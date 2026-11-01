@@ -1,8 +1,10 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { DialogTrigger } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
+import { Popover } from '../../molecules/Popover/Popover.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
 import { DescriptionList, type DescriptionItem } from '../../molecules/DescriptionList/DescriptionList.tsx';
@@ -158,12 +160,16 @@ export function BookingReceipt({
                     <ButtonLink provider="apple-calendar" href={calendars.ics} download="booking.ics">
                       {strings.apple}
                     </ButtonLink>
+                    {share !== undefined && (
+                      <span className={styles.shareAt}>
+                        <ShareMeeting share={share} />
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
             </section>
           )}
-          {isLive && share !== undefined && <ShareBox share={share} />}
           {facts.length > 0 && (
             <div className={styles.facts}>
               <DescriptionList items={facts} />
@@ -194,36 +200,43 @@ export function BookingReceipt({
 }
 
 /**
- * The meeting's details as one block to send on: shown as they will read, copied whole, or handed to the device's own
- * share sheet where it has one (a phone), with a link that puts the meeting in the receiver's calendar.
+ * Share: one quiet button at the end of Add to calendar, opening a small popover (stageshow's share): the meeting in
+ * two lines as it will be sent, then Copy details, and the device's own share sheet where it has one (a phone). What
+ * is sent carries a link that puts the meeting in the receiver's calendar.
  */
-function ShareBox({ share }: { readonly share: NonNullable<BookingReceiptProps['share']> }) {
-  const text = useRef<HTMLParagraphElement>(null);
+function ShareMeeting({ share }: { readonly share: NonNullable<BookingReceiptProps['share']> }) {
+  const [first, ...rest] = share.lines;
   const message = [...share.lines, strings.addLine(share.calendarUrl)].join('\n');
   // The device's share sheet, where there is one; everywhere else Copy details does the job alone.
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   return (
-    <section className={styles.share} aria-label={strings.shareHeading}>
-      <span className={styles.label}>{strings.shareHeading}</span>
-      <p ref={text} className={styles.shareText}>
-        {message}
-      </p>
-      <div className={styles.links}>
-        {canShare && (
-          <Button
-            icon="share"
-            onPress={() => {
-              // A dismissed sheet rejects; nothing to say about that.
-              navigator
-                .share({ title: share.title, text: share.lines.join('\n'), url: share.calendarUrl })
-                .catch(() => undefined);
-            }}
-          >
-            {strings.share}
-          </Button>
-        )}
-        <CopyButton value={message} label={strings.copyDetails} announcement={strings.copiedDetails} sourceRef={text} />
-      </div>
-    </section>
+    <DialogTrigger>
+      <Button variant="ghost" icon="share">
+        {strings.share}
+      </Button>
+      <Popover label={strings.shareHeading} placement="bottom end">
+        <div className={styles.sharePanel}>
+          <p className={styles.shareTitle}>{first}</p>
+          <p className={styles.shareLines}>{rest.join(' · ')}</p>
+          <div className={styles.shareActions}>
+            <CopyButton value={message} label={strings.copyDetails} announcement={strings.copiedDetails} />
+            {canShare && (
+              <Button
+                variant="primary"
+                icon="share"
+                onPress={() => {
+                  // A dismissed sheet rejects; nothing to say about that.
+                  navigator
+                    .share({ title: share.title, text: share.lines.join('\n'), url: share.calendarUrl })
+                    .catch(() => undefined);
+                }}
+              >
+                {strings.shareVia}
+              </Button>
+            )}
+          </div>
+        </div>
+      </Popover>
+    </DialogTrigger>
   );
 }

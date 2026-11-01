@@ -15,6 +15,7 @@ export const strings = {
   apple: 'Apple / .ics',
   shareHeading: 'Share this meeting',
   share: 'Share',
+  shareVia: 'Share via…',
   copyDetails: 'Copy details',
   copiedDetails: 'Details copied',
   addLine: (url: string) => `Add it to your calendar: ${url}`,
