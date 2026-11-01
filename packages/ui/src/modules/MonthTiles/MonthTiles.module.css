@@ -30,6 +30,20 @@
     letter-spacing: var(--tracking-title);
   }
 
+  /* A new month's name rolls in the way the arrows went: up from below going forward, down from above going back
+     (transitions.dev's text swap), as the days slide across under it. */
+  .name {
+    display: inline-block;
+  }
+
+  .name[data-direction='forward'] {
+    animation: name-up var(--duration-modal) var(--ease-out) backwards;
+  }
+
+  .name[data-direction='back'] {
+    animation: name-down var(--duration-modal) var(--ease-out) backwards;
+  }
+
   .year {
     color: var(--text-secondary);
     font: var(--text-body);
@@ -60,7 +74,7 @@
   /* Six weeks, every row a tile's height, a row of blanks too: every month is one height. */
   .grid {
     grid-auto-rows: 1fr;
-    animation: month-fade var(--duration-move) var(--ease-out) both;
+    animation: month-fade var(--duration-modal) var(--ease-out) both;
   }
 
   .grid[data-direction='forward'] {
@@ -202,6 +216,11 @@
       animation-name: month-fade;
     }
 
+    .name[data-direction='forward'],
+    .name[data-direction='back'] {
+      animation-name: month-fade;
+    }
+
     .day[data-loading] {
       animation: none;
     }
@@ -235,6 +254,22 @@
   @keyframes month-fade {
     from {
       opacity: 0;
+    }
+  }
+
+  @keyframes name-up {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+      filter: blur(var(--slide-blur));
+    }
+  }
+
+  @keyframes name-down {
+    from {
+      opacity: 0;
+      translate: 0 calc(-1 * var(--space-8));
+      filter: blur(var(--slide-blur));
     }
   }
 

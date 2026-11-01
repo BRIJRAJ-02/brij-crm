@@ -108,7 +108,10 @@ export function MonthTiles({
     <div className={styles.root}>
       <div className={styles.head}>
         <h2 className={styles.title}>
-          {name.month} <span className={styles.year}>{name.year}</span>
+          {/* Keyed by the month, so a new month's name rolls in the way the arrows went, with the days. */}
+          <span key={month} className={styles.name} data-direction={shown.direction}>
+            {name.month} <span className={styles.year}>{name.year}</span>
+          </span>
         </h2>
         <div className={styles.arrows}>
           <Button

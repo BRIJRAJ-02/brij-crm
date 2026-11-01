@@ -1,5 +1,21 @@
 /* SocialLinks: a row of icon only ghost link Buttons (30px boxes, 34px hit areas), space-4 apart so the hit areas
    meet without overlapping, pulled in by half a box less half a mark so the first mark lines up with the text above. */
+/* How far a mark lifts under the pointer, and how long the marks take to arrive one after another: none by default,
+   so the app's settings stay still; the public pages (BookingFrame, LinkPage) set both on their roots. */
+@property --social-lift {
+  syntax: '<length>';
+  inherits: true;
+  /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+  initial-value: 0px;
+}
+
+@property --social-arrive {
+  syntax: '<time>';
+  inherits: true;
+  /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+  initial-value: 0s;
+}
+
 @layer components {
   .root {
     display: flex;
@@ -11,8 +27,44 @@
     list-style: none;
   }
 
+  /* On a public page the marks arrive one after another, and one under the pointer lifts a touch, settling back as
+     it leaves: the person's links read as something to reach for. */
   .item {
     display: flex;
+    transition: translate var(--duration-move) var(--ease-out);
+    animation: social-in var(--social-arrive) var(--ease-out) backwards;
+    animation-delay: calc(var(--social-index, 0) * var(--social-arrive) / 6);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .item:hover {
+      translate: 0 calc(-1 * var(--social-lift));
+      transition-duration: var(--duration-hover);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .item {
+      animation-name: social-fade;
+    }
+
+    .item:hover {
+      translate: none;
+    }
+  }
+
+  @keyframes social-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+      scale: var(--scale-enter);
+    }
+  }
+
+  @keyframes social-fade {
+    from {
+      opacity: 0;
+    }
   }
 
   /* Round (a link page): centred outlined circles, space-8 apart, from the page's own centre line. */

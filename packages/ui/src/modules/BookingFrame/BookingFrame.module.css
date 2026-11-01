@@ -69,6 +69,10 @@
        literal until the artifact has a blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
     --slide-blur: 3px;
+    /* The host's social marks arrive one after another and lift a touch under the pointer (SocialLinks). */
+    --social-arrive: var(--duration-modal);
+    /* stylelint-disable-next-line unit-disallowed-list -- a lift with no token, the public pages' own */
+    --social-lift: 2px;
 
     box-sizing: border-box;
     display: flex;

@@ -76,13 +76,18 @@ export function SocialLinks({ links, label = strings.label, isInline = false, va
   const isRound = variant === 'round';
   if (links.length === 0) return null;
   const list = (wrap: (link: SocialLinkItem, element: ReactElement) => ReactElement) => {
-    const items = links.map((link) =>
+    const items = links.map((link, index) =>
       isInline ? (
-        <span key={link.network} role="listitem" className={styles.item}>
+        <span
+          key={link.network}
+          role="listitem"
+          className={styles.item}
+          style={{ '--social-index': String(Math.min(index, 8)) }}
+        >
           {wrap(link, <SocialLink link={link} isRound={isRound} />)}
         </span>
       ) : (
-        <li key={link.network} className={styles.item}>
+        <li key={link.network} className={styles.item} style={{ '--social-index': String(Math.min(index, 8)) }}>
           {wrap(link, <SocialLink link={link} isRound={isRound} />)}
         </li>
       ),
