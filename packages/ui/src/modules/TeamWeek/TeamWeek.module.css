@@ -338,11 +338,11 @@
     background: var(--tag-yellow-bg);
   }
 
-  /* This date only keeps the cell's dot at its end, as a read only grid marks such a day with the dot alone. */
+  /* This date only keeps the cell's dot in its top corner, as the cell has it (a read only grid marks such a day with
+     the dot alone); centred at the end it read as a switch. */
   .swatch > .dot {
-    inset-block: 0;
+    inset-block-start: var(--space-2);
     inset-inline-end: var(--space-2);
-    margin-block: auto;
     inline-size: var(--space-4);
     block-size: var(--space-4);
   }
