@@ -27,7 +27,14 @@
     transition:
       background-color var(--duration-hover) var(--ease-hover),
       border-color var(--duration-hover) var(--ease-hover),
-      color var(--duration-hover) var(--ease-hover);
+      color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  /* Held, a button eases to --scale-press: the token's 1 in the app (nothing shrinks, 20 October 2026), 0.97 inside a
+     public booking page, which sets it on its own root (1 November 2026). */
+  .root[data-pressed]:not([data-disabled]) {
+    scale: var(--scale-press);
   }
 
   .label {
@@ -414,6 +421,12 @@
     .root[data-disabled] {
       border-color: GrayText;
       color: GrayText;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-pressed]:not([data-disabled]) {
+      scale: none;
     }
   }
 }
