@@ -90,7 +90,7 @@ export function ReadyPanel({
     <section className={styles.root} {...(title === undefined ? {} : { 'aria-labelledby': titleId })}>
       <div className={styles.head} data-probe="edge" data-untitled={title === undefined || undefined}>
         <span className={styles.check} role="img" aria-label={strings.done}>
-          <Icon name="check" size="md" />
+          <Icon name="check" size="sm" />
         </span>
         <div className={styles.titles}>
           {title !== undefined && (
@@ -129,13 +129,13 @@ export function ReadyPanel({
           </Button>
         )}
       </div>
-      <div className={styles.visual} data-probe="edge">
+      <div className={styles.visual} data-probe="edge" data-alone={preview === undefined || undefined}>
         <div className={styles.qr}>
           <QrCode value={link} label={qrLabel} size="sm" />
         </div>
-        {preview === undefined ? (
-          <p className={styles.scan}>{strings.scan}</p>
-        ) : (
+        {/* No line beside the code: a QR explains itself, and the owner asked for the telling off (1 November
+            2026). */}
+        {preview !== undefined && (
           <div className={styles.preview} role="group" aria-label={previewLabel} data-scale={previewScale}>
             {/* A glimpse to look at: nothing in it takes focus, a press or a scroll. */}
             <div className={styles.glimpse} inert>

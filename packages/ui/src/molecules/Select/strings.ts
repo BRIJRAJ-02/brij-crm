@@ -4,6 +4,8 @@ export const strings = {
   none: 'None',
   clear: 'Clear',
   readOnly: 'Read only',
+  /** The lock's name where the reason has no line of its own (a Select in a table row): the state, then the why. */
+  readOnlyBecause: (reason: string) => `Read only: ${reason}`,
   search: 'Search',
   noMatches: 'No matches',
   /** An empty list that creates, before anything is typed. */

@@ -332,6 +332,44 @@ export const ChoiceFillsRow: Story = {
   },
 };
 
+/**
+ * `showsDescription`: a small mark beside the name and the sentence on the tile, for choices a person has to read
+ * rather than recognise (a form's three embed placements). No tall picture slot, and no tooltip repeating it.
+ */
+export const ChoiceDescribed: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="How it shows"
+        showsDescription
+        tiles={[
+          {
+            id: 'inline',
+            name: 'In the page',
+            icon: 'file-text',
+            description: 'Sits in your page and grows with the form.',
+          },
+          { id: 'popup', name: 'Popup', icon: 'layers', description: 'Your own button opens it in a dialog.' },
+          {
+            id: 'corner',
+            name: 'Corner button',
+            icon: 'message-square',
+            description: 'A button in the corner of every page opens it.',
+          },
+        ]}
+        defaultValue="inline"
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const group = canvas.getByRole('radiogroup', { name: 'How it shows' });
+    // The words are on the tile, not only in a tooltip.
+    await expect(within(group).getByText('Your own button opens it in a dialog.')).toBeVisible();
+    await expect(within(group).getByRole('radio', { name: 'In the page' })).toBeChecked();
+  },
+};
+
 /** Action mode: each tile starts something at once (Add block). A description reaches screen readers and a tooltip. */
 export const ChoiceAction: Story = {
   parameters: { crm: { screenshot: false } },

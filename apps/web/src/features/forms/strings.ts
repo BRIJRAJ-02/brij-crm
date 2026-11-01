@@ -135,8 +135,9 @@ export const strings = {
   // First publish (spec 0058, AC-13): one step, then the Ready panel (AC-6)
   publishTitle: 'Publish your form',
   liveTitle: 'Your form is live',
-  liveText: 'Share the link, or put it on your site.',
   name: 'Name',
+  /** An example of a name, never the name an unnamed form gets: Publish refuses a blank one. */
+  namePlaceholder: 'Contact us',
   address: 'Link',
   addressTaken: 'That link is taken',
   addressInvalid: 'The link needs 2 to 40 lowercase letters, numbers or hyphens.',
@@ -207,6 +208,8 @@ export const strings = {
     match === undefined ? `Adds a ${object}.` : `Adds or updates a ${object}, matched by ${match}.`,
   whichObject: 'Save to',
   mappingLabel: 'Where each answer is saved',
+  /** The table's own name for screen readers: its section's heading already says what the section is for. */
+  mappingTable: 'Questions and their fields',
   mappingQuestion: 'Question',
   mappingSavedAs: 'Saved as',
   retargetFailed: 'That didn’t change where submissions go.',

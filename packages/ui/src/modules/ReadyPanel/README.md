@@ -4,7 +4,7 @@ The "done, here is your link" moment after a booking page, a form or a link page
 
 ## Why it exists
 
-New. Nothing in the library showed a finished thing with its link: LinkCard shows an existing link small, QrCode is only the code, and a Modal is only the frame. After creating something people hunted for the address, so the moment is one module: a success mark and one heading, the link with Copy and Share, its QR code, a preview, and room for more (a form's three embed tiles). It only composes CopyButton, Button, QrCode and Icon; it adds no control of its own. Reuse and variant were tried first: LinkCard is a list card (switch, facts, actions) and bending it into a panel would have forked it.
+New. Nothing in the library showed a finished thing with its link: LinkCard shows an existing link small, QrCode is only the code, and a Modal is only the frame. After creating something people hunted for the address, so the moment is one module: a quiet success mark and one heading, the link with Copy and Share, its QR code, a preview, and room for more (a form's three embed tiles). It only composes CopyButton, Button, QrCode and Icon; it adds no control of its own. Reuse and variant were tried first: LinkCard is a list card (switch, facts, actions) and bending it into a panel would have forked it.
 
 ## Use
 
@@ -29,10 +29,11 @@ New. Nothing in the library showed a finished thing with its link: LinkCard show
 ```
 
 - One column on one left and right edge, blocks `space-16` apart. The link row, Copy and Share are `size-input` tall.
+- The mark is a tick on the green tag's ground, line and text at `size-control`, not a filled `success` disc: at full strength it was the one strong green in the product and the loudest thing on the dialog (owner, 1 November 2026).
 - `title` is the one heading. Inside a Modal, leave it out and let the Modal's title say it, so the dialog has one heading; the mark then sits beside `message`, in the text colour.
 - `link` is shown, cut in the middle when the field is short (the start up to the last slash gives way to an ellipsis, the page's own name always shows), copied (Copy swaps to a tick and "Copied" for two seconds, announced as "Link copied"), shared, and drawn as the QR code.
 - Share uses `onShare` when given, otherwise the browser's share sheet, and is left out where the browser has none. A closed sheet is not an error.
-- `preview` is a framed slot at the QR's height beside it (below it in a narrow slot), named by `previewLabel`. It is at most `size-column` tall: a taller picture (a whole phone) is cut there, its top kept in view. The preview is inert: nothing in it takes focus, a press or a scroll. `previewScale="shrunk"` lays a whole page out at twice the slot and draws it at half (`scale-shrunk`) from its top, so its head (a booking page's name and title) shows instead of being cut. Without one, a quiet line beside the QR says to point a phone's camera at it, so the code never stands alone in an empty row.
+- `preview` is a framed slot at the QR's height beside it (below it in a narrow slot), named by `previewLabel`. It is at most `size-column` tall: a taller picture (a whole phone) is cut there, its top kept in view. The preview is inert: nothing in it takes focus, a press or a scroll. `previewScale="shrunk"` lays a whole page out at twice the slot and draws it at half (`scale-shrunk`) from its top, so its head (a booking page's name and title) shows instead of being cut. Without one the QR stands alone, centred in its band: the line that told people to point a phone's camera at it went on 1 November 2026, because a QR explains itself, and a small code left at the edge of an otherwise empty row read as a layout fault.
 - Copy is primary by default. In a Modal whose footer has its own primary (Done), pass `copyVariant="secondary"` so the dialog keeps one primary.
 - `children` come below (embed tiles: `TileGrid variant="choice"`); `actions` sit at the end.
 - Motion: the panel eases in on opacity and a `space-8` rise, and the mark pops on opacity and scale, from the modal's duration and curve. Under reduced motion both appear at once, with no fade (spec 0058, AC-2).

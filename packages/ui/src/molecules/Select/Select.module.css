@@ -53,9 +53,13 @@
     opacity: var(--opacity-disabled);
   }
 
+  /* Locked, not a different control: the same outlined box, quieted. A filled block with no edge read as a third
+     kind of control beside the selects above and below it in a table of the same job (owner, 1 November 2026,
+     the form's publish dialog). The hairline steps down to border-subtle and the lift goes, so it is plainly not
+     something to press, and the value keeps the text colour so it stays as readable as its neighbours. */
   .root[data-readonly] .trigger {
-    border-color: transparent;
-    background: var(--surface-subtle);
+    border-color: var(--border-subtle);
+    background: var(--surface-raised);
     box-shadow: none;
     cursor: default;
   }

@@ -181,6 +181,8 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
         <TileGrid
           variant="choice"
           label={strings.embedMode}
+          // The same tiles as the first publish's panel: each says what the visitor sees, on the tile.
+          showsDescription
           tiles={EMBED_TILES}
           value={mode}
           onChange={(id) => {

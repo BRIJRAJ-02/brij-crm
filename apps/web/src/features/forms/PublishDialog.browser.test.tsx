@@ -155,6 +155,30 @@ describe('the first publish, in one step (AC-13)', () => {
     expect(page.getByRole('alert').query()).toBeNull();
   });
 
+  it('refuses a blank name and says so, rather than offering “Untitled form” as one', async () => {
+    await open();
+    const name = page.getByRole('textbox', { name: 'Name', exact: true });
+    // The grey text is an example, never a name a form could really go live under.
+    expect(name.element().getAttribute('placeholder')).toBe('Contact us');
+    // Left empty, the field says what is missing instead of leaving a dead button unexplained.
+    await userEvent.clear(name);
+    await expect.element(page.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();
+    await userEvent.tab();
+    await expect.element(page.getByText('Give the form a name.')).toBeVisible();
+    await userEvent.fill(name, 'Apply');
+    await expect.element(page.getByRole('button', { name: 'Publish', exact: true })).toBeEnabled();
+    expect(page.getByText('Give the form a name.').query()).toBeNull();
+  });
+
+  it('keeps the locked email row the height of its neighbours: its reason rides on the lock', async () => {
+    await open({ draft: MATCHED, choices: target(true) });
+    // The reason is the lock's own name, not a line under the row that makes it taller than its neighbours.
+    await expect
+      .element(page.getByRole('img', { name: 'Read only: The form matches records by this email.' }))
+      .toBeVisible();
+    expect(page.getByText('The form matches records by this email.', { exact: true }).query()).toBeNull();
+  });
+
   it('says in one line that Publish makes the email unique, before it happens (late trap #36)', async () => {
     await open();
     await expect.element(page.getByText(SAID)).toBeVisible();
@@ -185,6 +209,11 @@ describe('the Ready panel after the first publish (AC-6)', () => {
     const tiles = page.getByRole('radiogroup', { name: 'Put it on your site' });
     await expect.element(tiles).toBeVisible();
     expect(tiles.getByRole('radio').all()).toHaveLength(3);
+    // Each tile says what it does, on the tile: not a mark and a word with the words in a tooltip.
+    await expect.element(tiles.getByText('Your own button opens it in a dialog.')).toBeVisible();
+    // One heading, then the form's name: not three goes at the same sentence.
+    expect(page.getByText('Share the link, or put it on your site.').query()).toBeNull();
+    expect(page.getByText('Point a phone’s camera at the code to open the link there.').query()).toBeNull();
     expect(page.getByRole('textbox', { name: /Embed snippet/ }).query()).toBeNull();
     // Done takes focus as Publish leaves, so Esc and the dialog's name stay with it.
     await expect.element(page.getByRole('button', { name: /^Done/ })).toHaveFocus();

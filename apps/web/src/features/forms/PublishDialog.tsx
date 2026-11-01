@@ -13,7 +13,19 @@ import {
   type ObjectSummary,
 } from '@crm/data';
 import { FORM_SLUG, publishProblem, slugFromName } from '@crm/data/forms';
-import { Button, Callout, Field, iconOf, Modal, ReadyPanel, Select, Table, TileGrid, type SelectItem } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  Field,
+  FieldGroup,
+  iconOf,
+  Modal,
+  ReadyPanel,
+  Select,
+  Table,
+  TileGrid,
+  type SelectItem,
+} from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import {
@@ -78,6 +90,7 @@ export function PublishDialog(props: PublishDialogProps) {
   const [typedName, setTypedName] = useState<string | undefined>(undefined);
   const [chosenAddress, setChosenAddress] = useState<string | undefined>(undefined);
   const [isAddressTyped, setAddressTyped] = useState(false);
+  const [isNameTouched, setNameTouched] = useState(false);
   const name = typedName ?? start.name;
   const address = chosenAddress ?? start.address;
   const [taken, setTaken] = useState<string | undefined>(undefined);
@@ -344,8 +357,10 @@ export function PublishDialog(props: PublishDialogProps) {
         }
       >
         <ReadyPanel
-          title={live.name}
-          message={strings.liveText}
+          /* The Modal's own title says it is live, so the panel's lead is the form's name and nothing else: the
+             title, the name and "Share the link, or put it on your site." were three goes at one sentence
+             (owner, 1 November 2026). */
+          message={live.name}
           link={data.forms.hostedUrl(live.publicKey)}
           shareTitle={live.name}
           // Done is the dialog's one primary; Copy steps down beside the link.
@@ -354,6 +369,8 @@ export function PublishDialog(props: PublishDialogProps) {
           <TileGrid
             variant="choice"
             label={strings.embedTiles}
+            // The three placements are read, not recognised: each says what it does on the tile itself.
+            showsDescription
             tiles={EMBED_TILES}
             value={embed}
             onChange={(id) => {
@@ -448,16 +465,24 @@ export function PublishDialog(props: PublishDialogProps) {
           {error}
         </Callout>
       )}
+      {/* Publish refuses a blank name (its button stays off), so the field says so rather than showing
+          "Untitled form" in grey, which read as a default a form could really go live under. The placeholder is
+          an example; the error comes once the field has been left empty, not while it is still being typed. */}
       <Field
         label={strings.name}
-        placeholder={strings.untitledForm}
+        placeholder={strings.namePlaceholder}
         value={name}
         maxLength={80}
+        isRequired
         // The dialog opens on its first question.
         // eslint-disable-next-line jsx-a11y-x/no-autofocus
         autoFocus
         onChange={rename}
+        onBlur={() => {
+          setNameTouched(true);
+        }}
         onSubmit={() => void goLive()}
+        {...(isNameTouched && name.trim() === '' ? { error: strings.nameRequired } : {})}
       />
       <Field
         label={strings.address}
@@ -486,32 +511,38 @@ export function PublishDialog(props: PublishDialogProps) {
       />
       {/* New object gives every question its own field, so there is nothing to match until it exists. */}
       {!isKeptOnly && !isBuildChosen && draft.questions.length > 0 && (
-        <Table
-          label={strings.mappingLabel}
-          columns={[
-            { id: 'question', label: strings.mappingQuestion, isRowHeader: true },
-            { id: 'savedAs', label: strings.mappingSavedAs },
-          ]}
-          rows={draft.questions}
-          getRowId={(question) => question.id}
-          renderCell={(question, column) =>
-            column === 'question' ? (
-              labelOf(question)
-            ) : (
-              <SavedAs
-                question={question}
-                target={target}
-                plannedTitle={planned.get(question.id)}
-                creatableTitle={creatable.get(question.id)}
-                isLocked={isMatchQuestion(draft, question)}
-                isDisabled={busy !== undefined}
-                onChange={(change) => {
-                  onDraftChange(changeQuestion(draft, question.id, change));
-                }}
-              />
-            )
-          }
-        />
+        /* A section of its own, under a heading: three labelled fields and then an unnamed table all read at one
+           weight, so nothing said where the dialog's questions ended and its filing began (owner, 1 November
+           2026). */
+        <FieldGroup label={strings.mappingLabel} tone="heading" headingLevel={3}>
+          <Table
+            // Named apart from its section's heading, so a reader doesn't hear the same words twice over.
+            label={strings.mappingTable}
+            columns={[
+              { id: 'question', label: strings.mappingQuestion, isRowHeader: true },
+              { id: 'savedAs', label: strings.mappingSavedAs },
+            ]}
+            rows={draft.questions}
+            getRowId={(question) => question.id}
+            renderCell={(question, column) =>
+              column === 'question' ? (
+                labelOf(question)
+              ) : (
+                <SavedAs
+                  question={question}
+                  target={target}
+                  plannedTitle={planned.get(question.id)}
+                  creatableTitle={creatable.get(question.id)}
+                  isLocked={isMatchQuestion(draft, question)}
+                  isDisabled={busy !== undefined}
+                  onChange={(change) => {
+                    onDraftChange(changeQuestion(draft, question.id, change));
+                  }}
+                />
+              )
+            }
+          />
+        </FieldGroup>
       )}
     </Modal>
   );
