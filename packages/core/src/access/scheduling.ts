@@ -19,6 +19,7 @@ import { ROLE_PERMISSIONS, ROLES, type Role } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { isUuid } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
+import { holdersOf } from '../roles/held.ts';
 import type { EngineScope } from './mint.ts';
 import { can, isRole, type Access, type Principal } from './policy.ts';
 
@@ -382,4 +383,16 @@ export async function actingFor(
   if (row === undefined) throw refuse('NOT_FOUND', NO_PERSON);
   if (!canActFor(reach, memberId, need, what)) throw refuse('FORBIDDEN', seeOnlyMessage(row.name));
   return reach;
+}
+
+/**
+ * Everyone who manages everyone's scheduling now (spec 0037, J9): owners and admins, and custom roles holding
+ * `schedule.manage`, read by the permission they hold at the time. Who a booking that needs a host is told to.
+ * Named here so `schedule.*` stays in this one file (AC-1221).
+ */
+export function schedulingManagers(
+  tx: WorkspaceTx,
+  workspaceId: string,
+): Promise<readonly { readonly id: string; readonly email: string }[]> {
+  return holdersOf(tx, workspaceId, 'schedule.manage');
 }
