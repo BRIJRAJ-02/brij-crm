@@ -83,3 +83,5 @@ Held, a button eases to `--scale-press`. The token is 1, so nothing in the app s
 - No `disabledReason` tooltip yet: a disabled button gets no hover or focus, so a tooltip on it would reach no one by keyboard. Until a disabled button can stay focusable, write the reason beside it and tie it with `aria-describedby`, or put a `LockReason` beside it.
 - The keycaps no longer read as part of the name, and the primary's keycap is edged instead of filled, so its text holds 4.5:1 (on the `on-accent-kbd` fill it was 3.3:1).
 - The SplitButton divider on the primary uses `on-accent-kbd`, as the artifact does.
+
+A label that changes after the first paint resolves in over `--label-swap` (a 2px blur and a fade, a fade alone under reduced motion). The property is registered at 0s, so nothing moves in the app; the public booking page sets it on BookingFrame's root.

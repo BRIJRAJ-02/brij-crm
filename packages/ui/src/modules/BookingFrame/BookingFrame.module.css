@@ -38,6 +38,15 @@
     --frame-accent-border: var(--frame-brand-accent, var(--accent-border));
     --frame-accent-line: var(--frame-brand-accent, var(--accent-line));
     --frame-focus: var(--frame-brand-focus, var(--shadow-focus));
+    /* The public booking page answers a press and swaps labels in place (the owner, 1 November 2026, this page
+       only): every Button, time and day in here eases to 0.97 while held, and a changed label (Book, Confirm)
+       resolves in. The app keeps the tokens' 1 and no swap. */
+    --scale-press: 0.97;
+    --label-swap: var(--duration-move);
+    /* The blur a step, a heading and a new fact resolve out of (transitions.dev's page slide and text reveal), a
+       literal until the artifact has a blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --slide-blur: 3px;
 
     box-sizing: border-box;
     display: flex;
@@ -161,6 +170,11 @@
   .factIcon {
     display: flex;
     flex: none;
+  }
+
+  /* A fact that arrives or changes after the first paint (the chosen time) resolves in where it stands. */
+  .fact[data-reveal] {
+    animation: fact-in var(--duration-move) var(--ease-out);
   }
 
   .factBody {
@@ -294,6 +308,11 @@
     animation: cover-in var(--duration-move) var(--ease-out);
   }
 
+  /* A heading that changes with the step resolves in with it. */
+  .heading[data-reveal] {
+    animation: fact-in var(--duration-move) var(--ease-out);
+  }
+
   /* A step moves the way it went: the details in from the end, Back's month (or List) in from the start. */
   .stage[data-moved][data-enter='forward'] .cover {
     animation-name: step-forward;
@@ -311,6 +330,7 @@
     transition: none;
   }
 
+  .card[data-instant] .heading[data-reveal],
   .stage[data-instant][data-moved] .cover,
   .stage[data-instant][data-enter='back'] .cover,
   .stage[data-instant][data-enter='back'] .under:not([inert]) {
@@ -612,6 +632,7 @@
     from {
       opacity: 0;
       translate: var(--space-16) 0;
+      filter: blur(var(--slide-blur));
     }
   }
 
@@ -619,6 +640,14 @@
     from {
       opacity: 0;
       translate: calc(-1 * var(--space-16)) 0;
+      filter: blur(var(--slide-blur));
+    }
+  }
+
+  @keyframes fact-in {
+    from {
+      opacity: 0;
+      filter: blur(var(--slide-blur));
     }
   }
 

@@ -36,7 +36,11 @@ export interface BookingDetailsValues {
 
 /** What sending the details answered, as the page's client words it. */
 export type BookingDetailsOutcome =
-  | { readonly kind: 'done' }
+  /**
+   * Booked. `next` runs a beat later (one `--duration-move`, while Confirm shows Booked with a tick): where the page
+   * moves on to the receipt (the owner, 1 November 2026). Without it, the page has already moved on.
+   */
+  | { readonly kind: 'done'; readonly next?: () => void }
   /**
    * Errors by field: `name`, `email`, `phone`, `guest-<n>` (the n-th guest
    * sent, blanks left out), `answers.<key>` (a question's). `message` is the answer's own sentence, said in
@@ -66,6 +70,14 @@ export interface BookingDetailsProps {
   readonly onBack: () => void;
   readonly onSubmit: (values: BookingDetailsValues) => Promise<BookingDetailsOutcome>;
 }
+
+/** One `--duration-move`, read from the page so it follows the token, in milliseconds. */
+const beatOf = (element: Element | null): number => {
+  const value = element === null ? '' : getComputedStyle(element).getPropertyValue('--duration-move').trim();
+  const amount = Number.parseFloat(value);
+  if (Number.isNaN(amount)) return 0;
+  return value.endsWith('ms') ? amount : amount * 1000;
+};
 
 /** The field a question's error is on, before its key: the server names it the same way. */
 const ANSWER_FIELD = 'answers.';
@@ -172,6 +184,9 @@ export function BookingDetails({
   const shakeOf = (field: string) => (shake.fields.has(field) ? (shake.round % 2 === 0 ? 'even' : 'odd') : undefined);
   const [line, setLine] = useState('');
   const [isBusy, setBusy] = useState(false);
+  const [isDone, setDone] = useState(false);
+  const doneTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => globalThis.clearTimeout(doneTimer.current), []);
   const [bookingAs, setBookingAs] = useState(
     prefill?.name !== undefined && prefill.name !== '' ? prefill.name : undefined,
   );
@@ -303,7 +318,12 @@ export function BookingDetails({
       trap,
     }).then(
       (outcome) => {
-        if (outcome.kind === 'done') return;
+        if (outcome.kind === 'done') {
+          // Confirm says Booked for one move's length, so the visitor sees it land before the receipt takes over.
+          setDone(true);
+          if (outcome.next !== undefined) doneTimer.current = globalThis.setTimeout(outcome.next, beatOf(form.current));
+          return;
+        }
         setBusy(false);
         if (outcome.kind === 'failed') {
           setLine(outcome.message);
@@ -536,8 +556,14 @@ export function BookingDetails({
         <Button variant="ghost" isDisabled={isBusy} onPress={onBack}>
           {strings.back}
         </Button>
-        <Button variant="primary" size="lg" type="submit" isPending={isBusy}>
-          {isBusy ? strings.confirming : strings.confirm}
+        <Button
+          variant="primary"
+          size="lg"
+          type="submit"
+          isPending={isBusy && !isDone}
+          {...(isDone ? { icon: 'check' as const } : {})}
+        >
+          {isDone ? strings.booked : isBusy ? strings.confirming : strings.confirm}
         </Button>
       </div>
     </form>

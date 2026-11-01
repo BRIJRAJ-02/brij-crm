@@ -23,6 +23,7 @@ export const strings = {
   back: 'Back',
   confirm: 'Confirm booking',
   confirming: 'Booking',
+  booked: 'Booked',
   nameRequired: 'Give your name.',
   emailRequired: 'Give an email address such as name@example.com.',
   guestInvalid: 'Give each guest’s email address.',
