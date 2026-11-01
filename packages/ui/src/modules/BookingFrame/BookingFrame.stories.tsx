@@ -105,8 +105,12 @@ export const Branded: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('img', { name: 'Acme' })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
-    const book = canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' });
-    await expect(getComputedStyle(book).backgroundColor).toBe('rgb(230, 87, 8)');
+    // The brand's accent marks the chosen time, and Book while it can be pressed. Once the step waits for the
+    // visitor's details Book is off, and an off primary is neutral by design (owner, 31 October 2026), so the
+    // chosen time is what says the brand reached the page.
+    const chosen = canvas.getByRole('button', { name: /^9:30 AM/ });
+    await waitFor(() => expect(getComputedStyle(chosen).backgroundColor).toBe('rgb(230, 87, 8)'));
+    await expect(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' })).toBeInTheDocument();
   },
 };
 
