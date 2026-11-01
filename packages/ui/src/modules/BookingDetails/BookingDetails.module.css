@@ -10,6 +10,9 @@
        yet: the artifact owes a motion blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
     --chip-blur: 2px;
+    /* A panel opening, transitions.dev's 400ms (the owner, 2 November 2026), a literal until the artifact has it. */
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --panel-duration: 400ms;
 
     display: flex;
     flex-direction: column;
@@ -58,6 +61,13 @@
 
   /* A field's own wrapper, so a refused Confirm can shake the field it found wrong: twice side to side, small, then
      still. Two names for one shake, so the next refusal replays it. */
+  /* Add guests opens the Guests field as a card expansion (stageshow's ai-cards): it grows to its height, so Anything
+     the host should know moves down as one. Where a height can't animate, it fades in. */
+  .guests[data-opening] {
+    interpolate-size: allow-keywords;
+    animation: guests-open var(--panel-duration) var(--ease-out);
+  }
+
   .shaker,
   .guests {
     min-inline-size: 0;
@@ -170,6 +180,24 @@
     .shaker[data-shake],
     .guests[data-shake] {
       animation: none;
+    }
+
+    .guests[data-opening]:not([data-shake]) {
+      animation-name: line-in;
+    }
+  }
+
+  @keyframes guests-open {
+    from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
+      opacity: 0;
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
     }
   }
 

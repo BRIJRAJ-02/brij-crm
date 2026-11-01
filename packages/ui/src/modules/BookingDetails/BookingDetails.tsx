@@ -405,7 +405,12 @@ export function BookingDetails({
         />
       </div>
       {isAddingGuests || guests.length > 0 ? (
-        <div className={styles.guests} data-shake={shakeOf('guests')}>
+        <div
+          className={styles.guests}
+          data-shake={shakeOf('guests')}
+          // Opened by Add guests, it grows into place; guests a visitor came back with are simply there.
+          data-opening={isAddingGuests || undefined}
+        >
           {guests.length > 0 && (
             <ul className={styles.chips} aria-label={strings.guestsList}>
               {guests.map((guest, index) => (

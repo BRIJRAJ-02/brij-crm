@@ -42,7 +42,14 @@
        only): every Button, time and day in here eases to 0.97 while held, and a changed label (Book, Confirm)
        resolves in. The app keeps the tokens' 1 and no swap. */
     --scale-press: 0.97;
-    --label-swap: var(--duration-move);
+    /* transitions.dev's timings for this page (the owner, 2 November 2026): a text swap 150ms, a page slide 250ms,
+       a text reveal 500ms. Literals on this page's root until the artifact carries them as tokens. */
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --label-swap: 150ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --slide-duration: 250ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --reveal-duration: 500ms;
     /* The blur a step, a heading and a new fact resolve out of (transitions.dev's page slide and text reveal), a
        literal until the artifact has a blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
@@ -174,7 +181,7 @@
 
   /* A fact that arrives or changes after the first paint (the chosen time) resolves in where it stands. */
   .fact[data-reveal] {
-    animation: fact-in var(--duration-move) var(--ease-out);
+    animation: fact-in var(--reveal-duration) var(--ease-in-out);
   }
 
   .factBody {
@@ -305,12 +312,12 @@
   }
 
   .stage[data-moved] .cover {
-    animation: cover-in var(--duration-move) var(--ease-out);
+    animation: cover-in var(--slide-duration) var(--ease-out);
   }
 
   /* A heading that changes with the step resolves in with it. */
   .heading[data-reveal] {
-    animation: fact-in var(--duration-move) var(--ease-out);
+    animation: fact-in var(--reveal-duration) var(--ease-in-out);
   }
 
   /* A step moves the way it went: the details in from the end, Back's month (or List) in from the start. */
@@ -320,7 +327,7 @@
 
   .stage[data-moved][data-enter='back'] .cover,
   .stage[data-enter='back'] .under:not([inert]) {
-    animation: step-back var(--duration-move) var(--ease-out);
+    animation: step-back var(--slide-duration) var(--ease-out);
   }
 
   /* Chosen from the keyboard (the view switch's arrows, Enter on Book or Back), a view or a step shows at once:

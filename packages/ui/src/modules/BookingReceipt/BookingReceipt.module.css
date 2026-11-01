@@ -10,6 +10,12 @@
        blur yet: the artifact owes a motion blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
     --reveal-blur: 3px;
+    /* transitions.dev's timings (the owner, 2 November 2026): a text reveal and the success check 500ms, a panel
+       opening 400ms. Literals until the artifact carries them as tokens. */
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --reveal-duration: 500ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --panel-duration: 400ms;
 
     box-sizing: border-box;
     display: flex;
@@ -61,7 +67,7 @@
     border-radius: var(--radius-full);
     background: var(--tag-green-bg);
     color: var(--tag-green-text);
-    animation: mark-pop var(--duration-modal) var(--ease-out) var(--duration-hover) both;
+    animation: mark-pop var(--reveal-duration) var(--ease-out) var(--duration-hover) both;
   }
 
   .mark[data-state='cancelled'] {
@@ -80,7 +86,7 @@
     margin: 0;
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
-    animation: text-rise var(--duration-modal) var(--ease-out) backwards;
+    animation: text-rise var(--reveal-duration) var(--ease-in-out) backwards;
   }
 
   .title:focus {
@@ -90,7 +96,7 @@
   .lead {
     margin: 0;
     color: var(--text-secondary);
-    animation: text-rise var(--duration-modal) var(--ease-out) calc(var(--duration-hover) / 2) backwards;
+    animation: text-rise var(--reveal-duration) var(--ease-in-out) calc(var(--duration-hover) / 2) backwards;
   }
 
   .card {
@@ -102,7 +108,7 @@
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
     container-type: inline-size;
-    animation: receipt-rise var(--duration-modal) var(--ease-out) var(--duration-hover) both;
+    animation: receipt-rise var(--panel-duration) var(--ease-out) var(--duration-hover) both;
   }
 
   .band {
