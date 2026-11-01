@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { PublicBookInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
+import { rollingWeek } from '../../test/dates-kit.ts';
 import { enterBookingByToken, enterBookingPage } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
 import { setObjectArchived } from '../engine/definitions.ts';
@@ -51,16 +52,8 @@ const asOwner = (text: string, params: readonly unknown[] = []) => testQuery(own
 const LINK_KEY = Buffer.alloc(32, 9);
 // A reminder whose time has passed is never queued, and crm_enqueue_booking_mail compares against the
 // database's own clock, so a fixed calendar date turns this file red the week it arrives. The booking sits on
-// the Monday about a year out instead, and every date below hangs off it.
-const aYearOut = new Date(Date.now() + 365 * 86_400_000);
-const MONDAY_DAY = new Date(aYearOut.getTime() + ((8 - aYearOut.getUTCDay()) % 7) * 86_400_000)
-  .toISOString()
-  .slice(0, 10);
-const dayAfter = (day: string, days: number) =>
-  new Date(Date.parse(`${day}T00:00:00.000Z`) + days * 86_400_000).toISOString().slice(0, 10);
-/** The Sunday before, midnight UTC. */
-const SUNDAY_DAY = dayAfter(MONDAY_DAY, -1);
-const TUESDAY_DAY = dayAfter(MONDAY_DAY, 1);
+// the Monday about a year out instead, and every date below hangs off it (see test/dates-kit.ts).
+const { monday: MONDAY_DAY, sunday: SUNDAY_DAY, tuesday: TUESDAY_DAY } = rollingWeek();
 const NOW = new Date(`${SUNDAY_DAY}T00:00:00.000Z`);
 const MONDAY_9 = `${MONDAY_DAY}T09:00:00.000Z`;
 const MONDAY_10 = new Date(`${MONDAY_DAY}T10:00:00.000Z`);
