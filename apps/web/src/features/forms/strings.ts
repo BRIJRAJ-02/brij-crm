@@ -307,6 +307,7 @@ export const strings = {
   ownFormTrapNote: 'Leave this hidden field in place: it keeps bots out.',
   ownFormTrapLabel: 'Leave this empty',
   ownFormNoFiles: (label: string) => `${label}: file questions work on the hosted form only.`,
+  ownFormHostedOnly: (label: string) => `${label}: this question works on the hosted form only.`,
   copied: 'Copied.',
   sitesTitle: 'Allowed sites',
   sitesTip: 'Your own HTML only posts from these addresses. Embeds and the hosted page work on any site.',

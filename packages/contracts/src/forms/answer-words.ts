@@ -6,6 +6,10 @@
 export interface AnswerWordsOptions {
   readonly yes?: string;
   readonly no?: string;
+  /** The answer's type, where a shape alone can't say how it reads: a ranking numbers its order. */
+  readonly answerType?: string;
+  /** How a signature reads ("Signed"). */
+  readonly signed?: string;
 }
 
 /** A moment read in the zone it was given in: "2 Nov 2026, 14:30 (Europe/London)". */
@@ -29,15 +33,23 @@ function momentWords(at: string, timeZone: string): string {
 
 /**
  * An answer as words: text as itself, yes or no, a number, a phone's number, a file's name, the choices picked and
- * Other's words, an address's parts in reading order, a date and time in the visitor's zone. Empty when it holds
- * nothing.
+ * Other's words, an address's parts in reading order, a date and time in the visitor's zone, a ranking numbered in
+ * its order. Empty when it holds nothing.
  */
 export function answerWords(value: unknown, options: AnswerWordsOptions = {}): string {
   if (value === undefined || value === null) return '';
+  // A signature is a drawing: it reads as the fact of it, never its file's name.
+  if (options.answerType === 'signature') return options.signed ?? 'Signed';
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'boolean') return value ? (options.yes ?? 'Yes') : (options.no ?? 'No');
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string').join(', ');
+  if (Array.isArray(value)) {
+    const items = value.filter((item): item is string => typeof item === 'string');
+    // A ranking reads as its order: "1. Slack, 2. Linear".
+    return options.answerType === 'ranking'
+      ? items.map((item, index) => `${String(index + 1)}. ${item}`).join(', ')
+      : items.join(', ');
+  }
   if (typeof value !== 'object') return '';
   const shape = value as Readonly<Record<string, unknown>>;
   if (typeof shape.name === 'string' && typeof shape.fileId === 'string') return shape.name;

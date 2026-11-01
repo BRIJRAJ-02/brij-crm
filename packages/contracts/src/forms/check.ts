@@ -58,9 +58,12 @@ export interface DateTimeAnswer {
   readonly timeZone: string;
 }
 
+/** A ranking's answer (spec 0063): every choice, by its words, in the visitor's order, first is most. */
+export type RankingAnswer = readonly string[];
+
 /** One answer in its canonical shape. */
 export type CheckedAnswer =
-  string | number | boolean | PhoneAnswer | FileAnswer | MultiAnswer | AddressAnswer | DateTimeAnswer;
+  string | number | boolean | PhoneAnswer | FileAnswer | MultiAnswer | AddressAnswer | DateTimeAnswer | RankingAnswer;
 
 /** The outcome: the answers in their canonical shapes, by key, or each failing question's message by key. */
 export type AnswerCheck =
@@ -225,6 +228,33 @@ function addressOf(raw: unknown, words: FormStrings): { value?: AddressAnswer; e
   return { value: parts };
 }
 
+/** A ranking: every one of the question's choices once (each by its words or its key), in the visitor's order. */
+function rankingOf(
+  raw: unknown,
+  choices: readonly string[] | undefined,
+  choiceKeys: readonly string[] | undefined,
+  words: FormStrings,
+): { value?: RankingAnswer; error?: string } {
+  const offered = (choices ?? []).filter((choice) => choice.trim() !== '');
+  if (!Array.isArray(raw) || raw.length !== offered.length) return { error: words.rankAll };
+  const order: string[] = [];
+  for (const each of raw) {
+    if (typeof each !== 'string') return { error: words.rankAll };
+    const value = each.trim();
+    const at = (choiceKeys ?? []).indexOf(value);
+    const label = offered.includes(value) ? value : at === -1 ? undefined : choices?.[at];
+    if (label === undefined || order.includes(label)) return { error: words.rankAll };
+    order.push(label);
+  }
+  return { value: order };
+}
+
+/** The upload a file or a signature names: its id, as the page holds it; the server swaps it for the stored file. */
+function uploadOf(raw: unknown, error: string): { value?: FileAnswer; error?: string } {
+  const id = typeof raw === 'object' && raw !== null ? (raw as { readonly fileId?: unknown }).fileId : raw;
+  return typeof id === 'string' && UUID.test(id) ? { value: { fileId: id.toLowerCase() } } : { error };
+}
+
 /** The most choices a multi select answer may name. */
 const FORM_PICKS_MAX = 40;
 
@@ -320,13 +350,12 @@ function checkOne(
       const compact = number.replace(/[\s().-]/g, '');
       return E164.test(compact) ? { value: { number: compact, country } } : { error: words.phone };
     }
-    case 'file': {
-      // The upload's id, as the page holds it; the server swaps it for the stored file.
-      const id = typeof raw === 'object' && raw !== null ? (raw as { readonly fileId?: unknown }).fileId : raw;
-      return typeof id === 'string' && UUID.test(id)
-        ? { value: { fileId: id.toLowerCase() } }
-        : { error: words.fileInvalid };
-    }
+    case 'file':
+      return uploadOf(raw, words.fileInvalid);
+    case 'signature':
+      return uploadOf(raw, words.signatureMissing);
+    case 'ranking':
+      return rankingOf(raw, choices, choiceKeys, words);
   }
 }
 

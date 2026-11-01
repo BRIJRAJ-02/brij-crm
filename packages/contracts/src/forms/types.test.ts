@@ -141,3 +141,70 @@ describe('answerWords', () => {
     expect(answerWords({ number: '+447700900000', country: 'GB' })).toBe('+447700900000');
   });
 });
+
+describe('batch two: signature and ranking (spec 0063, AC-6307, AC-6310)', () => {
+  const ranking: CheckedForm['questions'][number] = {
+    key: 'tools',
+    answerType: 'ranking',
+    required: true,
+    choices: ['Slack', 'Notion', 'Linear'],
+    choiceKeys: ['slack', 'notion', 'linear'],
+  };
+
+  it('takes every choice once in the visitor’s order, by words or by key, and refuses anything less', () => {
+    expect(one(ranking, ['Linear', 'Slack', 'Notion'])).toEqual({
+      ok: true,
+      answers: { tools: ['Linear', 'Slack', 'Notion'] },
+    });
+    expect(one(ranking, ['notion', 'linear', 'slack'])).toEqual({
+      ok: true,
+      answers: { tools: ['Notion', 'Linear', 'Slack'] },
+    });
+    const refusal = { ok: false, fields: { tools: 'Put every choice in your order.' } };
+    expect(one(ranking, ['Linear', 'Slack'])).toEqual(refusal);
+    expect(one(ranking, ['Linear', 'Linear', 'Slack'])).toEqual(refusal);
+    expect(one(ranking, ['Linear', 'Slack', 'Jira'])).toEqual(refusal);
+    expect(one(ranking, 'Linear')).toEqual(refusal);
+  });
+
+  it('asks a required ranking left untouched, and leaves an optional one out', () => {
+    expect(one(ranking, undefined)).toEqual({ ok: false, fields: { tools: 'Answer this question.' } });
+    expect(one({ ...ranking, required: false }, undefined)).toEqual({ ok: true, answers: {} });
+  });
+
+  it('takes a signature as the upload it names, and refuses anything else', () => {
+    const signature = { key: 'sign', answerType: 'signature', required: true } as const;
+    const fileId = '01a19070-abed-72aa-bda5-e28af82c31e3';
+    expect(one(signature, { fileId })).toEqual({ ok: true, answers: { sign: { fileId } } });
+    expect(one(signature, { fileId: 'not-an-id' })).toEqual({
+      ok: false,
+      fields: { sign: 'Sign here, or type your name instead.' },
+    });
+    expect(one(signature, undefined)).toEqual({ ok: false, fields: { sign: 'Answer this question.' } });
+  });
+
+  it('files a signature onto a file and a ranking onto text', () => {
+    expect(FILES_ONTO.signature).toEqual(['file']);
+    expect(FILES_ONTO.ranking).toEqual(['text', 'long_text']);
+  });
+
+  it('refuses a second signature question in one sentence', () => {
+    const signature = (index: number) => ({
+      id: `s${String(index)}`,
+      key: `s${String(index)}`,
+      label: 'Sign',
+      answerType: 'signature' as const,
+      required: false,
+    });
+    expect(FormDocument.safeParse({ questions: [signature(1)], targets: {} }).success).toBe(true);
+    const issues = FormDocument.safeParse({ questions: [signature(1), signature(2)], targets: {} }).error?.issues;
+    expect(issues?.map((issue) => issue.message)).toEqual([
+      'A form can ask for one signature. Remove the other signature question first.',
+    ]);
+  });
+
+  it('reads a ranking as its order and a signature as signed', () => {
+    expect(answerWords(['Linear', 'Slack'], { answerType: 'ranking' })).toBe('1. Linear, 2. Slack');
+    expect(answerWords({ fileId: 'x', name: 'signature.png' }, { answerType: 'signature' })).toBe('Signed');
+  });
+});

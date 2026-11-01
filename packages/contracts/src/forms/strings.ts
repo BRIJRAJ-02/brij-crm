@@ -119,6 +119,32 @@ export interface FormStrings {
   readonly address: string;
   /** A rating's or scale's choice, read with its number: "4 out of 5". */
   readonly outOf: (value: number, top: number) => string;
+  // Batch two (spec 0063, AC-6307, AC-6308).
+  /** A ranking that isn't every choice once, in an order. */
+  readonly rankAll: string;
+  /** A ranking item's grip: "Move Notion". */
+  readonly moveItem: (name: string) => string;
+  /** How a ranking's grip moves, read with it; then what each step of a move says aloud. */
+  readonly moveHelp: string;
+  readonly moveLifted: (name: string, place: number, count: number) => string;
+  readonly movePlace: (name: string, place: number, count: number) => string;
+  readonly moveDropped: (name: string, place: number, count: number) => string;
+  readonly moveCancelled: (name: string, place: number, count: number) => string;
+  /** The signature pad's name, for a screen reader. */
+  readonly signHere: string;
+  readonly signatureMissing: string;
+  /** Switches a signature from drawing to typing, and back. */
+  readonly typeInstead: string;
+  readonly drawInstead: string;
+  /** The typed signature's box. */
+  readonly typedName: string;
+  readonly clearSignature: string;
+  /** Inside the empty pad, where to sign. */
+  readonly signPlaceholder: string;
+  /** Under the pad where nothing can be sent (the builder's preview). */
+  readonly signaturePreview: string;
+  /** A signature as words, where an answer is read back. */
+  readonly signed: string;
 }
 
 const EN: FormStrings = {
@@ -202,6 +228,22 @@ const EN: FormStrings = {
   addressCountry: 'Country',
   address: 'Enter the address: at least the street or the city.',
   outOf: (value, top) => `${String(value)} out of ${String(top)}`,
+  rankAll: 'Put every choice in your order.',
+  moveItem: (name) => `Move ${name}`,
+  moveHelp: 'Press Space to pick it up, the arrow keys to move it, Space to drop it, or Escape to put it back.',
+  moveLifted: (name, place, count) => `${name} picked up, at ${String(place)} of ${String(count)}.`,
+  movePlace: (name, place, count) => `${name}, ${String(place)} of ${String(count)}.`,
+  moveDropped: (name, place, count) => `${name}, dropped at ${String(place)} of ${String(count)}.`,
+  moveCancelled: (name, place, count) => `${name}, put back at ${String(place)} of ${String(count)}.`,
+  signHere: 'Signature pad. Draw your signature, or type your name instead.',
+  signatureMissing: 'Sign here, or type your name instead.',
+  typeInstead: 'Type your name instead',
+  drawInstead: 'Draw instead',
+  typedName: 'Your full name',
+  clearSignature: 'Clear',
+  signPlaceholder: 'Sign here',
+  signaturePreview: 'Visitors sign here once the form is published.',
+  signed: 'Signed',
 };
 
 const CATALOGUE: Readonly<Record<FormLanguage, Partial<FormStrings>>> = {

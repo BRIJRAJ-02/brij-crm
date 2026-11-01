@@ -132,4 +132,12 @@ describe('filing the new answer types (spec 0063, AC-6307)', () => {
     const { refused } = plan({ questions: [question('fit', 'rating', ID.date)] }, ATTRIBUTES, OPTIONS, { fit: 4 });
     expect(refused[0]?.message).toBe(`${ID.date} no longer takes this kind of answer.`);
   });
+
+  it('files a ranking onto text as its order read out (spec 0063, batch two)', () => {
+    const { planned, refused } = plan({ questions: [question('tools', 'ranking', ID.text)] }, ATTRIBUTES, OPTIONS, {
+      tools: ['Linear', 'Slack', 'Notion'],
+    });
+    expect(refused).toEqual([]);
+    expect(planned[0]?.value).toBe('1. Linear, 2. Slack, 3. Notion');
+  });
 });

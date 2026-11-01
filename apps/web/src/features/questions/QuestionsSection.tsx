@@ -94,6 +94,8 @@ const TYPE_ICONS = {
   multi_select: 'list-checks',
   address: 'map-pin',
   hidden: 'eye-off',
+  signature: 'pen',
+  ranking: 'arrow-down-wide-narrow',
 } as const satisfies Record<AnswerType, IconName>;
 
 /** Props for the questions section. */

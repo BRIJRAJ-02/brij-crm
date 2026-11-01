@@ -358,6 +358,12 @@ export function useHostedForm({
 
   const checkStep = (questions: readonly PublicQuestion[]) => {
     if (preview) return true;
+    // A file or a signature of this step still going: on once it is in, as Send waits for it.
+    if (questions.some((question) => busy.has(question.key))) {
+      setAlert(words.fileBusy);
+      return false;
+    }
+    setAlert('');
     const result = checkAll(questions);
     if (result.ok) {
       setErrors((current) =>

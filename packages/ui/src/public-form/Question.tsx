@@ -18,6 +18,14 @@ import { isUploadedFile, type HostedFileHandlers } from './files.ts';
 // when it arrived (26 October 2026). Until it lands a Skeleton of the same height stands in, so the form draws at
 // once and keeps its shape.
 const LazyFileQuestion = lazy(() => import('./FileQuestion.tsx').then((module) => ({ default: module.FileQuestion })));
+// Signature and Ranking (spec 0063, AC-6331) load the same way, together in one chunk with its own budget line
+// (BatchTwoQuestions.ts says why one): a form without either never carries the pad or the ranked list.
+const LazySignatureQuestion = lazy(() =>
+  import('./BatchTwoQuestions.ts').then((module) => ({ default: module.SignatureQuestion })),
+);
+const LazyRankingQuestion = lazy(() =>
+  import('./BatchTwoQuestions.ts').then((module) => ({ default: module.RankingQuestion })),
+);
 
 /** The control of a question to type in, or else its first control (a dropdown's trigger): a phone's number before its code. */
 export function focusQuestion(container: HTMLElement | null, key: string): void {
@@ -42,7 +50,11 @@ export function asideOf(question: PublicQuestion, words: FormStrings): string | 
 
 /** What a drawn answer sends: a phone as E.164 with its country, a file as the id of its upload, the rest as held. */
 export function answerOf(question: PublicQuestion, value: unknown): unknown {
-  if (question.answerType === 'file') return isUploadedFile(value) ? { fileId: value.fileId } : undefined;
+  if (question.answerType === 'file' || question.answerType === 'signature') {
+    return isUploadedFile(value) ? { fileId: value.fileId } : undefined;
+  }
+  // A ranking is the visitor's order once they have moved anything; untouched, it is no answer.
+  if (question.answerType === 'ranking') return Array.isArray(value) ? value : undefined;
   if (question.answerType === 'phone') {
     const phone = value as PhoneFieldValue | undefined;
     if (phone === undefined || phone.national.trim() === '') return undefined;
@@ -328,6 +340,34 @@ export function Question({
             value={value}
             error={error}
             files={files}
+            onChange={onChange}
+          />
+        </Suspense>
+      );
+    case 'signature':
+      return (
+        <Suspense fallback={<Skeleton shape="block" />}>
+          <LazySignatureQuestion
+            questionKey={question.key}
+            label={isLabelHidden ? labelProps.label : aside === undefined ? label : `${label} ${aside}`}
+            words={words}
+            value={value}
+            error={error}
+            files={files}
+            onChange={onChange}
+          />
+        </Suspense>
+      );
+    case 'ranking':
+      return (
+        <Suspense fallback={<Skeleton shape="block" />}>
+          <LazyRankingQuestion
+            questionKey={question.key}
+            label={isLabelHidden ? labelProps.label : aside === undefined ? label : `${label} ${aside}`}
+            words={words}
+            choices={question.choices ?? []}
+            value={value}
+            error={error}
             onChange={onChange}
           />
         </Suspense>

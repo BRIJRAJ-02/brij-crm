@@ -1,0 +1,70 @@
+/* A hosted form's Ranking question: its choices as rows in the visitor's order, each a grip, its place and its
+   words, on the field's own ground and hairline. The row picked up takes the accent edge, and a line marks where it lands. */
+@layer components {
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-input);
+    padding-inline: var(--space-4) var(--space-12);
+    border: var(--border-width-hairline) solid var(--field-border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* The row picked up, by pointer or key. */
+  .row[data-lifted] {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-control);
+  }
+
+  /* Where the lifted row lands: a line in the gap above or below this one, as the sidebar's sections draw it. */
+  .row[data-drop]::before {
+    position: absolute;
+    inset-inline: 0;
+    block-size: var(--border-width-thick);
+    border-radius: var(--radius-xs);
+    background: var(--accent);
+    content: '';
+    pointer-events: none;
+  }
+
+  .row[data-drop='before']::before {
+    inset-block-start: calc(-1 * var(--space-4));
+  }
+
+  .row[data-drop='after']::before {
+    inset-block-end: calc(-1 * var(--space-4));
+  }
+
+  .place {
+    min-inline-size: var(--space-16);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* What a screen reader hears about moving a row, and each move said aloud: in the page, taking no space. */
+  .spoken {
+    position: absolute;
+    inline-size: var(--border-width-hairline);
+    block-size: var(--border-width-hairline);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

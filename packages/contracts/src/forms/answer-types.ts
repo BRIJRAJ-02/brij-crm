@@ -31,12 +31,15 @@ export const ANSWER_TYPES = [
   'multi_select',
   'address',
   'hidden',
+  // Spec 0063, batch two (AC-6307).
+  'signature',
+  'ranking',
 ] as const;
 /** One answer type. */
 export type AnswerType = (typeof ANSWER_TYPES)[number];
 
 /** The types answered by picking from the question's own choices. */
-export const CHOICE_TYPES: readonly AnswerType[] = ['dropdown', 'choice', 'multi_select'];
+export const CHOICE_TYPES: readonly AnswerType[] = ['dropdown', 'choice', 'multi_select', 'ranking'];
 
 /**
  * The types a booking page's questions may take (spec 0063, AC-6311): those it had before the new types arrived,
@@ -76,6 +79,8 @@ export const NO_PLACEHOLDER_TYPES: readonly AnswerType[] = [
   'multi_select',
   'address',
   'hidden',
+  'signature',
+  'ranking',
 ];
 
 /** The attribute types each answer type may be filed onto (spec 0023, Answer types). */
@@ -104,6 +109,10 @@ export const FILES_ONTO: Readonly<Record<AnswerType, readonly AttributeType[]>> 
   multi_select: ['select'],
   address: ['location'],
   hidden: ['text', 'select', 'number'],
+  // A PNG drawn (or typed and drawn) on the page, kept as an upload like a file's.
+  signature: ['file'],
+  // Read as "1. A, 2. B"; the whole order stays on the submission.
+  ranking: ['text', 'long_text'],
 };
 
 /** Whether an answer of `answerType` may be filed onto an attribute of `attributeType` (AC-658). */

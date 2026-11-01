@@ -10,6 +10,7 @@ import {
   CircleAlert,
   CircleCheck,
   Copy,
+  GripVertical,
   Info,
   Lock,
   Minus,
@@ -21,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 
-/** The icons drawn with no registry around them: the hosted form's controls (Rating's star among them), its alerts, its toasts and its upload. */
+/** The icons drawn with no registry around them: the hosted form's controls (Rating's star and a Ranking row's grip among them), its alerts, its toasts and its upload. */
 export const baseIcons = {
   'arrow-left': ArrowLeft,
   check: Check,
@@ -29,6 +30,7 @@ export const baseIcons = {
   'circle-alert': CircleAlert,
   'circle-check': CircleCheck,
   copy: Copy,
+  'grip-vertical': GripVertical,
   info: Info,
   lock: Lock,
   minus: Minus,

@@ -355,9 +355,11 @@ export function planNewAttributes(
       questionId: question.id,
       title,
       type,
-      choices: CHOICE_TYPES.includes(question.answerType)
-        ? (question.choices ?? []).filter((choice) => choice.trim() !== '')
-        : [],
+      // A ranking's choices are the order's words, filed as text: only a select takes them as options.
+      choices:
+        type === 'select' && CHOICE_TYPES.includes(question.answerType)
+          ? (question.choices ?? []).filter((choice) => choice.trim() !== '')
+          : [],
       ...(isMatch ? { isUnique: true } : {}),
       ...(question.answerType === 'multi_select' ? { isMulti: true } : {}),
     });

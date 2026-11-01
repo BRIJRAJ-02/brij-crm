@@ -10,9 +10,11 @@ import { FileValue, PhoneValue } from '@crm/contracts/values';
 import { strings } from './strings.ts';
 
 /** An answer as words: text, Yes or No, a phone's number, a file's name, and the newer shapes. Never markup. */
-export function answerText(answer: Pick<SubmissionAnswer, 'value'>): string {
-  // The shared reading (spec 0063): a file's name, a phone's number, the picks, an address, a date and time.
-  return answerWords(answer.value, { yes: strings.yes, no: strings.no });
+export function answerText(answer: Pick<SubmissionAnswer, 'value'> & { readonly answerType?: string }): string {
+  // The shared reading (spec 0063): a file's name, a phone's number, the picks, an address, a date and time, a
+  // ranking in its order. A signature shows as its file below, so its words are its file's name.
+  const answerType = answer.answerType === 'ranking' ? { answerType: 'ranking' } : {};
+  return answerWords(answer.value, { yes: strings.yes, no: strings.no, ...answerType });
 }
 
 /** Whether an answer holds a stored file (by its value's shape, as `answerText` reads it). */
@@ -27,7 +29,7 @@ export function holdsFile(answer: Pick<SubmissionAnswer, 'value'>): boolean {
 function answerValue(answer: SubmissionAnswer): ReactNode {
   const text = answerText(answer);
   if (text === '') return strings.noAnswer;
-  if (answer.answerType === 'file') {
+  if (answer.answerType === 'file' || answer.answerType === 'signature') {
     // The stored file through the field set: its icon and name, a download link the api checks on every open.
     const file = FileValue.safeParse(answer.value);
     if (!file.success) return text;

@@ -194,6 +194,13 @@ function valueFor(
       if (option === undefined) return { refused: `${attribute.title} has no option called “${String(answer)}”.` };
       return { value: attribute.isMulti ? [option.id] : option.id };
     }
+    // A ranking (spec 0063, AC-6307) files as its order read out: "1. Slack, 2. Linear". The order itself stays on
+    // the submission.
+    case 'text':
+    case 'long_text':
+      return Array.isArray(answer)
+        ? { value: answer.map((each, index) => `${String(index + 1)}. ${String(each)}`).join(', ') }
+        : { value: answer };
     case 'domain': {
       if (typeof answer !== 'string') return { refused: 'That isn’t a web address.' };
       try {

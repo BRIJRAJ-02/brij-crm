@@ -25,8 +25,8 @@ import { loadForm, loadVersions } from './shared.ts';
 const MAX_ANSWERS = 60;
 
 /** An answer as words (`answerWords` in contracts): the email notice reads every shape as the panel does. */
-export function answerWords(value: unknown): string {
-  return wordsOf(value);
+export function answerWords(value: unknown, answerType?: string): string {
+  return wordsOf(value, answerType === undefined ? {} : { answerType });
 }
 
 /** The answers as an email's rows: labelled, each cut to what a row holds, the empty ones left out. */
@@ -34,7 +34,7 @@ function answerRows(answers: readonly SubmissionAnswer[]): EmailRow[] {
   return answers
     .flatMap((answer) => {
       const label = answer.label.trim().slice(0, 200);
-      const value = answerWords(answer.value).slice(0, 4000);
+      const value = answerWords(answer.value, answer.answerType).slice(0, 4000);
       return label === '' || value === '' ? [] : [{ label, value }];
     })
     .slice(0, MAX_ANSWERS);

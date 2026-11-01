@@ -47,21 +47,35 @@ const book = firstLoad(manifest, 'book.html');
 // the hosted form's first load: its own files and whatever they import that the form had not loaded already.
 // The chunk is the one the hosted form imports dynamically under that name (the app imports the same module
 // statically for the builder's preview, so Rolldown names a shared chunk after it rather than marking an entry).
-const stepsKey = (manifest['form.html']?.dynamicImports ?? []).find((key) => manifest[key]?.name === 'HostedFormSteps');
-if (stepsKey === undefined || form.chunks.includes(stepsKey)) {
-  throw new Error('The step layouts are no longer a lazy chunk of their own: a Classic form would carry them.');
-}
-const stepsChunks = [];
-const visitSteps = (key) => {
-  if (stepsChunks.includes(key) || form.chunks.includes(key)) return;
-  stepsChunks.push(key);
-  for (const imported of manifest[key]?.imports ?? []) visitSteps(imported);
+/**
+ * A lazy chunk the hosted form loads by `name` (the module it imports dynamically), measured as what it adds to the
+ * form's first load: its own files and whatever they import that the form had not loaded already. Throws when the
+ * module stops being a lazy chunk of its own, since every form would then carry it.
+ */
+const lazyChunk = (name) => {
+  const importers = ['form.html', ...form.chunks];
+  const key = importers
+    .flatMap((importer) => manifest[importer]?.dynamicImports ?? [])
+    .find((each) => manifest[each]?.name === name);
+  if (key === undefined || form.chunks.includes(key)) {
+    throw new Error(`${name} is no longer a lazy chunk of its own: every hosted form would carry it.`);
+  }
+  const chunks = [];
+  const visit = (each) => {
+    if (chunks.includes(each) || form.chunks.includes(each)) return;
+    chunks.push(each);
+    for (const imported of manifest[each]?.imports ?? []) visit(imported);
+  };
+  visit(key);
+  return {
+    js: chunks.flatMap((each) => manifest[each]?.file ?? []),
+    css: [...new Set(chunks.flatMap((each) => manifest[each]?.css ?? []))].filter((file) => !form.css.includes(file)),
+  };
 };
-visitSteps(stepsKey);
-const steps = {
-  js: stepsChunks.flatMap((key) => manifest[key]?.file ?? []),
-  css: [...new Set(stepsChunks.flatMap((key) => manifest[key]?.css ?? []))].filter((file) => !form.css.includes(file)),
-};
+const steps = lazyChunk('HostedFormSteps');
+// Spec 0063, slice 4 (AC-6331): Signature and Ranking load the same way, as one chunk (BatchTwoQuestions.ts says
+// why one, not two).
+const batchTwo = lazyChunk('BatchTwoQuestions');
 const inDist = (files) => files.map((file) => path.join(DIST, file));
 
 // React's development build carries this message; production never does.
@@ -94,6 +108,15 @@ export default [
     name: 'Form step layouts, lazy (gzipped)',
     path: inDist([...steps.js, ...steps.css]),
     limit: '10 kB',
+    gzip: true,
+    running: false,
+  },
+  // Spec 0063's lines for the heavy controls, the Signature pad at most 8 kB and the Ranking at most 6 kB, as the
+  // one chunk they share: their sum.
+  {
+    name: 'Form signature and ranking, lazy (gzipped)',
+    path: inDist([...batchTwo.js, ...batchTwo.css]),
+    limit: '14 kB',
     gzip: true,
     running: false,
   },

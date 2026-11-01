@@ -234,6 +234,7 @@ export const FormDocument = z
   .superRefine((document, context) => {
     const seen = { ids: new Set<string>(), keys: new Set<string>(), attributes: new Set<string>() };
     let files = 0;
+    let signatures = 0;
     document.questions.forEach((question, index) => {
       const at = ['questions', index];
       if (seen.ids.has(question.id))
@@ -272,6 +273,7 @@ export const FormDocument = z
         });
       }
       if (question.answerType === 'file') files += 1;
+      if (question.answerType === 'signature') signatures += 1;
       seen.ids.add(question.id);
       seen.keys.add(question.key);
       if (attributeId !== undefined) seen.attributes.add(attributeId);
@@ -318,6 +320,13 @@ export const FormDocument = z
         code: 'custom',
         path: ['questions'],
         message: 'A form can ask for one file. Remove the other file question first.',
+      });
+    }
+    if (signatures > 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['questions'],
+        message: 'A form can ask for one signature. Remove the other signature question first.',
       });
     }
   });

@@ -10,8 +10,11 @@ import type { HostedFormState } from './use-hosted-form.ts';
  * no module with the form's first load (sharing one splits it into a chunk of its own, which the first load pays
  * for): a file's name, a phone as typed, the rest as given.
  */
-function textOf(answerType: string, value: unknown): string {
+function textOf(answerType: string, value: unknown, signed: string): string {
   if (typeof value === 'string') return value.trim();
+  // A ranking reads as its order; a signature as the fact of it (spec 0063).
+  if (Array.isArray(value)) return value.map((each, index) => `${String(index + 1)}. ${String(each)}`).join(', ');
+  if (answerType === 'signature') return typeof value === 'object' && value !== null ? signed : '';
   if (typeof value !== 'object' || value === null) return '';
   const field = answerType === 'file' ? 'name' : answerType === 'phone' ? 'national' : '';
   const text: unknown = field === '' ? undefined : (value as Readonly<Record<string, unknown>>)[field];
@@ -32,7 +35,7 @@ export function SentAnswers({
 }) {
   const sent = form.questions.flatMap((question) => {
     if (!state.shown.has(question.key)) return [];
-    const text = textOf(question.answerType, state.answers[question.key]);
+    const text = textOf(question.answerType, state.answers[question.key], state.words.signed);
     return text === ''
       ? []
       : [

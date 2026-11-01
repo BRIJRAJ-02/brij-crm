@@ -73,10 +73,12 @@ export function questionFacts(questions: readonly FormQuestion[]): readonly Fact
   return questions.flatMap((question): Fact[] => {
     const label = question.label.trim() === '' ? question.key : question.label.trim();
     switch (question.answerType) {
-      // A file, an address and a date and time have nothing a condition compares (spec 0063).
+      // A file, an address, a date and time, a signature and a ranking have nothing a condition compares (spec 0063).
       case 'file':
       case 'address':
       case 'datetime':
+      case 'signature':
+      case 'ranking':
         return [];
       case 'choice':
       case 'dropdown':

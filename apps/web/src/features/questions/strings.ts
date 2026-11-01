@@ -112,6 +112,8 @@ export const strings = {
     multi_select: 'Multi select',
     address: 'Address',
     hidden: 'Hidden',
+    signature: 'Signature',
+    ranking: 'Ranking',
   } satisfies Record<AnswerType, string>,
 
   // An answer as a panel shows it

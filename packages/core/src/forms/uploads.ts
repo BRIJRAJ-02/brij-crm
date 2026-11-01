@@ -7,7 +7,14 @@
 // - a member reads one through `readUpload`, which holds only when they could open the submission that took it
 //   and the file is among the answers they may see (field level access included), so a link never works across
 //   workspaces, nor for a member the submission is hidden from.
-import { SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS, type FormDocument, type SubmissionView } from '@crm/contracts';
+import {
+  SIGNATURE_UPLOAD,
+  SPAM_FILES_KEPT_DAYS,
+  UPLOAD_ANSWER_TYPES,
+  UPLOAD_KEPT_HOURS,
+  type FormDocument,
+  type SubmissionView,
+} from '@crm/contracts';
 import type { FileValue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -29,9 +36,9 @@ export const UNKNOWN_FILE = 'That file does not exist.';
 /** What an upload the form can't take answers. */
 const NOT_TAKING_FILES = 'This form does not take files.';
 
-/** Whether a document asks for a file. */
+/** Whether a document asks for a file or a signature (spec 0063): both answer with an upload. */
 function asksForFile(document: FormDocument): boolean {
-  return document.questions.some((question) => question.answerType === 'file');
+  return document.questions.some((question) => UPLOAD_ANSWER_TYPES.includes(question.answerType));
 }
 
 /** The form's live document when it is live and asks for a file; otherwise the refusal that says why. */
@@ -153,9 +160,11 @@ export async function claimUploads(
 ): Promise<ClaimedUploads> {
   const wanted = input.questions.flatMap((question) => {
     const value = input.answers[question.key];
-    if (question.answerType !== 'file' || typeof value !== 'object' || value === null) return [];
+    if (!UPLOAD_ANSWER_TYPES.includes(question.answerType) || typeof value !== 'object' || value === null) return [];
     const fileId = (value as { readonly fileId?: unknown }).fileId;
-    return typeof fileId === 'string' ? [{ key: question.key, fileId }] : [];
+    return typeof fileId === 'string'
+      ? [{ key: question.key, fileId, isSignature: question.answerType === 'signature' }]
+      : [];
   });
   if (wanted.length === 0) return { answers: input.answers, ids: [] };
   const rows = await tx
@@ -184,7 +193,12 @@ export async function claimUploads(
   const seen = new Set<string>();
   for (const each of wanted) {
     const row = byId.get(each.fileId);
-    if (row === undefined || seen.has(row.id)) {
+    // A signature takes only the PNG a page draws, under its size (spec 0063): never another kind of file.
+    const unfit =
+      row !== undefined &&
+      each.isSignature &&
+      (row.contentType !== SIGNATURE_UPLOAD.contentType || row.size > SIGNATURE_UPLOAD.maxBytes);
+    if (row === undefined || seen.has(row.id) || unfit) {
       missing[each.key] = input.invalid;
       continue;
     }
@@ -221,7 +235,9 @@ export async function claimSpamUploads(
     readonly answers: Readonly<Record<string, unknown>>;
   },
 ): Promise<ClaimedUploads> {
-  const fileKeys = new Set(input.questions.filter((each) => each.answerType === 'file').map((each) => each.key));
+  const fileKeys = new Set(
+    input.questions.filter((each) => UPLOAD_ANSWER_TYPES.includes(each.answerType)).map((each) => each.key),
+  );
   const answers: Record<string, unknown> = Object.fromEntries(
     Object.entries(input.answers).filter(([key]) => !fileKeys.has(key)),
   );
@@ -295,7 +311,7 @@ function holdsFile(view: SubmissionView, fileId: string): boolean {
   return view.answers.some((answer) => {
     const value = answer.value;
     return (
-      answer.answerType === 'file' &&
+      UPLOAD_ANSWER_TYPES.includes(answer.answerType) &&
       typeof value === 'object' &&
       value !== null &&
       (value as { readonly fileId?: unknown }).fileId === fileId

@@ -61,6 +61,14 @@ export function siteOrigin(typed: string): { readonly origin?: string; readonly 
   return { origin: url.origin };
 }
 
+/** The questions a link can't fill: a file and a signature are uploads, a ranking is an order (spec 0063). */
+const NOT_PREFILLED: readonly string[] = ['file', 'signature', 'ranking'];
+
+/** The questions a prefill link can fill, in the form's order. */
+export function prefillable(questions: readonly FormQuestion[]): readonly FormQuestion[] {
+  return questions.filter((question) => !NOT_PREFILLED.includes(question.answerType));
+}
+
 /**
  * A link that fills the form's first question (spec 0063, AC-6309): `?key=value`, a hidden question first when the
  * form has one, since setting one is what a prefill link is mostly for.
@@ -202,7 +210,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
                 label={strings.prefillExample}
                 variant="copy"
                 copyLabel={strings.copyPrefill}
-                value={prefillExample(link, shown.questions)}
+                value={prefillExample(link, prefillable(shown.questions))}
               />
               <Table
                 label={strings.prefillKeys}
@@ -210,7 +218,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
                   { id: 'question', label: strings.prefillQuestion, isRowHeader: true },
                   { id: 'key', label: strings.prefillKey },
                 ]}
-                rows={shown.questions}
+                rows={prefillable(shown.questions)}
                 getRowId={(question) => question.id}
                 renderCell={(question, column) =>
                   column === 'question' ? (
