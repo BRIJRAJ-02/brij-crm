@@ -84,6 +84,7 @@ export const ReadBack: Story = {
         role: 'assistant',
         text: 'Tomorrow at 3:00 PM, 30 minutes, for Ada Lovelace (ada@example.com). Shall I book it?',
         suggestions: ['Yes, book it', 'Something else'],
+        confirm: 'Yes, book it',
       },
     ]);
     return (

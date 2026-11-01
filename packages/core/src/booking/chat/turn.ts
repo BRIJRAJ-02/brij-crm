@@ -117,7 +117,13 @@ export async function chatTurn(
   if (state.intent !== 'book' || state.held === undefined || state.name === undefined || state.email === undefined) {
     const said = answer(state, words);
     return {
-      reply: { text: said.text, offers: [...said.offers], suggestions: [...said.suggestions], duration },
+      reply: {
+        text: said.text,
+        offers: [...said.offers],
+        suggestions: [...said.suggestions],
+        ...(said.confirm === undefined ? {} : { confirm: said.confirm }),
+        duration,
+      },
       bookedNew: false,
     };
   }

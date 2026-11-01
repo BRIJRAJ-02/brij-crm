@@ -130,6 +130,7 @@ export function ChatPanel(props: ChatPanelProps) {
             sent: reply.text,
             days: daysOf(reply.offers, zone, locale, hour12, reply.duration),
             suggestions: reply.suggestions,
+            ...(reply.confirm === undefined ? {} : { confirm: reply.confirm }),
           };
           keep({ conversationId, lines: [...thread, answer] });
           if (reply.duration !== duration) onDuration(reply.duration);

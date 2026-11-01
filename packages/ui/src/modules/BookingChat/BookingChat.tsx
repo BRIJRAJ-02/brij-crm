@@ -22,6 +22,11 @@ export interface BookingChatLine {
   readonly text: string;
   readonly days?: readonly BookingChatDay[];
   readonly suggestions?: readonly string[];
+  /**
+   * On a read back, the suggestion that books it ("Yes, book it"): the answer's suggestions become its confirm card
+   * (stageshow's ai-cards), this one the primary action, at the size of the page's Book.
+   */
+  readonly confirm?: string;
 }
 
 /** A failed turn: the sentence, and what the visitor can do about it. */
@@ -102,11 +107,27 @@ export function BookingChat({
   const lastAssistant = lines.findLast((line) => line.role === 'assistant')?.id;
   const isLocked = isWaiting || isDone || isLoading;
 
-  // The newest line in view as the thread grows.
+  // The newest line in view as the thread grows: at once when a line arrives, then again as each line, its times and
+  // its card finish opening to their height, so the thread follows them down rather than stopping short (the owner,
+  // 2 November 2026). It glides there, unless less motion was asked for.
   useEffect(() => {
     const thread = threadRef.current;
     if (thread !== null) thread.scrollTop = thread.scrollHeight;
   }, [lines.length, isWaiting, error]);
+  useEffect(() => {
+    const thread = threadRef.current;
+    if (thread === null) return undefined;
+    const follow = () => {
+      const isStill = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      thread.scrollTo({ top: thread.scrollHeight, behavior: isStill ? 'auto' : 'smooth' });
+    };
+    thread.addEventListener('animationstart', follow);
+    thread.addEventListener('animationend', follow);
+    return () => {
+      thread.removeEventListener('animationstart', follow);
+      thread.removeEventListener('animationend', follow);
+    };
+  }, []);
 
   // A pressed time or suggestion leaves with its reply: focus goes to the field, where the next answer is typed.
   const focusField = () => globalThis.requestAnimationFrame(() => fieldRef.current?.focus());
@@ -162,11 +183,25 @@ export function BookingChat({
                     </div>
                   ))}
                 {isLive && line.suggestions !== undefined && line.suggestions.length > 0 && (
-                  <div className={styles.suggestions} role="group" aria-label={strings.suggestions}>
+                  <div
+                    className={styles.suggestions}
+                    data-confirm={line.confirm === undefined ? undefined : ''}
+                    role="group"
+                    aria-label={strings.suggestions}
+                  >
                     {line.suggestions.map((suggestion) => (
                       <Button
                         key={suggestion}
-                        variant="ghost"
+                        {...(line.confirm === undefined
+                          ? { variant: 'ghost' as const }
+                          : suggestion === line.confirm
+                            ? {
+                                variant: 'primary' as const,
+                                size: 'xl' as const,
+                                icon: 'check' as const,
+                                isFullWidth: 'center' as const,
+                              }
+                            : { variant: 'secondary' as const, size: 'xl' as const, isFullWidth: 'center' as const })}
                         onPress={() => {
                           onSend(suggestion);
                           focusField();
