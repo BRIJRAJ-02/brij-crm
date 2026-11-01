@@ -81,10 +81,16 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
 
   // A name a live attribute goes by is refused on the name, before anything is sent (AC-245; the API name is made
   // from it, with no field of its own since 30 October 2026).
-  // The creates' toasts go first: on a phone the last one would sit over the dialog's footer, and an open dialog
-  // holds its timer (as does a pointer resting on the toast, so it moves off first).
-  await page.mouse.move(0, 0);
-  await expect(page.locator('[data-tone="success"][role="alertdialog"]')).toHaveCount(0, { timeout: 20_000 });
+  // The creates' toasts go first: on a phone the one still up sits over the dialog's footer, over Cancel. Waiting
+  // them out would take the better part of a minute (the region shows one at a time, five seconds each, and an open
+  // dialog holds the timer), so dismiss them here, where no dialog is in the way, as a person in a hurry would.
+  const toasts = page.locator('[data-tone="success"][role="alertdialog"]');
+  const dismiss = toasts.getByRole('button', { name: 'Dismiss' });
+  await expect(async () => {
+    if ((await dismiss.count()) > 0) await dismiss.first().click({ timeout: 2_000 });
+    // Dismissing one shows the next at once, so an empty region is the whole queue drained.
+    await expect(toasts).toHaveCount(0, { timeout: 1_000 });
+  }).toPass({ timeout: 60_000 });
   await page.getByRole('button', { name: 'New attribute' }).click();
   const dialog = page.getByRole('dialog', { name: 'New attribute' });
   await dialog.getByLabel('Name', { exact: true }).fill('Code');
