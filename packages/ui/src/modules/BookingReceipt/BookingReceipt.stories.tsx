@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, screen, userEvent, within } from 'storybook/test';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
@@ -26,6 +26,16 @@ const meta = {
       google: 'https://calendar.google.com/calendar/render',
       outlook: 'https://outlook.live.com/calendar/0/deeplink/compose',
       ics: '/booking.ics',
+    },
+    share: {
+      title: 'Intro call with Ada Lovelace',
+      lines: [
+        'Intro call with Ada Lovelace',
+        'Friday, October 9, 2026, 9:30 – 10:00 AM',
+        'London time (GMT+1)',
+        'Video call',
+      ],
+      calendarUrl: 'https://calendar.google.com/calendar/render',
     },
   },
 } satisfies Meta<typeof BookingReceipt>;
@@ -99,5 +109,15 @@ export const WithBrand: Story = {
     const link = canvas.getByRole('link', { name: 'Powered by Timefix (opens in a new tab)' });
     await expect(link).toHaveAttribute('target', '_blank');
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  },
+};
+
+/** Share: one quiet button at the end of Add to calendar, opening the meeting in two lines with Copy details. */
+export const Sharing: Story = {
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Share' }));
+    const panel = await screen.findByRole('dialog', { name: 'Share this meeting' });
+    await expect(within(panel).getByText('Intro call with Ada Lovelace')).toBeInTheDocument();
+    await expect(within(panel).getByRole('button', { name: 'Copy details' })).toBeInTheDocument();
   },
 };
