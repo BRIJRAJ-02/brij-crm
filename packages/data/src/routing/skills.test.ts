@@ -66,10 +66,17 @@ function setup() {
       reads.push('settings');
       return Promise.resolve(settings);
     },
-    setSettings: (_, wonStage, updatedAt) =>
+    setSettings: (_, change, updatedAt) =>
       later(() => {
         if (updatedAt !== settings.updatedAt) throw dataError('STALE', 'Someone else changed it.');
-        settings = { ...(wonStage === null ? {} : { wonStage }), updatedAt: 'later' };
+        const wonStage = change.wonStage ?? null;
+        settings = {
+          ...(wonStage === null ? {} : { wonStage }),
+          ...(change.smartMode === undefined ? {} : { smartMode: change.smartMode }),
+          ...(change.tiltPercent === undefined ? {} : { tiltPercent: change.tiltPercent }),
+          ...(change.fit === undefined ? {} : { fit: [...change.fit] }),
+          updatedAt: 'later',
+        };
         server = { ...server, wonMeansSet: wonStage !== null };
         return settings;
       }),
@@ -135,7 +142,7 @@ describe('routing skills in the browser (spec 0037, AC-1382)', () => {
     const releaseSkills = skills.retain();
     await flush();
     const wonStage = { attributeId: STAGE, optionIds: [WON] };
-    const first = store.setWonStage('acme', wonStage);
+    const first = store.set('acme', { wonStage });
     const shown = settings.getSnapshot();
     expect(shown.status === 'ready' && shown.value.wonStage).toEqual(wonStage);
     answer();
@@ -146,7 +153,7 @@ describe('routing skills in the browser (spec 0037, AC-1382)', () => {
     // Someone else changes it: this tab's next change is refused and the settings are read again.
     setSettingsElsewhere({ updatedAt: 'elsewhere' });
     const before = reads.filter((each) => each === 'settings').length;
-    const second = store.setWonStage('acme', null);
+    const second = store.set('acme', { wonStage: null });
     answer();
     await expect(second).rejects.toMatchObject({ code: 'STALE' });
     await flush();
@@ -163,8 +170,8 @@ describe('routing skills in the browser (spec 0037, AC-1382)', () => {
     setSettingsElsewhere({ updatedAt: 'read' });
     settings.reload();
     await flush();
-    const first = store.setWonStage('acme', { attributeId: STAGE, optionIds: [WON] });
-    const second = store.setWonStage('acme', null);
+    const first = store.set('acme', { wonStage: { attributeId: STAGE, optionIds: [WON] } });
+    const second = store.set('acme', { wonStage: null });
     // Both show at once; only the first is on its way.
     const shown = settings.getSnapshot();
     expect(shown.status === 'ready' && shown.value.wonStage).toBeUndefined();

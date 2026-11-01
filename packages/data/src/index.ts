@@ -177,7 +177,12 @@ import {
   type RoutingReportSurface,
 } from './routing/reports.ts';
 import { createPageRules, type PageRulesHeld } from './routing/page-rules.ts';
-import { createRoutingSkills, type RoutingSettingsState, type RoutingSkillsState } from './routing/skills.ts';
+import {
+  createRoutingSkills,
+  type RoutingSettingsState,
+  type RoutingSkillsState,
+  type SettingsChange,
+} from './routing/skills.ts';
 import {
   createRoutingLog,
   type RoutingDecisionFilters,
@@ -498,7 +503,11 @@ export type {
   RoutingStepView,
   RoutingSurface,
   RoutingTestResult,
+  CandidateNumbers,
+  FitLink,
   MemberSkills,
+  RoutingPick,
+  SmartMode,
   RequiredSkills,
   RouteHosts,
   SkillGroup,
@@ -687,7 +696,7 @@ export type {
   RoutingHeld,
   RoutingOverviewState,
 } from './routing/log.ts';
-export type { RoutingSettingsState, RoutingSharedState, RoutingSkillsState } from './routing/skills.ts';
+export type { RoutingSettingsState, RoutingSharedState, RoutingSkillsState, SettingsChange } from './routing/skills.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -2552,13 +2561,22 @@ export function createDataLayer({
       ),
     settings: (workspace) =>
       beforeRead(workspace).then(() => call((options) => api.routing.settings.get({ workspace }, options))),
-    setSettings: (workspace, wonStage, updatedAt) =>
+    setSettings: (workspace, change, updatedAt) =>
       call((options) =>
         api.routing.settings.set(
           {
             workspace,
-            wonStage:
-              wonStage === null ? null : { attributeId: wonStage.attributeId, optionIds: [...wonStage.optionIds] },
+            ...(change.wonStage === undefined
+              ? {}
+              : {
+                  wonStage:
+                    change.wonStage === null
+                      ? null
+                      : { attributeId: change.wonStage.attributeId, optionIds: [...change.wonStage.optionIds] },
+                }),
+            ...(change.smartMode === undefined ? {} : { smartMode: change.smartMode }),
+            ...(change.tiltPercent === undefined ? {} : { tiltPercent: change.tiltPercent }),
+            ...(change.fit === undefined ? {} : { fit: change.fit.map((link) => ({ ...link })) }),
             ...(updatedAt === undefined ? {} : { updatedAt }),
             mutationId: mintId(),
           },
@@ -4568,12 +4586,17 @@ export function createDataLayer({
         setMember: (workspace: string, memberId: string, skillIds: readonly string[]): Promise<void> =>
           routingSkills.setMember(workspace, memberId, skillIds),
       },
-      /** The workspace's routing settings (AC-1351): Won means (AC-1385), for holders of routing.manage. */
+      /**
+       * The workspace's routing settings (AC-1351), for holders of routing.manage: Won means (AC-1385), and the smart
+       * ranking's mode, fairness allowance and fit links (AC-1363, AC-1374).
+       */
       settings: {
         view: (workspace: string): RoutingHeld<RoutingSettingsState> => routingSkills.settings(workspace),
         /** Won means set, or cleared with null; `STALE` reads the settings again and rejects. */
         setWonStage: (workspace: string, wonStage: WonStage | null): Promise<void> =>
-          routingSkills.setWonStage(workspace, wonStage),
+          routingSkills.set(workspace, { wonStage }),
+        /** One settings change (the Smart tab's), shown at once; `STALE` reads them again and rejects. */
+        set: (workspace: string, change: SettingsChange): Promise<void> => routingSkills.set(workspace, change),
       },
       /**
        * Routing › Test (AC-1392): what a surface's rules would decide for typed answers and an email. Stores nothing

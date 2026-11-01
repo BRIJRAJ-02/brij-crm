@@ -20,7 +20,10 @@
 //
 // This is the seam spec 0037's routing and learned ranking plug into: they
 // order or narrow the candidates before the pick, and the ledger row's detail
-// records what was compared.
+// records what was compared. Spec 0037's smart ranking (AC-1361 to AC-1364)
+// plugs in as a seat's `smart`: `smart.ts` turns a load, a fit and a learned
+// lift into one ranking key, and this file only ever orders by that key.
+import { rankingKey, tilts, withinAllowance, type SmartRanking } from './smart.ts';
 
 /** One member who could take the work. */
 export interface Candidate {
@@ -55,8 +58,8 @@ export interface Returning {
   readonly standinId?: string | undefined;
 }
 
-/** Why a member got the work, as the ledger stores it. */
-export type PickReason = 'fair' | 'priority' | 'even' | 'owner' | 'last_host' | 'standin' | 'only_free';
+/** Why a member got the work, as the ledger stores it. `routed` is the smart ranking moving the pick (AC-1363). */
+export type PickReason = 'fair' | 'priority' | 'even' | 'owner' | 'last_host' | 'standin' | 'only_free' | 'routed';
 
 /** One candidate as the ledger row's detail records them. */
 export interface ComparedMember {
@@ -98,22 +101,31 @@ export function evenWaiting(members: readonly Candidate[], gap: number): Readonl
   return new Set(loads.filter((each) => each.load - lowest >= gap - 1e-9).map((each) => each.id));
 }
 
-/** Fair's order: lowest load, higher priority, longest since last assigned (never first), member id. */
-function fairOrder(a: Candidate, b: Candidate): number {
+/**
+ * Fair's order: lowest ranking key, higher priority, longest since last
+ * assigned (never first), member id. Without a smart ranking the key is the
+ * load, so this is exactly spec 0029's order (AC-739); with one it is the
+ * load less the seat's slack times the candidate's preference (AC-1363),
+ * which only ever reorders people the rules already allowed.
+ */
+function fairOrder(a: Candidate, b: Candidate, smart: SmartRanking | undefined): number {
   return (
-    loadOf(a) - loadOf(b) ||
+    rankingKey(a, smart) - rankingKey(b, smart) ||
     b.priority - a.priority ||
     (a.lastAssignedAt?.getTime() ?? -Infinity) - (b.lastAssignedAt?.getTime() ?? -Infinity) ||
     (a.memberId < b.memberId ? -1 : a.memberId > b.memberId ? 1 : 0)
   );
 }
 
-/** The candidates best first, by the strategy (AC-738). */
+/** The candidates best first, by the strategy (AC-738) and, when it is given, the smart ranking (AC-1361). */
 export function rankCandidates(
   candidates: readonly Candidate[],
   strategy: PickRules['strategy'],
+  smart?: SmartRanking,
 ): readonly Candidate[] {
-  return [...candidates].sort((a, b) => (strategy === 'priority' ? b.priority - a.priority : 0) || fairOrder(a, b));
+  return [...candidates].sort(
+    (a, b) => (strategy === 'priority' ? b.priority - a.priority : 0) || fairOrder(a, b, smart),
+  );
 }
 
 /** The member a returning guest goes to among the open candidates, and why; undefined when neither is free. */
@@ -132,29 +144,54 @@ function returningTo(
   return standin === undefined ? undefined : { memberId: standin.memberId, reason: 'standin' };
 }
 
-/** The first of `ranked` that `allowed` admits, by the rules above. */
+/**
+ * The first of `ranked` that `allowed` admits, by the rules above. With a
+ * smart ranking (AC-1361) the seat is ordered twice: once by the rotation
+ * alone and once with the preference, and the reason is `routed` only when
+ * the two disagree, so the ledger still says `fair`, `priority` or `even`
+ * whenever the ranking changed nothing.
+ */
 function pickAmong(
-  ranked: readonly Candidate[],
+  candidates: readonly Candidate[],
   rules: PickRules,
   known: Returning,
   allowed: (memberId: string) => boolean,
+  smart?: SmartRanking,
 ): Picked | undefined {
-  const open = ranked.filter((each) => allowed(each.memberId));
+  const plain = rankCandidates(candidates, rules.strategy);
+  const open = plain.filter((each) => allowed(each.memberId));
   const first = open[0];
   if (first === undefined) return undefined;
   const detail: PickDetail = {
     strategy: rules.strategy,
-    compared: ranked.map((each) => ({
+    compared: plain.map((each) => ({
       memberId: each.memberId,
       count: each.count + each.calibration,
       weight: each.weight,
       priority: each.priority,
     })),
   };
+  // A returning guest's owner, last host or stand in is never ranked and never a trial (AC-1365).
   const back = returningTo(open, rules, known);
   if (back !== undefined) return { ...back, detail };
   if (open.length === 1) return { memberId: first.memberId, reason: 'only_free', detail };
-  return { memberId: first.memberId, reason: rules.strategy, detail };
+  // Two or more free candidates: the ranking orders them (AC-1361).
+  const ranked =
+    smart !== undefined &&
+    tilts(
+      smart,
+      open.map((each) => each.memberId),
+    )
+      ? rankCandidates(candidates, rules.strategy, smart).filter((each) => allowed(each.memberId))
+      : open;
+  // The allowance is measured from the whole rotation's lowest load, not this slot's (AC-1364): the seat's own first
+  // choice is always admitted, so a seat where everyone is over it still books, by the rotation's own order.
+  const best =
+    smart === undefined
+      ? (ranked[0] ?? first)
+      : (ranked.find((each) => each.memberId === first.memberId || withinAllowance(each, smart)) ?? first);
+  const reason: PickReason = best.memberId === first.memberId ? rules.strategy : 'routed';
+  return { memberId: best.memberId, reason, detail };
 }
 
 /**
@@ -166,8 +203,9 @@ export function pickMember(
   candidates: readonly Candidate[],
   rules: PickRules,
   known: Returning = {},
+  smart?: SmartRanking,
 ): Picked | undefined {
-  return pickAmong(rankCandidates(candidates, rules.strategy), rules, known, () => true);
+  return pickAmong(candidates, rules, known, () => true, smart);
 }
 
 /**
@@ -188,12 +226,14 @@ export function hallHolds(sets: readonly (readonly string[])[]): boolean {
   return true;
 }
 
-/** One seat to fill: a rotation's rules, its free candidates, and where its returning guest goes. */
+/** One seat to fill: a rotation's rules, its free candidates, where its returning guest goes, and its ranking. */
 export interface Seat {
   readonly rotationId: string;
   readonly rules: PickRules;
   readonly candidates: readonly Candidate[];
   readonly known?: Returning;
+  /** The smart ranking for this seat (AC-1361); absent, or off, leaves the pick exactly the rotation's. */
+  readonly smart?: SmartRanking;
 }
 
 /** A seat's pick, naming its rotation. */
@@ -212,12 +252,13 @@ export function fillSeats(seats: readonly Seat[]): readonly SeatPick[] | undefin
   for (const [index, seat] of seats.entries()) {
     const later = ids.slice(index + 1);
     const picked = pickAmong(
-      rankCandidates(seat.candidates, seat.rules.strategy),
+      seat.candidates,
       seat.rules,
       seat.known ?? {},
       (memberId) =>
         !taken.has(memberId) &&
         hallHolds(later.map((set) => set.filter((each) => each !== memberId && !taken.has(each)))),
+      seat.smart,
     );
     if (picked === undefined) return undefined;
     taken.add(picked.memberId);

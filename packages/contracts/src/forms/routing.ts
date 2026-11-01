@@ -7,7 +7,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { CONDITION_OPS, CONDITIONS_MAX, isHiddenFact, isRecordFact, NUMBER_OPS, VALUELESS_OPS } from './show-when.ts';
 import { QUESTION_KEY } from './answer-types.ts';
-import { REQUIRED_SKILLS_MAX } from './routing-limits.ts';
+import { REQUIRED_SKILLS_MAX, SMART_MODES } from './routing-limits.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 
@@ -284,6 +284,58 @@ export const RoutingStepView = RoutingStep.extend({ pageName: z.string().optiona
 /** A decision's step as the log shows it. */
 export type RoutingStepView = z.infer<typeof RoutingStepView>;
 
+/** Why a ranked seat went where it did (AC-1373): the rotation's own fair share, or the rep's track record. */
+export const RoutingPickBy = z.enum(['fair_share', 'track_record']);
+/** Why a ranked seat went where it did. */
+export type RoutingPickBy = z.infer<typeof RoutingPickBy>;
+
+/**
+ * One candidate's numbers as the snapshot froze them (AC-1373). `load` is their count for each unit of weight at
+ * weight 100; `fairShare` the seat's mean load. The rates are only ever sent to the rep themself (their own) and to
+ * holders of `routing.manage`.
+ */
+export const CandidateNumbers = z.object({
+  memberId: Uuid,
+  name: z.string(),
+  /** Their live count in the window, calibration included. */
+  count: z.number(),
+  load: z.number(),
+  fairShare: z.number(),
+  /** 0 to 1: the share of applying fit links whose skill they hold. */
+  fit: z.number(),
+  /** 0 to 1: their learned lift in this cell, 0 while it is cold. */
+  lift: z.number(),
+  trials: z.number().int().min(0),
+  successes: z.number().int().min(0),
+  /** The smoothed rate and the team's, 0 to 1; only at the rates tier. */
+  rate: z.number().optional(),
+  teamRate: z.number().optional(),
+  /** True for the candidate the seat went to. */
+  isPicked: z.boolean(),
+});
+/** One candidate's numbers. */
+export type CandidateNumbers = z.infer<typeof CandidateNumbers>;
+
+/** A ranked seat's pick, in the words every tier reads (AC-1373). */
+export const RoutingPick = z.object({
+  memberId: Uuid,
+  name: z.string(),
+  /** The picked rep's matched skills, by name. */
+  skills: z.array(z.string()),
+  by: RoutingPickBy,
+  mode: z.enum(SMART_MODES),
+  /** True when this decision was drawn into the holdout, so it picked plain fair (L9). */
+  holdout: z.boolean(),
+  /** The rotation's window, for the explanation's words ("in the last 30 days"). */
+  windowDays: z.number().int().min(1),
+  /** The model the lift came from; 0 before anything was learned. */
+  modelVersion: z.number().int().min(0),
+  slack: z.number(),
+  tiltPercent: z.number().int().min(0),
+});
+/** A ranked seat's pick. */
+export type RoutingPick = z.infer<typeof RoutingPick>;
+
 /**
  * One decision as Routing › Decisions shows it (AC-1375): names and outcomes only, no record fact, and only when the
  * reader may see the person it was for.
@@ -318,6 +370,13 @@ export const RoutingDecision = z.object({
   steps: z.array(RoutingStepView),
   /** Rules passed over because a fact couldn't be read, by place ("Rule 2"). */
   skipped: z.array(z.string()),
+  /** The ranked seat's pick, from the frozen snapshot (AC-1373); absent when nothing was ranked. */
+  pick: RoutingPick.optional(),
+  /**
+   * The candidates' numbers from the snapshot, at the reader's tier (AC-1373): empty for a plain viewer, the picked
+   * rep's own row for that rep, every row with its rates for a holder of `routing.manage`.
+   */
+  numbers: z.array(CandidateNumbers).default([]),
 });
 /** One decision. */
 export type RoutingDecision = z.infer<typeof RoutingDecision>;

@@ -1,8 +1,8 @@
 // Brief
 // Purpose: Bookings › Routing (spec 0037, AC-1383), for holders of routing.manage: every routed form and team page in one place, and every decision they made.
 // Main task: see where each surface sends people when no rule matches and how it did in 30 days; then scan decisions, filter them, and open one to see why it went where it did.
-// Then (L7) Skills, Test, and Won means under the Overview.
-// Leaves out: editing rules (each surface's own Routing card, linked), Smart (L8), Insights (L9).
+// Then (L7) Skills, Test, and Won means under the Overview, and (L8) Smart: the ranking mode, the fairness allowance and the fit links.
+// Leaves out: editing rules (each surface's own Routing card, linked), Insights (L9).
 import type {
   AttributeDefinition,
   DataLayer,
@@ -43,11 +43,13 @@ import { formHref } from '../forms/paths.ts';
 import { skillStrings } from './skills-strings.ts';
 import { SkillsTab } from './SkillsTab.tsx';
 import { strings } from './tab-strings.ts';
+import { smartStrings } from './smart-strings.ts';
+import { SmartTab, type FitField } from './SmartTab.tsx';
 import { TestTab } from './TestTab.tsx';
 import { WonMeansCard } from './WonMeansCard.tsx';
 
 /** Routing's views, in the strip's order. */
-export const ROUTING_VIEWS = ['overview', 'decisions', 'skills', 'test'] as const;
+export const ROUTING_VIEWS = ['overview', 'decisions', 'skills', 'test', 'smart'] as const;
 /** One of Routing's views. */
 export type RoutingView = (typeof ROUTING_VIEWS)[number];
 
@@ -71,6 +73,8 @@ export interface RoutingScreenProps {
   readonly members: readonly MemberView[];
   /** Deals' Stage field, for Won means; undefined when Deals has none. */
   readonly stage?: AttributeDefinition;
+  /** The select and status fields on People, Companies and Deals a fit link may read (spec 0037, AC-1362). */
+  readonly fitFields: readonly FitField[];
   readonly toasts: Toasts;
   readonly onSearch: (next: Partial<RoutingSearch>) => void;
 }
@@ -100,7 +104,7 @@ function Toolbar({ children }: { readonly children: ReactNode }) {
 }
 
 /** Bookings › Routing. */
-export function RoutingScreen({ data, slug, search, members, stage, toasts, onSearch }: RoutingScreenProps) {
+export function RoutingScreen({ data, slug, search, members, stage, fitFields, toasts, onSearch }: RoutingScreenProps) {
   const overviewHeld = useMemo(() => data.routing.overview(slug), [data, slug]);
   const overview = useRoutingOverview(overviewHeld);
   const surfaces = overview.status === 'ready' ? overview.overview.surfaces : [];
@@ -120,6 +124,7 @@ export function RoutingScreen({ data, slug, search, members, stage, toasts, onSe
             { value: 'decisions', label: strings.decisions },
             { value: 'skills', label: skillStrings.views.skills },
             { value: 'test', label: skillStrings.views.test },
+            { value: 'smart', label: smartStrings.view },
           ]}
         />
       </Toolbar>
@@ -143,6 +148,8 @@ export function RoutingScreen({ data, slug, search, members, stage, toasts, onSe
         <SkillsTab data={data} slug={slug} members={members} toasts={toasts} />
       ) : search.view === 'test' ? (
         <TestTab data={data} slug={slug} surfaces={surfaces} />
+      ) : search.view === 'smart' ? (
+        <SmartTab data={data} slug={slug} fields={fitFields} toasts={toasts} />
       ) : (
         <Decisions data={data} slug={slug} search={search} surfaces={surfaces} members={members} onSearch={onSearch} />
       )}

@@ -738,6 +738,8 @@ function SubmissionDetail({
   readonly isFiling: boolean;
 }) {
   const source = cameFromOf(submission);
+  // A lead whose owner waits for its meeting (spec 0037, AC-1372): the panel says so while the claim is open.
+  const waitsForBooking = submission.assignment?.reason === 'waiting_for_booking';
   const filing = answerFiling(submission.answers, submission.crm, isFiling, submission.refused);
   const reasons = submission.crm.state === 'linked' ? notSavedReasons(submission.answers, submission.refused) : [];
   return (
@@ -778,7 +780,7 @@ function SubmissionDetail({
           markOf={(answer) => (filing.marked.has(answer.questionId) ? filing.mark : undefined)}
         />
       </FieldGroup>
-      {(submission.records.length > 0 || submission.crm.state === 'filing') && (
+      {(submission.records.length > 0 || submission.crm.state === 'filing' || waitsForBooking) && (
         <>
           <Separator />
           <FieldGroup
@@ -788,6 +790,13 @@ function SubmissionDetail({
             isLive
             {...(submission.records.length > 0 ? {} : { hint: strings.answersFiling })}
           >
+            {/* The lead's owner follows its meeting (spec 0037, AC-1423): nobody owns it until the booking is made. */}
+            {waitsForBooking && (
+              <DescriptionList
+                layout="stacked"
+                items={[{ id: 'owner-waiting', term: strings.owner, description: strings.ownerWaiting }]}
+              />
+            )}
             {submission.records.length > 0 ? (
               <DescriptionList
                 layout="stacked"

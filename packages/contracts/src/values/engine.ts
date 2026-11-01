@@ -87,6 +87,8 @@ export const ENGINE_REFUSAL_CODES = [
   'EDITOR_LIMIT',
   // Routing (spec 0037, AC-1341): a booking page a published form's rule, or its After someone sends it, still books.
   'ROUTING_IN_USE',
+  // A booking made through a form's hand off more than 24 hours after the submission (spec 0037, AC-1427).
+  'HANDOFF_EXPIRED',
   // Skills (spec 0037, AC-1382): a skill a host route names, or the workspace's 100th.
   'SKILL_IN_USE',
   'SKILL_LIMIT',

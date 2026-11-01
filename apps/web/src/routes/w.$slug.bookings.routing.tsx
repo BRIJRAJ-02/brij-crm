@@ -2,6 +2,7 @@ import { isDataError, type AttributeDefinition, type DataLayer, type MemberView 
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { RoutingPending, RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
+import type { FitField } from '../features/routing/SmartTab.tsx';
 import { strings } from '../features/routing/tab-strings.ts';
 import { SettingsMissing } from '../features/settings/SettingsPage.tsx';
 
@@ -20,7 +21,10 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
     const host = text(raw.host);
     const decision = text(raw.decision);
     return {
-      view: raw.view === 'decisions' || raw.view === 'skills' || raw.view === 'test' ? raw.view : 'overview',
+      view:
+        raw.view === 'decisions' || raw.view === 'skills' || raw.view === 'test' || raw.view === 'smart'
+          ? raw.view
+          : 'overview',
       ...(surface === undefined ? {} : { surface }),
       ...(rule === undefined ? {} : { rule }),
       ...(host === undefined ? {} : { host }),
@@ -32,15 +36,20 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
   loader: async ({
     context,
     params,
-  }): Promise<{ readonly members?: readonly MemberView[]; readonly stage?: AttributeDefinition }> => {
+  }): Promise<{
+    readonly members?: readonly MemberView[];
+    readonly stage?: AttributeDefinition;
+    readonly fitFields?: readonly FitField[];
+  }> => {
     try {
       const access = await context.data.access.mine(params.slug);
       if (!access.permissions.includes('routing.manage')) return {};
-      const [members, stage] = await Promise.all([
+      const [members, stage, fitFields] = await Promise.all([
         context.data.members.list(params.slug),
         dealsStage(context.data, params.slug),
+        fitTargets(context.data, params.slug),
       ]);
-      return { members, ...(stage === undefined ? {} : { stage }) };
+      return { members, fitFields, ...(stage === undefined ? {} : { stage }) };
     } catch (error) {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return {};
@@ -65,8 +74,41 @@ async function dealsStage(data: DataLayer, slug: string): Promise<AttributeDefin
   return attributes.find((each) => each.apiSlug === 'stage' && !each.isArchived);
 }
 
+/**
+ * The fields a fit link may read (spec 0037, AC-1362): the live select and status fields on People, Companies and
+ * Deals, each with its live options, prefixed by their object so two fields called Region read apart. A field or an
+ * object hidden from the reader is simply absent.
+ */
+async function fitTargets(data: DataLayer, slug: string): Promise<readonly FitField[]> {
+  const objects = await data.objects.list(slug);
+  const wanted = objects.filter(
+    (each) => each.standardKey === 'people' || each.standardKey === 'companies' || each.standardKey === 'deals',
+  );
+  const lists = await Promise.all(wanted.map((object) => data.attributes.list(slug, object.id)));
+  return wanted.flatMap((object, index) =>
+    (lists[index] ?? [])
+      .filter(
+        (attribute) =>
+          !attribute.isArchived &&
+          (attribute.type === 'select' || attribute.type === 'status') &&
+          (attribute.options ?? []).some((option) => !option.isArchived),
+      )
+      .map((attribute) => ({
+        id: attribute.id,
+        label: `${object.singularName} · ${attribute.title}`,
+        options: (attribute.options ?? [])
+          .filter((option) => !option.isArchived)
+          .map((option) => ({
+            id: option.id,
+            label: option.label,
+            hue: option.hue,
+          })),
+      })),
+  );
+}
+
 function RoutingRoute() {
-  const { members, stage } = Route.useLoaderData();
+  const { members, stage, fitFields } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const search = Route.useSearch();
   const { data, toasts } = Route.useRouteContext();
@@ -79,6 +121,7 @@ function RoutingRoute() {
       search={search}
       members={members}
       {...(stage === undefined ? {} : { stage })}
+      fitFields={fitFields ?? []}
       toasts={toasts}
       onSearch={(next) => void navigate({ search: (current) => ({ ...current, ...next }), replace: true })}
     />

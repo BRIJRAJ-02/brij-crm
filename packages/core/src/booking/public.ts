@@ -88,6 +88,8 @@ import { writeAssignment } from '../rotation/ledger.ts';
 import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } from '../rotation/team.ts';
 import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
+import { claimLeadOwnerAtBooking } from './lead.ts';
+import { refuseExpiredHandoff } from '../routing/lead-owner.ts';
 import {
   bookingAnswersOf,
   chatIsOff,
@@ -1151,6 +1153,9 @@ export async function bookPublicSlot(
     candidates = slot.candidates;
   }
 
+  // A hand off older than its life never books (spec 0037, AC-1427): the visitor fills the form in again.
+  if (link !== undefined) await inWorkspace(entry.scope, (tx) => refuseExpiredHandoff(tx, link.submissionId, now));
+
   // Routing (spec 0043): a hand off's hosts, else the page's rules over the guest's record fields, read here before
   // any lock, so a busy team page's bookings never wait on them.
   const routing: BookingRouting | undefined =
@@ -1162,6 +1167,8 @@ export async function bookPublicSlot(
             email: input.email,
             ...(link === undefined ? {} : { submissionId: link.submissionId }),
             answers,
+            // Everyone who could take a seat at this slot, for the ranking's fit (spec 0037, AC-1362).
+            memberIds: candidates.flat(),
           }),
         )
       : undefined;
@@ -1201,6 +1208,18 @@ export async function bookPublicSlot(
         chosen = await chooseHosts(tx, page, team, {
           ...choice,
           ...(routing?.hosts === undefined ? {} : { prefer: allowFor(team, routing.hosts) }),
+          // The smart ranking orders the free reps the rules already allowed (spec 0037, AC-1361).
+          ...(routing?.smart === undefined
+            ? {}
+            : {
+                smart: {
+                  mode: routing.smart.settings.mode,
+                  tiltPercent: routing.smart.settings.tiltPercent,
+                  fit: routing.smart.fit.shares,
+                  matched: routing.smart.fit.matched,
+                  modelVersion: routing.smart.settings.modelVersion,
+                },
+              }),
         });
         narrowed = chosen.narrowed;
         host = chosen.organiser;
@@ -1265,7 +1284,15 @@ export async function bookPublicSlot(
         if (row === undefined) throw new Error('The booking was not stored.');
         bookingId = row.id;
         if (routing !== undefined) {
-          await recordBookingRouting(tx, { workspaceId, pageId: page.id, bookingId, routing, narrowed });
+          const snapshot = chosen?.snapshot ?? [];
+          await recordBookingRouting(tx, {
+            workspaceId,
+            pageId: page.id,
+            bookingId,
+            routing,
+            narrowed,
+            ...(snapshot.length === 0 ? {} : { snapshot: snapshot.map((seat) => ({ ...seat })) }),
+          });
         }
         // The organiser's own `booking_hosts` row comes with the booking (its trigger); every other host's here.
         const others = hosts.filter((memberId) => memberId !== host);
@@ -1295,6 +1322,12 @@ export async function bookPublicSlot(
           });
         }
       }
+      // The lead whose owner waited for this meeting (spec 0037, AC-1372): the seat of the form's own rotation
+      // becomes the owner, claimed in the database, so the unbooked job can never assign as well.
+      if (link !== undefined && chosen !== undefined) {
+        await claimLeadOwnerAtBooking(context, { submissionId: link.submissionId, picks: chosen.picks });
+      }
+
       // The visitor's records, under a lock on their email, in a savepoint: a refusal keeps the booking. On a round
       // robin page, a person or company made now is the assigned host's (AC-744); one that exists keeps its owner.
       // A page that keeps bookings out of the CRM finds and makes no records (spec 0057, AC-5708). The filed answers

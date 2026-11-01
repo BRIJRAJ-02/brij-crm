@@ -42,6 +42,12 @@ export {
   SKILL_GROUPS,
   SKILL_NAME_MAX,
   SKILLS_MAX,
+  // The smart ranking's numbers (spec 0037, L8): the Smart tab's modes, allowance and fit limit.
+  FIT_LINKS_MAX,
+  SMART_MODE_DEFAULT,
+  SMART_MODES,
+  TILT_PERCENT_DEFAULT,
+  TILT_PERCENT_MAX,
   type KnownValue,
   matchesShowWhen,
   summarizeShowWhen,

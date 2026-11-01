@@ -439,7 +439,10 @@ export const routingRouter = member.routing.router({
     set: member.routing.settings.set.handler(({ context, input }) =>
       commitWrite(context, { mutationId: input.mutationId }, () =>
         setRoutingSettings(context.scope, {
-          wonStage: input.wonStage,
+          ...(input.wonStage === undefined ? {} : { wonStage: input.wonStage }),
+          ...(input.smartMode === undefined ? {} : { smartMode: input.smartMode }),
+          ...(input.tiltPercent === undefined ? {} : { tiltPercent: input.tiltPercent }),
+          ...(input.fit === undefined ? {} : { fit: input.fit }),
           ...(input.updatedAt === undefined ? {} : { updatedAt: input.updatedAt }),
         }),
       ),

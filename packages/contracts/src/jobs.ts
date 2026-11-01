@@ -43,6 +43,8 @@ export const JOB_KINDS = {
   'records.import': { label: 'Import', lane: 'heavy', cancellable: true },
   'records.import_undo': { label: 'Undo import', lane: 'heavy', cancellable: false },
   'records.export': { label: 'Export', lane: 'heavy', cancellable: true },
+  // A form lead's owner picked after its hand off expired with no booking (spec 0037, AC-1372): the system's.
+  'routing.assign_unbooked': { label: 'Assign a lead', lane: 'light', cancellable: false },
   // Computed attributes (spec 0015): the system's own recomputes, started in the write that changed an input.
   'computed.recompute': { label: 'Updating computed values', lane: 'light', cancellable: false },
   'computed.fill': { label: 'Working out values', lane: 'heavy', cancellable: false },

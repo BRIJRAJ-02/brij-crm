@@ -33,6 +33,7 @@ import { checkId, isUuid, uuidList } from '../engine/ids.ts';
 import { postgresError, refuse } from '../engine/refusals.ts';
 import { canSeeForm } from '../forms/shared.ts';
 import { unseenRules } from './seen.ts';
+import { explainDecision, snapshotOf } from './explain.ts';
 
 /** How far back Overview counts, in days. */
 const OVERVIEW_DAYS = 30;
@@ -232,6 +233,7 @@ interface DecisionRow extends Record<string, unknown> {
   readonly routed_page_id: string | null;
   readonly hosts: readonly string[] | null;
   readonly steps: unknown;
+  readonly snapshot: unknown;
   readonly booking_id: string | null;
   readonly booking_host: string | null;
   readonly starts_at: string | null;
@@ -267,7 +269,7 @@ async function readDecisions(tx: WorkspaceTx, where: SQL, limit: number) {
   const found = await tx.execute<DecisionRow>(sql`
     select d.id::text, d.decided_at::text as at, to_json(d.decided_at)#>>'{}' as decided_at,
       d.surface_kind, d.surface_id::text, d.rule_id, d.qualified, d.skipped, d.routed_page_id::text,
-      d.hosts::text[] as hosts, d.steps,
+      d.hosts::text[] as hosts, d.steps, d.snapshot,
       b.id::text as booking_id, b.host_member_id::text as booking_host, to_json(b.starts_at)#>>'{}' as starts_at,
       b.status as booking_status, (b.no_show_at is not null) as no_show, b.visitor_name,
       case when jsonb_typeof(s.answers -> 'name') = 'string' then left(s.answers ->> 'name', 200) end as lead_name,
@@ -314,10 +316,18 @@ async function decisionsOf(
     ...kept.flatMap((row) => (row.routed_page_id === null ? [] : [row.routed_page_id])),
     ...[...steps.values()].flatMap((list) => list.flatMap((step) => (step.pageId === undefined ? [] : [step.pageId]))),
   ]);
+  // The ranked seats' snapshots (AC-1373): every name the explanation uses is read once, with the hosts'.
+  const seats = new Map(kept.map((row) => [row.id, snapshotOf(row.snapshot)]));
+  const ranked = [...seats.values()].flat();
   const members = await memberNames(tx, [
     ...kept.flatMap((row) => row.hosts ?? []),
     ...kept.flatMap((row) => (row.booking_host === null ? [] : [row.booking_host])),
+    ...ranked.flatMap((seat) => seat.candidates.map((each) => each.memberId)),
   ]);
+  const skills = await skillNames(
+    tx,
+    ranked.flatMap((seat) => seat.candidates.flatMap((each) => each.skillIds)),
+  );
   return kept.flatMap((row): RoutingDecision[] => {
     const surface = byId.get(row.surface_id);
     // A form the reader can't see keeps its decisions out of their log.
@@ -371,9 +381,34 @@ async function decisionsOf(
           ...(step.pageId === undefined ? {} : { pageName: pages.get(step.pageId) ?? '' }),
         })),
         skipped: [...new Set(row.skipped ?? [])].map(label),
+        // The reader holds `routing.manage` to be here at all, so this is the rates tier (AC-1373).
+        ...explained(row.snapshot, members, skills),
       },
     ];
   });
+}
+
+/** One decision's explanation at the rates tier, with the lists the contract takes. */
+function explained(
+  snapshot: unknown,
+  memberNames: ReadonlyMap<string, string>,
+  skillNames: ReadonlyMap<string, string>,
+) {
+  const explanation = explainDecision(snapshot, { tier: 'manage', memberNames, skillNames });
+  return {
+    ...(explanation.pick === undefined ? {} : { pick: explanation.pick }),
+    numbers: [...explanation.numbers],
+  };
+}
+
+/** The skills a snapshot names, by id. */
+async function skillNames(tx: WorkspaceTx, ids: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  const wanted = [...new Set(ids)];
+  if (wanted.length === 0) return new Map();
+  const rows = await tx.execute<{ id: string; name: string }>(
+    sql`select id::text, name from routing_skills where id = any(${uuidList(wanted)})`,
+  );
+  return new Map(rows.rows.map((row) => [row.id, row.name]));
 }
 
 function parseSteps(stored: unknown): readonly RoutingStep[] {

@@ -4,7 +4,14 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { QUESTION_KEY } from './answer-types.ts';
-import { SKILL_GROUPS, SKILL_NAME_MAX, SKILLS_MAX } from './routing-limits.ts';
+import {
+  FIT_LINKS_MAX,
+  SKILL_GROUPS,
+  SKILL_NAME_MAX,
+  SKILLS_MAX,
+  SMART_MODES,
+  TILT_PERCENT_MAX,
+} from './routing-limits.ts';
 import { RoutingFallback, routingLogContract } from './routing.ts';
 import { isHiddenFact, KNOWN_VALUES } from './show-when.ts';
 import { Uuid } from '../values/ids.ts';
@@ -98,17 +105,61 @@ export const WonStage = z.strictObject({
 /** Won means. */
 export type WonStage = z.infer<typeof WonStage>;
 
+/** The smart ranking's mode (AC-1361): Off is plain fairness, Fit the lead's skills, Learn adds the track record. */
+export const SmartMode = z.enum(SMART_MODES);
+/** The smart ranking's mode. */
+export type SmartMode = z.infer<typeof SmartMode>;
+
+/**
+ * One fit link (AC-1362): an option of a select or status field on People, Companies or Deals joined to a skill
+ * ("Preferred language is Spanish" to the Spanish skill). A link applies when the lead holds that option.
+ */
+export const FitLink = z.strictObject({ attributeId: Uuid, optionId: Uuid, skillId: Uuid });
+/** One fit link. */
+export type FitLink = z.infer<typeof FitLink>;
+
+/** The workspace's fit links, each pair named once, at most 100 (spec 0037's Numbers). */
+export const FitLinks = z
+  .array(FitLink)
+  .max(FIT_LINKS_MAX, { error: `Keep fit to ${String(FIT_LINKS_MAX)} links.` })
+  .refine(
+    (links) =>
+      new Set(links.map((link) => `${link.attributeId}:${link.optionId}:${link.skillId}`)).size === links.length,
+    { error: 'Link each option to a skill once.' },
+  );
+/** The workspace's fit links. */
+export type FitLinks = z.infer<typeof FitLinks>;
+
+/** The fairness allowance, a whole 0 to 50 percent (AC-1363). */
+export const TiltPercent = z
+  .number()
+  .int({ error: 'Use a whole number of percent.' })
+  .min(0, { error: 'Use 0 to 50 percent.' })
+  .max(TILT_PERCENT_MAX, { error: 'Use 0 to 50 percent.' });
+/** The fairness allowance. */
+export type TiltPercent = z.infer<typeof TiltPercent>;
+
 /** The workspace's routing settings (AC-1351): absent fields are the defaults; `updatedAt` absent until first set. */
 export const RoutingSettings = z.object({
   wonStage: WonStage.optional(),
+  /** Absent until first set: the workspace runs `SMART_MODE_DEFAULT`. */
+  smartMode: SmartMode.optional(),
+  tiltPercent: TiltPercent.optional(),
+  fit: FitLinks.optional(),
   updatedAt: z.string().optional(),
 });
 /** The workspace's routing settings. */
 export type RoutingSettings = z.infer<typeof RoutingSettings>;
 
-/** The settings changed: `wonStage` null clears it; `updatedAt` as read, or 409 `STALE`. */
+/**
+ * The settings changed: a field left out stays as it is, `wonStage` null clears it; `updatedAt` as read, or 409
+ * `STALE`. One procedure for every lane's settings, so two tabs never write past each other.
+ */
 export const SetRoutingSettingsInput = WorkspaceScoped.extend({
-  wonStage: WonStage.nullable(),
+  wonStage: WonStage.nullable().optional(),
+  smartMode: SmartMode.optional(),
+  tiltPercent: TiltPercent.optional(),
+  fit: FitLinks.optional(),
   updatedAt: z.string().max(40).optional(),
   mutationId: Uuid,
 });

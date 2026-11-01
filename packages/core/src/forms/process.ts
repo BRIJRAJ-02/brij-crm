@@ -39,6 +39,7 @@ import { pickLeadOwner, recordLeadOwner, type LeadOwner } from '../rotation/owne
 import { copyFiledFile, type RecordFileStore } from '../records/files.ts';
 import { newId } from '../engine/ids.ts';
 import { tellTeam } from './notify.ts';
+import { ownerWaitForSubmission, startUnbookedAssign, WAITING_FOR_BOOKING } from '../routing/lead-owner.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -104,7 +105,7 @@ export function ownerAttribute(attributes: ReadonlyMap<string, AttributeDef>): A
  * its savepoints, every savepoint keeping that scope (as the runner's
  * `asSystem` does for `onFailed`).
  */
-function actingAs(context: WriteContext, scope: EngineScope): WriteContext {
+export function actingAs(context: WriteContext, scope: EngineScope): WriteContext {
   return {
     ...context,
     scope,
@@ -780,6 +781,19 @@ async function chooseFor(
     return { ...(fixed.memberId === undefined ? {} : { memberId: fixed.memberId }), assignment: fixed };
   }
   if (owner === undefined) return { assignment: { rotationId, reason: 'no_owner_field' } };
+  // The lead's owner follows its meeting when the two share a rotation (spec 0037, AC-1372): nobody is picked now,
+  // the booking's host becomes the owner, and the unbooked job picks five minutes after the hand off expires.
+  const wait = await ownerWaitForSubmission(tx, {
+    workspaceId: context.scope.workspaceId,
+    formId: input.form.id,
+    ownerRotationId: rotationId,
+    submissionId: input.submissionId,
+    ...(input.document.after.kind === 'booking' ? { afterPageId: input.document.after.bookingPageId } : {}),
+  });
+  if (wait !== undefined) {
+    await startUnbookedAssign(context, { submissionId: input.submissionId, decisionId: wait.decisionId });
+    return { assignment: { rotationId, reason: WAITING_FOR_BOOKING } };
+  }
   const current =
     matchedId === undefined
       ? undefined

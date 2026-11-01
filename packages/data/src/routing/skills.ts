@@ -3,7 +3,15 @@
 // is read when a screen first holds it and again whenever the person comes back to the page. Every write shows at
 // once and is sent; the server's answer becomes the base, and a refusal takes back only that write (the others still
 // waiting stay shown), rejecting with the refusal. Nothing is fetched for a read no screen holds.
-import type { RoutingSettings, RoutingSkill, SkillGroup, SkillsView, WonStage } from '@crm/contracts';
+import type {
+  FitLink,
+  RoutingSettings,
+  RoutingSkill,
+  SkillGroup,
+  SkillsView,
+  SmartMode,
+  WonStage,
+} from '@crm/contracts';
 import { toDataError } from '../errors.ts';
 import { heldRead, type RoutingHeld } from './log.ts';
 
@@ -23,12 +31,23 @@ export interface RoutingSkillsDeps {
   readonly settings: (workspace: string) => Promise<RoutingSettings>;
   readonly setSettings: (
     workspace: string,
-    wonStage: WonStage | null,
+    change: SettingsChange,
     updatedAt: string | undefined,
   ) => Promise<RoutingSettings>;
   readonly mintId: () => string;
   readonly onReturn?: (refresh: () => void) => () => void;
   readonly now?: () => number;
+}
+
+/**
+ * One settings change (AC-1351): only the fields it sets. Every lane's settings go through this one write, so two
+ * tabs on different tabs of Routing never write past each other.
+ */
+export interface SettingsChange {
+  readonly wonStage?: WonStage | null;
+  readonly smartMode?: SmartMode;
+  readonly tiltPercent?: number;
+  readonly fit?: readonly FitLink[];
 }
 
 /** A held read's state: loading, refused on its first read, or ready with what the screen shows. */
@@ -123,7 +142,7 @@ export function createRoutingSkills(deps: RoutingSkillsDeps) {
   const skills = new Map<string, ReturnType<typeof optimistic<SkillsView>>>();
   const settings = new Map<string, ReturnType<typeof optimistic<RoutingSettings>>>();
   // The Won means write still on its way per workspace, which the next one waits for.
-  const wonQueue = new Map<string, Promise<void>>();
+  const settingsQueue = new Map<string, Promise<void>>();
   const skillsOf = (workspace: string) => {
     const found = skills.get(workspace);
     if (found !== undefined) return found;
@@ -205,19 +224,26 @@ export function createRoutingSkills(deps: RoutingSkillsDeps) {
     /** The workspace's routing settings, held while a screen shows them. */
     settings: (workspace: string): RoutingHeld<RoutingSettingsState> => settingsOf(workspace),
     /**
-     * Won means set (or cleared with null), shown at once; sent with the `updatedAt` last read, so a change someone
-     * else made meanwhile is refused `STALE` and read again. Skills learn Won means is set from the answer.
+     * One settings change shown at once (Won means, the smart mode, the fairness allowance, the fit links); sent with
+     * the `updatedAt` last read, so a change someone else made meanwhile is refused `STALE` and read again. One write
+     * at a time per workspace, each sent with the time the last answer gave, so two quick changes inside one round
+     * trip queue rather than refusing this tab's own.
      */
-    setWonStage: async (workspace: string, wonStage: WonStage | null): Promise<void> => {
+    set: async (workspace: string, change: SettingsChange): Promise<void> => {
       const held = settingsOf(workspace);
-      // One write at a time per workspace, each sent with the time the last answer gave: a second pick inside one
-      // round trip waits for the first rather than being refused STALE against this tab's own change.
-      const before = wonQueue.get(workspace);
-      const send = () => deps.setSettings(workspace, wonStage, held.current()?.updatedAt);
+      const before = settingsQueue.get(workspace);
+      const send = () => deps.setSettings(workspace, change, held.current()?.updatedAt);
       const written = held.write(
         (value) => {
-          const { wonStage: _, ...rest } = value;
-          return wonStage === null ? rest : { ...rest, wonStage };
+          const next = { ...value };
+          if (change.wonStage !== undefined) {
+            if (change.wonStage === null) delete next.wonStage;
+            else next.wonStage = change.wonStage;
+          }
+          if (change.smartMode !== undefined) next.smartMode = change.smartMode;
+          if (change.tiltPercent !== undefined) next.tiltPercent = change.tiltPercent;
+          if (change.fit !== undefined) next.fit = [...change.fit];
+          return next;
         },
         before === undefined ? send : () => before.then(send),
       );
@@ -225,9 +251,9 @@ export function createRoutingSkills(deps: RoutingSkillsDeps) {
         () => undefined,
         () => undefined,
       );
-      wonQueue.set(workspace, settled);
+      settingsQueue.set(workspace, settled);
       void settled.then(() => {
-        if (wonQueue.get(workspace) === settled) wonQueue.delete(workspace);
+        if (settingsQueue.get(workspace) === settled) settingsQueue.delete(workspace);
       });
       try {
         await written;

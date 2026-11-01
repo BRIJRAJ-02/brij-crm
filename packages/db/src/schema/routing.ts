@@ -15,6 +15,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  smallint,
   text,
   uniqueIndex,
   uuid,
@@ -54,6 +55,19 @@ export const routingDecisions = pgTable(
      * page with no free time and the fallback used instead. Null when nothing did. Nullable with no default (AC-1446).
      */
     steps: jsonb('steps'),
+    /**
+     * The lead owner claim (spec 0037, AC-1372), on `form` rows only: whoever sets `assigned_at` from null wins and
+     * writes the owner, so a booking and the unbooked job can never both assign. Nullable with no default (AC-1446).
+     */
+    assignedMemberId: uuid('assigned_member_id'),
+    assignedAt: timestamptz('assigned_at'),
+    /**
+     * The values the ranking and fit used (AC-1362), as option ids, numbers or yes or no, each marked `answered` or
+     * `record`; never free text.
+     */
+    facts: jsonb('facts'),
+    /** Every candidate's numbers at the booking (AC-1373), on `booking_page` rows only: every explanation reads this. */
+    snapshot: jsonb('snapshot'),
     decidedAt: timestamptz('decided_at').notNull().defaultNow(),
   },
   (t) => [
@@ -62,6 +76,11 @@ export const routingDecisions = pgTable(
       name: 'routing_decisions_booking',
       columns: [t.workspaceId, t.bookingId],
       foreignColumns: [bookings.workspaceId, bookings.id],
+    }),
+    foreignKey({
+      name: 'routing_decisions_assigned_member',
+      columns: [t.workspaceId, t.assignedMemberId],
+      foreignColumns: [members.workspaceId, members.id],
     }),
     foreignKey({
       name: 'routing_decisions_routed_page',
@@ -85,6 +104,11 @@ export const routingDecisions = pgTable(
     check('routing_decisions_submission', sql`(${t.surfaceKind} = 'form') = (${t.submissionId} is not null)`),
     // Named hosts are 1 to 8; members with skills (spec 0037, AC-1356) up to a whole roster.
     check('routing_decisions_hosts', sql`${t.hosts} is null or cardinality(${t.hosts}) between 1 and 200`),
+    // The claim is a form's (AC-1372): a team page's row never holds one, and a member without a time never counts.
+    check(
+      'routing_decisions_claim',
+      sql`(${t.assignedMemberId} is null and ${t.assignedAt} is null) or (${t.surfaceKind} = 'form' and ${t.assignedAt} is not null)`,
+    ),
   ],
 );
 
@@ -98,10 +122,17 @@ export const routingSettings = pgTable(
     workspaceId: workspaceId(),
     /** Won means (AC-1385): `{ attributeId, optionIds[] }`, the Deals stage and the stages that count as won. */
     wonStage: jsonb('won_stage'),
+    /** `off`, `fit` or `learn` (AC-1361); null, or anything else, reads as the code's own default (AC-1223). */
+    smartMode: text('smart_mode'),
+    /** The fairness allowance, 0 to 50 percent (AC-1363); null reads as the default 20. */
+    tiltPercent: smallint('tilt_percent'),
+    /** The fit links (AC-1362): up to 100 `{ attributeId, optionId, skillId }`. */
+    fit: jsonb('fit'),
     ...auditColumns(),
   },
   (t) => [
     primaryKey({ name: 'routing_settings_pkey', columns: [t.workspaceId] }),
+    check('routing_settings_tilt', sql`${t.tiltPercent} is null or ${t.tiltPercent} between 0 and 50`),
     ...actorConstraints('routing_settings', 'created_by', t.workspaceId, {
       type: t.createdByType,
       id: t.createdById,

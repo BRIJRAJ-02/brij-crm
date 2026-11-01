@@ -18,6 +18,7 @@ import { refuse } from '../engine/refusals.ts';
 import { lockRotation } from './ledger.ts';
 import { candidatesOf, memberSlots, readTeam, slotCandidates, type Team } from './team.ts';
 import { fillSeats, type SeatPick } from './pick.ts';
+import { floorOf, loadAt100, slackOf, type SmartRanking } from './smart.ts';
 import { lastHostOf, ownerOfEmail } from './returning.ts';
 import { awayAt } from '../scheduling/time-off.ts';
 import type { Candidate } from './pick.ts';
@@ -64,7 +65,58 @@ export interface HostChoice {
   readonly allow?: (rotationId: string, memberId: string) => boolean;
   /** Who a seat goes to first when free (routing's hosts, spec 0043); when none is, the seat picks as usual. */
   readonly prefer?: (rotationId: string, memberId: string) => boolean;
+  /**
+   * The smart ranking's inputs (spec 0037, AC-1361), read before the locks.
+   * Each seat's slack is worked out here from that rotation's own switched on
+   * members, so one seat's allowance never depends on another's.
+   */
+  readonly smart?: SmartInputs;
 }
+
+/** What the caller hands in for the smart ranking: the settings and what it read of the lead. */
+export interface SmartInputs {
+  readonly mode: SmartRanking['mode'];
+  readonly tiltPercent: number;
+  readonly holdout?: boolean;
+  readonly fit: ReadonlyMap<string, number>;
+  readonly lift?: ReadonlyMap<string, number>;
+  /** The skills each candidate matched, by member: what the explanation names (spec 0037, AC-1373). */
+  readonly matched?: ReadonlyMap<string, readonly string[]>;
+  readonly modelVersion: number;
+}
+
+/** One ranked candidate as the decision's snapshot freezes them (spec 0037, AC-1373). */
+export interface SnapshotCandidate {
+  readonly memberId: string;
+  readonly count: number;
+  readonly load: number;
+  readonly fairShare: number;
+  readonly fit: number;
+  readonly lift: number;
+  readonly trials: number;
+  readonly successes: number;
+  /** The skills they matched, by id: the explanation names them. */
+  readonly skillIds: readonly string[];
+  readonly isPicked: boolean;
+}
+
+/** One ranked seat's frozen numbers (AC-1373): every explanation is built from this, never from the stats. */
+export interface SeatSnapshot {
+  readonly rotationId: string;
+  readonly mode: SmartRanking['mode'];
+  readonly holdout: boolean;
+  readonly tiltPercent: number;
+  readonly slack: number;
+  readonly modelVersion: number;
+  readonly windowDays: number;
+  readonly pickedMemberId: string;
+  /** Why it went there: the rotation's own fair share, or the rep's track record. */
+  readonly by: 'fair_share' | 'track_record';
+  readonly candidates: readonly SnapshotCandidate[];
+}
+
+/** The skills each candidate matched, by member, kept beside the ranking for the snapshot. */
+type Matched = ReadonlyMap<string, readonly string[]>;
 
 /** The booking's hosts: the organiser (first fixed host, else the first rotation's host), everyone, and the new picks. */
 export interface ChosenHosts {
@@ -74,6 +126,8 @@ export interface ChosenHosts {
   readonly picks: readonly SeatPick[];
   /** The seats went to `prefer`'s hosts (false when there was no preference, or none of them was free). */
   readonly narrowed: boolean;
+  /** Every ranked seat's frozen numbers (AC-1373); empty when nothing was ranked. */
+  readonly snapshot: readonly SeatSnapshot[];
 }
 
 /**
@@ -168,6 +222,23 @@ export async function chooseHosts(
     const wanted = rotation.rules.returning === 'owner' ? ownerId : lastHostId;
     open.push({ index, rotation, lastHostId, standinId: standinFor(wanted) });
   }
+  // Each rotation's own slack (AC-1363), from its switched on members' mean load, before any seat is filled.
+  const smartOf = new Map<string, SmartRanking>();
+  if (choice.smart !== undefined && choice.smart.mode !== 'off') {
+    for (const { rotation } of open) {
+      const pool = candidatesOf(rotation, reads.standing.get(rotation.rules.id));
+      smartOf.set(rotation.rules.id, {
+        mode: choice.smart.mode,
+        tiltPercent: choice.smart.tiltPercent,
+        holdout: choice.smart.holdout ?? false,
+        slack: slackOf(choice.smart.tiltPercent, pool),
+        floor: floorOf(pool),
+        fit: choice.smart.fit,
+        lift: choice.smart.lift ?? new Map<string, number>(),
+        modelVersion: choice.smart.modelVersion,
+      });
+    }
+  }
   const seatsOf = (prefer?: (rotationId: string, memberId: string) => boolean) =>
     open.map(({ index, rotation, lastHostId, standinId }) => {
       const admits = (memberId: string) =>
@@ -183,18 +254,24 @@ export async function chooseHosts(
         standinId !== undefined && admits(standinId) && !candidates.some((each) => each.memberId === standinId)
           ? [{ memberId: standinId, count: 0, calibration: 0, weight: 1, priority: 0 }]
           : [];
+      const smart = smartOf.get(rotation.rules.id);
       return {
         rotationId: rotation.rules.id,
         rules: rotation.rules,
         candidates: [...candidates, ...outside],
         known: { ownerId, lastHostId, standinId },
+        ...(smart === undefined ? {} : { smart }),
       };
     });
   // A routed preference (spec 0043) picks among its hosts first; when none of them is free, the rotation picks.
-  const preferred = choice.prefer === undefined ? undefined : fillSeats(seatsOf(choice.prefer));
+  const seats = choice.prefer === undefined ? undefined : seatsOf(choice.prefer);
+  const preferred = seats === undefined ? undefined : fillSeats(seats);
   const narrowed = preferred !== undefined;
-  const picks = preferred ?? fillSeats(seatsOf());
+  const plain = preferred === undefined ? seatsOf() : seats;
+  const picks = preferred ?? fillSeats(plain ?? []);
   if (picks === undefined) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
+  // The ranked seats' numbers, frozen as they were compared (AC-1373).
+  const snapshot = snapshotOf(plain ?? [], picks, smartOf, open, choice.smart?.matched ?? new Map());
   const seated = team.rotations.map(
     (rotation) => kept.get(rotation.rules.id) ?? picks.find((pick) => pick.rotationId === rotation.rules.id)?.memberId,
   );
@@ -203,5 +280,49 @@ export async function chooseHosts(
     throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
   }
   const hosts = [...team.fixed, ...seated.flatMap((memberId) => (memberId === undefined ? [] : [memberId]))];
-  return { organiser: team.fixed[0] ?? first, hosts, picks, narrowed };
+  return { organiser: team.fixed[0] ?? first, hosts, picks, narrowed, snapshot };
+}
+
+/** Every ranked seat's snapshot, from the seats as they were compared and the picks they gave (AC-1373). */
+function snapshotOf(
+  seats: readonly { readonly rotationId: string; readonly candidates: readonly Candidate[] }[],
+  picks: readonly SeatPick[],
+  smartOf: ReadonlyMap<string, SmartRanking>,
+  open: readonly { readonly rotation: { readonly rules: { readonly id: string; readonly windowDays: number } } }[],
+  matched: Matched,
+): readonly SeatSnapshot[] {
+  return seats.flatMap((seat) => {
+    const smart = smartOf.get(seat.rotationId);
+    const pick = picks.find((each) => each.rotationId === seat.rotationId);
+    // Only a ranked seat of two or more candidates has a snapshot: a returning guest's seat was never ranked.
+    if (smart === undefined || pick === undefined || seat.candidates.length < 2) return [];
+    const loads = seat.candidates.map((each) => loadAt100(each));
+    const fairShare = loads.reduce((total, each) => total + each, 0) / Math.max(1, loads.length);
+    const windowDays = open.find((each) => each.rotation.rules.id === seat.rotationId)?.rotation.rules.windowDays ?? 30;
+    return [
+      {
+        rotationId: seat.rotationId,
+        mode: smart.mode,
+        holdout: smart.holdout,
+        tiltPercent: smart.tiltPercent,
+        slack: smart.slack,
+        modelVersion: smart.modelVersion,
+        windowDays,
+        pickedMemberId: pick.memberId,
+        by: pick.reason === 'routed' ? ('track_record' as const) : ('fair_share' as const),
+        candidates: seat.candidates.map((each, index) => ({
+          memberId: each.memberId,
+          count: each.count + each.calibration,
+          load: loads[index] ?? 0,
+          fairShare,
+          fit: smart.fit.get(each.memberId) ?? 0,
+          lift: smart.lift.get(each.memberId) ?? 0,
+          trials: 0,
+          successes: 0,
+          skillIds: [...(matched.get(each.memberId) ?? [])],
+          isPicked: each.memberId === pick.memberId,
+        })),
+      },
+    ];
+  });
 }

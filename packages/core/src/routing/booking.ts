@@ -14,6 +14,8 @@ import { decideRoute, recordFactKeys } from './decide.ts';
 import { recordFacts, type RecordFactObjects } from './facts.ts';
 import { submissionDecision } from './forms.ts';
 import { routeHostIds } from './hosts.ts';
+import { readFit, NO_FIT, type Fit, type RankingFact } from './fit.ts';
+import { readSmartSettings, type SmartSettings } from './settings.ts';
 
 const { routingDecisions } = schema;
 
@@ -62,6 +64,17 @@ export async function handoffHosts(
   };
 }
 
+/**
+ * What the smart ranking needs for this booking (spec 0037, AC-1361 to
+ * AC-1363), read before the locks: the workspace's settings, each candidate's
+ * fit, and the facts behind it, which the decision keeps.
+ */
+export interface BookingSmart {
+  readonly settings: SmartSettings;
+  readonly fit: Fit;
+  readonly facts: readonly RankingFact[];
+}
+
 /** What routing chose for one team booking, before the hosts are picked. */
 export interface BookingRouting {
   /** The hosts to pick among, when a hand off or a rule chose some. */
@@ -70,6 +83,8 @@ export interface BookingRouting {
   readonly handoffDecisionId?: string;
   /** The page's own decision, recorded with the booking, when the page has rules and no hand off chose. */
   readonly page?: { readonly ruleId?: string; readonly qualified?: boolean; readonly skipped: readonly string[] };
+  /** The smart ranking's inputs (AC-1361); absent when nobody could be ranked. */
+  readonly smart?: BookingSmart;
 }
 
 /**
@@ -88,12 +103,20 @@ export async function routeBooking(
     readonly submissionId?: string;
     /** The booking's own answers to the page's questions (spec 0057), by question key (spec 0037, AC-1352). */
     readonly answers?: Readonly<Record<string, unknown>>;
+    /** Everyone who could take a seat at this slot, for the smart ranking's fit (spec 0037, AC-1362). */
+    readonly memberIds?: readonly string[];
   },
 ): Promise<BookingRouting> {
+  const smart = await readBookingSmart(tx, input);
   const handoff =
     input.submissionId === undefined ? undefined : await handoffHosts(tx, input.submissionId, input.page.id);
-  if (handoff?.hosts !== undefined) return { hosts: handoff.hosts, handoffDecisionId: handoff.decisionId };
-  const handed = handoff === undefined ? {} : { handoffDecisionId: handoff.decisionId };
+  if (handoff?.hosts !== undefined) {
+    return { hosts: handoff.hosts, handoffDecisionId: handoff.decisionId, ...(smart === undefined ? {} : { smart }) };
+  }
+  const handed = {
+    ...(handoff === undefined ? {} : { handoffDecisionId: handoff.decisionId }),
+    ...(smart === undefined ? {} : { smart }),
+  };
   const rules = input.page.routingRules ?? [];
   // Both doors write a decision (spec 0037, AC-1357): a page with no rules records its fallback, the whole rotation.
   if (rules.length === 0) return { ...handed, page: { skipped: [] } };
@@ -121,6 +144,46 @@ export async function routeBooking(
 }
 
 /**
+ * The smart ranking's inputs for one booking (AC-1361 to AC-1363), read
+ * before any lock: nothing at all for a workspace with no fit links and mode
+ * `off`, so the plain path costs one small read. A question the page files
+ * onto a fit link's field counts as the lead's answer (AC-1362); a handing
+ * form's answer was already filed onto that field at submit, so the record
+ * read picks it up.
+ */
+async function readBookingSmart(
+  tx: WorkspaceTx,
+  input: {
+    readonly page: PageRecord;
+    readonly objects: RecordFactObjects;
+    readonly email: string;
+    readonly answers?: Readonly<Record<string, unknown>>;
+    readonly memberIds?: readonly string[];
+  },
+): Promise<BookingSmart | undefined> {
+  const memberIds = input.memberIds ?? [];
+  if (memberIds.length < 2) return undefined;
+  const settings = await readSmartSettings(tx);
+  if (settings.mode === 'off' || settings.fit.length === 0) {
+    return { settings, fit: NO_FIT, facts: [] };
+  }
+  const filedOn = new Map(
+    input.page.questions.flatMap((question) =>
+      question.filedOn === undefined ? [] : [[question.key, question.filedOn.attributeId] as const],
+    ),
+  );
+  const fit = await readFit(tx, {
+    links: settings.fit,
+    objects: input.objects,
+    email: input.email,
+    answers: input.answers ?? {},
+    filedOn,
+    memberIds,
+  });
+  return { settings, fit, facts: fit.facts };
+}
+
+/**
  * Records what routing did for a booking (AC-1607, AC-1611): the form's
  * decision gets its booking; the page's own decision is stored with it, one
  * per booking (migration 0088), `hosts` null when the routed hosts weren't
@@ -134,6 +197,8 @@ export async function recordBookingRouting(
     readonly bookingId: string;
     readonly routing: BookingRouting;
     readonly narrowed: boolean;
+    /** Every ranked seat's frozen numbers (AC-1373); absent when nothing was ranked. */
+    readonly snapshot?: unknown;
   },
 ): Promise<void> {
   const { routing } = input;
@@ -144,6 +209,8 @@ export async function recordBookingRouting(
       .where(and(eq(routingDecisions.id, routing.handoffDecisionId), isNull(routingDecisions.bookingId)));
   }
   if (routing.page === undefined) return;
+  // The facts the ranking read (AC-1362): option ids only, each marked where it came from, never free text.
+  const facts = routing.smart?.facts ?? [];
   await tx
     .insert(routingDecisions)
     .values({
@@ -155,6 +222,8 @@ export async function recordBookingRouting(
       skipped: [...routing.page.skipped],
       hosts: input.narrowed && routing.hosts !== undefined ? [...routing.hosts] : null,
       bookingId: input.bookingId,
+      facts: facts.length === 0 ? null : facts.map((fact) => ({ ...fact })),
+      snapshot: input.snapshot ?? null,
     })
     .onConflictDoNothing();
 }
