@@ -39,8 +39,7 @@ async function limitSends(context: Pick<RequestContext, 'limiter'>, workspaceId:
     window: 60,
     max: WEBHOOK_SENDS_PER_WORKSPACE_MINUTE,
   });
-  if (!whole.allowed)
-    throw apiError('RATE_LIMITED', 'That’s a lot of sends at once. Wait a minute, then try again.');
+  if (!whole.allowed) throw apiError('RATE_LIMITED', 'That’s a lot of sends at once. Wait a minute, then try again.');
   const decision = await context.limiter.consumeRateLimit(`webhook-send:${workspaceId}:${endpointId}`, {
     window: 60,
     max: WEBHOOK_SENDS_PER_MINUTE,

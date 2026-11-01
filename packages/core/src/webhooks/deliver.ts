@@ -20,13 +20,7 @@ import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { hostOf } from './addresses.ts';
-import {
-  auditWebhook,
-  cancelQueuedDeliveries,
-  deliveryColumns,
-  ENDPOINT_NOT_FOUND,
-  toDelivery,
-} from './endpoints.ts';
+import { auditWebhook, cancelQueuedDeliveries, deliveryColumns, ENDPOINT_NOT_FOUND, toDelivery } from './endpoints.ts';
 import { webhookEnvelope } from './payloads.ts';
 import { openSecret, type WebhookKey } from './signing.ts';
 

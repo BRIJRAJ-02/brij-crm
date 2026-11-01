@@ -195,7 +195,43 @@ describe('the endpoints (AC-6419)', () => {
     // Paused rather than broken, with the variable named, since the person who can fix it runs the server.
     await expect.element(page.getByText('Webhooks are paused')).toBeVisible();
     expect(document.body.textContent).toContain('WEBHOOK_SECRET_KEY');
-    expect(page.getByRole('button', { name: 'Add endpoint' }).elements()).toHaveLength(0);
+    // Add is there but refuses: the api answers 503, so offering it would only fail.
+    await expect.element(page.getByRole('button', { name: 'Add endpoint' }).first()).toBeDisabled();
+  });
+
+  it('keeps the endpoints readable while webhooks are paused, rather than hiding the whole page', async () => {
+    // What both productions show today. An admin must still be able to open an endpoint, read its log and delete
+    // it; replacing the page made a workspace's existing setup look as though it had never been made (UX review).
+    const { layer } = layerWith();
+    await renderScreen(layer, { available: false, endpoints: [ENDPOINT] });
+    await expect.element(page.getByRole('rowheader', { name: /Zapier/ })).toBeVisible();
+    expect(document.body.textContent).toContain('Webhooks are paused');
+    expect(document.body.textContent).toContain('WEBHOOK_SECRET_KEY');
+    // Add is there but refuses, since every write answers 503 without the key.
+    await expect.element(page.getByRole('button', { name: 'Add endpoint' }).first()).toBeDisabled();
+    for (const theme of THEMES) {
+      applyTheme(theme);
+      expect(await axeViolations()).toEqual([]);
+    }
+    resetTheme();
+  });
+
+  it('shows an endpoint turned off by three days of failures, and how to bring it back', async () => {
+    const { layer } = layerWith();
+    const failing: WebhookEndpoint = { ...ENDPOINT, status: 'off', offReason: 'failing' };
+    await renderScreen(layer, { available: true, endpoints: [failing] });
+    expect(document.body.textContent).toContain('Off, failing');
+    for (const theme of THEMES) {
+      applyTheme(theme);
+      expect(await axeViolations()).toEqual([]);
+    }
+    resetTheme();
+    // The panel says what happened and that one switch brings it back. (Its own axe pass is the panel test's,
+    // which opens the dialog and lets it settle; a theme applied mid animation leaves axe no background to read.)
+    await page.getByRole('rowheader', { name: /Zapier/ }).click();
+    await expect.element(page.getByRole('dialog')).toBeVisible();
+    expect(document.body.textContent).toContain('failed');
+    await userEvent.keyboard('{Escape}');
   });
 
   it('adds one with its events, then shows its secret once with Copy', async () => {
@@ -205,7 +241,7 @@ describe('the endpoints (AC-6419)', () => {
     const dialog = page.getByRole('dialog', { name: 'Add endpoint' });
     await dialog.getByRole('textbox', { name: 'Endpoint URL' }).fill('https://hooks.example.com/new');
     await dialog.getByRole('button', { name: 'Form submitted' }).click();
-    await dialog.getByRole('button', { name: 'Add endpoint' }).click();
+    await dialog.getByRole('button', { name: 'Add', exact: true }).click();
     expect(webhooks.create).toHaveBeenCalledWith('acme', {
       url: 'https://hooks.example.com/new',
       description: '',
@@ -239,7 +275,7 @@ describe('the endpoints (AC-6419)', () => {
     await page.getByRole('button', { name: 'Add endpoint' }).first().click();
     const dialog = page.getByRole('dialog', { name: 'Add endpoint' });
     await dialog.getByRole('textbox', { name: 'Endpoint URL' }).fill('https://inside.example.com');
-    await dialog.getByRole('button', { name: 'Add endpoint' }).click();
+    await dialog.getByRole('button', { name: 'Add', exact: true }).click();
     await expect.element(dialog.getByText('That address points to a private network. Use a public one.')).toBeVisible();
   });
 });
@@ -252,7 +288,7 @@ describe('one endpoint (AC-6420, AC-6425)', () => {
     const dialog = page.getByRole('dialog', { name: 'Zapier' });
     await expect.element(dialog.getByText('Ends in ab12')).toBeVisible();
     await expect.element(dialog.getByText(/Internal error/)).toBeVisible();
-    await dialog.getByRole('button', { name: 'Send test event' }).click();
+    await dialog.getByRole('button', { name: 'Send', exact: true }).click();
     await expect.element(dialog.getByText('Delivered', { exact: true }).first()).toBeVisible();
     await dialog.getByRole('button', { name: 'Resend' }).first().click();
     expect(webhooks.resend).toHaveBeenCalledWith('acme', DELIVERY.id);
@@ -302,8 +338,22 @@ describe('screenshots', () => {
         available: true,
         endpoints: [
           ENDPOINT,
-          { ...ENDPOINT, id: `${ENDPOINT.id.slice(0, -1)}2`, url: 'https://hooks.zapier.example/catch/1', description: 'Make', status: 'off', offReason: 'failing' },
-          { ...ENDPOINT, id: `${ENDPOINT.id.slice(0, -1)}3`, url: 'https://n8n.example.com/webhook/x', description: 'n8n', status: 'off', offReason: 'turned_off' },
+          {
+            ...ENDPOINT,
+            id: `${ENDPOINT.id.slice(0, -1)}2`,
+            url: 'https://hooks.zapier.example/catch/1',
+            description: 'Make',
+            status: 'off',
+            offReason: 'failing',
+          },
+          {
+            ...ENDPOINT,
+            id: `${ENDPOINT.id.slice(0, -1)}3`,
+            url: 'https://n8n.example.com/webhook/x',
+            description: 'n8n',
+            status: 'off',
+            offReason: 'turned_off',
+          },
         ],
       });
       applyTheme(theme);
@@ -319,7 +369,7 @@ describe('screenshots', () => {
 
       // Paused: no signing key on this server, with the variable named.
       const paused = layerWith();
-      await renderScreen(paused.layer, { available: false, endpoints: [] });
+      await renderScreen(paused.layer, { available: false, endpoints: [ENDPOINT] });
       applyTheme(theme);
       await page.screenshot({ path: `${dir}/paused-${theme}.png` });
       clear();

@@ -189,7 +189,7 @@ export function NotificationList({
         ? strings.submission(item.formName ?? strings.someForm)
         : // A webhook endpoint that turned off leads with the endpoint, not with who acted: nobody did (spec 0064).
           item.kind === 'webhook_off'
-          ? strings.webhookOff(item.excerpt === '' ? strings.someEndpoint : item.excerpt)
+          ? strings.webhookOff(item.actor.name === '' ? strings.someEndpoint : item.actor.name)
           : item.isNote === true
             ? strings.mentionInNote(item.actor.name)
             : strings.sentence[item.kind](item.actor.name);

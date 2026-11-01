@@ -324,16 +324,7 @@ export const deliveryColumns = sql`
   created_at::text as created_text, ${iso(sql`sent_at`)} as sent_at
 `;
 
-const FAILURES = new Set([
-  'address',
-  'timeout',
-  'network',
-  'redirect',
-  'status',
-  'too_large',
-  'cancelled',
-  'config',
-]);
+const FAILURES = new Set(['address', 'timeout', 'network', 'redirect', 'status', 'too_large', 'cancelled', 'config']);
 
 /** A row as the contract's delivery. */
 export function toDelivery(row: DeliveryRow): WebhookDelivery {

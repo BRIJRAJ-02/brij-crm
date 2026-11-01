@@ -26,7 +26,11 @@ export const strings = {
   description: 'Send bookings, form submissions and signups to other apps as they happen.',
   endpoints: 'Endpoints',
   add: 'Add endpoint',
+  /** The Add dialog's own submit: the title already says what is being added (design review, 1 November). */
+  addAction: 'Add',
   atLimit: 'You have 10 endpoints, the most a workspace can have.',
+  /** Unticking the last event would leave the endpoint getting nothing, so it is refused with a reason. */
+  oneEventLeft: 'Keep at least one event, or turn the endpoint off.',
   emptyTitle: 'No endpoints yet',
   emptyText: 'Add one to send events to Zapier, Make, n8n or your own server.',
   /**
@@ -38,8 +42,9 @@ export const strings = {
    * The code chip ends the line, with no punctuation after it: the chip carries its own inline padding, so a comma
    * or a full stop behind it floated a space away from the name (shots, 1 November).
    */
-  unavailableBefore:
-    'Nothing is queued or sent until this server has its signing secret, so no event ever leaves unsigned. It works straight away once the server sets',
+  unavailableBefore: 'Nothing is queued or sent until this server sets',
+  /** The same, as one line, where it is a Callout over the endpoints rather than an empty state's body. */
+  unavailableLine: 'Webhooks are paused. Nothing is queued or sent until this server sets',
   unavailableKey: 'WEBHOOK_SECRET_KEY',
   failedTitle: 'Webhooks didn’t load',
   failedText: 'Try again in a moment.',
@@ -80,7 +85,10 @@ export const strings = {
   rotateText: 'The old secret keeps working for 24 hours.',
   rotateAction: 'Rotate secret',
   rotating: 'Rotating…',
-  test: 'Send test event',
+  test: 'Send',
+  /** The row's own words, so it isn't the button's label said twice (UX review, 1 November). */
+  testRow: 'Test event',
+  testRowText: 'Sends a ping to this endpoint now and shows the answer.',
   testing: 'Sending…',
   testResult: (delivery: { readonly state: WebhookDeliveryState; readonly responseStatus?: number }) =>
     delivery.state === 'sent'
@@ -103,6 +111,8 @@ export const strings = {
   logCapped: (count: number) => `Showing the newest ${String(count)}. The log keeps 30 days.`,
   logEmpty: 'Nothing sent yet',
   logFailedTitle: 'Deliveries didn’t load',
+  /** A later page failing: what is already shown stays. */
+  logMoreFailed: 'The next page didn’t load. Try again in a moment.',
   logEmptyText: 'Events show here as they’re sent. The log keeps 30 days.',
   columnEvent: 'Event',
   columnAnswer: 'Response',
@@ -114,6 +124,8 @@ export const strings = {
   resend: 'Resend',
   resent: 'Sent again',
   resendFailed: 'Sent again, but it failed.',
+  /** A send that left and is still waiting for the receiver: neither delivered nor failed. */
+  resentWaiting: 'Sent again. Waiting for an answer.',
   more: 'Show more',
   delete: 'Delete endpoint',
   deleteTitle: 'Delete this endpoint?',

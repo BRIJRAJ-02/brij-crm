@@ -65,8 +65,7 @@ async function subscribers(tx: WorkspaceTx, types: readonly WebhookEventType[]):
 /** The endpoints of `endpoints` that want `type` and still have room for another delivery. */
 const takers = (endpoints: readonly Subscriber[], type: WebhookEventType): readonly Subscriber[] =>
   endpoints.filter(
-    (endpoint) =>
-      endpoint.events.includes(type) && (!endpoint.failing || endpoint.waiting < WEBHOOK_PENDING_MAX),
+    (endpoint) => endpoint.events.includes(type) && (!endpoint.failing || endpoint.waiting < WEBHOOK_PENDING_MAX),
   );
 
 /** Stores and queues one event for the endpoints given that want `type`. */

@@ -258,9 +258,14 @@ export async function runWebhookDelivery(deps: WebhookDeliverDeps, payload: unkn
       endpointId: loaded.send.endpointId,
       reason: 'the stored secret did not open under WEBHOOK_SECRET_KEY',
     });
-    await finishWebhookDelivery(scope, loaded.send, { ok: false, ms: 0, failure: loaded.failure }, {
-      hooks: [outboxHook()],
-    });
+    await finishWebhookDelivery(
+      scope,
+      loaded.send,
+      { ok: false, ms: 0, failure: loaded.failure },
+      {
+        hooks: [outboxHook()],
+      },
+    );
     return;
   }
   const result = await deps.send(loaded.send);

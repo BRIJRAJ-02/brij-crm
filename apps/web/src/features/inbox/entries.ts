@@ -25,6 +25,19 @@ export function toNotificationItem(view: NotificationView, members: readonly Mem
       excerpt: '',
     };
   }
+  // A webhook endpoint that turned itself off: the row is about the endpoint, so its host is the row's name and
+  // there is no second line repeating it, exactly as a join request is handled above (design review, 1 November).
+  if (view.kind === 'webhook_off') {
+    return {
+      id: view.id,
+      kind: view.kind,
+      actor: { type: 'system', id: null, name: view.excerpt },
+      createdAt: view.createdAt,
+      isRead: view.readAt !== undefined,
+      isDone: view.doneAt !== undefined,
+      excerpt: '',
+    };
+  }
   return {
     id: view.id,
     kind: view.kind,

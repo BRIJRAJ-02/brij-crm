@@ -118,16 +118,22 @@ export function WebhooksScreen({ data, toasts, slug, initial }: WebhooksScreenPr
         : [endpoint, ...held],
     );
 
-  if (!initial.available) {
-    return (
-      <SettingsPage title={strings.title} titleRef={titleRef}>
-        <EmptyState icon="plug" title={strings.unavailableTitle}>
-          {strings.unavailableBefore}
-          <Code>{strings.unavailableKey}</Code>
-        </EmptyState>
-      </SettingsPage>
-    );
-  }
+  // Paused (no signing key on this server) hides nothing: the endpoints are still there and still readable, so an
+  // admin can open one, read its log and delete it. Only adding and changing are off, which is what the api answers
+  // anyway. Replacing the page with the notice made an existing setup look as though it had never been made up (UX
+  // review, 1 November), which is exactly what both productions would show today.
+  const paused = !initial.available;
+  const pausedNotice = (
+    <>
+      {strings.unavailableBefore} <Code>{strings.unavailableKey}</Code>
+    </>
+  );
+  // The Callout has no title of its own, so its line carries the state too.
+  const pausedLine = (
+    <>
+      {strings.unavailableLine} <Code>{strings.unavailableKey}</Code>
+    </>
+  );
 
   return (
     <SettingsPage title={strings.title} titleRef={titleRef}>
@@ -135,11 +141,12 @@ export function WebhooksScreen({ data, toasts, slug, initial }: WebhooksScreenPr
         title={strings.endpoints}
         description={strings.description}
         actions={
-          <Button variant="primary" icon="plus" isDisabled={atLimit} onPress={startAdding}>
+          <Button variant="primary" icon="plus" isDisabled={paused || atLimit} onPress={startAdding}>
             {strings.add}
           </Button>
         }
       >
+        {paused && <Callout tone="warning">{pausedLine}</Callout>}
         {atLimit && <Callout tone="info">{strings.atLimit}</Callout>}
         <Table
           label={strings.endpoints}
@@ -148,17 +155,23 @@ export function WebhooksScreen({ data, toasts, slug, initial }: WebhooksScreenPr
           getRowId={(endpoint) => endpoint.id}
           onRowAction={setOpenId}
           emptyState={
-            <EmptyState
-              icon="plug"
-              title={strings.emptyTitle}
-              actions={
-                <Button variant="primary" icon="plus" onPress={startAdding}>
-                  {strings.add}
-                </Button>
-              }
-            >
-              {strings.emptyText}
-            </EmptyState>
+            paused ? (
+              <EmptyState layout="fill" icon="plug" title={strings.unavailableTitle}>
+                {pausedNotice}
+              </EmptyState>
+            ) : (
+              <EmptyState
+                icon="plug"
+                title={strings.emptyTitle}
+                actions={
+                  <Button variant="primary" icon="plus" onPress={startAdding}>
+                    {strings.add}
+                  </Button>
+                }
+              >
+                {strings.emptyText}
+              </EmptyState>
+            )
           }
           renderCell={(endpoint, column) => {
             switch (column) {
@@ -177,6 +190,11 @@ export function WebhooksScreen({ data, toasts, slug, initial }: WebhooksScreenPr
               default:
                 return endpoint.lastDelivery === undefined ? (
                   strings.never
+                ) : // An endpoint turned off after 3 days of failures has a successful delivery somewhere behind it,
+                // and showing that one in green beside "Off, failing" read as though it were fine (UX review,
+                // 1 November). Status already carries the colour, so this cell keeps the time alone.
+                endpoint.offReason === 'failing' ? (
+                  <RelativeTime value={endpoint.lastDelivery.at} />
                 ) : (
                   <>
                     <StatusDot hue={deliveryHue(endpoint.lastDelivery)}>
@@ -316,7 +334,7 @@ function AddEndpoint({
             isPending={isBusy}
             isDisabled={!url.trim().startsWith('https://') || events.length === 0}
           >
-            {isBusy ? strings.adding : strings.add}
+            {isBusy ? strings.adding : strings.addAction}
           </Button>
         </>
       }
@@ -399,7 +417,10 @@ function EndpointDialog({
       );
       setCursor(page.nextCursor);
     } catch {
-      setLogFailed(true);
+      // The first page failing is the whole log failing; a later one is not, so the rows already read stay and the
+      // toast says the rest didn't come (UX review, 1 November).
+      if (after === undefined) setLogFailed(true);
+      else toasts.toast({ tone: 'danger', message: strings.logMoreFailed });
     }
   };
 
@@ -427,6 +448,7 @@ function EndpointDialog({
 
   // The switch shows at once and is put back if refused (crm-frontend-state).
   const setOn = async (on: boolean) => {
+    if (toggling) return;
     const was = endpoint;
     setToggling(true);
     onChange({ ...endpoint, status: on ? 'active' : 'off' });
@@ -443,7 +465,14 @@ function EndpointDialog({
 
   // Each chip saves as it is pressed, as the switch does: shown at once, put back if refused (one save model).
   const saveEvents = async (next: readonly string[]) => {
-    if (next.length === 0) return;
+    // Disabling the control the person just pressed takes it out of the tab order, so focus falls to the body and
+    // the next Tab restarts at the top of the dialog (design and UX reviews, 1 November). The write is optimistic
+    // and rolls back, so a press made while one is in flight is simply ignored instead.
+    if (saving) return;
+    if (next.length === 0) {
+      setError(strings.oneEventLeft);
+      return;
+    }
     const was = events;
     setEvents(next);
     setSaving(true);
@@ -508,8 +537,15 @@ function EndpointDialog({
       const delivery = await data.webhooks.resend(slug, deliveryId);
       putDelivery(delivery);
       toasts.toast({
-        tone: delivery.state === 'sent' ? 'success' : 'danger',
-        message: delivery.state === 'sent' ? strings.resent : strings.resendFailed,
+        // Still waiting is neither sent nor failed: saying "it failed" of a delivery that has not answered yet is
+        // simply wrong (UX review, 1 November).
+        tone: delivery.state === 'sent' ? 'success' : delivery.state === 'pending' ? 'info' : 'danger',
+        message:
+          delivery.state === 'sent'
+            ? strings.resent
+            : delivery.state === 'pending'
+              ? strings.resentWaiting
+              : strings.resendFailed,
       });
     } catch (failure) {
       toasts.toast({ tone: 'danger', message: refusalOf(failure) });
@@ -518,8 +554,12 @@ function EndpointDialog({
     }
   };
 
-  if (secret !== undefined) {
-    return (
+  // The secret, the confirm and this endpoint's window all render together, the small ones over the big one. They
+  // used to return in its place, which unmounted the window: cancelling a Rotate or a Delete then dropped the log
+  // back to its first page and put focus at the window's start rather than on the button that opened it (design and
+  // UX reviews, 1 November).
+  const secretModal =
+    secret === undefined ? undefined : (
       <Modal
         key="secret"
         title={strings.secretTitle}
@@ -542,11 +582,10 @@ function EndpointDialog({
         </Code>
       </Modal>
     );
-  }
 
-  if (confirm !== undefined) {
-    const isDelete = confirm === 'delete';
-    return (
+  const isDelete = confirm === 'delete';
+  const confirmModal =
+    confirm === undefined ? undefined : (
       <Modal
         key="confirm"
         title={isDelete ? strings.deleteTitle : strings.rotateTitle}
@@ -587,164 +626,171 @@ function EndpointDialog({
         {isDelete ? strings.deleteText : strings.rotateText}
       </Modal>
     );
-  }
 
   const status = statusOf(endpoint);
   return (
-    <Modal
-      key="window"
-      title={endpoint.description === '' ? strings.endpointTitle : endpoint.description}
-      icon="plug"
-      variant="window"
-      isOpen
-      context={endpoint.url}
-      status={<StatusDot hue={status.hue}>{status.label}</StatusDot>}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-      footerStart={
-        <Button variant="ghost-danger" icon="trash" onPress={() => setConfirm('delete')}>
-          {strings.delete}
-        </Button>
-      }
-      actions={<Button slot="close">{strings.close}</Button>}
-    >
-      {error !== undefined && (
-        <Callout tone="danger" isAnnounced>
-          {error}
-        </Callout>
-      )}
-      {endpoint.status === 'off' && endpoint.offReason === 'failing' && (
-        <Callout tone="danger">{strings.failingHelp}</Callout>
-      )}
-      <SettingsRow title={strings.on}>
-        <Switch
-          label={strings.on}
-          isLabelHidden
-          isSelected={endpoint.status === 'active'}
-          isDisabled={toggling}
-          onChange={(on) => void setOn(on)}
-        />
-      </SettingsRow>
-      <SettingsRow
-        title={strings.secret}
-        description={
-          endpoint.previousSecretUntil === undefined ? (
-            strings.secretHint(endpoint.secretHint)
-          ) : (
-            <>
-              {strings.secretHint(endpoint.secretHint)}. {strings.overlap}{' '}
-              <RelativeTime value={endpoint.previousSecretUntil} />
-            </>
-          )
+    <>
+      <Modal
+        key="window"
+        title={endpoint.description === '' ? strings.endpointTitle : endpoint.description}
+        icon="plug"
+        variant="window"
+        isOpen
+        context={endpoint.url}
+        status={<StatusDot hue={status.hue}>{status.label}</StatusDot>}
+        onOpenChange={(next) => {
+          if (!next) onClose();
+        }}
+        footerStart={
+          <Button variant="ghost-danger" icon="trash" onPress={() => setConfirm('delete')}>
+            {strings.delete}
+          </Button>
         }
+        actions={<Button slot="close">{strings.close}</Button>}
       >
-        <Button icon="refresh-cw" onPress={() => setConfirm('rotate')}>
-          {strings.rotate}
-        </Button>
-      </SettingsRow>
-      <SettingsRow title={strings.test}>
-        <Button icon="send" isPending={testing} onPress={() => void test()}>
-          {testing ? strings.testing : strings.test}
-        </Button>
-      </SettingsRow>
-      {tested !== undefined && (
-        <Callout tone={tested.state === 'sent' ? 'success' : 'danger'} isAnnounced>
-          {tested.state === 'sent' || tested.failure === undefined
-            ? strings.testResult(tested)
-            : `${strings.testResult(tested)}. ${strings.failure[tested.failure]}`}
-        </Callout>
-      )}
-      <ChoiceChips
-        label={strings.events}
-        choices={EVENT_CHOICES}
-        selected={events}
-        isDisabled={saving}
-        onChange={(next) => void saveEvents(next)}
-      />
-      <SettingsSection title={strings.log}>
-        {logFailed ? (
-          <EmptyState tone="error" title={strings.logFailedTitle} onRetry={() => void readLog()}>
-            {strings.failedText}
-          </EmptyState>
-        ) : (
-          <Table
-            label={strings.log}
-            isScrollable
-            isLoading={log === undefined}
-            columns={[
-              { id: 'event', label: strings.columnEvent, isRowHeader: true, size: 'fit' },
-              { id: 'state', label: strings.columnStatus, size: 'fit' },
-              { id: 'answer', label: strings.columnAnswer, size: 'fill' },
-              { id: 'code', label: strings.columnStatusCode, size: 'fit', align: 'end' },
-              { id: 'time', label: strings.columnTime, size: 'fit', align: 'end' },
-              { id: 'attempt', label: strings.columnAttempt, size: 'fit', align: 'end' },
-              { id: 'when', label: strings.columnWhen, size: 'fit' },
-              { id: 'resend', label: strings.resend, size: 'fit', isLabelHidden: true },
-            ]}
-            rows={log ?? []}
-            getRowId={(delivery) => delivery.id}
-            emptyState={
-              <EmptyState icon="inbox" title={strings.logEmpty} layout="row">
-                {strings.logEmptyText}
-              </EmptyState>
-            }
-            renderCell={(delivery, column) => {
-              switch (column) {
-                case 'event':
-                  return strings.event(delivery.eventType);
-                case 'answer':
-                  return delivery.responseExcerpt === undefined ? (
-                    delivery.failure === undefined ? (
-                      ''
-                    ) : (
-                      strings.failure[delivery.failure]
-                    )
-                  ) : (
-                    <TruncatedText>{delivery.responseExcerpt}</TruncatedText>
-                  );
-                case 'state':
-                  return <StatusDot hue={deliveryHue(delivery)}>{strings.state(delivery.state)}</StatusDot>;
-                case 'code':
-                  return delivery.responseStatus === undefined ? '' : String(delivery.responseStatus);
-                case 'time':
-                  return delivery.responseMs === undefined ? '' : strings.ms(delivery.responseMs);
-                case 'attempt':
-                  return String(delivery.attempt);
-                case 'when':
-                  return <RelativeTime value={delivery.sentAt ?? delivery.createdAt} />;
-                default:
-                  return delivery.eventType === 'ping' ? null : (
-                    <Button
-                      variant="ghost"
-                      isPending={resending === delivery.id}
-                      onPress={() => void resend(delivery.id)}
-                    >
-                      {strings.resend}
-                    </Button>
-                  );
-              }
-            }}
-          />
+        {error !== undefined && (
+          <Callout tone="danger" isAnnounced>
+            {error}
+          </Callout>
         )}
-        {cursor !== undefined &&
-          ((log?.length ?? 0) < LOG_HELD ? (
-            <Button
-              variant="ghost"
-              isPending={loadingMore}
-              onPress={() => {
-                setLoadingMore(true);
-                void readLog(cursor).finally(() => setLoadingMore(false));
-              }}
-            >
-              {strings.more}
-            </Button>
+        {endpoint.status === 'off' && endpoint.offReason === 'failing' && (
+          <Callout tone="danger">{strings.failingHelp}</Callout>
+        )}
+        <SettingsRow title={strings.on}>
+          <Switch
+            label={strings.on}
+            isLabelHidden
+            isSelected={endpoint.status === 'active'}
+            onChange={(on) => void setOn(on)}
+          />
+        </SettingsRow>
+        <SettingsRow
+          title={strings.secret}
+          description={
+            endpoint.previousSecretUntil === undefined ? (
+              strings.secretHint(endpoint.secretHint)
+            ) : (
+              <>
+                {strings.secretHint(endpoint.secretHint)}. {strings.overlap}{' '}
+                <RelativeTime value={endpoint.previousSecretUntil} />
+              </>
+            )
+          }
+        >
+          <Button icon="refresh-cw" onPress={() => setConfirm('rotate')}>
+            {strings.rotate}
+          </Button>
+        </SettingsRow>
+        <SettingsRow title={strings.testRow} description={strings.testRowText}>
+          <Button icon="send" isPending={testing} onPress={() => void test()}>
+            {testing ? strings.testing : strings.test}
+          </Button>
+        </SettingsRow>
+        {tested !== undefined && (
+          <Callout
+            tone={tested.state === 'sent' ? 'success' : tested.state === 'pending' ? 'info' : 'danger'}
+            isAnnounced
+          >
+            {tested.state === 'sent' || tested.failure === undefined
+              ? strings.testResult(tested)
+              : `${strings.testResult(tested)}. ${strings.failure[tested.failure]}`}
+          </Callout>
+        )}
+        <ChoiceChips
+          label={strings.events}
+          choices={EVENT_CHOICES}
+          selected={events}
+          onChange={(next) => void saveEvents(next)}
+        />
+        <SettingsSection title={strings.log}>
+          {logFailed ? (
+            <EmptyState tone="error" title={strings.logFailedTitle} onRetry={() => void readLog()}>
+              {strings.failedText}
+            </EmptyState>
           ) : (
-            // The panel holds the newest LOG_HELD rows, so Load more stops here rather than appearing to do nothing.
-            <Callout tone="info">{strings.logCapped(LOG_HELD)}</Callout>
-          ))}
-      </SettingsSection>
-    </Modal>
+            <Table
+              label={strings.log}
+              isScrollable
+              isLoading={log === undefined}
+              columns={[
+                { id: 'event', label: strings.columnEvent, isRowHeader: true, size: 'fit' },
+                { id: 'state', label: strings.columnStatus, size: 'fit' },
+                { id: 'answer', label: strings.columnAnswer, size: 'fill' },
+                { id: 'code', label: strings.columnStatusCode, size: 'fit', align: 'end' },
+                { id: 'time', label: strings.columnTime, size: 'fit', align: 'end' },
+                { id: 'attempt', label: strings.columnAttempt, size: 'fit', align: 'end' },
+                { id: 'when', label: strings.columnWhen, size: 'fit' },
+                { id: 'resend', label: strings.resend, size: 'fit', isLabelHidden: true },
+              ]}
+              rows={log ?? []}
+              getRowId={(delivery) => delivery.id}
+              emptyState={
+                <EmptyState icon="inbox" title={strings.logEmpty} layout="row">
+                  {strings.logEmptyText}
+                </EmptyState>
+              }
+              renderCell={(delivery, column) => {
+                switch (column) {
+                  case 'event':
+                    return strings.event(delivery.eventType);
+                  case 'answer':
+                    return delivery.responseExcerpt === undefined ? (
+                      delivery.failure === undefined ? (
+                        ''
+                      ) : (
+                        strings.failure[delivery.failure]
+                      )
+                    ) : (
+                      <TruncatedText>{delivery.responseExcerpt}</TruncatedText>
+                    );
+                  case 'state':
+                    return <StatusDot hue={deliveryHue(delivery)}>{strings.state(delivery.state)}</StatusDot>;
+                  case 'code':
+                    return delivery.responseStatus === undefined ? '' : String(delivery.responseStatus);
+                  case 'time':
+                    return delivery.responseMs === undefined ? '' : strings.ms(delivery.responseMs);
+                  case 'attempt':
+                    return String(delivery.attempt);
+                  case 'when':
+                    return <RelativeTime value={delivery.sentAt ?? delivery.createdAt} />;
+                  default:
+                    return delivery.eventType === 'ping' ? null : (
+                      // The icon is what says it is pressable: flat ghost text in a dense log read as data until
+                      // the pointer reached it (UX review, 1 November).
+                      <Button
+                        variant="ghost"
+                        icon="refresh-cw"
+                        isPending={resending === delivery.id}
+                        onPress={() => void resend(delivery.id)}
+                      >
+                        {strings.resend}
+                      </Button>
+                    );
+                }
+              }}
+            />
+          )}
+          {cursor !== undefined &&
+            ((log?.length ?? 0) < LOG_HELD ? (
+              <Button
+                variant="ghost"
+                isPending={loadingMore}
+                onPress={() => {
+                  setLoadingMore(true);
+                  void readLog(cursor).finally(() => setLoadingMore(false));
+                }}
+              >
+                {strings.more}
+              </Button>
+            ) : (
+              // The panel holds the newest LOG_HELD rows, so Load more stops here rather than appearing to do nothing.
+              <Callout tone="info">{strings.logCapped(LOG_HELD)}</Callout>
+            ))}
+        </SettingsSection>
+      </Modal>
+      {secretModal}
+      {confirmModal}
+    </>
   );
 }
 
