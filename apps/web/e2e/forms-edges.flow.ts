@@ -230,14 +230,10 @@ test.describe('the form journey’s edges', () => {
     await expect(page.getByRole('button', { name: /Booking page$/ })).toContainText('Intro call');
 
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const setUp = page.getByRole('dialog', { name: 'Set up your form' });
-    await setUp.getByLabel('Name').fill(`Talk to us ${tag}`);
-    await setUp.getByRole('button', { name: 'Next' }).click();
-    await page
-      .getByRole('dialog', { name: 'Where the answers go' })
-      .getByRole('button', { name: 'Publish', exact: true })
-      .click();
-    await expect(page.getByRole('dialog', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
+    const publish = page.getByRole('dialog', { name: 'Publish your form' });
+    await publish.getByRole('textbox', { name: 'Name', exact: true }).fill(`Talk to us ${tag}`);
+    await publish.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
     await page.keyboard.press('Escape');
     await page.getByRole('tab', { name: 'Settings' }).click();
     const key = await page.getByRole('textbox', { name: /^Link/ }).inputValue();

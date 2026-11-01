@@ -86,6 +86,8 @@ export interface BlockKind {
   readonly label: string;
   readonly description: string;
   readonly icon: IconName;
+  /** Its tile's tint in the Add modal's grid, so the kinds read apart at a glance (spec 0058, AC-9). */
+  readonly hue: Hue;
   /** Its editor Modal, for an add and an edit. */
   readonly Editor: ComponentType<BlockEditorProps>;
   /** Whether Edit is offered (a booking page block has nothing of its own to edit). */
@@ -97,10 +99,21 @@ export interface BlockKind {
  * signup makes a hosted form with one email field and then adds an ordinary `form` block for it, so it is an entry
  * in this picker and nothing else: no kind word, no column, no renderer and nothing new on the public page.
  */
-export type AddableKind = ProfileBlockKind | 'signup';
+export type AddableKind = Exclude<ProfileBlockKind, SpecSixtyOneKind> | 'signup';
+
+/**
+ * Spec 0061's kinds, which this editor doesn't add or draw yet (its R4 lane builds their editors): a row of one
+ * says what it is and nothing more, and the preview leaves it out.
+ */
+type SpecSixtyOneKind = 'socials' | 'media' | 'image' | 'gallery' | 'times' | 'banner';
+
+/** Whether a stored block is one of spec 0061's kinds, which this editor shows only by its name for now. */
+export function isNewKind(item: ProfileItem): item is Extract<ProfileItem, { kind: SpecSixtyOneKind }> {
+  return ['socials', 'media', 'image', 'gallery', 'times', 'banner'].includes(item.kind);
+}
 
 /** Whether an entry makes a block of its own kind, or one of another kind (Email signup makes a form). */
-export function blockKindOf(kind: AddableKind): ProfileBlockKind {
+export function blockKindOf(kind: AddableKind): Exclude<ProfileBlockKind, SpecSixtyOneKind> {
   return kind === 'signup' ? 'form' : kind;
 }
 
@@ -110,6 +123,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addPage,
     description: strings.addPageText,
     icon: 'calendar-clock',
+    hue: 'green',
     Editor: PageChooser,
     isEditable: false,
   },
@@ -117,6 +131,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addLink,
     description: strings.addLinkText,
     icon: 'link',
+    hue: 'blue',
     Editor: LinkEditor,
     isEditable: true,
   },
@@ -124,6 +139,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addContact,
     description: strings.addContactText,
     icon: 'id-card',
+    hue: 'sky',
     Editor: ContactEditor,
     isEditable: true,
   },
@@ -131,6 +147,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addText,
     description: strings.addTextText,
     icon: 'file-text',
+    hue: 'gray',
     Editor: TextEditor,
     isEditable: true,
   },
@@ -138,6 +155,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addForm,
     description: strings.addFormText,
     icon: 'clipboard-list',
+    hue: 'lime',
     Editor: FormChooser,
     // The label is the only thing an edit could change, and the chooser is where it is typed.
     isEditable: true,
@@ -146,6 +164,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addFaq,
     description: strings.addFaqText,
     icon: 'circle-question-mark',
+    hue: 'yellow',
     Editor: FaqEditor,
     isEditable: true,
   },
@@ -153,6 +172,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addSignup,
     description: strings.addSignupText,
     icon: 'mail',
+    hue: 'orange',
     Editor: SignupEditor,
     isEditable: false,
   },
@@ -160,6 +180,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addTestimonial,
     description: strings.addTestimonialText,
     icon: 'message-square',
+    hue: 'red',
     Editor: TestimonialEditor,
     isEditable: true,
   },
@@ -167,6 +188,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addHeading,
     description: strings.addHeadingText,
     icon: 'type',
+    hue: 'gray',
     Editor: HeadingEditor,
     isEditable: true,
   },
@@ -201,6 +223,7 @@ function shownAddress(url: string): string {
 
 /** How a block's row reads; a link to one of our pages outside this workspace leads with saying so, and is off. */
 export function rowWords(item: ProfileItem): BlockRowWords {
+  if (isNewKind(item)) return { title: item.kind, address: '' };
   if (item.kind === 'link') {
     return item.outsideWorkspace === true
       ? { title: item.title, address: `${strings.notInWorkspace} · ${shownAddress(item.url)}`, isOff: true }
@@ -265,6 +288,7 @@ export function previewBlock(
   handle: string,
   markOf: (url: string) => LinkPageMark | undefined,
 ): LinkPageBlock | undefined {
+  if (isNewKind(item)) return undefined;
   if (item.kind === 'heading')
     return {
       kind: 'heading',

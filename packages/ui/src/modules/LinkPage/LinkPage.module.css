@@ -25,6 +25,31 @@
     --page-card-mark: var(--on-inverse);
     --page-card-hover: var(--inverse-hover);
     --page-card-shadow: none;
+    /* Dark to look at, so a brand draws its dark pair here (spec 0060, AC-5). */
+    --page-brand-accent: var(--brand-accent-dark, var(--page-none));
+    --page-brand-on-accent: var(--brand-on-accent-dark, var(--page-none));
+    --page-brand-link: var(--brand-link-dark, var(--page-none));
+    --page-soft-base: var(--surface-inverse);
+  }
+
+  /* Ink following the visitor (spec 0060, AC-15): on a light system it is the inverse, as ink in light is. */
+  @media (prefers-color-scheme: light) {
+    .root[data-page-ground='ink'][data-page-mode='system'] {
+      --page-surface: var(--surface-inverse);
+      --page-text: var(--on-inverse);
+      --page-text-quiet: var(--on-inverse);
+      --page-card: var(--inverse-hover);
+      --page-card-border: var(--inverse-hover);
+      --page-card-text: var(--on-inverse);
+      --page-card-quiet: var(--on-inverse);
+      --page-card-mark: var(--on-inverse);
+      --page-card-hover: var(--inverse-hover);
+      --page-card-shadow: none;
+      --page-brand-accent: var(--brand-accent-dark, var(--page-none));
+      --page-brand-on-accent: var(--brand-on-accent-dark, var(--page-none));
+      --page-brand-link: var(--brand-link-dark, var(--page-none));
+      --page-soft-base: var(--surface-inverse);
+    }
   }
 
   /* The tint ground takes the person's hue, the nine of spec 0012 and no other colour. Every one is written out,
@@ -75,9 +100,107 @@
     --page-text-quiet: var(--tag-purple-text);
   }
 
+  /* Gradients (spec 0060, AC-10): two or three of the nine tints, the same tag tokens the tint ground draws, so each
+     has its light and its dark form from the tokens, and every colour in one is a surface the contrast guard holds
+     the accent to. The words on them are the page's own, as on the plain ground. `--page-surface` is the first stop,
+     the colour a card's soft fill and the browser bar are measured against. */
+  .root[data-page-ground='gradient'],
+  .root[data-page-ground='pattern'] {
+    background-image: var(--page-ground-paint);
+  }
+
+  .root[data-page-ground='gradient'][data-page-gradient='dawn'] {
+    --page-surface: var(--tag-yellow-bg);
+    --page-ground-paint: linear-gradient(to bottom, var(--tag-yellow-bg), var(--tag-orange-bg), var(--tag-red-bg));
+  }
+  .root[data-page-ground='gradient'][data-page-gradient='dusk'] {
+    --page-surface: var(--tag-purple-bg);
+    --page-ground-paint: linear-gradient(to bottom, var(--tag-purple-bg), var(--tag-red-bg), var(--tag-orange-bg));
+  }
+  .root[data-page-ground='gradient'][data-page-gradient='mint'] {
+    --page-surface: var(--tag-green-bg);
+    --page-ground-paint: linear-gradient(to bottom right, var(--tag-green-bg), var(--tag-lime-bg));
+  }
+  .root[data-page-ground='gradient'][data-page-gradient='ocean'] {
+    --page-surface: var(--tag-sky-bg);
+    --page-ground-paint: linear-gradient(to bottom, var(--tag-sky-bg), var(--tag-blue-bg));
+  }
+  .root[data-page-ground='gradient'][data-page-gradient='peach'] {
+    --page-surface: var(--tag-orange-bg);
+    --page-ground-paint: linear-gradient(to bottom right, var(--tag-orange-bg), var(--tag-red-bg));
+  }
+  .root[data-page-ground='gradient'][data-page-gradient='grape'] {
+    --page-surface: var(--tag-purple-bg);
+    --page-ground-paint: linear-gradient(to bottom right, var(--tag-purple-bg), var(--tag-blue-bg));
+  }
+  .root[data-page-ground='gradient'][data-page-gradient='sand'] {
+    --page-surface: var(--tag-yellow-bg);
+    --page-ground-paint: linear-gradient(to bottom, var(--tag-yellow-bg), var(--tag-gray-bg));
+  }
+  .root[data-page-ground='gradient'][data-page-gradient='graphite'] {
+    --page-surface: var(--tag-gray-bg);
+    --page-ground-paint: linear-gradient(to bottom, var(--tag-gray-bg), var(--surface-subtle));
+  }
+
+  /* Patterns (spec 0060, AC-10): the border colour drawn as a quiet repeat on the subtle surface, sized from the
+     spacing scale. The lines are the border token, so each has its dark form, and the words never sit on more than
+     a hairline of them. */
+  .root[data-page-ground='pattern'] {
+    --page-surface: var(--surface-subtle);
+
+    background-size: var(--page-pattern-size);
+  }
+  .root[data-page-ground='pattern'][data-page-pattern='dots'] {
+    --page-pattern-size: var(--space-16) var(--space-16);
+    --page-ground-paint: radial-gradient(
+      circle,
+      var(--border) var(--border-width-hairline),
+      transparent var(--border-width-thick)
+    );
+  }
+  .root[data-page-ground='pattern'][data-page-pattern='grid'] {
+    --page-pattern-size: var(--space-24) var(--space-24);
+    --page-ground-paint:
+      linear-gradient(var(--border) var(--border-width-hairline), transparent var(--border-width-hairline)),
+      linear-gradient(to right, var(--border) var(--border-width-hairline), transparent var(--border-width-hairline));
+  }
+  .root[data-page-ground='pattern'][data-page-pattern='lines'] {
+    --page-pattern-size: var(--space-24) var(--space-12);
+    --page-ground-paint: linear-gradient(
+      var(--border) var(--border-width-hairline),
+      transparent var(--border-width-hairline)
+    );
+  }
+  .root[data-page-ground='pattern'][data-page-pattern='waves'] {
+    --page-pattern-size: var(--space-16) var(--space-8);
+    --page-ground-paint: radial-gradient(
+      circle at bottom,
+      transparent var(--space-6),
+      var(--border) var(--space-6),
+      var(--border) calc(var(--space-6) + var(--border-width-hairline)),
+      transparent calc(var(--space-6) + var(--border-width-hairline))
+    );
+  }
+
+  /* A photo ground (spec 0060, AC-11): the photo from the page's own stylesheet, and the whole column on a solid
+     sheet over it, so no word, row or foot is ever drawn on the photo and the contrast of AC-5 holds whatever it
+     shows. A page with no photo never gets here: it draws as plain. */
+  .root[data-page-ground='image'] {
+    background-image: var(--page-ground-image, var(--page-photo-stand-in));
+    background-position: center;
+    background-size: cover;
+  }
+
+  .root[data-thumbnail][data-page-ground='image'] {
+    padding: var(--space-4);
+  }
+
   /* Shapes are the radius scale and nothing else (AC-5409). */
+  /* A card taller than a row (a featured link, a tile, media, a picture) keeps a card's corner on a pill page: a
+     pill that tall would cut into its words (spec 0061). */
   .root[data-page-shape='pill'] {
     --page-radius: var(--radius-full);
+    --page-radius-card: var(--radius-xl);
   }
 
   .root[data-page-shape='square'] {
@@ -88,32 +211,37 @@
      or tinted row also moves its second line and its chevron onto the card's own colour: the quiet greys have no
      checked pair against the accent, and `text-secondary` on `accent` measured 1.19:1 (AC-5407). */
   .root[data-page-fill='soft'] {
-    --page-card: var(--accent-soft);
-    --page-card-border: var(--accent-soft);
-    --page-card-text: var(--link);
-    --page-card-quiet: var(--link);
-    --page-card-mark: var(--link);
-    --page-card-hover: var(--accent-soft);
+    --page-card: var(--page-accent-soft);
+    --page-card-border: var(--page-accent-soft);
+    --page-card-text: var(--page-link);
+    --page-card-quiet: var(--page-link);
+    --page-card-mark: var(--page-link);
+    --page-card-hover: var(--page-accent-soft);
     --page-card-shadow: none;
   }
 
   .root[data-page-fill='outline'] {
     --page-card: transparent;
-    --page-card-border: var(--accent-border);
-    --page-card-text: var(--link);
-    --page-card-quiet: var(--link);
-    --page-card-mark: var(--link);
-    --page-card-hover: var(--accent-soft);
+    --page-card-border: var(--page-accent-border);
+    --page-card-text: var(--page-link);
+    --page-card-quiet: var(--page-link);
+    --page-card-mark: var(--page-link);
+    --page-card-hover: var(--page-accent-soft);
     --page-card-shadow: none;
   }
 
+  /* On a photo an outlined row is see through, so it takes the raised card under its outline (AC-11). */
+  .root[data-page-ground='image'][data-page-fill='outline'] {
+    --page-card: var(--surface-raised);
+  }
+
   .root[data-page-fill='solid'] {
-    --page-card: var(--accent);
-    --page-card-border: var(--accent);
-    --page-card-text: var(--on-accent);
-    --page-card-quiet: var(--on-accent);
-    --page-card-mark: var(--on-accent);
-    --page-card-hover: var(--accent-hover);
+    --page-card: var(--page-accent);
+    --page-card-border: var(--page-accent);
+    --page-card-text: var(--page-on-accent);
+    --page-card-quiet: var(--page-on-accent);
+    --page-card-mark: var(--page-on-accent);
+    --page-card-hover: var(--page-accent-hover);
     --page-card-shadow: var(--shadow-control);
   }
 
@@ -122,6 +250,38 @@
   .root[data-page-font='mono'] {
     --page-face: var(--font-mono);
   }
+
+  /* The packs of spec 0060 (AC-12), from `@crm/tokens/packs.css`: a heading face beside Inter, or one face for
+     the whole page. Display's face has one weight, so its name draws at the note title's size rather than bolder. */
+  .root[data-page-font='grotesk'] {
+    --page-face: var(--font-pack-grotesk);
+  }
+
+  .root[data-page-font='editorial'] {
+    --page-face: var(--font-pack-editorial);
+  }
+
+  .root[data-page-font='classic'] {
+    --page-face: var(--font-pack-classic);
+    --page-body-face: var(--font-pack-classic);
+  }
+
+  .root[data-page-font='friendly'] {
+    --page-face: var(--font-pack-friendly);
+  }
+
+  .root[data-page-font='geometric'] {
+    --page-face: var(--font-pack-geometric);
+    --page-body-face: var(--font-pack-geometric);
+  }
+
+  .root[data-page-font='display'] {
+    --page-face: var(--font-pack-display);
+    --page-name-text: var(--text-note-title);
+  }
+
+  /* Follow the visitor (spec 0060, AC-15) sets no `data-theme`, so the tokens and `light-dark()` below take the
+     visitor's own light or dark; nothing else needs a block of its own. */
 
   .root {
     --page-surface: var(--surface);
@@ -136,7 +296,38 @@
     --page-card-mark: var(--text-tertiary);
     --page-card-hover: var(--surface-hover);
     --page-radius: var(--radius-md);
+    --page-radius-card: var(--page-radius);
     --page-face: var(--font-sans);
+    --page-body-face: var(--font-sans);
+    --page-name-text: var(--text-heading);
+    --page-ground-paint: none;
+    /* What a thumbnail draws for a photo it has no photo for: a page without one draws plain and never shows it. */
+    --page-photo-stand-in: linear-gradient(to bottom right, var(--tag-sky-bg), var(--tag-purple-bg));
+
+    /* The brand (spec 0060, AC-5, AC-14): the accent pair the page's own stylesheet sets at the root, or the app's
+       preview through `variables`, its light or dark half picked by the page's own colour scheme. With no brand
+       each name falls back to the token it stands in for, so a page without one draws exactly as before (AC-17).
+       `--page-none` is the guaranteed invalid value: a mix built from a brand that isn't there is invalid too, and
+       its reader falls back. Hover keeps the accent itself, since a mix toward black or white could take text on it
+       under 4.5:1. */
+    --page-none: initial;
+    --page-brand-accent: light-dark(var(--brand-accent, var(--page-none)), var(--brand-accent-dark, var(--page-none)));
+    --page-brand-on-accent: light-dark(
+      var(--brand-on-accent, var(--page-none)),
+      var(--brand-on-accent-dark, var(--page-none))
+    );
+    --page-brand-link: light-dark(var(--brand-link, var(--page-none)), var(--brand-link-dark, var(--page-none)));
+    /* A tenth of the link colour over the page's own surface: the link keeps 4.5:1 on it for any accent. */
+    --page-soft-base: var(--surface);
+    --page-brand-soft: color-mix(in oklab, var(--page-brand-link) 10%, var(--page-soft-base));
+    --page-brand-focus: 0 0 0 var(--border-width-thick) var(--page-brand-accent);
+    --page-accent: var(--page-brand-accent, var(--accent));
+    --page-accent-hover: var(--page-brand-accent, var(--accent-hover));
+    --page-on-accent: var(--page-brand-on-accent, var(--on-accent));
+    --page-link: var(--page-brand-link, var(--link));
+    --page-accent-soft: var(--page-brand-soft, var(--accent-soft));
+    --page-accent-border: var(--page-brand-accent, var(--accent-border));
+    --page-focus: var(--page-brand-focus, var(--shadow-focus));
 
     box-sizing: border-box;
     display: flex;
@@ -146,7 +337,29 @@
     background: var(--page-surface);
     color: var(--page-text);
     font: var(--text-body);
+    font-family: var(--page-body-face);
     letter-spacing: var(--tracking-body);
+  }
+
+  /* Everything inside the page reads the accent through the library's own names (a Save contact button, a focus
+     ring, the address pill), so the brand reaches them too. One level in from the root, where the names above
+     were worked out, since a name can't be built from its own value on one element. */
+  .column,
+  .thumb {
+    --accent: var(--page-accent);
+    --accent-hover: var(--page-accent-hover);
+    --on-accent: var(--page-on-accent);
+    --link: var(--page-link);
+    --accent-soft: var(--page-accent-soft);
+    --accent-border: var(--page-accent-border);
+    --shadow-focus: var(--page-focus);
+  }
+
+  /* An editor's draft of one block (spec 0060, AC-16): the page's own ground and look, in a slice. */
+  .root[data-draft] {
+    min-block-size: auto;
+    padding: var(--space-12);
+    border-radius: var(--radius-xl);
   }
 
   /* In the editor's phone: the height its content takes, the phone's own background. */
@@ -163,6 +376,23 @@
     max-inline-size: var(--size-page-card);
   }
 
+  /* The editor's preview remounts with each look picked, and the column fades in on the new ground (AC-18). */
+  .root[data-preview] .column {
+    animation: look-in var(--duration-move) var(--ease-out) both;
+  }
+
+  @keyframes look-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-preview] .column {
+      animation: none;
+    }
+  }
+
   .hero {
     display: flex;
     flex-direction: column;
@@ -173,6 +403,61 @@
 
   .hero > :first-child {
     margin-block-end: var(--space-6);
+  }
+
+  /* The face's own box: one flex item, so the hero centres it and a cover can pull it up. */
+  .face {
+    display: flex;
+  }
+
+  /* The words under the face: part of the hero's own column, except beside the face in the left header. */
+  .who {
+    display: contents;
+  }
+
+  /* The cover header (spec 0060, AC-13): a 3:1 photo band the width of the column, the face overlapping its foot
+     on a ring of the page's own surface. */
+  .hero > .cover {
+    align-self: stretch;
+    aspect-ratio: 3 / 1;
+    margin-block-end: 0;
+    border-radius: var(--radius-xl);
+    background-color: var(--page-card);
+    background-image: var(--page-cover-image, var(--page-photo-stand-in));
+    background-position: center;
+    background-size: cover;
+  }
+
+  .cover + .face {
+    margin-block-start: calc(var(--avatar-hero) / -2 - var(--space-4));
+    padding: var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--page-surface);
+  }
+
+  .root[data-page-avatar='rounded'] .face {
+    border-radius: calc(var(--radius-xl) + var(--space-4));
+  }
+
+  /* The left header (spec 0060, AC-13): the face, then the name, bio and address beside it, reading from its edge. */
+  .root[data-page-header='left'] .hero {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-16);
+    text-align: start;
+  }
+
+  .root[data-page-header='left'] .face {
+    margin-block-end: 0;
+  }
+
+  .root[data-page-header='left'] .who {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+    min-inline-size: 0;
   }
 
   /* The address pill under the bio: the page's own address, pressed to copy. While it loads, its own place, so
@@ -222,8 +507,9 @@
     margin: 0;
     inline-size: 100%;
     color: var(--page-text);
-    font: var(--text-heading);
+    font: var(--page-name-text);
     font-family: var(--page-face);
+    font-synthesis: none;
     letter-spacing: var(--tracking-heading);
     overflow-wrap: anywhere;
   }
@@ -242,6 +528,7 @@
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+    font-family: var(--page-body-face);
   }
 
   /* The blocks alone, an editor's "How it looks": the caption close over them. */
@@ -277,6 +564,7 @@
     color: var(--page-text-quiet);
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-kbd);
+    font-family: var(--page-body-face);
     text-transform: uppercase;
     overflow-wrap: anywhere;
   }
@@ -347,6 +635,7 @@
     color: var(--page-text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
+    font-family: var(--page-body-face);
     overflow-wrap: anywhere;
   }
 
@@ -355,6 +644,7 @@
     color: var(--page-text-quiet);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+    font-family: var(--page-body-face);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -375,6 +665,7 @@
     color: var(--page-text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+    font-family: var(--page-body-face);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -386,6 +677,7 @@
     color: var(--page-text-quiet);
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);
+    font-family: var(--page-body-face);
     overflow-wrap: anywhere;
   }
 
@@ -575,6 +867,7 @@
     color: var(--page-card-text);
     font: var(--text-title);
     font-family: var(--page-face);
+    font-synthesis: none;
     letter-spacing: var(--tracking-title);
     overflow-wrap: anywhere;
   }
@@ -593,7 +886,8 @@
     transition: color var(--duration-hover) var(--ease-hover);
   }
 
-  /* The blocks arrive with a short rise. Movement only where motion is welcome; the fade always. */
+  /* The blocks arrive with a short fade and rise, only where motion is welcome. Under reduced motion they are simply
+     there: no fade either (spec 0058, AC-2), on the public page and in the preview alike. */
   @keyframes rise {
     from {
       opacity: 0;
@@ -602,11 +896,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    @keyframes rise {
-      from {
-        opacity: 0;
-        translate: none;
-      }
+    .blocks {
+      animation: none;
     }
   }
 
@@ -629,6 +920,32 @@
     inline-size: 100%;
   }
 
+  /* The head: the face over the sample, or beside it for the left header. */
+  .thumbHead {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .root[data-page-header='left'] .thumbHead {
+    flex-direction: row;
+    align-self: stretch;
+    gap: var(--space-4);
+  }
+
+  /* A cover band the face overlaps; it takes a row's place, so the miniature keeps its height. */
+  .thumbCover {
+    align-self: stretch;
+    block-size: var(--space-12);
+    margin-block-end: calc(var(--space-8) * -1);
+    border-radius: var(--radius-xs);
+    background-color: var(--page-card-border);
+    background-image: var(--page-cover-image, var(--page-photo-stand-in));
+    background-position: center;
+    background-size: cover;
+  }
+
   .thumbFace {
     inline-size: var(--space-12);
     block-size: var(--space-12);
@@ -636,10 +953,15 @@
     background: var(--page-text-quiet);
   }
 
+  .root[data-page-avatar='rounded'] .thumbFace {
+    border-radius: var(--radius-xs);
+  }
+
   .thumbSample {
     color: var(--page-text);
     font: var(--text-label-strong);
     font-family: var(--page-face);
+    font-synthesis: none;
   }
 
   .thumbRow {
@@ -652,12 +974,408 @@
     box-shadow: var(--page-card-shadow);
   }
 
+  /* A Customise row's tile, about one detail (`detail`): the typeface's sample large in its own face, or one button
+     a control high, where soft, round and square corners read apart. Centred in the slot on the page's ground. */
+  .thumb[data-detail] {
+    justify-content: center;
+    block-size: 100%;
+  }
+
+  .thumbFont {
+    color: var(--page-text);
+    font: var(--text-note-title);
+    font-family: var(--page-face);
+    font-synthesis: none;
+  }
+
+  .thumbButton {
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: var(--size-control);
+    border: var(--page-card-border-width) solid var(--page-card-border);
+    border-radius: var(--page-radius);
+    background: var(--page-card);
+    box-shadow: var(--page-card-shadow);
+  }
+
+  /* Follow visitor: the light page with the dark one over its lower right half, cut corner to corner. */
+  .thumbSplit {
+    display: grid;
+    block-size: 100%;
+  }
+
+  .thumbSplit > * {
+    grid-area: 1 / 1;
+  }
+
+  .thumbSplit > :last-child {
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  }
+
+  /* Spec 0061. A link's own picture in its tile (AC-6101): the tile's square, cropped to it. */
+  .tile[data-tile='thumb'] {
+    overflow: hidden;
+  }
+
+  .thumbImage,
+  .coverImage {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  /* A featured link (AC-6102): the same card, larger, its picture across the top and its words under it. Emphasis
+     by size and place only: nothing here animates. */
+  .block[data-featured] {
+    border-radius: var(--page-radius-card);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .featuredPicture,
+  .tilePicture {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--page-accent-soft);
+    overflow: hidden;
+  }
+
+  .featuredPicture {
+    aspect-ratio: 2 / 1;
+  }
+
+  /* With no picture, a shorter band: the link's own tile on the soft accent, so the card still reads as featured
+     without a field of empty colour. */
+  .featuredPicture[data-empty] {
+    aspect-ratio: 4 / 1;
+  }
+
+  .featuredText {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-12);
+  }
+
+  /* A grid page (AC-6103): the person stays in the card's column, and the blocks take a wider dialog's width across
+     it, centred on it, never wider than the page's own room. */
+  .root[data-grid] {
+    container-type: inline-size;
+  }
+
+  .root[data-grid] .blocks {
+    align-self: center;
+    inline-size: min(var(--size-dialog-wide), calc(100cqi - var(--space-16) * 2));
+  }
+
+  /* On a grid page a section's heading and the person's words line up with the tiles' words, not the list's inset. */
+  .root[data-grid] .heading,
+  .root[data-grid] .writing,
+  .root[data-grid] .said {
+    padding-inline: var(--space-12);
+  }
+
+  /* A run of tiles: its own size container, so a column's width is known, and rows exactly that tall. Two columns,
+     four from the container breakpoint, in order: no dense packing, so nothing ever moves ahead of its place. */
+  .tilesRoom {
+    container-type: inline-size;
+  }
+
+  .tiles {
+    --tile-columns: 2;
+    --tile-side: calc((100cqi - (var(--tile-columns) - 1) * var(--space-8)) / var(--tile-columns));
+
+    display: grid;
+    grid-template-columns: repeat(var(--tile-columns), minmax(0, 1fr));
+    grid-auto-rows: var(--tile-side);
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  @container (inline-size >= 480px) {
+    .tiles {
+      --tile-columns: 4;
+    }
+  }
+
+  .tileItem {
+    display: flex;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .tileItem[data-size='wide'] {
+    grid-column: span 2;
+  }
+
+  .tileItem[data-size='large'] {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+
+  /* A link's or booking page's tile: the row's own card (`.block`), stood on end, its tile at the top or its picture
+     filling it, its words at the foot. */
+  .block[data-card='tile'] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    border-radius: var(--page-radius-card);
+    overflow: hidden;
+  }
+
+  .tileTop {
+    display: flex;
+    flex: 1;
+    align-items: flex-start;
+    padding: var(--space-12);
+  }
+
+  .tilePicture {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .tileFoot {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-8);
+    padding: var(--space-12);
+  }
+
+  /* A lazy block's place while its chunk loads (AC-6126): the block's own outer shape, so nothing moves when it
+     lands. A media card's stage and caption, a picture's ratio and caption line, a gallery's row or squares, a times
+     card's title, line, chips and More times. */
+  .holdCard {
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    border: var(--page-card-border-width) solid var(--page-card-border);
+    border-radius: var(--page-radius-card);
+    background: var(--page-card);
+    overflow: hidden;
+  }
+
+  .holdCard[data-fill],
+  .holdPicture[data-fill],
+  .holdGallery[data-fill] {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .holdCard[data-times] {
+    gap: var(--space-12);
+    padding: var(--space-12);
+  }
+
+  .holdStage {
+    display: flex;
+    flex: none;
+  }
+
+  .holdStage[data-hold='video'] {
+    aspect-ratio: 16 / 9;
+  }
+
+  .holdStage[data-hold='audio'] {
+    block-size: calc(var(--size-column-narrow) + var(--space-32));
+  }
+
+  .holdStage[data-provider='applemusic'] {
+    block-size: calc(var(--size-column-narrow) + var(--space-32) + var(--space-24));
+  }
+
+  .holdCard[data-fill] .holdStage {
+    flex: 1;
+    aspect-ratio: auto;
+  }
+
+  .holdHead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .holdCaption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-12);
+  }
+
+  .holdTitle {
+    display: flex;
+    font: var(--text-title);
+  }
+
+  .holdLine {
+    display: flex;
+    font: var(--text-label);
+  }
+
+  .holdPicture {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .holdFrame {
+    display: flex;
+    aspect-ratio: var(--hold-ratio, 4 / 3);
+    border-radius: var(--page-radius-card);
+    overflow: hidden;
+  }
+
+  .holdPicture[data-fill] .holdFrame {
+    flex: 1;
+    aspect-ratio: auto;
+  }
+
+  .holdGallery {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .holdShots {
+    display: flex;
+    flex: 1;
+    gap: var(--space-8);
+  }
+
+  .holdGallery[data-display='grid'] .holdShots {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .holdSteps {
+    display: none;
+    block-size: var(--size-control);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .holdSteps {
+      display: block;
+    }
+  }
+
+  .holdShot {
+    display: flex;
+    flex: 1;
+    block-size: var(--size-column);
+    border-radius: var(--page-radius-card);
+    overflow: hidden;
+  }
+
+  .holdGallery[data-display='grid'] .holdShot {
+    block-size: auto;
+    aspect-ratio: 1;
+  }
+
+  .holdGallery[data-fill] .holdShot {
+    block-size: 100%;
+  }
+
+  .holdChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+  }
+
+  /* A touch control's height, as Button's touch size writes it. */
+  .holdChip,
+  .holdMore {
+    display: flex;
+    block-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+  }
+
+  .holdChip {
+    inline-size: var(--size-column-narrow);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  /* A picture's or the media's stand in when its chunk couldn't load: its alt text, quietly, on the card. */
+  .unloaded {
+    margin: 0;
+    padding: var(--space-12);
+    border-radius: var(--page-radius-card);
+    background: var(--page-card);
+    color: var(--page-card-quiet);
+  }
+
+  /* The banner (AC-6112): one line at the very top in the page's soft accent, its close at the end. */
+  .banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-12);
+    border-radius: var(--page-radius-card);
+    background: var(--page-accent-soft);
+    color: var(--page-text);
+  }
+
+  .bannerText {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    font-family: var(--page-body-face);
+    overflow-wrap: anywhere;
+  }
+
+  .bannerLink {
+    color: var(--page-link);
+    text-decoration: underline;
+    text-underline-offset: var(--space-2);
+    border-radius: var(--radius-xs);
+    outline: none;
+  }
+
+  .bannerLink:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* The socials row block (AC-6104): the header's round marks, centred, wherever the owner put them. */
+  .socials {
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Late in the file, after the column and the miniature they change: the photo ground's solid sheet (AC-11), and
+     the cover miniature's hidden row. */
+  .root[data-page-ground='image'] .column,
+  .root[data-page-ground='image'] .thumb {
+    box-sizing: border-box;
+    padding: var(--space-20) var(--space-16);
+    border-radius: var(--radius-xl);
+    background: var(--page-surface);
+  }
+
+  .root[data-page-ground='image'] .thumb {
+    padding: var(--space-4);
+    border-radius: var(--radius-xs);
+  }
+
+  .root[data-page-header='cover'] .thumbRow:last-child {
+    display: none;
+  }
+
   @media (forced-colors: active) {
     .block {
       border-color: CanvasText;
     }
 
-    .block:focus-visible {
+    .block:focus-visible,
+    .bannerLink:focus-visible {
       outline: var(--border-width-thick) solid Highlight;
     }
   }

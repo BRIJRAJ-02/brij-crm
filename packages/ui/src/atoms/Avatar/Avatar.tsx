@@ -34,6 +34,13 @@ export interface AvatarProps {
    * a page that draws only people.
    */
   readonly mark?: ReactNode;
+  /**
+   * How a picture fills the tile. `cover` (the default) fills it, as a face or a site's icon should. `contain` keeps
+   * the whole picture inside the tile with nothing cut, on a light plate with a hairline (its letter waits on the
+   * same plate): a workspace's own logo, which
+   * may be a wide wordmark whose letters a crop would cut off (spec 0060).
+   */
+  readonly fit?: 'cover' | 'contain';
 }
 
 /**
@@ -47,7 +54,17 @@ const FADES_IN: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['title', 'xl', 'h
 const ONE_INITIAL: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['xs', 'sm']);
 
 /** A person's or company's picture, or their initials on a hue tile: people are circles, companies squares. */
-export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDecorative = false, mark }: AvatarProps) {
+export function Avatar({
+  name,
+  id,
+  src,
+  hue,
+  size = 'sm',
+  shape = 'circle',
+  isDecorative = false,
+  mark,
+  fit = 'cover',
+}: AvatarProps) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   // The picture that has loaded, and whether it was already in the browser's cache: one there shows at once.
   const [loaded, setLoaded] = useState<{ readonly src: string; readonly isCached: boolean } | undefined>(undefined);
@@ -75,6 +92,7 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
       data-size={size}
       data-shape={shape}
       data-hue={hue ?? stableHue(id ?? name)}
+      {...(fit === 'contain' ? { 'data-fit': 'contain' } : {})}
       {...(isDecorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': name })}
     >
       {showImage ? (

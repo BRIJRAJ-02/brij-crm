@@ -1,6 +1,10 @@
 # BookingFrame
 
-A booking page's frame (spec 0025, 0025-experience.md; laid out as the timefix booking page, the owner's call on 20 October 2026): the host in a rail of their own (a large picture, the name, the meeting as the page's `h1`, its facts, and a "Powered by Timefix" card pinned at the rail's foot), beside one card: a heading row with Month or List, the month and the day's times side by side (the times scroll inside their pane at the month's height), and a band across the foot for the Book bar. Under the page breakpoint everything stacks and Timefix moves to the page's end, centred. This folder also holds `BookingFoot` (that foot alone, for the guest's booking page) and `BookingMessage` (one small card for a page with nothing to book: loading, not found, paused, or failed with Try again).
+A booking page's frame (spec 0025, 0025-experience.md; laid out as the timefix booking page, the owner's call on 20 October 2026): the host in a rail of their own (a large picture, the name, the meeting as the page's `h1`, its facts, and a "Powered by Timefix" card pinned at the rail's foot), beside one card: a heading row with the picker's controls in one compact group at its end (the clock and the view, spec 0058, AC-24), the month and the day's times side by side (the times scroll inside their pane at the month's height), and a band across the foot for the Book bar. Under the page breakpoint everything stacks and Timefix moves to the page's end, centred. This folder also holds `BookingFoot` (that foot alone, for the guest's booking page) and `BookingMessage` (one small card for a page with nothing to book: loading, not found, paused, or failed with Try again).
+
+### The foot
+
+`BookingFoot` is how every public page ends, and nothing turns it off. On a wide booking page it is a card at the rail's end: "POWERED BY" over the Timefix wordmark, then "Claim your free page" under a hairline (the owner kept this card on 31 October 2026, over a quiet one-line foot). Everywhere else it is centred under the card, "Powered by" over the wordmark and the claim link. `href` and `newTabLabel` let a page tag the wordmark itself and open it in a new tab (the guest's page).
 
 ## Why it exists
 
@@ -44,7 +48,10 @@ A person's public profile, `/<handle>`, the Cal.com profile the owner pointed at
 Why a variant here rather than a new module: it is the booking pages' own page, so it keeps their background, centred column, card and foot, which live in this folder. The column is wider than BookingMessage's so a row's title and chips fit.
 
 ```tsx
-<BookingProfile person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme.' }} claimHref={claimPageHref('booking_profile')}>
+<BookingProfile
+  person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme.' }}
+  claimHref={claimPageHref('booking_profile')}
+>
   <BookingProfileSection title="Sales">
     <LinkList label="Sales" searchLabel="Search" isToolbarHidden rows={rows} onOpen={open} />
   </BookingProfileSection>
@@ -80,3 +87,8 @@ None of its own. A view or a step chosen from the keyboard (the view switch's ar
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Brand kit
+
+`brand` (spec 0060, AC-4) is the workspace's kit: `logo` (a path on our own origin, through `safeImageSrc`, with its `alt`) heads the rail at a control's height, never cropped, and `variables` (an app preview's accent custom properties, set through the CSSOM) stands in for the page's brand stylesheet. The page's stylesheet sets `--brand-accent`, `--brand-on-accent`, `--brand-link` and their `-dark` halves at the root; the frame picks the half its colour scheme asks for with `light-dark()` and points the library's own names (`--accent`, `--link`, `--accent-soft`, `--shadow-focus`, …) at them one level in, so the chosen day, the chosen time, Book, links and focus rings all wear the brand. With no brand each name falls back to its token and the page draws exactly as before. `PageBrand` is the shape the hosted form takes too.
+

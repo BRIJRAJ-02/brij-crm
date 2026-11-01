@@ -7,7 +7,7 @@ import { BULK_OPS } from './bulk-ops.ts';
 import { ApiRefusal } from './errors.ts';
 import { JobView } from './jobs.ts';
 import { FilterGroup } from './values/filters.ts';
-import { RecordView } from './records.ts';
+import { FiledCompany, RecordView } from './records.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 
@@ -163,6 +163,8 @@ export const UpdateOutcome = z.object({
   written: z.record(z.uuid(), Uuid).optional(),
   before: z.unknown().optional(),
   refusals: z.array(ApiRefusal).optional(),
+  /** The company a new email filed the person under (spec 0059), which the browser's undo takes back with the edit. */
+  filedCompany: FiledCompany.optional(),
 });
 /** One record's outcome in a bulk edit. */
 export type UpdateOutcome = z.infer<typeof UpdateOutcome>;

@@ -89,6 +89,7 @@ const data = {
   calendar: { view: () => calendarView },
   tasks: { due: () => dueSource },
   inbox: { unread: () => unreadSource },
+  workspaceLogo: { subscribe: () => () => undefined, src: () => undefined },
   nav: {
     source: () => navSource,
     change: (_workspace: string, op: NavOperation) => {

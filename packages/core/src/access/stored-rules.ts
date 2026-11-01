@@ -9,7 +9,7 @@
 import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 import type { RuleSource } from './door.ts';
-import type { AccessRules, LevelRule, RecordRuleRow, RuleSubject } from './policy.ts';
+import type { AccessRules, ComputedInputRule, LevelRule, RecordRuleRow, RuleSubject } from './policy.ts';
 
 /** One row of the rule source's statement: a kind and its fields as text. */
 type Row = {
@@ -48,6 +48,18 @@ function recordOf(row: Row): RecordRuleRow | undefined {
   return { subject, objectId: row.c, kind: row.e, attributeId: row.d };
 }
 
+/** A computed attribute's input row (`a` the computed attribute, `b` its object, `c` the input, `d` its object). */
+function computedOf(row: Row): ComputedInputRule | undefined {
+  if (row.a === null || row.b === null || row.c === null || row.d === null) return undefined;
+  return {
+    computedId: row.a,
+    computedObjectId: row.b,
+    inputId: row.c,
+    inputObjectId: row.d,
+    ...(row.e === null ? {} : { kind: row.e }),
+  };
+}
+
 /**
  * The workspace's rules for one member, read in the door's own transaction (one statement, row level security
  * keeping every table to the workspace): their teams, the active members of those teams, and the rules that name
@@ -78,9 +90,20 @@ export const storedRules: RuleSource = async (tx, member) => {
       from record_rules r
       where r.workspace_id = (select id from workspace)
         and (r.subject_role = ${member.role} or r.subject_team_id in (select team_id from mine))
+    union all
+    select 'computed', ci.computed_attribute_id::text, c.object_id::text, ci.input_attribute_id::text, i.object_id::text, c.computed->>'kind'
+      from computed_inputs ci
+      join attributes c on c.workspace_id = ci.workspace_id and c.id = ci.computed_attribute_id
+      join attributes i on i.workspace_id = ci.workspace_id and i.id = ci.input_attribute_id
+      where ci.workspace_id = (select id from workspace) and c.object_id is not null and i.object_id is not null
+        and (exists (select 1 from access_rules r where r.workspace_id = (select id from workspace)
+            and (r.subject_role = ${member.role} or r.subject_team_id in (select team_id from mine)))
+          or exists (select 1 from record_rules r where r.workspace_id = (select id from workspace)
+            and (r.subject_role = ${member.role} or r.subject_team_id in (select team_id from mine))))
   `);
   const levels: LevelRule[] = [];
   const records: RecordRuleRow[] = [];
+  const computed: ComputedInputRule[] = [];
   const teamIds: string[] = [];
   const mates = new Set<string>([member.memberId]);
   for (const row of found.rows) {
@@ -92,9 +115,12 @@ export const storedRules: RuleSource = async (tx, member) => {
     } else if (row.k === 'record') {
       const record = recordOf(row);
       if (record !== undefined) records.push(record);
+    } else if (row.k === 'computed') {
+      const input = computedOf(row);
+      if (input !== undefined) computed.push(input);
     }
   }
-  return { levels, records, teamIds: teamIds.sort(), teamMemberIds: [...mates].sort() };
+  return { levels, records, computed, teamIds: teamIds.sort(), teamMemberIds: [...mates].sort() };
 };
 
 /** The whole workspace's rules and teams, for the relay's audiences. */
@@ -126,9 +152,18 @@ export async function workspaceRules(tx: WorkspaceTx): Promise<WorkspaceRules> {
     select 'record', r.subject_type, coalesce(r.subject_role, r.subject_team_id::text), r.object_id::text,
         r.attribute_id::text, r.kind
       from record_rules r where r.workspace_id = (select id from workspace)
+    union all
+    select 'computed', ci.computed_attribute_id::text, c.object_id::text, ci.input_attribute_id::text, i.object_id::text, c.computed->>'kind'
+      from computed_inputs ci
+      join attributes c on c.workspace_id = ci.workspace_id and c.id = ci.computed_attribute_id
+      join attributes i on i.workspace_id = ci.workspace_id and i.id = ci.input_attribute_id
+      where ci.workspace_id = (select id from workspace) and c.object_id is not null and i.object_id is not null
+        and (exists (select 1 from access_rules r where r.workspace_id = (select id from workspace))
+          or exists (select 1 from record_rules r where r.workspace_id = (select id from workspace)))
   `);
   const levels: LevelRule[] = [];
   const records: RecordRuleRow[] = [];
+  const computed: ComputedInputRule[] = [];
   const teamsOf = new Map<string, string[]>();
   const peopleOf = new Map<string, string[]>();
   for (const row of found.rows) {
@@ -145,6 +180,9 @@ export async function workspaceRules(tx: WorkspaceTx): Promise<WorkspaceRules> {
     } else if (row.k === 'record') {
       const record = recordOf(row);
       if (record !== undefined) records.push(record);
+    } else if (row.k === 'computed') {
+      const input = computedOf(row);
+      if (input !== undefined) computed.push(input);
     }
   }
   return {
@@ -154,7 +192,7 @@ export async function workspaceRules(tx: WorkspaceTx): Promise<WorkspaceRules> {
     forMember: (memberId) => {
       const teamIds = [...(teamsOf.get(memberId) ?? [])].sort();
       const mates = new Set<string>([memberId, ...teamIds.flatMap((teamId) => peopleOf.get(teamId) ?? [])]);
-      return { levels, records, teamIds, teamMemberIds: [...mates].sort() };
+      return { levels, records, computed, teamIds, teamMemberIds: [...mates].sort() };
     },
   };
 }

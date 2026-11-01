@@ -27,7 +27,7 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
   shouldReload: ({ cause }) => cause !== 'stay',
   loader: async ({ context, params }) => {
     try {
-      const [page, mine, targets, objects] = await Promise.all([
+      const [page, mine, targets, objects, everyone] = await Promise.all([
         context.data.bookingPages.get(params.slug, params.pageId),
         context.data.access.mine(params.slug),
         // Where its questions' answers may be filed (spec 0057): the page's object and its attributes, beside the page rather
@@ -35,6 +35,9 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
         context.data.bookingPages.attributes(params.slug, params.pageId).catch(() => undefined),
         // The objects the Questions tab's "Where the answers go" picker offers; a failed read leaves it out.
         context.data.objects.list(params.slug).catch(() => []),
+        // The workspace's members, for Sharing's picker (an admin's); cached for the app load, so this costs nothing
+        // when Bookings or Settings read them already. A failed read leaves the picker empty.
+        context.data.members.list(params.slug).catch(() => undefined),
         // The reader's calendars, primed so the editor's calendar note is in its first paint; a failed read just
         // leaves the note out.
         context.data.calendar
@@ -58,16 +61,24 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
           .catch(() => undefined);
       }
       // A round robin page's Hosts card: the members it can seat, and the rotations it can book from.
+      // A guest is never offered as a host: guests take no bookings (spec 0031, slice 9).
       const people =
         page.kind === 'round_robin'
-          ? (await Promise.all([context.data.members.list(params.slug), context.data.rotations.held(params.slug)]))[0]
+          ? (
+              await Promise.all([context.data.members.list(params.slug), context.data.rotations.held(params.slug)])
+            )[0].filter((person) => person.role !== 'guest')
           : undefined;
+      // Sharing's picker (spec 0037, AC-1331), for an admin: the members who aren't admins, but the page's owner, who
+      // edits it already. Read beside the page above; a failed read leaves none.
+      const sharingPeople = mine.permissions.includes('booking.admin')
+        ? everyone?.filter((member) => member.role === 'member' && member.id !== page.ownerMemberId)
+        : undefined;
       // Its Routing card (spec 0043): the person's and company's fields rules may read; a failed read leaves none.
       const fields =
         page.kind === 'round_robin' && page.canChange
           ? await readRecordFields(context.data, params.slug).catch(() => undefined)
           : undefined;
-      return { page, mayRead, ownerMember, people, fields, targets, objects };
+      return { page, mayRead, ownerMember, people, sharingPeople, fields, targets, objects };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') {
         return {
@@ -75,6 +86,7 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
           mayRead: false,
           ownerMember: undefined,
           people: undefined,
+          sharingPeople: undefined,
           fields: undefined,
           targets: undefined,
           objects: [],
@@ -151,7 +163,7 @@ function Missing({
 }
 
 function EditorRoute() {
-  const { page, mayRead, ownerMember, people, fields, targets, objects } = Route.useLoaderData();
+  const { page, mayRead, ownerMember, people, sharingPeople, fields, targets, objects } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { tab = 'page' } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -168,6 +180,7 @@ function EditorRoute() {
       {...(mayRead ? { schedules: data.schedules.view(slug, ownerMember, memberZone(data, slug)) } : {})}
       {...(ownerMember === undefined ? {} : { ownerMember })}
       {...(people === undefined ? {} : { people })}
+      {...(sharingPeople === undefined ? {} : { sharingPeople })}
       {...(fields === undefined ? {} : { recordFields: fields })}
       {...(targets === undefined ? {} : { targets })}
       objects={objects}

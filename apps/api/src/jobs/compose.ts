@@ -83,7 +83,7 @@ export interface JobTasks {
   /** One webhook delivery's try (spec 0064), where `WEBHOOK_SECRET_KEY` is set; off, its rows wait. */
   readonly webhookDeliver: ((payload: unknown) => Promise<void>) | undefined;
   /** One workspace's queued automation runs (parity #53), each as the member its automation runs as; told how to queue its next call. */
-  readonly automation: (payload: unknown, again: (workspaceId: string) => Promise<void>) => Promise<void>;
+  readonly automation: (payload: unknown, again: (workspaceId: string, at?: Date) => Promise<void>) => Promise<void>;
   /**
    * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email as the system, and the held sweep's one
    * Sentry warning (`CALENDAR_OUTAGE`, counts only).
@@ -241,7 +241,7 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
 
   // Automations (parity #53): each queued run enters as the member its automation runs as (the same rules the
   // requests use), writes with the outbox hook only, and tells `onStored` when a run stored an event.
-  const automation = (payload: unknown, again: (workspaceId: string) => Promise<void>) =>
+  const automation = (payload: unknown, again: (workspaceId: string, at?: Date) => Promise<void>) =>
     runAutomationTask(
       {
         door: { db, rules: APP_RULES },

@@ -6,6 +6,7 @@
 // it applies to the static shell, so the policy, `X-Content-Type-Options` and `Referrer-Policy` are the same bytes
 // for both and can never drift (AC-5505).
 import { registerHooks } from 'node:module';
+import { addCacheTag } from '@vercel/functions';
 
 // Vercel's Node builder compiles each imported TypeScript file to a .js beside it but keeps the `.ts` in every
 // import, as Node runs them on the other hosts. The same hook `api/index.mjs` registers, for the same reason.
@@ -27,7 +28,7 @@ registerHooks({
 const { cacheControlFor, shellFor } = await import('../handle-shell.ts');
 // The built shell, written beside this file by the build (`crm:booking-shell` in vite.config.ts), so the function
 // reads no file and makes no request for its own bytes.
-const { BOOKING_SHELL } = await import('./shell.generated.mjs');
+const { BOOKING_SHELL, PACK_FONTS } = await import('./shell.generated.mjs');
 
 /** Reads one handle's public profile from this deployment's own api, through the same edge every visitor uses. */
 const readProfile = (origin) => async (handle, signal) => {
@@ -51,14 +52,25 @@ const readPage = (origin) => async (handle, slug, signal) => {
   return await answer.json();
 };
 
+/** Files this answer under its cache tags, and never fails the answer for it (a missed tag only shortens its life). */
+async function tagQuietly(tags) {
+  try {
+    await addCacheTag([...tags]);
+  } catch {
+    // The short s-maxage bounds an untagged answer anyway.
+  }
+}
+
 export async function GET(request) {
   const url = new URL(request.url);
   // The canonical address is the public origin's, never the host this request happened to arrive on (AC-5502);
   // without one set, a preview serves itself and says so.
   const origin = process.env.BOOKING_PUBLIC_ORIGIN ?? url.origin;
-  const { body, status, outcome } = await shellFor(url.pathname, {
+  const { body, status, outcome, tags } = await shellFor(url.pathname, {
     shell: BOOKING_SHELL,
     origin,
+    // Each font pack's heading face by its built name, so a link page preloads its own pack and no other (spec 0060).
+    fonts: PACK_FONTS,
     // The share card is served from the public origin too, by `api/card.mjs` in this same deployment, so a crawler
     // that follows the block reaches a picture on the address the page itself lives at (spec 0055, AC-5510).
     cardOrigin: origin,
@@ -69,6 +81,10 @@ export async function GET(request) {
       console.warn(JSON.stringify({ event: 'handle.shell.missed', handle, reason }));
     },
   });
+  // A link page's shell is filed under its handle, so the page's Live or Private switch deletes it from the edge at
+  // once (spec 0058, AC-23). A failed tag leaves only the answer's short s-maxage, which bounds it anyway. The runtime's
+  // addCacheTag may answer no promise at all, or throw, so it is awaited inside a try, never chained with `.catch`.
+  if (tags !== undefined && tags.length > 0) await tagQuietly(tags);
   return new Response(body, {
     status,
     headers: {

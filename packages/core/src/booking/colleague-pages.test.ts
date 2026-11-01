@@ -194,12 +194,13 @@ describe('Manage over a colleague reaches their personal pages (AC-1273, AC-1332
     });
     await testQuery(ownerUrl, `update members set status = 'removed' where id = $1`, [w.bea]);
     expect(await listBookingPages(w.as(w.priya), NOW)).toEqual([]);
+    // Each call made only when awaited: one started early rejects before anything listens (an unhandled rejection).
     for (const call of [
-      getBookingPage(w.as(w.priya), { pageId: w.page.id }, NOW),
-      updateBookingPage(w.as(w.priya), { pageId: w.page.id, settings: { bufferBefore: 5 } }, NOW),
-      readPageDestination(w.as(w.priya), { pageId: w.page.id }),
+      () => getBookingPage(w.as(w.priya), { pageId: w.page.id }, NOW),
+      () => updateBookingPage(w.as(w.priya), { pageId: w.page.id, settings: { bufferBefore: 5 } }, NOW),
+      () => readPageDestination(w.as(w.priya), { pageId: w.page.id }),
     ]) {
-      expect(await refusalOf(call)).toMatchObject({ code: 'NOT_FOUND' });
+      expect(await refusalOf(call())).toMatchObject({ code: 'NOT_FOUND' });
     }
   });
 

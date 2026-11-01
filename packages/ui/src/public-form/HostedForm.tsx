@@ -1,11 +1,14 @@
+import { useEffect, useState } from 'react';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { PublicForm } from '@crm/contracts/forms';
 import { Button } from '../atoms/Button/Button.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
+import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import {
   ErrorSummary,
   FormAlert,
   FormClosed,
+  FormConfirmation,
   FormFoot,
   FormFrame,
   FormHeader,
@@ -15,9 +18,10 @@ import {
   TIMEFIX_LOGO,
 } from './FormParts.tsx';
 import styles from './HostedForm.module.css';
-import { FormBooking } from './FormBooking.tsx';
+import type { FormBooking as EagerFormBooking, FormBookingProps } from './FormBooking.tsx';
 import type { HostedRemoveUpload, HostedUpload } from './files.ts';
 import { Question } from './Question.tsx';
+import { SentAnswers } from './SentAnswers.tsx';
 import {
   useHostedForm,
   type HostedFormMode,
@@ -26,6 +30,36 @@ import {
 } from './use-hosted-form.ts';
 
 export { FormLoading, FormMessage } from './FormParts.tsx';
+
+/**
+ * Sent, and on to book (FormBooking), in a chunk of its own: nobody sees it before they send, and the hosted page's
+ * first load has no room to spare (apps/web/.size-limit.js). It starts loading once the form is drawn and is kept
+ * once here, so by the time anyone presses Send it draws at once, and its heading can take focus in the same render;
+ * BookingFallback stands in until it arrives, or for good if it can't.
+ */
+const loadBooking = () => import('./FormBooking.tsx');
+
+/**
+ * Sent, while the countdown's chunk is still arriving or when it can't be fetched (a flaky network, or a deploy
+ * between load and Send): the answers are saved, so the thank you shows with Book a time as its one way on, never a
+ * blank page. What was sent reads back above it, as on the countdown.
+ */
+function BookingFallback({ state, mode, heading, url, text, summary }: FormBookingProps) {
+  return (
+    <FormConfirmation mode={mode} heading={heading} title={state.words.thanksTitle} text={text} summary={summary}>
+      <Button
+        variant="primary"
+        size="lg"
+        onPress={() => {
+          state.goTo(url);
+        }}
+      >
+        {state.words.bookATime}
+      </Button>
+    </FormConfirmation>
+  );
+}
+
 export type { HostedFormMode, HostedSubmission, HostedSubmitOutcome } from './use-hosted-form.ts';
 
 /** Props for HostedForm. */
@@ -54,6 +88,11 @@ export interface HostedFormProps {
   readonly now?: () => number;
   /** The Timefix wordmark under the form; the web app serves these two by default. */
   readonly logo?: ProductLogo;
+  /**
+   * The workspace's brand kit, for an app preview (spec 0060, AC-1): its logo and its accent's custom properties.
+   * Left out, the form wears the brand its own read names (its logo; the page's stylesheet brings the accent).
+   */
+  readonly brand?: PageBrand;
 }
 
 /**
@@ -76,6 +115,7 @@ export function HostedForm({
   onStale,
   now = Date.now,
   logo = TIMEFIX_LOGO,
+  brand,
 }: HostedFormProps) {
   const { state, refs } = useHostedForm({
     form,
@@ -90,17 +130,29 @@ export function HostedForm({
     now,
   });
   const { words, preview } = state;
+  const [LoadedBooking, setLoadedBooking] = useState<typeof EagerFormBooking>();
+  useEffect(() => {
+    // A chunk that can't be fetched leaves BookingFallback in its place.
+    void loadBooking().then(
+      (module) => {
+        setLoadedBooking(() => module.FormBooking);
+      },
+      () => undefined,
+    );
+  }, []);
+  const Booking = LoadedBooking ?? BookingFallback;
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
   else if (state.view.kind === 'booking') {
     body = (
-      <FormBooking
+      <Booking
         state={state}
         mode={mode}
         heading={refs.heading}
         url={state.view.url}
         seconds={state.view.seconds}
         text={state.view.text}
+        summary={<SentAnswers form={form} state={state} />}
       />
     );
   } else if (state.view.kind === 'thanks')
@@ -152,6 +204,7 @@ export function HostedForm({
     <FormFrame
       form={form}
       mode={mode}
+      {...(brand === undefined ? {} : { brand })}
       container={refs.container}
       {...(preview ? { previewNote: words.previewNote } : {})}
       foot={<FormFoot form={form} mode={mode} logo={logo} state={state} />}

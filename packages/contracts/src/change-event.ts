@@ -203,6 +203,21 @@ export const CommentsEvent = z.object({
 });
 
 /**
+ * A record's files changed (#32): an attachment added on its Files tab,
+ * deleted or brought back, on these records of the object. A screen holding
+ * one of the records reads its files again; `coarse` means every held
+ * record's files.
+ */
+export const FilesEvent = z.object({
+  ...place,
+  kind: z.literal('files'),
+  objectId: Uuid.optional(),
+  recordIds: ids,
+  coarse,
+  mutationId,
+});
+
+/**
  * These members' notifications or notification settings changed (spec 0038,
  * AC-1167): the members, and nothing else, so it carries no more than a
  * `members` event. Every audience receives it; a client acts only on its own
@@ -319,6 +334,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   TimeOffEvent,
   AutomationsEvent,
   CommentsEvent,
+  FilesEvent,
   NotificationsEvent,
   RestrictedEvent,
 ]);
@@ -344,6 +360,7 @@ export const CHANGE_EVENT_KINDS = [
   'calendars',
   'time_off',
   'automations',
+  'files',
   'restricted',
 ] as const satisfies readonly ChangeEvent['kind'][];
 

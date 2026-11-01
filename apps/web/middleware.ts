@@ -41,8 +41,14 @@ export const STRIP_PATH = /^\/api\/public\/handles\/[a-z0-9][a-z0-9-]{1,38}[a-z0
 
 /** public-paths.ts's PUBLIC_HOST_PATH: the handle addresses, /b/, /f/, /embed/, the built files and /api/public/. */
 export const PUBLIC_HOST_PATH = new RegExp(
-  `^(?:/(?:b|f|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:embed\\.js|favicon\\.ico|layers\\.css|theme-boot\\.js)|/${HANDLE}(?:/${SLUG})?/?)$`,
+  `^(?:/(?:b|f|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:embed\\.js|favicon\\.ico|layers\\.css|theme-boot\\.js)|/(?:robots\\.txt|sitemap-handles\\.xml)|/${HANDLE}(?:/${SLUG})?/?)$`,
 );
+
+/** public-paths.ts's CRAWL_FILES: the public origin's crawl files, each answered by the API (spec 0061, AC-6123). */
+export const CRAWL_FILES: Readonly<Record<string, string>> = {
+  '/robots.txt': '/api/public/robots.txt',
+  '/sitemap-handles.xml': '/api/public/sitemap-handles.xml',
+};
 
 /** An https URL, or undefined for anything else (unset, empty, malformed or plain http). */
 const httpsUrl = (value: string | undefined): URL | undefined => {
@@ -180,7 +186,10 @@ export function apiTarget(env: { readonly API_ORIGIN_INTERNAL?: string | undefin
 }
 
 export default function middleware(request: Request): Response {
-  const url = new URL(request.url);
+  const asked = new URL(request.url);
+  // A crawl file is the API's own answer at its public path (spec 0061, AC-6123), vouched for as any API request is.
+  const crawl = CRAWL_FILES[asked.pathname];
+  const url = crawl === undefined ? asked : new URL(`${crawl}${asked.search}`, asked);
   // One deployment answers on both hosts with opposite moves, so a cache that keeps one must keep it per host.
   // A move read off this browser's own cookie is nobody else's answer: it is never stored, it names `cookie` in
   // `vary` as well, and it is a 302, since a permanent move is exactly what a browser does remember.
@@ -248,6 +257,6 @@ export default function middleware(request: Request): Response {
   else headers.delete(ORIGIN_HEADER);
   for (const header of TRACE_HEADERS) headers.delete(header);
 
-  if (!proxied) return next({ request: { headers } });
+  if (!proxied) return crawl === undefined ? next({ request: { headers } }) : rewrite(url, { request: { headers } });
   return rewrite(new URL(url.pathname + url.search, origin), { request: { headers } });
 }

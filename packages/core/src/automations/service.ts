@@ -27,6 +27,7 @@ import { canonicalId, isUuid, isUuidV7 } from '../engine/ids.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
 import { isArchivedNow, loadAttributes, parseFor, type AttributeDef } from '../engine/values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import { writeAudit } from '../members/audit.ts';
 import { activeMembers } from './members.ts';
 
 const { attributeOptions, automationRuns, automations, objects } = schema;
@@ -197,6 +198,31 @@ async function lockOne(tx: WorkspaceTx, automationId: string): Promise<Row> {
   return row;
 }
 
+/** What an automation's audit row says changed. */
+type AutomationChange = 'created' | 'updated' | 'enabled' | 'disabled' | 'deleted' | 'restored';
+
+/**
+ * Writes one automation's audit row (`automation.changed`) in its write's transaction, for Settings › History: the
+ * change and the name its trigger's object has now (`tasks` for a task due one), never its definition.
+ */
+async function auditAutomation(
+  context: WriteContext,
+  row: Pick<Row, 'id' | 'objectId'>,
+  change: AutomationChange,
+): Promise<void> {
+  const { tx, scope } = context;
+  const [object] =
+    row.objectId === null
+      ? []
+      : await tx.select({ name: objects.pluralName }).from(objects).where(eq(objects.id, row.objectId));
+  await writeAudit(tx, scope.workspaceId, scope.actor, {
+    action: 'automation.changed',
+    targetType: 'automation',
+    targetId: row.id,
+    after: { change, object: row.objectId === null ? 'tasks' : (object?.name ?? 'records') },
+  });
+}
+
 /** The view of a row just written. */
 function viewOf(row: Row): Automation {
   const view = toView(row);
@@ -275,6 +301,7 @@ export async function createAutomation(
         })
         .returning();
       if (row === undefined) throw new Error('An automation just written could not be read back.');
+      await auditAutomation(context, row, 'created');
       context.record({ automations: [id] });
       return viewOf(row);
     },
@@ -310,6 +337,7 @@ export async function updateAutomation(
         .where(eq(automations.id, row.id))
         .returning();
       if (updated === undefined) throw new Error('An automation just written could not be read back.');
+      await auditAutomation(context, updated, 'updated');
       context.record({ automations: [row.id] });
       return viewOf(updated);
     },
@@ -370,6 +398,9 @@ export async function setAutomationEnabled(
         .where(eq(automations.id, row.id))
         .returning();
       if (updated === undefined) throw new Error('An automation just written could not be read back.');
+      // A switch to where it already was changes nothing worth a row.
+      if (row.enabled !== input.enabled)
+        await auditAutomation(context, updated, input.enabled ? 'enabled' : 'disabled');
       context.record({ automations: [row.id] });
       return viewOf(updated);
     },
@@ -399,6 +430,7 @@ export async function deleteAutomation(
           deletedByMemberId: caller,
         })
         .where(eq(automations.id, row.id));
+      await auditAutomation(context, row, 'deleted');
       context.record({ automations: [row.id] });
     },
     hooks,
@@ -427,6 +459,7 @@ export async function restoreAutomation(
         .where(and(eq(automations.id, id), sql`${automations.deletedAt} is not null`))
         .returning();
       if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_AUTOMATION);
+      await auditAutomation(context, row, 'restored');
       context.record({ automations: [id] });
       return viewOf(row);
     },

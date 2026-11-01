@@ -1,9 +1,15 @@
 # Font licences
 
-Both fonts here come from the design system artifact (`project/fonts/`) and are used under the SIL Open Font License, Version 1.1. The full licence text follows.
+Inter and JetBrains Mono come from the design system artifact (`project/fonts/`). The six link page packs (spec 0060) are the Latin subsets Fontsource publishes of each family's Google Fonts release. All eight are used under the SIL Open Font License, Version 1.1. The full licence text follows.
 
 - `Inter-Variable-latin.woff2`: Inter. Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter).
 - `JetBrainsMono-Variable-latin.woff2`: JetBrains Mono. Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono).
+- `HostGrotesk-Variable-latin.woff2`: Host Grotesk. Copyright 2024 The Host Grotesk Project Authors (https://github.com/Element-Type/HostGrotesk).
+- `Fraunces-Variable-latin.woff2`: Fraunces. Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces).
+- `Newsreader-Variable-latin.woff2`: Newsreader. Copyright 2020 The Newsreader Project Authors (https://github.com/productiontype/Newsreader).
+- `BricolageGrotesque-Variable-latin.woff2`: Bricolage Grotesque. Copyright 2022 The Bricolage Grotesque Project Authors (https://github.com/ateliertriay/bricolage).
+- `Outfit-Variable-latin.woff2`: Outfit. Copyright 2021 The Outfit Project Authors (https://github.com/Outfitio/Outfit-Fonts).
+- `InstrumentSerif-Regular-latin.woff2`: Instrument Serif. Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif).
 
 ---
 

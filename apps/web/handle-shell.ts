@@ -6,14 +6,34 @@
 // Three rules hold this together. The bytes below `</head>` are the build's, never rewritten. A read that misses,
 // in any way at all, answers the plain shell rather than an error. And nothing is read off the request but its
 // path, so one handle has one answer for everybody and the edge can cache it (AC-5504).
-import { BRAND_DESCRIPTION, withMeta, type MetaLook, type MetaSource } from './handle-meta.ts';
+import { linkPageCacheTags } from '@crm/contracts/handles';
+import {
+  BRAND_DESCRIPTION,
+  withMeta,
+  withPageFacts,
+  type MetaLook,
+  type MetaSource,
+  type PageFacts,
+} from './handle-meta.ts';
 import { HANDLE_PATH } from './public-paths.ts';
 
 /** How long the profile read may take before the plain shell goes out instead (AC-5503). */
 export const READ_TIMEOUT_MS = 800;
 
-/** What the shell answers with, so a crawler caches it and a person never waits on it (AC-5504). */
+/**
+ * What a booking page's shell answers with, so a crawler caches it and a person never waits on it (AC-5504). A
+ * booking page under a handle isn't the link page and its switch doesn't hide it, so it keeps the long stale window.
+ */
 export const SHELL_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=86400';
+
+/**
+ * What a link page's shell answers with, and a handle with nothing to show (spec 0058, AC-23). The shell carries the
+ * page itself (its name, bio and blocks, in the boot block), so a page made Private must stop being served promptly:
+ * its Live or Private switch deletes the edge's copy at once (the `link-page:<handle>` cache tag), and where that
+ * can't run, a minute fresh and a minute stale bound it at two. The stale minute is only ever a page that was public
+ * a minute before, and it keeps the cold api's wait off a visitor.
+ */
+export const PROFILE_SHELL_CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=60';
 
 /**
  * A shell whose read missed (it timed out on a cold api, or failed) is kept by the edge for seconds, not minutes
@@ -21,9 +41,13 @@ export const SHELL_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate
  */
 export const MISSED_CACHE_CONTROL = 'public, s-maxage=10';
 
-/** What the shell's answer is cached for: a miss briefly, anything the read decided (a page, a 404) as usual. */
+/**
+ * What the shell's answer is cached for: a miss briefly, a booking page as usual, and a link page or a 404 (which a
+ * private page answers) for a minute, so either side of the Live or Private switch shows promptly.
+ */
 export function cacheControlFor(outcome: ShellOutcome): string {
-  return outcome === 'missed' ? MISSED_CACHE_CONTROL : SHELL_CACHE_CONTROL;
+  if (outcome === 'missed') return MISSED_CACHE_CONTROL;
+  return outcome === 'page' ? SHELL_CACHE_CONTROL : PROFILE_SHELL_CACHE_CONTROL;
 }
 
 /** The share card's address for one handle, versioned so a new name or picture is a new address (AC-5513). */
@@ -41,6 +65,47 @@ export interface ShellProfile {
   readonly theme?: unknown;
   readonly indexable?: unknown;
   readonly version?: unknown;
+  /** The versions of the page's own stylesheet and photos (spec 0060, `PublicLook`). */
+  readonly look?: unknown;
+  /** The person's social links, as the profile read answers them (spec 0061, AC-6121). */
+  readonly socials?: unknown;
+  /** The page's first blocks, as the profile read answers them (spec 0061, AC-6122). */
+  readonly items?: unknown;
+}
+
+/**
+ * What structured data and crawler text say of a page (spec 0061, AC-6121, AC-6122), read from the profile answer
+ * and trusted in nothing: the social links' web addresses, and the live links' titles and web addresses in order,
+ * leaving out every link behind a notice. The picture only when the answer has one, on our own origin.
+ */
+export function pageFactsOf(profile: ShellProfile, name: string, url: string, origin: string): PageFacts {
+  const list = (value: unknown): readonly unknown[] => (Array.isArray(value) ? (value as readonly unknown[]) : []);
+  const field = (entry: unknown, key: string): string | undefined =>
+    typeof entry === 'object' && entry !== null && key in entry
+      ? text((entry as Record<string, unknown>)[key])
+      : undefined;
+  const web = (address: string | undefined) =>
+    address !== undefined && /^https?:\/\/[^\s]+$/i.test(address) ? address : undefined;
+  const sameAs = list(profile.socials).flatMap((entry) => {
+    const href = web(field(entry, 'href'));
+    return href === undefined ? [] : [href];
+  });
+  const links = list(profile.items).flatMap((entry) => {
+    if (field(entry, 'kind') !== 'link' || field(entry, 'notice') !== undefined) return [];
+    const title = field(entry, 'title');
+    const address = web(field(entry, 'url'));
+    return title === undefined || address === undefined ? [] : [{ title, url: address }];
+  });
+  const image = text(profile.image);
+  const bio = text(profile.bio);
+  return {
+    name,
+    url,
+    sameAs,
+    links,
+    ...(bio === undefined ? {} : { bio }),
+    ...(image !== undefined && image.startsWith('/api/public/') ? { image: `${origin}${image}` } : {}),
+  };
 }
 
 /** A string, or undefined for anything else: a read's answer is parsed here, never trusted by its type. */
@@ -111,14 +176,63 @@ export function withBoot(shell: string, boot: ShellBoot): string {
   return `${shell.slice(0, headEnd)}${block}${shell.slice(headEnd)}`;
 }
 
+/** The id of the page's own stylesheet link, which the public bundle finds again (`wearStylesheet` in public/). */
+export const LOOK_LINK_ID = 'crm-look';
+
+/** A look's version and a font file's built path, as the shell will write them into an attribute. */
+const LOOK_VERSION = /^[0-9a-f]{12}$/;
+const LOOK_HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const FONT_FILE = /^\/assets\/[\w.-]+\.woff2$/;
+
+/**
+ * The link page's own look in its head (spec 0060, AC-20, AC-21): its stylesheet on our own api (the accent pair and
+ * any photo, `look.css?v=`), and a preload for its pack's heading face, by the built name the build handed over, so
+ * the name draws in its own face from the start. Inter is preloaded by the build on every public page already, so a
+ * file the shell names once is never named twice. Anything malformed writes nothing: the page draws its look from
+ * the shared stylesheet either way, in the product's accent.
+ */
+export function withLook(shell: string, profile: ShellProfile, fonts: Readonly<Record<string, string>> = {}): string {
+  const headEnd = shell.indexOf('</head>');
+  if (headEnd < 0) return shell;
+  const handle = text(profile.handle);
+  const look =
+    typeof profile.look === 'object' && profile.look !== null ? (profile.look as Record<string, unknown>) : {};
+  const version = text(look.version);
+  const theme =
+    typeof profile.theme === 'object' && profile.theme !== null ? (profile.theme as Record<string, unknown>) : {};
+  const font = text(theme.font);
+  const links: string[] = [];
+  if (
+    font !== undefined &&
+    Object.hasOwn(fonts, font) &&
+    FONT_FILE.test(fonts[font] ?? '') &&
+    !shell.includes(`href="${fonts[font] ?? ''}"`)
+  ) {
+    links.push(`    <link rel="preload" href="${fonts[font] ?? ''}" as="font" type="font/woff2" crossorigin>\n`);
+  }
+  if (handle !== undefined && LOOK_HANDLE.test(handle) && handle.length <= 40 && version !== undefined) {
+    if (LOOK_VERSION.test(version)) {
+      links.push(
+        `    <link rel="stylesheet" id="${LOOK_LINK_ID}" href="/api/public/handles/${handle}/look.css?v=${version}">\n`,
+      );
+    }
+  }
+  return links.length === 0 ? shell : `${shell.slice(0, headEnd)}${links.join('')}${shell.slice(headEnd)}`;
+}
+
 /** What the shell was built from, which the answer's own header reports so a miss is visible in production. */
 export type ShellOutcome = 'profile' | 'page' | 'unknown' | 'missed';
 
-/** One answer: the page's bytes, its status and the outcome that produced it. */
+/** One answer: the page's bytes, its status, the outcome that produced it, and the edge cache tags it is filed under. */
 export interface ShellAnswer {
   readonly body: string;
   readonly status: number;
   readonly outcome: ShellOutcome;
+  /**
+   * A link page's shell, or the 404 a private one answers, is filed under `link-page:<handle>` for the address asked
+   * and the page's current handle (`linkPageCacheTags`), so its Live or Private switch deletes it (spec 0058, AC-23).
+   */
+  readonly tags?: readonly string[];
 }
 
 /** What the shell needs from outside: the built bytes, where the page lives, and the one read it makes. */
@@ -140,6 +254,11 @@ export interface ShellDeps {
    * shows a broken preview, which is worse than the small one.
    */
   readonly cardOrigin?: string;
+  /**
+   * The built path of each font pack's heading face, keyed by the `font` a look stores (spec 0060, AC-21): written
+   * by the build from `FONT_PACKS` in `@crm/tokens/packs`, so the preload names the file the stylesheet fetches.
+   */
+  readonly fonts?: Readonly<Record<string, string>>;
   /** The time now, in milliseconds: when a profile was read, so the page can tell an old shell's copy. */
   readonly now?: () => number;
   /** Where a miss is reported. */
@@ -175,7 +294,12 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
       kind: 'profile',
       indexable: false,
     };
-    return { body: withMeta(deps.shell, source), status: 404, outcome: 'unknown' };
+    return {
+      body: withMeta(deps.shell, source),
+      status: 404,
+      outcome: 'unknown',
+      tags: linkPageCacheTags(parts.handle),
+    };
   }
   const handle = text(profile.handle) ?? parts.handle;
   const look = lookOf(profile.theme);
@@ -190,10 +314,18 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     ...(bio === undefined ? {} : { description: bio }),
     ...(look === undefined ? {} : { look }),
   };
+  // Structured data on an indexable page, and the page as text for a crawler that runs no script (spec 0061).
+  const facts = pageFactsOf(profile, source.name, source.canonical, deps.origin);
+  const described = withPageFacts(withMeta(deps.shell, source), facts, source.indexable);
   return {
-    body: withBoot(withMeta(deps.shell, source), { kind: 'profile', profile, readAt: (deps.now ?? Date.now)() }),
+    body: withBoot(withLook(described, { ...profile, handle }, deps.fonts), {
+      kind: 'profile',
+      profile,
+      readAt: (deps.now ?? Date.now)(),
+    }),
     status: 200,
     outcome: 'profile',
+    tags: linkPageCacheTags(parts.handle, handle),
   };
 }
 

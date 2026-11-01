@@ -11,10 +11,13 @@ import {
   partsOf,
   shellFor,
   withBoot,
+  withLook,
+  LOOK_LINK_ID,
   type ShellDeps,
   type ShellProfile,
 } from './handle-shell.ts';
 import { bootOf, BOOT_ID as PAGE_BOOT_ID } from './src/public/booking/boot.ts';
+import { LOOK_LINK_ID as PAGE_LOOK_LINK_ID } from './src/public/stylesheet.ts';
 
 const shell = readFileSync(path.join(import.meta.dirname, 'book.html'), 'utf8');
 
@@ -290,11 +293,166 @@ describe('the boot block (29 Oct 2026)', () => {
   });
 });
 
+describe('the look in the head (spec 0060, AC-20, AC-21)', () => {
+  const fonts = {
+    sans: '/assets/Inter-Variable-latin-AbC123.woff2',
+    display: '/assets/InstrumentSerif-Regular-latin-dEf456.woff2',
+    mono: '/assets/JetBrainsMono-Variable-latin-x9.woff2',
+  };
+  const display = {
+    ...profile,
+    theme: { ...(profile.theme as object), font: 'display' },
+    look: { version: 'abcdef012345' },
+  };
+  const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
+
+  it('is the id the page finds again', () => {
+    expect(PAGE_LOOK_LINK_ID).toBe(LOOK_LINK_ID);
+  });
+
+  it('links the page’s own stylesheet on our api and preloads its pack’s heading face, and no other', async () => {
+    const { body } = await shellFor('/anish', deps({ readProfile: () => Promise.resolve(display), fonts }));
+    const head = headOf(body);
+    expect(head).toContain(
+      `<link rel="stylesheet" id="${LOOK_LINK_ID}" href="/api/public/handles/anish/look.css?v=abcdef012345">`,
+    );
+    expect(head).toContain(`<link rel="preload" href="${fonts.display}" as="font" type="font/woff2" crossorigin>`);
+    expect(head).not.toContain(fonts.mono);
+    // Nothing it fetches from another origin, and nothing inline.
+    const fetched = head.match(/<link[^>]+rel="(?:stylesheet|preload)"[^>]*>/g) ?? [];
+    expect(fetched.length).toBeGreaterThan(1);
+    expect(fetched.filter((link) => /href="(?:https?:)?\/\//.test(link))).toEqual([]);
+    expect(head).not.toMatch(/<style|style="/);
+  });
+
+  it('names a file once: Inter, which the build preloads already, is not preloaded again', () => {
+    const built = shell.replace('</head>', `<link rel="preload" href="${fonts.sans}" as="font" crossorigin></head>`);
+    const html = withLook(built, { ...profile, theme: { font: 'sans' } }, fonts);
+    expect(html.split(fonts.sans).length - 1).toBe(1);
+  });
+
+  it('writes no stylesheet for a page without one, nor for a malformed version or handle', () => {
+    expect(withLook(shell, profile, fonts)).not.toContain('look.css');
+    expect(withLook(shell, { ...display, look: { version: '"><b>' } }, fonts)).not.toContain('look.css');
+    expect(withLook(shell, { ...display, handle: 'a"b' }, fonts)).not.toContain('look.css');
+  });
+
+  it('preloads nothing for a font it has no built file for, nor a file outside the build', () => {
+    expect(withLook(shell, display, {})).not.toContain('as="font"');
+    expect(withLook(shell, display, { display: 'https://fonts.example/x.woff2' })).not.toContain('as="font"');
+  });
+
+  it('adds nothing to a booking page’s shell, a miss or an unknown handle', async () => {
+    const missed = await shellFor('/anish', deps({ readProfile: () => Promise.reject(new Error('down')), fonts }));
+    expect(missed.body).toBe(shell);
+    const page = await shellFor(
+      '/anish/intro',
+      deps({ readPage: () => Promise.resolve({ publicKey: 'k123', title: 'Intro' }), fonts }),
+    );
+    expect(page.body).not.toContain('look.css');
+  });
+});
+
 describe('cacheControlFor', () => {
   it('keeps a missed read for seconds, so a cold api never leaves the plain shell cached for minutes', () => {
     expect(cacheControlFor('missed')).toBe('public, s-maxage=10');
-    expect(cacheControlFor('page')).toContain('s-maxage=300');
-    expect(cacheControlFor('profile')).toContain('s-maxage=300');
-    expect(cacheControlFor('unknown')).toContain('s-maxage=300');
+    expect(cacheControlFor('page')).toBe('public, s-maxage=300, stale-while-revalidate=86400');
+  });
+
+  it('keeps a link page, or the 404 a private one answers, two minutes at most, so its switch shows promptly', () => {
+    // Spec 0058, AC-23: a page made Private must not be served from the edge for long, stale or fresh.
+    for (const outcome of ['profile', 'unknown'] as const) {
+      const header = cacheControlFor(outcome);
+      expect(header).toBe('public, s-maxage=60, stale-while-revalidate=60');
+      const seconds = (name: string) => Number(new RegExp(`${name}=(\\d+)`).exec(header)?.[1] ?? 'NaN');
+      expect(seconds('s-maxage') + seconds('stale-while-revalidate')).toBeLessThanOrEqual(120);
+    }
+  });
+});
+
+describe('the edge cache tags', () => {
+  it('files a link page’s shell under the address asked and the handle its owner holds now', async () => {
+    const answer = await shellFor('/anish-old', deps({ readProfile: () => Promise.resolve(profile) }));
+    expect(answer.tags).toEqual(['link-page:anish-old', 'link-page:anish']);
+    expect((await shellFor('/anish', deps())).tags).toEqual(['link-page:anish']);
+  });
+
+  it('files the 404 a private page answers under its handle, so going Live again deletes it', async () => {
+    const answer = await shellFor('/anish', deps({ readProfile: () => Promise.resolve(undefined) }));
+    expect(answer.tags).toEqual(['link-page:anish']);
+  });
+
+  it('files nothing for a miss or a booking page, which the switch doesn’t touch', async () => {
+    const missed = await shellFor('/anish', deps({ readProfile: () => Promise.reject(new Error('down')) }));
+    expect(missed.tags).toBeUndefined();
+    const booking = await shellFor('/anish/intro', deps({ readPage: () => Promise.resolve(page) }));
+    expect(booking.outcome).toBe('page');
+    expect(booking.tags).toBeUndefined();
+  });
+});
+
+describe('structured data and crawler text (spec 0061, AC-6121, AC-6122)', () => {
+  const rich: ShellProfile = {
+    ...profile,
+    image: '/api/public/profiles/anish/picture?v=1',
+    bio: 'Designer </script><script>alert(1)</script>',
+    socials: [
+      { network: 'linkedin', href: 'https://www.linkedin.com/in/anish' },
+      { network: 'x', href: 'javascript:alert(1)' },
+    ],
+    items: [
+      { kind: 'link', id: 'a', title: 'Portfolio <b>', url: 'https://anish.design' },
+      { kind: 'link', id: 'b', title: 'After dark', url: 'https://example.com/x', notice: '18' },
+      { kind: 'link', id: 'c', title: 'Mail me', url: 'mailto:a@b.co' },
+      { kind: 'heading', id: 'd', title: 'Work' },
+    ],
+  };
+
+  /** The one structured data block's JSON, or undefined. */
+  const ldOf = (html: string) => {
+    const found = [...html.matchAll(/<script type="application\/ld\+json">([^<]*)<\/script>/g)];
+    expect(found.length).toBeLessThanOrEqual(1);
+    const [first] = found;
+    return first?.[1] === undefined ? undefined : (JSON.parse(first[1]) as Record<string, unknown>);
+  };
+
+  it('carries one ProfilePage for a Person, with every < written escaped', async () => {
+    const answer = await shellFor('/anish', deps({ readProfile: () => Promise.resolve(rich) }));
+    const ld = ldOf(answer.body);
+    expect(ld).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'ProfilePage',
+      url: 'https://timefix.com/anish',
+      mainEntity: {
+        '@type': 'Person',
+        name: 'Anish Rao',
+        description: 'Designer </script><script>alert(1)</script>',
+        image: 'https://timefix.com/api/public/profiles/anish/picture?v=1',
+        url: 'https://timefix.com/anish',
+        sameAs: ['https://www.linkedin.com/in/anish'],
+      },
+    });
+    const head = answer.body.slice(0, answer.body.indexOf('</head>'));
+    expect(head).not.toContain('</script><script>alert');
+    expect(head).toContain('\\u003c/script>');
+  });
+
+  it('carries none on a page set not to index', async () => {
+    const answer = await shellFor(
+      '/anish',
+      deps({ readProfile: () => Promise.resolve({ ...rich, indexable: false }) }),
+    );
+    expect(ldOf(answer.body)).toBeUndefined();
+  });
+
+  it('writes the name, the bio and the live web links into the root, escaped, leaving noticed links out', async () => {
+    const answer = await shellFor('/anish', deps({ readProfile: () => Promise.resolve(rich) }));
+    const root = /<div id="root"[^>]*>([\s\S]*?)<\/div>/.exec(answer.body)?.[1] ?? '';
+    expect(root).toContain('<h1>Anish Rao</h1>');
+    expect(root).toContain('<p>Designer &lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;</p>');
+    expect(root).toContain('<a href="https://anish.design">Portfolio &lt;b&gt;</a>');
+    expect(root).not.toContain('After dark');
+    expect(root).not.toContain('mailto:');
+    expect(ldOf(answer.body)).toBeDefined();
   });
 });

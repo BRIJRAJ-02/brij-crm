@@ -24,6 +24,28 @@ export const Default: Story = {
 };
 
 /**
+ * Off has a name of its own (the link page's Private): a small status word beside the switch while it is off, read
+ * as its description. The label stays "Live", the one name voice control and screen readers use.
+ */
+export const OffStatus: Story = {
+  args: { label: 'Live', offStatus: 'Private' },
+  // Its baseline comes with the next CI render; the play checks the word and its wiring meanwhile.
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const toggle = canvas.getByRole('switch', { name: 'Live' });
+    // The status is the switch's description, drawn as generated content (which the browser reads into it; the test
+    // library's description reader skips generated content, so this checks the wiring and the word instead).
+    const status = document.getElementById(toggle.getAttribute('aria-describedby') ?? '');
+    if (status === null) throw new Error('the switch has no description');
+    const word = () => getComputedStyle(status, '::after').content;
+    await expect(word()).toBe('"Private"');
+    await userEvent.click(toggle);
+    await expect(toggle).toBeChecked();
+    await expect(word()).not.toBe('"Private"');
+  },
+};
+
+/**
  * With its label hidden (a link card's switch), the switch is only its 28px track, so an invisible hit area
  * grows it to at least 32 by 32: a press just beside it still toggles it.
  */

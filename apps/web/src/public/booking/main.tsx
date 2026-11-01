@@ -15,7 +15,7 @@
 import '@crm/ui/styles.css';
 import { handleAddressOf } from '@crm/contracts/handles';
 import { createHandleClient, isDataError } from '@crm/data/booking';
-import { BookingMessage, BookingProfile, BookingProvider } from '@crm/ui/public-booking';
+import { BookingMessage, BookingProfile, BookingProvider, createToasts } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { freshProfile, readBoot } from './boot.ts';
@@ -23,6 +23,7 @@ import { BookingPage, LoadingBooking } from './BookingPage.tsx';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
 import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
 import { strings, tabTitle } from './strings.ts';
+import { guardPreloadErrors, hasFilledField, preloadStrings, sessionStore } from '../../preload-guard.ts';
 
 // The guest page loads on its own: a visitor booking never downloads its changes (move, guests, cancel).
 const ManagePage = lazy(() => import('./ManagePage.tsx').then((module) => ({ default: module.ManagePage })));
@@ -51,6 +52,27 @@ const storage = ((): HandoffStorage | undefined => {
   }
 })();
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+// The page's one toast queue, so the preload guard can say a new version is ready over a half filled form.
+const toasts = createToasts();
+// A tab left open across a deploy asks for a chunk the new one no longer has: reload once onto it, or, while the
+// visitor has typed into the page, offer Reload in a toast instead.
+const reloadPage = () => {
+  globalThis.location.reload();
+};
+guardPreloadErrors({
+  target: window,
+  storage: () => sessionStore(window),
+  now,
+  reload: reloadPage,
+  isDirty: () => hasFilledField(document),
+  offerReload: () => {
+    toasts.toast({
+      tone: 'info',
+      message: preloadStrings.newVersion,
+      action: { label: preloadStrings.reload, onAction: reloadPage },
+    });
+  },
+});
 // What the handle address's shell already read (boot.ts): only a handle address's shell carries one.
 const boot = path === null ? readBoot(document) : undefined;
 // The profile the shell read, when it is recent enough to draw before the page's own read lands.
@@ -90,10 +112,26 @@ const showAddress = (pathname: string) => {
 /** Whether a plain `/b/<key>` visit moves to the page's handle address: never framed, nor on a return from Google. */
 const mayMove = path !== null && !isManage && embed === undefined && !/[?&](?:calendar|d|day|tz)=/.test(address.search);
 
-/** Skips the cross document crossfade of the navigation now leaving, where the browser has one (`pageswap`). */
+/** The parts of a navigation's view transition this page touches. */
+interface PageTransition {
+  readonly skipTransition: () => void;
+  readonly ready: Promise<unknown>;
+  readonly finished: Promise<unknown>;
+}
+
+/**
+ * Skips the cross document crossfade of the navigation now leaving, where the browser has one (`pageswap`). A skipped
+ * (or aborted) transition rejects its `ready` and `finished` with an AbortError or InvalidStateError nobody waits for:
+ * expected, so they are let go rather than reaching the error reporter as unhandled rejections.
+ */
 function skipPageCrossfade(event: Event): void {
-  const swap: Event & { readonly viewTransition?: { readonly skipTransition: () => void } | null } = event;
-  swap.viewTransition?.skipTransition();
+  const swap: Event & { readonly viewTransition?: PageTransition | null } = event;
+  const transition = swap.viewTransition;
+  if (transition === undefined || transition === null) return;
+  const letGo = (): void => undefined;
+  transition.ready.catch(letGo);
+  transition.finished.catch(letGo);
+  transition.skipTransition();
 }
 
 /** The booking page (or its guest page) for a public key, as `/b/<key>` has always drawn it. */
@@ -103,7 +141,7 @@ function renderBooking(publicKey: string) {
   if (tidied !== undefined) globalThis.history.replaceState(globalThis.history.state, '', tidied);
   view.render(
     <StrictMode>
-      <BookingProvider locale={locale} timeZone={timeZone}>
+      <BookingProvider locale={locale} timeZone={timeZone} toasts={toasts}>
         {isManage ? (
           <Suspense
             fallback={
@@ -154,7 +192,7 @@ function renderMessage(title: string, text: string) {
   document.title = tabTitle(title);
   view.render(
     <StrictMode>
-      <BookingProvider locale={locale} timeZone={timeZone}>
+      <BookingProvider locale={locale} timeZone={timeZone} toasts={toasts}>
         <BookingMessage title={title}>{text}</BookingMessage>
       </BookingProvider>
     </StrictMode>,
@@ -166,7 +204,7 @@ if (path !== null) {
 } else if (handled?.kind === 'profile') {
   view.render(
     <StrictMode>
-      <BookingProvider locale={locale} timeZone={timeZone}>
+      <BookingProvider locale={locale} timeZone={timeZone} toasts={toasts}>
         {/* The profile's own shape while its module loads, so the page never swaps one card for another. */}
         <Suspense fallback={<BookingProfile />}>
           <ProfilePage
@@ -187,7 +225,7 @@ if (path !== null) {
   // `/b/<key>` draws, so finding the key fills the page in rather than replacing it.
   view.render(
     <StrictMode>
-      <BookingProvider locale={locale} timeZone={timeZone}>
+      <BookingProvider locale={locale} timeZone={timeZone} toasts={toasts}>
         <LoadingBooking locale={locale} timeZone={timeZone} now={now} />
       </BookingProvider>
     </StrictMode>,
@@ -210,7 +248,7 @@ if (path !== null) {
           document.title = tabTitle(strings.failedTitle);
           view.render(
             <StrictMode>
-              <BookingProvider locale={locale} timeZone={timeZone}>
+              <BookingProvider locale={locale} timeZone={timeZone} toasts={toasts}>
                 <BookingMessage title={strings.failedTitle} onRetry={tryAddress}>
                   {strings.failedText}
                 </BookingMessage>

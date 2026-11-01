@@ -14,6 +14,11 @@ export interface FileDropProps {
   readonly label: string;
   /** MIME types or extensions it accepts (`text/csv`, `.xlsx`). Leave it out to take any file. */
   readonly acceptedTypes?: readonly string[];
+  /**
+   * The accepted types as people name them ("PNG, JPG or WebP"), shown in the hint and the refusal in place of the
+   * raw `acceptedTypes` (`image/png, image/jpeg`). Leave it out where the raw list already reads well (`.csv`).
+   */
+  readonly typesText?: string;
   /** The largest file it takes, in bytes. */
   readonly maxSize?: number;
   readonly allowsMultiple?: boolean;
@@ -26,6 +31,12 @@ export interface FileDropProps {
    */
   readonly preview?: { readonly src: string; readonly alt: string };
   readonly isDisabled?: boolean;
+  /**
+   * Shows what is there with no way to change it (a member's view of the workspace's logo): `preview` alone, drawn
+   * at a control's height, and nothing that looks or announces as a control. Without a preview it draws nothing,
+   * so the screen says there is none.
+   */
+  readonly isReadOnly?: boolean;
   /**
    * `zone` (the default) is the drop area with its browse button. `button` is the browse button alone, with
    * `label` as its words, for a picker that sits beside what it changes (first run's avatar, 27 October 2026),
@@ -56,11 +67,13 @@ function accepts(file: File, types: readonly string[] | undefined): boolean {
 export function FileDrop({
   label,
   acceptedTypes,
+  typesText,
   maxSize,
   allowsMultiple = false,
   onFiles,
   preview,
   isDisabled = false,
+  isReadOnly = false,
   variant = 'zone',
   isPending = false,
   wrongTypeText,
@@ -69,10 +82,11 @@ export function FileDrop({
   const [error, setError] = useState<string | undefined>(undefined);
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const shown = safeImageSrc(preview?.src);
+  const types = typesText ?? acceptedTypes?.join(', ');
   const take = (files: readonly File[]) => {
     const wrongType = files.find((file) => !accepts(file, acceptedTypes));
     if (wrongType !== undefined) {
-      setError(wrongTypeText?.(wrongType.name) ?? strings.wrongType(wrongType.name, (acceptedTypes ?? []).join(', ')));
+      setError(wrongTypeText?.(wrongType.name) ?? strings.wrongType(wrongType.name, types ?? ''));
       return;
     }
     const tooBig = maxSize === undefined ? undefined : files.find((file) => file.size > maxSize);
@@ -83,10 +97,9 @@ export function FileDrop({
     setError(undefined);
     onFiles(allowsMultiple ? files : files.slice(0, 1));
   };
-  const limits = [
-    acceptedTypes === undefined ? undefined : acceptedTypes.join(', '),
-    maxSize === undefined ? undefined : strings.upTo(formatFileSize(maxSize, locale)),
-  ].filter((part) => part !== undefined);
+  const limits = [types, maxSize === undefined ? undefined : strings.upTo(formatFileSize(maxSize, locale))].filter(
+    (part) => part !== undefined,
+  );
   const refusal =
     error === undefined ? undefined : (
       <span className={styles.error} role="alert">
@@ -94,6 +107,19 @@ export function FileDrop({
         {error}
       </span>
     );
+  if (isReadOnly) {
+    return shown !== undefined && failed !== shown ? (
+      <img
+        className={styles.preview}
+        data-read-only=""
+        src={shown}
+        alt={preview?.alt ?? ''}
+        onError={() => {
+          setFailed(shown);
+        }}
+      />
+    ) : null;
+  }
   if (variant === 'button') {
     return (
       <div className={styles.field}>

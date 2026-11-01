@@ -8,8 +8,9 @@ import { strings } from './strings.ts';
 
 function one(text: string, context: TextContext) {
   if (context.phone === undefined) return refuse(strings.loading);
+  // The attribute's own default country first, then the context's (the workspace's, for an import).
   return (
-    context.phone.parse(text, context.defaultCountry ?? context.attribute.defaultCountry) ?? refuse(strings.invalid)
+    context.phone.parse(text, context.attribute.defaultCountry ?? context.defaultCountry) ?? refuse(strings.invalid)
   );
 }
 

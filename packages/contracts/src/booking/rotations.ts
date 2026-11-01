@@ -101,8 +101,12 @@ export const RotationView = RotationSettings.extend({
   members: z.array(RotationMemberView),
   /** How many live booking pages book from it. */
   pages: z.number().int().min(0),
-  /** The reader may change it (`booking.admin`). */
+  /** The reader may change it (`booking.admin`, or one of its editors: spec 0037, AC-1331). */
   canChange: z.boolean(),
+  /** The reader is one of its editors (spec 0037, AC-1332): Round robin shows an Editor badge. */
+  isEditor: z.boolean().optional(),
+  /** The reader may delete it and change its editors (`booking.admin`); an editor may not (AC-1331). */
+  canManage: z.boolean().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });
@@ -265,9 +269,9 @@ export const DistributionRow = z.object({
   isOn: z.boolean(),
   /** Live units in the window, calibration and adjustments included. */
   count: z.number(),
-  /** Their share of the window's count by weight, among the members switched on: `booking.admin` only (AC-752). */
+  /** Their share of the window's count by weight, among the members switched on: `booking.admin` and editors (AC-752, AC-1330). */
   fairShare: z.number().optional(),
-  /** `count` less `fairShare`: above zero, ahead of their share. `booking.admin` only. */
+  /** `count` less `fairShare`: above zero, ahead of their share. `booking.admin` and editors. */
   difference: z.number().optional(),
   /** The window's adjustments, summed. */
   adjusted: z.number().int(),
@@ -287,7 +291,7 @@ export const RotationDistribution = z.object({
   weekStarts: z.array(z.string()).length(12),
   rows: z.array(DistributionRow),
   adjustments: z.array(RotationAdjustment),
-  /** The reader may adjust counts (`booking.admin`, or the rotation's editors once spec 0037 adds them). */
+  /** The reader may adjust counts (`booking.admin`, or the rotation's editors: spec 0037, AC-1329). */
   canAdjust: z.boolean(),
 });
 /** A rotation's Distribution tab. */

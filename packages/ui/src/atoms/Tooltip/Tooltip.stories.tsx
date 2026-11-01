@@ -26,7 +26,16 @@ export const OnHover: Story = {
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
-    await hoverFresh(userEvent, canvas.getByRole('button', { name: 'Archive' }));
+    const button = canvas.getByRole('button', { name: 'Archive' });
+    // Start cold, so a retry measures the delay again: a tooltip a failed try left open closes, and React Aria's
+    // warm period after it (500 ms, when the next tooltip shows at once) runs out first. Without this one slow
+    // first try on a loaded WebKit runner failed every retry with the tooltip already there (31 October 2026).
+    await userEvent.unhover(button);
+    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
+    await new Promise((resolve) => {
+      setTimeout(resolve, 600);
+    });
+    await hoverFresh(userEvent, button);
     const hovered = performance.now();
     await expect(document.querySelector('[role="tooltip"]')).toBeNull();
     await tooltip();

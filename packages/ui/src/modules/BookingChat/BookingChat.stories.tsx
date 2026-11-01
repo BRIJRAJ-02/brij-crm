@@ -16,7 +16,7 @@ function greeting(): BookingChatLine {
   return {
     id: 'greet',
     role: 'assistant',
-    text: 'I can book your 30 minute Intro call with Ada. When works for you? Type something like “tomorrow afternoon”, or pick a time below.',
+    text: 'Booking your 30 min Intro call with Ada. When suits you?',
     days: [
       times('Fri 9 Oct', ['9:00 AM', '9:30 AM', '10:00 AM']),
       times('Mon 12 Oct', ['9:00 AM', '9:30 AM', '10:00 AM']),

@@ -4,7 +4,18 @@
 // Leaves out: anything inside one form (its builder), and archived forms (a later pass).
 import { isDataError, type FormSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import { Button, focusLater, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip, type LinkGridCard } from '@crm/ui';
+import {
+  Button,
+  ButtonLink,
+  focusLater,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+  SpotIllustration,
+  Tooltip,
+  type LinkGridCard,
+} from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
@@ -15,6 +26,14 @@ import { strings as capturesStrings } from '../captures/strings.ts';
 import { DeleteFormDialog } from './FormConfirms.tsx';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
+
+/** With no forms: a still drawing of a form, one line and New form (spec 0058, AC-8). */
+const EMPTY = {
+  title: strings.noForms,
+  text: strings.noFormsText,
+  icon: 'clipboard-list',
+  illustration: <SpotIllustration kind="form" />,
+} as const;
 
 /** Props for Captures › Forms: the workspace, whose held list of forms the route loaded. */
 export interface FormsScreenProps {
@@ -109,6 +128,13 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       ...(isPublished ? { copyValue: data.forms.hostedUrl(form.publicKey) } : {}),
       actions: (
         <>
+          {/* A draft has no link to copy or open, so its foot said nothing to do: Edit is the next step, beside More
+              (the owner, 31 October 2026: "no idea what to do"). */}
+          {canManage && !isPublished && !isPending && (
+            <ButtonLink size="lg" icon="pencil" label={strings.editFormOf(form.name)} href={formHref(slug, form.id)}>
+              {strings.editDraft}
+            </ButtonLink>
+          )}
           {isLive && (
             <Tooltip content={strings.openInNewTab} isDisabled={isPending}>
               <Button
@@ -160,17 +186,17 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       searchLabel={strings.searchForms}
       status={list.status}
       cards={cards}
-      // An empty list offers New in its middle too: the same as the TopBar's.
+      // An empty list offers New in its middle too, as a secondary: the TopBar's New stays the one primary.
       {...(create?.create === undefined
         ? {}
         : {
             newAction: (
-              <Button variant="primary" icon="plus" onPress={create.create} isPending={create.isPending}>
+              <Button icon="plus" onPress={create.create} isPending={create.isPending}>
                 {strings.newForm}
               </Button>
             ),
           })}
-      empty={{ title: strings.noForms, text: strings.noFormsText, icon: 'clipboard-list' }}
+      empty={EMPTY}
       errorTitle={strings.failedTitle}
       onRetry={() => {
         data.forms.view(slug).reload();
@@ -204,7 +230,7 @@ export function FormsPending() {
       searchLabel={strings.searchForms}
       status="loading"
       cards={[]}
-      empty={{ title: strings.noForms, text: strings.noFormsText, icon: 'clipboard-list' }}
+      empty={EMPTY}
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}
     />

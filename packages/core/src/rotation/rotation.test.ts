@@ -33,6 +33,7 @@ import { reassignBooking, reassignUpcoming } from './reassign.ts';
 import { handOnBooking, rotationsRemoval } from './removal.ts';
 import { createRotation, deleteRotation, listRotations, updateRotation } from './rotations.ts';
 import { loadTeam } from './team.ts';
+import { createTimeOff } from '../scheduling/time-off.ts';
 
 const { appUrl } = inject('testDatabase');
 const LINK_KEY = Buffer.alloc(32, 7);
@@ -1072,6 +1073,77 @@ describe('fixed hosts and several rotations (spec 0037, AC-1319 to AC-1322)', ()
         where a.status = 'confirmed' and b.status = 'confirmed' and a.during && b.during`),
     );
     expect(overlaps.rows).toEqual([]);
+  });
+});
+
+describe('the race with stand ins (AC-1431)', () => {
+  it('serialises 30 parallel bookings on two pages sharing members, an away last host’s stand in a candidate on the other page, with no deadlock', async () => {
+    const w = await workspace();
+    const people = await Promise.all(['A', 'B', 'C', 'D'].map((name) => w.addMember(`Member ${name}`)));
+    const [a, b, c, d] = people.map((person) => person.id);
+    if (a === undefined || b === undefined || c === undefined || d === undefined) throw new Error('Four members.');
+    const offOn = (index: number, day: string, standinMemberId?: string) =>
+      createTimeOff(
+        people[index]?.scope ?? w.owner,
+        { now: () => NOW },
+        {
+          id: newId(),
+          fromDate: day,
+          toDate: day,
+          reason: 'vacation',
+          ...(standinMemberId === undefined ? {} : { standinMemberId }),
+        },
+      );
+    // One sends a returning guest to the host they met last; Two shares B and C with it, and holds D.
+    const one = await rotationOf(w, 'One', [a, b, c], { returning: 'last_host' });
+    const two = await rotationOf(w, 'Two', [c, d, b]);
+    const first = await teamPage(w, [], [one.id]);
+    const second = await teamPage(w, [], [two.id]);
+    // Guests who met A last: on Tuesday B and C are away, so One gives each of them to A.
+    await offOn(1, '2026-11-03');
+    await offOn(2, '2026-11-03');
+    const guests: { readonly email: string; readonly name: string }[] = [];
+    for (const index of [0, 1, 2]) {
+      const guest = { email: `known-${String(index)}@client.example`, name: `Known ${String(index)}` };
+      const met = await bookPublicSlot(
+        first.entry,
+        deps(),
+        bookInput(`2026-11-03T${String(9 + index).padStart(2, '0')}:00:00.000Z`, guest),
+      );
+      expect((await hostsOf(w, [met.bookingId])).get(met.bookingId)).toBe(a);
+      guests.push(guest);
+    }
+    // A is away on Monday with D standing in: D is a candidate on Two, and outside One.
+    await offOn(0, MONDAY, d);
+    const times = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30'];
+    const settled = await Promise.allSettled(
+      Array.from({ length: 30 }, (_, index) =>
+        bookPublicSlot(
+          index % 2 === 0 ? first.entry : second.entry,
+          deps(),
+          bookInput(at(times[index % times.length] ?? '09:00'), index % 2 === 0 ? guests[index % 3] : {}),
+        ),
+      ),
+    );
+    // Every refusal is a taken time, never a deadlock (40P01) or anything else.
+    for (const each of settled) {
+      if (each.status === 'rejected') expect(isRefusal(each.reason) && each.reason.refusal.code).toBe('SLOT_TAKEN');
+    }
+    const booked = settled.flatMap((each) => (each.status === 'fulfilled' ? [each.value.bookingId] : []));
+    expect(booked.length).toBeGreaterThan(8);
+    // Every recheck held: nobody double booked, and A, away, took none.
+    const overlaps = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`
+        select 1 from booking_hosts a join booking_hosts b on a.member_id = b.member_id and a.booking_id < b.booking_id
+        where a.status = 'confirmed' and b.status = 'confirmed' and a.during && b.during`),
+    );
+    expect(overlaps.rows).toEqual([]);
+    expect([...(await hostsOf(w, booked)).values()]).not.toContain(a);
+    // The stand in took some of A's returning guests on One, from outside its rotation.
+    const reasons = await Promise.all(
+      booked.map(async (bookingId) => (await bookingAssignments(w.owner, { bookingId }))[0]?.reason),
+    );
+    expect(reasons).toContain('standin');
   });
 });
 

@@ -1,9 +1,9 @@
 // First run in Chromium (spec 0036): the steps in order with their count,
 // Back keeping what was typed, the address checked as typed, Create workspace
 // going on to Your booking page, the page and the handle each made from their
-// step, the end saying the page is live, and Sign out asking first (the
-// owner, 21 October 2026): Cancel changes nothing, and Sign out signs out
-// once. Only Invite your team skips (the owner, 27 October 2026).
+// step, the end handing out both links (spec 0058, AC-7), and Sign out asking
+// first (the owner, 21 October 2026): Cancel changes nothing, and Sign out signs
+// out once. Connect your calendar and Invite your team each skip (spec 0058, AC-25).
 import type { DataLayer, SignedInUser } from '@crm/data';
 import { createToasts, UiProvider } from '@crm/ui';
 import {
@@ -16,14 +16,24 @@ import {
 } from '@tanstack/react-router';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
+import { publicBookingOrigin } from '../booking/links.ts';
 import { shownStep, welcomeSearch, welcomeSteps } from './steps.ts';
 import { WelcomeScreen, type WelcomeScreenProps } from './WelcomeScreen.tsx';
 
 const USER: SignedInUser = { id: '0199a6f2-0000-7000-8000-000000000001', name: '', email: 'ada.lovelace@acme.com' };
 const WORKSPACE_ID = '0199a6f2-0000-7000-8000-00000000000a';
 const PAGE_ID = '0199a6f2-0000-7000-8000-00000000000b';
+/** The member's calendar list where Outlook isn't on: Google only. */
+const CALENDAR_SNAPSHOT = { status: 'ready', enabled: true, providers: ['google'], connections: [], max: 5 } as const;
+const CALENDAR_VIEW = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => CALENDAR_SNAPSHOT,
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  reload: () => undefined,
+};
 
 /** A stand in data layer: what first run calls, counted. */
 function fakeData(taken: readonly string[] = ['taken-one']) {
@@ -81,6 +91,8 @@ function fakeData(taken: readonly string[] = ['taken-one']) {
     },
     calendar: {
       connectUrl: (slug: string, then?: string) => `/api/calendar/google/start?workspace=${slug}&then=${String(then)}`,
+      // Google only: this deployment hasn't turned Outlook on. One view, one snapshot, as the store keeps them.
+      view: () => CALENDAR_VIEW,
     },
     preferences: {
       of: () => ({ getSnapshot: () => ({ status: 'ready', preferences: { timeZone: 'Europe/London' } }) }),
@@ -89,7 +101,13 @@ function fakeData(taken: readonly string[] = ['taken-one']) {
       newId: () => PAGE_ID,
       create: (workspace: string, input: { id: string; title: string; settings?: { durations?: number[] } }) => {
         pages.push({ workspace, id: input.id, title: input.title, minutes: input.settings?.durations?.[0] ?? 0 });
-        return Promise.resolve({ id: input.id, title: input.title });
+        return Promise.resolve({
+          id: input.id,
+          title: input.title,
+          slug: 'intro-call',
+          publicKey: 'k3x9',
+          isPrivate: false,
+        });
       },
     },
     profile: {
@@ -325,7 +343,10 @@ describe('first run’s steps', () => {
 
     await expect.element(page.getByRole('heading', { level: 1, name: 'Connect your calendar' })).toBeVisible();
     await expect.element(page.getByText('Step 5 of 6')).toBeVisible();
-    await page.getByRole('button', { name: 'Continue without a calendar' }).click();
+    // Outlook isn't on here: its button is off, and its words say why.
+    await expect.element(page.getByRole('button', { name: 'Outlook coming soon' })).toBeDisabled();
+    // Skip for now, the step's clear secondary action (spec 0058, AC-25).
+    await page.getByRole('button', { name: 'Skip for now' }).click();
 
     await expect.element(page.getByRole('heading', { level: 1, name: 'Invite your team' })).toBeVisible();
     await expect.element(page.getByText('Step 6 of 6')).toBeVisible();
@@ -350,11 +371,32 @@ describe('first run’s steps', () => {
     await expect.element(page.getByRole('button', { name: 'Continue' })).toHaveFocus();
     await page.getByRole('button', { name: 'Continue' }).click();
 
-    // The end: what the run made, with its address, and no step count, since there is nothing to do here.
+    // The end: what the run made, and no step count, since there is nothing to do here. Two tiles (spec 0058,
+    // AC-7): the booking page's link and the link page's, each with Copy link and Open, at the addresses every
+    // other screen gives them.
     await expect.element(page.getByRole('heading', { level: 1, name: 'You’re live' })).toBeVisible();
     expect(router.state.location.search).toEqual({ step: 'done', workspace: 'ada' });
     expect(page.getByText(/^Step \d+ of/).query()).toBeNull();
     await expect.element(page.getByRole('button', { name: 'Go to dashboard' })).toHaveFocus();
+    const bookingUrl = `${publicBookingOrigin()}/ada-lovelace/intro-call`;
+    const linkPageUrl = `${publicBookingOrigin()}/ada-lovelace`;
+    await expect
+      .element(page.getByRole('link', { name: 'Open Intro call in a new tab' }))
+      .toHaveAttribute('href', bookingUrl);
+    await expect
+      .element(page.getByRole('link', { name: 'Open Your link page in a new tab' }))
+      .toHaveAttribute('href', linkPageUrl);
+    const copied = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    await page
+      .getByRole('group', { name: 'Actions for Intro call' })
+      .getByRole('button', { name: /Copy link/ })
+      .click();
+    await page
+      .getByRole('group', { name: 'Actions for Your link page' })
+      .getByRole('button', { name: /Copy link/ })
+      .click();
+    expect(copied.mock.calls.map(([text]) => text)).toEqual([bookingUrl, linkPageUrl]);
+    copied.mockRestore();
     await page.getByRole('button', { name: 'Go to dashboard' }).click();
     await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
   });
@@ -398,8 +440,8 @@ describe('first run’s steps', () => {
   it('says a connected calendar came back, and Continue goes on to the last step', async () => {
     const fake = fakeData();
     const router = await renderWelcome(fake.data, '/welcome?step=calendar&workspace=acme&calendar=connected');
-    await expect.element(page.getByText('Google Calendar is connected.')).toBeVisible();
-    // Nothing on this step says Skip: the connecting happens at Google, so its way on says what it does.
+    await expect.element(page.getByText('Your calendar is connected.')).toBeVisible();
+    // Connected, there is nothing left to skip: Continue is the one way on.
     expect(page.getByRole('button', { name: 'Skip for now' }).query()).toBeNull();
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect.element(page.getByRole('heading', { level: 1, name: 'Invite your team' })).toBeVisible();

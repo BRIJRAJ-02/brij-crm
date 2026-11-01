@@ -420,6 +420,16 @@ describe('the Team week scenario (AC-1289 to AC-1292)', () => {
     const week = await readTeamWeek(w.owner, { now: realNow }, { weekStart: thisMonday() });
     expect(week.rows.find((row) => row.memberId === sam)?.otherSchedules).toBe(2);
   });
+
+  it('gives a guest no row, even to the owner, who manages everyone (spec 0031, slice 9)', async () => {
+    const w = await world();
+    const ana = await w.add('Ana Diaz');
+    const gus = await w.add('Gus Guest', { role: 'guest', hours: false });
+    const week = await readTeamWeek(w.owner, { now: realNow }, { weekStart: thisMonday() });
+    const ids = week.rows.map((row) => row.memberId);
+    expect(ids).toContain(ana);
+    expect(ids).not.toContain(gus);
+  });
 });
 
 /** A week of hours for the refusals. */

@@ -195,6 +195,10 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   ],
   'webhook.deleted': [row('webhook.deleted', 'workspace', newId(), { after: { host: 'hooks.example.com' } })],
   'webhook.turned_off': [row('webhook.turned_off', 'workspace', newId(), { after: { host: 'hooks.example.com' } })],
+  // An API key made, revoked or brought back (parity #34): its name, never its secret.
+  'api_key.created': [row('api_key.created', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
+  'api_key.revoked': [row('api_key.revoked', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
+  'api_key.restored': [row('api_key.restored', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
   'rotation.adjusted': [
     row('rotation.adjusted', 'rotation', rotation, { after: { memberId: bea, units: 2, note: 'Holiday' } }),
   ],
@@ -303,6 +307,10 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     row('booking.changed_for', 'booking', booking, { after: { memberId: bea, change: 'made' } }),
   ],
   // As the call sites in teams.ts and rules.ts write them (target types `team` and `object`).
+  'automation.changed': [
+    row('automation.changed', 'automation', newId(), { after: { change: 'created', object: 'Deals' } }),
+    row('automation.changed', 'automation', newId(), { after: { change: 'disabled', object: 'tasks' } }),
+  ],
   'team.changed': [
     row('team.changed', 'team', newId(), { after: { change: 'created', name: 'Sales' } }),
     row('team.changed', 'team', newId(), { before: { name: 'Sales' }, after: { change: 'renamed', name: 'Revenue' } }),
@@ -331,6 +339,9 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   ],
   'rotation.changed': [
     row('rotation.changed', 'rotation', rotation, { after: { name: 'Sales', added: [bea], removed: [] } }),
+  ],
+  'editors.changed': [
+    row('editors.changed', 'rotation', rotation, { after: { name: 'Sales', added: [bea], removed: [] } }),
   ],
 };
 
@@ -476,6 +487,8 @@ describe('toEntryView, per action', () => {
   });
 
   it('says a team change and an access rule in the names stored then, with only the counts of people and fields', () => {
+    expect(only('automation.changed', 0).params).toEqual({ change: 'created', object: 'Deals' });
+    expect(only('automation.changed', 1).params).toEqual({ change: 'disabled', object: 'tasks' });
     expect(only('team.changed', 0).params).toEqual({ change: 'created', team: 'Sales', joined: 0, left: 0 });
     expect(only('team.changed', 1).params).toEqual({ change: 'renamed', team: 'Sales', joined: 0, left: 0 });
     expect(only('team.changed', 2).params).toEqual({ change: 'deleted', team: 'Revenue', joined: 0, left: 1 });
@@ -522,6 +535,8 @@ describe('toEntryView, per action', () => {
     });
     expect(only('booking_page.changed_for').params).toEqual({ page: 'Intro call', deleted: false });
     expect(only('rotation.changed').params).toEqual({ added: 1, removed: 0 });
+    expect(only('editors.changed').params).toEqual({ added: 1, removed: 0 });
+    expect(only('editors.changed').target).toMatchObject({ type: 'rotation', id: rotation });
     const unknown = row('schedule.changed', 'member', bea, { after: { memberId: bea, kind: 'rebuilt' } });
     expect(toEntryView(unknown, names)).toBeUndefined();
   });

@@ -6,6 +6,7 @@ import * as z from 'zod';
 import { AttributeDefault } from './values/attribute-config.ts';
 import { AttributeType } from './values/attribute-values.ts';
 import { AttributeRelationship } from './relationship-block.ts';
+import { AttributeComputed, ComputedDefinitionInput } from './computed.ts';
 import { Hue } from './values/hues.ts';
 import { AttributeValidation, ValidationRuleInput } from './values/validation-rules.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -81,6 +82,8 @@ export const AttributeDefinition = z.object({
   validation: AttributeValidation.optional(),
   /** A record reference's relationship (spec 0014). */
   relationship: AttributeRelationship.optional(),
+  /** A computed attribute's definition and where its values stand (spec 0015); `type` is then its result type. */
+  computed: AttributeComputed.optional(),
 });
 /** One attribute of an object. */
 export type AttributeDefinition = z.infer<typeof AttributeDefinition>;
@@ -193,6 +196,11 @@ export const CreateAttributeInput = WorkspaceScoped.extend({
   options: z.array(NewAttributeOption).max(1000, 'An attribute holds at most 500 options.').optional(),
   /** Its rules, in order (spec 0013, AC-252); at most 20 (`LIMIT_REACHED`). */
   rules: AttributeRules.optional(),
+  /**
+   * A computed attribute (spec 0015): a lookup, a rollup or a formula (its source). `type` is then ignored and the
+   * result type derived; Required, Unique, a default, options and rules are refused `CONFIG_INVALID`.
+   */
+  computed: ComputedDefinitionInput.optional(),
   mutationId: Uuid,
 });
 /** A new attribute. */
@@ -216,6 +224,8 @@ export const UpdateAttributeInput = WorkspaceScoped.extend({
    * attribute's own rules (one left out is deleted); at most 20.
    */
   rules: AttributeRules.optional(),
+  /** A computed attribute's new definition, of the same result type (spec 0015, AC-322): every record recomputes. */
+  computed: ComputedDefinitionInput.optional(),
   mutationId: Uuid,
 });
 /** An attribute's settings, changed. */

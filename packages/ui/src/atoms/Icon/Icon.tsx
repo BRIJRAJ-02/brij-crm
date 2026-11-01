@@ -29,8 +29,11 @@ export function IconScope({ icons: scoped, children }: IconScopeProps) {
   return <ScopedIcons.Provider value={value}>{children}</ScopedIcons.Provider>;
 }
 
-/** Icon sizes, from the `size-icon` tokens: `md` 16 (nav, menus, rows), `sm` 14 (buttons, chips), `xs` 12 (card footers). */
-export type IconSize = 'md' | 'sm' | 'xs';
+/**
+ * Icon sizes, from the `size-icon` tokens: `lg` one and a half `size-icon` (a picture slot: a choice tile's mark),
+ * `md` 16 (nav, menus, rows), `sm` 14 (buttons, chips), `xs` 12 (card footers).
+ */
+export type IconSize = 'lg' | 'md' | 'sm' | 'xs';
 
 /** Icon colour: `inherit` takes the parent's, `muted` is `text-secondary`, `ai` is the AI sparkle only. */
 export type IconTone = 'inherit' | 'muted' | 'ai' | 'success' | 'danger';

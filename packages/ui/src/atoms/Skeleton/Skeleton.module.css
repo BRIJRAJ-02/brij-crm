@@ -145,8 +145,10 @@
     }
   }
 
+  /* Still under reduced motion, the text shape's bar (its ::before) as well as the box (spec 0058, AC-2). */
   @media (prefers-reduced-motion: reduce) {
-    .root {
+    .root,
+    .root[data-shape='text']::before {
       animation: none;
     }
   }

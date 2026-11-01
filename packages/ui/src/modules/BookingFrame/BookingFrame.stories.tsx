@@ -64,6 +64,11 @@ export const ChooseATime: Story = {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Intro call · 30 min' })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
     await expect(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' })).toBeEnabled();
+    // The clock and the view share the heading row's end, one group on one line (spec 0058, AC-24).
+    const clock = canvas.getByRole('radiogroup', { name: 'Clock' });
+    const view = canvas.getByRole('radiogroup', { name: 'View' });
+    await expect(clock.parentElement).toBe(view.parentElement);
+    await expect(clock.getBoundingClientRect().top).toBe(view.getBoundingClientRect().top);
     // Both feet, the rail's (wide screens) and the page's (phones): each link tagged as the booking page's.
     await expect(timefixLinkTags(canvasElement)).toEqual([
       timefixTags('booking_page', 'footer_logo'),
@@ -71,6 +76,37 @@ export const ChooseATime: Story = {
       timefixTags('booking_page', 'footer_logo'),
       timefixTags('booking_page', 'claim_link'),
     ]);
+  },
+};
+
+/** An orange brand, as `brandProperties(brandVariables({ accent: '#e8590c' }))` makes it (spec 0060, AC-7). */
+const ORANGE_BRAND = [
+  ['--brand-accent', '#e65708'],
+  ['--brand-on-accent', '#000000'],
+  ['--brand-link', '#b74300'],
+  ['--brand-accent-dark', '#e8590c'],
+  ['--brand-on-accent-dark', '#000000'],
+  ['--brand-link-dark', '#fd6c2b'],
+] as const;
+
+/** A stand in logo: a mark and a word, in one fill. */
+const LOGO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60"><circle cx="30" cy="30" r="24" fill="#e8590c"/><rect x="66" y="18" width="160" height="24" rx="6" fill="#e8590c"/></svg>',
+)}`;
+
+/**
+ * The workspace's brand kit (spec 0060, AC-4): its logo heads the rail, and its accent marks the chosen day, the
+ * chosen time, Book and the focus ring. The steps and the requests are the same as without it.
+ */
+export const Branded: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { brand: { logo: { src: LOGO, alt: 'Acme' }, variables: ORANGE_BRAND } },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('img', { name: 'Acme' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
+    const book = canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' });
+    await expect(getComputedStyle(book).backgroundColor).toBe('rgb(230, 87, 8)');
   },
 };
 
@@ -397,6 +433,7 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
   const [time, setTime] = useState<string | undefined>(undefined);
   const [view, setView] = useState('month');
   const [step, setStep] = useState<'pick' | 'details' | 'back'>('pick');
+  const [hour12, setHour12] = useState(true);
   const bookBar = (
     <Button
       variant="primary"
@@ -439,8 +476,7 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
                     slots={TIMES}
                     value={time}
                     onChange={setTime}
-                    hour12
-                    onHour12Change={fn()}
+                    hour12={hour12}
                     layout="grid"
                   />
                 </>
@@ -448,24 +484,34 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
               coverFooter: bookBar,
             }
           : {})}
+        // The picker's corner as the page draws it (spec 0058, AC-24): the clock and the view in one compact group.
         toolbar={
-          <SegmentedControl
-            label="View"
-            value={view}
-            onChange={(next) => {
-              setView(next);
-              // A switch is a fresh look, as the page's is: Back's slide doesn't replay.
-              setStep('pick');
-            }}
-            segments={[
-              { value: 'month', label: 'Month', icon: 'calendar', isIconOnly: true },
-              { value: 'list', label: 'List', icon: 'list', isIconOnly: true },
-            ]}
-          />
+          <>
+            <SegmentedControl
+              label="Clock"
+              value={hour12 ? '12' : '24'}
+              onChange={(next) => setHour12(next === '12')}
+              segments={[
+                { value: '12', label: '12h' },
+                { value: '24', label: '24h' },
+              ]}
+            />
+            <SegmentedControl
+              label="View"
+              value={view}
+              onChange={(next) => {
+                setView(next);
+                // A switch is a fresh look, as the page's is: Back's slide doesn't replay.
+                setStep('pick');
+              }}
+              segments={[
+                { value: 'month', label: 'Month', icon: 'calendar', isIconOnly: true },
+                { value: 'list', label: 'List', icon: 'list', isIconOnly: true },
+              ]}
+            />
+          </>
         }
-        aside={
-          <SlotList heading="Thu Oct 8" slots={TIMES} value={time} onChange={setTime} hour12 onHour12Change={fn()} />
-        }
+        aside={<SlotList heading="Thu Oct 8" slots={TIMES} value={time} onChange={setTime} hour12={hour12} />}
       >
         <MonthTiles
           month="2026-10"

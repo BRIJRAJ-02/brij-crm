@@ -22,6 +22,7 @@ describe('settingsNav', () => {
       ['Profile', 'Preferences', 'Sign in and devices', 'Notifications', 'Scheduling access'],
       [
         'General',
+        'Brand',
         'Members',
         'Teams',
         'Security',
@@ -29,6 +30,7 @@ describe('settingsNav', () => {
         'Objects',
         'Lists',
         'Automations',
+        'Developer',
         'Background jobs',
         'History',
         'Trash',
@@ -45,6 +47,8 @@ describe('settingsNav', () => {
       notifications: '/w/acme/settings/account/notifications',
       'scheduling-access': '/w/acme/settings/account/scheduling',
       general: '/w/acme/settings/general',
+      // The brand kit (spec 0060): every member reads it, owners and admins change it.
+      brand: '/w/acme/settings/brand',
       security: '/w/acme/settings/account/sign-in',
       members: '/w/acme/settings/members',
       teams: '/w/acme/settings/teams',
@@ -53,6 +57,7 @@ describe('settingsNav', () => {
       objects: '/w/acme/settings/objects',
       lists: '/w/acme/settings/lists',
       automations: '/w/acme/settings/automations',
+      developer: '/w/acme/settings/developer',
       jobs: '/w/acme/settings/jobs',
       history: '/w/acme/settings/history',
       // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).
@@ -92,7 +97,11 @@ describe('visibleSettingsNav', () => {
       workspaceGroups.map((group) => ({
         ...group,
         entries: group.entries.filter(
-          (entry) => entry.id !== 'workspace-security' && entry.id !== 'automations' && entry.id !== 'webhooks',
+          (entry) =>
+            entry.id !== 'workspace-security' &&
+            entry.id !== 'automations' &&
+            entry.id !== 'webhooks' &&
+            entry.id !== 'developer',
         ),
       })),
     );
@@ -103,12 +112,22 @@ describe('visibleSettingsNav', () => {
         'security.manage',
         'automations.manage',
         'webhooks.manage',
+        'api_keys.manage',
       ]),
     ).toEqual(workspaceGroups);
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications', 'scheduling-access'],
-      ['general', 'members', 'teams', 'objects', 'lists', 'jobs', 'history', 'trash'],
+      ['general', 'brand', 'members', 'teams', 'objects', 'lists', 'jobs', 'history', 'trash'],
+    ]);
+  });
+
+  it('leaves out for a guest the pages they can’t use: Scheduling access, Teams, Objects, Lists, jobs (spec 0031)', () => {
+    expect(
+      visibleSettingsNav(settingsNav('acme'), [], false, true).map((group) => group.entries.map((entry) => entry.id)),
+    ).toEqual([
+      ['profile', 'preferences', 'security', 'notifications'],
+      ['general', 'members', 'history', 'trash'],
     ]);
   });
 
@@ -156,6 +175,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/account/preferences')).toBe('preferences');
     expect(settingsPageOf('/w/acme/settings/account/profile')).toBe('profile');
     expect(settingsPageOf('/w/acme/settings/general')).toBe('general');
+    expect(settingsPageOf('/w/acme/settings/brand')).toBe('brand');
     expect(settingsPageOf('/w/acme/settings/account/sign-in')).toBe('security');
     // The old address still marks the page while it redirects.
     expect(settingsPageOf('/w/acme/settings/account/security')).toBe('security');

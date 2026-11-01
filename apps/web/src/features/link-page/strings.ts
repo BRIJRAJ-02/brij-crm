@@ -1,4 +1,5 @@
 // Settings › Account › Link page's copy (spec 0051).
+import { homeStrings } from './home-strings.ts';
 import { navStrings } from './nav-strings.ts';
 
 /** A count as the browser's language writes it, as Forms' counts are. */
@@ -11,7 +12,7 @@ export const strings = {
   /** The page's place in Settings: a page of Profile's. */
   profile: 'Profile',
   blocks: 'Blocks',
-  blocksText: 'One page for everything people can do with you. Drag to reorder.',
+  blocksText: 'Drag to reorder.',
   // The figures (AC-5127): over the last 30 days, with the 30 before as the comparison. A number keeps its word on
   // its line (a no break space), so a phone never strands the "2" away from "views".
   noPresses: 'No clicks yet',
@@ -32,7 +33,7 @@ export const strings = {
   addTitle: 'Add to your link page',
   addWhat: 'What are you adding',
   addItem: 'Add item',
-  addHint: 'It goes to the end of the section. Drag it anywhere afterwards.',
+  addHint: 'It lands at the end. Drag it anywhere after.',
   newSection: 'New section',
   /** Leads a link's row when it names one of our own pages that is not in this workspace (spec 0056, AC-5612). */
   notInWorkspace: 'Not in this workspace, hidden from visitors',
@@ -92,49 +93,103 @@ export const strings = {
   testimonial: 'Testimonial',
   sharing: 'Sharing and search',
   sharingText: 'What people see when your page is shared, and whether it can be found.',
-  indexable: 'Let search engines show this page',
-  indexableText: 'Off, your page still works and every link on it still opens. It just stops appearing in results.',
-  shareImage: 'Picture when shared',
-  shareImageText: 'Paste your link anywhere and this is the picture people see. Leave it and we draw one for you.',
+  indexable: 'Show in search engines',
+  shareImage: 'Preview image',
   shareImageDrop: 'Upload a picture',
   shareImageAlt: 'Your page’s share picture',
   shareImageRemove: 'Use the drawn one',
   shareImageRemoving: 'Remove this picture?',
-  shareImageRemoveText: 'Your link will show the card we draw from your name and bio instead.',
-  appearance: 'Appearance',
-  appearanceText: 'How your page looks. Every change shows in the preview and saves at once.',
-  /**
-   * The five named starting points (spec 0054, AC-5420). The name is never stored: picking one writes the six
-   * keys behind it, so a look can never drift out of step with the word that named it.
-   */
-  startingPoint: 'Start from',
+  shareImageRemoveText: 'Your link shows the card we draw instead.',
+  appearance: 'Design',
+  appearanceText: 'Pick a look, then make it yours.',
+  startingPoint: 'Looks',
   presetPlain: 'Plain',
   presetPaper: 'Paper',
   presetBold: 'Bold',
   presetInk: 'Ink',
   presetQuiet: 'Quiet',
+  presetDawn: 'Dawn',
+  presetOcean: 'Ocean',
+  presetMint: 'Mint',
+  presetStudio: 'Studio',
+  presetEditorial: 'Editorial',
+  presetNight: 'Night',
+  presetPeach: 'Peach',
+  presetGraphite: 'Graphite',
+  presetGallery: 'Gallery',
   reset: 'Reset',
+  /** Under the gallery: every key of the look, each a row of pictures (spec 0060, AC-9). */
+  customise: 'Customise',
+  colour: 'Colour',
+  /** The default a link page's colour follows: the workspace's brand, else the product's own. */
+  colourDefault: 'Workspace',
+  /** A separate colour for dark pages, under More (AC-6). */
+  colourMore: 'Dark colour',
+  colourDarkDefault: 'Automatic',
   ground: 'Background',
   groundPlain: 'Plain',
   groundPaper: 'Paper',
   groundTint: 'Colour',
   groundInk: 'Ink',
-  hue: 'Colour',
-  mode: 'Light or dark',
+  groundImage: 'Photo',
+  gradientDawn: 'Dawn',
+  gradientDusk: 'Dusk',
+  gradientMint: 'Mint',
+  gradientOcean: 'Ocean',
+  gradientPeach: 'Peach',
+  gradientGrape: 'Grape',
+  gradientSand: 'Sand',
+  gradientGraphite: 'Graphite',
+  patternDots: 'Dots',
+  patternGrid: 'Grid',
+  patternLines: 'Lines',
+  patternWaves: 'Waves',
+  hue: 'Tint',
+  mode: 'Mode',
   modeLight: 'Light',
   modeDark: 'Dark',
+  modeSystem: 'Follow visitor',
   shape: 'Corners',
   shapeSoft: 'Soft',
   shapePill: 'Round',
   shapeSquare: 'Square',
-  fill: 'Rows',
+  fill: 'Buttons',
   fillPlain: 'Plain',
   fillSoft: 'Tinted',
   fillOutline: 'Outlined',
   fillSolid: 'Filled',
-  font: 'Typeface',
-  fontSans: 'Inter',
+  font: 'Font',
+  fontSans: 'Modern',
   fontMono: 'Mono',
+  fontGrotesk: 'Grotesk',
+  fontEditorial: 'Editorial',
+  fontClassic: 'Classic',
+  fontFriendly: 'Friendly',
+  fontGeometric: 'Geometric',
+  fontDisplay: 'Display',
+  header: 'Header',
+  headerCentred: 'Centred',
+  headerCover: 'Cover',
+  headerLeft: 'Left',
+  avatar: 'Face',
+  avatarCircle: 'Circle',
+  avatarRounded: 'Rounded',
+  avatarNone: 'None',
+  /** The photo pickers (AC-10, AC-13): the drop area's words, and what the preview shows. */
+  coverPhoto: 'Cover photo',
+  coverPhotoDrop: 'Add a cover photo',
+  groundPhoto: 'Background photo',
+  groundPhotoDrop: 'Add a background photo',
+  photoAlt: 'The photo on your page',
+  /** The types a cover or ground photo takes, as people name them, in the picker's hint. */
+  photoTypes: 'PNG, JPG or WebP',
+  /** The types a share picture takes, as people name them, in the picker's hint. */
+  shareImageTypes: 'PNG or JPG',
+  photoRemove: 'Remove photo',
+  photoRemoving: 'Remove this photo?',
+  photoRemoveText: 'Your page goes back to its plain background.',
+  coverRemoveText: 'Your page goes back to the centred header.',
+  photoUnreadable: 'That picture couldn’t be read. Try a JPEG, PNG or WebP.',
   addForm: 'Timefix form',
   addFormText: 'One of your forms, as a row people press',
   newForm: 'Add a form',
@@ -181,27 +236,39 @@ export const strings = {
   openAddress: (address: string) => `${address}, open your page`,
   /** The header's Share: it opens the QR and the address to hand on. */
   share: 'Share',
+  /**
+   * The one Live or Private switch at the top of the screen (spec 0058, AC-23). Its word never changes with the state,
+   * so a screen reader hears "Live, switch, off" for a private page, never a double negative.
+   */
+  live: 'Live',
+  /** The word beside that switch while it is off: the state, shown to the eye only. */
+  private: 'Private',
+  /** Under the address while the page is private: what that means, in one line, the same words everywhere. */
+  privateLine: homeStrings.privateLine,
+  /** The Share modal's way out of Private, beside that line, and the overview's while the page is Private. */
+  goLive: 'Turn on Live',
+  /** The overview's line while the page is Private: nothing to share until it is Live. */
+  privateShareLine: 'Private. Turn on Live to share it.',
+  /** The empty editor once an import has landed: its rows wait in Archived. */
+  emptyArchived: 'Restore them from Archived below.',
+  /** Said once, the first time a page made for its owner goes live as they open it, with Undo. */
+  nowLive: 'Your page is live',
+  liveFailed: 'That didn’t save. Try again.',
   // What the page opens on (27 Oct 2026): the page as something to hand out, with Edit page the way into the
   // builder. The promise line says what a link page is for, since Home no longer explains it.
   promise: 'Everything people need from you, behind one short link.',
   shareOnline: 'Share online',
   yourPage: 'Your page',
   yourAddress: 'Your address',
-  pasteItAnywhere: 'Paste it in your bio, an email signature or a message.',
   shareInPerson: 'Share in person',
-  scanIt: 'Anyone can scan this with their phone camera to open your page.',
   downloadCode: 'Download',
   editPageAction: 'Edit page',
   doneEditing: 'Done',
   whatVisitorsSee: 'What visitors see',
-  // Shown only while the page holds nothing: it says what the page is for, and goes once they have built one,
-  // rather than asking to be dismissed (27 Oct 2026).
-  whyTitle: 'Why have a link page?',
-  whyPoints: [
-    { term: 'One link, not ten', description: 'Your booking, socials and work in one place, so nobody has to hunt.' },
-    { term: 'Get booked faster', description: 'People can pick a time with you straight from your page.' },
-    { term: 'Always up to date', description: 'Change a link once. Your bio, QR code and badge never go stale.' },
-  ],
+  /** The overview's first empty moment (spec 0058, AC-8): one picture, one line, one way in. */
+  startTitle: 'Nothing on your page yet',
+  startText: 'Add your links and booking pages.',
+  startAction: 'Add to your page',
   // The rows.
   heading: 'Section',
   bookingPage: 'Booking page',
@@ -225,11 +292,16 @@ export const strings = {
   remove: 'Delete',
   moved: (title: string, at: number, of: number) => `${title} moved to ${String(at)} of ${String(of)}.`,
   // The states.
-  empty: 'Your link page is empty',
-  emptyText: 'Add your booking pages and links, and they show at your address in this order.',
-  noHandle: 'Claim your address first',
-  noHandleText: 'Your link page lives at your handle. Pick one in Settings › Profile, then come back.',
-  openProfile: 'Go to Profile',
+  empty: 'Your page is empty',
+  emptyText: 'Add a link, a booking page or anything else.',
+  /** No handle yet (spec 0058, AC-8): claimed right here, never a trip to Profile. */
+  noHandle: 'Claim your link',
+  noHandleText: 'Your page goes live at this address.',
+  handleLabel: 'Your link',
+  claim: 'Claim',
+  claiming: 'Claiming',
+  handleMissing: 'Pick a link.',
+  claimFailed: 'That link didn’t save. Try again.',
   failed: 'Your link page didn’t load',
   retry: 'Try again',
   archived: 'Archived',
@@ -258,8 +330,7 @@ export const strings = {
   contactNote: 'Note',
   contactNotePlaceholder: 'What to ask me about',
   contactNoteHint: 'Saved with the contact, not shown on your page.',
-  contactHint:
-    'Anyone who opens your page can save this card to their phone, with the email and phone you add here. Only what you fill in goes on it.',
+  contactHint: 'Only what you fill in goes on the card.',
   newLink: 'Add a link',
   editLink: 'Edit link',
   linkTitle: 'Title',
@@ -298,9 +369,9 @@ export const strings = {
   save: 'Save',
   // Delete asks first.
   deleteTitle: (title: string) => `Delete ${title}?`,
-  deleteText: 'It leaves your link page for good. Archive keeps it instead.',
+  deleteText: 'It leaves your page for good. Archive keeps it.',
   removePageTitle: (title: string) => `Remove ${title} from your link page?`,
-  removePageText: 'The booking page itself stays as it is. Archive keeps its place here instead.',
+  removePageText: 'The booking page itself stays as it is.',
   removePage: 'Remove from link page',
   archived1: (title: string) => `${title} archived.`,
   undo: 'Undo',

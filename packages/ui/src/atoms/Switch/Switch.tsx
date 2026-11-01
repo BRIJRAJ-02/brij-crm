@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { SwitchButton, SwitchField, Text } from 'react-aria-components';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Switch.module.css';
@@ -12,6 +13,12 @@ export interface SwitchProps {
    * row's "Check for conflicts" then names its own calendar.
    */
   readonly labelContext?: string;
+  /**
+   * A small status word beside the switch while it is off ("Private"), where off has a name of its own. The label
+   * stays the one name, so voice control says "click Live"; the word is the switch's description, so a screen reader
+   * hears "Live, switch, off, Private". Drawn by CSS from a data attribute, so Switch's first load barely grows.
+   */
+  readonly offStatus?: string;
   /** A line under the label that says more. */
   readonly description?: string;
   readonly isSelected?: boolean;
@@ -20,6 +27,8 @@ export interface SwitchProps {
   readonly isDisabled?: boolean;
   readonly isReadOnly?: boolean;
   readonly name?: string;
+  /** The switch's own input, for a screen that moves focus to it (a "Turn on Live" elsewhere that then goes away). */
+  readonly inputRef?: Ref<HTMLInputElement | null>;
 }
 
 /** Turns a setting on or off at once, with no Save: notifications, a feature, a sync. */
@@ -27,6 +36,7 @@ export function Switch({
   label,
   isLabelHidden = false,
   labelContext,
+  offStatus,
   description,
   isSelected,
   defaultSelected,
@@ -34,6 +44,7 @@ export function Switch({
   isDisabled = false,
   isReadOnly = false,
   name,
+  inputRef,
 }: SwitchProps) {
   return (
     <SwitchField
@@ -44,6 +55,7 @@ export function Switch({
       {...(defaultSelected === undefined ? {} : { defaultSelected })}
       {...(onChange === undefined ? {} : { onChange })}
       {...(name === undefined ? {} : { name })}
+      {...(inputRef === undefined ? {} : { inputRef })}
     >
       <SwitchButton className={styles.root} data-label-hidden={isLabelHidden || undefined}>
         <span className={styles.track} aria-hidden="true">
@@ -58,6 +70,7 @@ export function Switch({
         )}
         {labelContext !== undefined && <VisuallyHidden> {labelContext}</VisuallyHidden>}
       </SwitchButton>
+      {offStatus !== undefined && <Text slot="description" className={styles.status} data-status={offStatus} />}
       {description !== undefined && (
         <Text slot="description" className={styles.description}>
           {description}

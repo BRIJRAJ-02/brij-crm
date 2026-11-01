@@ -1,6 +1,7 @@
 import { formStrings, type PublicForm } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { settleAnimations } from '../workbench/animations.ts';
 import { Stage } from '../workbench/Stage/Stage.tsx';
 import { FormLoading, HostedForm } from './HostedForm.tsx';
 
@@ -210,17 +211,25 @@ export const Failed: Story = {
   },
 };
 
-/** The thank you replaces the form, with focus on its heading; Send another starts again. */
+/**
+ * The thank you replaces the form, with focus on its heading: what was sent, read back (spec 0058, AC-19), then one
+ * next step, Send another, which starts again.
+ */
 export const Thanks: Story = {
   args: {
     onSubmit: () => Promise.resolve({ kind: 'done' as const, next: { kind: 'message' as const, text: '' } }),
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
-    await expect(canvas.getByText('We will come back to you at the address you gave.')).toBeInTheDocument();
+    await settleAnimations();
+    await expect(canvas.getByText('We will come back to you at the address you gave.')).toBeVisible();
+    // Only what was answered: the empty phone and size are left out.
+    await expect(canvasElement.querySelector('dl')).toHaveTextContent('Your nameAda LovelaceWork emailada@example.com');
+    // One next step, and only one.
+    await expect(canvas.getAllByRole('button').map((button) => button.textContent)).toEqual(['Send another']);
   },
 };
 
@@ -270,7 +279,10 @@ const booking = (seconds: number) => () =>
     next: { kind: 'booking' as const, url: '/b/intro-call?p=token', countdownSeconds: seconds, text: '' },
   });
 
-/** Sent, and on to book: "Taking you to book a time in 30…" with the ring draining, Book now and Stay here (AC-1059). */
+/**
+ * Sent, and on to book: what was sent read back (spec 0058, AC-19), Book a time with a quiet Stay here, then "Taking
+ * you to book a time in 30…" with the ring draining (AC-1059).
+ */
 export const BookAfter: Story = {
   // The ring and the number move with time, so no screenshot.
   parameters: { crm: { screenshot: false } },
@@ -280,7 +292,8 @@ export const BookAfter: Story = {
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
-    await expect(canvas.getByRole('button', { name: 'Book now' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Book a time' })).toBeInTheDocument();
+    await expect(canvas.getByText('ada@example.com')).toBeInTheDocument();
     await expect(args.onRedirect).not.toHaveBeenCalled();
   },
 };
@@ -345,5 +358,76 @@ export const ShowWhen: Story = {
     await expect(await canvas.findByLabelText('Team size')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('radio', { name: 'Small' }));
     await waitFor(() => expect(canvas.queryByLabelText('Team size')).not.toBeInTheDocument());
+  },
+};
+
+/** An orange brand, as `brandProperties(brandVariables({ accent: '#e8590c' }))` makes it (spec 0060, AC-7). */
+const ORANGE_BRAND = [
+  ['--brand-accent', '#e65708'],
+  ['--brand-on-accent', '#000000'],
+  ['--brand-link', '#b74300'],
+  ['--brand-accent-dark', '#e8590c'],
+  ['--brand-on-accent-dark', '#000000'],
+  ['--brand-link-dark', '#fd6c2b'],
+] as const;
+
+/**
+ * The workspace's brand kit on a form (spec 0060, AC-4): its logo over the headline and its accent on the button,
+ * a chosen option and the focus ring. Nothing else about the form changes.
+ */
+export const Branded: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { brand: { logo: { src: wordmark('#e8590c'), alt: 'Acme' }, variables: ORANGE_BRAND } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('img', { name: 'Acme' })).toBeInTheDocument();
+    const send = canvas.getByRole('button', { name: 'Send' });
+    await expect(getComputedStyle(send).backgroundColor).toBe('rgb(230, 87, 8)');
+  },
+};
+
+/** The same kit on a dark form: its dark half, still readable on the button (AC-5). */
+export const BrandedDark: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    form: { ...LEAD, look: { colour: 'dark', corners: 'rounded' } },
+    brand: { logo: { src: wordmark('#e8590c'), alt: 'Acme' }, variables: ORANGE_BRAND },
+  },
+};
+
+/** A live form's read names its logo by version, and the form draws it from its own key's route (AC-4). */
+export const BrandFromRead: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { form: { ...LEAD, key: 'project-enquiry', brand: { logo: '0123456789ab' } } },
+  // Storybook serves no logo, so the picture fails and leaves the form; WebKit can get there before `play` starts.
+  // So every logo the form draws is noted as it lands, before the story renders, and read back below.
+  loaders: [
+    () => {
+      const drawn: { readonly src: string | null; readonly alt: string | null }[] = [];
+      const watch = new MutationObserver((changes) => {
+        for (const change of changes) {
+          for (const node of change.addedNodes) {
+            const images = node instanceof Element ? [node, ...node.querySelectorAll('img')] : [];
+            for (const image of images) {
+              if (image instanceof HTMLImageElement && image.getAttribute('src')?.startsWith('/api/public/forms/')) {
+                drawn.push({ src: image.getAttribute('src'), alt: image.getAttribute('alt') });
+              }
+            }
+          }
+        }
+      });
+      watch.observe(document.body, { childList: true, subtree: true });
+      return { drawn, watch };
+    },
+  ],
+  play: async ({ canvasElement, loaded }) => {
+    const { drawn, watch } = loaded as {
+      readonly drawn: readonly { readonly src: string | null; readonly alt: string | null }[];
+      readonly watch: MutationObserver;
+    };
+    await waitFor(() => expect(drawn.length).toBeGreaterThan(0));
+    watch.disconnect();
+    await expect(drawn[0]).toEqual({ src: '/api/public/forms/project-enquiry/logo?v=0123456789ab', alt: '' });
+    // A logo that fails leaves rather than drawing a broken picture.
+    await waitFor(() => expect(canvasElement.querySelector('img[src^="/api/public/forms/"]')).toBeNull());
   },
 };

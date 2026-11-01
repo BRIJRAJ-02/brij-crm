@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
+import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Radio, RadioGroup } from './Radio.tsx';
 
@@ -162,5 +163,73 @@ export const Cards: Story = {
     const box = description.getBoundingClientRect();
     const under = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
     await expect(under?.closest('label')).toBe(canvas.getByRole('radio', { name: /Contact card/ }).closest('label'));
+  },
+};
+
+/** A merge's side by side choice (spec 0049): each card a record's name over the value it holds, picked whole. */
+export const CardsWithValues: Story = {
+  // Cards already has its screenshot; this one proves the value's place in the hit area and its description.
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Job title', defaultValue: 'keep' },
+  render: (args) => (
+    <Stage width="dialog">
+      <RadioGroup {...args} variant="cards">
+        <Radio value="keep" preview="Chief Technology Officer">
+          Jane Doe
+        </Radio>
+        <Radio value="merge" preview="CTO">
+          Jane D.
+        </Radio>
+      </RadioGroup>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const merged = canvas.getByRole('radio', { name: 'Jane D.' });
+    await expect(merged).toHaveAccessibleDescription('CTO');
+    // The whole card picks it, the value under the label included: asked of the browser, as Cards does.
+    const value = canvas.getByText('CTO').getBoundingClientRect();
+    const under = document.elementFromPoint(value.left + value.width / 2, value.top + value.height / 2);
+    await expect(under?.closest('label')).toBe(merged.closest('label'));
+    await userEvent.click(merged);
+    await expect(merged).toBeChecked();
+  },
+};
+
+/** The same, as the merge dialog draws it: each side's value through its field display, and off while it saves. */
+export const CardsWithFieldValues: Story = {
+  // Cards already has its screenshot; this one proves the value's place in the hit area and its description.
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Description', defaultValue: 'keep', isDisabled: true },
+  render: (args) => {
+    const attribute = {
+      id: 'description',
+      name: 'Description',
+      type: 'long_text' as const,
+      allowMultiple: false,
+      isRequired: false,
+      isUnique: false,
+      isReadOnly: false,
+    };
+    return (
+      <Stage width="dialog">
+        <RadioGroup {...args} variant="cards">
+          <Radio
+            value="keep"
+            preview={
+              <AttributeDisplay
+                attribute={attribute}
+                value="Leads the platform team, and owns the renewal with Acme through the end of next year."
+                surface="preview"
+              />
+            }
+          >
+            Kept · Jane Doe
+          </Radio>
+          <Radio value="merge" preview={<AttributeDisplay attribute={attribute} value={null} surface="preview" />}>
+            Merged away · Jane Doe
+          </Radio>
+        </RadioGroup>
+      </Stage>
+    );
   },
 };

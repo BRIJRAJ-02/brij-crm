@@ -61,6 +61,8 @@
 
   .column {
     block-size: var(--size-table-header);
+    /* Not the UA's 1px: the row's height is block-size, its words centred in it. */
+    padding-block: 0;
     padding-inline: var(--space-8);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     color: var(--text-secondary);
@@ -111,6 +113,7 @@
     --table-cell-inline: var(--space-8);
 
     block-size: var(--size-row);
+    padding-block: 0;
     padding-inline: var(--table-cell-inline);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     outline: none;

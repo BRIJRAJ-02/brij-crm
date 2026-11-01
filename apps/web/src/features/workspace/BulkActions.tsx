@@ -37,6 +37,7 @@ import {
   recordsWord,
 } from './bulk.ts';
 import { runExport } from '../imports/export-run.ts';
+import { useCan } from './WorkspacePage.tsx';
 import { strings as importStrings } from '../imports/strings.ts';
 import { runUndo } from './useUndoShortcut.ts';
 import { isFocusLost, useBulkJob } from './useBulkJob.ts';
@@ -404,10 +405,13 @@ export function useBulkActions({
   };
 
   // Export N selected (spec 0040): the ticked rows' shown columns as a CSV, read as the member, with the export's
-  // one toast. Reading is enough, so it shows on an object the person may only read too. One export per press.
+  // one toast. Reading is enough, so it shows on an object the person may only read too, for anyone who holds
+  // `records.export`. One export per press.
   const exporting = useRef(false);
+  // Only for those who may export (a guest may not): the server refuses anyone else.
+  const canExport = useCan('records.export');
   const exportButton =
-    selection.kind === 'some' && ids.length > 0 && exportColumns.length > 0 ? (
+    canExport && selection.kind === 'some' && ids.length > 0 && exportColumns.length > 0 ? (
       <Button
         icon="download"
         onPress={() => {

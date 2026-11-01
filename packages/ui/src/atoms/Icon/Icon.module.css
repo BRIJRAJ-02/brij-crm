@@ -11,6 +11,12 @@
     vertical-align: middle;
   }
 
+  /* A mark that is a picture, not a label: a choice tile's (TileGrid variant="choice"). */
+  .icon[data-size='lg'] {
+    inline-size: calc(var(--size-icon) * 1.5);
+    block-size: calc(var(--size-icon) * 1.5);
+  }
+
   .icon[data-size='sm'] {
     inline-size: var(--size-icon-sm);
     block-size: var(--size-icon-sm);

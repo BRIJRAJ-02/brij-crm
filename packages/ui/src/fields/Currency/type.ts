@@ -33,9 +33,11 @@ export const currencyType: AttributeTypeDef<'currency'> = {
         ),
       );
     }
-    const parsed = parseAmount(given, { locale: context.locale, defaultCurrency: context.attribute.defaultCurrency });
+    // The attribute's own default first, then the workspace's: "$" is the Australian dollar in an Australian workspace.
+    const home = context.attribute.defaultCurrency ?? context.defaultCurrency;
+    const parsed = parseAmount(given, { locale: context.locale, defaultCurrency: home });
     if (parsed === undefined) return refuse(`“${given.trim()}” isn’t an amount.`);
-    const code = parsed.currency ?? context.attribute.defaultCurrency ?? '';
+    const code = parsed.currency ?? home ?? '';
     if (!CODES.has(code)) return refuse(`Add a currency code, such as USD ${parsed.amount}.`);
     return { amount: parsed.amount, currency: code as CurrencyValue['currency'] };
   },

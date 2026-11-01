@@ -277,6 +277,18 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace turned off hooks.example.com after 3 days of failed deliveries',
   ],
   [
+    { ...base, action: 'api_key.created', target: workspace, params: { name: 'Zapier' } },
+    'Ada Lovelace made the API key Zapier',
+  ],
+  [
+    { ...base, action: 'api_key.revoked', target: workspace, params: { name: 'Zapier' } },
+    'Ada Lovelace revoked the API key Zapier',
+  ],
+  [
+    { ...base, action: 'api_key.restored', target: workspace, params: { name: 'Zapier' } },
+    'Ada Lovelace brought back the API key Zapier',
+  ],
+  [
     { ...base, action: 'rotation.adjusted', target: rotation, params: { person: bea, units: 2 } },
     'Ada Lovelace adjusted Bea Rao’s count in Sales by +2',
   ],
@@ -434,6 +446,14 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace booked Intro call on dayTime(2026-10-24T09:30) for Bea Rao',
   ],
   [
+    { ...base, action: 'automation.changed', target: workspace, params: { change: 'created', object: 'Deals' } },
+    'Ada Lovelace made an automation for Deals',
+  ],
+  [
+    { ...base, action: 'automation.changed', target: workspace, params: { change: 'disabled', object: 'tasks' } },
+    'Ada Lovelace switched off an automation for tasks',
+  ],
+  [
     {
       ...base,
       action: 'team.changed',
@@ -513,6 +533,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
   [
     { ...base, action: 'rotation.changed', target: rotation, params: { added: 1, removed: 0 } },
     'Ada Lovelace changed who is in Sales',
+  ],
+  [
+    { ...base, action: 'editors.changed', target: rotation, params: { added: 1, removed: 0 } },
+    'Ada Lovelace changed who can edit Sales',
   ],
 ];
 

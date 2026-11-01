@@ -104,6 +104,7 @@ export interface LinkPageApi {
   readonly show: (input: {
     readonly workspace: string;
     readonly mutationId: string;
+    readonly live?: boolean;
   }) => Promise<{ readonly isPublic: boolean }>;
   readonly importLinks: (input: {
     readonly workspace: string;
@@ -183,7 +184,7 @@ interface ProfileProcedures {
     options: { signal?: AbortSignal },
   ) => Promise<{ url: string } | { off: true }>;
   readonly show: (
-    input: { workspace: string; mutationId: string },
+    input: { workspace: string; mutationId: string; live?: boolean },
     options: { signal?: AbortSignal },
   ) => Promise<{ isPublic: boolean }>;
   readonly importLinks: (
@@ -787,14 +788,16 @@ export function createLinkPageStore(deps: LinkPageDeps) {
         throw toDataError(error);
       }),
     /**
-     * Makes the caller's own page public (27 Oct 2026), as they share its link: a page made with their membership is
-     * private until they edit it or share it. Editing shows it already; this is for copying the link, showing its
-     * code and saving it to a wallet. Never makes it private again.
+     * The caller's own page, Live or Private (spec 0058, AC-23). Without `live`, they opened it: a page made for them
+     * that nobody has chosen for goes live, once; one they set Private stays so. With `live`, the Live or Private
+     * switch. Answers whether it is public now.
      */
-    show: (workspace: string): Promise<{ readonly isPublic: boolean }> =>
-      deps.api.show({ workspace, mutationId: deps.mintId() }).catch((error: unknown) => {
-        throw toDataError(error);
-      }),
+    show: (workspace: string, live?: boolean): Promise<{ readonly isPublic: boolean }> =>
+      deps.api
+        .show({ workspace, mutationId: deps.mintId(), ...(live === undefined ? {} : { live }) })
+        .catch((error: unknown) => {
+          throw toDataError(error);
+        }),
     /**
      * Brings one link in bio page across (spec 0055, AC-5524): `id` is the import's own, so sending the same one
      * again adds nothing twice. Every row lands hidden, and the answer says what it made and what it could not.
@@ -914,8 +917,8 @@ export function openLinkPage(given: {
       workspace: string,
       wallet: 'apple_wallet' | 'google_wallet',
     ): Promise<{ readonly url: string } | { readonly off: true }> => store.walletLink(workspace, wallet),
-    /** Makes the caller's own page public as they share it (27 Oct 2026); never makes it private again. */
-    show: (workspace: string): Promise<{ readonly isPublic: boolean }> => store.show(workspace),
+    /** Opens the caller's own page, or with `live` is its Live or Private switch (spec 0058, AC-23). */
+    show: (workspace: string, live?: boolean): Promise<{ readonly isPublic: boolean }> => store.show(workspace, live),
     /** The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511); none goes back to drawn. */
     setShareImage: (
       workspace: string,

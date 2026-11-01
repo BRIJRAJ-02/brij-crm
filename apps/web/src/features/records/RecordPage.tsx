@@ -14,6 +14,7 @@ import type {
   ObjectSummary,
   RecordComments,
   RecordEntries,
+  RecordFilesSource,
   RecordState,
   RecordSubscription,
   RecordView,
@@ -24,9 +25,11 @@ import { toFieldAttribute } from '@crm/data';
 import {
   useActivityStatus,
   useLatestActivityAt,
+  useLatestLoggedContactAt,
   useRecordFacts,
   useCommentCount,
   useLiveStatus,
+  useRecordFileCount,
   useNoteTotal,
   useRecord,
   useRecordEntries,
@@ -57,7 +60,10 @@ import {
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
+import { mergeStrings } from '../duplicates/merge/index.ts';
 import { CommentsTab, LoadingThreads } from '../comments/CommentsTab.tsx';
+import { FilesTab, LoadingFiles } from '../files/FilesTab.tsx';
+import { strings as fileStrings } from '../files/strings.ts';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
 import { strings as noteStrings } from '../notes/strings.ts';
@@ -80,6 +86,7 @@ import { RecordLists } from '../lists/RecordLists.tsx';
 import { strings as listStrings } from '../lists/strings.ts';
 import { RecordActions } from './RecordActions.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
+import { RecordDuplicateBanner } from '../duplicates/RecordDuplicateBanner.tsx';
 import { PendingRelatedCard, RelatedCards, RelatedSections, type RelatedSource } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
 import { recordLinks } from './timeline.ts';
@@ -117,6 +124,8 @@ export interface RecordPageProps {
   readonly comments: RecordComments | undefined;
   /** `?thread=`: the thread a link to a comment names (AC-1161). */
   readonly thread?: string;
+  /** The record's files (#32): the Files tab and its count. */
+  readonly files: RecordFilesSource | undefined;
   /** The Lists section (spec 0048, AC-4822): the lists over this object and this record's entries; none when no list is readable. */
   readonly listSection?: ListSectionSource | undefined;
 }
@@ -135,6 +144,7 @@ const TABS = [
   { id: 'notes', label: noteStrings.notes, icon: 'notebook' as const },
   { id: 'tasks', label: taskStrings.tasks, icon: 'list-checks' as const },
   { id: 'comments', label: commentStrings.comments, icon: 'message-square' as const },
+  { id: 'files', label: fileStrings.files, icon: 'file' as const },
 ];
 
 /** A task list with nothing in it yet, for the Tasks tab before the record arrives. */
@@ -211,6 +221,7 @@ function PendingTab({ tab }: { readonly tab: RecordTab }) {
   const tasks = <TaskList label={taskStrings.openTasks} tasks={NO_TASKS} status="loading" onToggle={() => undefined} />;
   if (tab === 'tasks') return tasks;
   if (tab === 'comments') return <LoadingThreads />;
+  if (tab === 'files') return <LoadingFiles />;
   if (tab === 'notes') {
     return (
       <NoteList
@@ -290,14 +301,15 @@ function LoadingLayout({
 
 /** The record page, or its unavailable state for an address that names no record. */
 export function RecordPage(props: RecordPageProps) {
-  const { record, feed, recent, open, notes, comments } = props;
+  const { record, feed, recent, open, notes, comments, files } = props;
   if (
     record === undefined ||
     feed === undefined ||
     recent === undefined ||
     open === undefined ||
     notes === undefined ||
-    comments === undefined
+    comments === undefined ||
+    files === undefined
   ) {
     return <WorkspacePage currentObject={props.object.apiSlug} page={unavailablePage(props.slug, props.object)} />;
   }
@@ -310,6 +322,7 @@ export function RecordPage(props: RecordPageProps) {
       open={open}
       notes={notes}
       comments={comments}
+      files={files}
     />
   );
 }
@@ -338,6 +351,7 @@ function SubscribedRecordPage(
     readonly open: TaskListSource;
     readonly notes: NoteListSource;
     readonly comments: RecordComments;
+    readonly files: RecordFilesSource;
   },
 ) {
   const state = useRecord(props.record);
@@ -376,6 +390,7 @@ function RecordScreen({
   open,
   notes,
   comments,
+  files,
   listSection,
   meId,
   task,
@@ -392,6 +407,7 @@ function RecordScreen({
   readonly open: TaskListSource;
   readonly notes: NoteListSource;
   readonly comments: RecordComments;
+  readonly files: RecordFilesSource;
   readonly state: RecordState;
   readonly timelineStatus: ReturnType<typeof useActivityStatus>;
   readonly trashed?: TrashedState;
@@ -401,6 +417,26 @@ function RecordScreen({
   const canChangeSchema = useCan('schema.manage');
   const navigate = useNavigate();
   const live = useLiveStatus(data.live);
+  // A merged record's address (spec 0049, AC-4914): on to the record it went into, saying so once.
+  const mergedInto = trashed?.status === 'trashed' ? trashed.mergedInto : undefined;
+  const mergedName = trashed?.status === 'trashed' ? trashed.record.display.name : '';
+  const keptId = mergedInto?.recordId;
+  const keptName = mergedInto?.display.name ?? '';
+  // Once per merged address, however often the lookup is read again (a live re-read, StrictMode).
+  const redirected = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (keptId === undefined || redirected.current === recordId) return;
+    redirected.current = recordId;
+    const unnamedOne = strings.unnamed(object.singularName);
+    toasts.toast({
+      tone: 'info',
+      message: mergeStrings.wasMerged(
+        mergedName === '' ? unnamedOne : mergedName,
+        keptName === '' ? unnamedOne : keptName,
+      ),
+    });
+    void navigate({ href: recordHref(slug, object.apiSlug, keptId, tab), replace: true });
+  }, [keptId, keptName, mergedName, navigate, object.apiSlug, object.singularName, recordId, slug, tab, toasts]);
   const unnamed = strings.unnamed(object.singularName);
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
   // Add as person on a meeting (spec 0024, AC-609): one function while the page stays, so timeline entries keep
@@ -442,7 +478,9 @@ function RecordScreen({
   const openTotal = useTaskTotal(open);
   const notesTotal = useNoteTotal(notes);
   const commentCount = useCommentCount(comments);
+  const fileCount = useRecordFileCount(files);
   const latestAt = useLatestActivityAt(recent);
+  const latestContactAt = useLatestLoggedContactAt(recent);
   const recentStatus = useActivityStatus(recent);
   // The stat strip says what the tabs don't (owner's call, 22 Oct): the last activity, the next meeting, and on a
   // record with a stage (a deal) its value and how long it has been in that stage. The tabs keep their own counts.
@@ -457,9 +495,9 @@ function RecordScreen({
     () => attributes.find((each) => each.apiSlug === 'value' && each.type === 'currency' && !each.isArchived),
     [attributes],
   );
-  // A stage change reads the facts afresh: the age restarts.
+  // A stage change reads the facts afresh (the age restarts), and so does a call or meeting logged: the last contact.
   const stageNow = stageAttribute === undefined ? undefined : state.record?.values[stageAttribute.id];
-  const stageKey = typeof stageNow === 'string' ? stageNow : undefined;
+  const stageKey = `${typeof stageNow === 'string' ? stageNow : ''}:${latestContactAt ?? ''}`;
   const facts = useMemo(
     () => data.records.facts(slug, recordId, stageAttribute?.id, stageKey),
     [data, slug, recordId, stageAttribute?.id, stageKey],
@@ -586,7 +624,9 @@ function RecordScreen({
         ? { ...each, ...tabCount(notesTotal) }
         : each.id === 'comments'
           ? { ...each, ...tabCount(commentCount === undefined ? undefined : { count: commentCount, atLeast: false }) }
-          : each,
+          : each.id === 'files'
+            ? { ...each, ...tabCount(fileCount === undefined ? undefined : { count: fileCount, atLeast: false }) }
+            : each,
   );
 
   const openTab = (next: string) => {
@@ -629,6 +669,16 @@ function RecordScreen({
         meId={meId}
         isReadOnly={trashed?.status === 'trashed' || (state.status === 'deleted' && state.isLost)}
         {...(thread === undefined ? {} : { thread })}
+      />
+    );
+  } else if (tab === 'files') {
+    tabContent = (
+      <FilesTab
+        slug={slug}
+        recordId={recordId}
+        files={files}
+        members={members}
+        isReadOnly={trashed?.status === 'trashed' || (state.status === 'deleted' && state.isLost)}
       />
     );
   } else if (tab === 'notes') {
@@ -834,6 +884,13 @@ function RecordScreen({
       ...(factState.nextMeeting === undefined ? {} : { time: factState.nextMeeting.startsAt }),
     },
     {
+      id: 'contacted',
+      label: strings.lastContacted,
+      icon: 'phone' as const,
+      isLoading: isFactsLoading,
+      ...(factState.lastContacted === undefined ? {} : { time: factState.lastContacted }),
+    },
+    {
       id: 'activity',
       label: strings.lastActivity,
       icon: 'activity' as const,
@@ -899,6 +956,11 @@ function RecordScreen({
         {strings.noLongerAvailable(object.singularName)}
       </Callout>
     );
+  } else {
+    // Likely duplicates (spec 0049, AC-4906): nothing shows until a pair arrives.
+    notice = (
+      <RecordDuplicateBanner slug={slug} object={object} record={shown} attributes={attributes} members={members} />
+    );
   }
 
   return (
@@ -948,6 +1010,8 @@ function RecordScreen({
                     recordId={recordId}
                     pageLink={pageLink}
                     canDelete={canEdit}
+                    attributes={attributes}
+                    members={members}
                   />
                 </RecordHeader>
               }
@@ -958,7 +1022,7 @@ function RecordScreen({
               sidebarLabel={strings.details}
               isSidebarExpanded={isSidebarExpanded}
               onSidebarExpandedChange={setSidebarExpanded}
-              {...(notice === undefined ? {} : { notice })}
+              notice={notice}
               sidebar={
                 <>
                   <RecordDetails

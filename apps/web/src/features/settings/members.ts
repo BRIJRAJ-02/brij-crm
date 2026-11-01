@@ -5,24 +5,30 @@ import type { Role } from '@crm/data';
 
 /**
  * The roles `actor` may give `target` on the Members page (spec 0009, AC-137;
- * spec 0031, AC-811): an owner any; an admin moves people between admin and
- * member and never touches an owner; a member none. Empty means the role
+ * spec 0031, AC-811): an owner any; an admin moves people between admin,
+ * member and guest and never touches an owner; a member or guest none. Empty means the role
  * shows as text, not a control. The server checks again under lock.
  */
 export function grantableRoles(actor: Role | undefined, target: Role): readonly Role[] {
-  if (actor === 'owner') return ['owner', 'admin', 'member'];
-  if (actor === 'admin' && target !== 'owner') return ['admin', 'member'];
+  if (actor === 'owner') return ['owner', 'admin', 'member', 'guest'];
+  if (actor === 'admin' && target !== 'owner') return ['admin', 'member', 'guest'];
   return [];
 }
+
+/** Each role's power, for telling a change that takes access away (it asks first) from one that gives more. */
+const RANK: Readonly<Record<Role, number>> = { owner: 3, admin: 2, member: 1, guest: 0 };
+
+/** Whether moving someone from `from` to `to` takes access away from them, so the page asks first. */
+export const takesAccess = (from: Role, to: Role): boolean => RANK[to] < RANK[from];
 
 /** Whether `actor` may remove someone holding `target` (the same rules as changing their role), never themself. */
 export const canRemove = (actor: Role | undefined, target: Role, isSelf: boolean): boolean =>
   !isSelf && grantableRoles(actor, target).length > 0;
 
-/** The roles an invite may name (AC-803): an owner any, an admin admin or member, anyone else none. */
+/** The roles an invite may name (AC-803): an owner any, an admin admin, member or guest, anyone else none. */
 export function invitableRoles(actor: Role | undefined): readonly Role[] {
-  if (actor === 'owner') return ['owner', 'admin', 'member'];
-  if (actor === 'admin') return ['admin', 'member'];
+  if (actor === 'owner') return ['owner', 'admin', 'member', 'guest'];
+  if (actor === 'admin') return ['admin', 'member', 'guest'];
   return [];
 }
 

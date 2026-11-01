@@ -68,3 +68,22 @@ describe('the access summary', () => {
     ).toBe('Members can edit their own deals. Leads can edit Deals.');
   });
 });
+
+describe('guests in the line (spec 0031, AC-828)', () => {
+  it('says nothing of guests with nothing shared, and one sentence once they view', () => {
+    expect(
+      summarizeAccess({ object: 'Deals', role: DEFAULT, teams: [], guest: { level: 'none', records: 'all' } }),
+    ).toBe('Everyone can edit Deals.');
+    expect(
+      summarizeAccess({ object: 'Deals', role: DEFAULT, teams: [], guest: { level: 'read', records: 'all' } }),
+    ).toBe('Members can edit Deals. Guests can view Deals.');
+    expect(
+      summarizeAccess({
+        object: 'Deals',
+        role: { level: 'read', records: 'all', isDefault: false },
+        teams: [],
+        guest: { level: 'read', records: 'own' },
+      }),
+    ).toBe('Members can view Deals. Guests can view their own deals.');
+  });
+});

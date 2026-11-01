@@ -109,9 +109,39 @@ describe('framing (spec 0023, the embeds)', () => {
     expect(sent('/b/:publicKey', 'Content-Security-Policy')).toBe(
       app.replace("frame-ancestors 'self'", 'frame-ancestors *'),
     );
-    // A handle address (22 Oct 2026) is the same booking page, under the same policy.
+    // A handle address (22 Oct 2026) is the same booking page, under the same policy, and gains exactly one
+    // directive: the media players a visitor's Play press loads (spec 0061, AC-6107).
     expect(sent(HANDLE_HEADER_SOURCE, 'Content-Security-Policy')).toBe(
-      app.replace("frame-ancestors 'self'", 'frame-ancestors *'),
+      `${app.replace("frame-ancestors 'self'", 'frame-ancestors *')}; frame-src ${MEDIA_FRAMES.join(' ')}`,
+    );
+  });
+});
+
+/** The five players a link page's media block may load once Play is pressed (spec 0061, AC-6107), and no other. */
+const MEDIA_FRAMES = [
+  'https://www.youtube-nocookie.com',
+  'https://player.vimeo.com',
+  'https://open.spotify.com',
+  'https://w.soundcloud.com',
+  'https://embed.music.apple.com',
+];
+
+describe('media frames (spec 0061, AC-6107)', () => {
+  it('lets a handle page frame the five players, and nothing else anywhere', () => {
+    expect(directiveSources(sent(HANDLE_HEADER_SOURCE, 'Content-Security-Policy') ?? '', 'frame-src')).toEqual(
+      MEDIA_FRAMES,
+    );
+    // The app and a booking page frame nothing at all; a form frames reCAPTCHA alone, as it always did.
+    const app = rules[0]?.headers.find((header) => header.key === 'Content-Security-Policy')?.value ?? '';
+    expect(directiveSources(app, 'frame-src')).toEqual([]);
+    expect(directiveSources(sent('/b/:publicKey', 'Content-Security-Policy') ?? '', 'frame-src')).toEqual([]);
+    expect(directiveSources(sent('/f/(.*)', 'Content-Security-Policy') ?? '', 'frame-src')).toEqual([
+      'https://www.google.com/recaptcha/',
+    ]);
+    // And no other directive of the handle policy moved: it is the booking page's policy with that one added.
+    const handle = sent(HANDLE_HEADER_SOURCE, 'Content-Security-Policy') ?? '';
+    expect(handle.split('; ').filter((part) => !part.startsWith('frame-src'))).toEqual(
+      (sent('/b/:publicKey', 'Content-Security-Policy') ?? '').split('; '),
     );
   });
 

@@ -10,11 +10,14 @@ import { VisibleMembers } from './scheduling.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid } from './values/ids.ts';
 
-/** One active member: the id actor values carry, their name in this workspace, and their email. */
+/**
+ * One active member: the id actor values carry, their name in this workspace, and their email, absent when the
+ * reader is a guest (spec 0031, AC-829: a guest never learns another member's address).
+ */
 export const MemberSummary = z.object({
   id: Uuid,
   name: z.string(),
-  email: z.string(),
+  email: z.string().optional(),
 });
 /** One active member. */
 export type MemberSummary = z.infer<typeof MemberSummary>;
@@ -104,6 +107,25 @@ export const RemovalPreview = z.object({
 /** What removing a member will do. */
 export type RemovalPreview = z.infer<typeof RemovalPreview>;
 
+/**
+ * What making a member a guest will do (spec 0031, slice 9; spec 0037, AC-1432), as the confirm dialog lists it: a
+ * guest can't host, so they leave scheduling.
+ */
+export const GuestPreview = z.object({
+  /** Booking pages they alone host, which pause. */
+  pausedPages: z.number().int().min(0),
+  /** Rotations they leave. */
+  rotations: z.number().int().min(0),
+  /** Their upcoming bookings, each flagged "Needs a host" (a round robin one is handed on). */
+  upcomingBookings: z.number().int().min(0),
+  /** Scheduling delegations over them or held by them, which go. */
+  delegations: z.number().int().min(0),
+  /** Their link page is live and hides (kept, back as it was if they are a member again). */
+  hidesLinkPage: z.boolean(),
+});
+/** What making a member a guest will do. */
+export type GuestPreview = z.infer<typeof GuestPreview>;
+
 /** A removal (AC-814, AC-816): optionally who their open tasks and records go to. */
 export const RemoveMemberInput = MemberInput.extend({ reassignTo: Uuid.optional() });
 /** A removal. */
@@ -138,6 +160,8 @@ export const membersContract = {
   setRole: oc.input(SetRoleInput).output(SetRoleResult),
   /** What removing a member will do (AC-816): `members.manage`, or about oneself. */
   removalPreview: oc.input(MemberRead).output(RemovalPreview),
+  /** What making a member a guest will do (spec 0031, slice 9): `members.manage` only. */
+  guestPreview: oc.input(MemberRead).output(GuestPreview),
   remove: oc.input(RemoveMemberInput).output(RemovedMemberResult),
   leave: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(z.void()),
   /**

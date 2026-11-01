@@ -104,6 +104,7 @@ export function testServices(
     webhookSender?: WebhookSender;
     /** The resolved address check for a new endpoint: every host public unless given. */
     webhookHostCheck?: (url: URL) => Promise<WebhookUrlProblem | undefined>;
+    linkPageFetch?: OutsideFetch;
   } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
@@ -135,6 +136,8 @@ export function testServices(
     outsideFetch: options.outsideFetch ?? testOutsideFetch(),
     webhookSender: options.webhookSender ?? testWebhookSender(),
     webhookHostCheck: options.webhookHostCheck ?? (() => Promise.resolve(undefined)),
+    // A link page's pictures and media (spec 0061): a page with no picture, so no test reads the network.
+    linkPageFetch: options.linkPageFetch ?? testOutsideFetch(),
   };
 }
 

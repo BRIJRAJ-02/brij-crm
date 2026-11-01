@@ -8,6 +8,7 @@ import {
   handleProblem,
   HANDLE_PATTERN,
   isReservedHandle,
+  linkPageCacheTags,
   profileSections,
   RESERVED_HANDLES,
 } from './handles.ts';
@@ -143,5 +144,10 @@ describe('profileSections', () => {
       { key: '', items: [{ id: 'a', section: '   ' }] },
     ]);
     expect(profileSections([], () => undefined)).toEqual([]);
+  });
+
+  it('tags a link page by its handles, each once, and never by a malformed one', () => {
+    expect(linkPageCacheTags('ada', 'ada', 'ada-old')).toEqual(['link-page:ada', 'link-page:ada-old']);
+    expect(linkPageCacheTags(undefined, 'Ada', 'a,b', '../x', '')).toEqual([]);
   });
 });

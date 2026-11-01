@@ -148,6 +148,14 @@ export const WithTabs: Story = {
     await expect(canvas.getByRole('complementary', { name: 'Preview' })).toBeInTheDocument();
     await expect(canvas.getByRole('heading', { name: 'Preview', level: 2 })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: /Rounded corners/ })).toBeInTheDocument();
+    // A short form's own ground fills the phone to its foot, so a light form in dark mode has no dark band under it.
+    const ground = canvas.getByRole('complementary', { name: 'Preview' }).querySelector('[data-theme]');
+    const phoneScreen = ground?.parentElement;
+    await expect(ground).not.toBeNull();
+    await expect(ground?.getBoundingClientRect().bottom).toBeCloseTo(
+      phoneScreen?.getBoundingClientRect().bottom ?? 0,
+      0,
+    );
   },
 };
 

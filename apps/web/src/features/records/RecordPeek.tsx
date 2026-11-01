@@ -3,11 +3,13 @@
 // Main task: read and edit its details, then step to the record above or below with ↑ and ↓ and keep going.
 // Leaves out: Overview, the stat strip and the record's menu (delete, copy link), all on its full page one press away.
 import type { AttributeDefinition, MemberSummary, ObjectSummary, RecordState, RecordView } from '@crm/data';
-import { useCommentCount, useNoteTotal, useRecord, useTaskTotal } from '@crm/data/react';
+import { useCommentCount, useNoteTotal, useRecord, useRecordFileCount, useTaskTotal } from '@crm/data/react';
 import { Callout, EmptyState, RecordPanel, type RecordPanelTab } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentsTab } from '../comments/CommentsTab.tsx';
+import { FilesTab } from '../files/FilesTab.tsx';
+import { strings as fileStrings } from '../files/strings.ts';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
 import { strings as noteStrings } from '../notes/strings.ts';
@@ -236,6 +238,7 @@ function LoadedPeek(
   const openTotal = useTaskTotal(sources.open);
   const notesTotal = useNoteTotal(sources.notes);
   const commentCount = useCommentCount(sources.comments);
+  const fileCount = useRecordFileCount(sources.files);
   const link = useMemo(() => recordLinks(slug, sources.objects), [slug, sources.objects]);
   const chipHref = useCallback(
     (display: { readonly objectId: string; readonly recordId: string }) => link(display.objectId, display.recordId),
@@ -370,6 +373,12 @@ function LoadedPeek(
           isReadOnly={isLost}
         />
       ),
+    },
+    {
+      id: 'files',
+      label: fileStrings.files,
+      ...tabCount(fileCount === undefined ? undefined : { count: fileCount, atLeast: false }),
+      content: <FilesTab slug={slug} recordId={recordId} files={sources.files} members={members} isReadOnly={isLost} />,
     },
   ];
   return (

@@ -475,6 +475,10 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
       const host = typeof after.host === 'string' ? after.host : typeof before.host === 'string' ? before.host : '';
       return { ...base, action, target: workspace, params: { host }, changes: [] };
     }
+    case 'api_key.created':
+    case 'api_key.revoked':
+    case 'api_key.restored':
+      return { ...base, action, target: workspace, params: { name: text(after.name) ?? 'a key' }, changes: [] };
     case 'workspace_security.changed': {
       const twoFactor = typeof after.requireTwoFactor === 'boolean' ? after.requireTwoFactor : undefined;
       const days = has(after, 'sessionLengthDays')
@@ -661,6 +665,26 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: kind === 'renamed' ? change('name', plain(before.name), plain(after.name)) : [],
       };
     }
+    case 'automation.changed': {
+      const kind = after.change;
+      if (
+        kind !== 'created' &&
+        kind !== 'updated' &&
+        kind !== 'enabled' &&
+        kind !== 'disabled' &&
+        kind !== 'deleted' &&
+        kind !== 'restored'
+      ) {
+        return undefined;
+      }
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: { change: kind, object: text(after.object) ?? 'records' },
+        changes: [],
+      };
+    }
     case 'access.rule_set': {
       const level = after.level;
       const records = after.records;
@@ -715,6 +739,19 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         action,
         target: memberTarget(),
         params: { page: title, deleted: after.deleted === true },
+        changes: [],
+      };
+    }
+    case 'editors.changed': {
+      const many = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+      return {
+        ...base,
+        action,
+        target:
+          row.targetType === 'rotation'
+            ? thing('rotation', names.rotations)
+            : thing('booking_page', names.bookingPages),
+        params: { added: many(after.added), removed: many(after.removed) },
         changes: [],
       };
     }

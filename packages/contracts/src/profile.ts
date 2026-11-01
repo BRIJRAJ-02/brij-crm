@@ -12,12 +12,15 @@ import {
   ProfileItems,
   ProfileLinkImportResult,
   ProfilePageChoice,
+  ProfileQrStyle,
 } from './booking/link-page.ts';
+import { PROFILE_INSIGHT_DAYS } from './booking/link-page-rules.ts';
 import { PageTheme } from './booking/page-theme.ts';
 import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
 import { checkSocialLink, socialLinkProblem } from './values/social.ts';
 import { SOCIAL_LINK_NAMES, SOCIAL_LINK_NETWORKS, SOCIAL_LINKS_MAX } from './values/social-networks.ts';
+import { BrandHex, ImageVersion } from './workspace-brand.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
 /** A member's name in a workspace: 1 to 80 characters, trimmed (AC-821). */
@@ -158,8 +161,9 @@ export const MyProfile = z.object({
   /** Whether search engines may show their link page (spec 0055, AC-5506); absent with no handle. */
   indexable: z.boolean().optional(),
   /**
-   * Whether their link page is public yet (27 Oct 2026); absent with no handle. A page made with a membership is
-   * private, seen only by its owner, until they first edit it or share its link.
+   * Whether their link page is public (27 Oct 2026; spec 0058, AC-23); absent with no handle. A page made with a
+   * membership is private, seen only by its owner, until they claim its handle or open it; then their Live or
+   * Private switch decides.
    */
   isPublic: z.boolean().optional(),
   /**
@@ -276,6 +280,74 @@ export const ImportProfileLinksInput = WorkspaceScoped.extend({
 export type ImportProfileLinksInput = z.infer<typeof ImportProfileLinksInput>;
 
 /**
+ * The caller's own link page accent, and its photos (spec 0060, AC-13, AC-14): what the Design panel reads beside
+ * the look. No accent follows the workspace's brand; no dark accent lifts the light one; a photo is its version,
+ * served at `lookImagePath(handle, slot, version)`.
+ */
+export const ProfileLook = z.object({
+  accent: BrandHex.optional(),
+  accentDark: BrandHex.optional(),
+  cover: ImageVersion.optional(),
+  ground: ImageVersion.optional(),
+});
+/** The caller's own link page accent and photos. */
+export type ProfileLook = z.infer<typeof ProfileLook>;
+
+/**
+ * Sets or clears the caller's own link page accent pair (spec 0060, AC-14), whole: `null` clears one, and the page
+ * then follows the workspace's brand. A dark accent needs a light one beside it.
+ */
+export const SaveProfileAccentInput = WorkspaceScoped.extend({
+  accent: BrandHex.nullable(),
+  accentDark: BrandHex.nullable(),
+  mutationId: Uuid,
+}).refine((input) => input.accentDark === null || input.accent !== null, {
+  error: 'Pick the main colour before a dark one.',
+  path: ['accentDark'],
+});
+/** Sets or clears the caller's own link page accent pair. */
+export type SaveProfileAccentInput = z.infer<typeof SaveProfileAccentInput>;
+
+/** The accent pair as saved. */
+export const ProfileAccent = z.object({ accent: BrandHex.nullable(), accentDark: BrandHex.nullable() });
+/** The accent pair as saved. */
+export type ProfileAccent = z.infer<typeof ProfileAccent>;
+
+/** Which period the link page's figures cover (spec 0061, AC-6118): 7, 30 or 90 days, 30 when absent. */
+export const ProfileCountsInput = WorkspaceScoped.extend({
+  days: z
+    .union(
+      PROFILE_INSIGHT_DAYS.map((days) => z.literal(days)),
+      { error: 'Pick 7, 30 or 90 days.' },
+    )
+    .optional(),
+});
+/** Which period the link page's figures cover. */
+export type ProfileCountsInput = z.infer<typeof ProfileCountsInput>;
+
+/**
+ * Fetches the picture a link's own site names (`og:image`) as that link's thumbnail (spec 0061, AC-6101), when the
+ * owner presses "Use the site's picture". The link is named by id: the address read is the one saved, never an
+ * input, so this is never a way to have our server read an address somebody chose for it.
+ */
+export const FetchThumbnailInput = WorkspaceScoped.extend({ id: Uuid, mutationId: Uuid });
+/** Fetches a link's own site picture as its thumbnail. */
+export type FetchThumbnailInput = z.infer<typeof FetchThumbnailInput>;
+
+/** The thumbnail fetched (its stored picture's id and size), or `none` when the site names no picture we can use. */
+export const FetchedThumbnail = z.union([
+  z.object({ image: Uuid, width: z.number().int().min(1), height: z.number().int().min(1) }),
+  z.object({ none: z.literal(true) }),
+]);
+/** The thumbnail fetched, or none. */
+export type FetchedThumbnail = z.infer<typeof FetchedThumbnail>;
+
+/** Saves the share QR's style (spec 0061, AC-6124), whole: `null` clears it back to the plain code. */
+export const SaveQrStyleInput = WorkspaceScoped.extend({ style: ProfileQrStyle.nullable(), mutationId: Uuid });
+/** Saves the share QR's style. */
+export type SaveQrStyleInput = z.infer<typeof SaveQrStyleInput>;
+
+/**
  * The profile procedures: any active member, for themself only. The link page's (spec 0051) act on the caller's own
  * account in every workspace: the owner is the session's, never an input, and no role reaches another person's.
  */
@@ -288,6 +360,10 @@ export const profileContract = {
   formChoices: oc.input(WorkspaceScoped).output(z.array(ProfileFormChoice)),
   /** The look of the caller's own link page (spec 0054): read with the profile, saved whole. */
   saveTheme: oc.input(WorkspaceScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
+  /** The caller's own link page accent and photos (spec 0060), for the Design panel. */
+  look: oc.input(WorkspaceScoped).output(ProfileLook),
+  /** The caller's own link page accent pair (spec 0060, AC-14): their page and personal booking pages wear it. */
+  saveAccent: oc.input(SaveProfileAccentInput).output(ProfileAccent),
   /** Whether search engines may show the caller's own link page (spec 0055, AC-5506): read with the profile. */
   setIndexable: oc
     .input(WorkspaceScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))
@@ -312,11 +388,24 @@ export const profileContract = {
   walletLink: oc
     .input(WorkspaceScoped.extend({ wallet: z.enum(WALLET_KINDS) }))
     .output(z.object({ url: z.string() }).or(z.object({ off: z.literal(true) }))),
-  /** The link page's figures (spec 0051, AC-5127): views, visitors and each block's presses over 30 days. */
-  counts: oc.input(WorkspaceScoped).output(ProfileCounts),
   /**
-   * Makes the caller's own link page public (27 Oct 2026), asked as they share its link (copy it, show its code,
-   * save it to a wallet). Editing the page shows it too, with no call of its own. Never makes it private again.
+   * The link page's figures (spec 0051, AC-5127; spec 0061, AC-6118, AC-6119): views, visitors and each block's
+   * presses over 7, 30 or 90 days, each day's series, the top values of each fact, and the funnel to bookings.
    */
-  show: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(z.object({ isPublic: z.boolean() })),
+  counts: oc.input(ProfileCountsInput).output(ProfileCounts),
+  /** Fetches a link's own site picture as its thumbnail (spec 0061, AC-6101). */
+  fetchThumbnail: oc.input(FetchThumbnailInput).output(FetchedThumbnail),
+  /** The share QR's style (spec 0061, AC-6124), absent keys for the plain code. */
+  qrStyle: oc.input(WorkspaceScoped).output(ProfileQrStyle),
+  /** Saves the share QR's style (spec 0061, AC-6124). Refused with a hint when the colour is too light to scan. */
+  saveQrStyle: oc.input(SaveQrStyleInput).output(ProfileQrStyle),
+  /**
+   * The caller's own link page, Live or Private (spec 0058, AC-23). Without `live`, they opened it: a page made for
+   * them that nobody has chosen for goes live, once, and one they set Private stays so (claiming the handle and
+   * editing the page do the same with no call of their own). With `live`, it is the Live or Private switch, their
+   * own choice from then on. Answers whether the page is public now.
+   */
+  show: oc
+    .input(WorkspaceScoped.extend({ mutationId: Uuid, live: z.boolean().optional() }))
+    .output(z.object({ isPublic: z.boolean() })),
 };

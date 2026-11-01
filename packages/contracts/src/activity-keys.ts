@@ -22,6 +22,8 @@ export const LINKS_SHOWN_PER_ENTRY = 3;
  * oldest entry of its moment.
  */
 export const ACTIVITY_RANKS = {
+  // Another record merged into this one (spec 0049): first at its moment, before the moves it made.
+  merged: 0,
   links: 1,
   change: 2,
   comment: 3,

@@ -2,7 +2,8 @@
 // Purpose: add one record of any object (a person, a project) without leaving the table.
 // Main task: fill the name and every required field, open "Add more fields" for the rest, then Create; the row shows at once.
 // "Create more" keeps the dialog open, emptied, for the next one.
-// Leaves out: duplicate checks and templates. References pick through the record picker and go with the create.
+// Leaves out: templates. References pick through the record picker and go with the create. A likely duplicate is said
+// under the name, email, domain or Company field just filled (spec 0049, AC-4904), and never blocks Create.
 // A select or status offers "Create "<typed>"" to schema managers, as a table cell does; the new option is set here.
 import {
   isDataError,
@@ -25,9 +26,11 @@ import {
   sharedStrings,
   Switch,
 } from '@crm/ui';
-import { usePendingOptions } from '@crm/data/react';
+import { useDuplicateCheck, usePendingOptions } from '@crm/data/react';
 import { useParams, useRouteContext } from '@tanstack/react-router';
-import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { DuplicateHint } from '../duplicates/DuplicateHint.tsx';
+import { matchedAttributes, matchedValues } from '../duplicates/matched.ts';
 import { refsOf } from '../records/details.ts';
 import { useLinkEditing } from '../records/links.ts';
 import type { MemberPicker } from '../records/members.ts';
@@ -51,6 +54,8 @@ export interface NewRecordDialogProps {
   readonly objectKey?: string;
   /** The object's id: an option made here ("Create "<typed>"") is made on its attribute. */
   readonly objectId: string;
+  /** The object's API name, for the addresses of the records a likely duplicate hint names (spec 0049). */
+  readonly objectSlug?: string;
   /** The screen's member picker: an Owner is chosen with it, "Me" first, and a "current user" default shows as Me. */
   readonly memberPicker: MemberPicker;
   /** Mints the new record's id, once per opening: a second press after a lost answer sends the same one. */
@@ -163,6 +168,7 @@ export function NewRecordDialog({
   singularName,
   objectKey,
   objectId,
+  objectSlug,
   memberPicker,
   first,
   more,
@@ -214,6 +220,7 @@ export function NewRecordDialog({
         singularName={singularName}
         {...(objectKey === undefined ? {} : { objectKey })}
         objectId={objectId}
+        {...(objectSlug === undefined ? {} : { objectSlug })}
         memberPicker={memberPicker}
         newId={newId}
         first={first}
@@ -234,7 +241,16 @@ export function NewRecordDialog({
 /** Props for the dialog's form. */
 interface NewRecordFormProps extends Pick<
   NewRecordDialogProps,
-  'first' | 'more' | 'onCreate' | 'singularName' | 'newId' | 'objectKey' | 'objectId' | 'memberPicker' | 'preset'
+  | 'first'
+  | 'more'
+  | 'onCreate'
+  | 'singularName'
+  | 'newId'
+  | 'objectKey'
+  | 'objectId'
+  | 'objectSlug'
+  | 'memberPicker'
+  | 'preset'
 > {
   readonly onCreated: (record: RecordView) => void;
   readonly formId: string;
@@ -250,6 +266,7 @@ function NewRecordForm({
   singularName,
   objectKey,
   objectId,
+  objectSlug,
   memberPicker,
   newId,
   first,
@@ -290,12 +307,29 @@ function NewRecordForm({
   const { data } = useRouteContext({ from: '__root__' });
   const pendingOptions = usePendingOptions(data.options.pending);
 
+  // Likely duplicates (spec 0049, AC-4904): checked 300 ms after a name, email, domain or Company is committed, the
+  // matches said under that field. A hint only: Create never waits for it.
+  const duplicates = useMemo(() => data.records.duplicates.check(slug, objectId), [data, slug, objectId]);
+  useEffect(
+    () => () => {
+      duplicates.dispose();
+    },
+    [duplicates],
+  );
+  const duplicateState = useDuplicateCheck(duplicates);
+  const matched = new Set(matchedAttributes(editors, objectKey).map((each) => each.id));
+  // Said in one place, under the record's name, so later fields never move as the person goes on.
+  const hintFor = first.find((editor) => editor.isPrimary)?.id ?? first[0]?.id;
+
   /** One editor's value committed: what it shows, and what Create sends (a list where the attribute holds one). */
   const commitValue = (definition: AttributeDefinition, value: unknown) => {
     sending.current = {
       ...sending.current,
       [definition.id]: definition.isMulti && value !== null && !Array.isArray(value) ? [value] : value,
     };
+    if (matched.has(definition.id)) {
+      duplicates.ask(matchedValues(editors, sending.current, objectKey));
+    }
     setValues((shown) => ({ ...shown, [definition.id]: value }));
     if (fieldErrors.has(definition.id)) {
       setFieldErrors(new Map([...fieldErrors].filter(([key]) => key !== definition.id)));
@@ -398,11 +432,20 @@ function NewRecordForm({
       />
     );
   };
+  const editorWithHint = (definition: AttributeDefinition) =>
+    hintFor === definition.id && objectSlug !== undefined ? (
+      <Fragment key={definition.id}>
+        {editorFor(definition)}
+        <DuplicateHint slug={slug} objectSlug={objectSlug} state={duplicateState} />
+      </Fragment>
+    ) : (
+      editorFor(definition)
+    );
 
   return (
     <FieldActionsContext value={actions}>
       <Form id={formId} isBusy={isBusy} refusals={refusals} onSubmit={create} label={label} focusesFirstField>
-        {first.map(editorFor)}
+        {first.map(editorWithHint)}
         {more.length > 0 && (
           <Disclosure
             variant="fields"
@@ -411,7 +454,7 @@ function NewRecordForm({
             isExpanded={isMoreOpen}
             onExpandedChange={setMoreOpen}
           >
-            {more.map(editorFor)}
+            {more.map(editorWithHint)}
           </Disclosure>
         )}
       </Form>

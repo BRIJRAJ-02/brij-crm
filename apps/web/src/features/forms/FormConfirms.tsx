@@ -255,11 +255,7 @@ export function RetargetFormDialog({ ask, onClose, onConfirm }: RetargetDialogPr
         </>
       }
     >
-      <p>
-        {shown.objectId === null
-          ? strings.retargetOffText(shown.filedCount, shown.objectName)
-          : strings.retargetText(shown.filedCount, shown.objectName, shown.nextName)}
-      </p>
+      <p>{shown.objectId === null ? strings.retargetOffText : strings.retargetText(shown.nextName)}</p>
     </Modal>
   );
 }

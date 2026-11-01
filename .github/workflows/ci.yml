@@ -88,8 +88,12 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           restore-keys: |
             turbo-${{ github.job }}-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}-
       # Every step below runs even when one before it failed, so one push shows every red check at once.
+      # Two tasks at a time: type aware lints and typechecks four at once ran the runner out of memory on the
+      # B2 car (31 October 2026), which GitHub reports as a shutdown signal, not a failure.
       - run: pnpm check
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          TURBO_CONCURRENCY: 2
       # A migration stamped before one already deployed is skipped for good (packages/db/scripts/journal.ts), so
       # every push checks its journal against the commit it replaced.
       - name: Migrations stay in deploy order
@@ -470,6 +474,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           e2e/switching.flow.ts
           e2e/forms-publish.flow.ts
           e2e/members.flow.ts
+          e2e/guests.flow.ts
           e2e/schedules.flow.ts
           e2e/command.flow.ts
           e2e/attributes.flow.ts

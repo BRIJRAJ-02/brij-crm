@@ -1,5 +1,6 @@
 import {
   checkImportLinks,
+  checkImportDuplicates,
   checkImportMatches,
   createImport,
   getImport,
@@ -8,6 +9,7 @@ import {
   startImport,
   undoImport,
 } from '@crm/core';
+import { apiError } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -70,4 +72,28 @@ export const importsRouter = member.imports.router({
       values: input.values,
     }),
   ),
+  // The preview's likely duplicates (spec 0049, AC-4918): up to 1,000 rows a call, 30 calls a minute per member.
+  duplicates: member.imports.duplicates.handler(async ({ context, input, signal }) => {
+    const memberId = context.scope.actor.id ?? context.user.id;
+    const limit = await context.limiter.consumeRateLimit(
+      `imports:duplicates:${context.scope.workspaceId}:${memberId}`,
+      {
+        window: 60,
+        max: 30,
+      },
+    );
+    if (!limit.allowed) throw apiError('RATE_LIMITED', 'Too many checks in the last minute. Try again shortly.');
+    const matches = await checkImportDuplicates(
+      context.scope,
+      {
+        objectId: input.objectId,
+        rows: input.rows.map((row) => ({
+          name: row.name,
+          ...(row.company === undefined ? {} : { company: row.company }),
+        })),
+      },
+      signal,
+    );
+    return { rows: matches.map((match) => (match === undefined ? {} : { match })) };
+  }),
 });

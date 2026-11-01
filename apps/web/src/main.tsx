@@ -25,6 +25,7 @@ import { jobsHref } from './features/workspace/objects.ts';
 import { FILED_TOAST_MS, filedStrings, filedToast, unfiledToast } from './features/workspace/filed.ts';
 import { replacedToast } from './features/workspace/replaced.ts';
 import { startMonitoring } from './monitoring/index.ts';
+import { blocksUnload, guardPreloadErrors, preloadStrings, sessionStore } from './preload-guard.ts';
 import { routeTree } from './routeTree.gen.ts';
 
 // Monitoring first (spec 0010), so a fault from here on is kept. Without VITE_SENTRY_DSN_WEB in the build
@@ -47,6 +48,26 @@ installPlainErrors();
 
 // One toast queue for the app, shared by the screens and the data layer.
 const toasts = createToasts();
+
+// A tab left open across a deploy asks for a chunk the new one no longer has: reload once onto it, or, over an
+// editor's unsaved changes (any leave guard up), say a new version is ready and let the person reload.
+const reloadPage = () => {
+  window.location.reload();
+};
+guardPreloadErrors({
+  target: window,
+  storage: () => sessionStore(window),
+  now: Date.now,
+  reload: reloadPage,
+  isDirty: () => blocksUnload(window),
+  offerReload: () => {
+    toasts.toast({
+      tone: 'info',
+      message: preloadStrings.newVersion,
+      action: { label: preloadStrings.reload, onAction: reloadPage },
+    });
+  },
+});
 
 // The last thing written to the session hint, so the same answer isn't written again (hint.ts).
 let lastSessionHint: SessionHint | undefined;

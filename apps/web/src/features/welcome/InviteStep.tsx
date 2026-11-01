@@ -1,7 +1,8 @@
 // Brief
 // Purpose: first run's Invite your team (spec 0036, spec 0031's invitations): bring colleagues in while the workspace is new.
 // Main task: an address per row (the plus or Enter adds the next, a pasted list splits into rows), each with its role
-// where roles were read, then Invite ("Invite 2 people"), or Skip for now; then into the workspace.
+// where roles were read, then Invite ("Invite 2 people"), or Skip for now, the step's clear secondary action in the
+// same words as Connect your calendar's (spec 0058, AC-25); then into the workspace.
 // Leaves out: the list of open invitations and the invite link (Settings › Members holds those), and anything about
 // the link page: the phone beside the step shows it live, with its address to copy (the owner, 27 October 2026).
 import type { DataLayer, RoleOption } from '@crm/data';
@@ -75,7 +76,7 @@ export function InviteStep({ data, slug, roles, onDone }: InviteStepProps) {
         onSubmit={invite.send}
         actions={
           <Button variant="ghost" size="lg" isFullWidth="center" isDisabled={isBusy} onPress={onDone}>
-            {strings.skipCalendar}
+            {strings.skipForNow}
           </Button>
         }
       >

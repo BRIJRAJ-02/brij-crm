@@ -180,9 +180,10 @@ const shownAt = async (userId: string, workspaceId: string) =>
     )
   )[0]?.shown;
 
-// The owner, 27 Oct 2026, after a morning of pages nobody could open: "Make the link page live. and non indexable
-// by default". A page made with a membership answers from the moment it exists, and no search engine is told about
-// it until its owner says so in Sharing.
+// Spec 0058, AC-23 (31 Oct 2026, the industry standard way): a page made with a membership is private until its
+// owner claims its handle or opens it, as nobody asked for their name and photo at an address made from their name;
+// a handle claimed is live at once, as on Linktree; and from then on the owner's Live or Private switch decides.
+// Unlisted either way: no search engine is told about it until its owner says so in Sharing.
 describe('a page made with a membership', () => {
   async function made() {
     const ada = await person(`Hedy ${tag()}`);
@@ -198,13 +199,13 @@ describe('a page made with a membership', () => {
     return { ada, w, handle: page.handle, scope };
   }
 
-  it('is live for anyone at once, and unlisted', async () => {
+  it('is private and unlisted until its owner acts, and its owner still sees it', async () => {
     const { ada, w, handle } = await made();
-    expect(await shownAt(ada.id, w.workspaceId)).toBe(true);
-    expect(await codeOf(enterLinkPage({ db }, handle, { max: 10 }))).toBe('answered');
-    expect(await codeOf(enterLinkBlocks({ db }, handle, { max: 10 }))).toBe('answered');
-    expect(await codeOf(findHandleOwner({ db }, handle))).toBe('answered');
-    // Not listed: `indexable` false until its owner turns Sharing on, so the address works and search doesn't.
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(false);
+    expect(await codeOf(enterLinkPage({ db }, handle, { max: 10 }))).toBe('NOT_FOUND');
+    expect(await codeOf(enterLinkBlocks({ db }, handle, { max: 10 }))).toBe('NOT_FOUND');
+    expect(await codeOf(findHandleOwner({ db }, handle))).toBe('NOT_FOUND');
+    expect(await codeOf(enterLinkPage({ db }, handle, { max: 10, viewer: ada.id }))).toBe('answered');
     const [row] = await testQuery<{ indexable: boolean }>(
       ownerUrl,
       'select indexable from auth.public_profiles where user_id = $1 and workspace_id = $2',
@@ -213,11 +214,49 @@ describe('a page made with a membership', () => {
     expect(row?.indexable).toBe(false);
   });
 
-  it('is already public, so sharing it again changes nothing', async () => {
-    const { ada, w, scope } = await made();
+  it('goes live the first time its owner opens it', async () => {
+    const { ada, w, handle, scope } = await made();
     expect(await showMyLinkPage(scope)).toEqual({ isPublic: true });
     expect(await shownAt(ada.id, w.workspaceId)).toBe(true);
-    expect((await updateMyMemberProfile(scope, { bio: 'Inventor' })).isPublic).toBe(true);
+    expect(await codeOf(enterLinkPage({ db }, handle, { max: 10 }))).toBe('answered');
+    expect(await showMyLinkPage(scope)).toEqual({ isPublic: true });
+  });
+
+  it('goes live when its owner claims the handle they were given, as first run does', async () => {
+    const { ada, w, handle, scope } = await made();
+    expect((await updateMyMemberProfile(scope, { handle })).isPublic).toBe(true);
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(true);
+  });
+
+  it('goes live when its owner claims a new handle', async () => {
+    const { ada, w, scope } = await made();
+    const claimed = await updateMyMemberProfile(scope, { handle: `hedy-${tag()}` });
+    expect(claimed.isPublic).toBe(true);
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(true);
+  });
+
+  it('stays private through a name, a time zone, a bio or a photo choice made in Settings', async () => {
+    const { ada, w, scope } = await made();
+    await updateMyMemberProfile(scope, { name: `Hedy L ${tag()}`, timeZone: 'Europe/Vienna' });
+    await updateMyMemberProfile(scope, { bio: 'Inventor' });
+    expect((await updateMyMemberProfile(scope, { pictureHidden: true })).isPublic).toBe(false);
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(false);
+  });
+
+  it('follows the Live or Private switch, and nothing overrules a Private choice', async () => {
+    const { ada, w, handle, scope } = await made();
+    expect(await showMyLinkPage(scope, false)).toEqual({ isPublic: false });
+    // Opened, claimed again or edited after the owner chose Private: still private.
+    expect(await showMyLinkPage(scope)).toEqual({ isPublic: false });
+    expect((await updateMyMemberProfile(scope, { handle })).isPublic).toBe(false);
+    expect((await updateMyMemberProfile(scope, { handle: `hedy-${tag()}` })).isPublic).toBe(false);
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(false);
+    expect(await codeOf(enterLinkPage({ db }, handle, { max: 10 }))).toBe('NOT_FOUND');
+    // Live again, at once, and Private again.
+    expect(await showMyLinkPage(scope, true)).toEqual({ isPublic: true });
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(true);
+    expect(await showMyLinkPage(scope, false)).toEqual({ isPublic: false });
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(false);
   });
 
   it('is never shown from another workspace\u2019s transaction, nor for someone who isn\u2019t a member there', async () => {
@@ -238,5 +277,41 @@ describe('a page made with a membership', () => {
       return answer.rows[0]?.shown;
     });
     expect(stranger).toBe(false);
+    // The switch is held to the same rule: nothing turned on from another workspace, nothing written.
+    const switched = await db.withWorkspace(other.workspaceId, async (tx) => {
+      const answer = await tx.execute<{ shown: boolean }>(
+        sql`select crm_set_public_profile_live(${ada.id}::uuid, ${w.workspaceId}::uuid, true) as shown`,
+      );
+      return answer.rows[0]?.shown;
+    });
+    expect(switched).toBe(false);
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(false);
+  });
+
+  it('never switches a live page off from another workspace, nor for someone who isn\u2019t a member there', async () => {
+    const { ada, w, scope } = await made();
+    expect(await showMyLinkPage(scope, true)).toEqual({ isPublic: true });
+    const claimedAt = async () =>
+      (
+        await testQuery<{ at: string | null }>(
+          ownerUrl,
+          'select claimed_at::text as at from auth.public_profiles where user_id = $1 and workspace_id = $2',
+          [ada.id, w.workspaceId],
+        )
+      )[0]?.at;
+    const before = await claimedAt();
+    const other = await workspaceOf(await person(`Ivy ${tag()}`));
+    const turnOff = (workspaceId: string) =>
+      db.withWorkspace(other.workspaceId, async (tx) => {
+        const answer = await tx.execute<{ shown: boolean }>(
+          sql`select crm_set_public_profile_live(${ada.id}::uuid, ${workspaceId}::uuid, false) as shown`,
+        );
+        return answer.rows[0]?.shown;
+      });
+    // From another workspace's transaction, and for Ada in a workspace she isn't in: nothing written.
+    expect(await turnOff(w.workspaceId)).toBe(false);
+    expect(await turnOff(other.workspaceId)).toBe(false);
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(true);
+    expect(await claimedAt()).toBe(before);
   });
 });

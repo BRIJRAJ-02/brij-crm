@@ -7,8 +7,21 @@ export const strings = {
   generalTitle: 'General',
   workspaceSection: 'Details',
   name: 'Workspace name',
+  /** The logo row: the logo itself is set in Brand, beside the colour (spec 0060); one upload, never a second. */
+  logo: 'Logo',
+  logoText: 'Heads the sidebar, the browser tab, booking pages and forms. Set it in Brand, with your colour.',
+  /** The same row for a member who can't change it. */
+  logoTextReadOnly: 'Heads the sidebar, the browser tab, booking pages and forms. Owners and admins set it in Brand.',
+  /** The logo's name where the row shows it. */
+  logoAlt: 'Your logo',
+  openBrand: 'Open Brand',
   timeZone: 'Time zone',
   timeZoneInfo: 'Default for new pages and members.',
+  currency: 'Currency',
+  country: 'Country',
+  /** What a cleared currency or country shows: the language's region's, as before it was set. */
+  automatic: 'Automatic',
+  regionInfo: 'Default for new money and phone fields.',
   copyAddress: 'Copy address',
   /** The address row: the whole link, read only; owners and admins change the part after /w/ in its dialog. */
   webAddress: 'Web address',
@@ -43,6 +56,11 @@ export const strings = {
   nameChanged: 'Name changed.',
   yourNameMissing: 'Enter your name.',
   zoneChanged: (zone: string) => `Time zone is now ${zone}.`,
+  /** The workspace's currency or country saved: `to` is the code, or undefined for Automatic. */
+  regionChanged: (what: 'currency' | 'country', to: string | undefined) =>
+    to === undefined
+      ? `${what === 'currency' ? 'Currency' : 'Country'} is automatic.`
+      : `${what === 'currency' ? 'Currency' : 'Country'} is now ${to}.`,
   undo: 'Undo',
   /** An Undo pressed after the name or time zone changed again (here or by another admin): the newer one stays. */
   undoStale: sharedStrings.undoStale,
@@ -85,8 +103,11 @@ export const strings = {
   bioText: 'One line under your name on your page.',
   bioNeedsHandle: 'Claim a handle first: the bio shows on its page.',
   yourPage: 'Your page',
-  /** Under Your page (27 Oct 2026): live from the moment the membership exists, and not listed by search engines. */
-  yourPagePrivate: 'Live. Not in search engines.',
+  /**
+   * Under Your page while it is private (spec 0058, AC-23): the link page's own words for it (`homeStrings.privateLine`),
+   * written out rather than imported, since this module rides in the first load and the link page's copy doesn't.
+   */
+  yourPagePrivate: 'Private. Only you can open it.',
   copyLink: 'Copy link',
   /** Under their name beside the picture, when the picture is the one their Google account gave. */
   fromGoogle: 'From Google',

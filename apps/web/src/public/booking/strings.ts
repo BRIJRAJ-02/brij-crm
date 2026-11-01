@@ -62,7 +62,7 @@ export const strings = {
   trap: 'Leave this empty',
   // Book by chat (spec 0042).
   chatGreeting: (host: string, title: string, minutes: number) =>
-    `I can book your ${String(minutes)} minute ${title} with ${host}. When works for you? Type something like “tomorrow afternoon”, or pick a time below.`,
+    `Booking your ${String(minutes)} min ${title} with ${host}. When suits you?`,
   chatNoTimes: (host: string) => `${host} has nothing open right now. Check back soon.`,
   chatSuggestions: ['Something later', 'Next week'] as readonly string[],
   chatTooMany: 'That was a lot at once. Give it a few seconds and try again.',
@@ -81,8 +81,7 @@ export const strings = {
   // States.
   noTimesTitle: 'No open times in the next two months.',
   noTimesText: 'Check back soon.',
-  unreachable: (name: string) =>
-    `${name} can’t show times right now. Their calendar is temporarily unreachable. Try again shortly.`,
+  unreachable: 'Times unavailable. Try again shortly.',
   paused: 'Nothing is bookable here right now.',
   notFoundTitle: 'Page not found',
   notFoundText: 'There’s nothing at this address.',
@@ -94,7 +93,7 @@ export const strings = {
   allBusy: (host: string) => `Every time ${host} has open clashes with your calendar.`,
   connectResults: {
     denied: 'Your calendar wasn’t connected. Every time still shows.',
-    scope: 'Timefix needs to see when you’re busy to compare calendars. Connect again and leave that box ticked.',
+    scope: 'Connect again and leave the busy times box ticked.',
     failed: 'Couldn’t connect your calendar. Try again in a moment.',
     off: 'Connecting a calendar isn’t available on this page yet.',
   },
@@ -135,9 +134,10 @@ export const strings = {
   },
   marks: { confirmed: 'Confirmed', cancelled: 'Cancelled', past: 'Finished' },
   who: 'Who',
+  /** The guest page's summary, after the meeting's name: "Intro call  with Ada Lovelace" (spec 0058, AC-19). */
+  withHost: (host: string) => `with ${host}`,
   where: 'Where',
   yourNote: 'Your note',
-  host: 'Host',
   alsoInvited: (names: string) => `Also invited: ${names}`,
   joinCall: 'Join the call',
   addToCalendar: 'Add to calendar',
@@ -155,7 +155,7 @@ export const strings = {
   bookAgain: 'Book again',
   // A title, so no full stop, and a way on (QA Q80).
   linkGone: 'This link doesn’t open a booking',
-  linkGoneText: 'The link may be incomplete or out of date. Open the one in the latest email about this booking.',
+  linkGoneText: 'This link is out of date. Use the one in your latest email.',
 } as const;
 
 /** A tab's title: the page's heading, then the product, as every public page names its tab (QA Q76). */

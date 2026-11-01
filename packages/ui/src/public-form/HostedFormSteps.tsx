@@ -19,6 +19,7 @@ import type { HostedFormProps } from './HostedForm.tsx';
 import styles from './HostedFormSteps.module.css';
 import { FormBooking } from './FormBooking.tsx';
 import { asideOf, labelOf, Question } from './Question.tsx';
+import { SentAnswers } from './SentAnswers.tsx';
 import { useHostedForm } from './use-hosted-form.ts';
 
 /** One step: a run of question keys, in order, with an optional title ("About your company"). */
@@ -92,6 +93,7 @@ export function HostedFormSteps({
   onStale,
   now = Date.now,
   logo = TIMEFIX_LOGO,
+  brand,
 }: HostedFormStepsProps) {
   const [index, setIndex] = useState(0);
   const [hasMoved, setMoved] = useState(false);
@@ -165,6 +167,7 @@ export function HostedFormSteps({
         url={state.view.url}
         seconds={state.view.seconds}
         text={state.view.text}
+        summary={<SentAnswers form={form} state={state} />}
       />
     );
   } else if (state.view.kind === 'thanks')
@@ -283,6 +286,7 @@ export function HostedFormSteps({
       form={form}
       mode={mode}
       kind={isOpen ? 'open' : 'card'}
+      {...(brand === undefined ? {} : { brand })}
       container={refs.container}
       {...(preview ? { previewNote: words.previewNote } : {})}
       foot={<FormFoot form={form} mode={mode} logo={logo} state={state} />}

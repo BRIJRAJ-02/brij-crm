@@ -40,6 +40,8 @@ export const strings = {
   recentActivity: 'Recent activity',
   /** The stat strip under the header (the tabs keep the counts): when it last changed, its next meeting, its stage. */
   lastActivity: 'Last activity',
+  /** A call or meeting already past: logged on the record, or on the calendar. */
+  lastContacted: 'Last contacted',
   nextMeeting: 'Next meeting',
   enteredStage: (stage: string) => `Entered “${stage}”`,
   viewAll: 'View all',

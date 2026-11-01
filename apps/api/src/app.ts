@@ -22,7 +22,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { createActivityNoter } from './analytics/activity.ts';
 import { visitorKey } from './analytics/visitor.ts';
 import { createAllowlist } from './auth/allowlist.ts';
-import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
+import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth, type AuthSession } from './auth/auth.ts';
 import { doorSession } from './auth/door-session.ts';
 import { createCalendarRoutes } from './calendar/routes.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
@@ -34,6 +34,7 @@ import {
 } from './calendar/services.ts';
 import { backgroundHooks } from './hooks.ts';
 import { createEdgeGuard, type Geo } from './edge.ts';
+import { NO_EDGE_CACHE, type EdgeCache } from './edge-cache.ts';
 import { mountExports } from './forms/exports.ts';
 import { handoffKey } from './forms/handoff.ts';
 import { hashAddress, mountPublicForms } from './forms/public.ts';
@@ -41,6 +42,9 @@ import { mountFormFiles } from './forms/uploads.ts';
 import { createFileStore, type FileStore } from './storage/blob.ts';
 import { createDiskFileStore } from './storage/disk.ts';
 import { createForgetPicture, mountMyPicture } from './me-picture.ts';
+import { mountBrandLogo } from './brand-logo.ts';
+import { mountLinkPageImages } from './link-page-images.ts';
+import { mountLinkPagePictures } from './link-page-pictures.ts';
 import { mountLogos } from './logos.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
@@ -59,9 +63,11 @@ import type { Mailer } from './mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
+import { mountBrandCss } from './public/brand-css.ts';
+import { mountLook } from './public/look.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
 import { createPictureFetch, createPictureLoader, type PictureFetch } from './public/picture.ts';
-import { createOutsideFetch, type OutsideFetch } from './public/outside.ts';
+import { createOutsideFetch, createPinnedFetch, OUTSIDE_TIMEOUT_MS, type OutsideFetch } from './public/outside.ts';
 import { createFaviconFetch, type FaviconFetch } from './public/favicon.ts';
 import { createWalletLinks } from './wallet/wallet.ts';
 import { createApplePass } from './public/apple-pass.ts';
@@ -75,6 +81,7 @@ import { createRealtimeTokens } from './realtime/tokens.ts';
 import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realtime/wake.ts';
 import { operatorList } from './orpc.ts';
 import { router as appRouter } from './router.ts';
+import { mountPublicApi, V1_PREFIX } from './v1/rest.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
 import type { WebhookUrlProblem } from '@crm/core';
@@ -166,6 +173,11 @@ export interface AppServices {
    */
   readonly keepAlive?: (work: Promise<unknown>) => void;
   /**
+   * The edge cache in front of the public answers (spec 0058, AC-23): Vercel's cache tags on a function, nothing
+   * (`NO_EDGE_CACHE`) on a long running server, where each answer's short `s-maxage` alone bounds a copy.
+   */
+  readonly edgeCache?: EdgeCache;
+  /**
    * Where the door reads object, field and record rules (spec 0009), always
    * named: the server passes `APP_RULES` (rules.ts, none until #24), the same
    * source its worker re-enters members with; tests and the local test server
@@ -222,6 +234,8 @@ export interface AppServices {
    * seconds and 1 MB, which is a page of links with room to spare. A test passes its own.
    */
   readonly outsideFetch?: OutsideFetch;
+  /** The pinned outside read for a link page's pictures and media (spec 0061); tests pass their own. */
+  readonly linkPageFetch?: OutsideFetch;
   /**
    * Cuts a person's live connections when one of their sessions is signed
    * out elsewhere (spec 0033): the worker's notice where `WORKER_INTERNAL_URL`
@@ -265,6 +279,11 @@ export function createApp({
   const mailer = services.mailer ?? NO_MAILER;
   const outsideFetch =
     services.outsideFetch ?? createOutsideFetch({ timeoutMs: IMPORT_TIMEOUT_MS, maxBytes: IMPORT_MAX_BYTES });
+  // A link page's pictures and media (spec 0061, AC-6128): 3 seconds in all, at most 1 MB, and a connection pinned
+  // to the address it checked, since a link's own site sits behind no allow list.
+  const linkPageFetch =
+    services.linkPageFetch ??
+    createOutsideFetch({ fetch: createPinnedFetch(), timeoutMs: OUTSIDE_TIMEOUT_MS, maxBytes: 1024 * 1024 });
   // Who may start a workspace of their own (spec 0031, owner decision 3): the addresses sign up lets in by the list.
   const signupAllowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   const signedOut = services.signedOut ?? NO_SIGNED_OUT;
@@ -289,6 +308,7 @@ export function createApp({
   const wakeOnUse = services.wakeOnUse ?? (wakesOnUse(env) ? throttleWake(wakeRelay) : NO_WAKE);
   const wakeOverdue = services.wakeOverdue ?? throttleWake(wakeRelay, OVERDUE_WAKE_MS);
   const keepAlive = services.keepAlive ?? RUNS_ON;
+  const edgeCache = services.edgeCache ?? NO_EDGE_CACHE;
   // The operator console (spec 0047): its super admins, the days people use the app, and the visitor id key.
   const operators = operatorList(env.OPERATOR_EMAILS);
   const noteActivity = createActivityNoter({
@@ -432,6 +452,9 @@ export function createApp({
     if (SAFE_METHODS.has(c.req.method)) return next();
     // The forms' public writes check the hosted page's own origin; booking's stay on the app's (spec 0025).
     if (c.req.path.startsWith('/api/public/forms/')) return next();
+    // The public API (parity #34) reads no cookie, only a Bearer key, so a cross site write has nothing to ride on.
+    // Never mount a route that reads the session under /api/v1/: this line would let its writes past.
+    if (c.req.path.startsWith(V1_PREFIX)) return next();
     // The marketing site's beacon checks its own origins, SITE_ORIGINS (spec 0047, AC-1627).
     if (c.req.path === SITE_HIT_PATH && c.req.method === 'POST') return next();
     // Google's change notices carry no Origin: the channel's own token is their key (spec 0024, milestone 2).
@@ -476,6 +499,7 @@ export function createApp({
         wakeOnUse,
         wakeOverdue,
         keepAlive,
+        edgeCache,
         analytics,
         environment: env.APP_ENV,
         requestId: c.get('requestId'),
@@ -495,6 +519,8 @@ export function createApp({
         mailer,
         outsideFetch,
         webhooks,
+        linkPageFetch,
+        files: pictureFiles,
         appUrl: env.APP_URL,
         publicOrigins,
         bookingOrigin,
@@ -527,6 +553,18 @@ export function createApp({
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
   }
+
+  // The public API (parity #34): records over REST for a workspace's API keys, through the same door and services.
+  mountPublicApi(app, {
+    db,
+    rules,
+    limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+    // Its own gate, 2 list reads per workspace at once: a sync script never takes the 6 the app's people read with.
+    readGate: createReadGate(2),
+    wakeRelay,
+    analytics,
+    keepAlive,
+  });
 
   // Connecting a calendar (spec 0024): the browser navigates both, so they are plain routes beside the RPC.
   app.get('/calendar/google/start', (c) => calendarRoutes.start(c));
@@ -571,6 +609,7 @@ export function createApp({
     auth,
     enter: (session, slug) =>
       enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
+    wakeRelay,
   });
   // The form to booking hand off (spec 0023 AC-1057): one key, signing on the form's side and reading on the page's.
   const formsHandoffKey = handoffKey(env.BETTER_AUTH_SECRET);
@@ -624,6 +663,10 @@ export function createApp({
     limiter: services.emailPreferenceLimiter ?? createMemoryLimiter(),
     ...(services.now === undefined ? {} : { now: services.now }),
   });
+  // What booking pages, forms and link pages wear of a brand (spec 0060): stylesheets, logos and photos from our own
+  // origin. Before the booking routes, so `/handles/<handle>/look.css` is never read as a page's slug.
+  mountBrandCss(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
+  mountLook(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), auth, edgeCache });
   mountPublicBooking(app, {
     db,
     handoffKey: formsHandoffKey,
@@ -673,6 +716,9 @@ export function createApp({
     },
     // Page views for the console (spec 0047, AC-1625), counted after the answer.
     views: { visitorKey: visitors, keepAlive },
+    edgeCache,
+    // A link page's pictures (spec 0061), from the same private store its photos are kept in.
+    ...(pictureFiles === undefined ? {} : { files: pictureFiles }),
   });
 
   // The marketing site's beacon (spec 0047, AC-1627): only from SITE_ORIGINS, 60 a minute per address.
@@ -695,6 +741,20 @@ export function createApp({
     errorResponse,
   });
 
+  // A workspace's logo (owners and admins upload it) and a link page's cover and photo ground (its owner's), through
+  // the same member door the RPC opens (spec 0060, AC-2, AC-13, AC-23).
+  const imageRoutes = {
+    auth,
+    enter: (session: AuthSession, slug: string) =>
+      enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
+    files: pictureFiles,
+    limiter: createMemoryLimiter(),
+    errorResponse,
+  };
+  mountBrandLogo(app, { ...imageRoutes, edgeCache });
+  mountLinkPageImages(app, imageRoutes);
+  // A link page's pictures and its Insights download (spec 0061), the same way.
+  mountLinkPagePictures(app, imageRoutes);
   // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
   mountLogos(app, { auth, logos: logoFetch, limiter: createMemoryLimiter() });
 

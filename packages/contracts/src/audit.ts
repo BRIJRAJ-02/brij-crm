@@ -252,6 +252,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     workspace,
     z.strictObject({ host: z.string() }),
   ),
+  /** An API key made, revoked or brought back (parity #34): its name then. */
+  entry(['api_key.created', 'api_key.revoked', 'api_key.restored'], workspace, z.strictObject({ name: z.string() })),
   /** Only the rules that changed are present; `sessionLengthDays: null` took the limit away. */
   entry(
     ['workspace_security.changed'],
@@ -348,6 +350,15 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     booking,
     z.strictObject({ host: AuditPerson, change: z.enum(['made', 'moved', 'cancelled']) }),
   ),
+  /** An automation made, changed, switched on or off, deleted or brought back (parity #53): its trigger's object. */
+  entry(
+    ['automation.changed'],
+    workspace,
+    z.strictObject({
+      change: z.enum(['created', 'updated', 'enabled', 'disabled', 'deleted', 'restored']),
+      object: z.string(),
+    }),
+  ),
   /** A list made, changed, archived or restored (spec 0048); a rename shows as the name's change. */
   entry(['list.created', 'list.updated', 'list.archived', 'list.restored'], list, NoParams),
   /** A personal booking page changed or deleted by anyone but its owner (spec 0037, AC-1263): the target is the owner. */
@@ -356,6 +367,12 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(
     ['rotation.changed'],
     rotation,
+    z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
+  ),
+  /** Who may edit a page or a rotation changed (spec 0037, AC-1331): how many were added and how many removed. */
+  entry(
+    ['editors.changed'],
+    z.union([rotation, bookingPage]),
     z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
   ),
 ]);

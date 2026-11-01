@@ -77,6 +77,12 @@ interface WorkspaceHead {
    */
   readonly mark?: ReactNode;
   /**
+   * The workspace's own logo (Settings › Brand, spec 0060): a picture on our origin that heads the switcher in
+   * place of `mark`, the whole of it inside the mark's square so a wide wordmark is letterboxed, never cut. While it
+   * loads, or if it fails, the workspace's letter holds the square. Decorative, as `mark` is.
+   */
+  readonly logo?: string;
+  /**
    * Something chosen from the workspace menu is under way (signing out): the
    * button shows a spinner in place of its chevron (of the mark, on the rail),
    * ignores presses and says it is busy. Name what is under way in `workspaceBusyLabel`.
@@ -98,6 +104,7 @@ interface HeadingHead {
   readonly isWorkspaceLoading?: never;
   readonly workspaceMenu?: never;
   readonly mark?: never;
+  readonly logo?: never;
   readonly isWorkspaceBusy?: never;
   readonly workspaceBusyLabel?: never;
 }
@@ -244,14 +251,19 @@ function WorkspaceRow({
   isWorkspaceBusy = false,
   workspaceBusyLabel,
   mark: brand,
+  logo,
   isCollapsed,
 }: WorkspaceHead & { readonly isCollapsed: boolean }) {
   const showWorkspaceSkeleton = useDelayedLoading(isWorkspaceLoading);
   const spinner = <Spinner {...(workspaceBusyLabel === undefined ? {} : { label: workspaceBusyLabel })} />;
   const mark =
-    isWorkspaceBusy && isCollapsed
-      ? spinner
-      : (brand ?? <Avatar name={workspace} hue="ink" shape="square" size="sm" isDecorative />);
+    isWorkspaceBusy && isCollapsed ? (
+      spinner
+    ) : logo !== undefined ? (
+      <Avatar name={workspace} src={logo} fit="contain" hue="ink" shape="square" size="sm" isDecorative />
+    ) : (
+      (brand ?? <Avatar name={workspace} hue="ink" shape="square" size="sm" isDecorative />)
+    );
   const name = isCollapsed ? (
     <VisuallyHidden>{workspace}</VisuallyHidden>
   ) : (

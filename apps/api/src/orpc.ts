@@ -29,9 +29,11 @@ import type { Auth, SessionUser } from './auth/auth.ts';
 import { doorSession } from './auth/door-session.ts';
 import type { CalendarServices } from './calendar/services.ts';
 import type { Mailer } from './mail/mailer.ts';
+import type { EdgeCache } from './edge-cache.ts';
 import { apiError, inputProblems } from './errors.ts';
 import { log } from './log.ts';
 import type { OutsideFetch } from './public/outside.ts';
+import type { FileStore } from './storage/blob.ts';
 import type { ReadGate } from './gate.ts';
 import type { Analytics } from './monitoring/posthog.ts';
 import { setRequestScope } from './monitoring/sentry.ts';
@@ -71,6 +73,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * Anything a procedure doesn't await, such as an email, goes through it.
    */
   keepAlive: (work: Promise<unknown>) => void;
+  /**
+   * The edge cache in front of the public answers (spec 0058, AC-23): a write that takes something off the public
+   * pages deletes its cached copies here once it commits.
+   */
+  edgeCache: EdgeCache;
   /** Product events (spec 0010): a write sends the milestones it reached once it commits (`hooks.ts`). */
   analytics: Analytics;
   environment: AppEnvironment;
@@ -119,6 +126,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * 503 `API_UNAVAILABLE`.
    */
   webhooks: WebhookServices | undefined;
+   * The outside read for a link page's pictures and media (spec 0061, AC-6128): the same bounds, its connection
+   * pinned to an address it checked (no DNS rebinding), since a link's own site is behind no allow list.
+   */
+  linkPageFetch: OutsideFetch;
+  /** The private store a link page's pictures are kept in (spec 0061); absent, nothing can be stored here. */
+  files: FileStore | undefined;
   /** The app's own address (`APP_URL`): an invitation's link is `<appUrl>/invite/<token>`. */
   appUrl: string;
   /**

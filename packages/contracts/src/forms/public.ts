@@ -8,6 +8,7 @@ import { ANSWER_TYPES } from './answer-types.ts';
 import { CONDITION_OPS } from './show-when.ts';
 import { Uuid } from '../values/ids.ts';
 import { SubmitContext } from './context.ts';
+import { PublicBrand } from '../workspace-brand.ts';
 
 /** The languages a hosted form speaks (spec 0023, value sourcing); English for anything missing. */
 export const FORM_LANGUAGES = ['en', 'es', 'fr', 'de', 'pt', 'it', 'nl', 'hi'] as const;
@@ -62,6 +63,11 @@ export const PublicForm = z.object({
   /** Whether the thank you offers a meeting (#59): false until booking pages exist. */
   offersMeeting: z.boolean(),
   recaptchaSiteKey: z.string().optional(),
+  /**
+   * The workspace's brand kit on this form (spec 0060, AC-4): the versions `brandStylesheetPath('forms', …)` and
+   * `brandLogoPath('forms', …)` take. Absent when the form wears the product's own accent and no logo.
+   */
+  brand: PublicBrand.optional(),
 });
 /** A form as its hosted page renders it. */
 export type PublicForm = z.infer<typeof PublicForm>;

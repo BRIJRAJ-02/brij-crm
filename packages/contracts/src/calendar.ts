@@ -342,9 +342,12 @@ export const AttendeeMatch = z.enum(['linked', 'ambiguous', 'unknown', 'member']
 /** How an attendee matched. */
 export type AttendeeMatch = z.infer<typeof AttendeeMatch>;
 
-/** One attendee, as the reader may see them: a linked person only when the reader may see that person. */
+/**
+ * One attendee, as the reader may see them: a linked person only when the reader may see that person. `email` is
+ * absent for a workspace member when the reader is a guest (spec 0031, AC-829: a guest learns no member's address).
+ */
 export const MeetingAttendeeView = z.object({
-  email: z.string(),
+  email: z.string().optional(),
   name: z.string().optional(),
   response: AttendeeResponse,
   isOrganizer: z.boolean(),
