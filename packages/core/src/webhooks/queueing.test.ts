@@ -13,7 +13,6 @@
 import { randomBytes } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database, type WorkspaceTx } from '@crm/db';
 import type { WebhookEventType } from '@crm/contracts';
