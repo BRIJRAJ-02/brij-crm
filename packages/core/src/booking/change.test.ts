@@ -49,30 +49,10 @@ afterAll(async () => {
 const asOwner = (text: string, params: readonly unknown[] = []) => testQuery(ownerUrl, text, params);
 
 const LINK_KEY = Buffer.alloc(32, 9);
-
-/**
- * The fixture week, a Monday 8 to 14 days from today, midnight UTC. The services take their clock from `NOW`, but
- * the reminders are queued by the database (`crm_enqueue_booking_mail`), which drops one whose time has already
- * passed by Postgres's own clock: a fixed week (2 November 2026, as this was written) stops queueing the 24 hour
- * reminder the day the real clock passes it. The page's hours are the weekday default, so the day has to stay a
- * Monday.
- */
-function fixtureMonday(): Date {
-  const week = new Date(Date.now() + 7 * 86_400_000);
-  const monday = new Date(Date.UTC(week.getUTCFullYear(), week.getUTCMonth(), week.getUTCDate()));
-  // On to the next Monday (0 is Sunday); a Monday itself steps a week on, so the week is never today.
-  monday.setUTCDate(monday.getUTCDate() + ((8 - monday.getUTCDay()) % 7 || 7));
-  return monday;
-}
-
-const MONDAY = fixtureMonday();
-/** An instant in the fixture week, in hours (and minutes) from its Monday at midnight UTC. */
-const on = (hours: number, minutes = 0) => new Date(MONDAY.getTime() + hours * 3_600_000 + minutes * 60_000);
-const iso = (hours: number, minutes = 0) => on(hours, minutes).toISOString();
-/** The Sunday before it, midnight UTC: 33 hours before the booking every case makes. */
-const NOW = on(-24);
-const MONDAY_9 = iso(9);
-const MONDAY_10 = on(10);
+/** Sunday 1 November 2026, midnight UTC. */
+const NOW = new Date('2026-11-01T00:00:00.000Z');
+const MONDAY_9 = '2026-11-02T09:00:00.000Z';
+const MONDAY_10 = new Date('2026-11-02T10:00:00.000Z');
 
 /** A calendar that records every call, its event at a known place. */
 function recordingCalendar(options: { readonly failChanges?: boolean } = {}) {
@@ -178,8 +158,8 @@ describe('a booking queues its emails, and its token derives from its id', () =>
     // whether the calendar invited the guest.
     expect(rows.map((each) => each.kind)).toEqual(['reminder_24h', 'reminder_1h', 'confirmed']);
     const ofKind = (kind: string) => rows.find((each) => each.kind === kind);
-    expect(ofKind('reminder_24h')?.run_at.toISOString()).toBe(iso(9 - 24));
-    expect(ofKind('reminder_1h')?.run_at.toISOString()).toBe(iso(8));
+    expect(ofKind('reminder_24h')?.run_at.toISOString()).toBe('2026-11-01T09:00:00.000Z');
+    expect(ofKind('reminder_1h')?.run_at.toISOString()).toBe('2026-11-02T08:00:00.000Z');
     expect(ofKind('reminder_24h')?.key).toBe(`crm-booking:${s.workspaceId}:${booked.bookingId}:reminder_24h`);
     expect(ofKind('confirmed')?.key).toBeNull();
   });
@@ -205,8 +185,8 @@ describe('the guest moves their booking (AC-639, AC-675)', () => {
     const booked = await s.book();
     const target = guestTarget(await enterBookingByToken({ db }, booked.manageToken));
     const slots = await readMoveSlots(target, s.deps, {
-      from: on(0),
-      to: on(24),
+      from: new Date('2026-11-02T00:00:00Z'),
+      to: new Date('2026-11-03T00:00:00Z'),
     });
     // Its own 9:00 is offered (moving onto itself changes nothing).
     expect(slots.slots.map((slot) => slot.start)).toContain(MONDAY_9);
@@ -217,11 +197,11 @@ describe('the guest moves their booking (AC-639, AC-675)', () => {
     expect(moved.reschedules).toBe(1);
     expect(new Date(moved.previous_starts_at ?? '').toISOString()).toBe(MONDAY_9);
     expect(recorder.changes).toHaveLength(1);
-    expect(recorder.changes[0]?.change).toEqual({ start: MONDAY_10.toISOString(), end: iso(10, 30) });
+    expect(recorder.changes[0]?.change).toEqual({ start: MONDAY_10.toISOString(), end: '2026-11-02T10:30:00.000Z' });
     // The moved email, and the reminders again for the new time (the same keys, replaced).
     const rows = await queued(booked.bookingId);
     expect(rows.map((each) => each.kind)).toEqual(['reminder_24h', 'reminder_1h', 'confirmed', 'moved']);
-    expect(rows.find((each) => each.kind === 'reminder_1h')?.run_at.toISOString()).toBe(iso(9));
+    expect(rows.find((each) => each.kind === 'reminder_1h')?.run_at.toISOString()).toBe('2026-11-02T09:00:00.000Z');
   });
 
   it('refuses a time another booking holds, and a sixth move', async () => {
@@ -231,7 +211,7 @@ describe('the guest moves their booking (AC-639, AC-675)', () => {
     const target = guestTarget(await enterBookingByToken({ db }, first.manageToken));
     expect(await refusalOf(moveBooking(target, s.deps, { start: MONDAY_10 }))).toMatchObject({ code: 'SLOT_TAKEN' });
     await asOwner('update bookings set reschedules = $1 where id = $2', [MAX_RESCHEDULES, first.bookingId]);
-    expect(await refusalOf(moveBooking(target, s.deps, { start: on(11) }))).toMatchObject({
+    expect(await refusalOf(moveBooking(target, s.deps, { start: new Date('2026-11-02T11:00:00Z') }))).toMatchObject({
       code: 'LIMIT_REACHED',
     });
     expect((await readManagedBooking(await enterBookingByToken({ db }, first.manageToken), NOW)).canMove).toBe(false);
@@ -288,7 +268,7 @@ describe('the guest cancels (AC-638, AC-677)', () => {
     const s = await setup();
     const booked = await s.book();
     const target = guestTarget(await enterBookingByToken({ db }, booked.manageToken));
-    const later = { ...s.deps, now: () => on(9, 5) };
+    const later = { ...s.deps, now: () => new Date('2026-11-02T09:05:00Z') };
     expect(await refusalOf(cancelBooking(target, later, {}))).toMatchObject({
       code: 'BOOKING_CLOSED',
       message: 'That meeting has already happened, so it can no longer be cancelled.',
@@ -355,21 +335,23 @@ describe('the host moves and cancels (AC-640)', () => {
     const s = await setup(recorder.calendar);
     const booked = await s.book();
     const target = hostTarget(s.host, booked.bookingId);
-    const range = { from: on(0), to: on(24) };
+    const range = { from: new Date('2026-11-02T00:00:00Z'), to: new Date('2026-11-03T00:00:00Z') };
     // The same length keeps the page’s step (30 minutes); a new one starts at any free five minutes.
     const same = await readMoveSlots(target, s.deps, range);
-    expect(same.slots.map((slot) => slot.start)).not.toContain(iso(9, 15));
+    expect(same.slots.map((slot) => slot.start)).not.toContain('2026-11-02T09:15:00.000Z');
     const longer = await readMoveSlots(target, s.deps, { ...range, minutes: 45 });
-    expect(longer.slots.map((slot) => slot.start)).toEqual(expect.arrayContaining([MONDAY_9, iso(9, 15)]));
+    expect(longer.slots.map((slot) => slot.start)).toEqual(
+      expect.arrayContaining([MONDAY_9, '2026-11-02T09:15:00.000Z']),
+    );
     expect(longer.slots.every((slot) => Date.parse(slot.end) - Date.parse(slot.start) === 45 * 60_000)).toBe(true);
     // The same time and length again changes nothing; a new length at the same start moves the end only.
     expect(await moveBooking(target, s.deps, { start: new Date(MONDAY_9), minutes: 30 })).toEqual({ moved: false });
     expect(await moveBooking(target, s.deps, { start: new Date(MONDAY_9), minutes: 45 })).toEqual({ moved: true });
     const changed = await row(s.workspaceId, booked.bookingId);
     expect(changed.reschedules).toBe(1);
-    expect(recorder.changes.at(-1)?.change).toEqual({ start: MONDAY_9, end: iso(9, 45) });
+    expect(recorder.changes.at(-1)?.change).toEqual({ start: MONDAY_9, end: '2026-11-02T09:45:00.000Z' });
     // Asked for with a time another booking holds, it is refused as a move is.
-    await s.book({ start: iso(10), email: 'ann@navy.example' });
+    await s.book({ start: '2026-11-02T10:00:00.000Z', email: 'ann@navy.example' });
     expect(await refusalOf(moveBooking(target, s.deps, { start: new Date(MONDAY_9), minutes: 90 }))).toMatchObject({
       code: 'SLOT_TAKEN',
     });
@@ -437,7 +419,7 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
       {
         idempotencyKey: newId(),
         pageId: page.id,
-        start: on(12),
+        start: new Date('2026-11-02T12:00:00.000Z'),
         minutes: 30,
         name: 'Grace Hopper',
         email: 'grace@navy.example',
@@ -454,7 +436,7 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
     records: [],
   });
 
-  const week = { from: iso(0), to: iso(24) };
+  const week = { from: '2026-11-02T00:00:00.000Z', to: '2026-11-03T00:00:00.000Z' };
 
   it('links a deal at once in every read, audits it, takes it off, and files a past or cancelled one too', async () => {
     const s = await setup();
