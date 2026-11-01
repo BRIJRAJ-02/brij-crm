@@ -227,6 +227,9 @@
     /* An error fades in on the field that caused it, as the edge turns red; it goes when the field is fixed. The
        element stays while the field is invalid, so a message that replaces another changes in place, with no
        second fade (the story ErrorChangesInPlace). */
+    /* It opens to its own height, so the fields under it move down smoothly rather than jumping a line (stageshow's
+       form-error). */
+    interpolate-size: allow-keywords;
     animation: field-error-in var(--duration-move) var(--ease-out) backwards;
   }
 
@@ -396,7 +399,15 @@
 
   @keyframes field-error-in {
     from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
       opacity: 0;
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
     }
   }
 }

@@ -173,6 +173,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .fixed,
     .chip {
       animation-name: line-in;
     }
@@ -185,6 +186,12 @@
     .guests[data-opening]:not([data-shake]) {
       animation-name: line-in;
     }
+  }
+
+  /* The calm tick on a field put right: it opens out of a soft blur, as the guest chips do. */
+  .fixed {
+    display: inline-flex;
+    animation: chip-in var(--duration-modal) var(--ease-out) backwards;
   }
 
   @keyframes guests-open {

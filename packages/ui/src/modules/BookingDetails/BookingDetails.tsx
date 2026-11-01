@@ -8,6 +8,7 @@ import {
 } from '@crm/contracts/forms';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { countriesIn } from '../../lib/countries.ts';
 import { Field } from '../../molecules/Field/Field.tsx';
@@ -184,6 +185,19 @@ export function BookingDetails({
   const shakeOf = (field: string) => (shake.fields.has(field) ? (shake.round % 2 === 0 ? 'even' : 'odd') : undefined);
   const [line, setLine] = useState('');
   const [isBusy, setBusy] = useState(false);
+  // The fields a refused Confirm marked wrong: once one is right again it says so with a calm tick (stageshow's
+  // form-error), so the visitor sees the fix land rather than only the red going away.
+  const [wasWrong, setWasWrong] = useState<ReadonlySet<string>>(new Set());
+  const fixed = (field: 'name' | 'email', isRight: boolean) =>
+    wasWrong.has(field) && errors[field] === undefined && isRight
+      ? {
+          suffix: (
+            <span className={styles.fixed}>
+              <Icon name="check" size="sm" tone="success" />
+            </span>
+          ),
+        }
+      : {};
   const [isDone, setDone] = useState(false);
   const doneTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => globalThis.clearTimeout(doneTimer.current), []);
@@ -267,6 +281,7 @@ export function BookingDetails({
   };
   const showErrors = (found: Readonly<Record<string, string>>) => {
     setErrors(found);
+    setWasWrong((current) => new Set([...current, ...Object.keys(found)]));
     setShake((current) => ({
       round: current.round + 1,
       fields: new Set(Object.keys(found).map((field) => (field.startsWith('guest-') ? 'guests' : field))),
@@ -384,6 +399,7 @@ export function BookingDetails({
             setName(next);
             clear('name');
           }}
+          {...fixed('name', name.trim() !== '')}
           {...(errors.name === undefined ? {} : { error: errors.name })}
         />
       </div>
@@ -401,6 +417,7 @@ export function BookingDetails({
             setEmail(next);
             clear('email');
           }}
+          {...fixed('email', EMAIL.test(email.trim()))}
           {...(errors.email === undefined ? {} : { error: errors.email })}
         />
       </div>
