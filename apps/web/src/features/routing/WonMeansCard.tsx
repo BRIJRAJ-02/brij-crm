@@ -36,6 +36,7 @@ export function WonMeansCard({ data, slug, stage, toasts }: WonMeansCardProps) {
         <Select
           label={strings.wonStages}
           isLabelHidden
+          placeholder={strings.pickWonStages}
           selectionMode="multiple"
           optionStyle="dot"
           savesOnPick

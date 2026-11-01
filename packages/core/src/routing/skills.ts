@@ -71,9 +71,12 @@ export async function readSkills(tx: WorkspaceTx): Promise<SkillsView> {
   return { skills, members: membersView, wonMeansSet: settings !== undefined && settings.wonStage !== null };
 }
 
-/** The workspace's skills and who holds them (AC-1382): for any member. */
+/** The workspace's skills and who holds them (AC-1382): for any member; a guest gets the skills alone. */
 export async function listSkills(scope: EngineScope): Promise<SkillsView> {
-  return inWorkspace(scope, readSkills);
+  const view = await inWorkspace(scope, readSkills);
+  // A guest learns names, never who holds what (spec 0031: guests see no other member's details).
+  const { principal } = scope.access;
+  return principal.kind === 'member' && principal.role === 'guest' ? { ...view, members: [] } : view;
 }
 
 /** The audit row's view of a skill. */

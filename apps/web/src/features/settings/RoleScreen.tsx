@@ -268,15 +268,22 @@ export function RoleScreen({
     </MenuTrigger>
   ) : undefined;
 
-  const permissionRow = (name: Permission, label: string, description: string, isHoldable: boolean) => (
+  const permissionRow = (
+    name: Permission,
+    label: string,
+    description: string,
+    isHoldable: boolean,
+    isSectionLocked: boolean,
+  ) => (
     <SettingsRow
       key={name}
       title={label}
       meta={
         <>
           <InfoTip label={label}>{description}</InfoTip>
-          {/* Only built in roles hold it (AC-1240): a lock says so in its tooltip, not a line on every row. */}
-          {isCustom && !isHoldable && <LockReason reason={strings.onlyBuiltIn} size="sm" />}
+          {/* Only built in roles hold it (AC-1240): a lock says so in its tooltip, not a line on every row; a section
+              where no row is holdable carries one lock in its head instead (review, 1 November 2026). */}
+          {isCustom && !isHoldable && !isSectionLocked && <LockReason reason={strings.onlyBuiltIn} size="sm" />}
         </>
       }
       control="fit"
@@ -373,15 +380,24 @@ export function RoleScreen({
           </SettingsRow>
         </Card>
       </SettingsSection>
-      {sections.map((section) => (
-        <SettingsSection key={section.group} title={section.group}>
-          <Card>
-            {section.group === 'Scheduling' && reachSelect('see')}
-            {section.group === 'Scheduling' && reachSelect('manage')}
-            {section.rows.map((row) => permissionRow(row.name, row.label, row.description, row.isHoldable))}
-          </Card>
-        </SettingsSection>
-      ))}
+      {sections.map((section) => {
+        const isSectionLocked = isCustom && section.rows.every((row) => !row.isHoldable);
+        return (
+          <SettingsSection
+            key={section.group}
+            title={section.group}
+            {...(isSectionLocked ? { actions: <LockReason reason={strings.onlyBuiltIn} size="sm" /> } : {})}
+          >
+            <Card>
+              {section.group === 'Scheduling' && reachSelect('see')}
+              {section.group === 'Scheduling' && reachSelect('manage')}
+              {section.rows.map((row) =>
+                permissionRow(row.name, row.label, row.description, row.isHoldable, isSectionLocked),
+              )}
+            </Card>
+          </SettingsSection>
+        );
+      })}
     </SettingsStack>
   );
 

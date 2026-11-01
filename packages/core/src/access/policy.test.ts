@@ -578,4 +578,15 @@ describe('a custom role (spec 0037, AC-1229, AC-1234, AC-1248)', () => {
     expect(objectLevel(readOnlyInTeam, OBJECT)).toBe('none');
     expect(objectLevel(readOnlyInTeam, FIELD)).toBe('read');
   });
+
+  it('never writes through Member’s rule when it is Read only: the role’s data access caps what that rule gives', () => {
+    // Member: write on their own records, stored as an explicit write row with a record rule.
+    const ownWrite = rules(
+      [objectRule('write')],
+      [{ subject: { type: 'role', role: 'member' }, objectId: OBJECT, kind: 'own', attributeId: MEMBER_FIELD }],
+    );
+    expect(objectLevel(roleAccess(member('member'), ownWrite), OBJECT)).toBe('write');
+    expect(objectLevel(roleAccess(holder(), ownWrite, grant([], 'write')), OBJECT)).toBe('write');
+    expect(objectLevel(roleAccess(holder(), ownWrite, grant([], 'read')), OBJECT)).toBe('read');
+  });
 });

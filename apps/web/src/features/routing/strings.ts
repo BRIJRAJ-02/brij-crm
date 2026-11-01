@@ -157,6 +157,8 @@ export const strings = {
   heldBy: (names: readonly string[]) =>
     names.length === 0 ? 'Nobody holds these: the whole rotation picks.' : `Held by ${names.join(', ')}`,
   removedSkill: 'a removed skill',
+  /** A rule's skill while the skills are still loading. */
+  skillLoading: 'a skill',
   missingPage: 'a removed page',
 
   // The report

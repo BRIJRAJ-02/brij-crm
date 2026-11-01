@@ -275,6 +275,7 @@ function subjectMatches(subject: RuleSubject, principal: MemberPrincipal): boole
 }
 
 const higherObject = (a: ObjectLevel, b: ObjectLevel): ObjectLevel => (OBJECT_RANK[a] >= OBJECT_RANK[b] ? a : b);
+const lowerObject = (a: ObjectLevel, b: ObjectLevel): ObjectLevel => (OBJECT_RANK[a] <= OBJECT_RANK[b] ? a : b);
 const stricterField = (a: FieldLevel, b: FieldLevel): FieldLevel => (FIELD_RANK[a] <= FIELD_RANK[b] ? a : b);
 const higherField = (a: FieldLevel, b: FieldLevel): FieldLevel => (FIELD_RANK[a] >= FIELD_RANK[b] ? a : b);
 
@@ -350,6 +351,11 @@ function memberPolicy(
   principal: MemberPrincipal,
   rules: AccessRules,
   roleLevel: ObjectLevel = roleDefault(principal.role),
+  /**
+   * A custom role's data access as a ceiling on what the role's own rules give (spec 0037, AC-1229): Member's stored
+   * rules apply to its holders, and a Read only role must never write through one of them. Teams still grant.
+   */
+  roleCeiling?: ObjectLevel,
 ): DataPolicy {
   // Owners and admins are never restricted by stored rules (AC-843): a rule can't name them (AC-842), and a team only
   // grants, so they keep the open policy and its audience. Only rules injected by hand (tests) name their role.
@@ -397,7 +403,10 @@ function memberPolicy(
   const records = new Map<string, RecordRule>();
   for (const objectId of objectIds) {
     // The role always has a view (its default when it holds no rule); a team has one only where it holds a rule.
-    const views: SubjectView[] = [readView(stored.get('role')?.get(objectId), defaultLevel)];
+    const roleView = readView(stored.get('role')?.get(objectId), defaultLevel);
+    const views: SubjectView[] = [
+      roleCeiling === undefined ? roleView : { ...roleView, level: lowerObject(roleView.level, roleCeiling) },
+    ];
     for (const [key, byObject] of stored) {
       if (key === 'role') continue;
       const team = byObject.get(objectId);
@@ -499,7 +508,12 @@ export function roleAccess(
     ),
     data:
       custom && customRole !== undefined
-        ? memberPolicy(principal, rules, customRoleLevel(customRole.defaultObjectLevel))
+        ? memberPolicy(
+            principal,
+            rules,
+            customRoleLevel(customRole.defaultObjectLevel),
+            customRoleLevel(customRole.defaultObjectLevel),
+          )
         : memberPolicy(principal, rules),
   });
 }

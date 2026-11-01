@@ -122,6 +122,8 @@ function inOrder(skills: readonly RoutingSkill[]): RoutingSkill[] {
 export function createRoutingSkills(deps: RoutingSkillsDeps) {
   const skills = new Map<string, ReturnType<typeof optimistic<SkillsView>>>();
   const settings = new Map<string, ReturnType<typeof optimistic<RoutingSettings>>>();
+  // The Won means write still on its way per workspace, which the next one waits for.
+  const wonQueue = new Map<string, Promise<void>>();
   const skillsOf = (workspace: string) => {
     const found = skills.get(workspace);
     if (found !== undefined) return found;
@@ -208,15 +210,27 @@ export function createRoutingSkills(deps: RoutingSkillsDeps) {
      */
     setWonStage: async (workspace: string, wonStage: WonStage | null): Promise<void> => {
       const held = settingsOf(workspace);
-      const updatedAt = held.current()?.updatedAt;
+      // One write at a time per workspace, each sent with the time the last answer gave: a second pick inside one
+      // round trip waits for the first rather than being refused STALE against this tab's own change.
+      const before = wonQueue.get(workspace);
+      const send = () => deps.setSettings(workspace, wonStage, held.current()?.updatedAt);
+      const written = held.write(
+        (value) => {
+          const { wonStage: _, ...rest } = value;
+          return wonStage === null ? rest : { ...rest, wonStage };
+        },
+        before === undefined ? send : () => before.then(send),
+      );
+      const settled = written.then(
+        () => undefined,
+        () => undefined,
+      );
+      wonQueue.set(workspace, settled);
+      void settled.then(() => {
+        if (wonQueue.get(workspace) === settled) wonQueue.delete(workspace);
+      });
       try {
-        await held.write(
-          (value) => {
-            const { wonStage: _, ...rest } = value;
-            return wonStage === null ? rest : { ...rest, wonStage };
-          },
-          () => deps.setSettings(workspace, wonStage, updatedAt),
-        );
+        await written;
       } catch (error) {
         const refused = toDataError(error);
         if (refused.code === 'STALE') held.reload();

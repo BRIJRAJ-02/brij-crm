@@ -15,7 +15,7 @@ export const skillStrings = {
   heldBy: 'People',
   actions: 'Actions',
   newSkill: 'New skill',
-  editSkill: 'Rename skill',
+  editSkill: 'Edit skill',
   rename: 'Rename',
   delete: 'Delete',
   more: (name: string) => `More for ${name}`,
@@ -50,6 +50,7 @@ export const skillStrings = {
   // Test
   surface: 'Form or page',
   pickSurface: 'Pick a form or page',
+  pickFirst: 'Pick a form or page first.',
   email: 'Guest email',
   emailPlaceholder: 'guest@company.com',
   run: 'Run test',
@@ -89,6 +90,7 @@ export const skillStrings = {
   // Won means
   wonMeans: 'Won means',
   wonStages: 'Won stages',
+  pickWonStages: 'Pick the won stages',
   noStage: 'Deals have no Stage field.',
   wonSaved: 'Won means saved',
 };

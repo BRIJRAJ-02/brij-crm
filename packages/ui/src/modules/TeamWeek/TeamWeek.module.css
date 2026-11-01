@@ -310,12 +310,14 @@
 
   /* A key's mark: the cell's look at icon size, each with an edge of its own, so it holds in dark (a mark of a tag
      surface alone all but vanished there, the owner, 31 October 2026). */
+  /* A key's mark is a small copy of the cell it explains (its radius, fill and edge), never a square that reads as a
+     checkbox or a radio (review, 1 November 2026). */
   .swatch {
     position: relative;
     flex: none;
-    inline-size: var(--size-icon-xs);
+    inline-size: calc(var(--size-icon-xs) * 2);
     block-size: var(--size-icon-xs);
-    border: var(--border-width-hairline) solid var(--control-border);
+    border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-xs);
     background: var(--tag-gray-bg);
   }
@@ -327,6 +329,7 @@
 
   .swatch[data-tone='off'] {
     border-style: dashed;
+    border-color: var(--control-border);
     background: transparent;
   }
 
@@ -335,9 +338,13 @@
     background: var(--tag-yellow-bg);
   }
 
+  /* This date only keeps the cell's dot at its end, as a read only grid marks such a day with the dot alone. */
   .swatch > .dot {
-    inset: 0;
-    margin: auto;
+    inset-block: 0;
+    inset-inline-end: var(--space-2);
+    margin-block: auto;
+    inline-size: var(--space-4);
+    block-size: var(--space-4);
   }
 
   .hint {

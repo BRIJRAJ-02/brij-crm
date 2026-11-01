@@ -131,7 +131,11 @@ function RulesCardBody({
   const skillsHeld = useMemo(() => data.routing.skills.view(slug), [data, slug]);
   const skillsState = useRoutingSkills(skillsHeld);
   const skills = skillsState.status === 'ready' ? skillsState.value : undefined;
-  const skillName = (id: string) => skills?.skills.find((skill) => skill.id === id)?.name ?? strings.removedSkill;
+  // Until the skills land a rule names "skills" plainly; only a skill missing from a loaded list is a removed one.
+  const skillName = (id: string) =>
+    skills === undefined
+      ? strings.skillLoading
+      : (skills.skills.find((skill) => skill.id === id)?.name ?? strings.removedSkill);
 
   const pageTitle = (pageId: string) =>
     surface.kind === 'form' ? surface.pages.find((page) => page.id === pageId)?.title : undefined;

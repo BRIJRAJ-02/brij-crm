@@ -154,4 +154,27 @@ describe('routing skills in the browser (spec 0037, AC-1382)', () => {
     releaseSettings();
     releaseSkills();
   });
+
+  it('sends a second Won means pick after the first answers, with that answer’s time, so neither is refused', async () => {
+    const { store, answer, setSettingsElsewhere } = setup();
+    const settings = store.settings('acme');
+    const release = settings.retain();
+    await flush();
+    setSettingsElsewhere({ updatedAt: 'read' });
+    settings.reload();
+    await flush();
+    const first = store.setWonStage('acme', { attributeId: STAGE, optionIds: [WON] });
+    const second = store.setWonStage('acme', null);
+    // Both show at once; only the first is on its way.
+    const shown = settings.getSnapshot();
+    expect(shown.status === 'ready' && shown.value.wonStage).toBeUndefined();
+    answer();
+    await first;
+    await flush();
+    answer();
+    await second;
+    const landed = settings.getSnapshot();
+    expect(landed.status === 'ready' && landed.value).toEqual({ updatedAt: 'later' });
+    release();
+  });
 });

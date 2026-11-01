@@ -8,6 +8,7 @@ import { Button, Callout, ChoiceChips, Field, Modal, SegmentedControl, Select, S
 import { useState } from 'react';
 import { ConditionsEditor, firstConditions } from './ConditionsEditor.tsx';
 import { isComplete, storedShowWhen, type Fact } from './facts.ts';
+import { skillStrings } from './skills-strings.ts';
 import { strings } from './strings.ts';
 
 /** Someone a route may narrow to. */
@@ -50,15 +51,6 @@ export interface RuleDialogProps {
   readonly onSave: (rule: RoutingRule) => void;
   readonly onClose: () => void;
 }
-
-/** A skill's group, as the picker heads it. */
-const GROUP_NAMES: Readonly<Record<RoutingSkill['group'], string>> = {
-  language: 'Language',
-  region: 'Region',
-  segment: 'Segment',
-  product: 'Product',
-  other: 'Other',
-};
 
 /** Members with skills: the route's hosts requiring `ids`, or none when no skill is picked. */
 const skillHosts = (ids: readonly string[]): RouteHosts | undefined =>
@@ -261,7 +253,7 @@ function RuleDialogBody({
             items={(skills?.skills ?? []).map((skill) => ({
               id: skill.id,
               label: skill.name,
-              group: GROUP_NAMES[skill.group],
+              group: skillStrings.groups[skill.group],
               // Three at most: the rest wait until one is taken off.
               isDisabled: skillIds.length >= REQUIRED_SKILLS_MAX && !skillIds.includes(skill.id),
             }))}

@@ -13,6 +13,7 @@ import {
 import { isRecordFact } from '@crm/data/forms';
 import {
   Button,
+  ButtonGroup,
   Callout,
   Card,
   DescriptionList,
@@ -99,7 +100,11 @@ export function TestTab({ data, slug, surfaces }: TestTabProps) {
   const isPage = ready?.surface.kind === 'booking_page';
 
   const run = () => {
-    if (ready === undefined) return;
+    // Run is never a dead button: pressed before a surface is ready, it says what is missing.
+    if (ready === undefined) {
+      setFailure(strings.pickFirst);
+      return;
+    }
     setRunning(true);
     setFailure(undefined);
     const typed = Object.fromEntries(Object.entries(answers).filter(([, value]) => value.trim() !== ''));
@@ -176,9 +181,11 @@ export function TestTab({ data, slug, surfaces }: TestTabProps) {
               {failure}
             </Callout>
           )}
-          <Button variant="primary" icon="play" isDisabled={ready === undefined} isPending={running} onPress={run}>
-            {running ? strings.running : strings.run}
-          </Button>
+          <ButtonGroup label={strings.run} layout="row">
+            <Button variant="primary" icon="play" isPending={running || loaded === 'loading'} onPress={run}>
+              {running ? strings.running : strings.run}
+            </Button>
+          </ButtonGroup>
         </SettingsStack>
       </Card>
       {ready !== undefined && (

@@ -123,8 +123,10 @@
   }
 
   /* A loaded picture's plate: the page's surface in place of the hue, after every hue so it wins, so a logo with
-     clear parts reads on a neutral ground in both themes; its initials and hue stay the fallback and the wait. */
+     clear parts reads on a neutral ground in both themes, edged so a dark logo never melts into a dark page; its initials and hue stay the fallback and the wait. */
   .root[data-picture='loaded'] {
+    outline: var(--border-width-hairline) solid var(--border-subtle);
+    outline-offset: calc(var(--border-width-hairline) * -1);
     background: var(--surface);
   }
 

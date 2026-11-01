@@ -226,7 +226,7 @@ describe('skills (AC-1382)', () => {
     expect(refusal).toEqual({ code: 'SKILL_LIMIT', message: 'A workspace can have at most 100 skills.' });
   });
 
-  it('is changed only by holders of routing.manage, and listed for any member', async () => {
+  it('is changed only by holders of routing.manage, and listed for any member, a guest without holders', async () => {
     const w = await world();
     const spanish = await w.skill('Spanish');
     for (const call of [
@@ -241,6 +241,11 @@ describe('skills (AC-1382)', () => {
       expect((await refusalOf(call)).code).toBe('FORBIDDEN');
     }
     expect((await listSkills(w.bea.scope)).skills).toHaveLength(1);
+    // A guest reads the skills, never who holds them.
+    await setMemberSkills(w.owner, { memberId: w.cy.id, skillIds: [spanish] });
+    const asGuest = await listSkills(rescope(w.owner, { actor: { type: 'member', id: w.bea.id }, role: 'guest' }));
+    expect(asGuest.skills).toHaveLength(1);
+    expect(asGuest.members).toEqual([]);
   });
 
   it('sets and replaces a member’s skills; a removed member holds none (AC-1440)', async () => {
