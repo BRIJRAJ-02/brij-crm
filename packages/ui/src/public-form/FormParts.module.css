@@ -37,6 +37,34 @@
     --form-accent-border: var(--form-brand-accent, var(--accent-border));
     --form-accent-line: var(--form-brand-accent, var(--accent-line));
     --form-focus: var(--form-brand-focus, var(--shadow-focus));
+    /* The public pages' calmer pace and press (the owner, 1 and 2 November 2026, as BookingFrame sets them): the
+       library's motion tokens run about half as long again in here, a held Button eases to 0.97, and a changed label
+       (Send, Sending) resolves in. The app keeps the tokens' own pace. Literals until the artifact carries them. */
+    --scale-press: 0.97;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-hover: 180ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-press: 220ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-exit: 200ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-popover: 280ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-move: 340ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-modal: 380ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --label-swap: 260ms;
+    /* transitions.dev's text reveal (a step slower here, as on the booking page), its 40ms stagger, and the blurs a
+       reveal (3px) and the success check (8px) resolve out of: literals until the artifact has blur and reveal tokens. */
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --reveal-duration: 600ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's stagger, until the artifact carries it */
+    --stagger: 40ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --reveal-blur: 3px;
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --check-blur: 8px;
 
     display: flex;
     flex-direction: column;
@@ -139,6 +167,15 @@
     gap: var(--space-8);
   }
 
+  /* Loading to content (stageshow's loading): as the form first draws, the headline, then each question and the
+     button resolve in where the loading shape held their places, a beat apart, so the page fills in rather than
+     swapping. Under reduced motion they fade. */
+  .header[data-arrive],
+  .question[data-arrive],
+  .actions[data-arrive] {
+    animation: arrive var(--reveal-duration) var(--ease-in-out) calc(var(--arrive-index, 0) * var(--stagger)) backwards;
+  }
+
   .headline {
     margin: 0;
     color: var(--text);
@@ -199,6 +236,30 @@
     margin-block-end: var(--space-32);
   }
 
+  /* Under the questions: the summary, the alert line and the button (FormActions). */
+  .actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin-block-start: var(--space-4);
+  }
+
+  /* A refused send or step: the row shakes its head once (transitions.dev's error shake, 8px then 6px). Two names
+     for one shake, so the next refusal replays it. */
+  .actions[data-shake='even'] {
+    animation: shake-even calc(var(--duration-move) * 2) var(--ease-out);
+  }
+
+  .actions[data-shake='odd'] {
+    animation: shake-odd calc(var(--duration-move) * 2) var(--ease-out);
+  }
+
+  /* The calm tick on an answer put right (FixedTick): it opens out of a soft blur. */
+  .fixed {
+    display: inline-flex;
+    animation: tick-in var(--duration-modal) var(--ease-out) backwards;
+  }
+
   /* The email typo hint: a muted line under the field with its Use it. */
   .suggestion {
     display: flex;
@@ -230,10 +291,11 @@
     display: none;
   }
 
-  /* The thank you: the booking confirmation's badge, heading and muted line, centred. It rises into the card as the
-     form leaves it, so sending reads as one move, the badge growing in after it. */
+  /* The thank you: the booking confirmation's badge, heading and muted line, centred. Sending lands as one moment,
+     as a booking does (the owner, 2 November 2026: magical moments): the tick pops out of a large blur and sends two
+     soft rings out, then the heading, the line, what was sent and the next step rise out of a soft blur, a beat
+     apart. */
   .thanks {
-    animation: thanks-rise var(--duration-modal) var(--ease-out);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -242,7 +304,25 @@
     text-align: center;
   }
 
+  .thanks > * {
+    animation: rise var(--reveal-duration) var(--ease-in-out) var(--duration-hover) backwards;
+  }
+
+  .thanks > :nth-child(3) {
+    animation-delay: calc(var(--duration-hover) + var(--stagger));
+  }
+
+  .thanks > :nth-child(4),
+  .thanks > :nth-child(5) {
+    animation-delay: calc(var(--duration-hover) + 2 * var(--stagger));
+  }
+
   .badge {
+    /* How far a ring travels, in the badge's own sizes: about twice across, past the heading's cap height. No scale
+       token reaches past 1. */
+    --ring-reach: 2;
+
+    position: relative;
     display: inline-grid;
     place-items: center;
     inline-size: var(--size-toolbar);
@@ -251,7 +331,24 @@
     border-radius: var(--radius-full);
     background: var(--tag-green-bg);
     color: var(--tag-green-text);
-    animation: grow var(--duration-modal) var(--ease-out) var(--duration-hover) both;
+    animation: pop var(--reveal-duration) var(--ease-out) backwards;
+  }
+
+  /* As the tick lands it sends two soft rings out, one after the other: a pulse, never confetti. */
+  .badge::before,
+  .badge::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: var(--border-width-thick) solid var(--tag-green-text);
+    border-radius: var(--radius-full);
+    opacity: 0;
+    animation: ring calc(var(--reveal-duration) * 2) var(--ease-out) calc(var(--reveal-duration) / 2);
+    pointer-events: none;
+  }
+
+  .badge::after {
+    animation-delay: var(--reveal-duration);
   }
 
   /* What follows a confirmation: Send another, or Book now beside Stay here. */
@@ -323,10 +420,75 @@
     }
   }
 
-  @keyframes grow {
+  @keyframes pop {
     from {
       opacity: 0;
       scale: var(--scale-enter);
+      filter: blur(var(--check-blur));
+    }
+  }
+
+  @keyframes ring {
+    from {
+      opacity: var(--opacity-pulse);
+    }
+
+    to {
+      opacity: 0;
+      scale: var(--ring-reach);
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-12);
+      filter: blur(var(--reveal-blur));
+    }
+  }
+
+  @keyframes arrive {
+    from {
+      opacity: 0;
+      filter: blur(var(--reveal-blur));
+    }
+  }
+
+  @keyframes tick-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+      filter: blur(var(--reveal-blur));
+    }
+  }
+
+  @keyframes shake-even {
+    20% {
+      translate: calc(-1 * var(--space-8)) 0;
+    }
+    40% {
+      translate: var(--space-8) 0;
+    }
+    60% {
+      translate: calc(-1 * var(--space-6)) 0;
+    }
+    80% {
+      translate: var(--space-6) 0;
+    }
+  }
+
+  @keyframes shake-odd {
+    20% {
+      translate: calc(-1 * var(--space-8)) 0;
+    }
+    40% {
+      translate: var(--space-8) 0;
+    }
+    60% {
+      translate: calc(-1 * var(--space-6)) 0;
+    }
+    80% {
+      translate: var(--space-6) 0;
     }
   }
 
@@ -336,18 +498,21 @@
     }
   }
 
-  @keyframes thanks-rise {
-    from {
-      opacity: 0;
-      translate: 0 var(--space-8);
-    }
-  }
-
-  /* The fades stay; the rise and the growth go. */
+  /* The fades stay; the rises, the blurs, the pop, the rings and the shake go. */
   @media (prefers-reduced-motion: reduce) {
+    .header[data-arrive],
+    .question[data-arrive],
+    .actions[data-arrive],
+    .fixed,
     .badge,
-    .thanks {
+    .thanks > * {
       animation-name: fade;
+    }
+
+    .badge::before,
+    .badge::after,
+    .actions[data-shake] {
+      animation: none;
     }
   }
 }

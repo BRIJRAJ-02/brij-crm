@@ -5,6 +5,8 @@ import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import {
   ErrorSummary,
+  FixedTick,
+  FormActions,
   FormAlert,
   FormClosed,
   FormFoot,
@@ -122,7 +124,7 @@ export function HostedForm({
   else {
     body = (
       <>
-        <FormHeader form={form} mode={mode} heading={refs.heading} />
+        <FormHeader form={form} mode={mode} heading={refs.heading} isArriving />
         <VisuallyHidden>
           <span aria-live="polite">{state.shownNote}</span>
         </VisuallyHidden>
@@ -137,8 +139,13 @@ export function HostedForm({
           {form.questions
             // A hidden question has nothing to draw (spec 0063): it is answered by the link or its default.
             .filter((question) => state.shown.has(question.key) && question.answerType !== 'hidden')
-            .map((question) => (
-              <QuestionSlot key={`${String(state.round)}-${question.key}`} question={question} state={state}>
+            .map((question, index) => (
+              <QuestionSlot
+                key={`${String(state.round)}-${question.key}`}
+                question={question}
+                state={state}
+                arrive={index + 1}
+              >
                 <Question
                   question={question}
                   words={words}
@@ -148,17 +155,18 @@ export function HostedForm({
                   countryNames={state.countryNames}
                   onChange={(value) => state.change(question, value)}
                   files={state.files}
+                  {...(state.fixed.has(question.key) ? { fixed: <FixedTick /> } : {})}
                 />
               </QuestionSlot>
             ))}
           <FormTrap form={form} state={state} />
-          <div className={styles.actions}>
+          <FormActions state={state} arrive={state.shown.size + 1}>
             <ErrorSummary state={state} />
             <FormAlert state={state} />
             <Button variant="primary" size="lg" type={preview ? 'button' : 'submit'} isFullWidth="center">
               {state.isSending ? words.sending : form.buttonText}
             </Button>
-          </div>
+          </FormActions>
         </form>
       </>
     );

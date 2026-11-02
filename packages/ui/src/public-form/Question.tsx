@@ -9,7 +9,7 @@ import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
 import { Field } from '../molecules/Field/Field.tsx';
 import { PhoneField, type PhoneFieldValue } from '../molecules/PhoneField/PhoneField.tsx';
 import { SelectBase } from '../molecules/Select/Select.tsx';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 import { isUploadedFile, type HostedFileHandlers } from './files.ts';
 
@@ -112,6 +112,11 @@ export interface QuestionProps {
   readonly isLabelHidden?: boolean;
   /** A line under a long text answer: how to break a line where Enter goes on (one at a time, spec 0063). */
   readonly hint?: string | undefined;
+  /**
+   * Marked wrong earlier and right now: what a one line answer shows at its end (FormParts' `FixedTick`, a calm tick,
+   * stageshow's form-error). Other answers show nothing more.
+   */
+  readonly fixed?: ReactNode;
 }
 
 /** One question, drawn with the library's control for its answer type. */
@@ -126,6 +131,7 @@ export function Question({
   files,
   isLabelHidden = false,
   hint,
+  fixed,
 }: QuestionProps) {
   const label = labelOf(question, words);
   const aside = asideOf(question, words);
@@ -394,6 +400,7 @@ export function Question({
           {...(kind === 'website' ? { inputMode: 'url' as const } : {})}
           {...(autoComplete === undefined ? {} : { autoComplete })}
           {...(placeholder === undefined ? {} : { placeholder })}
+          {...(fixed === undefined ? {} : { suffix: fixed })}
           {...errorProps}
         />
       );

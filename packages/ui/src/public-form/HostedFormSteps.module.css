@@ -4,9 +4,11 @@
    card, a thin line at the top, the question large with its number, and OK
    with its Enter keycap. A new step appears at once, with focus on its first
    question: steps are mostly reached by Enter, and keyboard steps never wait.
-   One at a time, a question reached by pointer fades and rises a little into
-   place (spec 0063): transform and opacity only, taking input from its first
-   frame, and at once under reduced motion or when reached by key. */
+   Reached by pointer, a step (or one at a time, a question) slides a little in
+   the way the visitor went, out of a soft blur, on the public pages' calmer
+   pace (FormParts' root): transform, opacity and filter only, taking input
+   from its first frame, and at once under reduced motion or when reached by
+   key (spec 0063). */
 @layer components {
   .line {
     margin-block-end: var(--space-32);
@@ -20,6 +22,10 @@
   }
 
   .title {
+    /* The blur a step slides out of (transitions.dev's page slide), a literal until the artifact has a blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --step-blur: 3px;
+
     margin: 0;
     color: var(--text);
     font: var(--text-title);
@@ -27,6 +33,9 @@
   }
 
   .form {
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --step-blur: 3px;
+
     display: flex;
     flex-direction: column;
     gap: var(--space-20);
@@ -37,21 +46,48 @@
     margin-block-start: var(--space-32);
   }
 
-  /* Reached by pointer only: a question reached by Enter or Back from the keyboard shows at once. */
-  .form[data-layout='conversational'][data-moved] {
-    animation: question-rise var(--duration-move) var(--ease-out);
+  /* Reached by pointer only: a step reached by Enter or Back from the keyboard shows at once. On, a step comes in
+     from the end; Back's from the start. */
+  .form[data-moved='forward'] {
+    animation: step-on var(--duration-modal) var(--ease-out);
   }
 
-  @keyframes question-rise {
+  .form[data-moved='back'] {
+    animation: step-back var(--duration-modal) var(--ease-out);
+  }
+
+  /* A step's title changes in place, resolving in with its questions. */
+  .title[data-moved] {
+    animation: title-in var(--duration-modal) var(--ease-out);
+  }
+
+  @keyframes step-on {
     from {
       opacity: 0;
-      translate: 0 var(--space-8);
+      translate: var(--space-8) 0;
+      filter: blur(var(--step-blur));
     }
   }
 
-  /* Reduced motion: the next question is there at once (spec 0063 Motion, spec 0058 AC-2). */
+  @keyframes step-back {
+    from {
+      opacity: 0;
+      translate: calc(-1 * var(--space-8)) 0;
+      filter: blur(var(--step-blur));
+    }
+  }
+
+  @keyframes title-in {
+    from {
+      opacity: 0;
+      filter: blur(var(--step-blur));
+    }
+  }
+
+  /* Reduced motion: the next step is there at once (spec 0063 Motion, spec 0058 AC-2). */
   @media (prefers-reduced-motion: reduce) {
-    .form[data-layout='conversational'][data-moved] {
+    .form[data-moved],
+    .title[data-moved] {
       animation: none;
     }
   }
@@ -81,13 +117,6 @@
   .aside {
     color: var(--text-tertiary);
     font-weight: normal;
-  }
-
-  .actions {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-12);
-    margin-block-start: var(--space-4);
   }
 
   .buttons {

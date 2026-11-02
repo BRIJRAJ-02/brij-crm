@@ -167,15 +167,18 @@ export function FormHeader({
   mode,
   heading,
   isSubheadingShown = true,
+  isArriving = false,
 }: {
   readonly form: PublicForm;
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
   readonly isSubheadingShown?: boolean;
+  /** Resolves in where the loading shape held its place, as the form first draws (never in the builder's preview). */
+  readonly isArriving?: boolean;
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
   return (
-    <header className={styles.header}>
+    <header className={styles.header} data-arrive={(isArriving && mode !== 'preview') || undefined}>
       <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
         {form.headline}
       </Heading>
@@ -283,10 +286,16 @@ export function FormClosed({
 export function QuestionSlot({
   question,
   state,
+  arrive,
   children,
 }: {
   readonly question: PublicQuestion;
   readonly state: HostedFormState;
+  /**
+   * Its place in the form as it first draws: the questions resolve in one after another where the loading shape held
+   * them, a short beat apart. Left out, the question is simply there (a step reached from the keyboard).
+   */
+  readonly arrive?: number;
   readonly children: ReactNode;
 }) {
   const hint = state.hints[question.key];
@@ -295,6 +304,7 @@ export function QuestionSlot({
       data-question={question.key}
       id={`question-${question.key}`}
       className={styles.question}
+      {...arrival(state, arrive)}
       onBlur={(event) => state.blur(question, event)}
     >
       {children}
@@ -311,6 +321,46 @@ export function QuestionSlot({
         </div>
       )}
     </div>
+  );
+}
+
+/** A slot's arrival: its attribute and its place in the stagger, or nothing (a preview, or a slot that just shows). */
+function arrival(state: Pick<HostedFormState, 'preview'>, arrive: number | undefined) {
+  return arrive === undefined || state.preview
+    ? {}
+    : { 'data-arrive': true, style: { '--arrive-index': String(Math.min(arrive, ARRIVE_MOST)) } };
+}
+
+/** The most places a stagger counts: past it, the rest arrive together, so the last is never kept waiting. */
+const ARRIVE_MOST = 6;
+
+/**
+ * Under the questions: the summary, the alert line and the buttons. A refused send or step shakes the row once, small,
+ * twice side to side (transitions.dev's error shake), the same no a booking page's Confirm gives.
+ */
+export function FormActions({
+  state,
+  arrive,
+  children,
+}: {
+  readonly state: HostedFormState;
+  /** Its place in the form's arrival, after the questions (QuestionSlot's `arrive`). */
+  readonly arrive?: number;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div className={styles.actions} data-shake={state.shake} {...arrival(state, arrive)}>
+      {children}
+    </div>
+  );
+}
+
+/** At the end of a one line answer put right: a calm tick that opens out of a soft blur (stageshow's form-error). */
+export function FixedTick() {
+  return (
+    <span className={styles.fixed} data-fixed="">
+      <Icon name="check" size="sm" tone="success" />
+    </span>
   );
 }
 

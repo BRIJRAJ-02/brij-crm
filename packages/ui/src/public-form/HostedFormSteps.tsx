@@ -5,6 +5,8 @@ import { ProgressBar } from '../atoms/ProgressBar/ProgressBar.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import {
   ErrorSummary,
+  FixedTick,
+  FormActions,
   FormAlert,
   FormClosed,
   FormFoot,
@@ -80,8 +82,8 @@ export function HostedFormSteps({
   brand,
 }: HostedFormStepsProps) {
   const [shownIndex, setIndex] = useState(0);
-  // How the visitor last moved: a pointer's move eases the next question in, a key's shows it at once.
-  const [moved, setMoved] = useState<'pointer' | 'key' | undefined>(undefined);
+  // How the visitor last moved: a pointer's move slides the next step in the way it went, a key's shows it at once.
+  const [moved, setMoved] = useState<'forward' | 'back' | 'key' | undefined>(undefined);
   const hasMoved = moved !== undefined;
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
   const [focusesStep, setFocusesStep] = useState(false);
@@ -144,7 +146,7 @@ export function HostedFormSteps({
 
   const go = (next: number) => {
     setPicks(0);
-    setMoved(byPointer.current ? 'pointer' : 'key');
+    setMoved(byPointer.current ? (next < index ? 'back' : 'forward') : 'key');
     setFocusesStep(true);
     setIndex(next);
   };
@@ -169,6 +171,8 @@ export function HostedFormSteps({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a new pick starts the pause; nothing else does
   }, [picks]);
+  // A step reached by pointer slides in the way the visitor went; from the keyboard it is simply there.
+  const slide = moved === 'forward' || moved === 'back' ? moved : undefined;
   const place =
     layout === 'conversational' ? words.questionOf(index + 1, groups.length) : words.stepOf(index + 1, groups.length);
   const isOpen = layout === 'conversational';
@@ -201,7 +205,13 @@ export function HostedFormSteps({
           </div>
         ) : null}
         {!isOpen || index === 0 ? (
-          <FormHeader form={form} mode={mode} heading={refs.heading} isSubheadingShown={index === 0} />
+          <FormHeader
+            form={form}
+            mode={mode}
+            heading={refs.heading}
+            isSubheadingShown={index === 0}
+            isArriving={!hasMoved}
+          />
         ) : (
           // Past the first question the page keeps its heading, for screen readers only.
           <VisuallyHidden>
@@ -214,7 +224,12 @@ export function HostedFormSteps({
             {groups.length > 1 && (
               <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} />
             )}
-            {step.title !== undefined && <StepTitle className={styles.title}>{step.title}</StepTitle>}
+            {step.title !== undefined && (
+              // A new step's title resolves in with its questions, when they slid in.
+              <StepTitle key={index} className={styles.title} data-moved={slide}>
+                {step.title}
+              </StepTitle>
+            )}
           </div>
         )}
         <VisuallyHidden>
@@ -228,7 +243,7 @@ export function HostedFormSteps({
           data-layout={layout}
           noValidate
           ref={formRef}
-          data-moved={moved === 'pointer' || undefined}
+          data-moved={slide}
           // Capture: a control's press handling keeps these from bubbling.
           onPointerDownCapture={() => {
             byPointer.current = true;
@@ -256,10 +271,15 @@ export function HostedFormSteps({
             state.submit();
           }}
         >
-          {step.questions.map((question) => {
+          {step.questions.map((question, at) => {
             const aside = asideOf(question, words);
             return (
-              <QuestionSlot key={`${String(state.round)}-${question.key}`} question={question} state={state}>
+              <QuestionSlot
+                key={`${String(state.round)}-${question.key}`}
+                question={question}
+                state={state}
+                {...(hasMoved ? {} : { arrive: at + 1 })}
+              >
                 {isOpen && (
                   <p className={styles.ask} data-mode={mode} aria-hidden="true">
                     <span className={styles.number}>{String(index + 1)}</span>
@@ -296,12 +316,13 @@ export function HostedFormSteps({
                   files={state.files}
                   isLabelHidden={isOpen}
                   hint={isOpen && question.answerType === 'long_text' ? words.newLine : undefined}
+                  {...(state.fixed.has(question.key) ? { fixed: <FixedTick /> } : {})}
                 />
               </QuestionSlot>
             );
           })}
           {isLast && <FormTrap form={form} state={state} />}
-          <div className={styles.actions}>
+          <FormActions state={state} {...(hasMoved ? {} : { arrive: step.questions.length + 1 })}>
             {!isOpen && <ErrorSummary state={state} among={step.questions} />}
             <FormAlert state={state} />
             <div className={styles.buttons} data-layout={layout}>
@@ -319,7 +340,7 @@ export function HostedFormSteps({
                 {state.isSending ? words.sending : isLast ? form.buttonText : isOpen ? words.ok : words.next}
               </Button>
             </div>
-          </div>
+          </FormActions>
         </form>
       </>
     );

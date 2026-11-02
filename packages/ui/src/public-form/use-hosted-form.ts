@@ -116,6 +116,13 @@ export interface HostedFormState {
   readonly goTo: (url: string) => void;
   /** Moves focus to the first control of a question. */
   readonly focus: (key: string) => void;
+  /** The questions a shown error marked that now pass: each says so with a calm tick (stageshow's form-error). */
+  readonly fixed: ReadonlySet<string>;
+  /**
+   * How many times sending or going on was refused, as two names that take turns (`even`, `odd`) so the next refusal
+   * shakes the button row again; undefined before the first.
+   */
+  readonly shake: 'even' | 'odd' | undefined;
 }
 
 /** Where focus goes: the form's frame (its questions) and the view's heading. Kept apart from the state, which renders. */
@@ -264,6 +271,10 @@ export function useHostedForm({
   const [round, setRound] = useState(0);
   const [startedAt, setStartedAt] = useState(now);
   const [focusTarget, setFocusTarget] = useState<'heading' | undefined>(undefined);
+  // The questions an error has marked this round, so one put right can say so; and each refusal, for the shake.
+  const [wasWrong, setWasWrong] = useState<ReadonlySet<string>>(new Set());
+  const [refusals, setRefusals] = useState(0);
+  const refuse = () => setRefusals((count) => count + 1);
   const container = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const isClosed = form.status === 'paused' || view.kind === 'closed';
@@ -293,6 +304,9 @@ export function useHostedForm({
   // Questions that appear or go with an answer are said aloud once (spec 0043): the count is compared on render.
   const [seenCount, setSeenCount] = useState(shown.size);
   const [shownNote, setShownNote] = useState('');
+  // A question marked wrong is remembered for the round, so the tick can follow once it passes.
+  if (Object.keys(errors).some((key) => !wasWrong.has(key)))
+    setWasWrong(new Set([...wasWrong, ...Object.keys(errors)]));
   if (shown.size !== seenCount) {
     setSeenCount(shown.size);
     setShownNote(shown.size > seenCount ? words.questionsShown : words.questionsHidden);
@@ -361,6 +375,7 @@ export function useHostedForm({
     // A file or a signature of this step still going: on once it is in, as Send waits for it.
     if (questions.some((question) => busy.has(question.key))) {
       setAlert(words.fileBusy);
+      refuse();
       return false;
     }
     setAlert('');
@@ -373,6 +388,7 @@ export function useHostedForm({
     }
     setSubmitted(true);
     show(result.fields, questions);
+    refuse();
     return false;
   };
 
@@ -381,6 +397,7 @@ export function useHostedForm({
     setAlert('');
     if (busy.size > 0) {
       setAlert(words.fileBusy);
+      refuse();
       return;
     }
     const result = checkAll(form.questions);
@@ -388,6 +405,7 @@ export function useHostedForm({
       setSubmitted(true);
       onRefused?.(Object.keys(result.fields));
       show(result.fields, form.questions);
+      refuse();
       return;
     }
     // A page with nowhere to send (a draft opened to try) checks the answers, then thanks.
@@ -438,6 +456,7 @@ export function useHostedForm({
           setSubmitted(true);
           onRefused?.(Object.keys(outcome.fields));
           show(outcome.fields, form.questions);
+          refuse();
           return;
         case 'closed':
           setView({ kind: 'closed' });
@@ -445,12 +464,15 @@ export function useHostedForm({
           return;
         case 'offline':
           setAlert(words.offline);
+          refuse();
           return;
         case 'limited':
           setAlert(words.tooMany);
+          refuse();
           return;
         case 'failed':
           setAlert(words.failed);
+          refuse();
           return;
       }
     });
@@ -462,6 +484,8 @@ export function useHostedForm({
     setErrors({});
     setHints({});
     setTouched(new Set());
+    setWasWrong(new Set());
+    setRefusals(0);
     setSubmitted(false);
     setTrap('');
     setStartedAt(now());
@@ -472,6 +496,18 @@ export function useHostedForm({
   const summary = isSubmitted
     ? form.questions.filter((question) => shown.has(question.key) && errors[question.key] !== undefined)
     : [];
+
+  const fixed = new Set(
+    form.questions
+      .filter(
+        (question) =>
+          wasWrong.has(question.key) &&
+          errors[question.key] === undefined &&
+          !isBlank(given[question.key]) &&
+          messageOf(form, question, given[question.key]) === undefined,
+      )
+      .map((question) => question.key),
+  );
 
   const state: HostedFormState = {
     words,
@@ -518,6 +554,8 @@ export function useHostedForm({
       if (!preview) onRedirect?.(url);
     },
     focus,
+    fixed,
+    shake: refusals === 0 ? undefined : refusals % 2 === 0 ? 'even' : 'odd',
   };
   return { state, refs: { container, heading } };
 }

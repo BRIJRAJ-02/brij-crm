@@ -1,6 +1,7 @@
 import type { PublicForm, PublicStep } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor } from 'storybook/test';
+import { settleAnimations } from '../workbench/animations.ts';
 import { Stage } from '../workbench/Stage/Stage.tsx';
 import { HostedFormSteps } from './HostedFormSteps.tsx';
 
@@ -115,6 +116,24 @@ export const SecondStep: Story = {
     // Back keeps what was typed.
     await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(canvas.getByLabelText('Your name')).toHaveValue('Ada Lovelace'));
+  },
+};
+
+/**
+ * Continue pressed by pointer slides the next step in from the end, out of a soft blur, and Back's from the start;
+ * from the keyboard (SecondStep) a step is simply there.
+ */
+export const StepSlides: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, canvasElement }) => {
+    await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
+    await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
+    await userEvent.click(canvas.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(canvas.getByLabelText('Company')).toHaveFocus());
+    await expect(canvasElement.querySelector('form')?.getAttribute('data-moved')).toBe('forward');
+    await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(canvasElement.querySelector('form')?.getAttribute('data-moved')).toBe('back'));
+    await settleAnimations();
   },
 };
 

@@ -215,6 +215,27 @@ export const Errors: Story = {
   },
 };
 
+/**
+ * A refused Send shakes the button row once (transitions.dev's error shake), and each answer put right says so with a
+ * calm tick at its end, as the booking page's details do.
+ */
+export const PutRight: Story = {
+  play: async ({ canvas, canvasElement }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(canvas.getByLabelText('Your name')).toHaveFocus());
+    const actions = canvasElement.querySelector('[data-shake]');
+    await expect(actions?.getAttribute('data-shake')).toBe('odd');
+    // A second refusal takes the other name, so the shake plays again.
+    await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(actions?.getAttribute('data-shake')).toBe('even'));
+    await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
+    await waitFor(() => expect(canvas.queryAllByText('Answer this question.')).toHaveLength(1));
+    // The fixed answer's tick: one, on the name, and none yet on the email still to fix.
+    await expect(canvasElement.querySelectorAll('[data-question="name"] [data-fixed]')).toHaveLength(1);
+    await settleAnimations();
+  },
+};
+
 /** The checker: an answer is checked as focus leaves it, never while typing. */
 export const CheckedOnBlur: Story = {
   play: async ({ canvas }) => {

@@ -49,6 +49,16 @@ Date, Time and Date and time are the platform's own inputs in a Field (`temporal
 
 Loading, before the form has been read (`HostedForm.stories.tsx`). Book after sending and its Stay here (`HostedForm.stories.tsx`; the countdown itself in `FormBooking.browser.test.tsx`). Classic, every answer type, embed, dark and square, errors with the summary, checked on blur, the email hint, sending, failed, thanks, paused (`HostedForm.stories.tsx`). Steps, a step's errors, the second step, the last step and its thanks, steps dark and square, one at a time, its next question, its error, one at a time dark, a step its Show when skips, a choice that goes on by itself and a long answer's Shift and Enter (`HostedFormSteps.stories.tsx`). Each layout's loading shape (`FormLoading.browser.test.tsx`).
 
+## Motion
+
+The hosted form moves at the public booking page's calmer pace (FormParts' root sets the same duration overrides as BookingFrame, a 0.97 press and the label swap), on transitions.dev's scale: blur 3px for reveals and slides, 8px for the success check, 8px for a step's slide, 40ms between staggered parts.
+
+- **Arrival**: as the form first draws, the headline, each question and the button resolve in out of a soft blur where the loading shape held their places, 40ms apart (at most six places counted). A step reached later, from the keyboard or not, doesn't arrive again.
+- **Steps**: a step reached by pointer slides 8px the way the visitor went (Continue from the end, Back from the start) and its title resolves in with it. From the keyboard a step is simply there.
+- **Errors**: a refused Send or Continue shakes the button row once (8px, then 6px); a field's error opens to its height (Field); an answer put right shows a calm tick at its end (`FixedTick`, one line answers only).
+- **Sent**: the tick pops out of an 8px blur and sends two soft rings out, then the heading, the line, what was sent and the next step rise, a beat apart. The countdown to book draws in the same confirmation.
+- Reduced motion keeps the fades and drops the blur, the slides, the rings and the shake. The first question is not focused on load: a visitor arriving from a link meets the headline first.
+
 ## Keyboard
 
 Tab follows the questions. Enter in a single line field submits (Classic), continues (Steps, One at a time) or sends on the last step. One at a time, Enter on a choice or in a long answer continues too, and Shift and Enter breaks a long answer's line. The summary's links focus their questions. A step change moves focus to its first question and announces its place politely.

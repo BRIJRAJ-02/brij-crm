@@ -1,6 +1,6 @@
 /* The Classic layout (spec 0023, 0023-form-design.md): every question in one
    column under the header, 20px apart, then the error summary, the alert line
-   and the button. The frame, the header and the pieces live in FormParts. */
+   and the button (FormParts' FormActions). The frame, the header and the pieces live in FormParts. */
 @layer components {
   /* One component owns its styles (`pnpm house-rules`), so the loading shape
      that stands in for this column keeps its own copy in FormParts as
@@ -10,12 +10,5 @@
     flex-direction: column;
     gap: var(--space-20);
     margin-block-start: var(--space-32);
-  }
-
-  .actions {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-12);
-    margin-block-start: var(--space-4);
   }
 }
