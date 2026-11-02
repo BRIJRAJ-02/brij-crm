@@ -555,10 +555,18 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
       # repeat that experiment, and isolation inside a shard stays on. Two shards raise the ceiling, they do
       # not close the leak, and the number is a reading of the symptom: if a shard hangs again the answer is
       # that the leak has grown, not that we need a third.
+      #
+      # The order matters as much as the count, which is why `scripts/story-shard.ts` picks both rather than
+      # vitest's `--shard`: 62 -> 74 -> 5. Vitest shards by the sha1 of each path and, with no cache on a fresh
+      # runner, its sequencer leaves that order alone, so `--shard=1/2` drew four of the heaviest files in the
+      # library first and WebKit died after 5 (run 41457814575). The script deals the files heaviest first, so
+      # the shards weigh the same, then alternates heavy and light inside each one, so neither ever runs a
+      # stretch of heavy files. A run of heavy files is what kills the page, not the number of files.
       - name: Run the stories, in two shards
         run: |
           for shard in 1 2; do
-            pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" --shard="$shard/2"
+            mapfile -t files < <(node packages/ui/scripts/story-shard.ts "$shard" 2)
+            pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" "${files[@]}"
           done
         env:
           CRM_STORY_BROWSERS: ${{ matrix.browser }}
