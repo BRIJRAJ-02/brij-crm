@@ -1,31 +1,27 @@
 // Brief
-// Purpose: the snippet that puts a booking page on someone else's site (spec 0062, L3): how it opens, where it
-//   opens, and what the button looks like.
-// Main task: pick a way, copy the snippet. Nothing else has to be touched for it to work, and changing the page
-//   here never changes the snippet.
+// Purpose: the snippet that puts a booking page on someone else's site (spec 0062, L3): how it opens, and what
+//   the button looks like.
+// Main task: pick how it opens, copy the snippet. Nothing else has to be touched for it to work, and changing
+//   the page here never changes the snippet.
 // Leaves out: the view beacon and the embed's own stats (L3's other halves), and forms, which have their own tab.
+//
+// It was built as four ready made setups above a fold holding the same two choices again, which read as the same
+// question asked twice and filled the card with empty tiles (the owner, 2 November 2026: "it looks low UXed").
+// There is one question now, three answers, and a switch for the only thing the answer leaves open. Everything
+// else on the card is a property of the button we draw, so it appears only when we are drawing one.
 import {
   AccentPicker,
   Card,
-  Disclosure,
   Field,
   InfoTip,
-  SegmentedControl,
   Select,
+  Switch,
   TileGrid,
   type AccentQuickPick,
   type IconName,
 } from '@crm/ui';
 import { useState } from 'react';
-import {
-  EMBED_ICONS,
-  EMBED_PANELS,
-  embedSnippet,
-  hexAccent,
-  type EmbedIcon,
-  type EmbedMode,
-  type EmbedPanel,
-} from '../forms/snippets.ts';
+import { EMBED_ICONS, embedSnippet, hexAccent, type EmbedIcon, type EmbedMode } from '../forms/snippets.ts';
 import { embedStrings as strings } from './embed-strings.ts';
 
 /** Props for EmbedCard. */
@@ -45,46 +41,16 @@ export interface EmbedCardProps {
   readonly quickPicks: readonly AccentQuickPick[];
 }
 
-const MODE_TILES = [
-  { id: 'inline', name: strings.modes.inline.name, icon: 'monitor', description: strings.modes.inline.description },
-  {
-    id: 'popup',
-    name: strings.modes.popup.name,
-    icon: 'mouse-pointer-2',
-    description: strings.modes.popup.description,
-  },
-  {
-    id: 'floating',
-    name: strings.modes.floating.name,
-    icon: 'message-square',
-    description: strings.modes.floating.description,
-  },
-] as const;
-
 /**
- * The four ways nearly everyone wants it, each one press (the owner, 2 November 2026: the step by step version was
- * "too much to go through"). They are the same two choices underneath, so picking a setup and then opening the
- * details shows exactly what it set, rather than a second, separate state.
+ * The one question: who opens it. The three answers are what a site actually does, and each name says what the
+ * visitor sees rather than what we call it inside. Where it opens is the switch below, because it is only ever a
+ * second question about the same answer.
  */
-const SETUPS = [
-  { id: 'corner', mode: 'floating', panel: 'centre', icon: 'message-square', ...strings.setups.corner },
-  // panel-left-open rather than a right facing one: the registry ships to every page under UiProvider, so a
-  // new mark costs about 90 bytes of the first load, and this one already says "a panel at one side".
-  { id: 'side', mode: 'floating', panel: 'side', icon: 'panel-left-open', ...strings.setups.side },
-  { id: 'own', mode: 'popup', panel: 'centre', icon: 'mouse-pointer-2', ...strings.setups.own },
-  { id: 'inline', mode: 'inline', panel: 'centre', icon: 'monitor', ...strings.setups.inline },
-] as const satisfies readonly {
-  readonly id: string;
-  readonly mode: EmbedMode;
-  readonly panel: EmbedPanel;
-  readonly icon: IconName;
-  readonly name: string;
-  readonly description: string;
-}[];
-
-/** Which setup a mode and panel are, so the tiles show the one in force rather than forgetting it. */
-const setupOf = (mode: EmbedMode, panel: EmbedPanel) =>
-  SETUPS.find((each) => each.mode === mode && each.panel === panel)?.id;
+const MODE_TILES = [
+  { id: 'floating', name: strings.modes.floating, icon: 'message-square' },
+  { id: 'popup', name: strings.modes.popup, icon: 'mouse-pointer-2' },
+  { id: 'inline', name: strings.modes.inline, icon: 'monitor' },
+] as const satisfies readonly { readonly id: EmbedMode; readonly name: string; readonly icon: IconName }[];
 
 /**
  * The embed, built from the same `embedSnippet` the form's Install tab uses, so a booking page and a form are
@@ -92,14 +58,14 @@ const setupOf = (mode: EmbedMode, panel: EmbedPanel) =>
  * because the snippet is the only thing that leaves, and the site holds it from then on.
  */
 export function EmbedCard({ script, publicKey, title, isLive, quickPicks }: EmbedCardProps) {
-  // The corner button first: it is the only setup that needs nothing on the site but the snippet.
+  // The corner button first: it is the only one that needs nothing on the site but the snippet.
   const [mode, setMode] = useState<EmbedMode>('floating');
-  const [panel, setPanel] = useState<EmbedPanel>('centre');
+  const [isSide, setSide] = useState(false);
   const [words, setWords] = useState<string>(strings.wordsPlaceholder);
   const [accent, setAccent] = useState<string | undefined>(undefined);
   const [icon, setIcon] = useState<EmbedIcon>('calendar');
 
-  const current = setupOf(mode, panel);
+  // In the page is the one answer with nothing to open and no button of ours, so it has neither of the rest.
   const opens = mode !== 'inline';
   const corner = mode === 'floating';
   const snippet = embedSnippet(
@@ -110,7 +76,7 @@ export function EmbedCard({ script, publicKey, title, isLive, quickPicks }: Embe
       title,
       theme: 'light',
       buttonText: words.trim() === '' ? strings.wordsPlaceholder : words,
-      panel,
+      panel: isSide ? 'side' : 'centre',
       ...(accent === undefined ? {} : { accent }),
       icon,
     },
@@ -121,28 +87,21 @@ export function EmbedCard({ script, publicKey, title, isLive, quickPicks }: Embe
     <Card title={strings.title} actions={<InfoTip label={strings.title}>{strings.tip}</InfoTip>}>
       <TileGrid
         variant="choice"
-        label={strings.setup}
-        tiles={SETUPS.map(({ id, name, icon: tileIcon, description }) => ({
-          id,
-          name,
-          icon: tileIcon,
-          description,
-        }))}
-        {...(current === undefined ? {} : { value: current })}
+        label={strings.mode}
+        tiles={MODE_TILES.map(({ id, name, icon: tileIcon }) => ({ id, name, icon: tileIcon }))}
+        value={mode}
         onChange={(id) => {
-          const setup = SETUPS.find((each) => each.id === id);
-          if (setup === undefined) return;
-          setMode(setup.mode);
-          setPanel(setup.panel);
+          const tile = MODE_TILES.find((each) => each.id === id);
+          if (tile !== undefined) setMode(tile.id);
         }}
       />
+      {opens && <Switch label={strings.side} description={strings.sideHint} isSelected={isSide} onChange={setSide} />}
       {opens && (
         <Field
           label={strings.words}
           value={words}
           placeholder={strings.wordsPlaceholder}
           maxLength={40}
-          {...(panel === 'side' ? { hint: strings.panelHint } : {})}
           onChange={setWords}
         />
       )}
@@ -167,28 +126,15 @@ export function EmbedCard({ script, publicKey, title, isLive, quickPicks }: Embe
           }
         />
       )}
-      <Disclosure title={strings.details} variant="quiet">
-        <TileGrid
-          variant="choice"
-          label={strings.mode}
-          tiles={MODE_TILES}
-          value={mode}
-          onChange={(id) => {
-            const tile = MODE_TILES.find((each) => each.id === id);
-            if (tile !== undefined) setMode(tile.id);
-          }}
-        />
-        {opens && (
-          <SegmentedControl
-            label={strings.panel}
-            segments={EMBED_PANELS.map((each) => ({ value: each, label: strings.panels[each] }))}
-            value={panel}
-            onChange={(value) => setPanel(value === 'side' ? 'side' : 'centre')}
-          />
-        )}
-      </Disclosure>
       {isLive ? (
-        <Field label={strings.snippet} variant="copy" isMultiline copyLabel={strings.copy} value={snippet} />
+        <Field
+          label={strings.snippet}
+          variant="copy"
+          isMultiline
+          copyLabel={strings.copy}
+          hint={`${strings.modeHints[mode]} ${strings.paste}`}
+          value={snippet}
+        />
       ) : (
         <Field label={strings.snippet} variant="copy" isMultiline isReadOnly value="" hint={strings.liveFirst} />
       )}

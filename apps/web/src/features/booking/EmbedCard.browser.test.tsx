@@ -38,15 +38,13 @@ async function show(isLive = true) {
 }
 
 /**
- * The tiles and the segmented track animate, so a plain click waits for a stability that never arrives: the words
- * are clicked with `force`, as the form's Install tab test does.
+ * The tiles animate, so a plain click waits for a stability that never arrives: the words are clicked with
+ * `force`, as the form's Install tab test does.
  */
-
-/** The quick setups, which the card opens on; the same names appear again inside Change the details. */
-const setups = () => page.getByRole('radiogroup', { name: 'Pick one' });
-
-/** Opens the fold where the two underlying choices live. */
-const openDetails = () => userEvent.click(page.getByRole('button', { name: 'Change the details' }));
+const pick = (name: string) =>
+  userEvent.click(page.getByRole('radiogroup', { name: 'How it opens' }).getByText(name, { exact: true }), {
+    force: true,
+  });
 
 /** What the Snippet field holds now. */
 const snippet = () => (page.getByRole('textbox', { name: 'Snippet' }).element() as HTMLTextAreaElement).value;
@@ -62,21 +60,31 @@ describe('Put it on your site', () => {
     expect(code).not.toContain('data-timefix-panel');
   });
 
-  it('writes the side panel once it is picked, and takes it away again', async () => {
+  it('writes the side panel once the switch is on, and takes it away again', async () => {
     await show();
-    await userEvent.click(setups().getByText('Side panel', { exact: true }), { force: true });
+    // The switch's knob slides, so like the tiles it never reports itself stable: pressed with `force`.
+    const slide = page.getByRole('switch', { name: 'Slide in from the side' });
+    await userEvent.click(slide, { force: true });
     expect(snippet()).toContain('data-timefix-panel="side"');
-    await userEvent.click(setups().getByText('Corner button', { exact: true }), { force: true });
+    await userEvent.click(slide, { force: true });
     expect(snippet()).not.toContain('data-timefix-panel');
+  });
+
+  it('keeps the side switch for a button of the site’s own, and drops it in the page', async () => {
+    await show();
+    await pick('Your own button');
+    await expect.element(page.getByRole('switch', { name: 'Slide in from the side' })).toBeVisible();
+    await pick('In the page');
+    expect(page.getByRole('switch', { name: 'Slide in from the side' }).query()).toBeNull();
   });
 
   it('offers the colour and the mark for the corner button alone', async () => {
     await show();
-    // The corner button is the first setup, so its own look is offered from the start.
+    // The corner button is the first answer, so its own look is offered from the start.
     await expect.element(page.getByRole('radio', { name: 'Timefix' })).toBeVisible();
     expect(snippet()).toContain('data-timefix-icon="calendar"');
     // Your own button: its words still, but nothing of ours to colour or mark.
-    await userEvent.click(setups().getByText('Your own button', { exact: true }), { force: true });
+    await pick('Your own button');
     await expect.element(page.getByRole('textbox', { name: 'Button words' })).toBeVisible();
     expect(page.getByRole('radio', { name: 'Timefix' }).query()).toBeNull();
     const code = snippet();
@@ -86,7 +94,7 @@ describe('Put it on your site', () => {
 
   it('puts nothing in the page but the holder, and no button words, for an inline embed', async () => {
     await show();
-    await userEvent.click(setups().getByText('In the page', { exact: true }), { force: true });
+    await pick('In the page');
     expect(page.getByRole('textbox', { name: 'Button words' }).query()).toBeNull();
     const code = snippet();
     expect(code).toContain('data-timefix-booking="ada/intro"');
@@ -107,23 +115,9 @@ describe('Put it on your site', () => {
     await expect.element(page.getByText('Publish the page to get its snippet.')).toBeVisible();
   });
 
-  it('keeps the setup and the details the same two choices, not two states', async () => {
-    await show();
-    await openDetails();
-    const details = page.getByRole('radiogroup', { name: 'How it opens' });
-    // The fold opens showing what the chosen setup set, rather than its own untouched defaults.
-    await expect.element(details.getByRole('radio', { name: /A corner button/ })).toBeChecked();
-    await expect.element(page.getByRole('radio', { name: 'Middle' })).toBeChecked();
-    // Changing it there moves the setup above, since there is one state underneath.
-    await userEvent.click(page.getByText('Side panel', { exact: true }).first(), { force: true });
-    await expect.element(setups().getByRole('radio', { name: /Side panel/ })).toBeChecked();
-    expect(snippet()).toContain('data-timefix-panel="side"');
-  });
-
   for (const theme of THEMES) {
     it(`has no axe violations in ${theme}`, async () => {
       await show();
-      await userEvent.click(setups().getByText('Corner button', { exact: true }), { force: true });
       applyTheme(theme);
       expect(await axeViolations()).toEqual([]);
     });
