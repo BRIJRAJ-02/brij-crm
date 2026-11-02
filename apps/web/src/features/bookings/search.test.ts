@@ -18,9 +18,8 @@ describe('the calendar view in the address', () => {
     // The week is the default, so it says nothing.
     expect(rawOf('calendar', { ...search, view: 'week' })).not.toHaveProperty('v');
     // The list is Meetings' fourth view since the strip was cut to four areas, so its address says so, and it
-    // never carries the calendar's own day along with it.
-    expect(rawOf('list', { ...search, view: 'day' })).toMatchObject({ v: 'list' });
-    expect(rawOf('list', { ...search, view: 'list' })).not.toHaveProperty('d');
+    // carries the week and day it was left on, which it never reads itself, so Back lands on that week again.
+    expect(rawOf('list', { ...search, view: 'day' })).toMatchObject({ v: 'list', w: search.week, d: search.day });
   });
 
   it('reads v=list as the list view', () => {

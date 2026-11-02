@@ -2,12 +2,13 @@ import { isDataError } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
-import { TeamWeekScreen } from '../features/booking/TeamWeekScreen.tsx';
+import { TeamWeekPending, TeamWeekScreen } from '../features/booking/TeamWeekScreen.tsx';
 import { hoursSearch, rosterIsShown } from '../features/booking/links.ts';
 import { memberZone } from '../features/booking/zone.ts';
 import { strings } from '../features/booking/strings.ts';
 import { scheduleStrings } from '../features/booking/schedule-strings.ts';
 import { teamWeekStrings } from '../features/booking/team-week-strings.ts';
+import { useMyAccess } from '../features/workspace/WorkspacePage.tsx';
 
 // Bookings › Hours (2 November 2026): when we are free, in two views the address holds as `v` — Mine (the
 // member's own schedules, spec 0035, AC-969/970) and Team (the team's bookable week, spec 0037 job J6). They were
@@ -87,16 +88,16 @@ export const Route = createFileRoute('/w/$slug/bookings/hours')({
 });
 
 /**
- * The skeleton while the loader runs. It never reads `?v=team`: a reader without the reach is about to be sent to
- * their own hours, and a team-week skeleton would name a view they may not have before the access read comes back.
- * Mine's skeleton is the one everybody may see.
+ * The skeleton while the loader runs. It follows `?v=team` only for a reader whose scheduling reach sees a
+ * colleague: for anybody else the loader is about to send them to their own hours, and a team-week skeleton would
+ * both name a view they may not have and stand where the page will not. The reach comes from the frame's held
+ * access read, so this asks the server for nothing.
  */
 function HoursPending() {
-  return (
-    <LoadingNow>
-      <AvailabilityPending />
-    </LoadingNow>
-  );
+  const { v, week } = Route.useSearch();
+  const access = useMyAccess();
+  const isTeam = v === 'team' && access !== undefined && rosterIsShown(access);
+  return <LoadingNow>{isTeam ? <TeamWeekPending week={week} /> : <AvailabilityPending />}</LoadingNow>;
 }
 
 function HoursRoute() {

@@ -87,8 +87,8 @@ const NO_NAV: NavSource = {
 /** Bookings › Calendars' own address, the one page the stopped calendar banner stays off. */
 const CALENDARS_TAB = /\/bookings\/calendars\/?$/;
 
-/** Bookings › Calendar's address, whose single keys the shortcut help lists. */
-const CALENDAR_TAB = /\/bookings\/calendar\/?$/;
+/** Bookings › Meetings' address, whose single keys the shortcut help lists (Calendar until 2 November 2026). */
+const CALENDAR_TAB = /\/bookings\/meetings\/?$/;
 
 /** Inside Settings (spec 0026): the settings sidebar's current page and the way back out. */
 export interface SettingsSidebar {

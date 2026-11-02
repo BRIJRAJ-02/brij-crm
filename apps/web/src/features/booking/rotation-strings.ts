@@ -182,9 +182,9 @@ export const strings = {
   bookMe: 'Me',
   bookMeLine: 'Guests book time with you.',
   bookRotation: 'Round robin group',
-  bookRotationLine: 'Each booking goes to the next free person in a group.',
+  bookRotationLine: 'Each booking goes to the next free person in the group you pick.',
   bookEveryone: 'Anyone free',
-  bookEveryoneLine: 'Guests book whoever in the workspace is free. It sits on nobody’s profile.',
+  bookEveryoneLine: 'Guests book whoever in the workspace is free.',
   // The Team link (spec 0037, AC-1353): a form in front of the team pages.
   teamLink: 'Team link',
   teamLinkName: 'Book a call',

@@ -2,10 +2,11 @@ import { isDataError, type AttributeDefinition, type DataLayer } from '@crm/data
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, redirect, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { RotationsPending, RotationsScreen } from '../features/booking/RotationsScreen.tsx';
-import { RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
+import { RoutingPending, RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
 import { strings as rotationStrings } from '../features/booking/rotation-strings.ts';
 import { strings as routingStrings } from '../features/routing/tab-strings.ts';
 import { SettingsMissing } from '../features/settings/SettingsPage.tsx';
+import { useCan } from '../features/workspace/WorkspacePage.tsx';
 
 // Bookings › Hosts (2 November 2026): who takes the booking, in two views the address holds as `v` — Groups (the
 // round robin groups, spec 0029) and Rules (routing, spec 0037 AC-1383). They were two tabs, Round robin and
@@ -97,15 +98,14 @@ async function dealsStage(data: DataLayer, slug: string): Promise<AttributeDefin
 }
 
 /**
- * The skeleton while the loader runs. It never reads `?v=rules`: a reader without `routing.manage` is about to be
- * sent to the groups, and a routing skeleton would name a view they may not have before the access read comes back.
+ * The skeleton while the loader runs. It follows `?v=rules` only for a holder of `routing.manage`: for anybody
+ * else the loader is about to send them to the groups, so a routing skeleton would both name a view they may not
+ * have and stand where the page will not. The permission comes from the frame's held access read.
  */
 function HostsPending() {
-  return (
-    <LoadingNow>
-      <RotationsPending inFrame />
-    </LoadingNow>
-  );
+  const { v } = Route.useSearch();
+  const canRoute = useCan('routing.manage');
+  return <LoadingNow>{v === 'rules' && canRoute ? <RoutingPending /> : <RotationsPending inFrame />}</LoadingNow>;
 }
 
 function HostsRoute() {

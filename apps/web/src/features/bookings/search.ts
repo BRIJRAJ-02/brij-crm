@@ -95,6 +95,10 @@ export function rawOf(view: 'calendar' | 'list', search: BookingsSearch): RawBoo
     return {
       w: search.week,
       d: search.day,
+      // The list's own keys ride along for the same reason: Upcoming or Past is where you were, and a glance at
+      // the week should not forget it.
+      ...(search.tab === 'upcoming' ? {} : { tab: search.tab }),
+      ...(search.source === 'all' ? {} : { src: search.source }),
       ...(search.view === 'day' || search.view === 'team' ? { v: search.view } : {}),
       ...(search.members === undefined || search.members.length === 0 ? {} : { who: search.members.join(',') }),
       ...(search.withBookings === true ? { booked: '1' as const } : {}),
@@ -102,9 +106,13 @@ export function rawOf(view: 'calendar' | 'list', search: BookingsSearch): RawBoo
       ...shared,
     };
   }
-  // The list is a view of Meetings, so its address carries `v=list` beside its own keys.
+  // The list is a view of Meetings, so its address carries `v=list` beside its own keys — and the week and day
+  // it was left on, which the list itself never reads, so that stepping out to the list and back lands on the
+  // week you were looking at rather than on this one.
   return {
     v: 'list' as const,
+    w: search.week,
+    d: search.day,
     ...(search.tab === 'upcoming' ? {} : { tab: search.tab }),
     ...(search.source === 'all' ? {} : { src: search.source }),
     ...shared,

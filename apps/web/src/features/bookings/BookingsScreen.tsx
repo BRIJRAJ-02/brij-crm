@@ -124,10 +124,12 @@ export const TABS: readonly BookingsTab[] = ['upcoming', 'past', 'cancelled'];
  * which were two tabs and a hidden `v=day` until Bookings' strip was cut to four areas. `hasTeam` is whether there
  * is a Team day to show at all (AC-764), which only the week has read.
  */
-function meetingsSegments(hasTeam: boolean) {
+function meetingsSegments(hasTeam: boolean, hasKeys = true) {
   return [
-    { value: 'day', label: strings.meetingsViews.day, kbd: WEEK_KEYS.day },
-    { value: 'week', label: strings.meetingsViews.week, kbd: WEEK_KEYS.week },
+    // D and W are the week's own single keys (`week-keys.ts`), so only the week advertises them: on the list
+    // nothing listens for them, and a keycap there would promise a shortcut that does nothing.
+    { value: 'day', label: strings.meetingsViews.day, ...(hasKeys ? { kbd: WEEK_KEYS.day } : {}) },
+    { value: 'week', label: strings.meetingsViews.week, ...(hasKeys ? { kbd: WEEK_KEYS.week } : {}) },
     ...(hasTeam ? [{ value: 'team', label: strings.meetingsViews.team }] : []),
     { value: 'list', label: strings.meetingsViews.list },
   ];
@@ -1519,7 +1521,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
       end={
         <>
           <SegmentedControl
-            label={strings.meetingsViewLabel}
+            label={strings.viewLabel}
             size="compact"
             value={view}
             onChange={(next) => {
@@ -2293,13 +2295,13 @@ function ListBar({
               rather than a trip back up to the tab strip. The list has not read the team, so it offers no Team
               day: that is the week's to show, one press away. */}
           <SegmentedControl
-            label={strings.meetingsViewLabel}
+            label={strings.viewLabel}
             size="compact"
             value="list"
             onChange={(next) => {
               if (next === 'day' || next === 'week') onSearch({ view: next });
             }}
-            segments={meetingsSegments(false)}
+            segments={meetingsSegments(false, false)}
           />
           {search.source !== 'bookings' && search.link === undefined && <CalendarsToggle panel={panel} />}
           {/* Which meetings show is a choice only with a calendar connected: without one there are only bookings, and

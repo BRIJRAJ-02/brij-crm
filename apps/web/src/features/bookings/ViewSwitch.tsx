@@ -21,7 +21,7 @@ export interface HoursViewSwitchProps {
 export function HoursViewSwitch({ slug, view }: HoursViewSwitchProps) {
   return (
     <Switch
-      label={strings.hoursViewLabel}
+      label={strings.viewLabel}
       value={view}
       views={HOURS_VIEWS}
       labelOf={(id) => strings.hoursViews[id]}
@@ -44,7 +44,7 @@ export interface HostsViewSwitchProps {
 export function HostsViewSwitch({ slug, view }: HostsViewSwitchProps) {
   return (
     <Switch
-      label={strings.hostsViewLabel}
+      label={strings.viewLabel}
       value={view}
       views={HOSTS_VIEWS}
       labelOf={(id) => strings.hostsViews[id]}

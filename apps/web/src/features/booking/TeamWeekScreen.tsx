@@ -45,7 +45,7 @@ import {
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
+import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
 import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import {
   askReconnect,
@@ -347,6 +347,9 @@ function Loaded({
   /** Mine · Team on the tools' row; absent for a reader with nobody else's week to see. */
   readonly hasMineSwitch: boolean;
 }) {
+  // Mine · Team goes to the strip's end, the one home it has on both of Hours' views: a switch that moved to
+  // another row when you pressed it was the one control that had to stand still (2 November 2026).
+  const toolbarSlot = useBookingsToolbarSlot();
   const navigate = useNavigate();
   const state = useScheduling(held);
   const store = data.scheduling.loaded()?.teamWeek;
@@ -515,7 +518,6 @@ function Loaded({
       isTitleQuiet
       end={
         <>
-          {hasMineSwitch && <HoursViewSwitch slug={slug} view="team" />}
           {teamFilter}
           <Field
             label={words.search}
@@ -619,6 +621,9 @@ function Loaded({
         body: (
           <>
             {actionSlot !== null && usualAction !== null && createPortal(usualAction, actionSlot)}
+            {hasMineSwitch &&
+              toolbarSlot !== null &&
+              createPortal(<HoursViewSwitch slug={slug} view="team" />, toolbarSlot)}
             {tools}
             {body}
             <CopyWeekModal

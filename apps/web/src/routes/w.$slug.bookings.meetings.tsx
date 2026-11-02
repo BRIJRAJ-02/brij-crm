@@ -251,7 +251,9 @@ function MeetingsCalendar({ objects, pages, connections, availability, forPeople
         void navigate({
           to: '/w/$slug/bookings/meetings',
           params: { slug },
-          replace: true,
+          // Stepping a week replaces, so Back leaves Bookings rather than walking back through every week; moving
+          // to another view pushes, so Back returns to the view you came from (2 November 2026).
+          replace: next.view === undefined,
           search: rawOf('calendar', { ...search, ...next }),
         })
       }
@@ -286,7 +288,8 @@ function MeetingsList({ objects, pages }: MeetingsLoaded) {
         void navigate({
           to: '/w/$slug/bookings/meetings',
           params: { slug },
-          replace: true,
+          // As the week: the tab or the source replaces, another view pushes, so Back comes back to the list.
+          replace: next.view === undefined,
           search: rawOf('list', { ...search, ...next }),
         })
       }

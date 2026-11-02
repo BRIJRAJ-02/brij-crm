@@ -16,14 +16,15 @@ export const strings = {
     hosts: 'Hosts',
     calendars: 'Calendars',
   },
-  /** Meetings' views, on its tools' row. "Team day" is said in full, so it never reads as Hours' Team. */
-  meetingsViewLabel: 'How to show the meetings',
+  /**
+   * What every view switch in Bookings answers, one word, as the calendar's switch always said it. "Team day" is
+   * said in full in the segments, so it never reads as Hours' Team.
+   */
+  viewLabel: 'View',
   meetingsViews: { day: 'Day', week: 'Week', team: 'Team day', list: 'List' },
   /** Hours' views: the member's own hours, or the team's week. */
-  hoursViewLabel: 'Whose hours',
   hoursViews: { mine: 'Mine', team: 'Team' },
   /** Hosts' views: the round robin groups, or the routing rules. */
-  hostsViewLabel: 'Which hosts settings',
   hostsViews: { groups: 'Groups', rules: 'Rules' },
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' },
@@ -54,9 +55,6 @@ export const strings = {
   nextDay: 'Next day',
   goToToday: 'Go to today',
   /** The bar's Day and Week switch. */
-  calendarView: 'View',
-  dayView: 'Day',
-  weekView: 'Week',
   /** An empty week's way on: the day of the reader's next booking after it. */
   nextBooking: (day: string) => `Next booking: ${day}`,
   weekLabel: (range: string) => `Bookings, ${range}`,
@@ -418,8 +416,7 @@ export const strings = {
     reassigned: 'was reassigned by hand',
     adjustment: 'had their count adjusted by hand',
   },
-  // The Team day (spec 0030, as spec 0037 amends it).
-  teamView: 'Team',
+  // The Team day (spec 0030, as spec 0037 amends it); its segment's word is `meetingsViews.team`.
   teamLabel: (day: string) => `Team, ${day}`,
   teamNeedsTeam: 'A team calendar needs a team',
   teamNeedsTeamText: 'Invite someone and their day shows beside yours.',
