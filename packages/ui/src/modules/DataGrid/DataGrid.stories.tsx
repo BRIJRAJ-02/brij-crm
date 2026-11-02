@@ -961,6 +961,45 @@ export const FloatingBarShortList: Story = {
   },
 };
 
+/**
+ * The same, over a list long enough to scroll. FloatingBarShortList covers a grid that fits, where the footer never
+ * has to stick; a scrolling one is where the room for the bar and the sticky footer meet, and a People table with a
+ * row ticked drew its footer inline among the rows with more rows below it (2 November 2026).
+ */
+export const FloatingBarScrolled: Story = {
+  args: {
+    count: 30,
+    selected: ['company-1'],
+    addRow: { label: 'New company', onAdd: () => undefined },
+    floatingBar: (
+      <BulkActionBar placement="floating" count={1} total={30} onClear={() => undefined}>
+        <Button variant="danger" icon="trash">
+          Delete
+        </Button>
+      </BulkActionBar>
+    ),
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await settleAnimations();
+    await expect(canvas.getByRole('toolbar', { name: 'Selected records' })).toBeVisible();
+    const grid = canvasElement.querySelector<HTMLElement>('[role="grid"]');
+    await expect(grid).not.toBeNull();
+    if (grid === null) return;
+    // Scrolled to the end: the footer is the last thing under the rows, and the bar's room comes after it.
+    grid.scrollTop = grid.scrollHeight;
+    await waitFor(() => expect(grid.scrollTop).toBeGreaterThan(0));
+    const footer = canvasElement.querySelector<HTMLElement>('[role="row"][aria-rowindex="32"]');
+    await expect(footer).not.toBeNull();
+    if (footer === null) return;
+    const foot = footer.getBoundingClientRect();
+    // No row may be drawn below the footer: that is the bug, the footer stranded among the rows.
+    const below = [...canvasElement.querySelectorAll<HTMLElement>('[role="row"][aria-rowindex]')].filter(
+      (row) => row !== footer && row.getBoundingClientRect().top > foot.bottom + 1,
+    );
+    await expect(below).toHaveLength(0);
+  },
+};
+
 /** Opens the last column's editor (Open deals, a number), types a word and presses Enter, which it refuses. */
 async function refuseInLastColumn(canvasElement: HTMLElement, userEvent: { keyboard: Keys; tab: () => Promise<void> }) {
   const press = presser((keys) => userEvent.keyboard(keys));
