@@ -29,6 +29,7 @@ run behind it, and so far nothing has that.
 | (two more, same branch, same day) | `wip/embed-only` | one page, 178 files | passed **178**, twice |
 | 41478500792 | `wip/embed-only`, same branch | one page, fresh runner, nothing before it | crashed after **37** of 178 |
 | 41485749715 | car, f6d75ff14 | pass split | shard 1 **91/91**; the quarantined four **4/4**; the other 86 crashed after **3** |
+| 41490051715 | `wip/embed-handle-fix`, off `33dfbed7b` | one page, 178 files, fresh runner | crashed after **37** of 178 |
 
 Read the first six rows alone and our tree looks implicated. Read the last four and it plainly is not: the
 same unchanged branch passes its whole set three times and then dies at 37.
@@ -68,12 +69,48 @@ Adding weight does make it likelier: a 300 row version of `FloatingBarScrolled`,
 story file, crashed shard 1 at 37 (41477180390), and dropping it to 40 rows cleared that. So keep story
 fixtures small. That is a tendency worth respecting, not a mechanism anyone has shown.
 
+## The one piece of possible structure: 37, twice
+
+The series so far, in the order observed: **62, 74, 5, 178, 178, 178, 37, (91 + 4 + 3), 37.**
+
+Every figure appears once except **37, which has appeared twice** — 41478500792 on `wip/embed-only` and
+41490051715 on `wip/embed-handle-fix`. Both were a **full unsharded run of all 178 files from a cold
+runner**, on two branches whose trees differ by six `apps/web` files that no story imports.
+
+Nobody is claiming that means anything on a sample this small. It is either the only structure in the data
+or it is a coincidence, and the point of writing it down is that it is the only thing here we can actually
+test.
+
+### Start here: the experiment with a prediction
+
+Repeat the **full unsharded 178-file run from a cold runner** on an unchanged tree, several times.
+
+- If the crash keeps landing on or near 37, the crash point is a function of the ordering and of what ran
+  before it, and the thing to look at next is what the 37th file in that order leaves behind.
+- If it scatters, 37 twice was chance, and the search moves to the runner and the image rather than the
+  suite.
+
+Either outcome is informative, which is more than anything else on this page offers.
+
+**The sharded runs cannot be used for this.** They have a different ordering and a different number of files
+per page, so their figures are not comparable with the unsharded ones. The repeats have to be the plain
+178-file run or they mean nothing.
+
 ## If you pick this up
 
 Do not bisect the tree. Three identical-tree runs with three different outcomes will burn a day and tell you
-nothing. Something external or probabilistic is in this — the runner's memory, the image, a browser bug, or
-an interaction with how many pages Vitest keeps — and the next useful step is to measure the page's memory
-as files run, on a branch that both passes and crashes, rather than to look for a guilty component.
+nothing. Run the experiment above first.
+
+**You cannot clear a red by re-running it.** `gh run rerun` answers "Must have admin rights to Repository"
+for everyone working on this repo, and the token bears that out: `repos/BRIJRAJ-02/brij-crm` reports
+`{"admin": false, "maintain": false, "push": false, "pull": true}` (pushes go through a separate
+credential). So **every retry costs a fresh push**, which is also a fresh commit on the branch. Plan around
+that: you cannot quietly retry until it passes, and at this variance you should not want to — picking the
+run that suits you is how the four-files theory survived as long as it did.
+
+Beyond the experiment, something external or probabilistic is in this — the runner's memory, the image, a
+browser bug, or an interaction with how many pages Vitest keeps — and the next useful measurement is the
+page's memory as the files run, on a branch that both passes and crashes.
 
 `KEEPS_A_PAGE` in `packages/ui/scripts/story-shard.ts` can hold any set, including one file, if that helps an
 experiment. Changing it needs no code change elsewhere.
