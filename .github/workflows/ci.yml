@@ -502,8 +502,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           if-no-files-found: ignore
 
   # The library's stories as tests, one engine per job so they run side by
-  # side (spec 0003, AC-15). With milestone 2 one engine took about 5 minutes;
-  # add `--shard` to a job once it passes 10.
+  # side (spec 0003, AC-15), each engine in two shards (see the run step).
   stories:
     name: stories (${{ matrix.browser }})
     needs: changes
@@ -547,7 +546,16 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
             timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
             sudo dpkg --configure -a || true
           done
-      - run: pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})"
+      # Two shards, one vitest process each, so each starts a fresh browser page. Every story file in an
+      # engine shares one long lived page, and what 181 files leave behind in it adds up: WebKit ran out of
+      # memory and killed the page part way through, at a point that moved between two runs of the same tree
+      # (62 files in on run 41448200887, 74 on 41453929022), which is what accumulation looks like rather than
+      # one heavy story. Halving what one page carries is the fix; file isolation inside a shard stays on.
+      - name: Run the stories, in two shards
+        run: |
+          for shard in 1 2; do
+            pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" --shard="$shard/2"
+          done
         env:
           CRM_STORY_BROWSERS: ${{ matrix.browser }}
 
