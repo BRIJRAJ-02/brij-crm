@@ -64,6 +64,14 @@ export function MonthTiles({
     direction: 'none',
   });
   if (shown.month !== month) setShown({ month, direction: month > shown.month ? 'forward' : 'back' });
+  // The month whose times just arrived: its days settle from their loading shade a row at a time, top to bottom.
+  // Only that month and only that once; moving to another month shows its days as they are.
+  const [wasLoading, setWasLoading] = useState(isLoading);
+  const [settled, setSettled] = useState<string | undefined>(undefined);
+  if (wasLoading !== isLoading) {
+    setWasLoading(isLoading);
+    if (!isLoading) setSettled(month);
+  }
   const cells = monthCells(month, locale, weekStart);
   const open = cells.filter((key): key is string => key !== undefined && openDays.has(key));
   // The month's first day and its place, so a cell outside the month can name its neighbour's date.
@@ -100,7 +108,10 @@ export function MonthTiles({
     <div className={styles.root}>
       <div className={styles.head}>
         <h2 className={styles.title}>
-          {name.month} <span className={styles.year}>{name.year}</span>
+          {/* Keyed by the month, so a new month's name rolls in the way the arrows went, with the days. */}
+          <span key={month} className={styles.name} data-direction={shown.direction}>
+            {name.month} <span className={styles.year}>{name.year}</span>
+          </span>
         </h2>
         <div className={styles.arrows}>
           <Button
@@ -131,6 +142,7 @@ export function MonthTiles({
         key={month}
         className={styles.grid}
         data-direction={shown.direction}
+        data-settle={settled === month ? '' : undefined}
         role="group"
         aria-label={monthName(month, locale)}
         aria-busy={isLoading || undefined}
@@ -179,6 +191,7 @@ export function MonthTiles({
               data-loading={isLoading ? '' : undefined}
               data-best={isBest ? '' : undefined}
               data-today={isToday ? '' : undefined}
+              style={{ '--day-row': String(Math.floor(index / 7)) }}
               disabled={!isOpen}
               aria-pressed={isOpen ? key === value : undefined}
               aria-label={isBest ? `${label}, ${strings.best}` : label}

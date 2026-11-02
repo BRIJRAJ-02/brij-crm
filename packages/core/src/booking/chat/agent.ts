@@ -301,6 +301,8 @@ export interface ChatAnswer {
   readonly text: string;
   readonly offers: readonly string[];
   readonly suggestions: readonly string[];
+  /** On a read back, the suggestion that books it, so the page can draw it as the answer's confirm button. */
+  readonly confirm?: string;
 }
 
 /** The phrases offered as buttons; each one reads back through `step` as what it says. */
@@ -386,6 +388,7 @@ export function answer(
     text,
     offers: shown,
     suggestions: state.readBack ? [SAY.confirm, SAY.somethingElse] : (suggestions ?? moreSuggestions(shown, now)),
+    ...(state.readBack ? { confirm: SAY.confirm } : {}),
   });
   const held = state.held === undefined ? undefined : timeLabel(state.held, now, hour12);
   const lengths = page.durations.map(String);

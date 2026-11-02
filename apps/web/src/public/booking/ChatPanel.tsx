@@ -15,7 +15,7 @@ import {
 } from '@crm/ui/public-booking/chat';
 import { useState } from 'react';
 import { strings } from './strings.ts';
-import { dayKey, dayLabels, offerWords, timeLabel } from './time.ts';
+import { dayKey, dayLabels, longDate, offerWords, rangeLabel, timeLabel } from './time.ts';
 
 /** The most visitor lines one chat sends (the API's cap). */
 const MAX_LINES = 40;
@@ -130,6 +130,32 @@ export function ChatPanel(props: ChatPanelProps) {
             sent: reply.text,
             days: daysOf(reply.offers, zone, locale, hour12, reply.duration),
             suggestions: reply.suggestions,
+            ...(reply.confirm === undefined ? {} : { confirm: reply.confirm }),
+            ...(reply.readBack === undefined
+              ? {}
+              : (() => {
+                  // The confirm card's head: the booking as the confirmation will show it.
+                  const { start, name, email } = reply.readBack;
+                  const end = new Date(Date.parse(start) + reply.duration * 60_000).toISOString();
+                  const tile = new Intl.DateTimeFormat(locale, {
+                    timeZone: zone,
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                  })
+                    .formatToParts(new Date(start))
+                    .reduce<Record<string, string>>((all, part) => ({ ...all, [part.type]: part.value }), {});
+                  return {
+                    card: {
+                      weekday: tile.weekday ?? '',
+                      day: tile.day ?? '',
+                      month: tile.month ?? '',
+                      title: strings.chatCardTitle(page.title, page.hostName),
+                      when: `${longDate(start, zone, locale)} · ${rangeLabel(start, end, zone, locale, hour12)}`,
+                      who: `${name} · ${email}`,
+                    },
+                  };
+                })()),
           };
           keep({ conversationId, lines: [...thread, answer] });
           if (reply.duration !== duration) onDuration(reply.duration);

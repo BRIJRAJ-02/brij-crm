@@ -6,6 +6,16 @@
   /* In a view of a set height (the booking card's, which the month sets) the chat fills it: the thread takes what
      the composer leaves, so the composer stands at the foot from the first frame. */
   .root {
+    /* The booking page answers a press (the owner, 1 November 2026, public booking page only): any Button in here
+       eases to this scale while held. Set here, not in tokens.css (generated from the artifact, where it stays 1 for
+       the app), because this module only ever mounts on the public pages. */
+    --scale-press: 0.97;
+
+    /* One word's beat as a reply writes itself: 40ms, about 25 words a second (stageshow's ai-chat), quick enough to
+       feel live and slow enough to read along (the owner, 2 November 2026: the chat was too fast to use). */
+    /* stylelint-disable-next-line unit-disallowed-list -- a reading pace, no motion token stands for it */
+    --stream-step: 40ms;
+
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -37,11 +47,22 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-8);
-    animation: line-in var(--duration-popover) var(--ease-out) both;
+    /* A new line opens in the thread with its own height (stageshow's ai-chat and ai-cards: a drop reveal), so the
+       thread moves up as one rather than jumping a line at a time. */
+    interpolate-size: allow-keywords;
+    animation: line-drop var(--duration-modal) var(--ease-out) backwards;
   }
 
+  /* A turn that failed: its notice drops in with its own height above the composer. */
+  .error {
+    interpolate-size: allow-keywords;
+    animation: line-drop var(--duration-modal) var(--ease-out) backwards;
+  }
+
+  /* What the visitor sends rises out of the composer it was typed in (stageshow's messages). */
   .line[data-role='visitor'] {
     align-items: flex-end;
+    animation-name: line-sent;
   }
 
   .bubble {
@@ -61,6 +82,22 @@
     background: var(--accent-soft);
   }
 
+  /* A reply writes itself: each word resolves a beat after the one before (Written in BookingChat.tsx), about 25
+     words a second; past 40 words the rest arrive together, so a long reply never keeps the visitor waiting. */
+  .word {
+    animation: word-in var(--duration-move) var(--ease-out) backwards;
+    animation-delay: calc(var(--word, 0) * var(--stream-step));
+  }
+
+  /* What the reply offers (its times, its suggestions) arrives once its words have: the answer first, then the
+     choices, as a person would say it and then point. */
+  .offers,
+  .suggestions {
+    interpolate-size: allow-keywords;
+    animation: line-drop var(--duration-modal) var(--ease-out) backwards;
+    animation-delay: calc(var(--words, 0) * var(--stream-step) + var(--duration-popover));
+  }
+
   /* Each day's times start a group of their own: as far under the reply as the reply sits under the card's heading. */
   .offers {
     inline-size: 100%;
@@ -73,8 +110,102 @@
     gap: var(--space-4);
   }
 
+  /* A read back's answer is a confirm card (stageshow's ai-cards): the booking it would make, headed by the date tile
+     the confirmation shows, then the one question with a real button at the page's call to action size, the way out
+     beside it, on a raised card. Other answers' suggestions draw as before, without the card. */
+  .confirmCard[data-card] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    inline-size: min(100%, var(--size-panel-wide));
+    box-sizing: border-box;
+    padding: var(--space-16);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .summary {
+    display: flex;
+    gap: var(--space-12);
+    align-items: center;
+  }
+
+  /* The date as a tile, the accent's, as the confirmation's own tile is, so the two read as one booking. */
+  .tile {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    inline-size: calc(var(--size-toolbar) + var(--space-12));
+    block-size: calc(var(--size-toolbar) + var(--space-12));
+    border-radius: var(--radius-lg);
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .tileSmall {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-transform: uppercase;
+  }
+
+  .tileDay {
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .facts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .cardTitle {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .cardWhen {
+    color: var(--text);
+  }
+
+  .cardWho {
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .suggestions[data-confirm] {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-8);
+  }
+
+  /* While the reply is being written: its words in a light passing across them, the way a status line shimmers. */
+  .thinking {
+    background-image: linear-gradient(
+      90deg,
+      var(--text-secondary) 0%,
+      var(--text-secondary) 40%,
+      var(--text) 50%,
+      var(--text-secondary) 60%,
+      var(--text-secondary) 100%
+    );
+    background-size: 300% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: thinking var(--duration-pulse) linear infinite;
+  }
+
   .waiting {
     display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
     padding: var(--space-8) var(--space-12);
     border-radius: var(--radius-lg);
     background: var(--surface-subtle);
@@ -128,15 +259,69 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .line {
+    .line,
+    .line[data-role='visitor'],
+    .error {
       animation-name: line-fade;
+    }
+
+    /* Whole replies, and their choices with them: a fade, no writing out and no wait. */
+    .word {
+      animation: none;
+    }
+
+    .thinking {
+      animation: none;
+      background-image: none;
+      color: var(--text-secondary);
+    }
+
+    .offers,
+    .suggestions {
+      animation-name: line-fade;
+      animation-delay: initial;
     }
   }
 
-  @keyframes line-in {
+  @keyframes line-drop {
+    from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
+      opacity: 0;
+      translate: 0 calc(-1 * var(--space-4));
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
+    }
+  }
+
+  @keyframes line-sent {
+    from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
+    }
+  }
+
+  @keyframes word-in {
     from {
       opacity: 0;
-      translate: 0 var(--space-4);
+    }
+  }
+
+  @keyframes thinking {
+    from {
+      background-position-x: 100%;
     }
   }
 
