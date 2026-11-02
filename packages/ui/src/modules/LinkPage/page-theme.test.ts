@@ -55,7 +55,10 @@ function isTokenOnly(value: string): boolean {
 
 describe('the page look the library draws', () => {
   it('knows the same ten keys the contract does, with the same words', () => {
-    const contractKeys = [...CONTRACT.matchAll(/^\s+([a-z]+): z\.enum\(/gm)].map((match) => match[1]);
+    // The optional keys (spec 0061's `layout`) are not looks on the root: the blocks read `layout` from context.
+    const contractKeys = [...CONTRACT.matchAll(/^\s+([a-z]+): z\.enum\([^\n]*\),$/gm)]
+      .filter((match) => !match[0].includes('.optional()'))
+      .map((match) => match[1]);
     const attributes = [...MODULE.matchAll(/'data-page-([a-z]+)':/g)].map((match) => match[1]);
     expect(new Set(attributes)).toEqual(new Set(contractKeys));
     expect(contractKeys).toHaveLength(10);
