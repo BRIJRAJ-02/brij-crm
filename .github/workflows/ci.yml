@@ -45,6 +45,14 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           # tree and skipped `visual`; it surfaced on the next branch that ran it, looking like that branch's
           # regression). Landings are rare and are exactly the pushes that must not inherit a gap.
           #
+          # A BRANCH push keeps the filter, so a branch's head can carry `stories` and `visual` as SKIPPED
+          # rather than green, and a run whose job list is all ticks can still have tested no story at all
+          # (wip/crm-ui-car at a6a16f735: the push touched only a docs file, so the car's head had no WebKit
+          # result). Nothing may land on a sha whose `stories` or `visual` is skipped, any more than on one
+          # that is red, and the filter will not stop you: READ THE JOB LIST and confirm those four names say
+          # success. That human step is load bearing here, on purpose, because the alternative is forcing
+          # `stories` on every branch push and running the Firefox hang each time.
+          #
           # `stories` is deliberately NOT forced, and forcing it would stop production deploying on every
           # landing. deploy-web.yml requires only `check` and `ui`, but it also waits for `visual` and all
           # three `stories` browsers to be settled, where settled means success or skipped. Today a main push
