@@ -201,7 +201,7 @@ export function Tabs({
               )}
               {tab.alert !== undefined && (
                 <span className={styles.alert}>
-                  <VisuallyHidden>{`, ${tab.alert}`}</VisuallyHidden>
+                  <VisuallyHidden elementType="span">{`, ${tab.alert}`}</VisuallyHidden>
                 </span>
               )}
               <Indicator />

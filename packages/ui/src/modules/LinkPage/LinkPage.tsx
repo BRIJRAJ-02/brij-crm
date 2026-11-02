@@ -1617,7 +1617,7 @@ function Banner({
             {...(isWeb ? { target: '_blank', rel: 'noopener noreferrer nofollow' } : {})}
           >
             {block.text}
-            {isWeb && <VisuallyHidden>{strings.newTab}</VisuallyHidden>}
+            {isWeb && <VisuallyHidden elementType="span">{strings.newTab}</VisuallyHidden>}
           </a>
         )}
       </p>
