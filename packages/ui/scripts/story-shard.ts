@@ -3,25 +3,20 @@
 // `vitest run` per line.
 //
 // Why this exists rather than vitest's own `--shard`. Every story file in an engine
-// shares one long lived browser page, and what a file leaves behind in that page is
-// never fully reclaimed, so a run of heavy files back to back kills it: WebKit ran out
-// of memory 62 files in on run 41448200887 and 74 in on 41453929022, and with
-// `--shard=1/2` it died after 5 (run 41457814575). Vitest's `shard()` orders the files
-// by the sha1 of their path and slices that, and with no cache on a fresh runner its
-// `sort()` leaves that order alone, so which files land first is effectively a coin
-// toss, and that run of 5 drew four of the heaviest in the library.
+// shares one long lived browser page, and sometimes that page runs out of memory. It is
+// a MITIGATION, not a fix, and not a demonstrated one: the crash point is a distribution
+// rather than a property of a tree, and splitting the set has one green behind it
+// (41469582229) against a branch with no library change that both passed its whole set
+// three times and crashed at 37 of 178. Read docs/runbooks/story-page-leak.md, which
+// lists every observation, before concluding anything from a run of this.
 //
-// So we choose the split ourselves: deal the files heaviest first into the shards, which
-// balances what each shard carries and keeps the heaviest files apart. That got shard 1
-// through all 91 of its files on run 41461134131, while shard 2 died after 7.
-//
-// This picks membership and pass boundaries, not order. The files reach vitest as
-// filters, so vitest still runs them in whatever order it collected them; what we decide
-// is which files share a page. A pass is one `vitest run`, so each pass gets a page of
-// its own, which is stronger than ordering inside one page. That is why KEEPS_A_PAGE
-// below runs alone: on run 41461134131 those four ran first in shard 2 and killed it,
-// and they are the same set crm-6c's bisect hung on. Give them their own page and the
-// other 86 never meet what they leave behind.
+// What it does: deal the files heaviest first into the shards, so each carries about the
+// same, and give KEEPS_A_PAGE a pass of its own. It picks membership and pass boundaries,
+// never order, because the files reach vitest as filters and vitest still runs them in
+// whatever order it collected them. A pass is one `vitest run`, so each pass is a fresh
+// page. We avoided vitest's own `--shard` because it orders files by the sha1 of their
+// path and, with no cache on a fresh runner, its `sort()` leaves that order alone, so
+// which files land first is a coin toss; a 5 of 91 run came out of that (41457814575).
 //
 // File isolation stays on, and the shard count is a reading of the symptom, not a knob:
 // if a shard dies again, what a story leaves in the page has grown.
@@ -44,9 +39,13 @@ export function storyFiles(root: string = UI): readonly StoryFile[] {
 }
 
 /**
- * The stories that leave so much in the browser page that the files after them run out
- * of memory. They get a page to themselves. Take one out only with a run that shows the
- * shard holding it finishing without it quarantined.
+ * The stories kept to a page of their own. They were in front of one shard when it ran
+ * out of memory once (run 41461134131), which is the whole case against them: the same
+ * four ran among 178 in a single page on a branch with no library change and that page
+ * finished. They are separated because it is cheap, not because they are guilty. The
+ * crash point is a distribution rather than a property of any tree, so neither a pass
+ * nor a failure of one run says much — see docs/runbooks/story-page-leak.md before
+ * changing this list, and don't bisect a tree over it.
  */
 export const KEEPS_A_PAGE: readonly string[] = [
   'src/modules/WeekCalendar/WeekCalendar.stories.tsx',

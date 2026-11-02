@@ -574,31 +574,26 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
             timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
             sudo dpkg --configure -a || true
           done
-      # Two shards, one vitest process each, so each starts a fresh browser page. The shards are here because
-      # the page accumulates as the files run, not because the suite is slow: do not merge them back into one
-      # run to save a few minutes. Every story file in an engine shares one long lived page, and what it keeps
-      # adds up until the page dies: WebKit ran out of memory part way through, at a point that moved between
-      # two runs of the same tree (62 files in on run 41448200887, 74 on 41453929022), and Firefox hangs the
-      # same way. It is not the per file context: `--no-isolate` hangs identically (run 41448193169), so don't
-      # repeat that experiment, and isolation inside a shard stays on. Two shards raise the ceiling, they do
-      # not close the leak, and the number is a reading of the symptom: if a shard hangs again the answer is
-      # that the leak has grown, not that we need a third.
+      # Two shards per engine, and KEEPS_A_PAGE in a pass of its own, each pass one `vitest run` and so one
+      # fresh browser page. This is a MITIGATION and it is not a demonstrated one. The page sometimes runs out
+      # of memory, and the point it dies at is a distribution rather than a property of a tree: the same tree
+      # died at 62 and then 74 (41448200887, 41453929022), and a branch with NO library change passed all 178
+      # in one page three times and then crashed at 37 of 178 on a fresh runner (41478500792). The split has a
+      # single green behind it (41469582229). One pass proves no more than one failure does.
       #
-      # Which files share a page matters, which is why `scripts/story-shard.ts` picks the split rather than
-      # vitest's `--shard`: 62 -> 74 -> 5 -> 91. Vitest shards by the sha1 of each path and, with no cache on a
-      # fresh runner, its sequencer leaves that order alone, so `--shard=1/2` drew four of the heaviest files
-      # in the library first and WebKit died after 5 of 91 (run 41457814575). Dealing them heaviest first into
-      # the shards instead got shard 1 through all 91 (run 41461134131), while shard 2 died after 7 on those
-      # same four files.
+      # So do not read a green here as the problem being solved, do not read a red as this branch's fault, and
+      # do not bisect a tree over it: three identical-tree runs have given three different answers.
+      # docs/runbooks/story-page-leak.md lists every observation we have. Keep the shards, because they cost
+      # nothing and the alternative is a single page carrying everything; keep isolation on, since
+      # `--no-isolate` hangs identically (41448193169); and do not raise the timeout or add a third shard.
       #
-      # So the script prints one line per pass and a pass is one `vitest run`, which is one browser page: the
-      # four that killed shard 2 now run alone, and the other 86 get a page that never sees what they leave
-      # behind. That is membership and pass boundaries, which we do control; the order inside a pass is still
-      # vitest's, since the files reach it as filters.
-      # Both shards run here, one after the other on ONE runner, so shard 2 always meets a machine that just
-      # ran shard 1's files. Whether "shard 2 died after 7" is those files or the runner's free memory is
-      # being measured on wip/crm-shard-probe, which runs them the other way round; until that reports, don't
-      # read a shard 2 failure as proof the files caused it.
+      # `scripts/story-shard.ts` picks the split rather than vitest's `--shard`, which orders files by the
+      # sha1 of their path and, with no cache on a fresh runner, leaves that order alone, so which files land
+      # first is a coin toss; a 5 of 91 run came out of that (41457814575). The script decides membership and
+      # pass boundaries only: the files reach vitest as filters, so the order inside a pass is still vitest's.
+      #
+      # Both shards run here one after the other on ONE runner. That is not the cause either: 41478500792
+      # crashed with a fresh runner and nothing before it.
       - name: Run the stories, in two shards
         run: |
           for shard in 1 2; do
