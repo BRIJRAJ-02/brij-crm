@@ -289,6 +289,9 @@ export function BookingDetails({
     }
     return found;
   };
+  // A booking the server turned down with no field to blame: Confirm shakes its head once, beside the line saying why,
+  // the same no as a field's (transitions.dev's error shake).
+  const refused = () => setShake((current) => ({ round: current.round + 1, fields: new Set(['actions']) }));
   const showErrors = (found: Readonly<Record<string, string>>) => {
     setErrors(found);
     setWasWrong((current) => new Set([...current, ...Object.keys(found)]));
@@ -352,16 +355,21 @@ export function BookingDetails({
         setBusy(false);
         if (outcome.kind === 'failed') {
           setLine(outcome.message);
+          refused();
           return;
         }
         const drawn = drawnErrors(outcome.fields, needsPhone, sentRows, shown);
         // A refusal on nothing the form draws still says why, in the line, so the visitor isn't left guessing.
         if (Object.keys(drawn).length > 0) showErrors(drawn);
-        else setLine(outcome.message === undefined || outcome.message === '' ? strings.failed : outcome.message);
+        else {
+          setLine(outcome.message === undefined || outcome.message === '' ? strings.failed : outcome.message);
+          refused();
+        }
       },
       () => {
         setBusy(false);
         setLine(strings.failed);
+        refused();
       },
     );
   };
@@ -573,7 +581,7 @@ export function BookingDetails({
       <p className={styles.line} role="alert">
         {line}
       </p>
-      <div className={styles.actions}>
+      <div className={styles.actions} data-shake={shakeOf('actions')}>
         <Button variant="ghost" isDisabled={isBusy} onPress={onBack}>
           {strings.back}
         </Button>

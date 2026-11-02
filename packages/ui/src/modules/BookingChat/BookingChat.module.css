@@ -57,6 +57,12 @@
     animation: line-drop var(--duration-modal) var(--ease-out) backwards;
   }
 
+  /* A turn that failed: its notice drops in with its own height above the composer. */
+  .error {
+    interpolate-size: allow-keywords;
+    animation: line-drop var(--duration-modal) var(--ease-out) backwards;
+  }
+
   /* What the visitor sends rises out of the composer it was typed in (stageshow's messages). */
   .line[data-role='visitor'] {
     align-items: flex-end;
@@ -108,19 +114,80 @@
     gap: var(--space-4);
   }
 
-  /* A read back's answer is a confirm card (stageshow's ai-cards): the booking's one question asked with a real
-     button at Book's size, the way out beside it, on a raised card the width of the reply. */
+  /* A read back's answer is a confirm card (stageshow's ai-cards): the booking it would make, headed by the date tile
+     the confirmation shows, then the one question with a real button at the page's call to action size, the way out
+     beside it, on a raised card. Other answers' suggestions draw as before, without the card. */
+  .confirmCard[data-card] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    inline-size: min(100%, var(--size-panel-wide));
+    box-sizing: border-box;
+    padding: var(--space-16);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .summary {
+    display: flex;
+    gap: var(--space-12);
+    align-items: center;
+  }
+
+  /* The date as a tile, the accent's, as the confirmation's own tile is, so the two read as one booking. */
+  .tile {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    inline-size: calc(var(--size-toolbar) + var(--space-12));
+    block-size: calc(var(--size-toolbar) + var(--space-12));
+    border-radius: var(--radius-lg);
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .tileSmall {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-transform: uppercase;
+  }
+
+  .tileDay {
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .facts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .cardTitle {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .cardWhen {
+    color: var(--text);
+  }
+
+  .cardWho {
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .suggestions[data-confirm] {
     display: grid;
     grid-template-columns: 2fr 1fr;
-    inline-size: min(100%, var(--size-panel-wide));
-    box-sizing: border-box;
     gap: var(--space-8);
-    padding: var(--space-12);
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-xs);
   }
 
   /* While the reply is being written: its words in a light passing across them, the way a status line shimmers. */
@@ -197,7 +264,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .line,
-    .line[data-role='visitor'] {
+    .line[data-role='visitor'],
+    .error {
       animation-name: line-fade;
     }
 

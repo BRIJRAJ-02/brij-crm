@@ -186,6 +186,30 @@
   }
 
   .chipWeekday,
+  /* Right after booking, the page arrives as one moment rather than all at once (the owner, 2 November 2026: magical
+     moments, as a new workspace opens in Twenty): the host's picture lands, the tick pops on it and sends its rings
+     out, "You're booked" and its warm line rise, then the card, and last the date tile flips into place, so the eye
+     ends on when. A page opened later (Your booking) simply shows. */
+  .root[data-welcome] .avatar {
+    animation: avatar-land var(--reveal-duration) var(--ease-out) backwards;
+  }
+
+  .root[data-welcome] .title {
+    animation-delay: calc(var(--duration-hover) * 2);
+  }
+
+  .root[data-welcome] .lead {
+    animation-delay: calc(var(--duration-hover) * 2.5);
+  }
+
+  .root[data-welcome] .card {
+    animation-delay: calc(var(--duration-hover) * 3);
+  }
+
+  .root[data-welcome] .chip {
+    animation: chip-land var(--reveal-duration) var(--ease-out) calc(var(--duration-hover) * 4.5) backwards;
+  }
+
   .chipMonth {
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);
@@ -345,6 +369,11 @@
     .lead {
       animation-name: receipt-fade;
     }
+
+    .root[data-welcome] .avatar,
+    .root[data-welcome] .chip {
+      animation-name: receipt-fade;
+    }
   }
 
   @keyframes text-rise {
@@ -352,6 +381,24 @@
       opacity: 0;
       translate: 0 var(--space-12);
       filter: blur(var(--reveal-blur));
+    }
+  }
+
+  @keyframes avatar-land {
+    from {
+      opacity: 0;
+      scale: var(--scale-enter);
+      filter: blur(var(--reveal-blur));
+    }
+  }
+
+  /* The date tile turns up into place, like a calendar's page, out of the large blur. */
+  @keyframes chip-land {
+    from {
+      opacity: 0;
+      scale: var(--scale-shrunk);
+      rotate: x 90deg;
+      filter: blur(var(--check-blur));
     }
   }
 

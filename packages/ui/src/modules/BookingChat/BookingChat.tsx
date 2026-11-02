@@ -27,6 +27,21 @@ export interface BookingChatLine {
    * (stageshow's ai-cards), this one the primary action, at the size of the page's Book.
    */
   readonly confirm?: string;
+  /** With `confirm`: the booking it would make, drawn at the head of the confirm card. */
+  readonly card?: BookingChatCard;
+}
+
+/** What a read back would book, as the confirm card heads it: the date tile, the meeting, when and who. */
+export interface BookingChatCard {
+  readonly weekday: string;
+  readonly day: string;
+  readonly month: string;
+  /** "Intro call with Ada Lovelace". */
+  readonly title: string;
+  /** "Monday 2 November · 9:00 – 9:30 AM". */
+  readonly when: string;
+  /** "Grace Hopper · grace@example.com". */
+  readonly who: string;
 }
 
 /** A failed turn: the sentence, and what the visitor can do about it. */
@@ -183,33 +198,51 @@ export function BookingChat({
                     </div>
                   ))}
                 {isLive && line.suggestions !== undefined && line.suggestions.length > 0 && (
-                  <div
-                    className={styles.suggestions}
-                    data-confirm={line.confirm === undefined ? undefined : ''}
-                    role="group"
-                    aria-label={strings.suggestions}
-                  >
-                    {line.suggestions.map((suggestion) => (
-                      <Button
-                        key={suggestion}
-                        {...(line.confirm === undefined
-                          ? { variant: 'ghost' as const }
-                          : suggestion === line.confirm
-                            ? {
-                                variant: 'primary' as const,
-                                size: 'xl' as const,
-                                icon: 'check' as const,
-                                isFullWidth: 'center' as const,
-                              }
-                            : { variant: 'secondary' as const, size: 'xl' as const, isFullWidth: 'center' as const })}
-                        onPress={() => {
-                          onSend(suggestion);
-                          focusField();
-                        }}
-                      >
-                        {suggestion}
-                      </Button>
-                    ))}
+                  <div className={styles.confirmCard} data-card={line.confirm === undefined ? undefined : ''}>
+                    {line.confirm !== undefined && line.card !== undefined && (
+                      // The booking it would make, the way the confirmation will show it: the date tile, then what,
+                      // when and who, so Yes is said to something seen, not a sentence re-read.
+                      <div className={styles.summary}>
+                        <span className={styles.tile} aria-hidden="true">
+                          <span className={styles.tileSmall}>{line.card.weekday}</span>
+                          <span className={styles.tileDay}>{line.card.day}</span>
+                          <span className={styles.tileSmall}>{line.card.month}</span>
+                        </span>
+                        <span className={styles.facts}>
+                          <span className={styles.cardTitle}>{line.card.title}</span>
+                          <span className={styles.cardWhen}>{line.card.when}</span>
+                          <span className={styles.cardWho}>{line.card.who}</span>
+                        </span>
+                      </div>
+                    )}
+                    <div
+                      className={styles.suggestions}
+                      data-confirm={line.confirm === undefined ? undefined : ''}
+                      role="group"
+                      aria-label={strings.suggestions}
+                    >
+                      {line.suggestions.map((suggestion) => (
+                        <Button
+                          key={suggestion}
+                          {...(line.confirm === undefined
+                            ? { variant: 'ghost' as const }
+                            : suggestion === line.confirm
+                              ? {
+                                  variant: 'primary' as const,
+                                  size: 'xl' as const,
+                                  icon: 'check' as const,
+                                  isFullWidth: 'center' as const,
+                                }
+                              : { variant: 'secondary' as const, size: 'xl' as const, isFullWidth: 'center' as const })}
+                          onPress={() => {
+                            onSend(suggestion);
+                            focusField();
+                          }}
+                        >
+                          {suggestion}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -231,24 +264,27 @@ export function BookingChat({
         )}
       </div>
       {error !== undefined && (
-        <Callout
-          tone={error.isPause === true ? 'warning' : 'danger'}
-          isAnnounced
-          {...(error.onRetry === undefined && error.onRestart === undefined
-            ? {}
-            : {
-                actions:
-                  error.onRestart === undefined ? (
-                    <Button icon="refresh-cw" onPress={error.onRetry}>
-                      {strings.retry}
-                    </Button>
-                  ) : (
-                    <Button onPress={error.onRestart}>{strings.restart}</Button>
-                  ),
-              })}
-        >
-          {error.message}
-        </Callout>
+        // Drops in above the composer with its own height, so the thread gives way rather than jumping.
+        <div className={styles.error}>
+          <Callout
+            tone={error.isPause === true ? 'warning' : 'danger'}
+            isAnnounced
+            {...(error.onRetry === undefined && error.onRestart === undefined
+              ? {}
+              : {
+                  actions:
+                    error.onRestart === undefined ? (
+                      <Button icon="refresh-cw" onPress={error.onRetry}>
+                        {strings.retry}
+                      </Button>
+                    ) : (
+                      <Button onPress={error.onRestart}>{strings.restart}</Button>
+                    ),
+                })}
+          >
+            {error.message}
+          </Callout>
+        </div>
       )}
       <div className={styles.composer} data-disabled={isDone || undefined}>
         <div className={styles.field}>

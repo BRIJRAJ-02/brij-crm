@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BookingChat, type BookingChatLine } from './BookingChat.tsx';
 
@@ -85,6 +86,14 @@ export const ReadBack: Story = {
         text: 'Tomorrow at 3:00 PM, 30 minutes, for Ada Lovelace (ada@example.com). Shall I book it?',
         suggestions: ['Yes, book it', 'Something else'],
         confirm: 'Yes, book it',
+        card: {
+          weekday: 'Fri',
+          day: '9',
+          month: 'Oct',
+          title: 'Intro call with Ada Lovelace',
+          when: 'Friday, 9 October 2026 · 3:00 – 3:30 PM',
+          who: 'Ada Lovelace · ada@example.com',
+        },
       },
     ]);
     return (
@@ -145,6 +154,8 @@ export const Paused: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
+    // The notice drops in with its height, held at its first frame while stories pause animations.
+    await settleAnimations();
     await expect(canvas.getByRole('button', { name: 'Try again' })).toBeVisible();
   },
 };

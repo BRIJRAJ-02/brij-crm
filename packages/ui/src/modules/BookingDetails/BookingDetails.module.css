@@ -75,12 +75,14 @@
   }
 
   .shaker[data-shake='even'],
-  .guests[data-shake='even'] {
+  .guests[data-shake='even'],
+  .actions[data-shake='even'] {
     animation: shake-even calc(var(--duration-move) * 2) var(--ease-out);
   }
 
   .shaker[data-shake='odd'],
-  .guests[data-shake='odd'] {
+  .guests[data-shake='odd'],
+  .actions[data-shake='odd'] {
     animation: shake-odd calc(var(--duration-move) * 2) var(--ease-out);
   }
 
@@ -142,7 +144,8 @@
     }
 
     .shaker[data-shake],
-    .guests[data-shake] {
+    .guests[data-shake],
+    .actions[data-shake] {
       animation: none;
     }
 

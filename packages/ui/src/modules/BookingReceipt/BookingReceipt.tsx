@@ -99,7 +99,7 @@ export function BookingReceipt({
           ? strings.welcome
           : strings.confirmed;
   return (
-    <main className={styles.root}>
+    <main className={styles.root} data-welcome={(isLive && isWelcome) || undefined}>
       <div className={styles.column}>
         <header className={styles.head}>
           <span className={styles.avatar}>
