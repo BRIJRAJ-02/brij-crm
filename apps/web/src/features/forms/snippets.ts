@@ -27,6 +27,20 @@ export const EMBED_MODES = ['inline', 'popup', 'floating'] as const;
 /** One way to embed. */
 export type EmbedMode = (typeof EMBED_MODES)[number];
 
+/**
+ * Where a dialog opens: the middle of the screen, or a column against the inline end (a sheet from the bottom on
+ * a phone). It is a separate choice from the mode, since either button can open either shape, and `centre` is
+ * what every snippet written before 2 November 2026 means.
+ */
+export const EMBED_PANELS = ['centre', 'side'] as const;
+/** One dialog shape. */
+export type EmbedPanel = (typeof EMBED_PANELS)[number];
+
+/** The marks a corner button may carry beside its words; `none` is just the words. */
+export const EMBED_ICONS = ['none', 'calendar', 'chat', 'mail'] as const;
+/** One corner button mark. */
+export type EmbedIcon = (typeof EMBED_ICONS)[number];
+
 /** What an embed points at: a form or a booking page, with the words and theme its snippet carries. */
 export interface EmbedTarget {
   readonly kind: 'form' | 'booking';
@@ -36,10 +50,21 @@ export interface EmbedTarget {
   readonly theme: 'light' | 'dark';
   /** The popup and corner button's words: the form's button text. */
   readonly buttonText: string;
+  /** Where a dialog opens; left out, the middle, which is what an older snippet means. */
+  readonly panel?: EmbedPanel;
+  /** The corner button's colour as `#rgb` or `#rrggbb`; left out, EMBED_ACCENT. The script refuses anything else. */
+  readonly accent?: string;
+  /** The corner button's mark; left out or `none`, the words alone. */
+  readonly icon?: EmbedIcon;
 }
 
 /** The corner button's colour: the library's accent, the blue the form's own button uses. */
 export const EMBED_ACCENT = '#1f5fd6';
+
+/** A colour the embed script will accept (`#rgb` or `#rrggbb`), or the default. It refuses anything else. */
+export function hexAccent(colour: string | undefined): string {
+  return colour !== undefined && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(colour) ? colour : EMBED_ACCENT;
+}
 
 /** The script tag: one per site, however many embeds it holds. */
 const scriptTag = (script: string) => `<script src="${escapeHtml(script)}" async></script>`;
@@ -51,12 +76,16 @@ const scriptTag = (script: string) => `<script src="${escapeHtml(script)}" async
  */
 export function embedSnippet(script: string, target: EmbedTarget, mode: EmbedMode): string {
   const kind = `data-timefix-${target.kind}="${escapeHtml(target.publicKey)}"`;
+  // Only what differs from the default is written, so a snippet stays as short as what it does.
+  const side = target.panel === 'side' && mode !== 'inline' ? ' data-timefix-panel="side"' : '';
+  const mark = target.icon !== undefined && target.icon !== 'none' ? ` data-timefix-icon="${target.icon}"` : '';
+  const colour = hexAccent(target.accent);
   const look = `data-timefix-title="${escapeHtml(target.title)}"${target.theme === 'dark' ? ' data-timefix-theme="dark"' : ''}`;
   const holder =
     mode === 'popup'
-      ? `<button type="button" ${kind} data-timefix-mode="popup" ${look}>${escapeHtml(target.buttonText)}</button>`
+      ? `<button type="button" ${kind} data-timefix-mode="popup"${side} ${look}>${escapeHtml(target.buttonText)}</button>`
       : mode === 'floating'
-        ? `<div ${kind} data-timefix-mode="floating" data-timefix-text="${escapeHtml(target.buttonText)}" data-timefix-color="${EMBED_ACCENT}" ${look}></div>`
+        ? `<div ${kind} data-timefix-mode="floating"${side}${mark} data-timefix-text="${escapeHtml(target.buttonText)}" data-timefix-color="${colour}" ${look}></div>`
         : `<div ${kind} ${look}></div>`;
   return `${scriptTag(script)}\n${holder}`;
 }
