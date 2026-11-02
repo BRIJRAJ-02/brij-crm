@@ -26,5 +26,6 @@ The domain services the api and the worker share, and (from Access model, #9) th
 - One folder per feature (`src/<feature>/`), exported through `src/index.ts`.
 - Never import Hono, `@orpc/server` or `process.env`. The api and the worker pass in everything a service needs.
 - Tenant data is read and written only through `db.withWorkspace()`, and (from #9) only with a scope the access door produced. See `crm-data-model-access`.
+- A suite that needs its fixture to sit in the future takes its week from `rollingWeek()` in `test/dates-kit.ts`, never a written out calendar date. Booking hours open Monday to Friday, so most fixtures want its `monday`. Services take `now` as a dependency, so a test can usually name any instant it likes; the exception is a reminder, which `crm_enqueue_booking_mail` judges against the database's own clock, so a fixed date stops queuing the 24 hour reminder the week it arrives (1 November 2026, `booking/change.test.ts`). A date used only as an opaque value is fine written out.
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
