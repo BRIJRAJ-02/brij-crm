@@ -547,9 +547,10 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
             timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
             sudo dpkg --configure -a || true
           done
-      # DIAGNOSTIC, wip/visual-ffhang only, never to be landed: one file, to tell a hang inside
-      # LinkPageBlocks.stories.tsx from an interaction with the files that run before it.
-      - run: pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" src/modules/LinkPage/LinkPage.stories.tsx src/modules/Sidebar/Sidebar.stories.tsx src/modules/SettingsLayout/SettingsLayout.stories.tsx src/modules/LinkPage/LinkPageBlocks.stories.tsx
+      # DIAGNOSTIC, wip/visual-ffhang only, never to be landed: the whole set again, with per file
+      # isolation off. No four file subset hangs and all seven do, so this asks whether the hang is
+      # the per file context the browser builds and tears down, rather than anything in a story.
+      - run: pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" --no-isolate
         env:
           CRM_STORY_BROWSERS: ${{ matrix.browser }}
 
