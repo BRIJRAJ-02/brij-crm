@@ -122,3 +122,43 @@ the tables, the endpoints, the bot checks, the resume read on the public form,
 the confirmation and the cleanup — is built and tested. F2 owes: the save on
 each Continue, the quiet "Saved", the Finish later control, the beacon calls,
 and reading `PublicForm.resumed` / `PublicForm.savesProgress` on load.
+
+## What the two UI reviews found
+
+`design-system-guardian` and `ux-interaction-reviewer` on the Analytics tab.
+Both passed it on tokens, library components and states (no raw values, no
+`className` or `style`, no one-off markup, `Chart` used as its README asks).
+Taken:
+
+- **Both charts' axis labels were being thinned by index**, so the drop off
+  chart drew five bars and printed three labels, over the wrong bars. Fixed on
+  this side by giving short `axisLabel`s (the day number; `Q1`…`Q6`) and
+  keeping the full text in `label`, which the tooltip and the table view read.
+- **The comparison line restated the previous figure** ("540" over "540 in the
+  30 days before"), which reads as the same number twice and otherwise makes a
+  reader subtract. It now shows the signed change, or "Same as the 30 days
+  before".
+- **The median's arrow meant the opposite of what it looked like**: less is
+  better for a time, so a form that got slower showed the same ↑ as a form that
+  got more visitors. It now says "39s faster" / "12s slower" and draws no arrow.
+- **The in-range no-data case fell through to a flat chart.** A range with no
+  visits but traffic before it now gets its own line and keeps the range
+  control; the by-source table gets an empty state.
+- **The chip had no denominator.** `statTitle` on `QuestionListItem` carries
+  "72% of the 88 who reached this question" as its tooltip.
+- `QuestionList`'s README and a story now cover `stat`, and two dead strings
+  are gone.
+
+Left, as owed rather than done:
+
+- **AC-6321's empty state should carry the Copy link button**; it currently has
+  the line only. The handler lives in `FormEditor`, so it is a prop to thread.
+- **The drop off block should probably sit above the daily chart**, and name
+  the worst question in words, since finding it is the tab's whole job. A
+  reorder plus a sentence; worth doing but it is a judgement call about a
+  screen the owner has not seen yet.
+- **Changing the range blanks the tab** rather than dimming it; `Chart` has
+  `isRefreshing` for exactly that.
+- `ChartPlot` thins labels by index for every kind, which is right for dates
+  and wrong for categories. Fixed here by not giving it long category labels;
+  the general fix belongs in `packages/ui` with a story.

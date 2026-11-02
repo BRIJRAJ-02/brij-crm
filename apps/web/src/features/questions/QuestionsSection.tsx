@@ -137,7 +137,7 @@ export interface QuestionsSectionProps {
    * weak question is visible where it is edited. Absent on a form with no analytics, and a question nobody has
    * reached has no entry.
    */
-  readonly stats?: ReadonlyMap<string, string>;
+  readonly stats?: ReadonlyMap<string, { readonly stat: string; readonly statTitle: string }>;
   /** A question to open and bring into view as the screen shows (a link from Settings' map of where answers go). */
   readonly focusQuestionId?: string;
   /** Whether the member may add attributes: an unfiled question is then filed onto a new one when the form is published. */
@@ -334,7 +334,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             conditionsLine(question.showWhen, questionFacts(questions.slice(0, questions.indexOf(question)))),
           ),
         }),
-    ...(stats?.get(question.id) === undefined ? {} : { stat: stats.get(question.id) }),
+    ...(stats?.get(question.id) ?? {}),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
   // With dividers, each in its place among the questions (spec 0063): a step's place and title, what it holds, its

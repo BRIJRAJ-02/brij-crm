@@ -55,12 +55,31 @@ function duration(ms: number): string {
   return rest === 0 ? `${String(hours)}h` : `${String(hours)}h ${String(rest)}m`;
 }
 
-/** A number against the one before it, as a Stat's comparison and trend (no colour: up isn't always good). */
+/**
+ * A figure against the one before it, as a Stat's comparison and trend (no
+ * colour: up isn't always good). It shows the *change*, signed, rather than
+ * the previous absolute figure: "540" over "540 in the 30 days before" reads
+ * as a restatement, and when the two differ a reader should not have to
+ * subtract in their head.
+ */
 function compared(now: number, before: number, days: number, format: (value: number) => string): Partial<StatItem> {
-  return {
-    comparison: strings.analyticsBefore(format(before), days),
-    trend: now === before ? 'same' : now > before ? 'up' : 'down',
-  };
+  if (now === before) return { comparison: strings.analyticsNoChange(days), trend: 'same' };
+  const up = now > before;
+  const change = `${up ? '+' : '−'}${format(Math.abs(now - before))}`;
+  return { comparison: strings.analyticsChange(change, days), trend: up ? 'up' : 'down' };
+}
+
+/**
+ * The median's own comparison. It is the one figure here where less is
+ * better, so an arrow would mean the opposite of what it looks like next to
+ * Views: a form that got slower would show the same ↑ as a form that got more
+ * visitors. The change is said in words instead, and no arrow is drawn.
+ */
+function comparedTime(now: number | undefined, before: number | undefined): Partial<StatItem> {
+  if (now === undefined) return { comparison: strings.analyticsNoMedian };
+  if (before === undefined || now === before) return {};
+  const by = duration(Math.abs(now - before));
+  return { comparison: now < before ? strings.analyticsFaster(by) : strings.analyticsSlower(by) };
 }
 
 /** A source as a person reads it: `direct` as a word, a UTM source or a host as itself. */
@@ -111,9 +130,7 @@ function headlineOf(analytics: FormAnalytics): readonly StatItem[] {
       id: 'median',
       label: strings.analyticsMedian,
       value: median === undefined ? '—' : duration(median),
-      ...(previous.medianMs === undefined || median === undefined
-        ? { comparison: median === undefined ? strings.analyticsNoMedian : undefined }
-        : compared(median, previous.medianMs, range, duration)),
+      ...comparedTime(median, previous.medianMs),
     },
   ];
 }
@@ -182,22 +199,51 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
     );
   }
 
+  // Nothing in this range, but the form has been seen before now: the range control stays, so the way out is
+  // obvious, and nothing is drawn as a flat line pretending to be data.
+  if (analytics.totals.views === 0) {
+    return (
+      <FieldGroup tone="heading" headingLevel={2} label={strings.analytics}>
+        {period}
+        <Stats label={strings.analyticsSummary} items={headlineOf(analytics)} />
+        <EmptyState icon="chart-line" title={strings.analyticsNoneInRange}>
+          {strings.analyticsNoneInRangeText}
+        </EmptyState>
+      </FieldGroup>
+    );
+  }
+
   const dayFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const dayOnly = new Intl.DateTimeFormat(undefined, { day: 'numeric', timeZone: 'UTC' });
   const dayPoints = analytics.byDay.map((each) => {
-    const label = dayFormat.format(new Date(`${each.day}T00:00:00Z`));
-    return { id: each.day, label, axisLabel: label, value: each.views, valueText: figure(each.views) };
+    const when = new Date(`${each.day}T00:00:00Z`);
+    // The axis takes the day number alone, so 30 and 90 day ranges don't run their labels together; the tooltip
+    // and the table view read `label`, which keeps the month.
+    return {
+      id: each.day,
+      label: dayFormat.format(when),
+      axisLabel: dayOnly.format(when),
+      value: each.views,
+      valueText: figure(each.views),
+    };
   });
   // Only the questions somebody reached: a bar per unreached question would be a row of zeroes saying nothing.
   const dropOff = analytics.byQuestion.filter((row) => row.reached > 0);
-  const dropPoints = dropOff.map((row) => {
-    const label = labels.get(row.questionId) ?? row.questionId;
-    return { id: row.questionId, label, axisLabel: label, value: row.leftHere, valueText: figure(row.leftHere) };
-  });
+  // The axis takes the question's place in the form, so five bars never lose a label to a long question; the
+  // tooltip and the table view read `label`, which is the question itself.
+  const order = new Map(analytics.byQuestion.map((row, at) => [row.questionId, at + 1]));
+  const dropPoints = dropOff.map((row) => ({
+    id: row.questionId,
+    label: labels.get(row.questionId) ?? row.questionId,
+    axisLabel: strings.analyticsQuestionAt(order.get(row.questionId) ?? 0),
+    value: row.leftHere,
+    valueText: figure(row.leftHere),
+  }));
 
   return (
     <FieldGroup tone="heading" headingLevel={2} label={strings.analytics}>
       {period}
-      <Stats label={strings.analytics} items={headlineOf(analytics)} />
+      <Stats label={strings.analyticsSummary} items={headlineOf(analytics)} />
       {dayPoints.length > 1 && (
         <Suspense fallback={<Skeleton shape="fill" />}>
           <Chart
@@ -237,6 +283,7 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
             { id: 'completions', label: strings.analyticsCompletions, align: 'end', size: 'fit' },
           ]}
           rows={analytics.bySource}
+          emptyState={<EmptyState layout="row" title={strings.analyticsNoSources} />}
           getRowId={(row) => row.source}
           renderCell={(row, column) =>
             column === 'source'
@@ -249,6 +296,12 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
       </FieldGroup>
     </FieldGroup>
   );
+}
+
+/** One question's chip: the figure the card shows, and what it is of, as its tooltip. */
+export interface QuestionStat {
+  readonly stat: string;
+  readonly statTitle: string;
 }
 
 /** The range the Form tab's chips read (AC-6322): the Analytics tab's own default, so the two share one read. */
@@ -276,13 +329,17 @@ const NO_ANALYTICS: FormAnalyticsHeld = {
  * seen would be a statement about the form's traffic dressed up as one about
  * the question.
  */
-export function useQuestionStats(view: FormAnalyticsHeld | undefined): ReadonlyMap<string, string> | undefined {
+export function useQuestionStats(view: FormAnalyticsHeld | undefined): ReadonlyMap<string, QuestionStat> | undefined {
   const state = useFormAnalytics(view ?? NO_ANALYTICS);
   return useMemo(() => {
     if (state.status !== 'ready') return undefined;
-    const entries = state.analytics.byQuestion.flatMap((row) =>
-      row.reached === 0 ? [] : ([[row.questionId, strings.analyticsChip(percent(row.answered, row.reached))]] as const),
-    );
+    const entries = state.analytics.byQuestion.flatMap((row) => {
+      if (row.reached === 0) return [];
+      const answered = percent(row.answered, row.reached);
+      // The card has room for the percentage only, so the tooltip carries what it is a percentage of.
+      const stat = { stat: strings.analyticsChip(answered), statTitle: strings.analyticsReached(answered, figure(row.reached)) };
+      return [[row.questionId, stat]] as const;
+    });
     return entries.length === 0 ? undefined : new Map(entries);
   }, [state]);
 }

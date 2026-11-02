@@ -595,14 +595,21 @@ export const strings = {
   analyticsStarts: 'Starts',
   analyticsCompletion: 'Completion',
   analyticsMedian: 'Median time',
-  /** The figure a period is read against, beside its arrow: "20 in the 30 days before". */
-  analyticsBefore: (before: string, days: number) => `${before} in the ${String(days)}\u00a0days before`,
+  /** The change against the period before, beside its arrow: "+8 vs 30 days before", so nothing has to be subtracted. */
+  analyticsChange: (change: string, days: number) => `${change} vs ${String(days)}\u00a0days before`,
+  analyticsNoChange: (days: number) => `Same as the ${String(days)}\u00a0days before`,
+  /** The median is the one figure where less is better, so its change says so in words rather than by an arrow. */
+  analyticsFaster: (by: string) => `${by} faster`,
+  analyticsSlower: (by: string) => `${by} slower`,
   analyticsNoMedian: 'No finishes yet',
   analyticsDay: 'Day',
   analyticsChart: (days: number) => `Views per day over the last ${String(days)} days`,
   analyticsDropOff: 'Where people stop',
   analyticsDropOffChart: 'People who stopped on each question',
   analyticsQuestion: 'Question',
+  /** A question's place in the form, as the drop off chart's axis label: "Q4". */
+  analyticsQuestionAt: (at: number) => `Q${String(at)}`,
+  analyticsSummary: 'Headline figures',
   analyticsLeft: 'Stopped here',
   analyticsSources: 'Where they come from',
   analyticsSource: 'Source',
@@ -610,12 +617,14 @@ export const strings = {
   analyticsDirect: 'Direct',
   analyticsEmpty: 'No visits yet',
   analyticsEmptyText: 'Share the form’s link to see how it performs.',
+  analyticsNoneInRange: 'No visits in this period',
+  analyticsNoneInRangeText: 'Try a longer period.',
+  analyticsNoSources: 'Nothing yet',
   analyticsFailed: 'Analytics didn’t load',
-  analyticsRetry: 'Try again',
   /** A question card's chip (AC-6322): "82% answered", or nothing at all when nobody reached it. */
   analyticsChip: (answered: string) => `${answered} answered`,
-  /** How many reached a question, as the chip's tooltip. */
-  analyticsReached: (reached: string) => `${reached} reached this question`,
+  /** What the chip's percentage is of, as its tooltip: the denominator, which the card has no room to say. */
+  analyticsReached: (answered: string, reached: string) => `${answered} of the ${reached} who reached this question`,
 
   status: {
     draft: 'Not published',
