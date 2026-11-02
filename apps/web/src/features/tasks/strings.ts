@@ -21,12 +21,20 @@ export const strings = {
   formerMember: 'Former member',
   /** Why a task's checkbox and fields can't be changed (AC-447). */
   readOnly: 'You can only view this task.',
-  // The task dialog.
+  // The task panel.
   task: 'Task',
+  /** The panel's steps through the list it was opened from, as a record's panel steps through its view. */
+  previousTask: 'Previous task',
+  nextTask: 'Next task',
+  /** The panel's one quick action, in place of a Done checkbox among the fields. */
+  markDone: 'Mark done',
+  reopen: 'Reopen',
+  /** Handing a task to somebody else: it reaches them, so the toast says so. */
+  assigned: 'Task assigned',
+  assignedConsequence: (name: string) => `${name} gets it in their inbox.`,
   loading: 'Loading the task',
   title: 'Title',
   description: 'Description',
-  done: 'Done',
   dueDate: 'Due date',
   assignee: 'Assignee',
   records: 'Records',

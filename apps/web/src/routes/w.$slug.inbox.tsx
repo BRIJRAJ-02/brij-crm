@@ -9,7 +9,7 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // The inbox (spec 0038, AC-1169 to AC-1174): `?status=done` (the Done tab),
 // `?kind=` (`mentions`, `replies` or `assignments`), `?unread=1` and `?task=`
-// (an assignment's task dialog). The loader starts the list the address
+// (an assignment's task panel). The loader starts the list the address
 // names beside the objects (the record chips' pages), the members (who did
 // it, and the names in an excerpt) and the person's member id, all through
 // the data layer; the inbox's store loads in its own chunk, and the screen

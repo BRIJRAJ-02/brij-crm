@@ -2,7 +2,8 @@ import type { RecordRefDisplay, TaskView } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import { withLinks } from '../records/timeline.ts';
 import { isTaskParam } from '../records/params.ts';
-import { chipRecords, memberDisplay, tabCount, toTaskEntry } from './entries.ts';
+import { chipRecords, memberDisplay, stepTask, tabCount, toTaskEntry } from './entries.ts';
+import type { TaskEntry } from '@crm/ui';
 
 const acme: RecordRefDisplay = { objectId: 'o1', recordId: 'r1', name: 'Acme', kind: 'company' };
 const ada: RecordRefDisplay = { objectId: 'o2', recordId: 'r2', name: 'Ada', kind: 'person' };
@@ -81,5 +82,30 @@ describe('tasks as the list draws them (spec 0019)', () => {
     ).toMatchObject({
       href: `/page?task=${task.id}`,
     });
+  });
+});
+
+describe('stepTask', () => {
+  const rows = (ids: readonly (string | undefined)[]) => ({
+    count: ids.length,
+    getItem: (index: number) => {
+      const id = ids[index];
+      return id === undefined ? undefined : ({ id, title: id, isDone: false } satisfies TaskEntry);
+    },
+  });
+
+  it('steps to the task before and after', () => {
+    expect(stepTask(rows(['a', 'b', 'c']), 'b', 'previous')).toBe('a');
+    expect(stepTask(rows(['a', 'b', 'c']), 'b', 'next')).toBe('c');
+  });
+
+  it('stops at either end', () => {
+    expect(stepTask(rows(['a', 'b']), 'a', 'previous')).toBeUndefined();
+    expect(stepTask(rows(['a', 'b']), 'b', 'next')).toBeUndefined();
+  });
+
+  it('has no step for a task the list does not hold, or a neighbour not read yet', () => {
+    expect(stepTask(rows(['a', 'b']), 'z', 'next')).toBeUndefined();
+    expect(stepTask(rows(['a', undefined]), 'a', 'next')).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 // Linking records from a cell or a record page row (spec 0014, milestone 2),
-// and the record picker's search everywhere it shows (the task dialog too).
+// and the record picker's search everywhere it shows (the task panel too).
 // One search per picker through the data layer (`records.search`), one open
 // at a time; each result says beside its name whether it is linked already
 // and who holds it ("At Acme"); a pick or a removed chip goes to the data
@@ -340,7 +340,7 @@ export function useLinkEditing(slug: string, openForm?: OpenRecordForm) {
 }
 
 /**
- * The task dialog's record picker search (spec 0019, through spec 0014's
+ * The task panel's record picker search (spec 0019, through spec 0014's
  * `records.search`): what the person types, in the object the switcher
  * names, and every record display it has answered (to show a picked one at
  * once). `failed` says the last search failed; typing on asks again.

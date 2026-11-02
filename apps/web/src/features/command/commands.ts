@@ -310,7 +310,7 @@ export interface CommandRecord {
 /**
  * The open record's actions, first under Actions: New note on <name>, New
  * task on <name>, Log a call on <name> and Log a meeting on <name>, each
- * opening the record's own note window, task dialog or Log activity dialog
+ * opening the record's own note window, task panel or Log activity dialog
  * (`?note=new`, `?task=new`, `?log=call`, `?log=meeting`) on its tab, as the
  * tabs' buttons do.
  */
@@ -354,8 +354,8 @@ export function createHref(slug: string, object: Pick<ObjectSummary, 'apiSlug'>)
   return `${objectHref(slug, object)}?new=1`;
 }
 
-/** The page a task dialog opens over from the menu: the one shown when it holds `?task=` (Tasks, the inbox, a record), else Tasks. */
-export function taskDialogHref(slug: string, pathname: string, task: string): string {
+/** The page a task panel opens over from the menu: the one shown when it holds `?task=` (Tasks, the inbox, a record), else Tasks. */
+export function taskPanelHref(slug: string, pathname: string, task: string): string {
   const prefix = `/w/${slug}/`;
   const rest = pathname.startsWith(prefix) ? pathname.slice(prefix.length) : undefined;
   const holds =
@@ -375,7 +375,7 @@ export function createTaskCommand(slug: string, pathname: string): Command {
     name: strings.createTask,
     icon: 'square-check',
     terms: strings.taskTerms,
-    run: go(taskDialogHref(slug, pathname, 'new')),
+    run: go(taskPanelHref(slug, pathname, 'new')),
   };
 }
 

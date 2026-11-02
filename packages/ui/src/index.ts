@@ -558,7 +558,12 @@ export {
 } from './modules/NotificationList/NotificationList.tsx';
 export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/RecordHeader.tsx';
 export { RecordLayout, type RecordLayoutProps } from './modules/RecordLayout/RecordLayout.tsx';
-export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';
+export {
+  RecordPanel,
+  type RecordPanelProps,
+  type RecordPanelSubject,
+  type RecordPanelTab,
+} from './modules/RecordPanel/RecordPanel.tsx';
 export {
   RelatedRecords,
   type RelatedRecord,

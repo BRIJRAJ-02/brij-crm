@@ -22,13 +22,13 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // `records.one`) and its timeline's first page, waiting at most OPEN_GRACE_MS
 // for them, and hands the screen subscriptions, never rows. The screen loads
 // with this route's component, outside the first load. Spec 0019 adds the
-// Tasks tab and `?task=<id>` (or `new`), the task dialog over any tab; the
+// Tasks tab and `?task=<id>` (or `new`), the task panel over any tab; the
 // loader starts the record's open tasks (the tab's count and Overview's block)
 // and reads the person's member id (a new task is theirs). Spec 0017
 // milestone 3 starts each side that holds many as a section source (the
 // sidebar's section and Overview's card share it), never waiting for them.
 /**
- * `?task=<id>` or `?task=new`: the task dialog; `?note=<id>` or `?note=new`: the note window; `?log=<id>`, `?log=new`,
+ * `?task=<id>` or `?task=new`: the task panel; `?note=<id>` or `?note=new`: the note window; `?log=<id>`, `?log=new`,
  * `?log=call` or `?log=meeting`: the Log activity dialog. Anything else is dropped.
  */
 interface RecordSearch {

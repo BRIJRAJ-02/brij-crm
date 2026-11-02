@@ -25,7 +25,7 @@ export interface TasksTabProps {
   readonly canAdd: boolean;
   /** A linked record's page, for its chip. */
   readonly recordHref: (record: RecordRefDisplay) => string | undefined;
-  /** Opens the task dialog on a task, or on a new one. */
+  /** Opens the task panel on a task, or on a new one. */
   readonly onOpenTask: (taskId: string) => void;
 }
 

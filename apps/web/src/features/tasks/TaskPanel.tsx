@@ -1,7 +1,8 @@
 // Brief
-// Purpose: everything about one task, on `?task=<id>` (or `?task=new`) over the page it opened from.
-// Main task: set its title and what it means, when it's due, who has it and which records it is about.
-// Leaves out: comments on tasks, rich text in the description, reminders beyond the due day's inbox notice, subtasks.
+// Purpose: everything about one task, beside the page it opened from, on `?task=<id>` (a new one is still a dialog).
+// Main task: read it at a glance, tick it off, and change its title, notes, due day, assignee and records in place.
+// Leaves out: comments and an activity feed on a task (neither exists: comments are record scoped), rich text in the
+// description, reminders beyond the due day's inbox notice, subtasks, a task's own full page.
 import {
   refusalSummary,
   TASK_DESCRIPTION_MAX,
@@ -23,7 +24,7 @@ import {
   arraySource,
   AttributeEditor,
   Button,
-  Checkbox,
+  Callout,
   DescriptionList,
   EmptyState,
   Field,
@@ -32,6 +33,7 @@ import {
   MenuItem,
   MenuTrigger,
   Modal,
+  RecordPanel,
   RelativeTime,
   Tooltip,
   type FieldAttribute,
@@ -44,8 +46,8 @@ import { taskCreatedToast } from './toasts.ts';
 import { strings } from './strings.ts';
 import { editorSearch, useRecordSearch } from '../records/links.ts';
 
-/** Props for the task dialog. */
-export interface TaskDialogProps {
+/** Props for the task panel. */
+export interface TaskPanelProps {
   readonly slug: string;
   /** The task's id, or `new`. */
   readonly task: string;
@@ -60,8 +62,14 @@ export interface TaskDialogProps {
   readonly onClose: () => void;
   /** The list the dialog opened from, by its name: it takes focus back after a delete. */
   readonly listLabel?: string;
-  /** Opens a task's dialog: the "Task created" toast's Open. */
+  /** Opens a task's panel: the "Task created" toast's Open. */
   readonly onOpenTask?: (taskId: string) => void;
+  /**
+   * Steps to the task above or below in the list the panel was opened from, as a record's panel steps through its
+   * view (↑ and ↓ too). Leave one out at either end, and both out where the panel wasn't opened from a list.
+   */
+  readonly onPrevious?: () => void;
+  readonly onNext?: () => void;
 }
 
 /** The member a member editor committed, or null when it was cleared. */
@@ -89,6 +97,9 @@ function failedTask(retry: () => void): TaskSubscription {
 /** Which field a refusal shows under. */
 type FieldName = 'title' | 'description' | 'isDone' | 'dueOn' | 'assignee' | 'records';
 
+/** The panel's one view: there are no comments or activity on a task, so a lone tab strip would say nothing. */
+const SUBJECT_ICON = 'square-check' as const;
+
 /** The dialog's attributes, through the field set's own editors (one field design, house rule 3). */
 function attributeOf(
   id: string,
@@ -114,7 +125,8 @@ interface TaskFieldsProps {
   readonly slug: string;
   readonly title: string;
   readonly description: string;
-  readonly isDone?: boolean;
+  /** A saved task's fields commit as they change; a new one's are held until Create. */
+  readonly isSaved: boolean;
   readonly dueOn: string | undefined;
   readonly assigneeMemberId: string | undefined;
   readonly records: readonly RecordRefDisplay[];
@@ -136,7 +148,7 @@ function TaskFields({
   slug,
   title,
   description,
-  isDone,
+  isSaved,
   dueOn,
   assigneeMemberId,
   records,
@@ -165,7 +177,7 @@ function TaskFields({
   // A saved task's description typed and then closed with Esc (no blur on the way out) is still saved.
   const commitOnClose = useRef<() => void>(() => undefined);
   useEffect(() => {
-    commitOnClose.current = isDone === undefined ? () => undefined : commitDescription;
+    commitOnClose.current = isSaved ? commitDescription : () => undefined;
   });
   useEffect(() => {
     const latest = commitOnClose;
@@ -190,7 +202,6 @@ function TaskFields({
   const [recordsError, setRecordsError] = useState<string | undefined>(undefined);
   const [titleError, setTitleError] = useState<string | undefined>(undefined);
   // A saved task's title emptied says why it wasn't saved, and keeps what was typed (a new one waits for Create).
-  const isSaved = isDone !== undefined;
   const commitTitle = () => {
     const trimmed = draft.trim();
     if (trimmed === '') {
@@ -240,18 +251,6 @@ function TaskFields({
         {...(readOnlyReason === undefined ? {} : { isReadOnly: true, readOnlyReason })}
         {...(errors.description === undefined ? {} : { error: errors.description })}
       />
-      {isDone !== undefined && (
-        <Checkbox
-          label={strings.done}
-          isSelected={isDone}
-          isReadOnly={readOnlyReason !== undefined}
-          {...(readOnlyReason === undefined ? {} : { description: readOnlyReason })}
-          onChange={(next) => {
-            onChange({ isDone: next });
-          }}
-          {...(errors.isDone === undefined ? {} : { error: errors.isDone })}
-        />
-      )}
       <AttributeEditor
         attribute={attributeOf('task-due', strings.dueDate, 'date', readOnlyReason)}
         value={dueOn ?? null}
@@ -342,6 +341,53 @@ function fieldOf(change: TaskChange): FieldName {
   return 'records';
 }
 
+/** The panel's shell for a saved task, whatever state it is in: the record panel's, with a task as its subject. */
+function TaskShell({
+  title,
+  onClose,
+  onPrevious,
+  onNext,
+  status,
+  onRetry,
+  actions,
+  quickActions,
+  empty,
+  children,
+}: {
+  readonly title: string;
+  readonly onClose: () => void;
+  readonly onPrevious?: () => void;
+  readonly onNext?: () => void;
+  readonly status?: 'ready' | 'loading' | 'error';
+  readonly onRetry?: () => void;
+  readonly actions?: ReactNode;
+  readonly quickActions?: ReactNode;
+  readonly empty?: ReactNode;
+  readonly children?: ReactNode;
+}) {
+  return (
+    <RecordPanel
+      subject={{
+        title,
+        icon: SUBJECT_ICON,
+        previousLabel: strings.previousTask,
+        nextLabel: strings.nextTask,
+      }}
+      width="lg"
+      isOpen
+      onClose={onClose}
+      {...(onPrevious === undefined ? {} : { onPrevious })}
+      {...(onNext === undefined ? {} : { onNext })}
+      {...(status === undefined ? {} : { status })}
+      {...(onRetry === undefined ? {} : { onRetry })}
+      {...(actions === undefined ? {} : { actions })}
+      {...(quickActions === undefined ? {} : { quickActions })}
+      {...(empty === undefined ? {} : { empty })}
+      {...(children === undefined ? {} : { body: children })}
+    />
+  );
+}
+
 /** A saved task: each field committed as it changes, optimistic, rolled back with the message under it. */
 function SavedTask({
   slug,
@@ -351,43 +397,48 @@ function SavedTask({
   members,
   meId,
   onClose,
+  onPrevious,
+  onNext,
   listLabel,
-}: Omit<TaskDialogProps, 'task' | 'pageRecord'> & { readonly subscription: TaskSubscription }) {
+}: Omit<TaskPanelProps, 'task' | 'pageRecord'> & { readonly subscription: TaskSubscription }) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const state = useTask(subscription);
   const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
-  const close = (
-    <Button slot="close" onPress={onClose}>
-      {strings.close}
-    </Button>
-  );
+  const steps = { ...(onPrevious === undefined ? {} : { onPrevious }), ...(onNext === undefined ? {} : { onNext }) };
   if (state.status === 'loading') {
-    return (
-      <TaskModal title={strings.task} onClose={onClose}>
-        <EmptyState isLoading title={strings.loading} />
-      </TaskModal>
-    );
+    return <TaskShell title={strings.task} onClose={onClose} status="loading" {...steps} />;
   }
   if (state.status === 'error') {
-    return (
-      <TaskModal title={strings.task} onClose={onClose} actions={close}>
-        <EmptyState tone="error" title={strings.loadFailed} onRetry={subscription.retry} />
-      </TaskModal>
-    );
+    return <TaskShell title={strings.task} onClose={onClose} status="error" onRetry={subscription.retry} {...steps} />;
   }
   const task: TaskView | undefined = state.task;
   if (state.status === 'missing' || task === undefined) {
     return (
-      <TaskModal title={strings.task} onClose={onClose} actions={close}>
-        <EmptyState icon="search" title={strings.missing} />
-      </TaskModal>
+      <TaskShell
+        title={strings.task}
+        onClose={onClose}
+        empty={<EmptyState icon="search" title={strings.missing} />}
+        {...steps}
+      />
     );
   }
   const change = (next: TaskChange) => {
     const field = fieldOf(next);
     setErrors((held) => ({ ...held, [field]: undefined }));
     void data.tasks.update(slug, task.id, next).then((failure: DataError | undefined) => {
-      if (failure !== undefined) setErrors((held) => ({ ...held, [field]: refusalSummary(failure) }));
+      if (failure !== undefined) {
+        setErrors((held) => ({ ...held, [field]: refusalSummary(failure) }));
+        return;
+      }
+      // Handing it to somebody else reaches them: the toast names that, since nothing on this screen shows it.
+      const handedOn = next.assigneeMemberId;
+      if (handedOn !== undefined && handedOn !== null && handedOn !== meId) {
+        toasts.toast({
+          tone: 'success',
+          message: strings.assigned,
+          consequence: strings.assignedConsequence(memberDisplay(members, handedOn).name),
+        });
+      }
     });
   };
   // Deleting acts at once, with no confirm, and offers Undo for 10 seconds (AC-445).
@@ -428,10 +479,24 @@ function SavedTask({
           ? strings.automation
           : strings.system;
   return (
-    <TaskModal
-      title={strings.task}
+    <TaskShell
+      title={task.title}
       onClose={onClose}
-      headerActions={
+      {...steps}
+      // The one action the panel is opened for, where the eye lands: Done was a checkbox among the fields.
+      quickActions={
+        <Button
+          variant={task.isDone ? 'secondary' : 'primary'}
+          icon={task.isDone ? 'undo-2' : 'check'}
+          isDisabled={!task.canChange}
+          onPress={() => {
+            change({ isDone: !task.isDone });
+          }}
+        >
+          {task.isDone ? strings.reopen : strings.markDone}
+        </Button>
+      }
+      actions={
         // More: Copy link, and Delete task for someone who may change it (milestone 4).
         <MenuTrigger>
           <Tooltip content={strings.more}>
@@ -457,11 +522,12 @@ function SavedTask({
       }
     >
       <Form id={`task-${task.id}`} onSubmit={() => undefined} label={strings.task}>
+        {errors.isDone !== undefined && <Callout tone="danger">{errors.isDone}</Callout>}
         <TaskFields
           slug={slug}
           title={task.title}
           description={task.description}
-          isDone={task.isDone}
+          isSaved
           dueOn={task.dueOn}
           assigneeMemberId={task.assigneeMemberId}
           records={task.records}
@@ -487,11 +553,15 @@ function SavedTask({
           ]}
         />
       </Form>
-    </TaskModal>
+    </TaskShell>
   );
 }
 
-/** A new task: its fields held here until Create, which closes the dialog at once (optimistic). */
+/**
+ * A new task: a dialog, not the panel. It is one short create form with its own Create, and a panel that asks
+ * before anything exists would hold a footer the record panel has no room for (31 October 2026's header pattern).
+ * Its fields are held here until Create, which closes it at once (optimistic).
+ */
 function NewTask({
   slug,
   pageRecord,
@@ -501,7 +571,7 @@ function NewTask({
   meId,
   onClose,
   onOpenTask,
-}: Omit<TaskDialogProps, 'task'>) {
+}: Omit<TaskPanelProps, 'task' | 'onPrevious' | 'onNext'>) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const formId = useId();
   // One id per opening, sent again on Retry.
@@ -557,6 +627,7 @@ function NewTask({
           slug={slug}
           title={title}
           description={description}
+          isSaved={false}
           dueOn={dueOn}
           assigneeMemberId={assignee}
           records={records}
@@ -589,7 +660,7 @@ function NewTask({
   );
 }
 
-/** The dialog's frame: the library's Modal, open while the address names a task. */
+/** The new task dialog's frame: the library's Modal, open while the address names `new`. */
 function TaskModal({
   title,
   onClose,
@@ -620,11 +691,12 @@ function TaskModal({
 }
 
 /**
- * The task dialog (AC-434): a new task's fields until Create, or a saved
- * task's, each committed as it changes and live; a task that doesn't exist,
- * was deleted, or is hidden says so.
+ * The task panel (AC-434): a saved task beside the page, each field committed
+ * as it changes and live, with Previous and Next where a list opened it; a
+ * task that doesn't exist, was deleted, or is hidden says so. `new` is still
+ * a dialog, since it is a create form with its own button.
  */
-export function TaskDialog(props: TaskDialogProps) {
+export function TaskPanel(props: TaskPanelProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const [subscription, setSubscription] = useState<TaskSubscription | 'failed' | undefined>(undefined);
   // Moves on Try again after the task's code failed to load.
@@ -638,7 +710,7 @@ export function TaskDialog(props: TaskDialogProps) {
         if (isLive) setSubscription(found);
       },
       () => {
-        // The store's code didn't load (offline): the dialog says so, with Try again.
+        // The store's code didn't load (offline): the panel says so, with Try again.
         if (isLive) setSubscription('failed');
       },
     );
@@ -647,7 +719,7 @@ export function TaskDialog(props: TaskDialogProps) {
     };
   }, [data, slug, task, attempt]);
   if (task === 'new') return <NewTask {...props} />;
-  // One SavedTask (so one Modal) from the first frame: a placeholder that says loading until the store's lands.
+  // One SavedTask (so one Panel) from the first frame: a placeholder that says loading until the store's lands.
   const shown =
     subscription === 'failed'
       ? failedTask(() => {

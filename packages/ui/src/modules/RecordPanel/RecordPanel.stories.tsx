@@ -353,3 +353,45 @@ export const NoAccess: Story = {
     await expect(canvas.getByText('You can’t see this record')).toBeInTheDocument();
   },
 };
+
+/**
+ * A task in the same shell (`subject` with `body`): its icon where a record's avatar sits, its own step names, one
+ * quick action and one scrolling body in place of the tabs.
+ */
+export const AsATask: Story = {
+  render: () => (
+    <Stage height="page">
+      <RecordPanel
+        subject={{
+          title: 'Call Ada back',
+          icon: 'square-check',
+          previousLabel: 'Previous task',
+          nextLabel: 'Next task',
+        }}
+        width="lg"
+        isOpen
+        onClose={fn()}
+        onPrevious={fn()}
+        onNext={fn()}
+        quickActions={
+          <Button variant="primary" icon="check">
+            Mark done
+          </Button>
+        }
+        body={
+          <AttributeList
+            label="Task"
+            sections={sampleDetails(SAMPLE_RECORD.values)}
+            editorProps={sampleEditorProps}
+            onCommit={fn()}
+          />
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const panel = canvas.getByRole('dialog', { name: 'Call Ada back' });
+    await expect(within(panel).getByRole('button', { name: 'Previous task' })).toBeInTheDocument();
+    await expect(within(panel).queryByRole('tablist')).not.toBeInTheDocument();
+  },
+};

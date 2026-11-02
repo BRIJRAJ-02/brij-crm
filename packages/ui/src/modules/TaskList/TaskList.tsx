@@ -29,6 +29,7 @@ import { ChipRow } from '../../fields/parts.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { formatDate, formatDateInYear } from '../../lib/format.ts';
 import { itemOfKey, keyedRows, type KeyedRow } from '../../lib/keyed-rows.ts';
+import { useDropIn } from '../../lib/motion/motion.ts';
 import type { ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { RowShown, useRangeReporter } from '../../lib/range-reporter.tsx';
@@ -301,6 +302,9 @@ function TaskListContent({
     () => (sectionOf === undefined ? undefined : groupRows(rows, tasks, sectionOf)),
     [rows, tasks, sectionOf],
   );
+  // A task made here lands at the top: that one row drops in, and the rest stay still (a virtual list draws a
+  // window, so only the row at index 0 is marked).
+  const listRef = useDropIn(rows[0]?.id);
 
   if (status === 'error') {
     return (
@@ -369,6 +373,7 @@ function TaskListContent({
         id={row.id}
         className={styles.row}
         textValue={task.title}
+        {...(row.index === 0 ? { 'data-drop-in': '' } : {})}
         data-done={task.isDone || undefined}
         data-pressable={onAction === undefined ? undefined : ''}
       >
@@ -454,6 +459,7 @@ function TaskListContent({
   const list =
     groups === undefined ? (
       <GridList
+        ref={listRef}
         className={styles.root}
         data-inline={isInline || undefined}
         aria-label={label}
@@ -464,7 +470,13 @@ function TaskListContent({
         {renderRow}
       </GridList>
     ) : (
-      <GridList className={styles.root} data-inline={isInline || undefined} aria-label={label} {...actions}>
+      <GridList
+        ref={listRef}
+        className={styles.root}
+        data-inline={isInline || undefined}
+        aria-label={label}
+        {...actions}
+      >
         {groups.map((group, index) =>
           group.section === undefined ? (
             <Collection key={`rows:${String(index)}`} items={group.rows} dependencies={dependencies}>

@@ -9,7 +9,7 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // My tasks (spec 0019, AC-436): `?filter=` (`assigned`, the default,
 // `created` or `all`), `?status=` (`open`, the default, or `done`) and
-// `?task=` (the task dialog). The loader starts the list the address names
+// `?task=` (the task panel). The loader starts the list the address names
 // (waiting at most OPEN_GRACE_MS for its first page, so a slow load draws the
 // list loading in place) beside the objects (the record picker and chips),
 // the members (assignees) and the person's member id, all through the data

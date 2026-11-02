@@ -17,7 +17,7 @@ import { LogActivityDialog } from '../notes/LogActivityDialog.tsx';
 import { NoteWindow } from '../notes/NoteWindow.tsx';
 import { tabCount } from '../tasks/entries.ts';
 import { strings as taskStrings } from '../tasks/strings.ts';
-import { TaskDialog } from '../tasks/TaskDialog.tsx';
+import { TaskPanel } from '../tasks/TaskPanel.tsx';
 import { TasksTab } from '../tasks/TasksTab.tsx';
 import { RecordLists, RecordListsLoading, type RecordListsProps } from '../lists/RecordLists.tsx';
 import type { ListSectionSource } from '../lists/list-section.ts';
@@ -457,7 +457,7 @@ function LoadedPeek(
           : {})}
       />
       {task !== undefined && (
-        <TaskDialog
+        <TaskPanel
           slug={slug}
           task={task}
           {...(canEdit ? { pageRecord: display } : {})}

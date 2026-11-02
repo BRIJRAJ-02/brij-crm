@@ -32,13 +32,15 @@ New. Clicking a record in a view (#17) opens it beside the table instead of leav
 - `actions` go before the close button, such as the record's menu.
 - `stats` puts the record header's stat strip (`RecordStats`) over the tabs: open tasks, notes, the last activity, each opening its tab through `onPress` (pair it with `selectedTab` and `onTabChange`). The leading avatar is `md` (24px), a step up from the bar's icons (13 Oct reference batch 4).
 - `notice` puts one line over the tabs, such as a danger `Callout` saying the record is no longer available (it stays read only until closed). `empty` replaces the tabs with the screen's own `EmptyState`, for a record that isn't available (missing or hidden read as one state, spec 0017 AC-384); the header keeps Close. Why props: the record page says both in its own layout, and the peek over a table or board (the CRM flow pass, 31 October 2026) has only the panel to say them in; `no-access` asks for access, which a deleted record can't be given.
+- `subject` opens something that isn't a record in the same shell: a task (`{ title, icon, previousLabel, nextLabel }`). Its icon takes the avatar's slot, its title the record's name, and its labels the steps' ("Previous task"). Why a prop rather than a second panel: the shell, the 31 October header pattern and the summary row are the same, and a `TaskPanel` beside this one would be the second panel that ends a design system (house rule 5, step 2).
+- `body` replaces the tabs with one scrolling body, for a subject with a single view: a task has no comments or activity of its own, and a lone tab strip said nothing.
 - `status`: `loading` (leave out `record`; skeletons show in place of the tabs), `error` (with Try again from `onRetry`), or `no-access`.
 - `isStepping` marks a step on its way, the next record loading while this one stays (the record panel over a table or board, 31 October 2026): after the loading delay a thin indeterminate progress line shows along the body's top edge, with no change of layout (the tabs keep their full colour: dimmed, their labels fell under AA contrast); a step that lands quickly shows nothing, and the body is `aria-busy` meanwhile. Why a prop: only the screen knows the next record is on its way (a held ↑ or ↓, or a page of the list loading).
 - Stepping onto the first or last record disables the button you pressed; focus moves to the other one.
 
 ## States
 
-Open (with its facts and quick actions; with its stat strip, its stats loading, or none; with a notice), unavailable (`empty`), closed (with the panel's exit animation), loading, failed, no access. Each tab's content brings its own loading, empty and error states.
+Open (with its facts and quick actions; as a task, with its icon, one body and no tabs; with its stat strip, its stats loading, or none; with a notice), unavailable (`empty`), closed (with the panel's exit animation), loading, failed, no access. Each tab's content brings its own loading, empty and error states.
 
 ## Keyboard
 

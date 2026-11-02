@@ -67,7 +67,7 @@ import { NoteWindow } from '../notes/NoteWindow.tsx';
 import { tabCount } from '../tasks/entries.ts';
 import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
 import { strings as taskStrings } from '../tasks/strings.ts';
-import { TaskDialog } from '../tasks/TaskDialog.tsx';
+import { TaskPanel } from '../tasks/TaskPanel.tsx';
 import { TasksTab } from '../tasks/TasksTab.tsx';
 import { objectHref } from '../workspace/objects.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
@@ -110,7 +110,7 @@ export interface RecordPageProps {
   readonly open: TaskListSource | undefined;
   /** The person's member id: a new task is theirs. */
   readonly meId: string | undefined;
-  /** `?task=`: the task dialog's task, or `new`. */
+  /** `?task=`: the task panel's task, or `new`. */
   readonly task?: string;
   /** The record's notes (spec 0019): the Notes tab and its count. */
   readonly notes: NoteListSource | undefined;
@@ -488,7 +488,7 @@ function RecordScreen({
     [data, slug, recordId, stageAttribute?.id, stageKey],
   );
   const factState = useRecordFacts(facts);
-  // Whether the task dialog was opened from this page, so closing it steps Back rather than adding a step.
+  // Whether the task panel was opened from this page, so closing it steps Back rather than adding a step.
   const openedHere = useRef(false);
   // A `?task=` that arrived while the page was open (a timeline entry's link, or `openTask`) was pushed: closing
   // steps Back. One the page opened with (a link from elsewhere) is replaced.
@@ -531,7 +531,7 @@ function RecordScreen({
     (kinds: readonly ActivityKind[]) => data.activity.forRecord(slug, recordId, object.id, kinds),
     [data, slug, recordId, object.id],
   );
-  // The note window (spec 0019), opened and closed as the task dialog is: pushed, so Back closes it.
+  // The note window (spec 0019), opened and closed as the task panel is: pushed, so Back closes it.
   const noteOpenedHere = useRef(false);
   const openNote = (noteId: string) => {
     noteOpenedHere.current = true;
@@ -717,7 +717,7 @@ function RecordScreen({
   }
   const dialog =
     task === undefined ? undefined : (
-      <TaskDialog
+      <TaskPanel
         slug={slug}
         task={task}
         {...(pageRecord === undefined || !canAddTasks ? {} : { pageRecord })}

@@ -10,8 +10,9 @@ import { useCallback, useMemo, useRef } from 'react';
 import { recordLinks } from '../records/timeline.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { daySections, useToday } from './day.ts';
+import { stepTask } from './entries.ts';
 import { strings } from './strings.ts';
-import { TaskDialog } from './TaskDialog.tsx';
+import { TaskPanel } from './TaskPanel.tsx';
 import { tickTask } from './toasts.ts';
 import { useTaskEntries } from './useTaskEntries.ts';
 
@@ -23,7 +24,7 @@ export interface MyTasksScreenProps {
   readonly slug: string;
   readonly filter: TaskMine;
   readonly status: MyTasksStatus;
-  /** `?task=`: the task dialog over the list. */
+  /** `?task=`: the task panel over the list. */
   readonly task?: string;
   /** The list the filter and status name. */
   readonly list: TaskListSource;
@@ -100,6 +101,10 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
     }
     go({});
   };
+  // Previous and Next step through this list, as a record's panel steps through its view. At either end the prop
+  // is left out, so the panel disables that button; with neither neighbour it shows no steps at all.
+  const before = task === undefined || task === 'new' ? undefined : stepTask(entries, task, 'previous');
+  const after = task === undefined || task === 'new' ? undefined : stepTask(entries, task, 'next');
   const empty = emptyOf(filter, status);
   const filterLabel = FILTERS.find((each) => each.value === filter)?.label ?? strings.myTasks;
   const statusLabel = STATUSES.find((each) => each.value === status)?.label ?? strings.open;
@@ -179,7 +184,7 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
               </TabPanel>
             </Tabs>
             {task !== undefined && (
-              <TaskDialog
+              <TaskPanel
                 slug={slug}
                 task={task}
                 objects={objects}
@@ -187,6 +192,20 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
                 meId={meId}
                 onClose={closeTask}
                 onOpenTask={openTask}
+                {...(before === undefined
+                  ? {}
+                  : {
+                      onPrevious: () => {
+                        openTask(before);
+                      },
+                    })}
+                {...(after === undefined
+                  ? {}
+                  : {
+                      onNext: () => {
+                        openTask(after);
+                      },
+                    })}
               />
             )}
           </>

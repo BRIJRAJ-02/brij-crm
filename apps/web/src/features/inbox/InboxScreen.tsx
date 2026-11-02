@@ -21,7 +21,7 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useMemo, useRef } from 'react';
 import { notificationSettingsHref } from '../settings/nav.ts';
-import { TaskDialog } from '../tasks/TaskDialog.tsx';
+import { TaskPanel } from '../tasks/TaskPanel.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { targetOf, toNotificationItem } from './entries.ts';
 import { notificationKind, type InboxKind, type InboxSearch } from './search.ts';
@@ -110,7 +110,7 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
     () => members.map((member) => ({ type: 'member' as const, id: member.id, name: member.name })),
     [members],
   );
-  // Whether this page opened the task dialog, so closing it steps Back rather than adding a step.
+  // Whether this page opened the task panel, so closing it steps Back rather than adding a step.
   const openedHere = useRef(false);
 
   const go = (next: InboxSearch, push = false) => {
@@ -271,7 +271,7 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
                     })}
             />
             {search.task !== undefined && (
-              <TaskDialog
+              <TaskPanel
                 slug={slug}
                 task={search.task}
                 objects={objects}

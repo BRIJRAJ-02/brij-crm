@@ -42,6 +42,29 @@ export function toTaskEntry(task: TaskView, members: readonly MemberSummary[], p
   };
 }
 
+/** What a stepping panel reads: the rows a list has drawn so far, by place. */
+export interface TaskRows {
+  readonly count: number;
+  readonly getItem: (index: number) => TaskEntry | undefined;
+}
+
+/**
+ * The task before or after `taskId` in the list the panel was opened from, as
+ * the record panel steps through its view. Undefined at either end, for a task
+ * the list doesn't hold (it was deleted, or the panel was opened from the
+ * inbox), and where the neighbour's page hasn't been read yet, so the step's
+ * button is disabled rather than going nowhere.
+ */
+export function stepTask(rows: TaskRows, taskId: string, step: 'previous' | 'next'): string | undefined {
+  for (let index = 0; index < rows.count; index += 1) {
+    if (rows.getItem(index)?.id !== taskId) continue;
+    const next = index + (step === 'next' ? 1 : -1);
+    if (next < 0 || next >= rows.count) return undefined;
+    return rows.getItem(next)?.id;
+  }
+  return undefined;
+}
+
 /**
  * A tab's count as its label carries it: the open tasks, and whether it is a
  * floor ("10,000+"). None at all shows no count: a "0" beside Tasks read as

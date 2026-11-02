@@ -16,7 +16,7 @@ import {
   pageCommands,
   recordCommands,
   settingsCommands,
-  taskDialogHref,
+  taskPanelHref,
   viewHref,
 } from './commands.ts';
 import { commandKey, isCommandMenuKey, isSearchKey } from './keys.ts';
@@ -359,7 +359,7 @@ describe('every address the menu lists is a route (AC-1104)', () => {
     ].flatMap((command) => ('href' in command.run ? [command.run.href] : []));
     expect(hrefs.filter((href) => !isRoute(href))).toEqual([]);
     expect(isRoute(createHref('acme', { apiSlug: 'people' }))).toBe(true);
-    expect(isRoute(taskDialogHref('acme', '/w/acme/home', 'new'))).toBe(true);
+    expect(isRoute(taskPanelHref('acme', '/w/acme/home', 'new'))).toBe(true);
     expect(isRoute('/w/acme/notes')).toBe(true);
     expect(isRoute(viewHref('acme', 'people', '0199a6f2-0000-7000-8000-000000000001'))).toBe(true);
     expect(isRoute('/w/acme/nowhere')).toBe(false);
@@ -376,9 +376,9 @@ describe('notes, tasks and making what nothing matched (the flow pass of 30 Oct 
 
   it('opens a task over the page when it holds the dialog, else over Tasks', () => {
     const record = '/w/acme/objects/people/0199a6f2-0000-7000-8000-0000000000b1/overview';
-    expect(taskDialogHref('acme', record, 'new')).toBe(`${record}?task=new`);
-    expect(taskDialogHref('acme', '/w/acme/inbox', 'new')).toBe('/w/acme/inbox?task=new');
-    expect(taskDialogHref('acme', '/w/acme/objects/people/views/0199a6f2-0000-7000-8000-000000000001', 'x')).toBe(
+    expect(taskPanelHref('acme', record, 'new')).toBe(`${record}?task=new`);
+    expect(taskPanelHref('acme', '/w/acme/inbox', 'new')).toBe('/w/acme/inbox?task=new');
+    expect(taskPanelHref('acme', '/w/acme/objects/people/views/0199a6f2-0000-7000-8000-000000000001', 'x')).toBe(
       '/w/acme/tasks?task=x',
     );
     expect(createTaskCommand('acme', '/w/acme/home')).toMatchObject({

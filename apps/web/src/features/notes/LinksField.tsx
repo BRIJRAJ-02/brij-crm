@@ -1,5 +1,5 @@
 // Brief
-// Purpose: the records a note, call or meeting is also on, besides its own, as chips with a picker (the task dialog's Records field).
+// Purpose: the records a note, call or meeting is also on, besides its own, as chips with a picker (the task panel's Records field).
 // Main task: add and remove linked records, shown at once, with a refusal said under the field.
 // Leaves out: the note's own record (it can't be unlinked), records the person may not change (not offered).
 import { NOTE_RECORDS_MAX, refusalSummary, type DataError, type ObjectSummary, type RecordRefDisplay } from '@crm/data';

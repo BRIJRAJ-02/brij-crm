@@ -49,3 +49,7 @@ Tab enters the list. The up and down arrows move between rows (section headings 
 ## Differences from the artifact
 
 Not in the artifact. `record` and `recordHref` on a task gave way to `records` and the list's `recordHref(record)` (spec 0019), so one task can name several records; `recordCount` stays for a count past the listed ones but draws nothing of its own.
+
+## Motion
+
+A task made here lands at the top of the list, and that one row drops in (`useDropIn`): the list carries the hook and the row at index 0 carries `data-drop-in`, so in a virtual list nothing else moves. A row's count badge rolls its changed digit through `Badge`. A ticked task is struck through and leaves when the list settles; it does not `collapseAway`, because the rows below a virtualised row are placed by the layout, so there would be nothing to glide.

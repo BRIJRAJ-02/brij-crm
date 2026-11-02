@@ -35,7 +35,7 @@ import {
   pageCommands,
   recordCommands,
   settingsCommands,
-  taskDialogHref,
+  taskPanelHref,
   viewHref,
   type Command,
   type CommandMode,
@@ -446,7 +446,7 @@ function hrefOf(
       ? undefined
       : noteHref(slug, object.apiSlug, note.record.recordId, note.id);
   }
-  if (kind === 'task') return taskDialogHref(slug, pathname, target);
+  if (kind === 'task') return taskPanelHref(slug, pathname, target);
   if (kind === 'record' || kind === 'recent-record') {
     const ref =
       records.find((hit) => hit.ref.recordId === target)?.ref ??

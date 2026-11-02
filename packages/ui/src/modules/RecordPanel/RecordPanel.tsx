@@ -5,6 +5,8 @@ import type { RecordRefDisplay } from '@crm/contracts/values';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
+import type { IconName } from '../../atoms/Icon/icons.ts';
 import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { ShortcutTooltip } from '../../atoms/Tooltip/ShortcutTooltip.tsx';
@@ -23,17 +25,41 @@ export interface RecordPanelTab extends TabItem {
   readonly content: ReactNode;
 }
 
+/**
+ * A subject that isn't a record, opened in the same panel: a task. It brings
+ * its own title and icon in place of the record's name and avatar, and names
+ * its own steps ("Previous task"), so one shell serves both rather than a
+ * second panel growing beside it.
+ */
+export interface RecordPanelSubject {
+  /** Its heading, and what the body is named by; while it loads, what it is ("Task").  */
+  readonly title: string;
+  /** The mark before the title, where a record has its avatar. */
+  readonly icon: IconName;
+  /** What stepping is called here, since it isn't a record ("Previous task", "Next task"). */
+  readonly previousLabel: string;
+  readonly nextLabel: string;
+}
+
 /** Props for RecordPanel. */
 export interface RecordPanelProps {
   /** The record: its name, kind, and picture or hue. Leave it out while it loads. */
   readonly record?: RecordRefDisplay;
+  /** In place of `record`: a subject that isn't one (a task), with its own title, icon and step names. */
+  readonly subject?: RecordPanelSubject;
   /** `loading` (skeletons in place of the tabs), `error`, or `no-access`, for the record as a whole. */
   readonly status?: LoadStatus;
   /** Try again, when `status` is `error`. */
   readonly onRetry?: () => void;
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  readonly tabs: readonly RecordPanelTab[];
+  /** Its tabs. Leave them out and pass `body` for a subject with a single view. */
+  readonly tabs?: readonly RecordPanelTab[];
+  /**
+   * In place of the tabs: one body that fills the panel and scrolls itself, for a subject with a single view (a
+   * task's fields). A lone tab strip said nothing, so there isn't one.
+   */
+  readonly body?: ReactNode;
   readonly selectedTab?: string;
   readonly onTabChange?: (id: string) => void;
   /** Steps to the record above or below in the view; leave one out at either end of the list. */
@@ -77,9 +103,11 @@ export interface RecordPanelProps {
  */
 export function RecordPanel({
   record,
+  subject,
   isOpen,
   onClose,
-  tabs,
+  tabs = [],
+  body,
   selectedTab,
   onTabChange,
   onPrevious,
@@ -109,7 +137,9 @@ export function RecordPanel({
     if (atEnd && (lost || active === nextRef.current)) previousRef.current?.focus();
     else if (atStart && (lost || active === previousRef.current)) nextRef.current?.focus();
   }, [atStart, atEnd]);
-  const isReady = status === 'ready' && record !== undefined;
+  // The name the panel is known by: the record's, or the subject's own title.
+  const name = record?.name ?? subject?.title;
+  const isReady = status === 'ready' && name !== undefined;
   let content: ReactNode;
   if (empty !== undefined) {
     content = <div className={styles.content}>{empty}</div>;
@@ -131,8 +161,7 @@ export function RecordPanel({
   return (
     <Panel
       title={
-        record?.name ??
-        (empty !== undefined ? strings.unavailable : status === 'error' ? strings.failed : strings.loading)
+        name ?? (empty !== undefined ? strings.unavailable : status === 'error' ? strings.failed : strings.loading)
       }
       variant="floating"
       isFlush
@@ -149,16 +178,20 @@ export function RecordPanel({
           }
         : {})}
       leading={
-        record !== undefined && (
-          <Avatar
-            name={record.name}
-            id={record.recordId}
-            size="md"
-            shape={record.kind === 'person' ? 'circle' : 'square'}
-            isDecorative
-            {...(record.imageSrc === undefined ? {} : { src: record.imageSrc })}
-            {...(record.hue === undefined ? {} : { hue: record.hue })}
-          />
+        subject !== undefined ? (
+          <Icon name={subject.icon} size="md" tone="muted" />
+        ) : (
+          record !== undefined && (
+            <Avatar
+              name={record.name}
+              id={record.recordId}
+              size="md"
+              shape={record.kind === 'person' ? 'circle' : 'square'}
+              isDecorative
+              {...(record.imageSrc === undefined ? {} : { src: record.imageSrc })}
+              {...(record.hue === undefined ? {} : { hue: record.hue })}
+            />
+          )
         )
       }
       actions={
@@ -166,22 +199,22 @@ export function RecordPanel({
           {/* Previous and Next as one pair, then a gap, then Open full page; Close ends the bar (owner, 31 Oct). */}
           {hasSteps && (
             <span className={styles.steps}>
-              <ShortcutTooltip content={strings.previous} kbd="↑">
+              <ShortcutTooltip content={subject?.previousLabel ?? strings.previous} kbd="↑">
                 <Button
                   ref={previousRef}
                   variant="ghost"
                   icon="chevron-up"
-                  label={strings.previous}
+                  label={subject?.previousLabel ?? strings.previous}
                   isDisabled={onPrevious === undefined}
                   {...(onPrevious === undefined ? {} : { onPress: onPrevious })}
                 />
               </ShortcutTooltip>
-              <ShortcutTooltip content={strings.next} kbd="↓">
+              <ShortcutTooltip content={subject?.nextLabel ?? strings.next} kbd="↓">
                 <Button
                   ref={nextRef}
                   variant="ghost"
                   icon="chevron-down"
-                  label={strings.next}
+                  label={subject?.nextLabel ?? strings.next}
                   isDisabled={onNext === undefined}
                   {...(onNext === undefined ? {} : { onPress: onNext })}
                 />
@@ -216,20 +249,24 @@ export function RecordPanel({
               <RecordStats label={strings.about(record.name)} stats={stats} />
             </div>
           )}
-          <div className={styles.tabs}>
-            <Tabs
-              label={record?.name ?? strings.loading}
-              tabs={tabs}
-              {...(selectedTab === undefined ? {} : { selectedKey: selectedTab })}
-              {...(onTabChange === undefined ? {} : { onSelectionChange: onTabChange })}
-            >
-              {tabs.map((tab) => (
-                <TabPanel key={tab.id} id={tab.id}>
-                  <div className={styles.content}>{tab.content}</div>
-                </TabPanel>
-              ))}
-            </Tabs>
-          </div>
+          {body === undefined ? (
+            <div className={styles.tabs}>
+              <Tabs
+                label={name ?? strings.loading}
+                tabs={tabs}
+                {...(selectedTab === undefined ? {} : { selectedKey: selectedTab })}
+                {...(onTabChange === undefined ? {} : { onSelectionChange: onTabChange })}
+              >
+                {tabs.map((tab) => (
+                  <TabPanel key={tab.id} id={tab.id}>
+                    <div className={styles.content}>{tab.content}</div>
+                  </TabPanel>
+                ))}
+              </Tabs>
+            </div>
+          ) : (
+            <div className={styles.content}>{body}</div>
+          )}
         </div>
       )}
     </Panel>
