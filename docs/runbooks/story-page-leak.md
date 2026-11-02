@@ -100,7 +100,23 @@ happily in a page of their own: four files never reach the count.
 
 It does NOT explain 62, 74, 5, 3, or the three clean 178s, so this is a strong lead and not an answer.
 
-### Start here: the experiment with a prediction
+### What we did about it, which is also the experiment
+
+Every pass is now capped at **30 files** (`MAX_PER_PASS` in `packages/ui/scripts/story-shard.ts`), so two
+shards of ~91 become four passes and three. Each pass is a fresh `vitest run` and so a fresh page.
+
+The prediction, written before the first run under the cap: **if the ceiling is counted in files, every pass
+of 30 or fewer survives and WebKit goes green. If a pass of 30 dies anyway, the count hypothesis is wrong.**
+Either way the run costs what an unchanged push would have cost.
+
+One observation already argues against the hypothesis and should not be forgotten while reading a green: a
+pass of 86 died after **3** (41485749715). If the ceiling were simply 37 files, that pass should have
+reached 37.
+
+The quarantine of four files went at the same time. It rested on a theory this page refutes, and under a cap
+it is redundant: every pass is small now.
+
+### If the cap does not settle it
 
 Repeat the same run on an unchanged tree several times, and vary only the number of files scheduled.
 

@@ -574,26 +574,26 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
             timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
             sudo dpkg --configure -a || true
           done
-      # Two shards per engine, and KEEPS_A_PAGE in a pass of its own, each pass one `vitest run` and so one
-      # fresh browser page. This is a MITIGATION and it is not a demonstrated one. The page sometimes runs out
-      # of memory, and the point it dies at is a distribution rather than a property of a tree: the same tree
-      # died at 62 and then 74 (41448200887, 41453929022), and a branch with NO library change passed all 178
-      # in one page three times and then crashed at 37 of 178 on a fresh runner (41478500792). The split has a
-      # single green behind it (41469582229). One pass proves no more than one failure does.
+      # Two shards per engine, each split into passes of at most 30 story files. A pass is one `vitest run`
+      # and so one fresh browser page, and `scripts/story-shard.ts` decides the split.
       #
-      # So do not read a green here as the problem being solved, do not read a red as this branch's fault, and
-      # do not bisect a tree over it: three identical-tree runs have given three different answers.
-      # docs/runbooks/story-page-leak.md lists every observation we have. Keep the shards, because they cost
-      # nothing and the alternative is a single page carrying everything; keep isolation on, since
-      # `--no-isolate` hangs identically (41448193169); and do not raise the timeout or add a third shard.
+      # The cap is the point. WebKit has died after the 37th file four times (41477180390, 41478500792,
+      # 41490051715, 41491888165) across two shardings, two file counts per page and four trees, and what the
+      # page was scheduled to run never moved that figure: 91 files or 178, the same 37. So the ceiling looks
+      # to be counted in FILES, not in their content, which means a pass that stays under it should live. If
+      # that is right, every pass of 30 or fewer passes. If a pass of 30 dies anyway, the count hypothesis is
+      # wrong, and one observation already argues against it: a pass of 86 died after 3 (41485749715).
       #
-      # `scripts/story-shard.ts` picks the split rather than vitest's `--shard`, which orders files by the
-      # sha1 of their path and, with no cache on a fresh runner, leaves that order alone, so which files land
-      # first is a coin toss; a 5 of 91 run came out of that (41457814575). The script decides membership and
-      # pass boundaries only: the files reach vitest as filters, so the order inside a pass is still vitest's.
+      # What this replaces: the four files that used to run in a page of their own. That quarantine rested on
+      # a theory we refuted — they passed 4 of 4 alone while a pass of ordinary files died after 3 — and
+      # under a cap it is unnecessary anyway, since every pass is already small.
       #
-      # Both shards run here one after the other on ONE runner. That is not the cause either: 41478500792
-      # crashed with a fresh runner and nothing before it.
+      # Isolation stays on, there is no third shard and no timeout change. `--no-isolate` hangs identically
+      # (41448193169). docs/runbooks/story-page-leak.md has every observation; read it before concluding
+      # anything from one run, because a green here is one sample and so is a red.
+      #
+      # `story-shard.ts` picks membership and pass boundaries only: the files reach vitest as filters, so the
+      # order inside a pass is still vitest's own.
       - name: Run the stories, in two shards
         run: |
           for shard in 1 2; do

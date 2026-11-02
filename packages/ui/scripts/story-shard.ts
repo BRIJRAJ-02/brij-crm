@@ -39,22 +39,14 @@ export function storyFiles(root: string = UI): readonly StoryFile[] {
 }
 
 /**
- * The stories kept to a page of their own. Quarantined for cheap and historical reasons,
- * NOT because any evidence points at them. They were in front of one shard when it ran
- * out of memory once (41461134131); since then the same four ran among 178 in a single
- * page on a branch with no library change and that page finished, and on 41485749715
- * they passed 4 of 4 in their own page while a pass of ordinary files died after 3 and
- * shard 1 took all 91. A page can die after three of anything. The crash point is a
- * distribution rather than a property of any tree, so neither a pass nor a failure of
- * one run says much — read docs/runbooks/story-page-leak.md before changing this list,
- * and don't bisect a tree over it.
+ * The most files one pass may run. WebKit has died after the 37th file four times, on
+ * two shardings, two file counts per page and four trees (41477180390, 41478500792,
+ * 41490051715, 41491888165), while what the page was scheduled to run never moved that
+ * figure. If the ceiling really is counted in files, a pass below it survives, so every
+ * pass is kept comfortably under. 30 rather than 36 because 37 is the only count we have
+ * seen it reach, not a measured limit.
  */
-export const KEEPS_A_PAGE: readonly string[] = [
-  'src/modules/WeekCalendar/WeekCalendar.stories.tsx',
-  'src/modules/LinkPage/LinkPage.stories.tsx',
-  'src/modules/SettingsLayout/SettingsLayout.stories.tsx',
-  'src/modules/LinkList/LinkList.stories.tsx',
-];
+export const MAX_PER_PASS = 30;
 
 /**
  * The files for shard `index` of `count` (both 1 based). Dealing heaviest first gives
@@ -72,20 +64,22 @@ export function shardStories(files: readonly StoryFile[], index: number, count: 
 }
 
 /**
- * A shard's passes, each one a `vitest run` of its own and so a browser page of its own.
- * The files in `KEEPS_A_PAGE` this shard holds go in a pass by themselves, ahead of the
- * rest; a shard holding none of them is a single pass, exactly as it was.
+ * A shard's passes, each one a `vitest run` of its own and so a browser page of its own,
+ * none holding more than `MAX_PER_PASS` files. Split into as few passes as that allows
+ * and then evenly, so no pass is a straggler of one.
  */
 export function shardPasses(
   files: readonly StoryFile[],
   index: number,
   count: number,
-  quarantined: readonly string[] = KEEPS_A_PAGE,
+  maxPerPass: number = MAX_PER_PASS,
 ): readonly (readonly string[])[] {
   const mine = shardStories(files, index, count);
-  const alone = mine.filter((file) => quarantined.includes(file));
-  const rest = mine.filter((file) => !quarantined.includes(file));
-  return [alone, rest].filter((pass) => pass.length > 0);
+  if (mine.length === 0) return [];
+  const howMany = Math.ceil(mine.length / maxPerPass);
+  const passes: string[][] = Array.from({ length: howMany }, () => []);
+  mine.forEach((file, place) => passes[place % howMany]?.push(file));
+  return passes.filter((pass) => pass.length > 0);
 }
 
 if (process.argv[1] === import.meta.filename) {
