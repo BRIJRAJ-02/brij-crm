@@ -1,0 +1,9 @@
+
+ RUN  v5.0.3 /private/tmp/claude-501/-Users-brijraj-Desktop-brijraj-crm/a7de589a-08e9-4fd6-bce9-a117940fce05/scratchpad/wt-0063-s9/packages/ui
+
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  01:59:51
+   Duration  2.53s (tests 68%, import 29%, worker 3%)
+

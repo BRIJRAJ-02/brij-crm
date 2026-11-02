@@ -1,0 +1,9 @@
+
+ RUN  v5.0.3 /private/tmp/claude-501/-Users-brijraj-Desktop-brijraj-crm/a7de589a-08e9-4fd6-bce9-a117940fce05/scratchpad/wt-0063-s9/packages/contracts
+
+
+ Test Files  9 passed (9)
+      Tests  120 passed (120)
+   Start at  00:01:16
+   Duration  419ms (transform 58%, import 34%, tests 7%, worker 1%)
+

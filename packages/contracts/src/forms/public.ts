@@ -5,7 +5,7 @@
 // the app), so its bundle carries no schema library.
 import * as z from 'zod';
 import { ANSWER_TYPES } from './answer-types.ts';
-import { FORM_LAYOUTS } from './path.ts';
+import { FORM_LAYOUTS, FORM_LOOK_THEMES } from './path.ts';
 import { CONDITION_OPS } from './show-when.ts';
 import { Uuid } from '../values/ids.ts';
 import { SubmitContext } from './context.ts';
@@ -118,7 +118,15 @@ export const PublicForm = z.object({
   subheading: z.string().optional(),
   buttonText: z.string(),
   language: z.enum(FORM_LANGUAGES),
-  look: z.object({ colour: z.enum(['light', 'dark']), corners: z.enum(['rounded', 'square']) }),
+  /**
+   * Its look (spec 0063, AC-6327): Light or Dark, Rounded or Square, and whether it wears its workspace's brand
+   * kit. `brand` arrives only with `theme: 'brand'`, so a plain form's read names no kit at all.
+   */
+  look: z.object({
+    colour: z.enum(['light', 'dark']),
+    corners: z.enum(['rounded', 'square']),
+    theme: z.enum(FORM_LOOK_THEMES).optional(),
+  }),
   questions: z.array(PublicQuestion),
   /** Classic when absent (spec 0063, AC-6302): Steps and One at a time load their own code on the page. */
   layout: z.enum(FORM_LAYOUTS).optional(),

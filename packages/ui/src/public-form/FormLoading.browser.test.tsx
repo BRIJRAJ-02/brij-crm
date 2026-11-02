@@ -4,10 +4,13 @@
 // owns its styles, so the loading shape keeps its own copy of the Classic
 // form's questions column; this holds the two together, so a change to either
 // that parts them fails here rather than on a visitor's phone.
+// The stylesheet comes before any component module: a layer's place is fixed by its first appearance, so a module
+// imported ahead of it registers `components` first and leaves `reset` after it, and reset's `button { color:
+// inherit }` then beats a component's own colour. That order measures a cascade no built page ever has.
+import '../styles/index.css';
 import type { PublicForm } from '@crm/contracts/forms';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { mountFormLoading, mountHostedForm, type HostedFormHandle } from './hosted-form.ts';
-import '../styles/index.css';
 
 const FORM: PublicForm = {
   key: 'loading-shape',

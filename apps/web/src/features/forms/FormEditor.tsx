@@ -4,6 +4,7 @@
 // Leaves out: round robin (#58), booking (#59), analytics. Jumps, endings, points and the Flow view arrived with spec 0063 slice 5: the jumps on a step divider (Form tab), the endings and the score's filing in Settings.
 import {
   isDataError,
+  type BrandStore,
   type FormDocument,
   type FormTargetChoices,
   type FormView,
@@ -50,6 +51,7 @@ import {
   withFlow,
   withQuestions,
 } from './draft.ts';
+import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from './FormBrand.tsx';
 import { FlowView } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { InstallTab } from './InstallTab.tsx';
@@ -85,6 +87,12 @@ export interface FormEditorProps {
   readonly openSubmission: SubmissionView | undefined;
   /** On the Form tab, the question to open and bring into view. */
   readonly question?: string;
+  /**
+   * The brand store (spec 0063, AC-6327), loaded with the route: the kit the preview wears while the look is
+   * Brand, and what Colours says of an empty one. Undefined when its chunk or its read failed, which costs the
+   * preview its accent and the picker its hint, and nothing else.
+   */
+  readonly brand?: BrandStore;
 }
 
 /** A document's mapping, as one comparable string: the target, its match, and where each question files. */
@@ -763,12 +771,20 @@ export function FormEditor(props: FormEditorProps) {
       footer={settings.footer}
       {...(current === 'form'
         ? {
-            preview: (
-              <HostedFormPreview
-                form={shownPreview.form}
-                {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
-              />
-            ),
+            preview:
+              draft.look.theme === 'brand' && props.brand !== undefined ? (
+                <BrandedFormPreview
+                  brand={props.brand}
+                  slug={slug}
+                  form={shownPreview.form}
+                  {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
+                />
+              ) : (
+                <HostedFormPreview
+                  form={shownPreview.form}
+                  {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
+                />
+              ),
             previewControls: (
               <>
                 <Select
@@ -803,6 +819,26 @@ export function FormEditor(props: FormEditorProps) {
                     }
                   }}
                 />
+                {/* Colours (spec 0063, AC-6327): the workspace's brand kit, or the product's own. */}
+                {props.brand === undefined ? (
+                  <BrandThemeSelect
+                    value={draft.look.theme ?? 'plain'}
+                    isReadOnly={!canManage}
+                    onChange={(theme) => {
+                      setDraft((before) => ({ ...before, look: { ...before.look, theme } }));
+                    }}
+                  />
+                ) : (
+                  <BrandThemeSelectWithKit
+                    brand={props.brand}
+                    slug={slug}
+                    value={draft.look.theme ?? 'plain'}
+                    isReadOnly={!canManage}
+                    onChange={(theme) => {
+                      setDraft((before) => ({ ...before, look: { ...before.look, theme } }));
+                    }}
+                  />
+                )}
               </>
             ),
           }

@@ -1,0 +1,21 @@
+
+ RUN  v5.0.3 /private/tmp/claude-501/-Users-brijraj-Desktop-brijraj-crm/a7de589a-08e9-4fd6-bce9-a117940fce05/scratchpad/wt-0063-s9/apps/web
+
+1:45:11 AM [vite] http proxy error: /api/public/forms/contact-us/logo?v=0123456789ab
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+1:45:11 AM [vite] http proxy error: /api/public/forms/contact-us/logo?v=0123456789ab
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+1:45:12 AM [vite] http proxy error: /api/public/forms/contact-us/logo?v=0123456789ab
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  01:45:08
+   Duration  3.69s (tests 58%, import 39%, worker 3%)
+

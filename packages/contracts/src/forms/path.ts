@@ -12,6 +12,15 @@ export const FORM_LAYOUTS = ['classic', 'steps', 'conversational'] as const;
 /** How a visitor sees a form. */
 export type FormLayout = (typeof FORM_LAYOUTS)[number];
 
+/**
+ * Whether a form wears its workspace's brand kit (spec 0063, AC-6327; spec 0060, AC-4): `brand` draws its accent
+ * and logo, `plain` the product's own colours. It sits here, beside the layouts, so the hosted page's own modules
+ * read it without reaching for the document's Zod schemas.
+ */
+export const FORM_LOOK_THEMES = ['plain', 'brand'] as const;
+/** Whether a form wears its workspace's brand kit. */
+export type FormLookTheme = (typeof FORM_LOOK_THEMES)[number];
+
 /** The longest step title the document takes. */
 export const FORM_STEP_TITLE_MAX = 80;
 

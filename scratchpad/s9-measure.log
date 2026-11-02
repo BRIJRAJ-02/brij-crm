@@ -1,0 +1,55 @@
+
+ RUN  v5.0.3 /private/tmp/claude-501/-Users-brijraj-Desktop-brijraj-crm/a7de589a-08e9-4fd6-bce9-a117940fce05/scratchpad/wt-0063-s9/packages/ui
+
+ ❯ |browser (chromium)| src/public-form/Brand.browser.test.tsx (6 tests | 2 failed) 1405ms
+   × draws the brand look and the Timefix mark in light (AC-6327, AC-6328) 551ms
+   × draws the brand look and the Timefix mark in dark (AC-6327, AC-6328) 489ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |browser (chromium)| src/public-form/Brand.browser.test.tsx > draws the brand look and the Timefix mark in light (AC-6327, AC-6328)
+AssertionError: expected 'rgb(24, 25, 29)' to be 'rgb(0, 0, 0)' // Object.is equality
+
+Failure screenshot:
+  - .vitest/attachments/failure-screenshots/Brand.browser.test.tsx/draws-the-brand-look-and-the-Timefix-mark-in-light--AC-6327--AC-6328-.png
+
+Expected: [32m"rgb([7m0, 0, 0[27m)"[39m
+Received: [31m"rgb([7m24, 25, 29[27m)"[39m
+
+ ❯ src/public-form/Brand.browser.test.tsx:139:28
+    137|     const painted = send === null ? undefined : globalThis.getComputed…
+    138|     expect(painted?.backgroundColor).toBe(colour === 'dark' ? 'rgb(232…
+    139|     expect(painted?.color).toBe('rgb(0, 0, 0)');
+       |                            ^
+    140|     await page.screenshot({ path: `../../.vitest/shots/s9-brand-form-$…
+    141|   });
+ ❯ node_modules/.vite/vitest/ef98362b8a6b0c8cd804b0d227aa1ffeaba89786/deps/plugins.D2ut1V9b-eScZmsxT.js?v=72ebce2e:5211:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |browser (chromium)| src/public-form/Brand.browser.test.tsx > draws the brand look and the Timefix mark in dark (AC-6327, AC-6328)
+AssertionError: expected 'rgb(235, 237, 239)' to be 'rgb(0, 0, 0)' // Object.is equality
+
+Failure screenshot:
+  - .vitest/attachments/failure-screenshots/Brand.browser.test.tsx/draws-the-brand-look-and-the-Timefix-mark-in-dark--AC-6327--AC-6328-.png
+
+Expected: [32m"rgb([7m0, 0, 0[27m)"[39m
+Received: [31m"rgb([7m235, 237, 239[27m)"[39m
+
+ ❯ src/public-form/Brand.browser.test.tsx:139:28
+    137|     const painted = send === null ? undefined : globalThis.getComputed…
+    138|     expect(painted?.backgroundColor).toBe(colour === 'dark' ? 'rgb(232…
+    139|     expect(painted?.color).toBe('rgb(0, 0, 0)');
+       |                            ^
+    140|     await page.screenshot({ path: `../../.vitest/shots/s9-brand-form-$…
+    141|   });
+ ❯ node_modules/.vite/vitest/ef98362b8a6b0c8cd804b0d227aa1ffeaba89786/deps/plugins.D2ut1V9b-eScZmsxT.js?v=72ebce2e:5211:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed (6)
+   Start at  01:40:37
+   Duration  2.53s (tests 68%, import 28%, worker 3%)
+

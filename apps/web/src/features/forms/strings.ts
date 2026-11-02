@@ -139,6 +139,14 @@ export const strings = {
   corners: 'Corners',
   rounded: 'Rounded corners',
   square: 'Square corners',
+  /** The look's third axis (spec 0063, AC-6327): the workspace's brand kit, or the product's own colours. */
+  theme: 'Colours',
+  themeBrand: 'Brand colours',
+  themePlain: 'Plain colours',
+  /** Said under Brand colours while the workspace has neither a colour nor a logo saved. */
+  themeBrandEmpty: 'Add your logo and colour in Settings › Brand.',
+  /** The workspace logo over the form reads as nothing: the headline beside it already names the form. */
+  brandLogoAlt: '',
 
   // Questions: the shared editor's words (`features/questions/strings.ts`), and the form's own
   ...questionStrings,

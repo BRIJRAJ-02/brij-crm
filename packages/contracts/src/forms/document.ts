@@ -16,7 +16,7 @@ import {
   QUESTION_KEY,
 } from './answer-types.ts';
 import { stepsOfBreaks, type ResolvedStep } from './breaks.ts';
-import { FORM_ENDINGS_MAX, FORM_LAYOUTS, FORM_STEP_TITLE_MAX, STEP_JUMPS_MAX } from './path.ts';
+import { FORM_ENDINGS_MAX, FORM_LAYOUTS, FORM_LOOK_THEMES, FORM_STEP_TITLE_MAX, STEP_JUMPS_MAX } from './path.ts';
 import { POINTS_LIMIT, SCORED_TYPES } from './score.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
@@ -225,10 +225,16 @@ export const FormStep = z.strictObject({
 /** A break in the questions. */
 export type FormStep = z.infer<typeof FormStep>;
 
-/** How the page looks: two axes and nothing else, each mapped onto tokens, so no unreadable pair exists. */
+/**
+ * How the page looks: three axes and nothing else, each mapped onto tokens, so no unreadable pair exists. `theme`
+ * (spec 0063, AC-6327) says whether it wears the workspace's brand kit. It is absent on every document written
+ * before this spec, and absent reads as `plain` everywhere, so those forms keep exactly the look they had; a new
+ * form is made with `brand` (`defaultDocument` in `@crm/core`).
+ */
 export const FormLook = z.strictObject({
   colour: z.enum(['light', 'dark']).default('light'),
   corners: z.enum(['rounded', 'square']).default('rounded'),
+  theme: z.enum(FORM_LOOK_THEMES).optional(),
 });
 /** How the page looks. */
 export type FormLook = z.infer<typeof FormLook>;
