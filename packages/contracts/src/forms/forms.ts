@@ -11,6 +11,7 @@ import { WorkspaceScoped } from '../workspaces.ts';
 import { SubmissionContext } from './context.ts';
 import { FormDocument } from './document.ts';
 import { PublicForm } from './public.ts';
+import { FormTemplateSummary, OfferedFormTemplateId } from './templates.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
 
 /** Where a form is (spec 0023, state transitions): `live` is accepting enquiries, `paused` not. */
@@ -545,6 +546,24 @@ export function exportDownloadPath(workspace: string, exportId: string): string 
   return `/api/exports/${encodeURIComponent(exportId)}/download?workspace=${encodeURIComponent(workspace)}`;
 }
 
+/**
+ * Starts a draft from a template (spec 0063, AC-6323): its questions file
+ * onto the workspace's matching standard attributes, and an answer that
+ * matches nothing is kept with the submission, with no field made until
+ * publish. The id is the browser's UUID v7 and the retry key, as
+ * `CreateFormInput`'s is. Only an offered template id is taken, so a template
+ * held back in code can't be reached from outside.
+ */
+export const CreateFromTemplateInput = WorkspaceScoped.extend({
+  id: uuidV7('The form id must be a UUID v7.'),
+  templateId: OfferedFormTemplateId,
+  /** What to call it; without one, the template's own name. */
+  name: FormName.optional(),
+  mutationId: Uuid,
+});
+/** Starts a draft from a template. */
+export type CreateFromTemplateInput = z.infer<typeof CreateFromTemplateInput>;
+
 /** The forms procedures (spec 0023). */
 export const formsContract = {
   list: oc.input(ListFormsInput).output(z.object({ items: z.array(FormSummary) })),
@@ -554,6 +573,10 @@ export const formsContract = {
   preview: oc.input(FormIdInput).output(PublicForm),
   slugAvailable: oc.input(SlugInput).output(z.object({ available: z.boolean() })),
   create: oc.input(CreateFormInput).output(FormView),
+  /** The gallery's tiles (AC-6323): the templates offered, in their order. Reading them changes nothing. */
+  templates: oc.input(WorkspaceScoped).output(z.object({ items: z.array(FormTemplateSummary) })),
+  /** Makes a draft from one template (AC-6323); needs `forms.manage`, as every other form write does. */
+  createFromTemplate: oc.input(CreateFromTemplateInput).output(FormView),
   saveDraft: oc.input(SaveFormDraftInput).output(FormView),
   publish: oc.input(PublishFormInput).output(FormView),
   updateSettings: oc.input(UpdateFormSettingsInput).output(FormView),

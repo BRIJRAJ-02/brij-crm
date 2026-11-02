@@ -19,6 +19,7 @@ import {
   FORM_SLUG,
   FORMS_LIST_MAX,
   generatedSlug,
+  isOfferedTemplate,
   publishProblem,
   recordFactProblem,
   type FormDocument,
@@ -26,6 +27,7 @@ import {
   type FormStatus,
   type FormSummary,
   type FormTargetChoices,
+  type FormTemplateSummary,
   type FormView,
   type PublicForm,
 } from '@crm/contracts';
@@ -38,6 +40,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { bookingTargetProblem } from '../booking/pages.ts';
 import { writeAudit } from '../members/audit.ts';
+import { formTemplate, offeredFormTemplates, templateDocument } from './templates/index.ts';
 import { changedRuleIds, checkFormAddresses, checkFormRoutes, rulesChanged } from '../routing/check.ts';
 import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -556,6 +559,101 @@ export async function createForm(
         name: input.name?.trim() ?? UNTITLED_FORM,
         objectId,
         document: firstDraft({ objectId, attributes, primaryId: object.primaryAttributeId }),
+      });
+      return viewOf(tx, scope, form);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * The gallery's tiles (spec 0063, AC-6323): the templates offered, in their
+ * order. Any member who reaches the forms module may read them — they are the
+ * same list on every workspace and hold no workspace's data — so there is
+ * nothing here to authorise beyond the door that let the member in, and
+ * nothing to read from the database.
+ */
+export function listFormTemplates(): { items: FormTemplateSummary[] } {
+  return { items: offeredFormTemplates() };
+}
+
+/** What creating a form from a template takes. */
+export interface CreateFromTemplateServiceInput {
+  readonly id: string;
+  readonly templateId: string;
+  readonly name?: string;
+}
+
+/**
+ * Starts a draft from a template (AC-6323): the template's questions on the
+ * workspace's default object, each filed onto the standard attribute whose
+ * slug it names where one fits, and kept with the submission where none does,
+ * so no field is made until the member publishes. With no object they may
+ * write, the form keeps its submissions only, as `createForm` does.
+ *
+ * The template id is untrusted: it is checked against the offered list and
+ * used only to pick a template out of the code catalog, never to look
+ * anything up. A template held back in code can't be reached here.
+ */
+export async function createFormFromTemplate(
+  scope: EngineScope,
+  input: CreateFromTemplateServiceInput,
+  hooks: readonly AfterWrite[] = [],
+): Promise<FormView> {
+  requirePermission(scope, 'forms.manage');
+  if (!isUuidV7(input.id)) throw refuse('CONFIG_INVALID', 'The form id must be a UUID v7.');
+  if (!isOfferedTemplate(input.templateId)) {
+    throw refuseOn('CONFIG_INVALID', 'That is not one of the form templates.', 'templateId');
+  }
+  const template = formTemplate(input.templateId);
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const existing = await loadForm(tx, input.id);
+      if (existing !== undefined) {
+        if (existing.createdById === scope.actor.id) return viewOf(tx, scope, existing);
+        throw refuse('ID_TAKEN', 'A form with that id already exists.');
+      }
+      // The tile's name is what the person chose between; `formName` is what the form itself is called.
+      const name = input.name?.trim() ?? template.formName ?? template.name;
+      const objectId = await defaultObject(tx, scope.access);
+      if (objectId === undefined) {
+        const kept = await insertForm(tx, scope, {
+          id: input.id,
+          name,
+          objectId: null,
+          document: templateDocument(template, undefined),
+        });
+        return viewOf(tx, scope, kept);
+      }
+      await writableObject(tx, scope, objectId);
+      // The schema is read through the access door's scope, as every other read of it is, and nothing is written
+      // to it: a template files onto fields that already exist, and makes none.
+      //
+      // Only the fields this member may write, the same cut `targetChoices` offers them in Where it goes
+      // (`fieldLevel`). Without it a template filed onto a field hidden from them, which they never chose and
+      // can't see, and Publish then refused the form by naming that field's title — telling them about a field
+      // their access rules hide (security review, slice 8). An answer whose field they can't write is kept with
+      // the submission instead, which is the same thing that happens when the workspace has no such field.
+      const fileableNow = fileable(await loadAttributes(tx, objectId));
+      const attributes = fileableNow.filter(
+        (attribute) => fieldLevel(scope.access, { id: attribute.id, objectId }) === 'write',
+      );
+      const match = matchOf(attributes);
+      const form = await insertForm(tx, scope, {
+        id: input.id,
+        name,
+        objectId,
+        document: templateDocument(template, {
+          objectId,
+          attributes: attributes.map((attribute) => ({
+            id: attribute.id,
+            apiSlug: attribute.apiSlug,
+            type: attribute.type,
+          })),
+          ...(match === undefined ? {} : { matchAttributeId: match.id }),
+        }),
       });
       return viewOf(tx, scope, form);
     },

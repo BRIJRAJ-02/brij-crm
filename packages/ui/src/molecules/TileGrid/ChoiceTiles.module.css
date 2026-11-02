@@ -185,6 +185,37 @@
     grid-column: 1 / -1;
   }
 
+  /* A described tile that keeps its thumbnail (`keepsPicture`): the tall picture across the top, its name and its
+     sentence underneath, in one column. A tile the person both looks at and reads, which the small mark's square
+     couldn't carry (the form template gallery, spec 0063, AC-6323).
+
+     Every selector here carries both attributes, and the block sits after the `[data-described]` rules: a plain
+     `[data-tall]` selector has the same specificity as the `[data-described]` one it has to beat, so whichever
+     came last would win and the name would stay pinned to row 1 with the picture pushed under it. */
+  .tile[data-described][data-tall] {
+    grid-template-columns: 1fr;
+    /* The picture carries the space under itself (below), so name and sentence sit a short step apart rather than
+       a picture's step apart. */
+    gap: var(--space-2);
+    align-content: start;
+  }
+
+  .tile[data-described][data-tall] .picture {
+    grid-row: 1;
+    /* The slot runs the tile's width; the thumbnail inside it keeps its own width and sits centred, rather than
+       hugging the start edge with empty slot after it. */
+    display: grid;
+    place-content: center;
+    inline-size: auto;
+    block-size: var(--size-column-min);
+    margin-block-end: var(--space-6);
+  }
+
+  .tile[data-described][data-tall] .name {
+    grid-row: 2;
+    align-self: start;
+  }
+
   /* The two quiet lines under a name, as one rule so they can't drift: what the choice does (`describe`, the
      thing a person reads to pick between them) and why a disabled tile can't be picked (`reason`, "At the
      limit", so it never needs a tooltip). */

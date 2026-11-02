@@ -19,4 +19,5 @@ export * from './routing.ts';
 export * from './conditions.ts';
 export * from './show-when.ts';
 export * from './strings.ts';
+export * from './templates.ts';
 export * from './uploads.ts';

@@ -53,9 +53,17 @@ interface ChoiceTilesBase {
    * (a form's three embed placements), where the tall slot was dead space and the tooltip hid the only words that
    * said what each one does (owner, 1 November 2026). Leave it off for tiles picked by sight, where the thumbnail
    * or the tinted mark is the thing being chosen: a `thumbnail` is squashed into the small mark's square here, so
-   * these tiles take an `icon`.
+   * these tiles take an `icon` — unless the grid also sets `keepsPicture`.
    */
   readonly showsDescription?: boolean;
+  /**
+   * Only read with `showsDescription`, and ignored without it. A tile that has a `thumbnail` keeps the tall picture slot and puts its name and
+   * sentence underneath, instead of squashing the thumbnail into the small mark's square. For a grid whose tiles
+   * are chosen by sight *and* have to be read: the form template gallery (spec 0063, AC-6323), where each tile owes
+   * the person both a preview of the form it makes and a line saying what it is for. A tile with an `icon` is
+   * unaffected and still reads as a mark beside its name.
+   */
+  readonly keepsPicture?: boolean;
 }
 
 /** A choice grid that keeps one tile chosen. */
@@ -113,17 +121,23 @@ function ActionTile({
   tile,
   onAction,
   showsDescription,
+  keepsPicture,
 }: {
   readonly tile: ChoiceTile;
   readonly onAction: (id: string) => void;
   readonly showsDescription: boolean;
+  readonly keepsPicture: boolean;
 }) {
+  const nameId = useId();
   const descriptionId = useId();
   const reasonId = useId();
   const reason = reasonOf(tile);
+  const tall = showsDescription && keepsPicture && tile.thumbnail !== undefined;
+  // The reason a tile can't be picked comes before what it does, as it does on a select tile: "At the limit"
+  // is the sentence that decides whether to read the rest.
   const describedBy = [
-    ...(tile.description === undefined ? [] : [descriptionId]),
     ...(reason === undefined ? [] : [reasonId]),
+    ...(tile.description === undefined ? [] : [descriptionId]),
   ].join(' ');
   return (
     <WithTip tile={tile} isShown={showsDescription}>
@@ -132,14 +146,21 @@ function ActionTile({
         data-tile=""
         data-mode="action"
         data-described={showsDescription || undefined}
+        data-tall={tall || undefined}
         isDisabled={tile.isDisabled === true}
         onPress={() => {
           onAction(tile.id);
         }}
+        // The name is the name alone, as it is on a select tile: without this the button's name is everything
+        // written on it, so a screen reader read the sentence twice, once as the name and again as the
+        // description (found building the template gallery, spec 0063).
+        aria-labelledby={nameId}
         {...(describedBy === '' ? {} : { 'aria-describedby': describedBy })}
       >
-        <Picture tile={tile} isCompact={showsDescription} />
-        <span className={styles.name}>{tile.name}</span>
+        <Picture tile={tile} isCompact={showsDescription && !tall} />
+        <span id={nameId} className={styles.name}>
+          {tile.name}
+        </span>
         {reason !== undefined && (
           <span id={reasonId} className={styles.reason}>
             {reason}
@@ -163,7 +184,15 @@ function ActionTile({
  * the tick's corner, so a click anywhere on the tile, on its name, or on the radio picks it, and nothing covers the
  * radio (React Aria's own RadioButton clips its input to nothing, which only a forced click reaches).
  */
-function SelectTile({ tile, showsDescription }: { readonly tile: ChoiceTile; readonly showsDescription: boolean }) {
+function SelectTile({
+  tile,
+  showsDescription,
+  keepsPicture,
+}: {
+  readonly tile: ChoiceTile;
+  readonly showsDescription: boolean;
+  readonly keepsPicture: boolean;
+}) {
   const state = useContext(RadioGroupStateContext);
   if (state === null) throw new Error('A select tile renders inside its RadioGroup.');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -187,6 +216,7 @@ function SelectTile({ tile, showsDescription }: { readonly tile: ChoiceTile; rea
   );
   const { focusProps, isFocusVisible } = useFocusRing();
   const { hoverProps, isHovered } = useHover({ isDisabled });
+  const tall = showsDescription && keepsPicture && tile.thumbnail !== undefined;
   return (
     <label
       {...mergeProps(labelProps, hoverProps)}
@@ -194,6 +224,7 @@ function SelectTile({ tile, showsDescription }: { readonly tile: ChoiceTile; rea
       data-tile=""
       data-mode="select"
       data-described={showsDescription || undefined}
+      data-tall={tall || undefined}
       data-selected={isSelected || undefined}
       data-disabled={isDisabled || undefined}
       data-pressed={isPressed || undefined}
@@ -201,7 +232,7 @@ function SelectTile({ tile, showsDescription }: { readonly tile: ChoiceTile; rea
       data-focus-visible={isFocusVisible || undefined}
     >
       <input {...mergeProps(inputProps, focusProps)} ref={inputRef} className={styles.input} />
-      <Picture tile={tile} isCompact={showsDescription} />
+      <Picture tile={tile} isCompact={showsDescription && !tall} />
       <span id={nameId} className={styles.name}>
         {tile.name}
       </span>
@@ -228,17 +259,26 @@ function SelectTile({ tile, showsDescription }: { readonly tile: ChoiceTile; rea
 /**
  * Equal size tiles to pick from by sight: a picture slot (a Lucide mark or a thumbnail), a short name, and for
  * `select` a ring and a tick on the chosen one. With `showsDescription`, each tile is instead a small mark beside
- * its name over a line saying what it does, for a short run of choices that have to be read. `select` is a radio group (one tab stop, arrows move and pick);
+ * its name over a line saying what it does, for a short run of choices that have to be read; with `keepsPicture`
+ * too, a tile that has a thumbnail keeps the tall picture and takes its name and line underneath, for a grid
+ * chosen by sight whose tiles also have to be read. `select` is a radio group (one tab stop, arrows move and pick);
  * `action` is a group of buttons. Internal: reached through `TileGrid variant="choice"`.
  */
 export function ChoiceTiles(props: ChoiceTilesProps) {
   const showsDescription = props.showsDescription ?? false;
+  const keepsPicture = props.keepsPicture ?? false;
   if (props.mode === 'action') {
     const { label, tiles, onAction } = props;
     return (
       <div className={styles.root} role="group" aria-label={label}>
         {tiles.map((tile) => (
-          <ActionTile key={tile.id} tile={tile} onAction={onAction} showsDescription={showsDescription} />
+          <ActionTile
+            key={tile.id}
+            tile={tile}
+            onAction={onAction}
+            showsDescription={showsDescription}
+            keepsPicture={keepsPicture}
+          />
         ))}
       </div>
     );
@@ -254,7 +294,7 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
     >
       {tiles.map((tile) => (
         <WithTip key={tile.id} tile={tile} isShown={showsDescription}>
-          <SelectTile tile={tile} showsDescription={showsDescription} />
+          <SelectTile tile={tile} showsDescription={showsDescription} keepsPicture={keepsPicture} />
         </WithTip>
       ))}
     </RadioGroup>

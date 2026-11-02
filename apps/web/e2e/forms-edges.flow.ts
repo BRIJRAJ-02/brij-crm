@@ -6,6 +6,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { newWorkspace } from './people.ts';
+import { newForm } from './forms.ts';
 
 /** The hosted form's bot check wants a human's pace before Send. */
 const HUMAN_PACE_MS = 3_000;
@@ -220,8 +221,7 @@ test.describe('the form journey’s edges', () => {
     });
 
     await page.goto(`/w/${slug}/captures/forms`);
-    await page.getByRole('button', { name: 'New form' }).first().click();
-    await expect(page).toHaveURL(/\/captures\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
+    await newForm(page);
     // Settings is open before the first publish, so what comes after sending is chosen first.
     await page.getByRole('tab', { name: 'Settings' }).click();
     await page.getByRole('radio', { name: 'Booking' }).check({ force: true });

@@ -1,11 +1,13 @@
 import {
   createForm,
+  createFormFromTemplate,
   deleteForm,
   duplicateForm,
   formAttributes,
   getForm,
   isSlugAvailable,
   listForms,
+  listFormTemplates,
   previewForm,
   publishForm,
   rotateFormSecret,
@@ -43,6 +45,22 @@ export const formsRouter = member.forms.router({
             ...(input.name === undefined ? {} : { name: input.name }),
             ...(input.mainObjectId === undefined ? {} : { mainObjectId: input.mainObjectId }),
           },
+          hooks,
+        ),
+      );
+    } catch (error) {
+      throw withInputFields(error, { ID_TAKEN: 'id' });
+    }
+  }),
+  // The gallery's tiles (spec 0063, AC-6323): the same list on every workspace, so nothing is read and nothing
+  // beyond the member door is authorised.
+  templates: member.forms.templates.handler(() => listFormTemplates()),
+  createFromTemplate: member.forms.createFromTemplate.handler(async ({ context, input }) => {
+    try {
+      return await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+        createFormFromTemplate(
+          context.scope,
+          { id: input.id, templateId: input.templateId, ...(input.name === undefined ? {} : { name: input.name }) },
           hooks,
         ),
       );

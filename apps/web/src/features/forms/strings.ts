@@ -27,6 +27,20 @@ export const strings = {
   openInNewTab: 'Open in a new tab',
   manageOnly: 'Only members who manage forms can change it',
   createFailed: 'Couldn’t make the form.',
+
+  // The template gallery (spec 0063, AC-6323): New form opens it, and each tile makes a draft at once.
+  galleryTitle: 'Start a form',
+  /** Said in the title bar, and announced politely, while a template is being turned into a draft. */
+  galleryMakingOne: (name: string) => `Making your ${name}…`,
+  /** What the blank template is called in that line, when the tiles never loaded and only Blank is reachable. */
+  galleryBlankName: 'blank form',
+  galleryFailedTitle: 'The templates didn’t load',
+  /** Read by screen readers while the tiles are on their way; the tile and lines only show after the loading delay. */
+  galleryLoading: 'Loading templates',
+  /** The way forward when there are no tiles to press: a failed read, or no templates at all. */
+  galleryBlank: 'Make a blank form',
+  galleryEmpty: 'No templates',
+  galleryEmptyText: 'Make a form from scratch instead.',
   turnOnFailed: (name: string) => `Couldn’t resume ${name}. It’s still paused.`,
   turnOffFailed: (name: string) => `Couldn’t pause ${name}. It’s still live.`,
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,

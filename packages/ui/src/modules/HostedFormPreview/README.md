@@ -32,7 +32,13 @@ A form's layout in miniature, for the editor's Layout tiles (TileGrid's `choice`
 />
 ```
 
-Why here and new: a choice tile takes a Lucide mark or a thumbnail, and no mark draws a form's layout (each new mark would also cost every page's first load, `packages/ui/AGENTS.md`). LinkPageThumbnail draws a link page's look, not a form's shape, and Skeleton is a loading state, not a picture. It lives beside the preview because it pictures the same thing: the form a visitor gets. It is shapes only, in tokens, still, inert and hidden from screen readers (the tile's name says which layout). States: the three layouts, in light and dark (`HostedFormPreview.stories.tsx`, Layout tiles).
+`rows` draws a *particular* form's answers instead of the layout's own one line fields, as shapes rather than controls (spec 0063, AC-6323): `field` a one line box, `long` a taller box, `choices` a stack of lines, `rating` five round marks, `scale` a row of boxes across the width, `date` a short box, `upload` a dashed box. That is what a template's tile shows, so a glance tells a feedback form from a signup one; without it the layout decides, which is what the three Layout tiles want.
+
+```tsx
+<FormLayoutThumbnail layout="classic" rows={['field', 'rating', 'long']} />
+```
+
+Why here and new: a choice tile takes a Lucide mark or a thumbnail, and no mark draws a form's layout (each new mark would also cost every page's first load, `packages/ui/AGENTS.md`). LinkPageThumbnail draws a link page's look, not a form's shape, and Skeleton is a loading state, not a picture. It lives beside the preview because it pictures the same thing: the form a visitor gets. It is shapes only, in tokens, still, inert and hidden from screen readers (the tile's name says which layout). States: the three layouts, and a template's own rows, in light and dark (`HostedFormPreview.stories.tsx`, Layout tiles and Template tiles).
 
 ## States and keyboard
 
