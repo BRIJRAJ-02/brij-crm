@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { FileIcon } from '../../atoms/FileIcon/FileIcon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
 import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
+import { collapseAway } from '../../lib/motion/motion.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import styles from './FileItem.module.css';
 import { strings } from './strings.ts';
@@ -24,7 +25,7 @@ export interface FileItemProps {
   readonly href?: string;
   /** Who added it and when (a name and a RelativeTime), after its size; a record's Files tab. */
   readonly detail?: ReactNode;
-  /** Shows a remove button. */
+  /** Shows a remove button. The row closes up first, so the rows below glide into its place as it goes. */
   readonly onRemove?: () => void;
   /** `row` (the default) with its size and progress; `chip`, a 20px chip with the icon and name, for cells and cards. */
   readonly variant?: 'row' | 'chip';
@@ -61,6 +62,7 @@ export function FileItem({
   variant = 'row',
 }: FileItemProps) {
   const { locale } = useFormatSettings();
+  const root = useRef<HTMLDivElement>(null);
   if (variant === 'chip') {
     return (
       <span className={styles.root} data-variant="chip">
@@ -79,7 +81,11 @@ export function FileItem({
   }
   const isUploading = progress !== undefined && progress < 100 && error === undefined;
   return (
-    <div className={styles.root} data-state={error === undefined ? (isUploading ? 'uploading' : 'done') : 'failed'}>
+    <div
+      ref={root}
+      className={styles.root}
+      data-state={error === undefined ? (isUploading ? 'uploading' : 'done') : 'failed'}
+    >
       <FileIcon contentType={contentType} />
       <span className={styles.text}>
         <span className={styles.name}>
@@ -109,7 +115,17 @@ export function FileItem({
           <span className={styles.error}>{error}</span>
         )}
       </span>
-      {onRemove !== undefined && <Button variant="ghost" icon="x" label={strings.remove(name)} onPress={onRemove} />}
+      {onRemove !== undefined && (
+        <Button
+          variant="ghost"
+          icon="x"
+          label={strings.remove(name)}
+          onPress={() => {
+            // The row closes up as it goes, so the list below glides rather than jumping.
+            collapseAway(root.current, onRemove);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -41,14 +41,16 @@ const WASH_MS = durationToken('duration-move') * 4;
 /**
  * A one shot highlight over a row that just changed, whoever changed it (an
  * edit made here, or a patch arriving over realtime). Pass something that
- * changes with the row's content, usually its `updatedAt`. The wash runs on
- * every change after the row is first drawn and never on the first draw, so a
- * list that has just loaded doesn't light up all at once. Reduced motion keeps
- * it: it is a fade, and it is the only sign a row changed.
+ * changes with the row's content: its `updatedAt`, or the values object
+ * itself, which the record store hands back unchanged until the record
+ * changes. The wash runs on every change after the row is first drawn and
+ * never on the first draw, so a list that has just loaded doesn't light up all
+ * at once. Reduced motion keeps it: it is a fade, and it is the only sign a
+ * row changed.
  */
-export function useRowWash<T extends HTMLElement>(stamp: string | number | undefined): RefCallback<T> {
+export function useRowWash<T extends HTMLElement>(stamp: unknown): RefCallback<T> {
   const element = useRef<T | null>(null);
-  const seen = useRef<string | number | undefined>(stamp);
+  const seen = useRef<unknown>(stamp);
   useEffect(() => {
     if (seen.current === stamp) return;
     seen.current = stamp;

@@ -213,6 +213,9 @@ export const strings = {
   sentTo: (list: string) => `Invited ${list}.`,
   /** The toast after a clean send, when the dialog closes. */
   invitedToast: (count: number) => (count === 1 ? 'Invited 1 person' : `Invited ${String(count)} people`),
+  /** What follows from the invite, said under the toast: the part that happens away from this screen. */
+  invitedConsequence: (count: number) =>
+    count === 1 ? 'They get an email with a link to join.' : 'Each gets an email with a link to join.',
   alreadyMembers: (list: string) => `Already members: ${list}.`,
   inviteMore: 'Invite more',
   done: 'Done',

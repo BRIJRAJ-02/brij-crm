@@ -76,7 +76,11 @@ export function InviteDialog({
     onInvited,
     // A clean send closes the dialog and says how many in a toast; only a partial one keeps the summary.
     onClean: (count, reset) => {
-      toasts.toast({ tone: 'success', message: strings.invitedToast(count) });
+      toasts.toast({
+        tone: 'success',
+        message: strings.invitedToast(count),
+        consequence: strings.invitedConsequence(count),
+      });
       reset();
       onClose();
     },

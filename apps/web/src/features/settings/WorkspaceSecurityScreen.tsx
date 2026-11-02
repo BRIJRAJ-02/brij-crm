@@ -135,7 +135,11 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
       setRules(await data.workspaceSecurity.signOutEveryone(slug));
       setIsOpen(false);
       requestAnimationFrame(() => titleRef.current?.focus());
-      toasts.toast({ tone: 'success', message: strings.signedOutEveryone });
+      toasts.toast({
+        tone: 'success',
+        message: strings.signedOutEveryone,
+        consequence: strings.signedOutEveryoneConsequence,
+      });
     } catch (failure) {
       if (isDataError(failure) && failure.code === 'STEP_UP_REQUIRED') {
         // The check ran out meanwhile: read the state again, so the confirm asks for it inline.

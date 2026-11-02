@@ -47,6 +47,8 @@ export const strings = {
     `Anyone signed in to ${workspace} over ${days(count)} ago signs in again.`,
   shortenAction: 'Shorten sessions',
   signedOutEveryone: 'Everyone was signed out.',
+  /** What follows, said under the toast: the part that happens away from this screen. */
+  signedOutEveryoneConsequence: 'Everyone signs in again on their next visit.',
   cancel: 'Cancel',
   failedTitle: 'Couldn’t load the workspace’s security',
   failedText: 'Check your connection, then try again.',
