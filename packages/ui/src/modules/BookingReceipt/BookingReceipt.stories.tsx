@@ -115,9 +115,13 @@ export const WithBrand: Story = {
 /** Share: one quiet button at the end of Add to calendar, opening the meeting in two lines with Copy details. */
 export const Sharing: Story = {
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Share' }));
+    const share = canvas.getByRole('button', { name: 'Share' });
+    await userEvent.click(share);
     const panel = await screen.findByRole('dialog', { name: 'Share this meeting' });
     await expect(within(panel).getByText('Intro call with Ada Lovelace')).toBeInTheDocument();
     await expect(within(panel).getByRole('button', { name: 'Copy details' })).toBeInTheDocument();
+    // As in Sidebar's KeptFold: the click leaves the pointer on Share, and the screenshot can catch the hover
+    // mid paint. The resting button is what the baseline holds.
+    await userEvent.unhover(share);
   },
 };
