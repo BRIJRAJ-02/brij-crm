@@ -737,16 +737,51 @@ describe('the list rows', () => {
     );
     await expect.element(page.getByRole('link', { name: 'Connect a calendar' }).first()).toBeVisible();
     expect(document.querySelector('aside[aria-label="Calendars"]')).toBeNull();
-    // Without a calendar there are only bookings, so there is no Show to pick (Q71), and with one link no Link
-    // group either. Filter itself stays, because the list always offers No shows only (spec 0037, AC-1426): a
-    // filter the person can't reach is no filter.
+    // Without a calendar there are only bookings, so there is no Show to pick (Q71), and with one link no Filter.
+    // No shows only (spec 0037, AC-1426) doesn't bring one back here either: no booking on Upcoming can be marked
+    // a no show, so the filter is offered on Past and Cancelled only.
+    expect([...document.querySelectorAll('button')].some((button) => button.textContent.startsWith('Filter'))).toBe(
+      false,
+    );
+  });
+
+  it('offers No shows only on Past, where a booking can have been marked one (spec 0037, AC-1426)', async () => {
+    const none = { status: 'ready', accounts: [] } as unknown as CalendarListState;
+    const noneConnected: CalendarsHeld<CalendarListState> = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => none,
+      retain: () => () => undefined,
+      reload: () => undefined,
+    };
+    const state: MeetingsState = { ...ready, items: [] };
+    const past: MeetingsHeld = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => state,
+      retain: () => () => undefined,
+      ready: () => Promise.resolve(),
+      loadMore: () => undefined,
+      reload: () => undefined,
+    };
+    shown = await renderInApp(
+      () => (
+        <BookingsListScreen
+          slug="acme"
+          search={{ week, day: wednesday, tab: 'past', source: 'all' }}
+          meetings={() => past}
+          calendars={noneConnected}
+          onDismissNotice={() => undefined}
+          objects={[]}
+          pages={[]}
+          locale="en-GB"
+          onSearch={() => undefined}
+        />
+      ),
+      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list?tab=past' },
+    );
     const filter = [...document.querySelectorAll('button')].find((button) => button.textContent.startsWith('Filter'));
     expect(filter).toBeDefined();
     filter?.click();
     await expect.element(page.getByRole('menuitemcheckbox', { name: 'No shows only' })).toBeVisible();
-    expect([...document.querySelectorAll('[role="group"]')].some((group) => group.textContent.includes('Show'))).toBe(
-      false,
-    );
   });
 
   it('with no calendar connected, reads a source left in the address as All, so the list can’t empty unseen', async () => {
