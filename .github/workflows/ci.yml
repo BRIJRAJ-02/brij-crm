@@ -549,7 +549,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           done
       # DIAGNOSTIC, wip/visual-ffhang only, never to be landed: one file, to tell a hang inside
       # LinkPageBlocks.stories.tsx from an interaction with the files that run before it.
-      - run: pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" src/modules/DataGrid/DataGrid.stories.tsx src/modules/WeekCalendar/WeekCalendar.stories.tsx src/modules/AttributeSettings/AttributeSettings.stories.tsx src/modules/LinkPage/LinkPageBlocks.stories.tsx
+      - run: pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" src/modules/LinkPage/LinkPage.stories.tsx src/modules/Sidebar/Sidebar.stories.tsx src/modules/SettingsLayout/SettingsLayout.stories.tsx src/modules/LinkPage/LinkPageBlocks.stories.tsx
         env:
           CRM_STORY_BROWSERS: ${{ matrix.browser }}
 
