@@ -2,7 +2,7 @@ import { isDataError, type AttributeDefinition, type DataLayer } from '@crm/data
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, redirect, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { RotationsPending, RotationsScreen } from '../features/booking/RotationsScreen.tsx';
-import { RoutingPending, RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
+import { RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
 import { strings as rotationStrings } from '../features/booking/rotation-strings.ts';
 import { strings as routingStrings } from '../features/routing/tab-strings.ts';
 import { SettingsMissing } from '../features/settings/SettingsPage.tsx';
@@ -96,9 +96,16 @@ async function dealsStage(data: DataLayer, slug: string): Promise<AttributeDefin
   return attributes.find((each) => each.apiSlug === 'stage' && !each.isArchived);
 }
 
+/**
+ * The skeleton while the loader runs. It never reads `?v=rules`: a reader without `routing.manage` is about to be
+ * sent to the groups, and a routing skeleton would name a view they may not have before the access read comes back.
+ */
 function HostsPending() {
-  const { v } = Route.useSearch();
-  return <LoadingNow>{v === 'rules' ? <RoutingPending /> : <RotationsPending inFrame />}</LoadingNow>;
+  return (
+    <LoadingNow>
+      <RotationsPending inFrame />
+    </LoadingNow>
+  );
 }
 
 function HostsRoute() {

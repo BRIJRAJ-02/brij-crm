@@ -7,7 +7,6 @@ import { useCalendarList } from '@crm/data/react';
 import {
   AsideLayout,
   Button,
-  ButtonLink,
   Callout,
   CalendarList,
   Link,
@@ -75,26 +74,12 @@ export function useCalendarsPanel(hasCalendar: boolean | undefined) {
 export type CalendarsPanel = ReturnType<typeof useCalendarsPanel>;
 
 /**
- * The bar's Calendars button: folds or opens the panel beside the view, or opens it as a sheet on a phone. With no
- * calendar connected it is one quiet Connect calendar link instead, since the panel would hold only that prompt.
+ * The bar's Calendars button: folds or opens the panel beside the view, or opens it as a sheet on a phone. It is
+ * drawn only where there is a calendar to pick: with none connected it used to be a quiet Connect calendar link
+ * instead, which went on 2 November 2026 when Calendars became one of Bookings' four tabs, in sight at every
+ * width, so a prompt on this bar only pointed at the tab beside it.
  */
-export function CalendarsToggle({
-  panel,
-  slug,
-  hasNoCalendar,
-}: {
-  readonly panel: CalendarsPanel;
-  readonly slug: string;
-  /** The calendars read and none is connected. */
-  readonly hasNoCalendar: boolean;
-}) {
-  if (hasNoCalendar)
-    return (
-      // Its label stays on a phone too: the icon alone, under New, would read as a new event.
-      <ButtonLink variant="ghost" icon="calendar-plus" label={strings.connectCalendar} href={calendarsHref(slug)}>
-        {strings.connectCalendarShort}
-      </ButtonLink>
-    );
+export function CalendarsToggle({ panel }: { readonly panel: CalendarsPanel }) {
   // On a phone the label folds away (the icon stays, named Calendars), so the week's range and arrows wrap less, as
   // they sat before the panel came (round 6).
   return (

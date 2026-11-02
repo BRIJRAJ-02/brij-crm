@@ -80,7 +80,6 @@ import {
 } from './CalendarsAside.tsx';
 import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
 import { DrawCard, type ForPerson } from './DrawCard.tsx';
-import { HostsSwitch } from './HostsSwitch.tsx';
 import { TeamDayView, type TeamDayViewProps } from './TeamDayView.tsx';
 import { NewMeetingDialog, type NewMeeting, type NewMeetingDialogProps } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
@@ -119,6 +118,20 @@ export type { BookingsSearch };
 
 /** The list's tabs, in order. */
 export const TABS: readonly BookingsTab[] = ['upcoming', 'past', 'cancelled'];
+
+/**
+ * Meetings' view switch, built once for the week and the list (2 November 2026): the same meetings in four shapes,
+ * which were two tabs and a hidden `v=day` until Bookings' strip was cut to four areas. `hasTeam` is whether there
+ * is a Team day to show at all (AC-764), which only the week has read.
+ */
+function meetingsSegments(hasTeam: boolean) {
+  return [
+    { value: 'day', label: strings.meetingsViews.day, kbd: WEEK_KEYS.day },
+    { value: 'week', label: strings.meetingsViews.week, kbd: WEEK_KEYS.week },
+    ...(hasTeam ? [{ value: 'team', label: strings.meetingsViews.team }] : []),
+    { value: 'list', label: strings.meetingsViews.list },
+  ];
+}
 
 /** Each connection's hue, in the order they were connected. */
 const CALENDAR_HUES: readonly Hue[] = ['blue', 'green', 'purple', 'orange', 'sky', 'yellow', 'red', 'lime'];
@@ -223,17 +236,27 @@ function FilterMenu({
   pages,
   onSearch,
   hasSources = false,
+  hosts,
 }: {
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
   /** The list: which meetings show is chosen here too. */
   readonly hasSources?: boolean;
+  /**
+   * Mine or Everyone, for a holder of `booking.admin` only (2 November 2026). Whose bookings show is a filter, the
+   * same kind of question as Show and Link, so it sits with them rather than as a second switch beside the view
+   * switch: two segmented controls side by side were already too heavy (the owner, 22 October 2026), and this row
+   * had grown to three.
+   */
+  readonly hosts?: HostsChoice | undefined;
 }) {
   const hasLinks = pages.length >= 2;
-  if (!hasLinks && !hasSources) return null;
+  if (!hasLinks && !hasSources && hosts === undefined) return null;
   const count =
-    (search.link === undefined ? 0 : 1) + (hasSources && search.source !== 'all' && search.link === undefined ? 1 : 0);
+    (search.link === undefined ? 0 : 1) +
+    (hasSources && search.source !== 'all' && search.link === undefined ? 1 : 0) +
+    (hosts?.value === 'all' ? 1 : 0);
   // A link's bookings are bookings only (calendar events have no page), so Show says so while one is picked.
   const shownSource = search.link === undefined ? search.source : 'bookings';
   const first = (keys: ReadonlySet<string | number>) => [...keys].map(String)[0];
@@ -242,6 +265,20 @@ function FilterMenu({
       <MenuTrigger>
         <Button icon="list-filter">{count === 0 ? strings.filter : strings.filterCount(count)}</Button>
         <Menu label={strings.filterMenu}>
+          {hosts !== undefined && (
+            <MenuSection
+              label={strings.hostsLabel}
+              selectionMode="single"
+              selectedKeys={[hosts.value]}
+              onSelectionChange={(keys) => {
+                const next = first(keys);
+                if (next === 'mine' || next === 'all') hosts.onChange(next);
+              }}
+            >
+              <MenuItem id="mine">{strings.hosts.mine}</MenuItem>
+              <MenuItem id="all">{strings.hosts.all}</MenuItem>
+            </MenuSection>
+          )}
           {hasSources && (
             <MenuSection
               label={strings.sourceLabel}
@@ -285,7 +322,10 @@ function FilterMenu({
           variant="ghost"
           icon="x"
           label={strings.clearFilters}
-          onPress={() => onSearch({ link: undefined, ...(hasSources ? { source: 'all' as const } : {}) })}
+          onPress={() => {
+            hosts?.onChange('mine');
+            onSearch({ link: undefined, ...(hasSources ? { source: 'all' as const } : {}) });
+          }}
         />
       )}
     </>
@@ -1460,13 +1500,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
         </>
       }
       title={range}
+      // With no calendar connected nothing stands here (2 November 2026): Calendars is one of only four tabs now,
+      // in sight at every width, where it used to scroll off the end of seven, so a standing Connect calendar
+      // prompt on this bar was a row of chrome pointing at the tab beside it. Both empty states still offer it.
       after={
         view === 'team' ? (
           // The Team day's issue counts portal here; the calendar switch is the reader's own week's.
           <span ref={setIssuesSlot} />
-        ) : hasNoCalendar ? // in sight at every width, where it used to scroll off the end of seven, so a standing prompt on this // Nothing here with no calendar connected (2 November 2026): Calendars is one of only four tabs now,
-        // bar is a row of chrome pointing at the tab beside it. The empty week and the empty list still offer it.
-        undefined : calendarList.status === 'error' ? (
+        ) : hasNoCalendar ? undefined : calendarList.status === 'error' ? (
           // The switch can't draw without the calendars: say so, with a retry, rather than leave a gap.
           <Button variant="ghost" icon="refresh-cw" onPress={() => props.calendars.reload()}>
             {strings.calendarsRetry}
@@ -1477,11 +1518,6 @@ function WeekView(props: BookingsCalendarScreenProps) {
       }
       end={
         <>
-          {/* Mine or Everyone sits here now rather than up on the tab strip, so one row holds every control this
-              view has (2 November 2026). On the Team day it steps aside: that day shows everyone either way. */}
-          {props.hosts !== undefined && view !== 'team' && (
-            <HostsSwitch value={props.hosts.value} onChange={props.hosts.onChange} />
-          )}
           <SegmentedControl
             label={strings.meetingsViewLabel}
             size="compact"
@@ -1489,22 +1525,15 @@ function WeekView(props: BookingsCalendarScreenProps) {
             onChange={(next) => {
               if (next === 'day' || next === 'week' || next === 'team' || next === 'list') setView(next);
             }}
-            segments={[
-              { value: 'day', label: strings.meetingsViews.day, kbd: WEEK_KEYS.day },
-              { value: 'week', label: strings.meetingsViews.week, kbd: WEEK_KEYS.week },
-              // Team only where there is a team to see, or someone who could invite one (AC-764's empty state).
-              ...(props.team === undefined || (props.team.members.length < 2 && !canInvite)
-                ? []
-                : [{ value: 'team', label: strings.meetingsViews.team }]),
-              // The list was a tab of its own until the strip was cut to four areas: it is the same meetings in
-              // another shape, so it belongs beside the other shapes.
-              { value: 'list', label: strings.meetingsViews.list },
-            ]}
+            // Team only where there is a team to see, or someone who could invite one (AC-764's empty state).
+            segments={meetingsSegments(props.team !== undefined && (props.team.members.length >= 2 || canInvite))}
           />
           {view === 'team' && props.team !== undefined ? (
             <TeamFilterMenu search={search} members={props.team.members} onSearch={onSearch} />
           ) : (
-            <FilterMenu search={search} pages={pages} onSearch={onSearch} />
+            // Whose bookings (Mine or Everyone) is in here now; on the Team day it steps aside, as it always has,
+            // since that day shows everyone the reader may see either way.
+            <FilterMenu search={search} pages={pages} onSearch={onSearch} hosts={props.hosts} />
           )}
         </>
       }
@@ -2228,7 +2257,6 @@ function groupsOf(
 
 /** The list's bar: Upcoming · Past · Cancelled, then the calendars and Filter (which meetings, which link). */
 function ListBar({
-  slug,
   search,
   pages,
   panel,
@@ -2236,11 +2264,10 @@ function ListBar({
   hosts,
   onSearch,
 }: {
-  readonly slug: string;
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
   readonly panel: CalendarsPanel;
-  /** The calendars read and none is connected: Connect calendar in the toggle's place. */
+  /** The calendars read and none is connected: no Calendars toggle, and Show has nothing to choose between. */
   readonly hasNoCalendar: boolean;
   /** Mine or Everyone, for a holder of `booking.admin` only; it sits on this row, as the calendar's does. */
   readonly hosts?: HostsChoice | undefined;
@@ -2262,28 +2289,22 @@ function ListBar({
       }
       end={
         <>
-          {hosts !== undefined && <HostsSwitch value={hosts.value} onChange={hosts.onChange} />}
-          {/* The same four shapes the calendar offers: the list is one of them, so leaving it is one press, not a
-              trip back up to the tab strip. */}
+          {/* The same shapes the week offers, built once (`meetingsSegments`), so leaving the list is one press
+              rather than a trip back up to the tab strip. The list has not read the team, so it offers no Team
+              day: that is the week's to show, one press away. */}
           <SegmentedControl
             label={strings.meetingsViewLabel}
             size="compact"
             value="list"
             onChange={(next) => {
-              if (next !== 'list') onSearch({ view: next === 'week' ? 'week' : next === 'day' ? 'day' : 'team' });
+              if (next === 'day' || next === 'week') onSearch({ view: next });
             }}
-            segments={[
-              { value: 'day', label: strings.meetingsViews.day },
-              { value: 'week', label: strings.meetingsViews.week },
-              { value: 'list', label: strings.meetingsViews.list },
-            ]}
+            segments={meetingsSegments(false)}
           />
-          {search.source !== 'bookings' && search.link === undefined && !hasNoCalendar && (
-            <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={false} />
-          )}
+          {search.source !== 'bookings' && search.link === undefined && <CalendarsToggle panel={panel} />}
           {/* Which meetings show is a choice only with a calendar connected: without one there are only bookings, and
-              "Calendar events only" could only show an empty list (Q71). */}
-          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources={!hasNoCalendar} />
+              "Calendar events only" could only show an empty list (Q71). Whose bookings is in here too. */}
+          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources={!hasNoCalendar} hosts={hosts} />
         </>
       }
     />
@@ -2418,7 +2439,6 @@ export function BookingsListScreen({
   );
   const bar = (
     <ListBar
-      slug={slug}
       search={search}
       pages={pages}
       panel={panel}

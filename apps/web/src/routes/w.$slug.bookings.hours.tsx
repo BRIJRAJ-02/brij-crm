@@ -2,7 +2,7 @@ import { isDataError } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
-import { TeamWeekPending, TeamWeekScreen } from '../features/booking/TeamWeekScreen.tsx';
+import { TeamWeekScreen } from '../features/booking/TeamWeekScreen.tsx';
 import { hoursSearch, rosterIsShown } from '../features/booking/links.ts';
 import { memberZone } from '../features/booking/zone.ts';
 import { strings } from '../features/booking/strings.ts';
@@ -24,7 +24,9 @@ export const Route = createFileRoute('/w/$slug/bookings/hours')({
   validateSearch: hoursSearch,
   // The team week alone reloads the route; a name typed into its search is read by the screen's own held week, so
   // typing never swaps the page for its pending state and loses the field's focus.
-  loaderDeps: ({ search }) => ({ view: search.v, member: search.member, week: search.week }),
+  loaderDeps: ({ search }) =>
+    // Each view's own deps only, so a `member` typed into a team address never re-reads the team week.
+    search.v === 'team' ? { view: 'team' as const, week: search.week } : { view: undefined, member: search.member },
   loader: async ({ context, params, deps, location }) => {
     const access = await context.data.access.mine(params.slug);
     const zone = memberZone(context.data, params.slug);
@@ -84,9 +86,17 @@ export const Route = createFileRoute('/w/$slug/bookings/hours')({
   component: HoursRoute,
 });
 
+/**
+ * The skeleton while the loader runs. It never reads `?v=team`: a reader without the reach is about to be sent to
+ * their own hours, and a team-week skeleton would name a view they may not have before the access read comes back.
+ * Mine's skeleton is the one everybody may see.
+ */
 function HoursPending() {
-  const { v, week } = Route.useSearch();
-  return <LoadingNow>{v === 'team' ? <TeamWeekPending week={week} /> : <AvailabilityPending />}</LoadingNow>;
+  return (
+    <LoadingNow>
+      <AvailabilityPending />
+    </LoadingNow>
+  );
 }
 
 function HoursRoute() {

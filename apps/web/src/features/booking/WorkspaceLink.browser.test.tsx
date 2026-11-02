@@ -135,8 +135,10 @@ describe('Booking pages › New: Everyone on the roster', () => {
     await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Talk to us');
     await userEvent.click(page.getByRole('radio', { name: new RegExp(rotationStrings.bookEveryone) }), { force: true });
     await expect.element(page.getByRole('radio', { name: new RegExp(rotationStrings.bookEveryone) })).toBeChecked();
-    // No help lines under the choices (spec 0058, AC-3): what each means is in the tip.
-    expect(page.getByText(/on nobody’s profile/).elements()).toHaveLength(0);
+    // One visible line under each choice (2 November 2026, the owner: "too much going on"). Spec 0058's AC-3 had
+    // them bare with the help in an InfoTip, but the difference between the four kinds is exactly what a person
+    // making their first link does not know, so it is on the screen. Noted for /architect.
+    expect(page.getByText(/on nobody’s profile/).elements()).toHaveLength(1);
     // Nothing else to choose: the hosts are the workspace's, each booked by their own hours.
     expect(page.getByRole('button', { name: new RegExp(rotationStrings.rotation) }).elements()).toHaveLength(0);
     expect(page.getByText('Schedule', { exact: true }).elements()).toHaveLength(0);

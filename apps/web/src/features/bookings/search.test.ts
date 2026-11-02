@@ -12,11 +12,20 @@ describe('the calendar view in the address', () => {
     expect(bookingsSearchOf({ d: '2026-10-22', v: 'day' }, new Date(), 1, 'UTC').view).toBe('day');
   });
 
-  it('writes only the day view, on the calendar tab only', () => {
+  it('writes the view it is on: the day, nothing for the week, and the list (2 November 2026)', () => {
     const search = bookingsSearchOf({ d: '2026-10-22' }, new Date(), 1, 'UTC');
     expect(rawOf('calendar', { ...search, view: 'day' })).toMatchObject({ v: 'day' });
+    // The week is the default, so it says nothing.
     expect(rawOf('calendar', { ...search, view: 'week' })).not.toHaveProperty('v');
-    expect(rawOf('list', { ...search, view: 'day' })).not.toHaveProperty('v');
+    // The list is Meetings' fourth view since the strip was cut to four areas, so its address says so, and it
+    // never carries the calendar's own day along with it.
+    expect(rawOf('list', { ...search, view: 'day' })).toMatchObject({ v: 'list' });
+    expect(rawOf('list', { ...search, view: 'list' })).not.toHaveProperty('d');
+  });
+
+  it('reads v=list as the list view', () => {
+    expect(parseBookingsSearch({ v: 'list' })).toEqual({ v: 'list' });
+    expect(bookingsSearchOf({ v: 'list' }, new Date(), 1, 'UTC').view).toBe('list');
   });
 });
 

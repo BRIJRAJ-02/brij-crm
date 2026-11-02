@@ -121,25 +121,33 @@ export function RoutingScreen({
   const surfaces = overview.status === 'ready' ? overview.overview.surfaces : [];
   return (
     <PageColumn>
-      <Toolbar>
-        {/* Hosts' own views first, then this one's parts: the outer choice on the left, the inner on its right. */}
-        {hasGroupsSwitch && <HostsViewSwitch slug={slug} view="rules" />}
-        <SegmentedControl
-          label={strings.views}
-          size="compact"
-          value={search.view}
-          onChange={(value) => {
-            const view = ROUTING_VIEWS.find((each) => each === value);
-            if (view !== undefined) onSearch({ view });
-          }}
-          segments={[
-            { value: 'overview', label: strings.overview },
-            { value: 'decisions', label: strings.decisions },
-            { value: 'skills', label: skillStrings.views.skills },
-            { value: 'test', label: skillStrings.views.test },
-          ]}
-        />
-      </Toolbar>
+      {/* Hosts' own views take the strip's end, where every Bookings tab draws its tools; this screen's own parts
+          sit on the row under them (2 November 2026). One switch to a row: two segmented controls side by side
+          were already too heavy (the owner, 22 October 2026), and "too much going on" is what this lane is for. */}
+      {hasGroupsSwitch && (
+        <Toolbar>
+          <HostsViewSwitch slug={slug} view="rules" />
+        </Toolbar>
+      )}
+      <SectionBar
+        start={
+          <SegmentedControl
+            label={strings.views}
+            size="compact"
+            value={search.view}
+            onChange={(value) => {
+              const view = ROUTING_VIEWS.find((each) => each === value);
+              if (view !== undefined) onSearch({ view });
+            }}
+            segments={[
+              { value: 'overview', label: strings.overview },
+              { value: 'decisions', label: strings.decisions },
+              { value: 'skills', label: skillStrings.views.skills },
+              { value: 'test', label: skillStrings.views.test },
+            ]}
+          />
+        }
+      />
       {search.view === 'overview' ? (
         overview.status === 'error' ? (
           <EmptyState tone="error" title={strings.failedTitle} onRetry={() => overviewHeld.reload()}>

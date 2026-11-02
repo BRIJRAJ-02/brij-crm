@@ -19,19 +19,14 @@ export interface HoursViewSwitchProps {
  * switch at all, rather than a control with one dead segment.
  */
 export function HoursViewSwitch({ slug, view }: HoursViewSwitchProps) {
-  const navigate = useNavigate();
   return (
-    <SegmentedControl
+    <Switch
       label={strings.hoursViewLabel}
-      size="compact"
       value={view}
-      onChange={(next) => {
-        // Each view keeps its own search, so moving between them starts the other clean rather than carrying a
-        // week into a schedule editor or a schedule id into a week.
-        if (isHoursView(next) && next !== view)
-          void navigate({ href: `/w/${slug}/bookings/hours${next === 'team' ? '?v=team' : ''}` });
-      }}
-      segments={HOURS_VIEWS.map((id) => ({ value: id, label: strings.hoursViews[id] }))}
+      views={HOURS_VIEWS}
+      labelOf={(id) => strings.hoursViews[id]}
+      isView={isHoursView}
+      hrefOf={(next) => `/w/${slug}/bookings/hours${next === 'team' ? '?v=team' : ''}`}
     />
   );
 }
@@ -47,17 +42,48 @@ export interface HostsViewSwitchProps {
  * the switch is absent rather than offering a segment that would bounce back.
  */
 export function HostsViewSwitch({ slug, view }: HostsViewSwitchProps) {
+  return (
+    <Switch
+      label={strings.hostsViewLabel}
+      value={view}
+      views={HOSTS_VIEWS}
+      labelOf={(id) => strings.hostsViews[id]}
+      isView={isHostsView}
+      hrefOf={(next) => `/w/${slug}/bookings/hosts${next === 'rules' ? '?v=rules' : ''}`}
+    />
+  );
+}
+
+/**
+ * The switch both tabs draw: a compact SegmentedControl whose segments are addresses. Each view keeps its own
+ * search, so moving between them starts the other clean rather than carrying a week into a schedule editor or a
+ * schedule id into a week. A third view (Hosts' Insights, lane L9) is one more entry in its `*_VIEWS` list.
+ */
+function Switch<View extends string>({
+  label,
+  value,
+  views,
+  labelOf,
+  isView,
+  hrefOf,
+}: {
+  readonly label: string;
+  readonly value: View;
+  readonly views: readonly View[];
+  readonly labelOf: (view: View) => string;
+  readonly isView: (value: unknown) => value is View;
+  readonly hrefOf: (view: View) => string;
+}) {
   const navigate = useNavigate();
   return (
     <SegmentedControl
-      label={strings.hostsViewLabel}
+      label={label}
       size="compact"
-      value={view}
+      value={value}
       onChange={(next) => {
-        if (isHostsView(next) && next !== view)
-          void navigate({ href: `/w/${slug}/bookings/hosts${next === 'rules' ? '?v=rules' : ''}` });
+        if (isView(next) && next !== value) void navigate({ href: hrefOf(next) });
       }}
-      segments={HOSTS_VIEWS.map((id) => ({ value: id, label: strings.hostsViews[id] }))}
+      segments={views.map((id) => ({ value: id, label: labelOf(id) }))}
     />
   );
 }

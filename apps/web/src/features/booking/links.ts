@@ -34,10 +34,6 @@ const availabilityQuery = (member: string | undefined, schedule?: string) => {
 export const availabilityHref = (slug: string, member?: string) =>
   `/w/${slug}/bookings/hours${availabilityQuery(member)}`;
 
-/** Bookings › Hours › Team: the team's bookable week (spec 0037, job J6), optionally at one week. */
-export const teamHoursHref = (slug: string, week?: string) =>
-  `/w/${slug}/bookings/hours?v=team${week === undefined ? '' : `&week=${week}`}`;
-
 // Calendars and Round robin came up out of Settings into Bookings (25 October 2026). Their addresses sit here
 // beside Availability's rather than in `bookings/tabs.ts`, because the command menu and the screens that link to
 // them are in the first load and that module is not: one import of it would put the whole tab strip's model
