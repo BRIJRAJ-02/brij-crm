@@ -807,6 +807,8 @@ export const Folders: Story = {
     await expect(canvasElement.querySelector('a[href="https://www.timefix.com"]')).not.toBeVisible();
     await userEvent.click(fold);
     await expect(fold).toHaveAttribute('aria-expanded', 'true');
+    // Opened by pointer, the fold grows open as its links arrive: settle that before reading them.
+    await settleAnimations();
     await expect(canvas.getByRole('link', { name: /timefix\.com/ })).toBeVisible();
     // The heading keeps the page's outline: the row is a button inside the h2 it names.
     await expect(canvas.getByRole('heading', { level: 2, name: /Find me/ })).toBeVisible();
@@ -816,6 +818,30 @@ export const Folders: Story = {
     // Pressing it again closes it, and one at a time: the page holds exactly one open.
     await userEvent.click(fold);
     await expect(fold).toHaveAttribute('aria-expanded', 'false');
+  },
+};
+
+/**
+ * The live page arrives at the booking page's pace: the face lands, the words rise, then each block in turn, 40ms
+ * apart. A fold opened from the keyboard is simply there, its blocks with it; opened by pointer it grows open.
+ */
+export const FoldFromKeyboard: Story = {
+  ...Folders,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvasElement.querySelector('[data-live]')).not.toBeNull();
+    // Each block a beat after the one before, counted from after the person; the fold's own from its opening.
+    const beats = [...canvasElement.querySelectorAll<HTMLElement>('li')].map((row) =>
+      row.style.getPropertyValue('--arrive-index'),
+    );
+    await expect(beats).toEqual(['5', '0', '1']);
+    await settleAnimations();
+    const fold = canvas.getByRole('button', { name: /Find me/ });
+    fold.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(fold).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvasElement.querySelector('[data-instant]')).not.toBeNull();
+    await expect(canvas.getByRole('link', { name: /timefix\.com/ })).toBeVisible();
   },
 };
 

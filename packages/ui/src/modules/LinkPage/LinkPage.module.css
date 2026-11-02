@@ -1,6 +1,30 @@
 /* A link page, /<handle> (spec 0051): one column a thumb reaches, the person first (face, name, bio, their social
    icons), then the blocks as whole rows to press, each a raised card with a leading tile, grouped under small
    headings, then the foot. On the booking pages' background, so the two read as one product. */
+/* How long the person and the blocks take to arrive, the beat between them, and how far a card lifts under the
+   pointer: none by default, so the editor's preview, a draft and a miniature stay still; the live page switches them
+   on (`.root[data-live]`), as the booking page does SocialLinks'. */
+@property --page-arrive {
+  syntax: '<time>';
+  inherits: true;
+  /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+  initial-value: 0s;
+}
+
+@property --page-stagger {
+  syntax: '<time>';
+  inherits: true;
+  /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+  initial-value: 0s;
+}
+
+@property --card-lift {
+  syntax: '<length>';
+  inherits: true;
+  /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+  initial-value: 0px;
+}
+
 @layer components {
   /* The owner's look (spec 0054): six data attributes on this root, each one block below, each block setting this
      page's own custom properties from token variables. Nothing is written at run time, no value is stored anywhere
@@ -360,6 +384,37 @@
     --shadow-focus: var(--page-focus);
   }
 
+  /* The live page moves at the public booking page's calmer pace (the owner, 1 and 2 November 2026): the motion
+     tokens run about half as long again, a press eases to 0.97, a changed label resolves in, the person and then the
+     blocks arrive out of a soft blur 40ms apart (transitions.dev's stagger), and a card lifts 2px under the pointer.
+     Literals until the artifact carries a public page pace and a blur token. */
+  .root[data-live] {
+    --scale-press: 0.97;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-hover: 180ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-press: 220ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-exit: 200ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-popover: 280ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-move: 340ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --duration-modal: 380ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
+    --label-swap: 260ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's text reveal, a step slower, until the artifact carries it */
+    --page-arrive: 600ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's stagger, until the artifact carries it */
+    --page-stagger: 40ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- a lift with no token, the public pages' own */
+    --card-lift: 2px;
+    /* The live page's blocks arrive one by one, so the list as a whole doesn't rise as well. */
+    /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+    --blocks-rise: 0s;
+  }
+
   /* An editor's draft of one block (spec 0060, AC-16): the page's own ground and look, in a slice. */
   .root[data-draft] {
     min-block-size: auto;
@@ -410,14 +465,31 @@
     margin-block-end: var(--space-6);
   }
 
-  /* The face's own box: one flex item, so the hero centres it and a cover can pull it up. */
+  /* The face's own box: one flex item, so the hero centres it and a cover can pull it up. On the live page the face
+     lands first, out of a soft blur, as the booking receipt's host does. */
   .face {
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --arrive-blur: 3px;
+
     display: flex;
+    animation: face-land var(--page-arrive) var(--ease-out) backwards;
   }
 
-  /* The words under the face: part of the hero's own column, except beside the face in the left header. */
+  /* The words under the face: part of the hero's own column, except beside the face in the left header. On the
+     live page the name, the bio and the address rise in after the face, a beat apart. */
   .who {
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --arrive-blur: 3px;
+
     display: contents;
+  }
+
+  .who > * {
+    animation: text-rise var(--page-arrive) var(--ease-in-out) calc(var(--page-stagger) * 2) backwards;
+  }
+
+  .who > :not(:first-child) {
+    animation-delay: calc(var(--page-stagger) * 3);
   }
 
   /* The cover header (spec 0060, AC-13): a 3:1 photo band the width of the column, the face overlapping its foot
@@ -482,9 +554,13 @@
   /* Save contact, the page's one action, with Share beside it: a thumb's row, and under it Add to Apple Wallet
      when the page offers one. */
   .actions {
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --arrive-blur: 3px;
+
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
+    animation: block-in var(--page-arrive) var(--ease-out) calc(var(--page-stagger) * 4) backwards;
   }
 
   .actions:empty {
@@ -554,13 +630,24 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-20);
-    animation: rise var(--duration-popover) var(--ease-out) both;
+    animation: rise var(--blocks-rise, var(--duration-popover)) var(--ease-out) both;
   }
 
   .group {
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --arrive-blur: 3px;
+
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
+  }
+
+  /* On the live page each block arrives in turn after the person (its place in `--arrive-index`, at most seven
+     beats, so the last is never kept waiting): a row or a tile on its own, anything else in a group as one. */
+  .group > :not(.list, .tilesRoom, .panel),
+  .item,
+  .tileItem {
+    animation: block-in var(--page-arrive) var(--ease-out) calc(var(--arrive-index, 0) * var(--page-stagger)) backwards;
   }
 
   .heading {
@@ -624,6 +711,20 @@
   /* Shut: the flex display above would otherwise win over the hidden attribute and leave the fold open. */
   .panel[hidden] {
     display: none;
+  }
+
+  /* Opened by pointer on the live page, the fold grows to its height (a card expansion, stageshow's ai-cards) as its
+     blocks arrive in turn; opened from the keyboard, it is simply there. */
+  .panel:not([hidden]) {
+    interpolate-size: allow-keywords;
+    animation: panel-open var(--page-arrive) var(--ease-out);
+  }
+
+  .panel[data-instant] {
+    /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+    --page-arrive: 0s;
+    /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+    --page-stagger: 0s;
   }
 
   /* Writing: the person's own words, not a row. No frame and nothing to press, so it reads as the page talking
@@ -732,6 +833,14 @@
     display: flex;
   }
 
+  /* The loading rows are simply there at first paint: only what replaces them arrives. */
+  .list[aria-busy] {
+    /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+    --page-arrive: 0s;
+    /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+    --page-stagger: 0s;
+  }
+
   .block {
     box-sizing: border-box;
     display: flex;
@@ -749,7 +858,9 @@
     outline: none;
     transition:
       background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover);
+      border-color var(--duration-hover) var(--ease-hover),
+      translate var(--duration-move) var(--ease-out),
+      scale var(--duration-press) var(--ease-out);
   }
 
   /* A place for a block that isn't there yet (a preview of a page still being made): the row's shape, quieter,
@@ -765,10 +876,17 @@
     box-shadow: var(--shadow-focus);
   }
 
+  /* Pressed, a card eases to the page's press (0.97 on the live page, the token's 1 elsewhere). */
+  .block:not([data-loading], [data-inert]):active {
+    scale: var(--scale-press);
+  }
+
   @media (hover: hover) and (pointer: fine) {
     .block:not([data-loading], [data-inert]):hover {
       border-color: var(--page-card-border);
       background: var(--page-card-hover);
+      translate: 0 calc(-1 * var(--card-lift));
+      transition-duration: var(--duration-hover);
     }
 
     .block:not([data-loading]):hover .end {
@@ -900,9 +1018,62 @@
     }
   }
 
+  @keyframes face-land {
+    from {
+      opacity: 0;
+      scale: var(--scale-enter);
+      filter: blur(var(--arrive-blur));
+    }
+  }
+
+  @keyframes text-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-12);
+      filter: blur(var(--arrive-blur));
+    }
+  }
+
+  @keyframes block-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+      filter: blur(var(--arrive-blur));
+    }
+  }
+
+  @keyframes panel-open {
+    from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
+      opacity: 0;
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
+    }
+  }
+
+  /* Reduced motion: the person and the blocks are simply there, no fade either (spec 0058, AC-2), on the live page
+     and in the preview alike; no lift, no press and no growth. */
   @media (prefers-reduced-motion: reduce) {
-    .blocks {
+    .blocks,
+    .panel:not([hidden]),
+    .face,
+    .who > *,
+    .actions,
+    .group > :not(.list, .tilesRoom, .panel),
+    .item,
+    .tileItem {
       animation: none;
+    }
+
+    .block:not([data-loading], [data-inert]):hover,
+    .block:not([data-loading], [data-inert]):active {
+      translate: none;
+      scale: none;
     }
   }
 

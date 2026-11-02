@@ -116,6 +116,15 @@ The library still reads no data itself: next times come in through `times`, and 
 
 Spec 0061's blocks add: a thumbnail that fails (its tile's fallback), a featured card with and without its picture, the grid at 2 and 4 columns, media before Play (after Play is the player), a picture with and without its caption and link, a gallery as a row, as a grid and with its viewer open, next times loading, ready, empty and failed, the banner and its close, and the notice sheet. Loading (no `person`: the hero's skeleton; no `blocks`: five block shaped places, the tile's and a title line's, so nothing moves when they arrive), a refused address (words, no link), empty (`empty` in the list's place), ready, a contact card, long words (titles, notes, names and bios wrap inside their card), with Show more, a search's count (`summary`, a status region mounted while a search is in play), the blocks alone, and the preview. Hover lifts a card to `surface-hover` and `border-strong` on fine pointers only; focus draws `shadow-focus`; there is no press shrink (house rule). The blocks arrive with a short fade and a `space-2` rise over `duration-popover`; under reduced motion they appear at once, with no fade (spec 0058, AC-2).
 
+## Motion
+
+The live page (`data-live`: not the editor's preview, a draft or a miniature) moves at the public booking page's calmer pace, with the same duration overrides, a 0.97 press and the label swap. Three registered properties switch its moments on, each `0` by default so the app stays still: `--page-arrive` (600ms), `--page-stagger` (40ms) and `--card-lift` (2px).
+
+- **Arrival**: the face lands out of a 3px blur, then the name, the bio and the address rise 12px, then the actions, then each block 8px up out of the blur in turn (`--arrive-index`, set per row, tile, group and fold, at most seven beats). The loading rows are simply there; only what replaces them arrives.
+- **Cards**: a card lifts 2px under a fine pointer and eases to the press while held. SocialLinks' marks arrive in turn and lift, as on a booking page.
+- **Folds**: opened by pointer, a fold grows to its height while its blocks arrive; opened from the keyboard (a click with no pointer detail) it is simply there.
+- Reduced motion: everything is simply there, no fade either (spec 0058, AC-2), with no lift or press.
+
 ## Keyboard
 
 Tab reaches each block in reading order, then the foot's links. Enter opens a block. On a grid page Tab walks the tiles in the order they show. In the gallery's viewer the left and right arrows move through the pictures and Escape closes it, returning focus to the picture; the notice sheet's Escape is Go back.

@@ -908,14 +908,17 @@ const RENDERERS: {
 /** One block in its row. */
 function BlockRow({
   block,
+  at,
   onPress,
 }: {
   readonly block: RowBlock;
+  /** Its place in the live page's arrival (`arriveAt`). */
+  readonly at: number;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
   const press = onPress === undefined ? undefined : () => onPress(block.id);
   return (
-    <li className={styles.item}>
+    <li className={styles.item} style={{ '--arrive-index': arriveAt(at) }}>
       {block.kind === 'link'
         ? RENDERERS.link(block, press)
         : block.kind === 'form'
@@ -1326,19 +1329,27 @@ function PageTile({
 function TileRun({
   tiles,
   label,
+  at,
   onPress,
 }: {
   readonly tiles: readonly TileBlock[];
   readonly label: string | undefined;
+  /** The first tile's place in the live page's arrival (`arriveAt`). */
+  readonly at: number;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
   return (
     <div className={styles.tilesRoom}>
       <ul className={styles.tiles} {...(label === undefined ? {} : { 'aria-label': label })}>
-        {tiles.map((block) => {
+        {tiles.map((block, index) => {
           const press = onPress === undefined ? undefined : () => onPress(block.id);
           return (
-            <li key={block.id} className={styles.tileItem} data-size={block.size ?? 'small'}>
+            <li
+              key={block.id}
+              className={styles.tileItem}
+              data-size={block.size ?? 'small'}
+              style={{ '--arrive-index': arriveAt(at + index) }}
+            >
               {block.kind === 'link' ? (
                 <LinkTile block={block} onPress={press} />
               ) : block.kind === 'page' ? (
@@ -1457,28 +1468,45 @@ function GroupRows({
   rows,
   level,
   isNamed,
+  at = ARRIVE_AFTER_PERSON,
   onPress,
 }: {
   readonly rows: readonly LinkPageBlock[];
   readonly level: 2 | 3;
   readonly isNamed: boolean;
+  /** The first block's place in the live page's arrival; each block after it a beat later. */
+  readonly at?: number;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
   const { layout } = useContext(PageActionsContext);
   // Writing is not a row, so it breaks out of the list rather than sitting in one: a run of rows is a list, and a
   // text block is the person's words between the lists.
-  return runsOf(rows, layout).map((run) => {
+  const runs = runsOf(rows, layout);
+  // Each run's first place in the arrival: after every block of the runs before it.
+  const starts = runs.map((_, index) =>
+    runs
+      .slice(0, index)
+      .reduce(
+        (sum, run) => sum + (run.kind === 'tiles' ? run.tiles.length : run.kind === 'rows' ? run.rows.length : 1),
+        at,
+      ),
+  );
+  return runs.map((run, index) => {
+    const start = starts[index] ?? at;
     const label = !isNamed && run.kind !== 'apart' && run.isFirst ? strings.blocks : undefined;
-    if (run.kind === 'tiles') return <TileRun key={run.key} tiles={run.tiles} label={label} onPress={onPress} />;
+    if (run.kind === 'tiles') {
+      return <TileRun key={run.key} tiles={run.tiles} label={label} at={start} onPress={onPress} />;
+    }
     if (run.kind === 'rows') {
       return (
         <ul key={run.key} className={styles.list} {...(label === undefined ? {} : { 'aria-label': label })}>
-          {run.rows.map((block) => (
-            <BlockRow key={block.id} block={block} onPress={onPress} />
+          {run.rows.map((block, index) => (
+            <BlockRow key={block.id} block={block} at={start + index} onPress={onPress} />
           ))}
         </ul>
       );
     }
+    // A block standing apart arrives as one, at its group's turn (the section's `--arrive-index`).
     return <ApartBlockView key={run.key} block={run.block} level={level} onPress={onPress} />;
   });
 }
@@ -1498,19 +1526,24 @@ function Folder({
   heading,
   rows,
   isOpen,
+  at,
   onToggle,
   onPress,
 }: {
   readonly heading: Extract<LinkPageBlock, { kind: 'heading' }>;
   readonly rows: readonly LinkPageBlock[];
   readonly isOpen: boolean;
+  /** Its place in the live page's arrival (`arriveAt`). */
+  readonly at: number;
   readonly onToggle: (id: string) => void;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
   const panelId = useId();
   const count = shownCount(rows);
+  // Opened from the keyboard (a click with no pointer behind it), the fold and its blocks are simply there.
+  const [isInstant, setInstant] = useState(false);
   return (
-    <section className={styles.group} data-folder="">
+    <section className={styles.group} data-folder="" style={{ '--arrive-index': arriveAt(at) }}>
       <h2 className={styles.folderTitle}>
         {/* The id is the heading's own, so `#<block id>` in the address finds this row (AC-5417). */}
         <button
@@ -1520,7 +1553,8 @@ function Folder({
           data-folder-row=""
           aria-expanded={isOpen}
           aria-controls={panelId}
-          onClick={() => {
+          onClick={(event) => {
+            setInstant(event.detail === 0);
             onToggle(heading.id);
           }}
         >
@@ -1537,8 +1571,9 @@ function Folder({
           </span>
         </button>
       </h2>
-      <div id={panelId} className={styles.panel} hidden={!isOpen}>
-        <GroupRows rows={rows} level={3} isNamed onPress={onPress} />
+      <div id={panelId} className={styles.panel} hidden={!isOpen} data-instant={isInstant || undefined}>
+        {/* Opened later, its blocks arrive from the fold's own first beat. */}
+        <GroupRows rows={rows} level={3} isNamed at={0} onPress={onPress} />
       </div>
     </section>
   );
@@ -1553,12 +1588,15 @@ function Group({
   heading,
   rows,
   openFolder,
+  at = ARRIVE_AFTER_PERSON,
   onToggleFolder,
   onPress,
 }: {
   readonly heading?: Extract<LinkPageBlock, { kind: 'heading' }>;
   readonly rows: readonly LinkPageBlock[];
   readonly openFolder?: string;
+  /** Its place in the live page's arrival: its heading's, and its first block's after it. */
+  readonly at?: number;
   readonly onToggleFolder: (id: string) => void;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
@@ -1569,21 +1607,43 @@ function Group({
         heading={heading}
         rows={rows}
         isOpen={openFolder === heading.id}
+        at={at}
         onToggle={onToggleFolder}
         onPress={onPress}
       />
     );
   }
   return (
-    <section className={styles.group} {...(heading === undefined ? {} : { 'aria-labelledby': headingId })}>
+    <section
+      className={styles.group}
+      style={{ '--arrive-index': arriveAt(at) }}
+      {...(heading === undefined ? {} : { 'aria-labelledby': headingId })}
+    >
       {heading !== undefined && (
         <h2 id={headingId} className={styles.heading}>
           {heading.title}
         </h2>
       )}
-      <GroupRows rows={rows} level={heading === undefined ? 2 : 3} isNamed={heading !== undefined} onPress={onPress} />
+      <GroupRows
+        rows={rows}
+        level={heading === undefined ? 2 : 3}
+        isNamed={heading !== undefined}
+        at={heading === undefined ? at : at + 1}
+        onPress={onPress}
+      />
     </section>
   );
+}
+
+/** Where the blocks' arrival starts on the live page: after the face, the words and the actions (LinkPage.module.css). */
+const ARRIVE_AFTER_PERSON = 5;
+
+/** The most beats an arrival counts: past it the rest arrive together, so the last block is never kept waiting. */
+const ARRIVE_MOST = 7;
+
+/** A block's place in the live page's arrival, as `--arrive-index`, the custom property its animation's delay reads. */
+function arriveAt(at: number): string {
+  return String(Math.min(at, ARRIVE_MOST));
 }
 
 /**
@@ -1841,6 +1901,7 @@ export function LinkPage({
       <Root
         className={styles.root}
         data-preview={isPreview || undefined}
+        data-live={isLive || undefined}
         data-grid={pageLayout === 'grid' || undefined}
         {...look}
         ref={variablesRef}
@@ -1941,6 +2002,7 @@ export function LinkPage({
                 <Group
                   key={group.heading?.id ?? `top-${String(index)}`}
                   rows={group.rows}
+                  at={ARRIVE_AFTER_PERSON + index}
                   onPress={onPress}
                   onToggleFolder={toggleFolder}
                   {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
