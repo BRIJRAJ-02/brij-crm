@@ -420,3 +420,46 @@ export const ChoiceDisabledSelect: Story = {
     await expect(report.failures.filter((failure) => failure.check === 'tile-size')).toEqual([]);
   },
 };
+
+function WithAction({ onAction }: { readonly onAction?: (id: string) => void }) {
+  const [value, setValue] = useState<string | null>('work');
+  const pages: readonly ChoiceTile[] = [
+    { id: 'work', name: 'Work', thumbnail: <Looks id="fair" />, description: '/ada' },
+    { id: 'side', name: 'Side project', thumbnail: <Looks id="first" />, description: '/ada-makes' },
+  ];
+  return (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="Your link pages"
+        tiles={pages}
+        value={value}
+        onChange={setValue}
+        action={{
+          tile: { id: 'new', name: 'New link page', icon: 'plus' },
+          onAction: (id) => onAction?.(id),
+        }}
+      />
+    </Stage>
+  );
+}
+
+/**
+ * A select grid with one action tile at its end (the link page switcher, spec 0064, AC-6414): the pages are radios,
+ * New link page is a button of the same size in the same grid, and the arrows stay among the radios.
+ */
+export const ChoiceWithAction: Story = {
+  render: () => <WithAction onAction={fn()} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('radio')).toHaveLength(2);
+    await expect(canvas.getByRole('radiogroup', { name: 'Your link pages' })).toBeInTheDocument();
+    const add = canvas.getByRole('button', { name: 'New link page' });
+    await userEvent.tab();
+    await expect(canvas.getByRole('radio', { name: /Work/ })).toHaveFocus();
+    await userEvent.tab();
+    await expect(add).toHaveFocus();
+    const report = probeAlignment({ root: 'body' });
+    await expect(report.failures.filter((failure) => failure.check === 'tile-size')).toEqual([]);
+    await expect(report.checked['tile-size']).toBe(3);
+  },
+};

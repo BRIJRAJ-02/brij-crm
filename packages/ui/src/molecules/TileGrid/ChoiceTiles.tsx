@@ -53,6 +53,11 @@ export interface ChoiceSelectProps extends ChoiceTilesBase {
   readonly value?: string | null;
   readonly defaultValue?: string;
   readonly onChange?: (id: string) => void;
+  /**
+   * One tile at the end that starts something rather than being picked (the link page switcher's New link page,
+   * spec 0064, AC-6414): a button, outside the radio group, in the same grid and at the same size as the tiles.
+   */
+  readonly action?: { readonly tile: ChoiceTile; readonly onAction: (id: string) => void };
 }
 
 /** A choice grid whose tiles each start something at once (a block kind adds that block). */
@@ -195,10 +200,10 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
       </div>
     );
   }
-  const { label, tiles, value, defaultValue, onChange } = props;
-  return (
+  const { label, tiles, value, defaultValue, onChange, action } = props;
+  const group = (
     <RadioGroup
-      className={styles.root}
+      className={action === undefined ? styles.root : styles.radios}
       aria-label={label}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
@@ -210,5 +215,14 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
         </WithTip>
       ))}
     </RadioGroup>
+  );
+  if (action === undefined) return group;
+  // The radio group lays its tiles straight into this grid (`display: contents`), so the action tile after it is
+  // one more cell of the same size, while the group's role and arrow keys still hold only the radios.
+  return (
+    <div className={styles.root}>
+      {group}
+      <ActionTile tile={action.tile} onAction={action.onAction} />
+    </div>
   );
 }

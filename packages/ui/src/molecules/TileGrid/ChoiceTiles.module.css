@@ -15,6 +15,12 @@
     min-inline-size: 0;
   }
 
+  /* A select grid with an action tile after it: the radio group adds no box of its own, so its tiles and the action
+     share the grid above. */
+  .radios {
+    display: contents;
+  }
+
   /* The tooltip's trigger wraps a tile: the trigger is the grid cell, this wrapper fills it, and the tile fills
      the wrapper, so a tile with a description is the same size as one without. */
   .cell {
