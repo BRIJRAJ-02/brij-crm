@@ -100,11 +100,14 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
 }
 
 export default [
+  // 300 kB from 2 November 2026 (the owner, "raise it to 300"): the CRM UI pass (follows, sample data, Excel import
+  // and export) took the first load to 252.34 kB, and the cars behind it add a little more. Room for those, not a
+  // licence to grow: keep trimming toward the old line.
   // 252 kB from 26 October 2026 (the owner): Calendars and Round robin came up out of Settings into Bookings, so
   // their addresses are read up front by the command menu, and a contact card gained its second and third email,
   // phone and website. A whole shared chunk was taken back out of the first load before asking, and it was still
   // about 80 bytes over. Raising this is a spec change, so it is the owner's call every time.
-  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '252 kB', gzip: true, running: false },
+  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '300 kB', gzip: true, running: false },
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '40 kB', gzip: true, running: false },
   // 223 kB from 26 October 2026: forms take files (spec 0023's uploads). The question's drop area brings React
   // Aria's drag and drop code, which took the form to 245.52 kB, 24.52 kB over. That is not what a form without a
