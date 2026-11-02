@@ -34,11 +34,12 @@ const answer = (body: unknown) =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 
 /** The page's facts, its viewer and its slots, as the API answers them. */
-function fakeApi(defaultView: 'month' | 'list' | 'chat') {
+function fakeApi(defaultView: 'month' | 'list' | 'chat', slots: readonly string[] = []) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (url.includes('/viewer')) return Promise.resolve(answer({ isHost: false, canConnect: false }));
-    if (url.includes('/slots')) return Promise.resolve(answer({ slots: [], timeZone: 'UTC' }));
+    if (url.includes('/slots'))
+      return Promise.resolve(answer({ slots: slots.map((start) => ({ start })), timeZone: 'UTC' }));
     return Promise.resolve(
       answer({
         publicKey: KEY,
@@ -152,5 +153,66 @@ describe('the time zone picker in the rail', () => {
     await vi.waitFor(() => {
       expect(document.activeElement?.getAttribute('aria-label')).toBe('Search city or GMT offset');
     });
+  });
+});
+
+describe('a next times chip’s time (spec 0061, AC-6110)', () => {
+  /** A time tomorrow at 09:00 UTC, which a chip on the link page would have carried here. */
+  const tomorrow = () => {
+    const day = new Date(Date.now() + 86_400_000);
+    day.setUTCHours(9, 0, 0, 0);
+    return day.toISOString();
+  };
+
+  const openAt = (query: string) => {
+    globalThis.history.replaceState(null, '', `/b/${KEY}${query}`);
+  };
+
+  afterEach(() => {
+    globalThis.history.replaceState(null, '', `/b/${KEY}`);
+  });
+
+  it('opens the details form on the time the chip named', async () => {
+    const start = tomorrow();
+    fakeApi('month', [start]);
+    openAt(`?at=${encodeURIComponent(start)}&len=30`);
+    show();
+    await loaded();
+    await loaded();
+    expect(host?.textContent).toContain('Your name');
+  });
+
+  it('says a time that has gone since, over the other times, and asks nothing of the visitor', async () => {
+    const start = tomorrow();
+    // The page's times no longer hold it: somebody booked it between the chip being drawn and this read.
+    fakeApi('month', [new Date(Date.parse(start) + 3_600_000).toISOString()]);
+    openAt(`?at=${encodeURIComponent(start)}&len=30`);
+    show();
+    await loaded();
+    await loaded();
+    expect(host?.textContent).toContain('That time was just taken. Here are the others.');
+    expect(host?.textContent).not.toContain('Your name');
+  });
+
+  it('says so for a time no read can cover, rather than waiting in silence', async () => {
+    const start = tomorrow();
+    fakeApi('month', [start]);
+    // Yesterday: before the first read's window, so no answer could ever hold it.
+    openAt(`?at=${encodeURIComponent(new Date(Date.now() - 86_400_000).toISOString())}&len=30`);
+    show();
+    await loaded();
+    await loaded();
+    expect(host?.textContent).toContain('That time was just taken. Here are the others.');
+  });
+
+  it('opens as it always did for an address whose at is no instant', async () => {
+    const start = tomorrow();
+    fakeApi('month', [start]);
+    openAt('?at=whenever');
+    show();
+    await loaded();
+    await loaded();
+    expect(host?.textContent).not.toContain('That time was just taken');
+    expect(host?.textContent).not.toContain('Your name');
   });
 });

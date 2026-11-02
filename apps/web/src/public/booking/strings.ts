@@ -73,6 +73,8 @@ export const strings = {
   errors: {
     taken: 'Someone just took that time. Pick another.',
     gone: 'That time is no longer available. Pick another.',
+    /** A next times chip whose time went between the link page drawing it and this page reading them (AC-6110). */
+    atGone: 'That time was just taken. Here are the others.',
     tooMany: 'Too many attempts just now. Wait a moment and try again.',
     closed: 'This page isn’t taking bookings any more.',
     failed: 'That did not go through. Try again in a moment.',

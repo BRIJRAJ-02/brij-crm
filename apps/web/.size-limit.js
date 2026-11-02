@@ -44,6 +44,21 @@ const form = firstLoad(manifest, 'form.html');
 const book = firstLoad(manifest, 'book.html');
 const inDist = (files) => files.map((file) => path.join(DIST, file));
 
+// Spec 0061, AC-6126: media, image, gallery, next times and the notice sheet each load as their own chunk, only
+// when a block of that kind is on the page. The budget is per chunk, so one of them growing is seen where it
+// happens rather than inside the first load, and a chunk that stops being lazy fails here instead of quietly
+// taking the booking page's budget.
+const lazyBlock = (name) => {
+  const key = Object.keys(manifest).find((each) => each.endsWith(`/LinkPage/${name}.tsx`));
+  if (key === undefined) {
+    throw new Error(`The manifest has no ${name} chunk. A block kind that is no longer lazy breaks AC-6126.`);
+  }
+  if (book.chunks.includes(key)) {
+    throw new Error(`${name} is in the booking page's first load. A block kind's code loads only with its block.`);
+  }
+  return inDist([manifest[key].file]);
+};
+
 // React's development build carries this message; production never does.
 const DEVELOPMENT_REACT = 'Download the React DevTools';
 if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_REACT))) {
@@ -71,4 +86,30 @@ export default [
   { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '17 kB', gzip: true, running: false },
   { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
   { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '18 kB', gzip: true, running: false },
+  // Spec 0061, AC-6126, measured on this build (2 November 2026, gzipped): media 1.15 kB, the picture and gallery
+  // chunk 1.68 kB (one chunk: `LinkPageGallery.tsx` re-exports `LinkPageImage`, so a page with either draws from
+  // the same code), next times 1.11 kB and the notice sheet 0.49 kB. Each limit is the measurement with a little
+  // room, and none of them is part of any page's first load, which `lazyBlock` proves above.
+  {
+    name: 'Media block chunk (gzipped)',
+    path: lazyBlock('LinkPageMedia'),
+    limit: '1.5 kB',
+    gzip: true,
+    running: false,
+  },
+  {
+    name: 'Picture and gallery chunk (gzipped)',
+    path: lazyBlock('LinkPageGallery'),
+    limit: '2 kB',
+    gzip: true,
+    running: false,
+  },
+  { name: 'Next times chunk (gzipped)', path: lazyBlock('LinkPageTimes'), limit: '1.5 kB', gzip: true, running: false },
+  {
+    name: 'Notice sheet chunk (gzipped)',
+    path: lazyBlock('LinkPageNotice'),
+    limit: '0.8 kB',
+    gzip: true,
+    running: false,
+  },
 ];

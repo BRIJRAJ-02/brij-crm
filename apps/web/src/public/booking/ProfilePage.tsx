@@ -10,6 +10,7 @@
 // the plain not found. A word kept for Timefix and a handle somebody holds (listed or not) both answer `absent`, so
 // nothing here can say that a private account is behind an address.
 import { createHandleClient, isDataError, type PublicProfile, type PublicProfileItem } from '@crm/data/booking';
+import type { LinkPageTimes } from '@crm/ui/public-booking';
 import {
   BookingFoot,
   BookingHandleOffer,
@@ -26,8 +27,27 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wearStylesheet } from '../stylesheet.ts';
 import { claimHandleHref } from './claim.ts';
-import { blocksOf, lookHref } from './link-page.ts';
+import {
+  blocksOf,
+  continuedNotices,
+  isBannerClosed,
+  keepClosedBanner,
+  keepContinuedNotice,
+  lookHref,
+  viewFactsOf,
+  type VisitStorage,
+} from './link-page.ts';
 import { strings, tabTitle } from './strings.ts';
+
+/** The tab's session storage, where a browser offers it: a page in a private window may have none, or refuse. */
+function visitStorage(): VisitStorage | undefined {
+  try {
+    return globalThis.sessionStorage;
+  } catch {
+    // Refused: the closed banner and the continued notices live for this page's life only.
+    return undefined;
+  }
+}
 
 /** The address as the visitor reads it in the bar: the host they are on, then the handle. */
 function addressOf(handle: string): string {
@@ -150,6 +170,23 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
           ...(initial.next === undefined ? {} : { next: initial.next }),
         },
   );
+  // What this view carries from the page (AC-6116): the referring site's host and the `utm_source`, read once,
+  // before anything the page does can change the address. Nothing else about the visitor is read or sent.
+  const [facts] = useState(() =>
+    viewFactsOf({
+      referrer: document.referrer,
+      search: globalThis.location.search,
+      origin: globalThis.location.origin,
+    }),
+  );
+  // The tab's session, and all this page keeps in it (AC-6127): a closed banner and the continued notices.
+  const visit = useMemo(() => visitStorage(), []);
+  // Each next times block's times, read when it nears the screen (AC-6110), once a visit.
+  const [times, setTimes] = useState<ReadonlyMap<string, LinkPageTimes>>(() => new Map());
+  const askedTimes = useRef<Set<string>>(new Set());
+  const [closedBanners, setClosedBanners] = useState<readonly string[]>([]);
+  // The noticed links this tab already said Continue to (AC-6113), read once.
+  const [continued, setContinued] = useState<readonly string[]>(() => continuedNotices(visit, handle));
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState('');
   const [isMoreLoading, setMoreLoading] = useState(false);
@@ -181,7 +218,7 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
       const ticket = (latest.current += 1);
       // The page's first read is its view (AC-5124); a cleared search reads it again as a search, never a view.
       const isFirst = !viewed.current;
-      client.profile(handle, search === '' && isFirst ? {} : { q: search }).then(
+      client.profile(handle, search === '' && isFirst ? facts : { q: search }).then(
         (profile) => {
           if (ticket !== latest.current) return;
           if (search === '' && isFirst) viewed.current = true;
@@ -216,7 +253,7 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
         },
       );
     },
-    [client, handle, onMoved],
+    [client, handle, onMoved, facts],
   );
   useEffect(() => {
     load(searched);
@@ -247,6 +284,27 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
       isLive = false;
     };
   }, [client, handle, loaded.state]);
+  // A next times block neared the screen (AC-6110): its times are read once, in the visitor's own zone, and the
+  // answer is cached for a minute by the api, so a page of blocks is a handful of light reads at most.
+  const readTimes = useCallback(
+    (id: string) => {
+      // The ids already asked for, in a ref rather than the state, so two blocks nearing the screen in one frame
+      // never make the same read twice before the first has settled.
+      if (askedTimes.current.has(id)) return;
+      askedTimes.current.add(id);
+      setTimes((kept) => (kept.has(id) ? kept : new Map(kept).set(id, { status: 'loading' })));
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      client.times(handle, id, zone).then(
+        (answer) => {
+          setTimes((kept) => new Map(kept).set(id, { status: 'ready', starts: answer.starts }));
+        },
+        () => {
+          setTimes((kept) => new Map(kept).set(id, { status: 'error' }));
+        },
+      );
+    },
+    [client, handle],
+  );
   // The back and forward buttons move between open sections, so the page follows the address rather than owning it.
   useEffect(() => {
     const follow = () => {
@@ -337,7 +395,13 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
   const { profile, items } = loaded;
   const current = profile.handle;
   const isSearching = searched !== '';
-  const blocks = blocksOf(current, items);
+  const blocks = blocksOf(current, items, {
+    ...(profile.socials === undefined ? {} : { socials: profile.socials }),
+    times,
+  });
+  // The banner at the very top (AC-6112), closed for the tab's session once the visitor closes it.
+  const banner = items.find((item) => item.kind === 'banner');
+  const bannerClosed = banner !== undefined && (closedBanners.includes(banner.id) || isBannerClosed(visit, banner.id));
   return (
     <LinkPage
       person={{
@@ -386,6 +450,16 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
       foot={footOf(profile.theme.mode)}
       // A press is counted by a beacon (AC-5125): the navigation never waits for it.
       onPress={(id) => client.press(current, id)}
+      onTimesNear={readTimes}
+      isBannerClosed={bannerClosed}
+      onCloseBanner={() => {
+        if (banner === undefined) return;
+        keepClosedBanner(visit, banner.id);
+        setClosedBanners((kept) => [...kept, banner.id]);
+      }}
+      continuedNotices={continued}
+      // Kept under the handle this visit was opened at, which is the one the set was read with.
+      onContinueNotice={(id) => setContinued(keepContinuedNotice(visit, handle, id))}
       {...(isLong
         ? {
             toolbar: <LinkListToolbar searchLabel={strings.searchLinks} query={query} onQueryChange={setQuery} />,

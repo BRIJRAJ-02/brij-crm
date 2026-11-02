@@ -52,7 +52,9 @@ export function readReturn(address: URL): { readonly chosen: Chosen; readonly re
 /** The address without what the return carried, so a reload starts clean; undefined when there is nothing to tidy. */
 export function tidiedAddress(address: URL): string | undefined {
   const next = new URL(address.href);
-  for (const key of ['d', 'day', 'tz', 'calendar', 'p']) next.searchParams.delete(key);
+  // `at` and `len` (spec 0061, AC-6110) go too: a next times chip's time is read once, as the page opens, so a
+  // reload, a bookmark or a forwarded address never drops somebody back into a time they stepped away from.
+  for (const key of ['d', 'day', 'tz', 'calendar', 'p', 'at', 'len']) next.searchParams.delete(key);
   if (next.href === address.href) return undefined;
   return `${next.pathname}${next.search}${next.hash}`;
 }

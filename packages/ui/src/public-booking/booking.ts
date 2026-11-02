@@ -61,6 +61,7 @@ export {
   type LinkPageBlock,
   type LinkPagePerson,
   type LinkPagePhotos,
+  type LinkPageTimes,
   type PageLook,
 } from '../modules/LinkPage/LinkPage.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';

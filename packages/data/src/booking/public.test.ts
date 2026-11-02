@@ -258,6 +258,50 @@ describe('createHandleClient', () => {
     expect(calls).toEqual(['https://timefix.test/api/public/profiles/ada/offer']);
   });
 
+  it('sends a view’s facts with the view read alone, and never with a search or a further page (AC-6116)', async () => {
+    const calls: { readonly url: string; readonly credentials?: string }[] = [];
+    const client = createHandleClient({
+      origin: 'https://timefix.test',
+      fetch: (input, init) => {
+        calls.push({
+          url: input instanceof Request ? input.url : input.toString(),
+          ...(init?.credentials === undefined ? {} : { credentials: init.credentials }),
+        });
+        return Promise.resolve(Response.json({ handle: 'ada', items: [] }));
+      },
+    });
+    await client.profile('ada', { ref: 'www.instagram.com', src: 'ig_bio' });
+    await client.profile('ada', { q: 'book', ref: 'www.instagram.com', src: 'ig_bio' });
+    await client.profile('ada', { after: 'cursor', ref: 'www.instagram.com' });
+    expect(calls).toEqual([
+      {
+        url: 'https://timefix.test/api/public/handles/ada?ref=www.instagram.com&src=ig_bio',
+        credentials: 'same-origin',
+      },
+      { url: 'https://timefix.test/api/public/handles/ada?q=book', credentials: 'omit' },
+      { url: 'https://timefix.test/api/public/handles/ada?after=cursor', credentials: 'omit' },
+    ]);
+  });
+
+  it('reads a next times block’s times under profiles, in the visitor’s zone (AC-6110)', async () => {
+    const calls: string[] = [];
+    const client = createHandleClient({
+      origin: 'https://timefix.test',
+      fetch: (input) => {
+        calls.push(input instanceof Request ? input.url : input.toString());
+        return Promise.resolve(Response.json({ slug: 'intro', duration: 30, starts: [] }));
+      },
+    });
+    expect(await client.times('ada', '00000000-0000-7000-8000-000000000001', 'Europe/London')).toEqual({
+      slug: 'intro',
+      duration: 30,
+      starts: [],
+    });
+    expect(calls).toEqual([
+      'https://timefix.test/api/public/profiles/ada/items/00000000-0000-7000-8000-000000000001/times?tz=Europe%2FLondon',
+    ]);
+  });
+
   it('hands a refused answer back as a DataError, so the page keeps its plain not found', async () => {
     const client = createHandleClient({
       origin: 'https://timefix.test',
