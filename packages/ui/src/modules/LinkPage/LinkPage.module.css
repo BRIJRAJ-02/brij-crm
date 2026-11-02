@@ -410,6 +410,9 @@
     --page-stagger: 40ms;
     /* stylelint-disable-next-line unit-disallowed-list -- a lift with no token, the public pages' own */
     --card-lift: 2px;
+    /* The blur the person and the blocks arrive out of (transitions.dev's reveal), until the artifact has a blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --arrive-blur: 3px;
     /* The live page's blocks arrive one by one, so the list as a whole doesn't rise as well. */
     /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
     --blocks-rise: 0s;
@@ -468,9 +471,6 @@
   /* The face's own box: one flex item, so the hero centres it and a cover can pull it up. On the live page the face
      lands first, out of a soft blur, as the booking receipt's host does. */
   .face {
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
-    --arrive-blur: 3px;
-
     display: flex;
     animation: face-land var(--page-arrive) var(--ease-out) backwards;
   }
@@ -478,9 +478,6 @@
   /* The words under the face: part of the hero's own column, except beside the face in the left header. On the
      live page the name, the bio and the address rise in after the face, a beat apart. */
   .who {
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
-    --arrive-blur: 3px;
-
     display: contents;
   }
 
@@ -554,9 +551,6 @@
   /* Save contact, the page's one action, with Share beside it: a thumb's row, and under it Add to Apple Wallet
      when the page offers one. */
   .actions {
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
-    --arrive-blur: 3px;
-
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
@@ -634,9 +628,6 @@
   }
 
   .group {
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
-    --arrive-blur: 3px;
-
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
@@ -715,9 +706,11 @@
 
   /* Opened by pointer on the live page, the fold grows to its height (a card expansion, stageshow's ai-cards) as its
      blocks arrive in turn; opened from the keyboard, it is simply there. */
-  .panel:not([hidden]) {
-    interpolate-size: allow-keywords;
-    animation: panel-open var(--page-arrive) var(--ease-out);
+  @supports (interpolate-size: allow-keywords) {
+    .panel:not([hidden]) {
+      interpolate-size: allow-keywords;
+      animation: panel-open var(--page-arrive) var(--ease-out);
+    }
   }
 
   .panel[data-instant] {

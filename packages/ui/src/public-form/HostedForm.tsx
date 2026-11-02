@@ -144,7 +144,7 @@ export function HostedForm({
                 key={`${String(state.round)}-${question.key}`}
                 question={question}
                 state={state}
-                arrive={index + 1}
+                {...(state.firstShown.has(question.key) ? { arrive: index + 1 } : {})}
               >
                 <Question
                   question={question}

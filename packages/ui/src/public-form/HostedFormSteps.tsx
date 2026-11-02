@@ -278,7 +278,7 @@ export function HostedFormSteps({
                 key={`${String(state.round)}-${question.key}`}
                 question={question}
                 state={state}
-                {...(hasMoved ? {} : { arrive: at + 1 })}
+                {...(hasMoved || !state.firstShown.has(question.key) ? {} : { arrive: at + 1 })}
               >
                 {isOpen && (
                   <p className={styles.ask} data-mode={mode} aria-hidden="true">

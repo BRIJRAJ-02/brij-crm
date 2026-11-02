@@ -46,10 +46,6 @@
     /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
     --duration-press: 220ms;
     /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
-    --duration-exit: 200ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
-    --duration-popover: 280ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
     --duration-move: 340ms;
     /* stylelint-disable-next-line unit-disallowed-list -- the public pages' calmer pace, until the artifact carries it */
     --duration-modal: 380ms;
@@ -257,7 +253,7 @@
   /* The calm tick on an answer put right (FixedTick): it opens out of a soft blur. */
   .fixed {
     display: inline-flex;
-    animation: tick-in var(--duration-modal) var(--ease-out) backwards;
+    animation: arrive var(--duration-modal) var(--ease-out) backwards;
   }
 
   /* The email typo hint: a muted line under the field with its Use it. */
@@ -293,8 +289,7 @@
 
   /* The thank you: the booking confirmation's badge, heading and muted line, centred. Sending lands as one moment,
      as a booking does (the owner, 2 November 2026: magical moments): the tick pops out of a large blur and sends two
-     soft rings out, then the heading, the line, what was sent and the next step rise out of a soft blur, a beat
-     apart. */
+     soft rings out, then the heading, the line, what was sent and the next step rise out of a soft blur together. */
   .thanks {
     display: flex;
     flex-direction: column;
@@ -306,15 +301,6 @@
 
   .thanks > * {
     animation: rise var(--reveal-duration) var(--ease-in-out) var(--duration-hover) backwards;
-  }
-
-  .thanks > :nth-child(3) {
-    animation-delay: calc(var(--duration-hover) + var(--stagger));
-  }
-
-  .thanks > :nth-child(4),
-  .thanks > :nth-child(5) {
-    animation-delay: calc(var(--duration-hover) + 2 * var(--stagger));
   }
 
   .badge {
@@ -454,14 +440,6 @@
     }
   }
 
-  @keyframes tick-in {
-    from {
-      opacity: 0;
-      translate: 0 var(--space-4);
-      filter: blur(var(--reveal-blur));
-    }
-  }
-
   @keyframes shake-even {
     20% {
       translate: calc(-1 * var(--space-8)) 0;
@@ -492,26 +470,17 @@
     }
   }
 
-  @keyframes fade {
-    from {
-      opacity: 0;
-    }
-  }
-
-  /* The fades stay; the rises, the blurs, the pop, the rings and the shake go. */
+  /* Reduced motion: every moment is an instant change (spec 0058, AC-2), as the step layouts' are. */
   @media (prefers-reduced-motion: reduce) {
     .header[data-arrive],
     .question[data-arrive],
     .actions[data-arrive],
+    .actions[data-shake],
     .fixed,
     .badge,
-    .thanks > * {
-      animation-name: fade;
-    }
-
     .badge::before,
     .badge::after,
-    .actions[data-shake] {
+    .thanks > * {
       animation: none;
     }
   }

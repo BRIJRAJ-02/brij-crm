@@ -126,11 +126,15 @@ export const SecondStep: Story = {
 export const StepSlides: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, canvasElement }) => {
+    // As the form first draws, the header, each question and the buttons arrive.
+    await expect(canvasElement.querySelectorAll('[data-arrive]').length).toBeGreaterThan(2);
     await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(canvas.getByLabelText('Company')).toHaveFocus());
     await expect(canvasElement.querySelector('form')?.getAttribute('data-moved')).toBe('forward');
+    // Only the first draw arrives: a step reached later slides, and nothing on it arrives again.
+    await expect(canvasElement.querySelector('[data-arrive]')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(canvasElement.querySelector('form')?.getAttribute('data-moved')).toBe('back'));
     await settleAnimations();

@@ -1849,6 +1849,12 @@ export function LinkPage({
   // A page whose only block is the contact card has no rows: its card is the header's Save contact, so the list
   // draws its empty state rather than an empty group.
   const groups = blocks === undefined ? [] : groupsOf(blocks);
+  // Each group's first beat in the live page's arrival: after the person, and after every block (and heading) before it.
+  const groupStarts = groups.map((_, index) =>
+    groups
+      .slice(0, index)
+      .reduce((sum, group) => sum + group.rows.length + (group.heading === undefined ? 0 : 1), ARRIVE_AFTER_PERSON),
+  );
   const look = lookAttributes(theme, photos);
   const variablesRef = usePageVariables(variables);
   if (layout === 'blocks') {
@@ -2002,7 +2008,7 @@ export function LinkPage({
                 <Group
                   key={group.heading?.id ?? `top-${String(index)}`}
                   rows={group.rows}
-                  at={ARRIVE_AFTER_PERSON + index}
+                  at={groupStarts[index] ?? ARRIVE_AFTER_PERSON}
                   onPress={onPress}
                   onToggleFolder={toggleFolder}
                   {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}

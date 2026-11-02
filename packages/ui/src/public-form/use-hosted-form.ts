@@ -123,6 +123,11 @@ export interface HostedFormState {
    * shakes the button row again; undefined before the first.
    */
   readonly shake: 'even' | 'odd' | undefined;
+  /**
+   * The questions shown as this round first drew: only they arrive (FormParts' QuestionSlot `arrive`). One an answer
+   * reveals later is simply there, so focus never lands in a question still fading in.
+   */
+  readonly firstShown: ReadonlySet<string>;
 }
 
 /** Where focus goes: the form's frame (its questions) and the view's heading. Kept apart from the state, which renders. */
@@ -307,6 +312,11 @@ export function useHostedForm({
   // A question marked wrong is remembered for the round, so the tick can follow once it passes.
   if (Object.keys(errors).some((key) => !wasWrong.has(key)))
     setWasWrong(new Set([...wasWrong, ...Object.keys(errors)]));
+  // What showed as this round first drew, kept for the round.
+  const [first, setFirst] = useState<{ readonly round: number; readonly keys: ReadonlySet<string> } | undefined>(
+    undefined,
+  );
+  if (first?.round !== round) setFirst({ round, keys: shown });
   if (shown.size !== seenCount) {
     setSeenCount(shown.size);
     setShownNote(shown.size > seenCount ? words.questionsShown : words.questionsHidden);
@@ -464,15 +474,12 @@ export function useHostedForm({
           return;
         case 'offline':
           setAlert(words.offline);
-          refuse();
           return;
         case 'limited':
           setAlert(words.tooMany);
-          refuse();
           return;
         case 'failed':
           setAlert(words.failed);
-          refuse();
           return;
       }
     });
@@ -556,6 +563,7 @@ export function useHostedForm({
     focus,
     fixed,
     shake: refusals === 0 ? undefined : refusals % 2 === 0 ? 'even' : 'odd',
+    firstShown: first?.round === round ? first.keys : shown,
   };
   return { state, refs: { container, heading } };
 }

@@ -22,10 +22,6 @@
   }
 
   .title {
-    /* The blur a step slides out of (transitions.dev's page slide), a literal until the artifact has a blur token. */
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
-    --step-blur: 3px;
-
     margin: 0;
     color: var(--text);
     font: var(--text-title);
@@ -33,9 +29,6 @@
   }
 
   .form {
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
-    --step-blur: 3px;
-
     display: flex;
     flex-direction: column;
     gap: var(--space-20);
@@ -65,7 +58,7 @@
     from {
       opacity: 0;
       translate: var(--space-8) 0;
-      filter: blur(var(--step-blur));
+      filter: blur(var(--reveal-blur, 0));
     }
   }
 
@@ -73,14 +66,14 @@
     from {
       opacity: 0;
       translate: calc(-1 * var(--space-8)) 0;
-      filter: blur(var(--step-blur));
+      filter: blur(var(--reveal-blur, 0));
     }
   }
 
   @keyframes title-in {
     from {
       opacity: 0;
-      filter: blur(var(--step-blur));
+      filter: blur(var(--reveal-blur, 0));
     }
   }
 

@@ -51,13 +51,13 @@ Loading, before the form has been read (`HostedForm.stories.tsx`). Book after se
 
 ## Motion
 
-The hosted form moves at the public booking page's calmer pace (FormParts' root sets the same duration overrides as BookingFrame, a 0.97 press and the label swap), on transitions.dev's scale: blur 3px for reveals and slides, 8px for the success check, 8px for a step's slide, 40ms between staggered parts.
+The hosted form moves at the public booking page's calmer pace (FormParts' root sets the same duration overrides as BookingFrame, a 0.97 press and the label swap), on transitions.dev's scale: a 3px blur for reveals and slides and 8px for the success check, an 8px travel for a step's slide, 40ms between staggered parts.
 
-- **Arrival**: as the form first draws, the headline, each question and the button resolve in out of a soft blur where the loading shape held their places, 40ms apart (at most six places counted). A step reached later, from the keyboard or not, doesn't arrive again.
+- **Arrival**: as the form first draws, the headline, each question and the button resolve in out of a soft blur where the loading shape held their places, 40ms apart (at most six places counted). A step reached later, from the keyboard or not, doesn't arrive again, and neither does a question an answer reveals (`firstShown`): it is simply there, so focus never lands in one still fading in.
 - **Steps**: a step reached by pointer slides 8px the way the visitor went (Continue from the end, Back from the start) and its title resolves in with it. From the keyboard a step is simply there.
-- **Errors**: a refused Send or Continue shakes the button row once (8px, then 6px); a field's error opens to its height (Field); an answer put right shows a calm tick at its end (`FixedTick`, one line answers only).
+- **Errors**: a refused Send or Continue (an answer to fix, or a file still going) shakes the button row once (8px, then 6px), never a failure the visitor didn't cause (offline, too many, failed); a field's error opens to its height (Field); an answer put right shows a calm tick at its end (`FixedTick`, one line answers only).
 - **Sent**: the tick pops out of an 8px blur and sends two soft rings out, then the heading, the line, what was sent and the next step rise, a beat apart. The countdown to book draws in the same confirmation.
-- Reduced motion keeps the fades and drops the blur, the slides, the rings and the shake. The first question is not focused on load: a visitor arriving from a link meets the headline first.
+- Reduced motion makes every moment an instant change (spec 0058, AC-2), as the step layouts already did. The first question is not focused on load: a visitor arriving from a link meets the headline first.
 
 ## Keyboard
 
