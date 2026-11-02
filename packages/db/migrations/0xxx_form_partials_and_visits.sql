@@ -54,6 +54,7 @@ ALTER TABLE "form_partials" ADD CONSTRAINT "form_partials_form" FOREIGN KEY ("wo
 ALTER TABLE "form_partials" ADD CONSTRAINT "form_partials_version" FOREIGN KEY ("workspace_id","version_id") REFERENCES "public"."form_versions"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "form_visits" ADD CONSTRAINT "form_visits_workspace" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "form_visits" ADD CONSTRAINT "form_visits_form" FOREIGN KEY ("workspace_id","form_id") REFERENCES "public"."forms"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "form_visits" ADD CONSTRAINT "form_visits_version" FOREIGN KEY ("workspace_id","version_id") REFERENCES "public"."form_versions"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 -- The resume read: one partial by its token's hash, inside the workspace the public key already named.
 CREATE UNIQUE INDEX "form_partials_token" ON "form_partials" USING btree ("workspace_id","token_hash");--> statement-breakpoint
 -- The daily cleanup's pick, oldest first, and a form's own partials.

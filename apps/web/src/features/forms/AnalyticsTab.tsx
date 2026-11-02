@@ -6,8 +6,14 @@
 // Leaves out: anything about one visitor (every figure is a count of daily hashes, never a person), and live
 // updates — a visitor sends no change event here, so the figures are read when the tab opens and when the person
 // comes back to it.
-import type { FormAnalytics, FormAnalyticsRange } from '@crm/contracts';
-import type { DataLayer, FormAnalyticsHeld, FormAnalyticsState, FormView } from '@crm/data';
+import type {
+  DataLayer,
+  FormAnalytics,
+  FormAnalyticsHeld,
+  FormAnalyticsRange,
+  FormAnalyticsState,
+  FormView,
+} from '@crm/data';
 import { useFormAnalytics } from '@crm/data/react';
 import {
   EmptyState,
@@ -124,8 +130,10 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
 
   // The questions the live form asks, in order, so a drop off row can be named where it is edited.
   const labels = useMemo(() => {
+    // The live version's questions: the tab exists only for a published form, and a visit counted against a
+    // question the draft has renamed should still read as the question the visitor actually saw.
     const document = form.live ?? form.draft;
-    return new Map((document?.questions ?? []).map((question) => [question.id, question.label]));
+    return new Map(document.questions.map((question) => [question.id, question.label]));
   }, [form.live, form.draft]);
 
   const period = (

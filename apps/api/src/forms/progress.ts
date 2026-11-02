@@ -25,6 +25,7 @@ import {
   countFormEvent,
   enterPublicForm,
   isRefusal,
+  postingRules,
   savePartial,
   sendResumeLink,
   type JobRegistry,
@@ -48,7 +49,7 @@ import { errorFields, log } from '../log.ts';
 import { captureFault } from '../monitoring/sentry.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
 import { FORM_EVENT_LIMITS, PARTIAL_LIMITS, type LimitRule, type PublicLimiter } from '../limits.ts';
-import { hashAddress } from './public.ts';
+import { hashAddress, postFrom, SIGNATURE_HEADER } from './public.ts';
 import type { TicketBook } from './ticket.ts';
 
 /**
@@ -126,6 +127,28 @@ export function mountFormProgress(app: Hono<{ Variables: Variables }>, deps: For
     return undefined;
   };
 
+  /**
+   * Whether this post may be made at all, by the form's own posting settings
+   * (`postFrom`), exactly as a submit is gated: our hosted page, a site the
+   * form lists (signed when it requires a signature), or a server post signed
+   * with the form's secret. Anything else is a third party site calling these
+   * endpoints on a visitor's behalf.
+   *
+   * These three carry no CORS headers and are not simple requests to read, but
+   * `sendBeacon` and a `text/plain` POST are both sent without a preflight, so
+   * without this gate another site could spend a visitor's resume email budget
+   * or file visits for people who never saw the form.
+   */
+  const allowed = async (
+    c: Context<{ Variables: Variables }>,
+    scope: Awaited<ReturnType<typeof enterPublicForm>>['scope'],
+    formId: string,
+    body: string,
+  ): Promise<boolean> => {
+    const posting = await postingRules(scope, { formId });
+    return postFrom(posting, deps.publicOrigin, c.get('origin'), body, c.req.header(SIGNATURE_HEADER) ?? null).allowed;
+  };
+
   app.put(
     '/public/forms/:publicKey/partials',
     bodyLimit({
@@ -145,7 +168,18 @@ export function mountFormProgress(app: Hono<{ Variables: Variables }>, deps: For
         return refusalAnswer(error);
       }
       const { scope, formId } = entered;
-      const parsed = PartialBody.safeParse(await c.req.json().catch(() => undefined));
+      // The raw text first: the signature a listed site's server sends is over the body exactly as sent.
+      const text = await c.req.text().catch(() => '');
+      if (!(await allowed(c, scope, formId, text))) {
+        return answer('FORBIDDEN_ORIGIN', 'This form saves progress only from its own page and the sites it lists.');
+      }
+      let raw: unknown;
+      try {
+        raw = JSON.parse(text);
+      } catch {
+        return answer('INPUT_INVALID', 'Send the save as JSON.');
+      }
+      const parsed = PartialBody.safeParse(raw);
       if (!parsed.success) return answer('INPUT_INVALID', 'That is not the shape a save takes.');
       const body = parsed.data;
       // The honeypot, before any limit is spent or any row written: a bot is told it worked and nothing happens.
@@ -153,7 +187,7 @@ export function mountFormProgress(app: Hono<{ Variables: Variables }>, deps: For
         return c.json({ resumeToken: 'x'.repeat(43), expiresAt: now().toISOString() }, 200);
       }
       // The signed fill ticket, on our clock. A save with no ticket at all is a script, not a visitor.
-      const ticket = deps.tickets.check(`form:${key}`, body.ticket);
+      const ticket = deps.tickets.check(`form:${key}`, body.ticket, { count: false });
       if (ticket.kind !== 'valid') return answer('INPUT_INVALID', 'Reload the form and try again.');
       const address = addressOf(c);
       const spent = limited([
@@ -204,12 +238,22 @@ export function mountFormProgress(app: Hono<{ Variables: Variables }>, deps: For
         return refusalAnswer(error);
       }
       const { scope, formId } = entered;
-      const parsed = PartialEmailBody.safeParse(await c.req.json().catch(() => undefined));
+      const text = await c.req.text().catch(() => '');
+      if (!(await allowed(c, scope, formId, text))) {
+        return answer('FORBIDDEN_ORIGIN', 'This form sends its link only from its own page and the sites it lists.');
+      }
+      let raw: unknown;
+      try {
+        raw = JSON.parse(text);
+      } catch {
+        return answer('INPUT_INVALID', 'Send it as JSON.');
+      }
+      const parsed = PartialEmailBody.safeParse(raw);
       if (!parsed.success) return answer('INPUT_INVALID', 'That is not the shape this takes.');
       const body = parsed.data;
       // 202 either way for the honeypot: a bot can't tell a swallowed request from a sent email.
       if (body.company_url !== undefined && body.company_url.trim() !== '') return c.body(null, 202);
-      const ticket = deps.tickets.check(`form:${key}`, body.ticket);
+      const ticket = deps.tickets.check(`form:${key}`, body.ticket, { count: false });
       if (ticket.kind !== 'valid') return answer('INPUT_INVALID', 'Reload the form and try again.');
       const address = addressOf(c);
       const spent = limited([
@@ -251,16 +295,26 @@ export function mountFormProgress(app: Hono<{ Variables: Variables }>, deps: For
       // A machine's visit is never counted (spec 0047's rule), and without a visitor key nothing is counted at all.
       if (visitorKey === undefined || userAgent === undefined || isMachine(userAgent)) return silent();
       if (!deps.limiter('forms:events:instance', FORM_EVENT_LIMITS.perInstance).allowed) return silent();
-      const parsed = FormEventBody.safeParse(await c.req.json().catch(() => undefined));
+      const text = await c.req.text().catch(() => '');
+      let raw: unknown;
+      try {
+        raw = JSON.parse(text);
+      } catch {
+        return silent();
+      }
+      const parsed = FormEventBody.safeParse(raw);
       if (!parsed.success) return silent();
       const body = parsed.data;
       if (body.company_url !== undefined && body.company_url.trim() !== '') return silent();
-      const ticket = deps.tickets.check(`form:${key}`, body.ticket);
+      const ticket = deps.tickets.check(`form:${key}`, body.ticket, { count: false });
       if (ticket.kind !== 'valid') return silent();
       const address = addressOf(c);
       if (!deps.limiter(`forms:event:${address}`, FORM_EVENT_LIMITS.perAddress).allowed) return silent();
       try {
         const { scope, formId } = await enterPublicForm({ db: deps.db }, key);
+        // Another site's page may not file visits for people who never saw this form. Silently, as everything
+        // here is: a beacon never tells its caller whether it was counted.
+        if (!(await allowed(c, scope, formId, text))) return silent();
         if (!deps.limiter(`forms:event-form:${scope.workspaceId}:${formId}`, FORM_EVENT_LIMITS.perForm).allowed) {
           return silent();
         }

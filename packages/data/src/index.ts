@@ -511,6 +511,8 @@ export type {
   OnboardingArea,
   OnboardingRole,
   OnboardingTeamSize,
+  FormAnalytics,
+  FormAnalyticsRange,
   FormAttributeChoice,
   FormDocument,
   FormLook,

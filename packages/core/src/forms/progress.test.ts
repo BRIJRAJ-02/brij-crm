@@ -20,7 +20,7 @@ import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
-import { testScope } from '../testing.ts';
+import { rescope, testScope } from '../testing.ts';
 import { createForm, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
 import { processSubmission } from './process.ts';
 import { getPublicForm, submitForm } from './public.ts';
@@ -52,7 +52,14 @@ async function workspace() {
   const system = testScope({ db, workspaceId: created.workspaceId, actor: SYSTEM_ACTOR });
   const query = <T extends Record<string, unknown>>(text: ReturnType<typeof sql>) =>
     db.withWorkspace(created.workspaceId, (tx) => tx.execute<T>(text)).then((result) => result.rows);
-  return { scope, system, workspaceId: created.workspaceId, ownerId: created.memberId, query };
+  return {
+    scope,
+    system,
+    workspaceId: created.workspaceId,
+    ownerId: created.memberId,
+    people: created.objects.people ?? '',
+    query,
+  };
 }
 type Workspace = Awaited<ReturnType<typeof workspace>>;
 
@@ -652,6 +659,28 @@ describe('analytics (AC-6320, AC-6321)', () => {
       sql`select visitor from form_visits where completed_at is not null`,
     );
     expect(rows.map((row) => row.visitor)).toEqual([clean]);
+  });
+
+  it('answers nothing to a member the form’s object is hidden from, rather than zeroes', async () => {
+    const w = await workspace();
+    const form = await stepsForm(w);
+    await event(form.publicKey, visitorHash('seen'), 'view');
+    // People hidden from this admin: the form is absent to them, so its numbers are too. Hidden means absent,
+    // never a locked report that still admits the form exists and how it is doing.
+    const blind = rescope(w.scope, {
+      role: 'admin',
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    expect(await refusalOf(formAnalytics(blind, { formId: form.id, range: 7 }))).toMatchObject([
+      { code: 'NOT_FOUND' },
+    ]);
+    // And the owner, who may see it, still gets the figure: the refusal above is access, not an empty table.
+    expect((await formAnalytics(w.scope, { formId: form.id, range: 7 })).totals.views).toBe(1);
   });
 
   it('answers nothing for a form in another workspace (AC-6329)', async () => {

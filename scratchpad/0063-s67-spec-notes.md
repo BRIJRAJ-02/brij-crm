@@ -74,3 +74,51 @@ points `/architect` should fold into `docs/specs/0063-forms-features/`.
   Changing either without the other silently stops completions being counted.
 - `drizzle` expands a JS array in a `sql` template into a parenthesised tuple,
   not an array literal: `sql.param(order)` is required for `::text[]`.
+
+## What the security review found, and what it changed
+
+`security-access-reviewer` on 009e63858 returned two must-fixes, both real and
+both fixed in the follow-up commit:
+
+- **The three new public endpoints skipped the submit's Origin and signature
+  gate.** `sendBeacon` and a `text/plain` POST are both sent with no CORS
+  preflight, so another site could have spent a visitor's resume-email budget
+  and filed visits for people who never saw the form. All three now run the
+  same `postFrom(...)` gate the submit does, over the raw body so a listed
+  site's HMAC still verifies.
+- **They spent the submit's fill-ticket use budget.** `check()` counts a use
+  against `TICKET_LIMITS.usesPerTicket` (5 a day). A real visitor on a Steps
+  form sends a beacon per question and a save per Continue, so from the sixth
+  call their own submit came back `reused`, which scores 3 against
+  `SPAM_SCORE.reviewAt` of 3 — their genuine submission would have been held
+  for review and never filed, silently, on exactly the forms this feature is
+  for. `TicketBook.check` now takes `{ count: false }`, which these three pass.
+
+Also taken: the missing composite foreign key on `form_visits.version_id`, and
+a test that a member the form's object is hidden from gets NOT_FOUND from
+`forms.analytics` rather than zeroes.
+
+Left, with reasons:
+
+- **The resume token travels in the link's query string** (`?resume=`), so it
+  can leak through `Referer` and access logs. It has to be a link, so the
+  mitigation belongs with the page that reads it: `history.replaceState` the
+  query away on load and `Referrer-Policy: no-referrer` on `/f/:key`. Both are
+  F2's files (`apps/web/src/public/*`), so they are owed there, not here.
+- `rowOfToken` and `dropPartial` filter on `form_id` and `token_hash` without
+  an explicit `workspace_id` predicate, resting on forced row level security.
+  That holds and is proven, but adding the predicate would match the rest of
+  the codebase.
+
+## Not built here, and why
+
+**AC-6319's visitor side is not built.** The hosted page has no Finish later
+button and no "Saved" line: `grep -rn "partials\|/events" apps/web/src/public
+packages/ui/src/public-form` finds nothing, so nothing calls the three new
+endpoints yet. The spec's lane table gives the hosted page to **F2**
+(`packages/ui/src/public-form/*`, `apps/web/src/public/{main,context,frame}.ts`),
+and this lane was not given those files. Everything behind them — the contracts,
+the tables, the endpoints, the bot checks, the resume read on the public form,
+the confirmation and the cleanup — is built and tested. F2 owes: the save on
+each Continue, the quiet "Saved", the Finish later control, the beacon calls,
+and reading `PublicForm.resumed` / `PublicForm.savesProgress` on load.

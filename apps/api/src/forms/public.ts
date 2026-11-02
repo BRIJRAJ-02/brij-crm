@@ -152,7 +152,7 @@ function refusalAnswer(error: unknown, headers?: Record<string, string>): Respon
 }
 
 /** Whose post this is, by the form's posting settings: the hosted page, a listed site (signed when it must be), or nobody. */
-function postFrom(
+export function postFrom(
   posting: PostingRules,
   publicOrigin: string,
   origin: string | undefined,

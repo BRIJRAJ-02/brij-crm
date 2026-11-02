@@ -459,6 +459,11 @@ export const formVisits = pgTable(
       columns: [t.workspaceId, t.formId],
       foreignColumns: [forms.workspaceId, forms.id],
     }).onDelete('cascade'),
+    foreignKey({
+      name: 'form_visits_version',
+      columns: [t.workspaceId, t.versionId],
+      foreignColumns: [formVersions.workspaceId, formVersions.id],
+    }).onDelete('cascade'),
     // The Analytics tab's range read, and the daily cleanup's oldest days first.
     index('form_visits_by_form_day').on(t.workspaceId, t.formId, t.day),
     index('form_visits_day').on(t.workspaceId, t.day),

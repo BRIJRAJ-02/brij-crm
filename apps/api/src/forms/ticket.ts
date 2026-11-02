@@ -23,8 +23,17 @@ const FUTURE_SLACK_MS = 1_000;
 export interface TicketBook {
   /** A new ticket for `subject`, issued now. */
   issue(subject: string): string;
-  /** What a sent ticket for `subject` says: valid with its age, or why not. Counts one use of a valid one. */
-  check(subject: string, ticket: string | undefined): TicketVerdict;
+  /**
+   * What a sent ticket for `subject` says: valid with its age, or why not.
+   *
+   * Counts one use of a valid one against `TICKET_LIMITS.usesPerTicket`, unless
+   * `count` is false. The chatty endpoints of spec 0063 (a partial save per
+   * Continue, a beacon per question reached) pass `count: false`: they have
+   * rate limits of their own, and if they spent this budget a genuine visitor
+   * would exhaust it mid fill and their own submit would come back `reused`,
+   * which scores as a bot signal and holds their submission for review.
+   */
+  check(subject: string, ticket: string | undefined, options?: { readonly count?: boolean }): TicketVerdict;
 }
 
 /** What a ticket book needs: the salt it derives its key from, the limiter that counts uses, and the clock. */
@@ -46,7 +55,7 @@ export function createTicketBook(deps: TicketDeps): TicketBook {
       const nonce = randomBytes(16).toString('base64url');
       return `t1.${issued}.${nonce}.${mac(subject, issued, nonce)}`;
     },
-    check(subject, ticket) {
+    check(subject, ticket, options = {}) {
       if (ticket === undefined || ticket.trim() === '') return { kind: 'missing' };
       const parts = ticket.split('.');
       if (parts.length !== 4 || parts[0] !== 't1') return { kind: 'invalid' };
@@ -58,7 +67,9 @@ export function createTicketBook(deps: TicketDeps): TicketBook {
       const elapsedMs = now() - Number.parseInt(issued, 36);
       if (elapsedMs < -FUTURE_SLACK_MS) return { kind: 'invalid' };
       if (elapsedMs > TICKET_TTL_MS) return { kind: 'expired' };
-      if (!deps.limiter(`ticket:${nonce}`, TICKET_LIMITS.usesPerTicket).allowed) return { kind: 'reused' };
+      if (options.count !== false && !deps.limiter(`ticket:${nonce}`, TICKET_LIMITS.usesPerTicket).allowed) {
+        return { kind: 'reused' };
+      }
       return { kind: 'valid', elapsedMs: Math.max(0, elapsedMs) };
     },
   };
