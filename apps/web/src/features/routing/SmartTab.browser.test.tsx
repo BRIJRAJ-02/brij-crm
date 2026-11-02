@@ -46,7 +46,12 @@ const LANGUAGE_FIELD = {
   ],
 } as unknown as AttributeDefinition;
 
-const FIELDS: readonly FitField[] = [{ id: LANGUAGE, label: 'Person · Preferred language', attribute: LANGUAGE_FIELD }];
+const FIELDS: readonly FitField[] = [
+  { id: LANGUAGE, label: 'Person · Preferred language', attribute: LANGUAGE_FIELD, objectKey: 'people' },
+];
+
+/** The team pages the objectives table shows (spec 0037, AC-1354). */
+const PAGES = [{ id: '00000000-0000-0000-0000-0000000000aa', title: 'Sales call', objective: 'deal' as const }];
 
 const SKILLS: SkillsView = {
   skills: [
@@ -132,7 +137,15 @@ async function render(initial: RoutingSettings, fields: readonly FitField[] = FI
   shown = await renderInApp(
     () => (
       <PageColumn>
-        <SmartTab data={made.data} slug="acme" fields={fields} onSkills={() => undefined} toasts={toasts} />
+        <SmartTab
+          data={made.data}
+          slug="acme"
+          fields={fields}
+          pages={PAGES}
+          onSkills={() => undefined}
+          onObjective={() => undefined}
+          toasts={toasts}
+        />
       </PageColumn>
     ),
     { data: made.data, pattern: '/w/$slug/bookings/routing', at: '/w/acme/bookings/routing?view=smart' },

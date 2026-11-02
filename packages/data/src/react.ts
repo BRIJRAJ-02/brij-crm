@@ -30,7 +30,7 @@ import type { RoutingReportHeld, RoutingReportState } from './routing/reports.ts
 import type { PageRulesHeld } from './routing/page-rules.ts';
 import type { AutomationsHeld, AutomationsState } from './automations/store.ts';
 import type { RoutingDecisionsHeld, RoutingDecisionsState, RoutingHeld, RoutingOverviewState } from './routing/log.ts';
-import type { RoutingSettingsState, RoutingSkillsState } from './routing/skills.ts';
+import type { RoutingInsightsState, RoutingSettingsState, RoutingSkillsState } from './routing/skills.ts';
 import type {
   EmailPreferencesState,
   EmailPreferencesStore,
@@ -463,6 +463,11 @@ export function useRoutingSkills(view: RoutingHeld<RoutingSkillsState>): Routing
 
 /** The workspace's routing settings (spec 0037, AC-1385), re-rendering as a change shows and lands. Held while mounted. */
 export function useRoutingSettings(view: RoutingHeld<RoutingSettingsState>): RoutingSettingsState {
+  return useRetained(view);
+}
+
+/** Routing › Insights (spec 0037, AC-1376): what the nightly run learned, re-read on return. Held while mounted. */
+export function useRoutingInsights(view: RoutingHeld<RoutingInsightsState>): RoutingInsightsState {
   return useRetained(view);
 }
 

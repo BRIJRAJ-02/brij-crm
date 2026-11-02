@@ -2,7 +2,7 @@
 // routes (plain functions, no React, so loaders can use them):
 // - Calendar: `w` (the week's Monday), `d` (the day picked), `v` (`day` for the day view, `team` for the Team day),
 //   `link`, `cal`; the Team day's filters `who` (people's ids), `booked` and `order` (spec 0030, AC-766);
-// - List: `tab` (`past`, `cancelled`), `src` (`bookings`, `calendar`), `link`, `cal`.
+// - List: `tab` (`past`, `cancelled`), `src` (`bookings`, `calendar`), `link`, `cal`, `ns` (no shows only).
 // The list pages by cursor (More), so the address holds no page.
 import type { BookingsTab, MeetingSource } from '@crm/data';
 import { dayKeyOf, isDayKey, weekOf } from './week.ts';
@@ -20,6 +20,8 @@ export interface RawBookingsSearch {
   readonly src?: 'bookings' | 'calendar';
   readonly link?: string;
   readonly cal?: string;
+  /** No shows only (spec 0037, AC-1426), the list's. */
+  readonly ns?: '1';
 }
 
 /** What the screens read: the week and day, the tab, the source and the filters. */
@@ -43,6 +45,8 @@ export interface BookingsSearch {
   readonly link?: string;
   /** The calendars whose events show, of those shown on the member's week; absent is all of them. A view only. */
   readonly cal?: readonly string[];
+  /** The list: only bookings marked a no show (spec 0037, AC-1426). */
+  readonly noShow?: boolean;
 }
 
 /** Reads an address's query, keeping only well formed values. */
@@ -60,6 +64,7 @@ export function parseBookingsSearch(search: Record<string, unknown>): RawBooking
     ...(search.src === 'bookings' || search.src === 'calendar' ? { src: search.src } : {}),
     ...(typeof search.link === 'string' && /^[0-9a-f-]{36}$/i.test(search.link) ? { link: search.link } : {}),
     ...(typeof search.cal === 'string' && search.cal.length <= 4_000 ? { cal: search.cal } : {}),
+    ...(search.ns === '1' || search.ns === 1 ? { ns: '1' as const } : {}),
   };
 }
 
@@ -78,6 +83,7 @@ export function bookingsSearchOf(raw: RawBookingsSearch, now: Date, firstDay: nu
     source: raw.src ?? 'all',
     ...(raw.link === undefined ? {} : { link: raw.link }),
     ...(raw.cal === undefined ? {} : { cal: raw.cal === '' ? [] : raw.cal.split(',') }),
+    ...(raw.ns === undefined ? {} : { noShow: true }),
   };
 }
 
@@ -101,6 +107,7 @@ export function rawOf(tab: 'calendar' | 'list', search: BookingsSearch): RawBook
   return {
     ...(search.tab === 'upcoming' ? {} : { tab: search.tab }),
     ...(search.source === 'all' ? {} : { src: search.source }),
+    ...(search.noShow === true ? { ns: '1' as const } : {}),
     ...shared,
   };
 }

@@ -30,6 +30,8 @@ export interface MeetingsQuery {
   readonly hosts?: BookingHosts;
   /** The calendars panel's pick; absent is every calendar shown. */
   readonly calendarIds?: readonly string[];
+  /** Only bookings marked a no show (spec 0037, AC-1426); a calendar event is never one, so this answers bookings alone. */
+  readonly noShow?: boolean;
 }
 
 /** The calls the store makes. */
@@ -90,6 +92,7 @@ const keyOf = (workspace: string, query: MeetingsQuery) =>
     query.source,
     query.hosts ?? 'mine',
     query.calendarIds === undefined ? '*' : [...query.calendarIds].sort().join(','),
+    query.noShow === true ? 'no-show' : 'any',
   ].join(':');
 
 /** The meetings store: one held list per workspace and question. */
@@ -129,6 +132,7 @@ export function createMeetingsStore(deps: MeetingsDeps) {
         source: query.source,
         hosts: query.hosts ?? 'mine',
         ...(query.calendarIds === undefined ? {} : { calendarIds: [...query.calendarIds] }),
+        ...(query.noShow === true ? { noShow: true } : {}),
         ...(after === undefined ? {} : { cursor: after }),
         limit: size,
       });

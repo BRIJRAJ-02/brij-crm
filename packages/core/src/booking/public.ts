@@ -111,6 +111,7 @@ import {
   routeBooking,
   type BookingRouting,
 } from '../routing/booking.ts';
+import { countsFrom, liftsFrom } from '../routing/stats.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { ensureManageToken, managePath, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 
@@ -1176,6 +1177,8 @@ export async function bookPublicSlot(
             answers,
             // Everyone who could take a seat at this slot, for the ranking's fit (spec 0037, AC-1362).
             memberIds: candidates.flat(),
+            // The page's rotations, for the cell each seat's lift is read from (spec 0037, AC-1369).
+            rotationIds: team.rotations.map((rotation) => rotation.rules.id),
           }),
         )
       : undefined;
@@ -1224,8 +1227,13 @@ export async function bookPublicSlot(
                 smart: {
                   mode: routing.smart.settings.mode,
                   tiltPercent: routing.smart.settings.tiltPercent,
+                  // The holdout draw (spec 0037, AC-1389): every preference reads 0, so the seat picks plain fair.
+                  holdout: routing.smart.holdout,
                   fit: routing.smart.fit.shares,
                   matched: routing.smart.fit.matched,
+                  // Each rotation's learned lift and its cell counts (AC-1369, AC-1376).
+                  lift: liftsFrom(routing.smart.lift),
+                  counts: countsFrom(routing.smart.lift),
                   modelVersion: routing.smart.settings.modelVersion,
                 },
               }),

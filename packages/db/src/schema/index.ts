@@ -68,7 +68,7 @@ export { emailPreferences, emails, emailStatus } from './emails.ts';
 export { bookingPageRotations, rotationAssignments, rotationMembers, rotationRoster, rotations } from './rotation.ts';
 export { memberBookingLimits, scheduleDelegations, schedulingEditors } from './scheduling.ts';
 export { accessRules, recordRules, teamMembers, teams } from './teams.ts';
-export { memberSkills, routingDecisions, routingSettings, routingSkills } from './routing.ts';
+export { memberSkills, routingDecisions, routingSettings, routingSkills, routingStats } from './routing.ts';
 export { automationRuns, automations } from './automations.ts';
 export { apiKeys } from './developer.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';

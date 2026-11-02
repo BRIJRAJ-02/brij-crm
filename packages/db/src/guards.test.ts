@@ -230,6 +230,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
+      // The hourly learning fan out's read (spec 0037, AC-1381).
+      { name: 'crm_routing_learn_workspaces', owner: 'crm_sweep' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_profile_accent', owner: 'crm_handle' },
       { name: 'crm_save_profile_image', owner: 'crm_handle' },
@@ -340,6 +342,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // The hourly learning fan out's read (spec 0037, AC-1381).
+      { name: 'crm_routing_learn_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it checks the workspace and the membership, and raises PROFILE_MISSING (spec 0060).
       { name: 'crm_save_profile_accent', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -448,14 +452,16 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_notification_digests_due',
         'crm_calendar_health_candidates',
         'crm_automation_due_workspaces',
+        'crm_routing_learn_workspaces',
       ],
       [
         'crm_workspace_ids(uuid, integer)',
         'crm_notification_digests_due(uuid, uuid, integer)',
         'crm_calendar_health_candidates(integer)',
         'crm_automation_due_workspaces(uuid, integer)',
+        'crm_routing_learn_workspaces(integer)',
       ],
-      ['worker', 'worker', 'worker', 'worker'],
+      ['worker', 'worker', 'worker', 'worker', 'worker'],
     ],
     [
       'crm_purge',
@@ -1088,6 +1094,13 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         { column: 'notification_settings.member_id', privilege: 'SELECT' },
         { column: 'notification_settings.time_zone', privilege: 'SELECT' },
         { column: 'notification_settings.workspace_id', privilege: 'SELECT' },
+        // The learning fan out's read (spec 0037, AC-1381): which workspaces have a ranked decision to count and
+        // when their last run was. Three columns of `routing_decisions` and two of `routing_settings`, nothing more.
+        { column: 'routing_decisions.decided_at', privilege: 'SELECT' },
+        { column: 'routing_decisions.snapshot', privilege: 'SELECT' },
+        { column: 'routing_decisions.workspace_id', privilege: 'SELECT' },
+        { column: 'routing_settings.model_trained_at', privilege: 'SELECT' },
+        { column: 'routing_settings.workspace_id', privilege: 'SELECT' },
         { column: 'workspaces.deleted_at', privilege: 'SELECT' },
         { column: 'workspaces.id', privilege: 'SELECT' },
       ]);

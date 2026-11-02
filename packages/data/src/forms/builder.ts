@@ -48,6 +48,13 @@ export {
   SMART_MODES,
   TILT_PERCENT_DEFAULT,
   TILT_PERCENT_MAX,
+  // The learning's numbers (spec 0037, L9): the holdout, the segments, the objectives and when a cell warms.
+  HOLDOUT_PERCENT_DEFAULT,
+  HOLDOUT_PERCENT_MAX,
+  OBJECTIVES,
+  SEGMENT_ATTRIBUTES_MAX,
+  SEGMENT_OPTIONS_MAX,
+  WARM_TRIALS,
   type KnownValue,
   matchesShowWhen,
   summarizeShowWhen,

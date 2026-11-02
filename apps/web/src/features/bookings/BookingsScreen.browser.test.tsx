@@ -737,8 +737,14 @@ describe('the list rows', () => {
     );
     await expect.element(page.getByRole('link', { name: 'Connect a calendar' }).first()).toBeVisible();
     expect(document.querySelector('aside[aria-label="Calendars"]')).toBeNull();
-    // Without a calendar there are only bookings, so there is no Show to pick (Q71), and with one link no Filter.
-    expect([...document.querySelectorAll('button')].some((button) => button.textContent.startsWith('Filter'))).toBe(
+    // Without a calendar there are only bookings, so there is no Show to pick (Q71), and with one link no Link
+    // group either. Filter itself stays, because the list always offers No shows only (spec 0037, AC-1426): a
+    // filter the person can't reach is no filter.
+    const filter = [...document.querySelectorAll('button')].find((button) => button.textContent.startsWith('Filter'));
+    expect(filter).toBeDefined();
+    filter?.click();
+    await expect.element(page.getByRole('menuitemcheckbox', { name: 'No shows only' })).toBeVisible();
+    expect([...document.querySelectorAll('[role="group"]')].some((group) => group.textContent.includes('Show'))).toBe(
       false,
     );
   });

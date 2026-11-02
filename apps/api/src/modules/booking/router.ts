@@ -26,6 +26,7 @@ import {
   getRoutingSettings,
   setRoutingSettings,
   routingDecisions,
+  routingInsights,
   routingOverview,
   routingReport,
   hostTarget,
@@ -126,6 +127,7 @@ export const bookingsRouter = member.bookings.router({
       source: input.source,
       hosts: input.hosts,
       ...(input.calendarIds === undefined ? {} : { calendarIds: input.calendarIds }),
+      ...(input.noShow === undefined ? {} : { noShow: input.noShow }),
       ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
       limit: input.limit,
     }),
@@ -443,11 +445,18 @@ export const routingRouter = member.routing.router({
           ...(input.smartMode === undefined ? {} : { smartMode: input.smartMode }),
           ...(input.tiltPercent === undefined ? {} : { tiltPercent: input.tiltPercent }),
           ...(input.fit === undefined ? {} : { fit: input.fit }),
+          ...(input.holdoutPercent === undefined ? {} : { holdoutPercent: input.holdoutPercent }),
+          ...(input.segmentAttributeIds === undefined ? {} : { segmentAttributeIds: input.segmentAttributeIds }),
+          ...(input.learnSince === undefined ? {} : { learnSince: input.learnSince }),
           ...(input.updatedAt === undefined ? {} : { updatedAt: input.updatedAt }),
         }),
       ),
     ),
   },
+  // Routing › Insights (spec 0037, AC-1376, L9): what the nightly run learned, for holders of routing.manage.
+  insights: member.routing.insights.handler(({ context, input }) =>
+    routingInsights(context.scope, ...(input.weeks === undefined ? [] : [{ weeks: input.weeks }])),
+  ),
   // Writes one audit row when it names an email, so it goes through the one write path too.
   test: member.routing.test.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>

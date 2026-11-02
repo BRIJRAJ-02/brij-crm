@@ -5,6 +5,7 @@
 // waiting stay shown), rejecting with the refusal. Nothing is fetched for a read no screen holds.
 import type {
   FitLink,
+  RoutingInsights,
   RoutingSettings,
   RoutingSkill,
   SkillGroup,
@@ -29,6 +30,8 @@ export interface RoutingSkillsDeps {
   readonly remove: (workspace: string, id: string) => Promise<SkillsView>;
   readonly setMember: (workspace: string, memberId: string, skillIds: readonly string[]) => Promise<SkillsView>;
   readonly settings: (workspace: string) => Promise<RoutingSettings>;
+  /** Routing › Insights (spec 0037, AC-1376): what the nightly run learned. Read only, so no optimistic write. */
+  readonly insights: (workspace: string, weeks: number | undefined) => Promise<RoutingInsights>;
   readonly setSettings: (
     workspace: string,
     change: SettingsChange,
@@ -48,6 +51,12 @@ export interface SettingsChange {
   readonly smartMode?: SmartMode;
   readonly tiltPercent?: number;
   readonly fit?: readonly FitLink[];
+  /** The holdout, 0 to 20 percent of ranked decisions (spec 0037, AC-1389). */
+  readonly holdoutPercent?: number;
+  /** The segment attributes, at most two (AC-1370); an empty list leaves one all segments cell. */
+  readonly segmentAttributeIds?: readonly string[];
+  /** Learn from, `YYYY-MM-DD` (AC-1386); `null` clears it. */
+  readonly learnSince?: string | null;
 }
 
 /** A held read's state: loading, refused on its first read, or ready with what the screen shows. */
@@ -60,6 +69,8 @@ export type RoutingSharedState<T> =
 export type RoutingSkillsState = RoutingSharedState<SkillsView>;
 /** The settings' state. */
 export type RoutingSettingsState = RoutingSharedState<RoutingSettings>;
+/** Insights' state. */
+export type RoutingInsightsState = RoutingSharedState<RoutingInsights>;
 
 /** One write waiting for its answer: how it changes what is shown. */
 interface Pending<T> {
@@ -150,6 +161,15 @@ export function createRoutingSkills(deps: RoutingSkillsDeps) {
     skills.set(workspace, made);
     return made;
   };
+  const insights = new Map<string, ReturnType<typeof optimistic<RoutingInsights>>>();
+  const insightsOf = (workspace: string, weeks: number | undefined) => {
+    const key = `${workspace}:${weeks === undefined ? 'window' : String(weeks)}`;
+    const found = insights.get(key);
+    if (found !== undefined) return found;
+    const made = optimistic((each: string) => deps.insights(each, weeks), workspace, deps);
+    insights.set(key, made);
+    return made;
+  };
   const settingsOf = (workspace: string) => {
     const found = settings.get(workspace);
     if (found !== undefined) return found;
@@ -221,10 +241,16 @@ export function createRoutingSkills(deps: RoutingSkillsDeps) {
         () => deps.setMember(workspace, memberId, skillIds),
       );
     },
+    /**
+     * Routing › Insights, held while the tab shows it (AC-1376): one handle per workspace and window, read when a
+     * screen first holds it and again when the person comes back, as the other routing reads are. Never written.
+     */
+    insights: (workspace: string, weeks?: number): RoutingHeld<RoutingInsightsState> => insightsOf(workspace, weeks),
     /** The workspace's routing settings, held while a screen shows them. */
     settings: (workspace: string): RoutingHeld<RoutingSettingsState> => settingsOf(workspace),
     /**
-     * One settings change shown at once (Won means, the smart mode, the fairness allowance, the fit links); sent with
+     * One settings change shown at once (Won means, the smart mode, the fairness allowance, the fit links, the
+     * holdout, the segment attributes and Learn from); sent with
      * the `updatedAt` last read, so a change someone else made meanwhile is refused `STALE` and read again. One write
      * at a time per workspace, each sent with the time the last answer gave, so two quick changes inside one round
      * trip queue rather than refusing this tab's own.
@@ -243,6 +269,12 @@ export function createRoutingSkills(deps: RoutingSkillsDeps) {
           if (change.smartMode !== undefined) next.smartMode = change.smartMode;
           if (change.tiltPercent !== undefined) next.tiltPercent = change.tiltPercent;
           if (change.fit !== undefined) next.fit = [...change.fit];
+          if (change.holdoutPercent !== undefined) next.holdoutPercent = change.holdoutPercent;
+          if (change.segmentAttributeIds !== undefined) next.segmentAttributeIds = [...change.segmentAttributeIds];
+          if (change.learnSince !== undefined) {
+            if (change.learnSince === null) delete next.learnSince;
+            else next.learnSince = change.learnSince;
+          }
           return next;
         },
         before === undefined ? send : () => before.then(send),

@@ -245,6 +245,8 @@ async function openWorker(hooks: {
       ...(cutOff === undefined ? {} : { cutOff }),
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
       daily: jobTasks.daily(opened),
+      // The learning run's hourly fan out (spec 0037, AC-1381).
+      routingLearn: jobTasks.routingLearn(opened),
     });
     queue = opened;
     return {

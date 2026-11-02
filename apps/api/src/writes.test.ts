@@ -244,6 +244,8 @@ const READS: ReadonlySet<string> = new Set([
   // Routing's skills (any member) and its settings (spec 0037, L7).
   'routing.skills.list',
   'routing.settings.get',
+  // Routing › Insights (spec 0037, L9): what the nightly run learned, a read only.
+  'routing.insights',
 ]);
 
 let db: Database;

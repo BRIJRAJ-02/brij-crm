@@ -69,3 +69,56 @@ export const smartStrings = {
   remove: 'Remove',
   cancel: 'Cancel',
 };
+
+/** The words L9 adds: the holdout, the segment fields, Learn from and each team page's objective. */
+export const learnStrings = {
+  // The holdout (AC-1389)
+  holdout: 'Holdout',
+  holdoutLabel: 'Holdout',
+  holdoutHint: 'A share of ranked meetings takes a strict turn, so Insights can tell whether the ranking is helping.',
+  holdoutOff: 'Nothing is held back, so Insights has nothing to compare against.',
+  holdoutOn: (percent: number) =>
+    `${String(percent)}% of ranked meetings take a strict turn, and Insights compares them with the rest.`,
+  holdoutClamped: (percent: number) => `Holdout set to ${String(percent)}%, the highest allowed.`,
+
+  // Segment fields (AC-1370)
+  segments: 'Segments',
+  segmentsHint:
+    'Learn separately for each kind of lead. Pick up to two fields of Companies or Deals with at most six options.',
+  segmentsNone: 'All leads are counted together.',
+  segmentField: (place: number) => `Field ${String(place)}`,
+  segmentPick: 'No field',
+  segmentsRestart: 'Changing these starts segment learning over. The all-leads numbers carry on.',
+  noSegmentFields: 'Nothing to segment by yet',
+  noSegmentFieldsText:
+    'A segment field is a select or status field of Companies or Deals with at most six live options.',
+
+  // Learn from (AC-1386)
+  learnSince: 'Learn from',
+  learnSinceHint: 'Ignore outcomes from before a date, to start over after you change how you sell.',
+  learnSinceLabel: 'Date',
+  learnSinceSet: (day: string) => `Outcomes before ${day} are not counted.`,
+  learnSinceUnset: 'Every outcome in the learning window is counted. Clear the date to count everything again.',
+  learnSinceCleared: 'Learn from cleared',
+  learnSinceStarted: (day: string) => `Learning starts over from ${day} at tonight’s run`,
+  // The confirm (owner rule, 21 October 2026; AC-1445)
+  learnSinceTitle: 'Start learning over from this date?',
+  learnSinceText: (day: string) =>
+    `Smart ranking starts over from ${day}. Outcomes of meetings booked before it stop counting at tonight’s run, and a segment may go back to fairness and fit alone until it has enough data again. Clear the date to count them again.`,
+  learnSinceConfirm: 'Start over',
+
+  // Each team page's objective (AC-1354)
+  objectives: 'What each page learns toward',
+  objectivesHint: 'A team page’s ranking learns toward one outcome. Deals created unless you change it.',
+  objectiveTable: 'Team pages and their objectives',
+  page: 'Team page',
+  objective: 'Learning toward',
+  objectiveNames: { deal: 'Deals created', won: 'Deals won', held: 'Meetings held' } as const,
+  wonNeedsStage: 'Set Won means on Overview to learn toward Deals won.',
+  noPages: 'No team pages yet',
+  noPagesText: 'A team page’s ranking is what learns; make one in Captures › Links.',
+  objectiveOf: (page: string) => `What ${page} learns toward`,
+
+  cancel: 'Cancel',
+  failed: 'Couldn’t save. Try again.',
+};

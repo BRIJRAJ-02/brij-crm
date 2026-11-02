@@ -2,7 +2,7 @@ import { isDataError, type AttributeDefinition, type DataLayer, type MemberView 
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { RoutingPending, RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
-import type { FitField } from '../features/routing/SmartTab.tsx';
+import type { FitField, TeamPage } from '../features/routing/SmartTab.tsx';
 import { strings } from '../features/routing/tab-strings.ts';
 import { SettingsMissing } from '../features/settings/SettingsPage.tsx';
 
@@ -22,7 +22,11 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
     const decision = text(raw.decision);
     return {
       view:
-        raw.view === 'decisions' || raw.view === 'skills' || raw.view === 'test' || raw.view === 'smart'
+        raw.view === 'decisions' ||
+        raw.view === 'skills' ||
+        raw.view === 'test' ||
+        raw.view === 'smart' ||
+        raw.view === 'insights'
           ? raw.view
           : 'overview',
       ...(surface === undefined ? {} : { surface }),
@@ -31,6 +35,15 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
       ...(tag === 'yes' || tag === 'no' || tag === 'none' ? { tag } : {}),
       ...(period === 'today' || period === '7' || period === '30' || period === '90' ? { period } : {}),
       ...(decision === undefined ? {} : { decision }),
+      // Insights' window, in weeks (spec 0037, AC-1376); anything else is the whole learning window.
+      ...(raw.weeks === 4 ||
+      raw.weeks === 12 ||
+      raw.weeks === 26 ||
+      raw.weeks === '4' ||
+      raw.weeks === '12' ||
+      raw.weeks === '26'
+        ? { weeks: Number(raw.weeks) }
+        : {}),
     };
   },
   loader: async ({
@@ -40,16 +53,27 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
     readonly members?: readonly MemberView[];
     readonly stage?: AttributeDefinition;
     readonly fitFields?: readonly FitField[];
+    readonly teamPages?: readonly TeamPage[];
   }> => {
     try {
       const access = await context.data.access.mine(params.slug);
       if (!access.permissions.includes('routing.manage')) return {};
-      const [members, stage, fitFields] = await Promise.all([
+      const [members, stage, fitFields, teamPages] = await Promise.all([
         context.data.members.list(params.slug),
         dealsStage(context.data, params.slug),
         fitTargets(context.data, params.slug),
+        // The live team pages, for each page's learning objective on Smart (spec 0037, AC-1354): the held list's,
+        // so moving between the Bookings tabs reads it once.
+        context.data.bookingPages.held(params.slug),
       ]);
-      return { members, fitFields, ...(stage === undefined ? {} : { stage }) };
+      return {
+        members,
+        fitFields,
+        teamPages: teamPages
+          .filter((page) => page.kind === 'round_robin')
+          .map((page) => ({ id: page.id, title: page.title, objective: page.routingObjective ?? 'deal' })),
+        ...(stage === undefined ? {} : { stage }),
+      };
     } catch (error) {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return {};
@@ -97,12 +121,14 @@ async function fitTargets(data: DataLayer, slug: string): Promise<readonly FitFi
         id: attribute.id,
         label: `${object.singularName} · ${attribute.title}`,
         attribute,
+        // A segment field is never People's (spec 0037, AC-1370), so the Smart tab needs to know which object it is.
+        objectKey: object.standardKey as 'people' | 'companies' | 'deals',
       })),
   );
 }
 
 function RoutingRoute() {
-  const { members, stage, fitFields } = Route.useLoaderData();
+  const { members, stage, fitFields, teamPages } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const search = Route.useSearch();
   const { data, toasts } = Route.useRouteContext();
@@ -116,6 +142,7 @@ function RoutingRoute() {
       members={members}
       {...(stage === undefined ? {} : { stage })}
       fitFields={fitFields ?? []}
+      teamPages={teamPages ?? []}
       toasts={toasts}
       onSearch={(next) => void navigate({ search: (current) => ({ ...current, ...next }), replace: true })}
     />

@@ -827,6 +827,8 @@ export { routingDecision, routingDecisions, routingOverview } from './routing/lo
 export { createSkill, deleteSkill, listSkills, setMemberSkills, updateSkill } from './routing/skills.ts';
 export { getRoutingSettings, setRoutingSettings } from './routing/settings.ts';
 export { routingTest } from './routing/test.ts';
+// Routing › Insights (spec 0037, AC-1376, AC-1386, AC-1389): what the nightly run learned, `routing.manage` only.
+export { routingInsights } from './routing/insights.ts';
 export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
 export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';
 export {

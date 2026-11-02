@@ -84,6 +84,13 @@ export interface QueueConnection {
   calendarHealthDue(max: number): Promise<CalendarHealthSweep>;
   /** The ids of live workspaces with an enabled task due automation, after `after`, at most `max` (1 to 500): `crm_automation_due_workspaces` (parity #53). */
   automationDueWorkspaces(after: string | undefined, max: number): Promise<readonly string[]>;
+  /**
+   * The nightly learning run's hourly fan out (spec 0037, AC-1381): the ids of live workspaces that have a ranked
+   * decision the last run didn't count, at most `max` (1 to 500): `crm_routing_learn_workspaces`. Ids only; which
+   * of them have reached their own 03:00 hour is decided afterwards, in each workspace's own transaction, since
+   * crm_sweep may not read `workspaces.time_zone` (migration 0034's closing check).
+   */
+  routingLearnDue(max: number): Promise<readonly string[]>;
   /** Deleted workspaces past their window, oldest first, at most `max` (1 to 50): `crm_workspaces_to_purge` (spec 0031). */
   workspacesToPurge(max: number): Promise<readonly string[]>;
   /** One outbox prune batch (`pruneOutbox`, spec 0007) on this connection: only crm_worker may run it. */
@@ -261,6 +268,13 @@ export function openQueueConnection(options: {
           fresh: row.fresh,
         })),
       };
+    },
+    async routingLearnDue(max) {
+      const result = await pool.query<{ id: string }>(
+        'select id from public.crm_routing_learn_workspaces($1) as w(id)',
+        [max],
+      );
+      return result.rows.map((row) => row.id);
     },
     async automationDueWorkspaces(after, max) {
       const result = await pool.query<{ id: string }>(

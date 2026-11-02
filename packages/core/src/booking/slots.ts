@@ -16,6 +16,8 @@ import {
   type BookingAvailability,
   type BookingPageSettings,
   type RoutingRule,
+  objectiveOf,
+  type RoutingObjective,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { resolveMany, virtualDefault, type ResolvedSchedule } from '../availability/resolve.ts';
@@ -56,6 +58,12 @@ export interface PageRecord extends BookingPageSettings {
   readonly pausedReason?: 'host_removed';
   /** A round robin page's routing rules (spec 0043, AC-1608); a stored list that doesn't parse reads as none. */
   readonly routingRules?: readonly RoutingRule[];
+  /**
+   * A team page's learning objective (spec 0037, AC-1354), already read
+   * through `objectiveOf`: a page that never set one, or whose stored value
+   * the code doesn't know, reads as Deals created.
+   */
+  readonly routingObjective?: RoutingObjective;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -134,6 +142,8 @@ export function pageOf(
     formOnly: row.kind === 'round_robin' && row.formOnly,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
+    // Only a team page learns (AC-1354); any other page has none, whatever a stray stored value says.
+    ...(row.kind === 'round_robin' ? { routingObjective: objectiveOf(row.routingObjective) } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

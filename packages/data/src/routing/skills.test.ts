@@ -66,6 +66,10 @@ function setup() {
       reads.push('settings');
       return Promise.resolve(settings);
     },
+    insights: () => {
+      reads.push('insights');
+      return Promise.resolve({ modelVersion: 0, segmentAttributes: [], segmentsRestarted: false, pages: [] });
+    },
     setSettings: (_, change, updatedAt) =>
       later(() => {
         if (updatedAt !== settings.updatedAt) throw dataError('STALE', 'Someone else changed it.');

@@ -222,17 +222,22 @@ function FilterMenu({
   pages,
   onSearch,
   hasSources = false,
+  hasNoShow = false,
 }: {
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
   /** The list: which meetings show is chosen here too. */
   readonly hasSources?: boolean;
+  /** The list offers the No show filter (spec 0037, AC-1426); the Calendar's own Filter doesn't. */
+  readonly hasNoShow?: boolean;
 }) {
   const hasLinks = pages.length >= 2;
-  if (!hasLinks && !hasSources) return null;
+  if (!hasLinks && !hasSources && !hasNoShow) return null;
   const count =
-    (search.link === undefined ? 0 : 1) + (hasSources && search.source !== 'all' && search.link === undefined ? 1 : 0);
+    (search.link === undefined ? 0 : 1) +
+    (hasSources && search.source !== 'all' && search.link === undefined ? 1 : 0) +
+    (search.noShow === true ? 1 : 0);
   // A link's bookings are bookings only (calendar events have no page), so Show says so while one is picked.
   const shownSource = search.link === undefined ? search.source : 'bookings';
   const first = (keys: ReadonlySet<string | number>) => [...keys].map(String)[0];
@@ -256,6 +261,16 @@ function FilterMenu({
                   {strings.sources[id]}
                 </MenuItem>
               ))}
+            </MenuSection>
+          )}
+          {hasNoShow && (
+            <MenuSection
+              label={strings.outcomeLabel}
+              selectionMode="multiple"
+              selectedKeys={search.noShow === true ? ['no-show'] : []}
+              onSelectionChange={(keys) => onSearch({ noShow: [...keys].length > 0 ? true : undefined })}
+            >
+              <MenuItem id="no-show">{strings.noShowOnly}</MenuItem>
             </MenuSection>
           )}
           {hasLinks && (
@@ -284,7 +299,9 @@ function FilterMenu({
           variant="ghost"
           icon="x"
           label={strings.clearFilters}
-          onPress={() => onSearch({ link: undefined, ...(hasSources ? { source: 'all' as const } : {}) })}
+          onPress={() =>
+            onSearch({ link: undefined, noShow: undefined, ...(hasSources ? { source: 'all' as const } : {}) })
+          }
         />
       )}
     </>
@@ -2237,7 +2254,11 @@ function ListBar({
           value={search.tab}
           onChange={(value) => {
             const tab = TABS.find((each) => each === value);
-            if (tab !== undefined && tab !== search.tab) onSearch({ tab });
+            // Upcoming has no no shows and so doesn't offer the filter: it goes with the tab, or it would keep
+            // filtering an empty list with no control left to clear it.
+            if (tab !== undefined && tab !== search.tab) {
+              onSearch({ tab, ...(tab === 'upcoming' ? { noShow: undefined } : {}) });
+            }
           }}
           segments={TABS.map((id) => ({ value: id, label: strings.tabs[id] }))}
         />
@@ -2249,7 +2270,15 @@ function ListBar({
           )}
           {/* Which meetings show is a choice only with a calendar connected: without one there are only bookings, and
               "Calendar events only" could only show an empty list (Q71). */}
-          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources={!hasNoCalendar} />
+          {/* No booking on Upcoming can be a no show yet, so offering the filter there could only empty the list:
+              the same reasoning the source filter uses just above (Q71). */}
+          <FilterMenu
+            search={search}
+            pages={pages}
+            onSearch={onSearch}
+            hasSources={!hasNoCalendar}
+            hasNoShow={search.tab !== 'upcoming'}
+          />
         </>
       }
     />
@@ -2354,6 +2383,8 @@ export function BookingsListScreen({
     source,
     ...(hosts === undefined ? {} : { hosts: hosts.value }),
     ...(search.cal === undefined ? {} : { calendarIds: search.cal }),
+    // No shows only (spec 0037, AC-1426): the server filters, so the pages a reader scrolls hold only those.
+    ...(search.noShow === true ? { noShow: true } : {}),
   });
   const state = useMeetings(list);
   // One booking page: its bookings only (calendar events have no page).
@@ -2407,7 +2438,7 @@ export function BookingsListScreen({
           groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me, timeZone)}
           onOpen={setOpenId}
           emptyState={
-            search.link !== undefined || search.cal !== undefined || source !== 'all' ? (
+            search.link !== undefined || search.cal !== undefined || source !== 'all' || search.noShow === true ? (
               <EmptyState
                 layout="fill"
                 icon="calendar-days"
@@ -2415,7 +2446,7 @@ export function BookingsListScreen({
                 actions={
                   <Button
                     variant="secondary"
-                    onPress={() => onSearch({ link: undefined, cal: undefined, source: 'all' })}
+                    onPress={() => onSearch({ link: undefined, cal: undefined, noShow: undefined, source: 'all' })}
                   >
                     {strings.clearFilters}
                   </Button>

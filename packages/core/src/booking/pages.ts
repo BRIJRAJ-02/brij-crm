@@ -325,6 +325,7 @@ function viewOf(
     fileToCrm: page.fileToCrm,
     answersObjectId: page.answersObjectId,
     formOnly: page.formOnly,
+    ...(page.routingObjective === undefined ? {} : { routingObjective: page.routingObjective }),
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     // Who hosts it and how it routes are for those who manage it: a member seeing a workspace link gets neither.
     ...(hosts === undefined || !changeable ? {} : { hosts }),
@@ -805,6 +806,9 @@ export async function createBookingPage(
       fileToCrm: given.fileToCrm ?? true,
       answersObjectId: given.answersObjectId ?? null,
       formOnly: kind === 'round_robin' && given.formOnly === true,
+      // Only a team page learns (spec 0037, AC-1354): create refuses one the same way update does, so a stray
+      // objective can never sit on a personal page's row.
+      routingObjective: kind === 'round_robin' ? given.routingObjective : undefined,
     };
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
     if (settings.answersObjectId !== null) {
@@ -854,6 +858,7 @@ export async function createBookingPage(
           fileToCrm: settings.fileToCrm,
           answersObjectId: settings.answersObjectId,
           formOnly: settings.formOnly,
+          ...(settings.routingObjective === undefined ? {} : { routingObjective: settings.routingObjective }),
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -929,6 +934,9 @@ export async function updateBookingPage(
     checkTeamSchedule(page.kind, settings.scheduleId);
     checkDurations(settings.durations);
     // Only through a form is a team page's (spec 0037, AC-1388): a personal page has no form in front of it.
+    if (settings.routingObjective !== undefined && page.kind !== 'round_robin') {
+      throw refuseOn('CONFIG_INVALID', 'Only a team page learns toward an objective.', 'routingObjective');
+    }
     if (settings.formOnly === true && page.kind !== 'round_robin') {
       throw refuseOn('CONFIG_INVALID', 'Only a team page books through a form only.', 'formOnly');
     }
@@ -1062,6 +1070,8 @@ export async function updateBookingPage(
           ...(settings.fileToCrm === undefined ? {} : { fileToCrm: settings.fileToCrm }),
           ...(settings.answersObjectId === undefined ? {} : { answersObjectId: settings.answersObjectId }),
           ...(settings.formOnly === undefined ? {} : { formOnly: settings.formOnly }),
+          // A team page's learning objective (spec 0037, AC-1354); a personal page's write refuses it above.
+          ...(settings.routingObjective === undefined ? {} : { routingObjective: settings.routingObjective }),
           ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,

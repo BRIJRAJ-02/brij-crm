@@ -179,6 +179,7 @@ import {
 import { createPageRules, type PageRulesHeld } from './routing/page-rules.ts';
 import {
   createRoutingSkills,
+  type RoutingInsightsState,
   type RoutingSettingsState,
   type RoutingSkillsState,
   type SettingsChange,
@@ -501,6 +502,12 @@ export type {
   RoutingSettings,
   RoutingSkill,
   RoutingStepView,
+  RoutingInsights,
+  RoutingObjective,
+  InsightsArm,
+  InsightsCell,
+  InsightsMember,
+  InsightsPage,
   RoutingSurface,
   RoutingTestResult,
   CandidateNumbers,
@@ -696,7 +703,13 @@ export type {
   RoutingHeld,
   RoutingOverviewState,
 } from './routing/log.ts';
-export type { RoutingSettingsState, RoutingSharedState, RoutingSkillsState, SettingsChange } from './routing/skills.ts';
+export type {
+  RoutingInsightsState,
+  RoutingSettingsState,
+  RoutingSharedState,
+  RoutingSkillsState,
+  SettingsChange,
+} from './routing/skills.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -2561,6 +2574,10 @@ export function createDataLayer({
       ),
     settings: (workspace) =>
       beforeRead(workspace).then(() => call((options) => api.routing.settings.get({ workspace }, options))),
+    insights: (workspace, weeks) =>
+      beforeRead(workspace).then(() =>
+        call((options) => api.routing.insights({ workspace, ...(weeks === undefined ? {} : { weeks }) }, options)),
+      ),
     setSettings: (workspace, change, updatedAt) =>
       call((options) =>
         api.routing.settings.set(
@@ -2577,6 +2594,11 @@ export function createDataLayer({
             ...(change.smartMode === undefined ? {} : { smartMode: change.smartMode }),
             ...(change.tiltPercent === undefined ? {} : { tiltPercent: change.tiltPercent }),
             ...(change.fit === undefined ? {} : { fit: change.fit.map((link) => ({ ...link })) }),
+            ...(change.holdoutPercent === undefined ? {} : { holdoutPercent: change.holdoutPercent }),
+            ...(change.segmentAttributeIds === undefined
+              ? {}
+              : { segmentAttributeIds: [...change.segmentAttributeIds] }),
+            ...(change.learnSince === undefined ? {} : { learnSince: change.learnSince }),
             ...(updatedAt === undefined ? {} : { updatedAt }),
             mutationId: mintId(),
           },
@@ -4598,6 +4620,13 @@ export function createDataLayer({
         /** One settings change (the Smart tab's), shown at once; `STALE` reads them again and rejects. */
         set: (workspace: string, change: SettingsChange): Promise<void> => routingSkills.set(workspace, change),
       },
+      /**
+       * Routing › Insights (spec 0037, AC-1376, AC-1386, AC-1389), for holders of routing.manage: what the nightly
+       * run learned per page and segment, the holdout comparison and each member's numbers. Held while the tab
+       * shows it; read only, so nothing here is written.
+       */
+      insights: (workspace: string, weeks?: number): RoutingHeld<RoutingInsightsState> =>
+        routingSkills.insights(workspace, weeks),
       /**
        * Routing › Test (AC-1392): what a surface's rules would decide for typed answers and an email. Stores nothing
        * but an audit row when an email is given; no screen holds its answer beyond the tab's own state.

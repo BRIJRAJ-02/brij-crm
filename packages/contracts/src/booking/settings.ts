@@ -5,6 +5,7 @@ import * as z from 'zod';
 import { DateValue } from '../values/attribute-values.ts';
 import { Uuid } from '../values/ids.ts';
 import { FormQuestion } from '../forms/document.ts';
+import { OBJECTIVES } from '../forms/routing-limits.ts';
 
 /** The meeting lengths offered as ready picks, in minutes; any other length in steps of 5 is a custom one. */
 export const BOOKING_DURATIONS = [15, 30, 45, 60, 90] as const;
@@ -313,6 +314,12 @@ export const BookingPageSettings = z.object({
    * no page changes behaviour on its own; meaningless on a personal page, whose writes refuse it.
    */
   formOnly: z.boolean(),
+  /**
+   * A team page's learning objective (spec 0037, AC-1354): what the smart ranking learns toward on this page. Absent
+   * means Deals created, the default; Deals won is offered only once Won means is set (AC-1385). Set on Routing ›
+   * Smart, so a personal page never carries one.
+   */
+  routingObjective: z.enum(OBJECTIVES).optional(),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;

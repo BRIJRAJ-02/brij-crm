@@ -17,6 +17,20 @@ export {
   type AutomationRunDeps,
 } from './automations/run.ts';
 export { SYSTEM_ACTOR } from './engine/scope.ts';
+// The nightly learning run's hourly fan out (spec 0037, AC-1381): the worker's `crm_cron_routing_learn` task.
+export {
+  LEARN_HOUR,
+  LEARN_PAGE,
+  LEARN_SPREAD_MINUTES,
+  learnKey,
+  learnMinute,
+  queueRoutingLearn,
+  readLocalNow,
+  type LocalNow,
+  type LearnFanoutDeps,
+  type LearnFanoutReport,
+  type LearnSweep,
+} from './routing/fanout.ts';
 // The daily cleanup's fan out (spec 0008, milestone 3): lists every workspace and starts a system job in each.
 export {
   DAILY_BUDGET_MS,

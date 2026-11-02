@@ -1,21 +1,34 @@
 // Brief
-// Purpose: Routing › Smart (spec 0037, AC-1361 to AC-1364, AC-1374): how the free reps are ordered once the rules have chosen who may host.
-// Main task: pick the ranking mode, set the fairness allowance and read the bound it gives, then join answers to skills as fit links.
-// Leaves out: the holdout, segment attributes, Learn from and each page's objective (Insights, L9); the rules themselves (each surface's Routing card).
+// Purpose: Routing › Smart (spec 0037, AC-1361 to AC-1364, AC-1374, AC-1354, AC-1370, AC-1386, AC-1389): how the free reps are ordered once the rules have chosen who may host, and what the nightly run learns from.
+// Main task: pick the ranking mode, set the fairness allowance and read the bound it gives, join answers to skills as fit links, then set the holdout, the segments, Learn from and each team page's objective.
+// Leaves out: the numbers themselves (Insights); the rules (each surface's Routing card).
 import {
   isDataError,
   toFieldAttribute,
   type AttributeDefinition,
   type DataLayer,
   type FitLink,
+  type RoutingObjective,
   type RoutingSkill,
   type SmartMode,
 } from '@crm/data';
-import { FIT_LINKS_MAX, SMART_MODE_DEFAULT, TILT_PERCENT_DEFAULT, TILT_PERCENT_MAX } from '@crm/data/forms';
+import {
+  FIT_LINKS_MAX,
+  HOLDOUT_PERCENT_DEFAULT,
+  HOLDOUT_PERCENT_MAX,
+  OBJECTIVES,
+  SEGMENT_ATTRIBUTES_MAX,
+  SEGMENT_OPTIONS_MAX,
+  SMART_MODE_DEFAULT,
+  TILT_PERCENT_DEFAULT,
+  TILT_PERCENT_MAX,
+} from '@crm/data/forms';
 import { useRoutingSettings, useRoutingSkills } from '@crm/data/react';
 import {
   AttributeDisplay,
+  AttributeEditor,
   Button,
+  Callout,
   Card,
   EmptyState,
   Field,
@@ -31,7 +44,7 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useMemo, useRef, useState } from 'react';
-import { smartStrings as strings } from './smart-strings.ts';
+import { learnStrings as learn, smartStrings as strings } from './smart-strings.ts';
 
 /**
  * One select or status field a fit link may read (AC-1362): its definition,
@@ -42,6 +55,16 @@ export interface FitField {
   readonly id: string;
   readonly label: string;
   readonly attribute: AttributeDefinition;
+  /** Which standard object it lives on: a segment field is never People's (spec 0037, AC-1370). */
+  readonly objectKey: 'people' | 'companies' | 'deals';
+}
+
+/** One live team page, for its learning objective (spec 0037, AC-1354). */
+export interface TeamPage {
+  readonly id: string;
+  readonly title: string;
+  /** What it learns toward now; a page that never set one reads as Deals created. */
+  readonly objective: RoutingObjective;
 }
 
 /** Props for SmartTab. */
@@ -50,13 +73,28 @@ export interface SmartTabProps {
   readonly slug: string;
   /** The select and status fields on People, Companies and Deals the reader can see, each with its live options. */
   readonly fields: readonly FitField[];
+  /** The workspace's live team pages, each with the objective it learns toward (AC-1354). */
+  readonly pages: readonly TeamPage[];
   /** Takes the person to Routing › Skills, where a fit link's skill is made. */
   readonly onSkills: () => void;
+  /** One team page's learning objective changed (AC-1354); the screen sends it through the page's own write. */
+  readonly onObjective: (pageId: string, objective: RoutingObjective) => void;
   readonly toasts: Toasts;
 }
 
 /** One empty list, so the maps below don't rebuild on every render while the skills load. */
 const EMPTY_SKILLS: readonly RoutingSkill[] = [];
+
+/** Learn from, as the field set's one date editor takes it (AC-1386): a plain optional date. */
+const LEARN_SINCE_FIELD = {
+  id: 'routing-learn-since',
+  name: learn.learnSinceLabel,
+  type: 'date' as const,
+  allowMultiple: false,
+  isRequired: false,
+  isUnique: false,
+  isReadOnly: false,
+};
 
 const FIT_COLUMNS: readonly TableColumn[] = [
   { id: 'field', label: strings.field, isRowHeader: true, isInline: true, size: 'fill' },
@@ -65,21 +103,28 @@ const FIT_COLUMNS: readonly TableColumn[] = [
   { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit', showsOnHover: true },
 ];
 
+const OBJECTIVE_COLUMNS: readonly TableColumn[] = [
+  // No `fill`, for the reason InsightsTab's Rep column gives: a filling column can collapse in a scrollable table.
+  { id: 'page', label: learn.page, isRowHeader: true, isInline: true },
+  { id: 'objective', label: learn.objective, isInline: true },
+];
+
 /** The rotation window the sentence speaks of: 30 days, the default every rotation starts with. */
 const WINDOW_DAYS = 30;
 
 /** Routing › Smart. */
-export function SmartTab({ data, slug, fields, onSkills, toasts }: SmartTabProps) {
+export function SmartTab({ data, slug, fields, pages, onSkills, onObjective, toasts }: SmartTabProps) {
   const held = useMemo(() => data.routing.settings.view(slug), [data, slug]);
   const state = useRoutingSettings(held);
   const skillsHeld = useMemo(() => data.routing.skills.view(slug), [data, slug]);
   const skillsState = useRoutingSkills(skillsHeld);
   const [adding, setAdding] = useState(false);
+  /** The Learn from date waiting for its confirm (AC-1445): set only once the person says Start over. */
+  const [learnFrom, setLearnFrom] = useState<string | undefined>();
   const [removing, setRemoving] = useState<FitLink | undefined>();
   const addRef = useRef<HTMLButtonElement>(null);
-  // Where focus goes when Add link is disabled (the 100th link), so a keyboard reader never lands on the body.
-  const tableRef = useRef<HTMLDivElement>(null);
   const skills = skillsState.status === 'ready' ? skillsState.value.skills : EMPTY_SKILLS;
+  const wonMeansSet = skillsState.status === 'ready' && skillsState.value.wonMeansSet;
   // One map each, not a scan per row: a workspace may hold 100 fit links against every select field of three
   // objects. Above the states below, so every render calls the same hooks in the same order.
   const byField = useMemo(() => new Map(fields.map((field) => [field.id, field])), [fields]);
@@ -109,6 +154,15 @@ export function SmartTab({ data, slug, fields, onSkills, toasts }: SmartTabProps
   const mode: SmartMode = settings?.smartMode ?? SMART_MODE_DEFAULT;
   const tiltPercent = settings?.tiltPercent ?? TILT_PERCENT_DEFAULT;
   const links = settings?.fit ?? [];
+  const holdoutPercent = settings?.holdoutPercent ?? HOLDOUT_PERCENT_DEFAULT;
+  const segmentIds = settings?.segmentAttributeIds ?? [];
+  const learnSince = settings?.learnSince;
+  // A segment field is never a person's (AC-1370), and six options is where a cell stops being able to warm.
+  const segmentFields = fields.filter(
+    (field) =>
+      field.objectKey !== 'people' &&
+      (field.attribute.options ?? []).filter((option) => !option.isArchived).length <= SEGMENT_OPTIONS_MAX,
+  );
   const fieldOf = (id: string) => byField.get(id);
   const optionOf = (link: FitLink) => byOption.get(link.optionId);
   const skillOf = (link: FitLink) => bySkill.get(link.skillId);
@@ -141,9 +195,10 @@ export function SmartTab({ data, slug, fields, onSkills, toasts }: SmartTabProps
         {isLoading ? (
           <Skeleton shape="field" />
         ) : (
-          <Allowance
-            tiltPercent={tiltPercent}
-            isDisabled={false}
+          <Percent
+            label={strings.allowanceLabel}
+            value={tiltPercent}
+            max={TILT_PERCENT_MAX}
             // The bound in plain words, live under the field (AC-1364).
             hint={
               mode === 'off'
@@ -251,6 +306,155 @@ export function SmartTab({ data, slug, fields, onSkills, toasts }: SmartTabProps
           }}
         />
       </Card>
+      <Card title={learn.holdout} description={learn.holdoutHint} isBusy={isLoading}>
+        {isLoading ? (
+          <Skeleton shape="field" />
+        ) : (
+          <Percent
+            label={learn.holdoutLabel}
+            value={holdoutPercent}
+            max={HOLDOUT_PERCENT_MAX}
+            hint={holdoutPercent === 0 ? learn.holdoutOff : learn.holdoutOn(holdoutPercent)}
+            onSave={(next, wasClamped) => {
+              save({ holdoutPercent: next });
+              if (wasClamped) toasts.toast({ tone: 'info', message: learn.holdoutClamped(next) });
+            }}
+          />
+        )}
+      </Card>
+      <Card title={learn.segments} description={learn.segmentsHint} isBusy={isLoading}>
+        {isLoading ? (
+          <Skeleton shape="field" />
+        ) : segmentFields.length === 0 ? (
+          <EmptyState icon="tag" title={learn.noSegmentFields}>
+            {learn.noSegmentFieldsText}
+          </EmptyState>
+        ) : (
+          <>
+            {Array.from({ length: SEGMENT_ATTRIBUTES_MAX }, (_, place) => {
+              const chosen = segmentIds[place];
+              // The second field is offered only once the first is set: a gap would read as one segment either way.
+              const isDisabled = place > 0 && segmentIds[place - 1] === undefined;
+              return (
+                <Select
+                  key={place}
+                  label={learn.segmentField(place + 1)}
+                  placeholder={learn.segmentPick}
+                  isSearchable
+                  isDisabled={isDisabled}
+                  items={[
+                    { id: 'none', label: learn.segmentPick },
+                    ...segmentFields
+                      .filter((field) => field.id === chosen || !segmentIds.includes(field.id))
+                      .map((field) => ({ id: field.id, label: field.label })),
+                  ]}
+                  value={chosen ?? 'none'}
+                  onChange={(id) => {
+                    const next = [...segmentIds];
+                    if (id === null || id === 'none') next.splice(place);
+                    else next[place] = id;
+                    save({ segmentAttributeIds: next });
+                  }}
+                />
+              );
+            })}
+            <Callout tone="info">{learn.segmentsRestart}</Callout>
+          </>
+        )}
+      </Card>
+      <Card title={learn.learnSince} description={learn.learnSinceHint} isBusy={isLoading}>
+        {isLoading ? (
+          <Skeleton shape="field" />
+        ) : (
+          // One date, through the field set's one date editor (the design system's rule: one editor per type).
+          // Clearing it is the editor's own empty value, not a second button: a button in the card's header
+          // squeezed this card's description to a sliver at 390, and said what the field already does.
+          <>
+            <AttributeEditor
+              attribute={LEARN_SINCE_FIELD}
+              value={learnSince ?? null}
+              surface="form"
+              onCommit={(value) => {
+                // Clearing it goes straight through (it only widens what counts); setting one asks first (AC-1445).
+                if (typeof value === 'string' && value !== '') setLearnFrom(value);
+                else if (learnSince !== undefined) {
+                  save({ learnSince: null });
+                  toasts.toast({ tone: 'success', message: learn.learnSinceCleared });
+                }
+              }}
+            />
+            <Callout tone="info">
+              {learnSince === undefined ? learn.learnSinceUnset : learn.learnSinceSet(learnSince)}
+            </Callout>
+          </>
+        )}
+      </Card>
+      <Card title={learn.objectives} description={learn.objectivesHint} isBusy={isLoading}>
+        <Table
+          label={learn.objectiveTable}
+          columns={OBJECTIVE_COLUMNS}
+          rows={pages}
+          getRowId={(page) => page.id}
+          isLoading={isLoading}
+          isScrollable
+          emptyState={
+            <EmptyState icon="users" title={learn.noPages}>
+              {learn.noPagesText}
+            </EmptyState>
+          }
+          renderCell={(page, column) =>
+            column === 'page' ? (
+              <TruncatedText>{page.title}</TruncatedText>
+            ) : (
+              <Select
+                label={learn.objectiveOf(page.title)}
+                isLabelHidden
+                size="sm"
+                items={OBJECTIVES.map((each) => ({
+                  id: each,
+                  label: learn.objectiveNames[each],
+                  // Deals won is offered only once Won means is set (AC-1354, AC-1385).
+                  // `description` is what a disabled option shows and announces (Select's README); `hint` is not a
+                  // SelectItem prop, so the reason was silently dropped.
+                  ...(each === 'won' && !wonMeansSet ? { isDisabled: true, description: learn.wonNeedsStage } : {}),
+                }))}
+                value={page.objective}
+                onChange={(id) => {
+                  const next = OBJECTIVES.find((each) => each === id);
+                  if (next !== undefined && next !== page.objective) onObjective(page.id, next);
+                }}
+              />
+            )
+          }
+        />
+      </Card>
+      {learnFrom !== undefined && (
+        <Modal
+          title={learn.learnSinceTitle}
+          isOpen
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setLearnFrom(undefined);
+          }}
+          actions={
+            <>
+              <Button slot="close">{learn.cancel}</Button>
+              <Button
+                variant="danger"
+                onPress={() => {
+                  const day = learnFrom;
+                  setLearnFrom(undefined);
+                  save({ learnSince: day });
+                  toasts.toast({ tone: 'success', message: learn.learnSinceStarted(day) });
+                }}
+              >
+                {learn.learnSinceConfirm}
+              </Button>
+            </>
+          }
+        >
+          {learn.learnSinceText(learnFrom)}
+        </Modal>
+      )}
       {adding && (
         <AddFitLink
           fields={fields}
@@ -259,7 +463,9 @@ export function SmartTab({ data, slug, fields, onSkills, toasts }: SmartTabProps
           onAdd={(link) => save({ fit: [...links, link] })}
           onClose={() => {
             setAdding(false);
-            focusLater(() => (addRef.current?.disabled === true ? tableRef.current : addRef.current));
+            // Noted for /architect: at the 100th link Add is disabled and so unfocusable, and Table takes no ref,
+            // so there is no in-card target to fall back to; Table needs a focus target before that case is right.
+            focusLater(() => addRef.current);
           }}
         />
       )}
@@ -289,7 +495,7 @@ export function SmartTab({ data, slug, fields, onSkills, toasts }: SmartTabProps
                     ),
                   });
                   toasts.toast({ tone: 'success', message: strings.removed });
-                  focusLater(() => addRef.current ?? tableRef.current);
+                  focusLater(() => addRef.current);
                 }}
               >
                 {strings.remove}
@@ -308,31 +514,39 @@ export function SmartTab({ data, slug, fields, onSkills, toasts }: SmartTabProps
   );
 }
 
-/** The allowance field: typed freely, saved when the person leaves it or presses Enter, and clamped to 0 to 50. */
-function Allowance({
-  tiltPercent,
-  isDisabled,
+/**
+ * A whole percent, typed freely, saved when the person leaves it or presses
+ * Enter, and clamped to 0 to `max`. The allowance and the holdout are the same
+ * control with different limits and sentences, so they share it.
+ */
+function Percent({
+  label,
+  value,
+  max,
+  isDisabled = false,
   hint,
   onSave,
 }: {
-  readonly tiltPercent: number;
-  readonly isDisabled: boolean;
+  readonly label: string;
+  readonly value: number;
+  readonly max: number;
+  readonly isDisabled?: boolean;
   readonly hint: string;
   readonly onSave: (next: number, wasClamped: boolean) => void;
 }) {
   const [draft, setDraft] = useState<string | undefined>();
-  const shown = draft ?? String(tiltPercent);
+  const shown = draft ?? String(value);
   const commit = () => {
     setDraft(undefined);
     if (draft === undefined) return;
     const typed = Number.parseInt(draft, 10);
     if (Number.isNaN(typed)) return;
-    const next = Math.min(TILT_PERCENT_MAX, Math.max(0, typed));
-    if (next !== tiltPercent) onSave(next, next !== typed);
+    const next = Math.min(max, Math.max(0, typed));
+    if (next !== value) onSave(next, next !== typed);
   };
   return (
     <Field
-      label={strings.allowanceLabel}
+      label={label}
       value={shown}
       inputMode="numeric"
       autoComplete="off"

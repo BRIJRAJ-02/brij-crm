@@ -23,8 +23,8 @@ import { recordFacts, RECORD_FACTS_MAX, type RecordFactObjects } from './facts.t
 
 const { memberSkills } = schema;
 
-/** Where a fit link's field lives, and how the lead's value for it is reached. */
-const SIDES = { people: 'person', companies: 'company', deals: 'deal' } as const;
+/** Where a fit link's or a segment attribute's field lives, and how the lead's value for it is reached. */
+export const SIDES = { people: 'person', companies: 'company', deals: 'deal' } as const;
 
 /** One fact the ranking used, as the decision keeps it (AC-1362). */
 export interface RankingFact {
@@ -60,8 +60,11 @@ export function fitLinksOf(stored: unknown): readonly FitLink[] {
   return links;
 }
 
-/** Each fit field, live, with where it lives and its live options by id and by lowercased label. */
-async function fieldsOf(
+/**
+ * Each named field, live, with where it lives and its live options by id and by lowercased label. Shared with the
+ * segment key (AC-1370), which resolves a lead's option exactly as fit does.
+ */
+export async function fieldsOf(
   tx: WorkspaceTx,
   attributeIds: readonly string[],
 ): Promise<
@@ -103,7 +106,11 @@ async function fieldsOf(
 }
 
 /** The option ids an answer names, matched against the field's live options by id, then by label. */
-function answeredOptions(value: unknown, byId: ReadonlySet<string>, byLabel: ReadonlyMap<string, string>): string[] {
+export function answeredOptions(
+  value: unknown,
+  byId: ReadonlySet<string>,
+  byLabel: ReadonlyMap<string, string>,
+): string[] {
   const given = (Array.isArray(value) ? value : [value]).filter((each): each is string => typeof each === 'string');
   return given.flatMap((each) => {
     if (byId.has(each)) return [each];

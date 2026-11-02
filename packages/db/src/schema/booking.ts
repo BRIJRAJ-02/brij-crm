@@ -104,6 +104,11 @@ export const bookingPages = pgTable(
      * page changes behaviour by itself; `booking_pages` is small, so the default is safe (AC-1446).
      */
     formOnly: boolean('form_only').notNull().default(false),
+    /**
+     * A team page's learning objective (spec 0037, AC-1354): `deal`, `won` or `held`. Null reads as Deals created,
+     * so a page that never set one still learns. Nullable with no default (AC-1446).
+     */
+    routingObjective: text('routing_objective'),
     /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
     deal: jsonb('deal'),
     status: text('status').notNull().default('live'),
@@ -192,6 +197,11 @@ export const bookingPages = pgTable(
     check('booking_pages_scope', sql`${t.scope} in ('member', 'workspace')`),
     check('booking_pages_scope_kind', sql`${t.scope} = 'member' or ${t.kind} = 'round_robin'`),
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),
+    // Spec 0037, AC-1354: an unknown objective never reaches the learning (null reads as Deals created).
+    check(
+      'booking_pages_objective',
+      sql`${t.routingObjective} is null or ${t.routingObjective} in ('deal', 'won', 'held')`,
+    ),
     check('booking_pages_paused_reason', sql`${t.pausedReason} is null or ${t.pausedReason} = 'host_removed'`),
     check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),
     check('booking_pages_reschedule_host', sql`${t.rescheduleHost} in ('same', 'rotation')`),

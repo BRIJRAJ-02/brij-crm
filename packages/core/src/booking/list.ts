@@ -8,7 +8,7 @@
 // no outbox row, so the screen reads again when the person comes back to it.
 // The week view reads a range: its bookings, and the reader's own calendar
 // events from spec 0024's sync beside them.
-import { and, asc, desc, eq, gt, gte, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, isNotNull, lt, or, sql } from 'drizzle-orm';
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import {
   BOOKINGS_LIST_MAX,
@@ -593,6 +593,8 @@ export async function listMeetings(
     readonly source?: MeetingSource;
     readonly hosts?: BookingHosts;
     readonly calendarIds?: readonly string[];
+    /** Only bookings marked a no show (spec 0037, AC-1426); a calendar event is never one. */
+    readonly noShow?: boolean;
     readonly cursor?: string;
     readonly limit?: number;
   },
@@ -601,17 +603,22 @@ export async function listMeetings(
   const base = readerOf(scope);
   if (base === undefined) return { items: [] };
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
-  const source = input.source ?? 'all';
+  // No show reads bookings alone (AC-1426): a calendar event can never be marked one, so Calendar events only
+  // with the filter on would answer an empty list rather than the bookings it asks for.
+  const source = input.noShow === true ? 'bookings' : (input.source ?? 'all');
   const ascending = input.when === 'upcoming';
   const after = input.cursor === undefined ? undefined : readCursor(input.cursor);
   const calendarIds = input.calendarIds?.map((id) => checkId(id, 'Pick one of your calendars.'));
   return inWorkspace(scope, async (tx) => {
     const reader = await readerIn(tx, scope, base, input.hosts ?? 'mine');
     // Bookings: the tab's, those the reader may see, from the cursor on.
-    const shown =
+    const marked = input.noShow === true ? isNotNull(bookings.noShowAt) : undefined;
+    const shown = and(
       input.when === 'cancelled'
         ? eq(bookings.status, 'cancelled')
-        : and(eq(bookings.status, 'confirmed'), ascending ? gte(bookings.endsAt, now) : lt(bookings.endsAt, now));
+        : and(eq(bookings.status, 'confirmed'), ascending ? gte(bookings.endsAt, now) : lt(bookings.endsAt, now)),
+      marked,
+    );
     const past =
       after === undefined
         ? undefined

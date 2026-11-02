@@ -511,6 +511,11 @@ export const ListMeetingsInput = WorkspaceScoped.extend({
   hosts: BookingHosts.default('mine'),
   /** Only these of the reader's calendars' events (the calendars panel's pick); absent is every one shown. */
   calendarIds: z.array(Uuid).max(50).optional(),
+  /**
+   * Only bookings marked a no show (spec 0037, AC-1426). A calendar event can never be one, so this answers
+   * bookings alone however `source` reads.
+   */
+  noShow: z.boolean().optional(),
   cursor: z.string().max(200).optional(),
   limit: z.number().int().min(1).max(MEETINGS_PAGE_MAX).default(50),
 });

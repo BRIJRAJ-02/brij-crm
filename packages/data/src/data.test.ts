@@ -892,6 +892,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       overview: os.routing.overview.handler(notServed),
       decisions: os.routing.decisions.handler(notServed),
       decision: os.routing.decision.handler(notServed),
+      insights: os.routing.insights.handler(notServed),
       skills: {
         list: os.routing.skills.list.handler(notServed),
         create: os.routing.skills.create.handler(notServed),

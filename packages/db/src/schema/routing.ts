@@ -9,6 +9,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  date,
   foreignKey,
   index,
   integer,
@@ -68,6 +69,16 @@ export const routingDecisions = pgTable(
     facts: jsonb('facts'),
     /** Every candidate's numbers at the booking (AC-1373), on `booking_page` rows only: every explanation reads this. */
     snapshot: jsonb('snapshot'),
+    /**
+     * This decision was drawn into the holdout (spec 0037, AC-1389), so it picked plain fair and the comparison
+     * reads it as its control arm. Null, on a ranked row, is "not drawn". Nullable with no default (AC-1446).
+     */
+    holdout: boolean('holdout'),
+    /**
+     * The segment the learning counts this decision in (AC-1370): `*` when the workspace sets no segment attributes,
+     * `?` when the lead was missing a value, else the canonical `attribute=option;attribute=option`.
+     */
+    segmentKey: text('segment_key'),
     decidedAt: timestamptz('decided_at').notNull().defaultNow(),
   },
   (t) => [
@@ -89,6 +100,10 @@ export const routingDecisions = pgTable(
     }),
     // The report: one surface's decisions in a window.
     index('routing_decisions_by_surface').on(t.workspaceId, t.surfaceId, t.decidedAt),
+    // The nightly learning run (spec 0037, AC-1381): a workspace's ranked decisions by time, and nothing else.
+    index('routing_decisions_ranked')
+      .on(t.workspaceId, t.decidedAt)
+      .where(sql`${t.snapshot} is not null`),
     // Routing › Decisions (spec 0037, AC-1383): every surface's decisions, newest first, keyset paged by time and id.
     index('routing_decisions_by_time').on(t.workspaceId, t.decidedAt.desc(), t.id.desc()),
     // One decision per submission (AC-1607), which a hand off's booking finds it by: a retried or doubled submit
@@ -128,11 +143,26 @@ export const routingSettings = pgTable(
     tiltPercent: smallint('tilt_percent'),
     /** The fit links (AC-1362): up to 100 `{ attributeId, optionId, skillId }`. */
     fit: jsonb('fit'),
+    /** The holdout, 0 to 20 percent of ranked decisions (AC-1389); null reads as the default 10. */
+    holdoutPercent: smallint('holdout_percent'),
+    /** The segment attributes (AC-1370): at most 2 select or status fields of Companies or Deals. */
+    segmentAttributeIds: uuid('segment_attribute_ids').array(),
+    /** Learn from (AC-1386): the next run ignores outcomes of bookings made before this day. */
+    learnSince: date('learn_since'),
+    /** The model the ranking reads its lift from (AC-1381); 0 until a run has trained one. */
+    modelVersion: integer('model_version').notNull().default(0),
+    /** When the last run finished: the fan out skips a workspace where nothing it reads changed since. */
+    modelTrainedAt: timestamptz('model_trained_at'),
     ...auditColumns(),
   },
   (t) => [
     primaryKey({ name: 'routing_settings_pkey', columns: [t.workspaceId] }),
     check('routing_settings_tilt', sql`${t.tiltPercent} is null or ${t.tiltPercent} between 0 and 50`),
+    check('routing_settings_holdout', sql`${t.holdoutPercent} is null or ${t.holdoutPercent} between 0 and 20`),
+    check(
+      'routing_settings_segments',
+      sql`${t.segmentAttributeIds} is null or cardinality(${t.segmentAttributeIds}) between 0 and 2`,
+    ),
     ...actorConstraints('routing_settings', 'created_by', t.workspaceId, {
       type: t.createdByType,
       id: t.createdById,
@@ -201,5 +231,44 @@ export const memberSkills = pgTable(
     }).onDelete('cascade'),
     // Who holds a skill: a host route's members, and a skill's deletion.
     index('member_skills_by_skill').on(t.workspaceId, t.skillId),
+  ],
+);
+
+/**
+ * What one nightly run learned (spec 0037, AC-1369, AC-1370, AC-1381): one row per member per cell, a cell being a
+ * team page, the seat's rotation, the segment and the page's objective. The ranking reads one cell by the primary
+ * key's prefix. Machine written and replaced nightly, so no audit columns; a new version is written beside the old
+ * one and switched in by the run's last batch.
+ */
+export const routingStats = pgTable(
+  'routing_stats',
+  {
+    workspaceId: workspaceId(),
+    /** The model this row belongs to: `routing_settings.model_version` is the one the ranking reads. */
+    modelVersion: integer('model_version').notNull(),
+    pageId: uuid('page_id').notNull(),
+    rotationId: uuid('rotation_id').notNull(),
+    /** `*`, `?`, or the canonical `attribute=option;attribute=option` (AC-1370). */
+    segmentKey: text('segment_key').notNull(),
+    /** `held`, `deal` or `won` (AC-1354). */
+    objective: text('objective').notNull(),
+    memberId: uuid('member_id').notNull(),
+    /** Ranked decisions credited to this member in this cell whose outcome window has passed (AC-1368). */
+    trials: integer('trials').notNull().default(0),
+    /** How many of them met the objective (AC-1366). */
+    successes: integer('successes').notNull().default(0),
+    /** Counted, but still inside their outcome window: what Insights says is "waiting" (AC-1376). */
+    waiting: integer('waiting').notNull().default(0),
+    trainedAt: timestamptz('trained_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({
+      name: 'routing_stats_pkey',
+      columns: [t.workspaceId, t.modelVersion, t.pageId, t.rotationId, t.segmentKey, t.objective, t.memberId],
+    }),
+    check('routing_stats_objective', sql`${t.objective} in ('held', 'deal', 'won')`),
+    check('routing_stats_counts', sql`${t.trials} >= 0 and ${t.successes} >= 0 and ${t.successes} <= ${t.trials}`),
+    // Dropping the versions older than the previous one, after a run switched (AC-1381).
+    index('routing_stats_by_version').on(t.workspaceId, t.modelVersion),
   ],
 );

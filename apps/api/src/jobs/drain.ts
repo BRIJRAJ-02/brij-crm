@@ -191,6 +191,9 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
         automation: tasks.automation,
         calendarHealth: tasks.calendarHealth,
         daily: tasks.daily(unrelayedSweep(queue)),
+        // The learning run's hourly fan out (spec 0037, AC-1381): where no worker runs, the first drain turn after
+        // each hour holds its crontab line, exactly as the calendar health sweep's does.
+        routingLearn: tasks.routingLearn(queue),
         ...(tasks.calendar === undefined ? {} : { calendar: tasks.calendar }),
         ...(options.onFault === undefined ? {} : { onFault: options.onFault }),
         onFailed: () => {

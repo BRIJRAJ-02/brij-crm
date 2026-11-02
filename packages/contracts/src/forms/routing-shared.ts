@@ -6,6 +6,9 @@ import * as z from 'zod';
 import { QUESTION_KEY } from './answer-types.ts';
 import {
   FIT_LINKS_MAX,
+  HOLDOUT_PERCENT_MAX,
+  OBJECTIVES,
+  SEGMENT_ATTRIBUTES_MAX,
   SKILL_GROUPS,
   SKILL_NAME_MAX,
   SKILLS_MAX,
@@ -139,6 +142,28 @@ export const TiltPercent = z
 /** The fairness allowance. */
 export type TiltPercent = z.infer<typeof TiltPercent>;
 
+/** The holdout, a whole 0 to 20 percent of ranked decisions (AC-1389). */
+export const HoldoutPercent = z
+  .number()
+  .int({ error: 'Use a whole number of percent.' })
+  .min(0, { error: 'Use 0 to 20 percent.' })
+  .max(HOLDOUT_PERCENT_MAX, { error: 'Use 0 to 20 percent.' });
+/** The holdout. */
+export type HoldoutPercent = z.infer<typeof HoldoutPercent>;
+
+/** The segment attributes (AC-1370): at most two select or status fields of Companies or Deals, each named once. */
+export const SegmentAttributeIds = z
+  .array(Uuid)
+  .max(SEGMENT_ATTRIBUTES_MAX, { error: 'Pick at most two fields.' })
+  .refine((ids) => new Set(ids).size === ids.length, { error: 'Pick each field once.' });
+/** The segment attributes. */
+export type SegmentAttributeIds = z.infer<typeof SegmentAttributeIds>;
+
+/** A team page's learning objective (AC-1354): Deals created, Deals won, or Meetings held. */
+export const RoutingObjective = z.enum(OBJECTIVES);
+/** A team page's learning objective. */
+export type RoutingObjective = z.infer<typeof RoutingObjective>;
+
 /** The workspace's routing settings (AC-1351): absent fields are the defaults; `updatedAt` absent until first set. */
 export const RoutingSettings = z.object({
   wonStage: WonStage.optional(),
@@ -146,6 +171,13 @@ export const RoutingSettings = z.object({
   smartMode: SmartMode.optional(),
   tiltPercent: TiltPercent.optional(),
   fit: FitLinks.optional(),
+  holdoutPercent: HoldoutPercent.optional(),
+  segmentAttributeIds: SegmentAttributeIds.optional(),
+  learnSince: z.iso.date().optional(),
+  /** The model the lift comes from; 0 until a nightly run has trained one. Read only. */
+  modelVersion: z.number().int().min(0).optional(),
+  /** When the last run finished. Read only. */
+  modelTrainedAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });
 /** The workspace's routing settings. */
@@ -160,6 +192,10 @@ export const SetRoutingSettingsInput = WorkspaceScoped.extend({
   smartMode: SmartMode.optional(),
   tiltPercent: TiltPercent.optional(),
   fit: FitLinks.optional(),
+  holdoutPercent: HoldoutPercent.optional(),
+  segmentAttributeIds: SegmentAttributeIds.optional(),
+  /** `null` clears Learn from, so every outcome in the window counts again. */
+  learnSince: z.iso.date().nullable().optional(),
   updatedAt: z.string().max(40).optional(),
   mutationId: Uuid,
 });
@@ -219,9 +255,116 @@ export const RoutingTestResult = z.object({
 /** What Test found. */
 export type RoutingTestResult = z.infer<typeof RoutingTestResult>;
 
+/** `routing.insights`' input (AC-1376): how many weeks of ranked bookings to count; absent is the learning window. */
+export const RoutingInsightsInput = WorkspaceScoped.extend({
+  weeks: z.number().int().min(1).max(52).optional(),
+});
+/** `routing.insights`' input. */
+export type RoutingInsightsInput = z.infer<typeof RoutingInsightsInput>;
+
+/** One member's row in a cell (AC-1376): their trials, their smoothed rate, their share, and their marking rate. */
+export const InsightsMember = z.object({
+  memberId: Uuid,
+  name: z.string(),
+  trials: z.number().int().min(0),
+  successes: z.number().int().min(0),
+  /** Their smoothed rate, 0 to 1 (AC-1369). */
+  rate: z.number(),
+  /**
+   * How far their smoothed rate sits above or below the team's, in rate units (0.04 is four percentage points).
+   * Absent while the cell is cold or the lead's segment was unknown, so the screen says "—" rather than 0, which
+   * would read as a judgement on the rep rather than "we aren't using this yet".
+   */
+  lift: z.number().optional(),
+  /** Their share of the cell's trials, 0 to 1, against `fairShare`, an equal share of them. */
+  share: z.number(),
+  fairShare: z.number(),
+  /**
+   * How often they mark a meeting of theirs a no show, 0 to 1, over the window (AC-1376); undefined when they
+   * hosted none, so nothing is read into a rate over no meetings.
+   */
+  markingRate: z.number().optional(),
+});
+/** One member's row in a cell. */
+export type InsightsMember = z.infer<typeof InsightsMember>;
+
+/** One learning cell (AC-1369): a page's rotation and segment, for the page's current objective. */
+export const InsightsCell = z.object({
+  rotationId: Uuid,
+  rotationName: z.string(),
+  /** `*` for all segments, `?` for a lead missing a value, else the canonical key. */
+  segmentKey: z.string(),
+  /** The key in words: "All leads", "No value", or "Segment is Enterprise". */
+  label: z.string(),
+  trials: z.number().int().min(0),
+  successes: z.number().int().min(0),
+  /** Bookings counted but still inside their outcome window. */
+  waiting: z.number().int().min(0),
+  /** The cell's team rate, 0 to 1. */
+  teamRate: z.number(),
+  /** True once the cell has `WARM_TRIALS` finished trials: only then is its lift read. */
+  isWarm: z.boolean(),
+  /** The earliest day the cell could warm, from the bookings already waiting; absent when it is warm. */
+  readyFrom: z.iso.date().optional(),
+  members: z.array(InsightsMember),
+});
+/** One learning cell. */
+export type InsightsCell = z.infer<typeof InsightsCell>;
+
+/** One arm of the holdout comparison (AC-1389): its trials, successes, rate and a 90 percent interval. */
+export const InsightsArm = z.object({
+  trials: z.number().int().min(0),
+  successes: z.number().int().min(0),
+  rate: z.number(),
+  /** The 90 percent interval's ends, 0 to 1; equal to `rate` with no trials. */
+  low: z.number(),
+  high: z.number(),
+});
+/** One arm of the comparison. */
+export type InsightsArm = z.infer<typeof InsightsArm>;
+
+/** One team page on Insights (AC-1376): its objective, its ranked bookings, its cells and its comparison. */
+export const InsightsPage = z.object({
+  pageId: Uuid,
+  name: z.string(),
+  objective: RoutingObjective,
+  /** Ranked decisions in the window. */
+  ranked: z.number().int().min(0),
+  cells: z.array(InsightsCell),
+  /** Picks the ranking moved, picks it left where fairness had them, and the holdout (AC-1389). */
+  changed: InsightsArm,
+  leftAlone: InsightsArm,
+  holdout: InsightsArm,
+  /** True when the comparison's intervals overlap, so "not yet certain". */
+  isCertain: z.boolean(),
+});
+/** One team page on Insights. */
+export type InsightsPage = z.infer<typeof InsightsPage>;
+
+/**
+ * Routing › Insights (AC-1376, AC-1386, AC-1389): what the nightly run learned, per team page and segment, with
+ * the holdout comparison and each member's numbers. `routing.manage` only.
+ */
+export const RoutingInsights = z.object({
+  /** The model the cells come from; 0 before any run. */
+  modelVersion: z.number().int().min(0),
+  modelTrainedAt: z.string().optional(),
+  /** Learn from (AC-1386): outcomes of bookings made before it are ignored. */
+  learnSince: z.iso.date().optional(),
+  /** The segment attributes now, by name (AC-1370). */
+  segmentAttributes: z.array(z.object({ id: Uuid, name: z.string() })),
+  /** True when the segment attributes changed since the run, so segment learning restarts (AC-1370). */
+  segmentsRestarted: z.boolean(),
+  /** How often the workspace's hosts mark a no show, 0 to 1, over the window; absent with no finished meetings. */
+  teamMarkingRate: z.number().optional(),
+  pages: z.array(InsightsPage),
+});
+/** Routing › Insights. */
+export type RoutingInsights = z.infer<typeof RoutingInsights>;
+
 /**
  * Lead routing's procedures: the report, Overview and Decisions (L6), then skills, member skills, the settings and
- * Test (L7). Skills are listed for any member; the rest need `routing.manage`.
+ * Test (L7), and Insights (L9). Skills are listed for any member; the rest need `routing.manage`.
  */
 export const routingContract = {
   ...routingLogContract,
@@ -239,4 +382,5 @@ export const routingContract = {
     set: oc.input(SetRoutingSettingsInput).output(RoutingSettings),
   },
   test: oc.input(RoutingTestInput).output(RoutingTestResult),
+  insights: oc.input(RoutingInsightsInput).output(RoutingInsights),
 };

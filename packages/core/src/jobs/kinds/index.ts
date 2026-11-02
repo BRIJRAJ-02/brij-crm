@@ -17,6 +17,7 @@ import { recordsImportUndo } from '../../imports/undo.ts';
 import { recordsExport } from '../../exports/records.ts';
 import { computedKinds } from '../../computed/jobs.ts';
 import { routingUnbooked } from '../../forms/unbooked.ts';
+import { routingLearn } from '../../routing/learn.ts';
 
 /** What the kinds a process runs depend on: where it runs, and (for the test kind) how it waits. */
 export interface JobKindsOptions {
@@ -70,6 +71,7 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
     recordsExport(),
     ...computedKinds(),
     routingUnbooked(options.rules),
+    routingLearn(),
     ...tests,
     ...(options.extra ?? []),
   ]);

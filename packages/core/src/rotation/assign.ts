@@ -79,7 +79,18 @@ export interface SmartInputs {
   readonly tiltPercent: number;
   readonly holdout?: boolean;
   readonly fit: ReadonlyMap<string, number>;
-  readonly lift?: ReadonlyMap<string, number>;
+  /**
+   * Each rotation's learned lift, by rotation id then member id (spec 0037,
+   * AC-1369): a cell is a rotation's, so one seat's lift never leaks into
+   * another's. A rotation with no warm cell is absent, which is lift 0.
+   */
+  readonly lift?: ReadonlyMap<string, ReadonlyMap<string, number>>;
+  /**
+   * Each rotation's cell counts, by rotation id then member id (AC-1376): the
+   * trials and successes the snapshot freezes, so an explanation never has to
+   * read the stats again after the cells are retrained.
+   */
+  readonly counts?: ReadonlyMap<string, ReadonlyMap<string, { readonly trials: number; readonly successes: number }>>;
   /** The skills each candidate matched, by member: what the explanation names (spec 0037, AC-1373). */
   readonly matched?: ReadonlyMap<string, readonly string[]>;
   readonly modelVersion: number;
@@ -244,7 +255,7 @@ export async function chooseHosts(
         slack: slackOf(choice.smart.tiltPercent, pool),
         floor: floorOf(pool),
         fit: choice.smart.fit,
-        lift: choice.smart.lift ?? new Map<string, number>(),
+        lift: choice.smart.lift?.get(rotation.rules.id) ?? new Map<string, number>(),
         modelVersion: choice.smart.modelVersion,
       });
     }
@@ -281,7 +292,14 @@ export async function chooseHosts(
   const picks = preferred ?? fillSeats(plain ?? []);
   if (picks === undefined) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
   // The ranked seats' numbers, frozen as they were compared (AC-1373).
-  const snapshot = snapshotOf(plain ?? [], picks, smartOf, open, choice.smart?.matched ?? new Map());
+  const snapshot = snapshotOf(
+    plain ?? [],
+    picks,
+    smartOf,
+    open,
+    choice.smart?.matched ?? new Map(),
+    choice.smart?.counts ?? new Map(),
+  );
   const seated = team.rotations.map(
     (rotation) => kept.get(rotation.rules.id) ?? picks.find((pick) => pick.rotationId === rotation.rules.id)?.memberId,
   );
@@ -300,6 +318,7 @@ function snapshotOf(
   smartOf: ReadonlyMap<string, SmartRanking>,
   open: readonly { readonly rotation: { readonly rules: { readonly id: string; readonly windowDays: number } } }[],
   matched: Matched,
+  counts: ReadonlyMap<string, ReadonlyMap<string, { readonly trials: number; readonly successes: number }>>,
 ): readonly SeatSnapshot[] {
   return seats.flatMap((seat) => {
     const smart = smartOf.get(seat.rotationId);
@@ -336,8 +355,8 @@ function snapshotOf(
           fairShare,
           fit: smart.fit.get(each.memberId) ?? 0,
           lift: smart.lift.get(each.memberId) ?? 0,
-          trials: 0,
-          successes: 0,
+          trials: counts.get(seat.rotationId)?.get(each.memberId)?.trials ?? 0,
+          successes: counts.get(seat.rotationId)?.get(each.memberId)?.successes ?? 0,
           skillIds: [...(matched.get(each.memberId) ?? [])],
           isPicked: each.memberId === pick.memberId,
         })),

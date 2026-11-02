@@ -1,16 +1,17 @@
 // Brief
 // Purpose: Bookings › Routing (spec 0037, AC-1383), for holders of routing.manage: every routed form and team page in one place, and every decision they made.
 // Main task: see where each surface sends people when no rule matches and how it did in 30 days; then scan decisions, filter them, and open one to see why it went where it did.
-// Then (L7) Skills, Test, and Won means under the Overview, and (L8) Smart: the ranking mode, the fairness allowance and the fit links.
-// Leaves out: editing rules (each surface's own Routing card, linked), Insights (L9).
-import type {
-  AttributeDefinition,
-  DataLayer,
-  MemberSummary,
-  MemberView,
-  RoutingDecision,
-  RoutingDecisionFilters,
-  RoutingSurface,
+// Then (L7) Skills, Test, and Won means under the Overview, (L8) Smart: the ranking mode, the fairness allowance and the fit links, and (L9) Insights: what the nightly run learned.
+// Leaves out: editing rules (each surface's own Routing card, linked).
+import {
+  isDataError,
+  type AttributeDefinition,
+  type DataLayer,
+  type MemberSummary,
+  type MemberView,
+  type RoutingDecision,
+  type RoutingDecisionFilters,
+  type RoutingSurface,
 } from '@crm/data';
 import { useRoutingDecisions, useRoutingOverview } from '@crm/data/react';
 import {
@@ -43,13 +44,15 @@ import { formHref } from '../forms/paths.ts';
 import { skillStrings } from './skills-strings.ts';
 import { SkillsTab } from './SkillsTab.tsx';
 import { strings } from './tab-strings.ts';
+import { insightsStrings } from './insights-strings.ts';
+import { InsightsTab } from './InsightsTab.tsx';
 import { smartStrings } from './smart-strings.ts';
-import { SmartTab, type FitField } from './SmartTab.tsx';
+import { SmartTab, type FitField, type TeamPage } from './SmartTab.tsx';
 import { TestTab } from './TestTab.tsx';
 import { WonMeansCard } from './WonMeansCard.tsx';
 
 /** Routing's views, in the strip's order. */
-export const ROUTING_VIEWS = ['overview', 'decisions', 'skills', 'test', 'smart'] as const;
+export const ROUTING_VIEWS = ['overview', 'decisions', 'skills', 'test', 'smart', 'insights'] as const;
 /** One of Routing's views. */
 export type RoutingView = (typeof ROUTING_VIEWS)[number];
 
@@ -62,6 +65,8 @@ export interface RoutingSearch {
   readonly tag?: 'yes' | 'no' | 'none';
   readonly period?: 'today' | '7' | '30' | '90';
   readonly decision?: string;
+  /** Insights' window, in weeks (spec 0037, AC-1376); absent is the whole learning window. */
+  readonly weeks?: number;
 }
 
 /** Props for the screen. */
@@ -75,6 +80,8 @@ export interface RoutingScreenProps {
   readonly stage?: AttributeDefinition;
   /** The select and status fields on People, Companies and Deals a fit link may read (spec 0037, AC-1362). */
   readonly fitFields: readonly FitField[];
+  /** The workspace's live team pages, for each page's learning objective on Smart (spec 0037, AC-1354). */
+  readonly teamPages: readonly TeamPage[];
   readonly toasts: Toasts;
   readonly onSearch: (next: Partial<RoutingSearch>) => void;
 }
@@ -104,7 +111,17 @@ function Toolbar({ children }: { readonly children: ReactNode }) {
 }
 
 /** Bookings › Routing. */
-export function RoutingScreen({ data, slug, search, members, stage, fitFields, toasts, onSearch }: RoutingScreenProps) {
+export function RoutingScreen({
+  data,
+  slug,
+  search,
+  members,
+  stage,
+  fitFields,
+  teamPages,
+  toasts,
+  onSearch,
+}: RoutingScreenProps) {
   const overviewHeld = useMemo(() => data.routing.overview(slug), [data, slug]);
   const overview = useRoutingOverview(overviewHeld);
   const surfaces = overview.status === 'ready' ? overview.overview.surfaces : [];
@@ -125,6 +142,7 @@ export function RoutingScreen({ data, slug, search, members, stage, fitFields, t
             { value: 'skills', label: skillStrings.views.skills },
             { value: 'test', label: skillStrings.views.test },
             { value: 'smart', label: smartStrings.view },
+            { value: 'insights', label: insightsStrings.view },
           ]}
         />
       </Toolbar>
@@ -153,8 +171,23 @@ export function RoutingScreen({ data, slug, search, members, stage, fitFields, t
           data={data}
           slug={slug}
           fields={fitFields}
+          pages={teamPages}
           onSkills={() => onSearch({ view: 'skills' })}
+          // The objective lives on the page, so it goes through the page's own write: shown at once, put back on a
+          // refusal, and the same path the page editor uses.
+          onObjective={(pageId, objective) => {
+            data.bookingPages.update(slug, pageId, { routingObjective: objective }).catch((error: unknown) => {
+              toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+            });
+          }}
           toasts={toasts}
+        />
+      ) : search.view === 'insights' ? (
+        <InsightsTab
+          data={data}
+          slug={slug}
+          {...(search.weeks === undefined ? {} : { weeks: search.weeks })}
+          onWeeks={(weeks) => onSearch({ weeks })}
         />
       ) : (
         <Decisions data={data} slug={slug} search={search} surfaces={surfaces} members={members} onSearch={onSearch} />

@@ -5,7 +5,15 @@
 // a job runs the same way wherever it runs.
 import { createFileStore } from '../storage/blob.ts';
 import { connectedCalendar, jobKinds, NO_CALENDAR, type JobRegistry, type QueueRows, type Runner } from '@crm/core';
-import { purgeWorkspace, runDailyCleanup, syncConnection, systemScope } from '@crm/core/system';
+import {
+  purgeWorkspace,
+  queueRoutingLearn,
+  readLocalNow,
+  runDailyCleanup,
+  syncConnection,
+  systemScope,
+  type LearnFanoutReport,
+} from '@crm/core/system';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
 import type { AppEnvironment } from '@crm/contracts';
 import type { Database, QueueConnection } from '@crm/db';
@@ -86,6 +94,11 @@ export interface JobTasks {
   };
   /** The daily cleanup's fan out on an open queue connection (only crm_worker may sweep). */
   readonly daily: (sweep: QueueConnection) => (input: DailyCleanupInput) => Promise<DailyCleanupReport>;
+  /**
+   * The nightly learning run's hourly fan out (spec 0037, AC-1381) on an open queue connection: only crm_worker may
+   * read which workspaces are due.
+   */
+  readonly routingLearn: (sweep: QueueConnection) => () => Promise<LearnFanoutReport>;
   /** The task identifiers these runners take: only their rows count as due. */
   readonly tasks: readonly string[];
 }
@@ -282,6 +295,19 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
         },
         input,
       ),
+    // The learning run's hourly fan out (spec 0037, AC-1381): one `routing.learn` in each workspace whose local
+    // 03:00 hour has come and whose slot minute has passed.
+    routingLearn: (sweep) => () =>
+      queueRoutingLearn({
+        registry,
+        systemScope: (workspaceId) => systemScope(db, workspaceId),
+        hooks: backgroundHooks,
+        sweep: { due: (max) => sweep.routingLearnDue(max) },
+        // Each candidate's own 03:00 hour, read in its own transaction under row level security.
+        localNow: (workspaceId) => readLocalNow(systemScope(db, workspaceId)),
+        log,
+        onStored,
+      }),
     tasks: runnerTasks({ calendar: calendar !== undefined, email: email !== undefined }),
   };
 }

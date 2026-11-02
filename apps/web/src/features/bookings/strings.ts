@@ -355,6 +355,9 @@ export const strings = {
   openTimeOff: 'Open time off',
   // A no show (spec 0043, AC-1613).
   noShow: 'No show',
+  // The list's No show filter (spec 0037, AC-1426).
+  outcomeLabel: 'Outcome',
+  noShowOnly: 'No shows only',
   markNoShow: 'Mark as no show',
   undoNoShow: 'Undo no show',
   markedNoShow: 'Marked as a no show',

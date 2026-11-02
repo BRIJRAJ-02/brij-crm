@@ -46,6 +46,7 @@ import {
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
+import { ROUTING_LEARN_CRONTAB, ROUTING_LEARN_TASK } from './routing-learn.ts';
 import { SCHEDULING_NOTICE_TASK } from './scheduling-notice.ts';
 import {
   CALENDAR_HEALTH_CRONTAB,
@@ -93,6 +94,7 @@ export const RUNNER_TASKS: readonly string[] = [
   SCHEDULING_NOTICE_TASK,
   CALENDAR_HEALTH_TASK,
   CALENDAR_HEALTH_EMAIL_TASK,
+  ROUTING_LEARN_TASK,
   AUTOMATION_TASK,
   AUTOMATION_DUE_TASK,
 ];
@@ -227,6 +229,13 @@ export interface JobRunnersOptions {
    * Only the worker passes it, beside its relay, which queues the rows.
    */
   readonly cutOff?: (payload: unknown, attempt: CutOffTry) => Promise<CutOffResult>;
+  /**
+   * The nightly learning run's hourly fan out (spec 0037, AC-1381): one hour's
+   * due workspaces started (`runRoutingLearnTask`). With it, the light runner
+   * holds the `crm_cron_routing_learn` crontab line; it throws plainly for a
+   * retry.
+   */
+  readonly routingLearn?: () => Promise<unknown>;
   /**
    * Hears every task call start and end (the worker's idle clock starts
    * again, spec 0008's sleep): a slice, or the daily task.
@@ -655,6 +664,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const schedulingNotice = lane === LANES.light ? options.schedulingNotice : undefined;
       const calendarHealth = lane === LANES.light ? options.calendarHealth : undefined;
       const automation = lane === LANES.light ? options.automation : undefined;
+      const routingLearn = lane === LANES.light ? options.routingLearn : undefined;
       const cutOff = lane === LANES.light ? options.cutOff : undefined;
       runners.push(
         watch(
@@ -744,6 +754,17 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                       options.onActivity,
                     ),
                   }),
+              ...(routingLearn === undefined
+                ? {}
+                : {
+                    [ROUTING_LEARN_TASK]: counted(
+                      async () => {
+                        await routingLearn();
+                      },
+                      inFlight,
+                      options.onActivity,
+                    ),
+                  }),
               ...(cutOff === undefined
                 ? {}
                 : { [CUTOFF_TASK]: counted(cutOffTask(options, cutOff), inFlight, options.onActivity) }),
@@ -753,7 +774,8 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
             ...(daily === undefined &&
             notificationEmail === undefined &&
             calendarHealth === undefined &&
-            automation === undefined
+            automation === undefined &&
+            routingLearn === undefined
               ? {}
               : {
                   crontab: [
@@ -761,6 +783,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                     ...(notificationEmail === undefined ? [] : [DIGEST_CRONTAB]),
                     ...(calendarHealth === undefined ? [] : [CALENDAR_HEALTH_CRONTAB]),
                     ...(automation === undefined ? [] : [AUTOMATION_DUE_CRONTAB]),
+                    ...(routingLearn === undefined ? [] : [ROUTING_LEARN_CRONTAB]),
                   ].join('\n'),
                 }),
             // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before

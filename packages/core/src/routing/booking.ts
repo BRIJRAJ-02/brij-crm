@@ -4,8 +4,9 @@
 // narrow the page's rotations to some of their members. Narrowing only ever
 // chooses among hosts; when none of them is free the whole rotation picks, so
 // a rule never refuses a booking.
+import { randomUUID } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
-import { PAGE_ROUTES } from '@crm/contracts';
+import { isHoldout, objectiveOf, PAGE_ROUTES, type RoutingObjective } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { PageRecord } from '../booking/slots.ts';
 import { handoffFacts } from '../forms/public.ts';
@@ -15,7 +16,9 @@ import { recordFacts, type RecordFactObjects } from './facts.ts';
 import { submissionDecision } from './forms.ts';
 import { routeHostIds } from './hosts.ts';
 import { readFit, NO_FIT, type Fit, type RankingFact } from './fit.ts';
+import { readSegmentKey } from './segment.ts';
 import { readSmartSettings, type SmartSettings } from './settings.ts';
+import { NO_LIFT, readPageLift, type PageLift } from './stats.ts';
 
 const { routingDecisions } = schema;
 
@@ -73,6 +76,17 @@ export interface BookingSmart {
   readonly settings: SmartSettings;
   readonly fit: Fit;
   readonly facts: readonly RankingFact[];
+  /**
+   * The cell this booking's learning counts in (spec 0037, AC-1370): `*` with
+   * no segment attributes, `?` when the lead was missing a value.
+   */
+  readonly segmentKey: string;
+  /** This decision was drawn into the holdout, so every seat picks plain fair (AC-1389). */
+  readonly holdout: boolean;
+  /** Each rotation's learned lift at the live model, by rotation id (AC-1369); empty while every cell is cold. */
+  readonly lift: PageLift;
+  /** The page's learning objective, which decides which cells were read (AC-1354). */
+  readonly objective: RoutingObjective;
 }
 
 /** What routing chose for one team booking, before the hosts are picked. */
@@ -83,6 +97,12 @@ export interface BookingRouting {
   readonly handoffDecisionId?: string;
   /** The page's own decision, recorded with the booking, when the page has rules and no hand off chose. */
   readonly page?: { readonly ruleId?: string; readonly qualified?: boolean; readonly skipped: readonly string[] };
+  /**
+   * The id the page's own decision row will take, minted here so the holdout
+   * draw can hash it before the ranking runs (AC-1389) and a replay of the
+   * same booking draws the same way.
+   */
+  readonly pageDecisionId?: string;
   /** The smart ranking's inputs (AC-1361); absent when nobody could be ranked. */
   readonly smart?: BookingSmart;
 }
@@ -105,15 +125,25 @@ export async function routeBooking(
     readonly answers?: Readonly<Record<string, unknown>>;
     /** Everyone who could take a seat at this slot, for the smart ranking's fit (spec 0037, AC-1362). */
     readonly memberIds?: readonly string[];
+    /** The page's rotations, for the lift each seat reads (spec 0037, AC-1369). */
+    readonly rotationIds?: readonly string[];
   },
 ): Promise<BookingRouting> {
-  const smart = await readBookingSmart(tx, input);
+  // Minted before anything is read, so the holdout draw can hash the id of the very row that will carry the
+  // snapshot (AC-1389): the hand off's row when its hosts win, else this page's own row.
+  const pageDecisionId = randomUUID();
   const handoff =
     input.submissionId === undefined ? undefined : await handoffHosts(tx, input.submissionId, input.page.id);
-  if (handoff?.hosts !== undefined) {
+  const handoffWins = handoff?.hosts !== undefined;
+  const smart = await readBookingSmart(tx, {
+    ...input,
+    decisionId: handoffWins ? handoff.decisionId : pageDecisionId,
+  });
+  if (handoffWins) {
     return { hosts: handoff.hosts, handoffDecisionId: handoff.decisionId, ...(smart === undefined ? {} : { smart }) };
   }
   const handed = {
+    pageDecisionId,
     ...(handoff === undefined ? {} : { handoffDecisionId: handoff.decisionId }),
     ...(smart === undefined ? {} : { smart }),
   };
@@ -144,12 +174,13 @@ export async function routeBooking(
 }
 
 /**
- * The smart ranking's inputs for one booking (AC-1361 to AC-1363), read
- * before any lock: nothing at all for a workspace with no fit links and mode
- * `off`, so the plain path costs one small read. A question the page files
- * onto a fit link's field counts as the lead's answer (AC-1362); a handing
- * form's answer was already filed onto that field at submit, so the record
- * read picks it up.
+ * The smart ranking's inputs for one booking (AC-1361 to AC-1363, AC-1369,
+ * AC-1370, AC-1389), read before any lock. A question the page files onto a
+ * fit link's field counts as the lead's answer (AC-1362); a handing form's
+ * answer was already filed onto that field at submit, so the record read
+ * picks it up. Mode `off` reads the segment and stops, so a workspace that
+ * turns Learn on later already has cells; a holdout skips the lift read, and
+ * so does a workspace whose model is still 0.
  */
 async function readBookingSmart(
   tx: WorkspaceTx,
@@ -159,28 +190,61 @@ async function readBookingSmart(
     readonly email: string;
     readonly answers?: Readonly<Record<string, unknown>>;
     readonly memberIds?: readonly string[];
+    readonly rotationIds?: readonly string[];
+    /** The decision whose id the holdout draw hashes (AC-1389). */
+    readonly decisionId: string;
   },
 ): Promise<BookingSmart | undefined> {
   const memberIds = input.memberIds ?? [];
   if (memberIds.length < 2) return undefined;
   const settings = await readSmartSettings(tx);
-  if (settings.mode === 'off' || settings.fit.length === 0) {
-    return { settings, fit: NO_FIT, facts: [] };
-  }
+  const objective = objectiveOf(input.page.routingObjective);
+  // Drawn once, before anything else is read, so the draw can never depend on who happened to be free (AC-1389),
+  // and only in Learn: a holdout exists to keep **learning** honest, and Fit makes no learned claim to check, so
+  // drawing there would cost a tenth of the fit preference for a comparison nothing reads. Noted for /architect:
+  // AC-1389 words the holdout as a share of every ranked decision.
+  const holdout = settings.mode === 'learn' && isHoldout(input.decisionId, settings.holdoutPercent);
   const filedOn = new Map(
     input.page.questions.flatMap((question) =>
       question.filedOn === undefined ? [] : [[question.key, question.filedOn.attributeId] as const],
     ),
   );
-  const fit = await readFit(tx, {
-    links: settings.fit,
+  const answers = input.answers ?? {};
+  // The segment is stamped on every ranked decision, whatever the mode (AC-1370): a workspace that turns Learn on
+  // later then already has cells to warm, rather than starting from nothing.
+  const segmentKey = await readSegmentKey(tx, {
+    attributeIds: settings.segmentAttributeIds,
     objects: input.objects,
     email: input.email,
-    answers: input.answers ?? {},
+    answers,
     filedOn,
-    memberIds,
   });
-  return { settings, fit, facts: fit.facts };
+  if (settings.mode === 'off') {
+    return { settings, fit: NO_FIT, facts: [], segmentKey, holdout, lift: NO_LIFT, objective };
+  }
+  const fit =
+    settings.fit.length === 0
+      ? NO_FIT
+      : await readFit(tx, {
+          links: settings.fit,
+          objects: input.objects,
+          email: input.email,
+          answers,
+          filedOn,
+          memberIds,
+        });
+  // The lift only matters in Learn, and only when a model has been trained; a holdout picks plain fair anyway.
+  const lift =
+    settings.mode !== 'learn' || holdout
+      ? NO_LIFT
+      : await readPageLift(tx, {
+          pageId: input.page.id,
+          rotationIds: input.rotationIds ?? [],
+          segmentKey,
+          objective,
+          modelVersion: settings.modelVersion,
+        });
+  return { settings, fit, facts: fit.facts, segmentKey, holdout, lift, objective };
 }
 
 /**
@@ -202,6 +266,10 @@ export async function recordBookingRouting(
   },
 ): Promise<void> {
   const { routing } = input;
+  // The holdout draw and the cell (AC-1389, AC-1370), kept only on the row that carries the snapshot: the nightly
+  // run reads them through the partial index, so a row with no snapshot was never ranked and never counts.
+  const drawn = routing.smart === undefined ? null : routing.smart.holdout;
+  const segmentKey = routing.smart?.segmentKey ?? null;
   // The facts the ranking read (AC-1362): option ids only, each marked where it came from, never free text.
   const facts = (routing.smart?.facts ?? []).map((fact) => ({ ...fact }));
   const snapshot = input.snapshot ?? null;
@@ -213,7 +281,7 @@ export async function recordBookingRouting(
         // A hand off's hosts win over the page's rules, so the page writes no decision of its own: the seat that
         // was ranked is explained from the form's row instead, which would otherwise have nothing to explain.
         ...(routing.page === undefined && facts.length > 0 ? { facts } : {}),
-        ...(routing.page === undefined && snapshot !== null ? { snapshot } : {}),
+        ...(routing.page === undefined && snapshot !== null ? { snapshot, holdout: drawn, segmentKey } : {}),
       })
       .where(and(eq(routingDecisions.id, routing.handoffDecisionId), isNull(routingDecisions.bookingId)));
   }
@@ -222,6 +290,8 @@ export async function recordBookingRouting(
     .insert(routingDecisions)
     .values({
       workspaceId: input.workspaceId,
+      // The id the holdout draw hashed (AC-1389): a replay of this booking hashes the same one.
+      ...(routing.pageDecisionId === undefined ? {} : { id: routing.pageDecisionId }),
       surfaceKind: 'booking_page',
       surfaceId: input.pageId,
       ruleId: routing.page.ruleId ?? null,
@@ -231,6 +301,7 @@ export async function recordBookingRouting(
       bookingId: input.bookingId,
       facts: facts.length === 0 ? null : facts,
       snapshot,
+      ...(snapshot === null ? {} : { holdout: drawn, segmentKey }),
     })
     .onConflictDoNothing();
 }
