@@ -605,7 +605,7 @@ function KeptFoldSidebar() {
  */
 export const KeptFold: Story = {
   render: () => <KeptFoldSidebar />,
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas, canvasElement, userEvent }) => {
     const label = canvas.getByRole('button', { name: 'Scheduling' });
     await expect(label).toHaveAttribute('aria-expanded', 'false');
     // Folded, its items are out of reach.
@@ -616,10 +616,11 @@ export const KeptFold: Story = {
     await expect(canvas.getByRole('link', { name: 'Bookings' })).toBeInTheDocument();
     await userEvent.click(label);
     await expect(label).toHaveAttribute('aria-expanded', 'false');
-    // The click leaves the pointer on the label, so the screenshot can catch it hovered: the shot is taken once the
-    // page settles, which is not always before the hover paints. Take the pointer away and the render is the resting
-    // one the baseline holds.
-    await userEvent.unhover(label);
+    // The click leaves the pointer on the label, and `:hover` follows where the pointer actually is, so the
+    // screenshot catches the label in its hover colour. `unhover` alone did not clear it in the `visual` project
+    // (run 41468762184), so the pointer is moved onto the empty stage beside the sidebar instead, which is a place
+    // with nothing to hover. The resting label is what the baseline holds.
+    await userEvent.hover(canvasElement);
   },
 };
 
