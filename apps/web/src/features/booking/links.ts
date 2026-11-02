@@ -21,7 +21,7 @@ export const pageTabOf = (value: unknown): PageTab =>
 export const pageEditorHref = (slug: string, pageId: string, tab?: PageTab) =>
   `/w/${slug}/captures/links/${pageId}${tab === undefined || tab === 'page' ? '' : `?tab=${tab}`}`;
 
-/** The Availability tab's query: whose schedules (`member`, spec 0035 AC-971) and which one (`schedule`); none for the reader's own default. */
+/** Hours › Mine's query: whose schedules (`member`, spec 0035 AC-971) and which one (`schedule`); none for the reader's own default. */
 const availabilityQuery = (member: string | undefined, schedule?: string) => {
   const query = new URLSearchParams();
   if (schedule !== undefined && schedule !== 'default') query.set('schedule', schedule);
@@ -30,9 +30,13 @@ const availabilityQuery = (member: string | undefined, schedule?: string) => {
   return text === '' ? '' : `?${text}`;
 };
 
-/** Bookings › Availability: the member's default schedule in its editor (spec 0035), or with `member` a colleague's. */
+/** Bookings › Hours › Mine: the member's own schedules (spec 0035), or with `member` a colleague's. */
 export const availabilityHref = (slug: string, member?: string) =>
-  `/w/${slug}/bookings/availability${availabilityQuery(member)}`;
+  `/w/${slug}/bookings/hours${availabilityQuery(member)}`;
+
+/** Bookings › Hours › Team: the team's bookable week (spec 0037, job J6), optionally at one week. */
+export const teamHoursHref = (slug: string, week?: string) =>
+  `/w/${slug}/bookings/hours?v=team${week === undefined ? '' : `&week=${week}`}`;
 
 // Calendars and Round robin came up out of Settings into Bookings (25 October 2026). Their addresses sit here
 // beside Availability's rather than in `bookings/tabs.ts`, because the command menu and the screens that link to
@@ -42,18 +46,24 @@ export const availabilityHref = (slug: string, member?: string) =>
 /** Bookings › Calendars: a member's own calendar connections (specs 0024 and 0026). */
 export const calendarsHref = (slug: string) => `/w/${slug}/bookings/calendars`;
 
+/** Bookings › Meetings: the week, the day, the Team day or the list, as the member left it. */
+export const meetingsHref = (slug: string) => `/w/${slug}/bookings/meetings`;
+
 /** Bookings' own tab (its week or list, as the member left it). */
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
 
-/** Bookings › Round robin: the groups a booking is shared out between (spec 0029). */
-export const roundRobinHref = (slug: string) => `/w/${slug}/bookings/round-robin`;
+/** Bookings › Hosts › Groups: the round robin groups a booking is shared out between (spec 0029). */
+export const roundRobinHref = (slug: string) => `/w/${slug}/bookings/hosts`;
+
+/** Bookings › Hosts › Rules: the routing rules (spec 0037, AC-1383), for holders of `routing.manage`. */
+export const routingHref = (slug: string) => `/w/${slug}/bookings/hosts?v=rules`;
 
 /**
  * One schedule open in the Availability tab (spec 0035, the Calendly way: the tab is the editor); `default` opens
  * whichever schedule is the default, the virtual one included.
  */
 export const scheduleHref = (slug: string, scheduleId: string, member?: string) =>
-  `/w/${slug}/bookings/availability${availabilityQuery(member, scheduleId)}`;
+  `/w/${slug}/bookings/hours${availabilityQuery(member, scheduleId)}`;
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -72,11 +82,37 @@ export const rosterIsShown = (access: {
   readonly scheduling?: { readonly seesOthers: boolean } | undefined;
 }): boolean => access.permissions.includes('booking.admin') || access.scheduling?.seesOthers === true;
 
-/** The Roster tab's search (spec 0037, the Team week): `?week=` (a Monday) and `?q=` (a name). */
+/** The Team view's own search (spec 0037, the Team week): `?week=` (a Monday) and `?q=` (a name). */
 export function rosterSearch(search: Record<string, unknown>): { readonly week?: string; readonly q?: string } {
   return {
     ...(typeof search.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(search.week) ? { week: search.week } : {}),
     ...(typeof search.q === 'string' && search.q.trim() !== '' ? { q: search.q.slice(0, 100) } : {}),
+  };
+}
+
+/** What Bookings › Hours' address holds. */
+export interface HoursSearch {
+  /** Which view: `team` is the team's week, absent is the member's own hours. */
+  readonly v?: 'team';
+  /** Mine: whose schedules (spec 0035, AC-971), and which one. */
+  readonly member?: string;
+  readonly schedule?: string;
+  /** Team: the week on show (a Monday), and the name searched for. */
+  readonly week?: string;
+  readonly q?: string;
+}
+
+/**
+ * Bookings › Hours' search (2 November 2026): `?v=team` picks the team's week and brings `week` and `q` with it;
+ * anything else is Mine, with `member` and `schedule`. The old tabs' addresses redirect into this shape.
+ */
+export function hoursSearch(search: Record<string, unknown>): HoursSearch {
+  if (search.v === 'team') return { v: 'team', ...rosterSearch(search) };
+  return {
+    ...memberSearch(search),
+    ...(typeof search.schedule === 'string' && UUID.test(search.schedule)
+      ? { schedule: search.schedule.toLowerCase() }
+      : {}),
   };
 }
 

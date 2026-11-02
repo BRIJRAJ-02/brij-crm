@@ -102,7 +102,7 @@ export function TodaySection({ context }: HomeSectionProps) {
     const item = agenda.find((each) => each.id === id);
     const day =
       item === undefined ? today : new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date(item.startsAt));
-    void navigate({ to: '/w/$slug/bookings/calendar', params: { slug }, search: { d: day } });
+    void navigate({ to: '/w/$slug/bookings/meetings', params: { slug }, search: { d: day } });
   };
   return frame(<BookingList label={strings.today} placement="card" groups={groups} onOpen={openDay} />, {
     ...(todays.length === 0 ? { description: strings.noMeetings } : {}),

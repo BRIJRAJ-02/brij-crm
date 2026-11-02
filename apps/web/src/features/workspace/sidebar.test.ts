@@ -50,7 +50,7 @@ describe('the sidebar’s routes (AC-944)', () => {
     expect(Object.keys(PAGE_LINKS)).toEqual(['linkPage', 'inbox', 'tasks', 'notes', 'bookings', 'captures']);
     expect(PAGE_LINKS.linkPage?.href('acme')).toBe('/w/acme/link-page');
     expect(PAGE_LINKS.inbox?.href('acme')).toBe('/w/acme/inbox');
-    expect(PAGE_LINKS.bookings?.href('acme')).toBe('/w/acme/bookings/calendar');
+    expect(PAGE_LINKS.bookings?.href('acme')).toBe('/w/acme/bookings/meetings');
     expect(PAGE_LINKS.captures?.href('acme')).toBe('/w/acme/captures/links');
   });
 

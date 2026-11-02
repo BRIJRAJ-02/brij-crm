@@ -5,16 +5,26 @@ export const strings = {
   pageMadeWhere: (title: string) => `Made “${title}”, in Captures › Links.`,
   /** The page's tab strip, as Captures has: its name, read by screen readers, and each tab. */
   pageTabsLabel: 'Bookings',
+  /**
+   * Four areas, one job each (2 November 2026). The words no longer collide: Calendar beside Calendars became
+   * Meetings beside Calendars, Availability beside Roster became one Hours, and Round robin beside Routing became
+   * one Hosts. Each old word stays on its own page as its heading; only the navigation reads plainer.
+   */
   pageTabs: {
-    calendar: 'Calendar',
-    list: 'List',
-    availability: 'Availability',
-    roster: 'Roster',
-    // "Round robin" is what the feature is called everywhere else in the product, so the tab says it too.
-    'round-robin': 'Round robin',
-    routing: 'Routing',
+    meetings: 'Meetings',
+    hours: 'Hours',
+    hosts: 'Hosts',
     calendars: 'Calendars',
   },
+  /** Meetings' views, on its tools' row. "Team day" is said in full, so it never reads as Hours' Team. */
+  meetingsViewLabel: 'How to show the meetings',
+  meetingsViews: { day: 'Day', week: 'Week', team: 'Team day', list: 'List' },
+  /** Hours' views: the member's own hours, or the team's week. */
+  hoursViewLabel: 'Whose hours',
+  hoursViews: { mine: 'Mine', team: 'Team' },
+  /** Hosts' views: the round robin groups, or the routing rules. */
+  hostsViewLabel: 'Which hosts settings',
+  hostsViews: { groups: 'Groups', rules: 'Rules' },
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' },
   listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Cancelled meetings' },

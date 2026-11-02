@@ -1,48 +1,38 @@
 // Brief
-// Purpose: the Calendar · List · Availability · Roster · Round robin · Calendars bar under Bookings' TopBar, in the row People's ViewBar takes, one tab per child route, with that tab's tools at its end, as Captures has.
-// Main task: switch between the week calendar, the list, the member's own hours, the team's week and the rest, each with its own address.
-// Leaves out: what each tab shows (its child route renders that into the chosen panel, and portals its tools into the strip's end).
+// Purpose: the Meetings · Hours · Hosts · Calendars bar under Bookings' TopBar, in the row People's ViewBar takes, one tab per child route, with that tab's tools at its end, as Captures has.
+// Main task: switch between the four jobs Bookings holds: what is booked, when we are free, who takes the booking, and the calendars it reads.
+// Leaves out: which view of a tab shows (that is the tab's own switch, on its tools' row, so the strip holds tabs and nothing else).
 import { TabPanel, Tabs } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 import { BOOKINGS_TABS, bookingsTabHref, isBookingsPageTab, type BookingsPageTab } from './tabs.ts';
-import { HostsSwitch } from './HostsSwitch.tsx';
-import { BookingsToolbarSlot, type HostsChoice } from './toolbarSlot.ts';
+import { BookingsToolbarSlot } from './toolbarSlot.ts';
 
 /** Props for BookingsTabs. */
 export interface BookingsTabsProps {
   readonly slug: string;
   /** The tab the address names. */
   readonly tab: BookingsPageTab;
-  /** The tabs this member has, in order (the Roster only for someone who sees a colleague's scheduling, Routing only for a holder of `routing.manage`). */
+  /** The tabs this member has, in order; every member has all four, since each tab's own views carry the gates. */
   readonly tabs?: readonly BookingsPageTab[];
   /** The child route's page (an `Outlet`), drawn in the chosen tab's panel. */
   readonly children: ReactNode;
-  /**
-   * Mine · Everyone at the strip's very end, after the tab's tools, for an admin on Calendar and List: drawn by the
-   * layout, so it stands still as those tabs swap their tools in beside it.
-   */
-  readonly hosts?: HostsChoice | undefined;
 }
 
 /**
- * Calendar · List · Availability · Roster · Round robin · Calendars. Choosing a tab moves to its address; the panel holds whatever that address
- * renders, and the strip's end holds that tab's tools.
+ * Meetings · Hours · Hosts · Calendars. Choosing a tab moves to its address; the panel holds whatever that address
+ * renders, and the strip's end holds that tab's tools. Four tabs, so nothing scrolls off a phone's strip, and no
+ * view switch lives up here: each tab's views sit on its own tools' row, one control row per screen.
  */
-export function BookingsTabs({ slug, tab, tabs = BOOKINGS_TABS, children, hosts }: BookingsTabsProps) {
+export function BookingsTabs({ slug, tab, tabs = BOOKINGS_TABS, children }: BookingsTabsProps) {
   const navigate = useNavigate();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
     <BookingsToolbarSlot.Provider value={slot}>
       <Tabs
         variant="bar"
-        end={
-          <>
-            <div ref={setSlot} />
-            {hosts !== undefined && <HostsSwitch value={hosts.value} onChange={hosts.onChange} />}
-          </>
-        }
+        end={<div ref={setSlot} />}
         label={strings.pageTabsLabel}
         selectedKey={tab}
         onSelectionChange={(next) => {

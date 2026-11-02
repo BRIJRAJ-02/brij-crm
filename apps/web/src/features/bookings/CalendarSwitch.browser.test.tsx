@@ -46,8 +46,8 @@ afterEach(() => {
 const render = async (calendars: readonly SwitchCalendar[] | undefined) => {
   shown = await renderInApp(() => <Harness calendars={calendars} />, {
     data: {},
-    pattern: '/w/$slug/bookings/calendar',
-    at: '/w/acme/bookings/calendar',
+    pattern: '/w/$slug/bookings/meetings',
+    at: '/w/acme/bookings/meetings',
   });
 };
 

@@ -40,7 +40,7 @@ export const homeHref = (slug: string) => `/w/${slug}/home`;
 /** The Captures page's address: its first tab, Booking pages, named outright so the sidebar's link preloads that page itself. */
 export const capturesHref = (slug: string) => `/w/${slug}/captures/links`;
 
-export const bookingsHref = (slug: string) => `/w/${slug}/bookings/calendar`;
+export const bookingsHref = (slug: string) => `/w/${slug}/bookings/meetings`;
 
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;

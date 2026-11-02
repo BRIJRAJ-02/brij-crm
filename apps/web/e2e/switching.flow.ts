@@ -27,6 +27,8 @@ interface Step {
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
 const tab = (name: string) => (page: Page) => page.getByRole('tab', { name, exact: true });
+/** A segment of a tab's view switch (a SegmentedControl is a radio group), by its label. */
+const segment = (name: string) => (page: Page) => page.getByRole('radio', { name, exact: true });
 /** A Captures card, by its title: the title is the link to its editor. */
 const card = (name: string) => (page: Page) => page.getByRole('link', { name, exact: true }).first();
 
@@ -68,18 +70,18 @@ const STEPS: readonly Step[] = [
   { name: 'sidebar to Links', section: 'captures', isReturn: false, target: sidebar('Captures'), ...LINKS },
   { name: 'tab to Forms', section: 'captures', isReturn: false, target: tab('Forms'), ...FORMS },
   { name: 'card to a form', isReturn: false, target: card('Untitled form'), ...FORM_EDITOR },
-  { name: 'sidebar to Calendar', section: 'bookings', isReturn: false, target: sidebar('Bookings'), ...CALENDAR },
-  { name: 'tab to List', section: 'bookings', isReturn: false, target: tab('List'), ...LIST },
-  { name: 'tab to Availability', section: 'bookings', isReturn: false, target: tab('Availability'), ...AVAILABILITY },
+  { name: 'sidebar to Meetings', section: 'bookings', isReturn: false, target: sidebar('Bookings'), ...CALENDAR },
+  { name: 'view to List', section: 'bookings', isReturn: false, target: segment('List'), ...LIST },
+  { name: 'tab to Hours', section: 'bookings', isReturn: false, target: tab('Hours'), ...AVAILABILITY },
   { name: 'sidebar back to Links', section: 'captures', isReturn: true, target: sidebar('Captures'), ...LINKS },
   { name: 'card to a booking page', isReturn: false, target: card('Intro call'), ...PAGE_EDITOR },
-  { name: 'sidebar back to Calendar', section: 'bookings', isReturn: true, target: sidebar('Bookings'), ...CALENDAR },
-  { name: 'tab back to List', section: 'bookings', isReturn: true, target: tab('List'), ...LIST },
+  { name: 'sidebar back to Meetings', section: 'bookings', isReturn: true, target: sidebar('Bookings'), ...CALENDAR },
+  { name: 'view back to List', section: 'bookings', isReturn: true, target: segment('List'), ...LIST },
   {
-    name: 'tab back to Availability',
+    name: 'tab back to Hours',
     section: 'bookings',
     isReturn: true,
-    target: tab('Availability'),
+    target: tab('Hours'),
     ...AVAILABILITY,
   },
   { name: 'sidebar back to Captures', section: 'captures', isReturn: true, target: sidebar('Captures'), ...LINKS },

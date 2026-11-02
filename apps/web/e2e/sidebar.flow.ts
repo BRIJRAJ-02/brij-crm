@@ -134,10 +134,10 @@ test.describe('sidebar', () => {
       'aria-current',
       'page',
     );
-    // Availability is a tab of Bookings, with Bookings current.
+    // Hours is a tab of Bookings, with Bookings current.
     await nav(page).getByRole('link', { name: 'Bookings', exact: true }).click();
-    await page.getByRole('tab', { name: 'Availability' }).click();
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/availability$`));
+    await page.getByRole('tab', { name: 'Hours' }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/hours$`));
     await expect(nav(page).getByRole('link', { name: 'Bookings', exact: true })).toHaveAttribute(
       'aria-current',
       'page',
@@ -151,8 +151,8 @@ test.describe('sidebar', () => {
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/captures/links$`));
     await expect(page.getByRole('heading', { level: 1, name: 'Captures' })).toBeVisible();
     await page.goto(`/w/${slug}/availability`);
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/availability$`));
-    await expect(page.getByRole('tab', { name: 'Availability' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/hours$`));
+    await expect(page.getByRole('tab', { name: 'Hours' })).toHaveAttribute('aria-selected', 'true');
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/captures/links$`));
     await other.close();

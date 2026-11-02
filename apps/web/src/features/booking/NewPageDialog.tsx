@@ -1,7 +1,7 @@
 // Brief
 // Purpose: New booking page (spec 0025 experience, AC-678; spec 0058, AC-5 and AC-17): a centred dialog, "Add a booking page", then its Ready panel.
 // Main task: a title and one length, then Create page; the Ready panel shows the link (Copy, Share, QR, a small preview), and Edit page opens the editor.
-// An admin also chooses who it books: themselves, one host from a rotation (spec 0029, AC-732), or everyone on the roster, which makes a workspace link (30 Oct 2026).
+// An admin also chooses what kind of link it is: Me, a Round robin group (spec 0029, AC-732), Anyone free (the workspace link, 30 Oct 2026) or a Team link (spec 0037, AC-1353). Each kind says in one line what it does, and the dialog keeps its one title whichever is chosen (2 Nov 2026).
 // Leaves out: the schedule (the page follows the default; another is picked on the editor's Hours tab, as Calendly and Cal.com do), everything else a page has (its editor), and its web address part (the server makes one from the title).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
@@ -9,7 +9,6 @@ import {
   Button,
   Callout,
   Field,
-  InfoTip,
   focusLater,
   Link,
   Modal,
@@ -253,7 +252,9 @@ export function NewPageDialog({
   }
   return (
     <Modal
-      title={isLinkOnly ? strings.addLinkOnlyPage : isTeamLink ? rotationStrings.addTeamLink : strings.addPage}
+      // One title, whatever kind is chosen: a title that swapped to "Add a team link" answered the question the
+      // body was still asking (2 Nov 2026).
+      title={isLinkOnly ? strings.addLinkOnlyPage : strings.addPage}
       isOpen={isOpen}
       // While the server answers, the dialog stays: a refusal has to land on its field.
       onOpenChange={(open) => {
@@ -292,23 +293,28 @@ export function NewPageDialog({
       {(canBookTeams || canTeamLink) && (
         <RadioGroup
           label={rotationStrings.whoBooks}
-          // Three short choices in a row; what each means waits in the tip, not in three lines under them.
-          info={
-            <InfoTip label={rotationStrings.whoBooks}>
-              {canTeamLink ? rotationStrings.whoBooksInfoTeamLink : rotationStrings.whoBooksInfo}
-            </InfoTip>
-          }
-          orientation="horizontal"
+          // Stacked, each kind with its one line under it: what the kinds are is the whole question, so it is on
+          // the screen rather than behind a tip, and four of them never wrap raggedly on a phone.
           value={who}
           isDisabled={isBusy}
           onChange={(value) => {
             if (value === 'me' || value === 'rotation' || value === 'everyone' || value === 'team-link') setWho(value);
           }}
         >
-          <Radio value="me">{rotationStrings.bookMe}</Radio>
-          {canBookTeams && <Radio value="rotation">{rotationStrings.bookRotation}</Radio>}
+          <Radio value="me" description={rotationStrings.bookMeLine}>
+            {rotationStrings.bookMe}
+          </Radio>
+          {canBookTeams && (
+            <Radio value="rotation" description={rotationStrings.bookRotationLine}>
+              {rotationStrings.bookRotation}
+            </Radio>
+          )}
           {/* A workspace link is on nobody's profile, so Link only means nothing for it. */}
-          {canBookTeams && !isLinkOnly && <Radio value="everyone">{rotationStrings.bookEveryone}</Radio>}
+          {canBookTeams && !isLinkOnly && (
+            <Radio value="everyone" description={rotationStrings.bookEveryoneLine}>
+              {rotationStrings.bookEveryone}
+            </Radio>
+          )}
           {/* A form in front of the team pages: with none live there is nothing to send people to. */}
           {canTeamLink && <TeamLinkRadio data={data} slug={slug} />}
         </RadioGroup>
@@ -392,8 +398,13 @@ function TeamLinkRadio({ data, slug }: { readonly data: DataLayer; readonly slug
   const hasNone =
     pages.status === 'ready' && !pages.items.some((page) => page.kind === 'round_robin' && page.status === 'live');
   return (
-    // In a row of short choices, like the others: only the reason it is off shows under it.
-    <Radio value="team-link" isDisabled={hasNone} {...(hasNone ? { description: rotationStrings.teamLinkNone } : {})}>
+    // Its line says what it does, as the other kinds' do; with no team page to send people to, the line is why
+    // it is off instead.
+    <Radio
+      value="team-link"
+      isDisabled={hasNone}
+      description={hasNone ? rotationStrings.teamLinkNone : rotationStrings.teamLinkLine}
+    >
       {rotationStrings.teamLink}
     </Radio>
   );

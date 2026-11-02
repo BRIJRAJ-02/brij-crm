@@ -38,7 +38,7 @@ export interface BookingsTopBarProps {
  */
 export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  // The week on screen: the Calendar's, else this week.
+  // The week on screen: Meetings', else this week.
   const { timeZone } = useFormatSettings();
   const { week } = bookingsSearchOf(
     parseBookingsSearch(useSearch({ strict: false })),
@@ -46,10 +46,10 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
     useFirstDay(),
     timeZone,
   );
-  // The member's hours, when the Calendar has read them; else nine to five on weekdays.
-  const calendarData = useMatch({ from: '/w/$slug/bookings/calendar', shouldThrow: false })?.loaderData;
+  // The member's hours, when Meetings has read them; else nine to five on weekdays.
+  const calendarData = useMatch({ from: '/w/$slug/bookings/meetings', shouldThrow: false })?.loaderData;
   const availability = calendarData?.availability;
-  // Whom the member Manages, for New meeting's For (spec 0037, AC-1272), as the Calendar read them.
+  // Whom the member Manages, for New meeting's For (spec 0037, AC-1272), as Meetings read them.
   const forPeople = calendarData?.forPeople;
   const pages = useCaptureList(data.bookingPages.view(slug));
   const calendar = useCalendar(data.calendar.view(slug));

@@ -25,6 +25,8 @@ interface Screen {
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
 const tab = (name: string) => (page: Page) => page.getByRole('tab', { name, exact: true });
+/** A segment of a view switch (a SegmentedControl is a radio group), by its label. */
+const segment = (name: string) => (page: Page) => page.getByRole('radio', { name, exact: true });
 /** A Captures card, by its title: the title is the link to its editor. */
 const card = (name: string) => (page: Page) => page.getByRole('link', { name, exact: true }).first();
 const at =
@@ -63,15 +65,14 @@ const ALL_SCREENS: readonly Screen[] = [
     start: ({ slug, recordId }) => `/w/${slug}/objects/people/${recordId}/overview`,
     target: tab('Tasks'),
   },
-  { name: 'bookings calendar', start: at('tasks'), target: sidebar('Bookings') },
-  { name: 'bookings list', start: at('bookings/calendar'), target: tab('List') },
-  { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
-  // Calendars and Round robin came up out of Settings into Bookings (25 October 2026), so they are walked as the
-  // tabs they are; each draws its body inside the frame the tab strip already holds.
-  // The Roster, a tab of its own from 31 October 2026: its week's bar and the grid's skeleton rows.
-  { name: 'bookings roster', start: at('bookings/calendar'), target: tab('Roster') },
-  { name: 'bookings round robin', start: at('bookings/calendar'), target: tab('Round robin') },
-  { name: 'bookings calendars', start: at('bookings/calendar'), target: tab('Calendars') },
+  { name: 'bookings meetings', start: at('tasks'), target: sidebar('Bookings') },
+  // Four tabs since 2 November 2026; what used to be a tab is a view inside one, so the list and the team week
+  // are walked by their view switch rather than by a tab.
+  { name: 'bookings list', start: at('bookings/meetings'), target: segment('List') },
+  { name: 'bookings hours', start: at('bookings/meetings'), target: tab('Hours') },
+  { name: 'bookings team hours', start: at('bookings/hours'), target: segment('Team') },
+  { name: 'bookings hosts', start: at('bookings/meetings'), target: tab('Hosts') },
+  { name: 'bookings calendars', start: at('bookings/meetings'), target: tab('Calendars') },
   { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
   { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },

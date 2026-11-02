@@ -1,0 +1,305 @@
+import {
+  isDataError,
+  type BookingAvailability,
+  type BookingHosts,
+  type BookingPageView,
+  type BookingsCalendarHeld,
+  type CalendarConnectionView,
+  type DataLayer,
+  type MeetingsQuery,
+  type ObjectSummary,
+} from '@crm/data';
+import { LoadingNow, useFormatSettings } from '@crm/ui';
+import { useEffect, useMemo, useRef } from 'react';
+import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { BookingsCalendarScreen, BookingsFailed, BookingsListScreen } from '../features/bookings/BookingsScreen.tsx';
+import { bookingsSearchOf, parseBookingsSearch, rawOf, type BookingsSearch } from '../features/bookings/search.ts';
+import { strings } from '../features/bookings/strings.ts';
+import { hostActions } from '../features/bookings/hostActions.ts';
+import { openHoursOf, workingStartOf } from '../features/bookings/span.ts';
+import { addDays, weekRange } from '../features/bookings/week.ts';
+import { memberZone } from '../features/booking/zone.ts';
+import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
+import { peopleSearchOf } from '../features/bookings/people.ts';
+import { useBookingsHosts } from '../features/bookings/toolbarSlot.ts';
+
+// Bookings › Meetings (spec 0025, AC-646; one tab since 2 November 2026): what is booked, in four views the
+// address holds as `v` — the week (the default), one day, the Team day (spec 0030) and the list. Calendar and
+// List were two tabs of their own until the Bookings strip was cut from seven tabs to four areas; both old
+// addresses redirect here, search and all.
+// The week (`w`, its Monday; `d`, the day picked) with the reader's own
+// calendar events beside the bookings, filtered by `link` (one booking page) and `cal` (the calendars the panel shows). The
+// loader waits for the week's first read through the data layer; the screen holds it, so it is read again whenever
+// the person comes back to the page (bookings have no change event yet). The Bookings layout draws the frame, the
+// TopBar and the tabs. Paging weeks changes only the search, never the loader's deps: the screen stays and holds the
+// next week's read (primed on entry for the weeks either side), so the toolbar never gives way to the pending page.
+export const Route = createFileRoute('/w/$slug/bookings/meetings')({
+  // One chunk for the page, its loading and its failure (the first load carries one import for it, not three).
+  codeSplitGroupings: [['component', 'pendingComponent', 'errorComponent']],
+  validateSearch: parseBookingsSearch,
+  // The list reads something else entirely, so which view the address names is a dep: the others only move the
+  // week, which the screen holds itself.
+  loaderDeps: ({ search }) => ({ isList: search.v === 'list' }),
+  loader: async ({ context, params, location, deps }) => {
+    const { data } = context;
+    if (deps.isList) return loadList(context.data, params.slug, location.search);
+    // The member's week start (read by the workspace frame already); a failed read starts on Monday's rule.
+    const preferences = await data.preferences.load(params.slug).catch(() => undefined);
+    // The member's zone (their Preferences, else the browser's): the week's days, its range and its hours.
+    const zone = memberZone(data, params.slug);
+    const asked = bookingsSearchOf(
+      parseBookingsSearch(location.search),
+      new Date(),
+      firstDayFor(preferences?.weekStart),
+      zone,
+    );
+    const shown = asked.week;
+    // The Team day (spec 0030): its first read with the page, so it lands in place; the days either side behind it.
+    const teamDay = asked.view === 'team' ? heldTeamDay(asked, data, params.slug, zone) : undefined;
+    // Mine, the default whoever reads (an admin's kept Everyone is the screen's to ask for); not on the Team day,
+    // which reads its own day instead of a week nobody sees.
+    const week = teamDay === undefined ? heldWeek(shown, data, params.slug, zone) : undefined;
+    // The weeks either side, read behind, so Previous and Next show at once.
+    if (week !== undefined) {
+      for (const step of [-7, 7])
+        heldWeek(addDays(shown, step), data, params.slug, zone)
+          .ready()
+          .catch(() => undefined);
+    }
+    const calendar = data.calendar.view(params.slug);
+    const [objects, pages, hours, , , , visible] = await Promise.all([
+      data.objects.list(params.slug),
+      // The Link filter's choices; a member without booking pages has none.
+      data.bookingPages.held(params.slug).catch(() => []),
+      // Where a day starts when time is drawn from the keyboard; without it, 9:00.
+      data.bookings.hours(params.slug, zone).catch(() => undefined),
+      week?.ready(),
+      calendar.ready().catch(() => undefined),
+      teamDay?.ready().catch(() => undefined),
+      // Whom the member Manages, for For on Block time and New meeting (spec 0037, AC-1272); none when it fails.
+      data.scheduling
+        .open()
+        .then((scheduling) => scheduling.visible(params.slug))
+        .catch(() => []),
+    ]);
+    const state = calendar.getSnapshot();
+    const connections = state.status === 'ready' ? state.connections.filter((each) => each.status !== 'revoked') : [];
+    // The caller comes first in their own reach: For lists the others they Manage.
+    const forPeople = visible.slice(1).filter((member) => member.canManage);
+    // Everyone the reader may see, for the Team day's People filter (spec 0030, AC-1434).
+    const members = visible.map(({ id, name }) => ({ id, name }));
+    return { objects, pages, connections, availability: hours?.availability, forPeople, members };
+  },
+  pendingComponent: MeetingsPending,
+  errorComponent: MeetingsError,
+  component: MeetingsRoute,
+});
+
+/** The list view's own read: its first page through the data layer, beside the objects and the booking pages. */
+async function loadList(data: DataLayer, slug: string, raw: Record<string, unknown>): Promise<MeetingsLoaded> {
+  // The list reads by tab and link, never by week; the week start and zone only fill the defaults.
+  const search = bookingsSearchOf(parseBookingsSearch(raw), new Date(), 1, memberZone(data, slug));
+  const [objects, pages] = await Promise.all([
+    data.objects.list(slug),
+    data.bookingPages.held(slug).catch(() => []),
+    // Mine, the default whoever reads (an admin's kept Everyone is the screen's to ask for).
+    data.bookings.meetings(slug, listQueryOf(search)).ready(),
+  ]);
+  return { objects, pages, connections: [], availability: undefined, forPeople: [], members: [] };
+}
+
+/** The list's question from the address: the tab, the source and the calendars picked. */
+function listQueryOf(search: BookingsSearch): MeetingsQuery {
+  return {
+    when: search.tab,
+    source: search.source,
+    ...(search.cal === undefined ? {} : { calendarIds: search.cal }),
+  };
+}
+
+/**
+ * The data layer's held read of the week starting on `monday` in `zone`, of `hosts`' bookings: the same one for the
+ * same week, every time.
+ */
+function heldWeek(
+  monday: string,
+  data: DataLayer,
+  slug: string,
+  zone: string,
+  hosts?: BookingHosts,
+): BookingsCalendarHeld {
+  const range = weekRange(monday, zone);
+  return data.bookings.calendar(slug, range.from, range.to, hosts);
+}
+
+/** The Team day for the address's day and filters (spec 0030): the same held read for the same ask, every time. */
+function heldTeamDay(search: BookingsSearch, data: DataLayer, slug: string, zone: string, day = search.day) {
+  return data.bookings.teamDay(slug, {
+    day,
+    timeZone: zone,
+    ...(search.members === undefined ? {} : { memberIds: search.members }),
+    ...(search.withBookings === true ? { withBookings: true as const } : {}),
+    ...(search.order === undefined ? {} : { order: search.order }),
+  });
+}
+
+/** What the loader read beside the week (the list view fills only what it uses). */
+interface MeetingsLoaded {
+  readonly objects: readonly ObjectSummary[];
+  readonly pages: readonly BookingPageView[];
+  readonly connections: readonly CalendarConnectionView[];
+  readonly availability: BookingAvailability | undefined;
+  /** The colleagues the member Manages: For on Block time and New meeting (AC-1272). */
+  readonly forPeople: readonly { readonly id: string; readonly name: string }[];
+  /** Everyone the reader may see: the Team day's People filter. */
+  readonly members: readonly { readonly id: string; readonly name: string }[];
+}
+
+function MeetingsRoute() {
+  return <Meetings {...Route.useLoaderData()} />;
+}
+
+/**
+ * While the page loads (shown only once the loading delay passed, so its skeleton shows at once): the screen
+ * itself, its week loading under its own toolbar, so the page lands exactly where its skeleton stood.
+ */
+function MeetingsPending() {
+  return (
+    <LoadingNow>
+      <Meetings objects={[]} pages={[]} connections={[]} availability={undefined} forPeople={[]} members={[]} />
+    </LoadingNow>
+  );
+}
+
+function Meetings(loaded: MeetingsLoaded) {
+  const { timeZone } = useFormatSettings();
+  const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay(), timeZone);
+  // The list is a view of this tab, not a page of its own: it reads something else, so it is its own screen.
+  return search.view === 'list' ? <MeetingsList {...loaded} /> : <MeetingsCalendar {...loaded} />;
+}
+
+function MeetingsCalendar({ objects, pages, connections, availability, forPeople, members }: MeetingsLoaded) {
+  const { slug } = Route.useParams();
+  // The member's zone, as the workspace frame's FormatScope holds it (their Preferences, else the browser's).
+  const { timeZone } = useFormatSettings();
+  const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay(), timeZone);
+  const navigate = useNavigate();
+  const { data, toasts } = Route.useRouteContext();
+  // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
+  const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
+  // Mine or Everyone: an admin's choice, the layout's (its switch is on the strip); anyone else sees their own.
+  const choice = useBookingsHosts();
+  const hosts = choice?.value ?? 'mine';
+  const week = heldWeek(search.week, data, slug, timeZone, hosts);
+  // The Team day (spec 0030): its held day, and the days either side read behind it so Previous and Next show at once.
+  const isTeam = search.view === 'team';
+  // Only while Team shows: a day nobody opened is never held, so a booking change never reads it again.
+  const teamDay = isTeam ? heldTeamDay(search, data, slug, timeZone) : undefined;
+  useEffect(() => {
+    if (!isTeam) return;
+    for (const step of [-1, 1])
+      heldTeamDay(search, data, slug, timeZone, addDays(search.day, step))
+        .ready()
+        .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the day and its filters are what change the ask.
+  }, [isTeam, data, slug, timeZone, search.day, search.members?.join(','), search.withBookings, search.order]);
+  // The member's zone changed in Preferences while the page is open: the loader primed the weeks either side in the
+  // old one, so prime them again in the new one (each held read is the same one for the same range).
+  // Mine or Everyone changed too: the weeks either side of the new choice.
+  const primed = useRef({ timeZone, hosts });
+  useEffect(() => {
+    if (primed.current.timeZone === timeZone && primed.current.hosts === hosts) return;
+    primed.current = { timeZone, hosts };
+    for (const step of [-7, 7])
+      heldWeek(addDays(search.week, step), data, slug, timeZone, hosts)
+        .ready()
+        .catch(() => undefined);
+  }, [data, slug, timeZone, search.week, hosts]);
+  return (
+    <BookingsCalendarScreen
+      slug={slug}
+      hosts={choice}
+      search={search}
+      week={week}
+      // The reader's upcoming bookings, read only while the week on show is empty, for its "Next booking".
+      upcoming={data.bookings.meetings(slug, { when: 'upcoming', source: 'bookings' })}
+      objects={objects}
+      pages={pages}
+      connections={connections}
+      calendars={data.calendar.calendars(slug)}
+      onDismissNotice={() => void data.calendar.dismissCalendarNotice(slug)}
+      locale={navigator.languages[0] ?? 'en-GB'}
+      onRemoveBlock={(blockId) => data.bookings.blocks.remove(slug, blockId)}
+      onBlock={(draft, preview) => data.bookings.blocks.create(slug, draft, preview)}
+      workingStart={(dayKey) => workingStartOf(availability, dayKey)}
+      openHours={(dayKey) => openHoursOf(availability, dayKey, timeZone)}
+      onBookAsHost={(meeting) => data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] })}
+      peopleSearch={peopleSearchOf(data, slug, objects)}
+      limitsAt={(input) => data.bookings.limitsAt(slug, input)}
+      pageDestination={(pageId) => data.calendar.pageDestination(slug, pageId)}
+      newBookingKey={data.bookings.newKey}
+      forPeople={forPeople}
+      team={{
+        held: teamDay,
+        data,
+        members,
+        onBlock: (draft, preview, team) => data.bookings.blocks.create(slug, draft, preview, team),
+      }}
+      toasts={toasts}
+      actions={actions}
+      onSearch={(next) =>
+        void navigate({
+          to: '/w/$slug/bookings/meetings',
+          params: { slug },
+          replace: true,
+          search: rawOf('calendar', { ...search, ...next }),
+        })
+      }
+    />
+  );
+}
+
+/** Meetings › List: the same four tools' row, the list under it. */
+function MeetingsList({ objects, pages }: MeetingsLoaded) {
+  const { slug } = Route.useParams();
+  const { timeZone } = useFormatSettings();
+  const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay(), timeZone);
+  const navigate = useNavigate();
+  const { data, toasts } = Route.useRouteContext();
+  // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
+  const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
+  // Mine or Everyone: an admin's choice, now on this row beside the view switch rather than up on the tab strip.
+  const choice = useBookingsHosts();
+  return (
+    <BookingsListScreen
+      slug={slug}
+      hosts={choice}
+      search={search}
+      meetings={(query) => data.bookings.meetings(slug, query)}
+      calendars={data.calendar.calendars(slug)}
+      onDismissNotice={() => void data.calendar.dismissCalendarNotice(slug)}
+      objects={objects}
+      pages={pages}
+      locale={navigator.languages[0] ?? 'en-GB'}
+      actions={actions}
+      onSearch={(next) =>
+        void navigate({
+          to: '/w/$slug/bookings/meetings',
+          params: { slug },
+          replace: true,
+          search: rawOf('list', { ...search, ...next }),
+        })
+      }
+    />
+  );
+}
+
+function MeetingsError({ error }: ErrorComponentProps) {
+  const router = useRouter();
+  return (
+    <BookingsFailed
+      message={isDataError(error) ? error.message : strings.failedText}
+      onRetry={() => void router.invalidate()}
+    />
+  );
+}

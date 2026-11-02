@@ -39,6 +39,7 @@ import { useCallback, useMemo, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { linksHref, pageEditorHref } from '../booking/links.ts';
 import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
+import { HostsViewSwitch } from '../bookings/ViewSwitch.tsx';
 import { formHref } from '../forms/paths.ts';
 import { skillStrings } from './skills-strings.ts';
 import { SkillsTab } from './SkillsTab.tsx';
@@ -72,6 +73,11 @@ export interface RoutingScreenProps {
   /** Deals' Stage field, for Won means; undefined when Deals has none. */
   readonly stage?: AttributeDefinition;
   readonly toasts: Toasts;
+  /**
+   * Groups · Rules on the tools' row: routing is Hosts' second view since 2 November 2026, and only a holder of
+   * `routing.manage` is ever here, so the switch comes from the route rather than being drawn unconditionally.
+   */
+  readonly hasGroupsSwitch?: boolean;
   readonly onSearch: (next: Partial<RoutingSearch>) => void;
 }
 
@@ -100,13 +106,24 @@ function Toolbar({ children }: { readonly children: ReactNode }) {
 }
 
 /** Bookings › Routing. */
-export function RoutingScreen({ data, slug, search, members, stage, toasts, onSearch }: RoutingScreenProps) {
+export function RoutingScreen({
+  data,
+  slug,
+  search,
+  members,
+  stage,
+  toasts,
+  hasGroupsSwitch = false,
+  onSearch,
+}: RoutingScreenProps) {
   const overviewHeld = useMemo(() => data.routing.overview(slug), [data, slug]);
   const overview = useRoutingOverview(overviewHeld);
   const surfaces = overview.status === 'ready' ? overview.overview.surfaces : [];
   return (
     <PageColumn>
       <Toolbar>
+        {/* Hosts' own views first, then this one's parts: the outer choice on the left, the inner on its right. */}
+        {hasGroupsSwitch && <HostsViewSwitch slug={slug} view="rules" />}
         <SegmentedControl
           label={strings.views}
           size="compact"

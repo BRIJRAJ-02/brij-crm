@@ -1430,7 +1430,7 @@ export function PageEditor({
                           description={strings.reservedTimeLine}
                           actions={
                             <ButtonLink
-                              href={bookingsTabHref(slug, 'calendar')}
+                              href={bookingsTabHref(slug, 'meetings')}
                               variant="ghost"
                               size="sm"
                               icon="settings"

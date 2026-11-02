@@ -28,7 +28,8 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
+import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
+import { HostsViewSwitch } from '../bookings/ViewSwitch.tsx';
 import { linksHref } from '../captures/tabs.ts';
 import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import { membersSettingsHref } from '../settings/nav.ts';
@@ -56,6 +57,11 @@ export interface RotationsScreenProps {
    * in the frame's own TopBar where Availability puts New schedule, one primary per screen.
    */
   readonly inFrame?: boolean;
+  /**
+   * Groups · Rules on the tools' row: the round robin groups are Hosts' first view since 2 November 2026, and only
+   * a holder of `routing.manage` has rules to switch to, so the switch comes from the route.
+   */
+  readonly hasRulesSwitch?: boolean;
 }
 
 const COLUMNS: readonly TableColumn[] = [
@@ -157,7 +163,14 @@ export function RotationsPending({ inFrame = false }: { readonly inFrame?: boole
 }
 
 /** The screen. */
-export function RotationsScreen({ data, slug, people, canManage, inFrame = false }: RotationsScreenProps) {
+export function RotationsScreen({
+  data,
+  slug,
+  people,
+  canManage,
+  inFrame = false,
+  hasRulesSwitch = false,
+}: RotationsScreenProps) {
   const state = useCaptureList(data.rotations.view(slug));
   const { toasts } = useRouteContext({ from: '__root__' });
   const [editing, setEditing] = useState<RotationView | 'new' | undefined>(undefined);
@@ -189,6 +202,8 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
   ]);
   // Where the frame wants this tab's one primary action, when the frame is Bookings rather than Settings.
   const actionSlot = useBookingsActionSlot();
+  // Groups · Rules on the strip's end, where every Bookings tab draws its tools.
+  const toolbarSlot = useBookingsToolbarSlot();
   const [isInviting, setInviting] = useState(false);
   // Members whose upcoming bookings an admin may hand on, one prompt at a time (every member a save removed).
   const [queue, setQueue] = useState<readonly Handing[]>([]);
@@ -285,6 +300,10 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
       {...(inFrame || action === undefined ? {} : { actions: action })}
     >
       {inFrame && action !== undefined && actionSlot !== null && createPortal(action, actionSlot)}
+      {inFrame &&
+        hasRulesSwitch &&
+        toolbarSlot !== null &&
+        createPortal(<HostsViewSwitch slug={slug} view="groups" />, toolbarSlot)}
       {state.status === 'loading' ? (
         <Card isBusy>
           <Skeleton width="long" />

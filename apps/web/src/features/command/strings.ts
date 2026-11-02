@@ -32,10 +32,12 @@ export const strings = {
   home: 'Home',
   myTasks: 'Tasks',
   bookings: 'Bookings',
-  availability: 'Availability',
+  // The Bookings tabs' own words (2 November 2026), with the old ones kept as search terms so a person who
+  // learned them still finds the page.
+  availability: 'Hours',
   bookingPages: 'Booking pages',
   calendars: 'Calendars',
-  roundRobin: 'Round robin',
+  roundRobin: 'Hosts',
   forms: 'Forms',
   /** The charts page (the reports lane), which has no sidebar item: Home and this menu reach it. */
   reports: 'Reports',
@@ -45,9 +47,9 @@ export const strings = {
   settingsPage: (page: string) => `Settings › ${page}`,
   /** Other words each page answers to (AC-1082). */
   tasksTerms: ['todo', 'to do', 'assigned'],
-  bookingsTerms: ['calendar', 'meetings', 'schedule'],
+  bookingsTerms: ['calendar', 'meetings', 'list', 'schedule'],
   homeTerms: ['dashboard', 'today', 'start'],
-  availabilityTerms: ['hours', 'schedules', 'working hours'],
+  availabilityTerms: ['availability', 'hours', 'schedules', 'working hours', 'roster', 'team hours'],
   bookingPagesTerms: ['links', 'scheduling links', 'captures'],
   formsTerms: ['enquiries', 'submissions', 'captures'],
   reportsTerms: ['charts', 'forecast', 'pipeline', 'analytics', 'graph', 'dashboard'],
@@ -55,7 +57,7 @@ export const strings = {
   settingsTerms: ['preferences', 'options'],
   preferencesTerms: ['theme', 'appearance', 'dark', 'light'],
   calendarsTerms: ['google', 'outlook', 'sync', 'connect'],
-  roundRobinTerms: ['rotation', 'rotations', 'team', 'share out', 'distribution'],
+  roundRobinTerms: ['round robin', 'rotation', 'rotations', 'routing', 'rules', 'groups', 'share out', 'distribution'],
   objectsTerms: ['attributes', 'fields', 'columns', 'schema'],
   jobsTerms: ['background', 'imports', 'exports', 'progress'],
   /** Account › Sign in and devices answers to what people call it elsewhere (it was Security). */

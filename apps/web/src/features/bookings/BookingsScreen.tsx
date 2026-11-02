@@ -80,6 +80,7 @@ import {
 } from './CalendarsAside.tsx';
 import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
 import { DrawCard, type ForPerson } from './DrawCard.tsx';
+import { HostsSwitch } from './HostsSwitch.tsx';
 import { TeamDayView, type TeamDayViewProps } from './TeamDayView.tsx';
 import { NewMeetingDialog, type NewMeeting, type NewMeetingDialogProps } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
@@ -1038,7 +1039,7 @@ const NO_BOOKINGS: readonly BookingListItem[] = [];
 /** Props for the calendar: its held week, the address, and what Filter offers. */
 export interface BookingsCalendarScreenProps {
   readonly slug: string;
-  /** Mine or Everyone, for a holder of `booking.admin` only (the switch itself is on the strip, the layout's). */
+  /** Mine or Everyone, for a holder of `booking.admin` only; its switch sits on this view's own tools' row. */
   readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
   readonly week: BookingsCalendarHeld;
@@ -1298,10 +1299,17 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const jumpRef = useRef<HTMLButtonElement>(null);
   // Day or Week (D and W), in the address (`v=day`), so a reload or a shared link keeps it: the day view is the
   // picked day across the width.
-  const view = search.view === 'team' && props.team === undefined ? 'day' : (search.view ?? 'week');
+  // The list is its own screen, so this one never draws it; `list` in the address only reaches here for the moment
+  // between a press and the swap, and reads as the week.
+  const view =
+    search.view === 'list'
+      ? 'week'
+      : search.view === 'team' && props.team === undefined
+        ? 'day'
+        : (search.view ?? 'week');
   // Where the Team day's issue counts sit in the bar (AC-1436), drawn by the day itself.
   const [issuesSlot, setIssuesSlot] = useState<HTMLElement | null>(null);
-  const setView = (next: 'week' | 'day' | 'team') => {
+  const setView = (next: 'week' | 'day' | 'team' | 'list') => {
     onSearch({ view: next });
   };
   const shownDay = days.includes(search.day) ? search.day : (days[0] ?? search.week);
@@ -1456,9 +1464,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
         view === 'team' ? (
           // The Team day's issue counts portal here; the calendar switch is the reader's own week's.
           <span ref={setIssuesSlot} />
-        ) : hasNoCalendar ? (
-          <CalendarsToggle panel={panel} slug={slug} hasNoCalendar />
-        ) : calendarList.status === 'error' ? (
+        ) : hasNoCalendar ? // in sight at every width, where it used to scroll off the end of seven, so a standing prompt on this // Nothing here with no calendar connected (2 November 2026): Calendars is one of only four tabs now,
+        // bar is a row of chrome pointing at the tab beside it. The empty week and the empty list still offer it.
+        undefined : calendarList.status === 'error' ? (
           // The switch can't draw without the calendars: say so, with a retry, rather than leave a gap.
           <Button variant="ghost" icon="refresh-cw" onPress={() => props.calendars.reload()}>
             {strings.calendarsRetry}
@@ -1469,20 +1477,28 @@ function WeekView(props: BookingsCalendarScreenProps) {
       }
       end={
         <>
+          {/* Mine or Everyone sits here now rather than up on the tab strip, so one row holds every control this
+              view has (2 November 2026). On the Team day it steps aside: that day shows everyone either way. */}
+          {props.hosts !== undefined && view !== 'team' && (
+            <HostsSwitch value={props.hosts.value} onChange={props.hosts.onChange} />
+          )}
           <SegmentedControl
-            label={strings.calendarView}
+            label={strings.meetingsViewLabel}
             size="compact"
             value={view}
             onChange={(next) => {
-              if (next === 'day' || next === 'week' || next === 'team') setView(next);
+              if (next === 'day' || next === 'week' || next === 'team' || next === 'list') setView(next);
             }}
             segments={[
-              { value: 'day', label: strings.dayView, kbd: WEEK_KEYS.day },
-              { value: 'week', label: strings.weekView, kbd: WEEK_KEYS.week },
+              { value: 'day', label: strings.meetingsViews.day, kbd: WEEK_KEYS.day },
+              { value: 'week', label: strings.meetingsViews.week, kbd: WEEK_KEYS.week },
               // Team only where there is a team to see, or someone who could invite one (AC-764's empty state).
               ...(props.team === undefined || (props.team.members.length < 2 && !canInvite)
                 ? []
-                : [{ value: 'team', label: strings.teamView }]),
+                : [{ value: 'team', label: strings.meetingsViews.team }]),
+              // The list was a tab of its own until the strip was cut to four areas: it is the same meetings in
+              // another shape, so it belongs beside the other shapes.
+              { value: 'list', label: strings.meetingsViews.list },
             ]}
           />
           {view === 'team' && props.team !== undefined ? (
@@ -2217,6 +2233,7 @@ function ListBar({
   pages,
   panel,
   hasNoCalendar,
+  hosts,
   onSearch,
 }: {
   readonly slug: string;
@@ -2225,6 +2242,8 @@ function ListBar({
   readonly panel: CalendarsPanel;
   /** The calendars read and none is connected: Connect calendar in the toggle's place. */
   readonly hasNoCalendar: boolean;
+  /** Mine or Everyone, for a holder of `booking.admin` only; it sits on this row, as the calendar's does. */
+  readonly hosts?: HostsChoice | undefined;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
 }) {
   return (
@@ -2232,7 +2251,6 @@ function ListBar({
       start={
         <SegmentedControl
           label={strings.tabsLabel}
-          // Compact, as the strip's other switches are: with Routing (and the Roster) the strip holds seven tabs.
           size="compact"
           value={search.tab}
           onChange={(value) => {
@@ -2244,8 +2262,24 @@ function ListBar({
       }
       end={
         <>
-          {search.source !== 'bookings' && search.link === undefined && (
-            <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
+          {hosts !== undefined && <HostsSwitch value={hosts.value} onChange={hosts.onChange} />}
+          {/* The same four shapes the calendar offers: the list is one of them, so leaving it is one press, not a
+              trip back up to the tab strip. */}
+          <SegmentedControl
+            label={strings.meetingsViewLabel}
+            size="compact"
+            value="list"
+            onChange={(next) => {
+              if (next !== 'list') onSearch({ view: next === 'week' ? 'week' : next === 'day' ? 'day' : 'team' });
+            }}
+            segments={[
+              { value: 'day', label: strings.meetingsViews.day },
+              { value: 'week', label: strings.meetingsViews.week },
+              { value: 'list', label: strings.meetingsViews.list },
+            ]}
+          />
+          {search.source !== 'bookings' && search.link === undefined && !hasNoCalendar && (
+            <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={false} />
           )}
           {/* Which meetings show is a choice only with a calendar connected: without one there are only bookings, and
               "Calendar events only" could only show an empty list (Q71). */}
@@ -2262,7 +2296,7 @@ const SOURCES: readonly MeetingSource[] = ['all', 'bookings', 'calendar'];
 /** Props for the list: its held pages, the address, the calendars and what Filter offers. */
 export interface BookingsListScreenProps {
   readonly slug: string;
-  /** Mine or Everyone, for a holder of `booking.admin` only (the switch itself is on the strip, the layout's). */
+  /** Mine or Everyone, for a holder of `booking.admin` only; its switch sits on this view's own tools' row. */
   readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
   /** The data layer's held list for a question (tab, source, the calendars picked): the same one every time. */
@@ -2389,6 +2423,7 @@ export function BookingsListScreen({
       pages={pages}
       panel={panel}
       hasNoCalendar={hasNoCalendar}
+      hosts={hosts}
       onSearch={onSearch}
     />
   );

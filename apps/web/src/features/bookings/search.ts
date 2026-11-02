@@ -2,7 +2,8 @@
 // routes (plain functions, no React, so loaders can use them):
 // - Calendar: `w` (the week's Monday), `d` (the day picked), `v` (`day` for the day view, `team` for the Team day),
 //   `link`, `cal`; the Team day's filters `who` (people's ids), `booked` and `order` (spec 0030, AC-766);
-// - List: `tab` (`past`, `cancelled`), `src` (`bookings`, `calendar`), `link`, `cal`.
+// - List, now Meetings' fourth view (`v=list`, 2 November 2026): `tab` (`past`, `cancelled`), `src` (`bookings`,
+//   `calendar`), `link`, `cal`.
 // The list pages by cursor (More), so the address holds no page.
 import type { BookingsTab, MeetingSource } from '@crm/data';
 import { dayKeyOf, isDayKey, weekOf } from './week.ts';
@@ -11,7 +12,7 @@ import { dayKeyOf, isDayKey, weekOf } from './week.ts';
 export interface RawBookingsSearch {
   readonly w?: string;
   readonly d?: string;
-  readonly v?: 'day' | 'team';
+  readonly v?: 'day' | 'team' | 'list';
   /** The Team day's people, by id, comma separated; absent is everyone the reader may see. */
   readonly who?: string;
   readonly booked?: '1';
@@ -28,8 +29,11 @@ export interface BookingsSearch {
   readonly week: string;
   /** The day selected (a narrow screen shows it alone). */
   readonly day: string;
-  /** The calendar's Day or Week (D and W); absent is the week. Kept in the address, so a reload or a link keeps it. */
-  readonly view?: 'week' | 'day' | 'team';
+  /**
+   * Which of Meetings' views (2 November 2026): the calendar's Day or Week (D and W), the Team day, or the List.
+   * Absent is the week. Kept in the address, so a reload or a link keeps it.
+   */
+  readonly view?: 'week' | 'day' | 'team' | 'list';
   /** The Team day's people (spec 0030, AC-766): absent is everyone the reader may see. */
   readonly members?: readonly string[];
   /** The Team day: only people with a booking that day. */
@@ -50,7 +54,7 @@ export function parseBookingsSearch(search: Record<string, unknown>): RawBooking
   return {
     ...(isDayKey(search.w) ? { w: search.w } : {}),
     ...(isDayKey(search.d) ? { d: search.d } : {}),
-    ...(search.v === 'day' || search.v === 'team' ? { v: search.v } : {}),
+    ...(search.v === 'day' || search.v === 'team' || search.v === 'list' ? { v: search.v } : {}),
     ...(typeof search.who === 'string' && /^[0-9a-f-]{36}(,[0-9a-f-]{36}){0,49}$/i.test(search.who)
       ? { who: search.who }
       : {}),
@@ -81,13 +85,13 @@ export function bookingsSearchOf(raw: RawBookingsSearch, now: Date, firstDay: nu
   };
 }
 
-/** The address for a tab's search: only what differs from the defaults. */
-export function rawOf(tab: 'calendar' | 'list', search: BookingsSearch): RawBookingsSearch {
+/** The address for one of Meetings' views: only what differs from the defaults. */
+export function rawOf(view: 'calendar' | 'list', search: BookingsSearch): RawBookingsSearch {
   const shared = {
     ...(search.link === undefined ? {} : { link: search.link }),
     ...(search.cal === undefined ? {} : { cal: search.cal.join(',') }),
   };
-  if (tab === 'calendar') {
+  if (view === 'calendar') {
     return {
       w: search.week,
       d: search.day,
@@ -98,7 +102,9 @@ export function rawOf(tab: 'calendar' | 'list', search: BookingsSearch): RawBook
       ...shared,
     };
   }
+  // The list is a view of Meetings, so its address carries `v=list` beside its own keys.
   return {
+    v: 'list' as const,
     ...(search.tab === 'upcoming' ? {} : { tab: search.tab }),
     ...(search.source === 'all' ? {} : { src: search.source }),
     ...shared,

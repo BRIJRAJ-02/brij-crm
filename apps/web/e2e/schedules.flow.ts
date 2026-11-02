@@ -100,7 +100,7 @@ test.describe('availability schedules', () => {
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
 
     // Availability opens the default in its editor; New schedule asks for a name and opens the new one there.
-    await page.goto(`/w/${slug}/bookings/availability`);
+    await page.goto(`/w/${slug}/bookings/hours`);
     // The switcher: the open schedule's name, then ", default" on the default, then what it does.
     const switcher = (name: string) =>
       page.getByRole('button', { name: new RegExp(`^${name}(, default)?, switch schedule$`) });
@@ -182,7 +182,7 @@ test.describe('availability schedules', () => {
     const again = await remove();
     await again.getByRole('button', { name: 'Delete schedule' }).click();
     await expect(again).toBeHidden();
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/availability$`));
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/hours$`));
     await expect(switcher('Working hours')).toBeVisible();
     await switcher('Working hours').click();
     await expect(page.getByRole('menuitemradio', { name: /Evenings/ })).toHaveCount(0);

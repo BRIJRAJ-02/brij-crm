@@ -60,6 +60,7 @@ import { availabilityHref } from './links.ts';
 import { teamWeekHref } from './team-week-links.ts';
 import { TeamWeekTeamFilter } from './TeamWeekTeamFilter.tsx';
 import { teamWeekStrings as words } from './team-week-strings.ts';
+import { HoursViewSwitch } from '../bookings/ViewSwitch.tsx';
 import { timeOffStrings } from './time-off-strings.ts';
 
 /** The days of a week as the weekly hours key them, Monday first. */
@@ -79,6 +80,12 @@ export interface TeamWeekScreenProps {
   readonly members: readonly VisibleMember[];
   /** The workspace's teams, for the team filter (AC-1289); the route reads them again on a live change. */
   readonly teams?: readonly TeamView[];
+  /**
+   * Mine · Team on the tools' row: the team's week is Hours' other view since 2 November 2026, and only a reader
+   * whose scheduling reach sees a colleague reaches it at all, so the switch comes from the route rather than
+   * being drawn unconditionally.
+   */
+  readonly hasMineSwitch?: boolean;
 }
 
 /** A date's weekday and day of the month apart ("Mon", "2"), in the reader's language. */
@@ -234,7 +241,16 @@ const weekdayName = (index: number, locale: string): string =>
  * The Team week: one toolbar (the team filter, the week, search, Copy week), Set usual hours in the TopBar's end as
  * the tab's one primary, the grid with its legend, its editor, menus and confirms.
  */
-export function TeamWeekScreen({ data, slug, week, search, zone, members, teams = [] }: TeamWeekScreenProps) {
+export function TeamWeekScreen({
+  data,
+  slug,
+  week,
+  search,
+  zone,
+  members,
+  teams = [],
+  hasMineSwitch = false,
+}: TeamWeekScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const { locale } = useFormatSettings();
@@ -272,6 +288,7 @@ export function TeamWeekScreen({ data, slug, week, search, zone, members, teams 
       onQuery={setQuery}
       actionSlot={actionSlot}
       teamFilter={<TeamWeekTeamFilter teams={teams} value={teamId} onChange={setTeam} />}
+      hasMineSwitch={hasMineSwitch}
       isTeamChosen={teamId !== ''}
       copying={copying}
       onCopy={setCopying}
@@ -306,6 +323,7 @@ function Loaded({
   onUsualFor,
   usualKey,
   toast,
+  hasMineSwitch,
 }: {
   readonly held: ReturnType<NonNullable<ReturnType<DataLayer['scheduling']['loaded']>>['teamWeek']['held']>;
   readonly data: DataLayer;
@@ -326,6 +344,8 @@ function Loaded({
   readonly onUsualFor: (ids: readonly string[] | undefined) => void;
   readonly usualKey: number;
   readonly toast: (tone: 'success' | 'danger', message: string) => void;
+  /** Mine · Team on the tools' row; absent for a reader with nobody else's week to see. */
+  readonly hasMineSwitch: boolean;
 }) {
   const navigate = useNavigate();
   const state = useScheduling(held);
@@ -495,6 +515,7 @@ function Loaded({
       isTitleQuiet
       end={
         <>
+          {hasMineSwitch && <HoursViewSwitch slug={slug} view="team" />}
           {teamFilter}
           <Field
             label={words.search}

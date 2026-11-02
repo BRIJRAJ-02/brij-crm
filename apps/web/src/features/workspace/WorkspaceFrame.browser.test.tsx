@@ -404,7 +404,7 @@ describe('the app’s sidebar (spec 0034)', () => {
       [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find((each) => each.textContent.trim() === name);
     expect(link('Home')?.getAttribute('href')).toBe('/w/acme/home');
     expect(link('Tasks')?.getAttribute('href')).toBe('/w/acme/tasks');
-    expect(link('Bookings')?.getAttribute('href')).toBe('/w/acme/bookings/calendar');
+    expect(link('Bookings')?.getAttribute('href')).toBe('/w/acme/bookings/meetings');
     expect(link('Captures')?.getAttribute('href')).toBe('/w/acme/captures/links');
     // The trash left the sidebar for Settings, under Workspace (the owner, 22 October 2026).
     expect(names.some((name) => name.startsWith('Trash'))).toBe(false);

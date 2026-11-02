@@ -209,8 +209,8 @@ async function renderWeek(
     {
       data,
       toasts,
-      pattern: '/w/$slug/bookings/calendar',
-      at: '/w/acme/bookings/calendar',
+      pattern: '/w/$slug/bookings/meetings',
+      at: '/w/acme/bookings/meetings',
       ...(permissions === undefined ? {} : { permissions }),
     },
   );
@@ -556,7 +556,7 @@ describe('cancelling from the list', () => {
           onSearch={() => undefined}
         />
       ),
-      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
+      { data: {}, pattern: '/w/$slug/bookings/meetings', at: '/w/acme/bookings/meetings?v=list' },
     );
     // A booking's row is titled by its page, "You and Ada Lovelace" under it.
     await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));
@@ -633,7 +633,7 @@ describe('the list rows', () => {
           onSearch={() => undefined}
         />
       ),
-      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
+      { data: {}, pattern: '/w/$slug/bookings/meetings', at: '/w/acme/bookings/meetings?v=list' },
     );
     await expect.element(page.getByRole('button', { name: 'Quick chat', exact: true })).toBeVisible();
     await expect
@@ -680,7 +680,7 @@ describe('the list rows', () => {
             onSearch={() => undefined}
           />
         ),
-        { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
+        { data: {}, pattern: '/w/$slug/bookings/meetings', at: '/w/acme/bookings/meetings?v=list' },
       );
     // The booking's panel, opened as the host opens it, from its row.
     const open = async () => {
@@ -733,7 +733,7 @@ describe('the list rows', () => {
           onSearch={() => undefined}
         />
       ),
-      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
+      { data: {}, pattern: '/w/$slug/bookings/meetings', at: '/w/acme/bookings/meetings?v=list' },
     );
     await expect.element(page.getByRole('link', { name: 'Connect a calendar' }).first()).toBeVisible();
     expect(document.querySelector('aside[aria-label="Calendars"]')).toBeNull();
@@ -779,7 +779,7 @@ describe('the list rows', () => {
           onSearch={() => undefined}
         />
       ),
-      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list?src=calendar' },
+      { data: {}, pattern: '/w/$slug/bookings/meetings', at: '/w/acme/bookings/meetings?v=list&src=calendar' },
     );
     // The list's own empty state, not "Nothing matches these filters" with no filter on screen to clear.
     await expect.element(page.getByText('Nothing coming up')).toBeVisible();
@@ -930,8 +930,8 @@ describe('linking a booking to a record by hand (polish F2)', () => {
       ),
       {
         data: { records: { search: dealSearch } as unknown as DataLayer['records'] },
-        pattern: '/w/$slug/bookings/list',
-        at: '/w/acme/bookings/list',
+        pattern: '/w/$slug/bookings/meetings',
+        at: '/w/acme/bookings/meetings?v=list',
       },
     );
     await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));

@@ -24,6 +24,7 @@ import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { memberZone } from './zone.ts';
 import { availabilityHref, bookingsHref, scheduleHref } from './links.ts';
+import { HoursViewSwitch } from '../bookings/ViewSwitch.tsx';
 import { NewScheduleDialog } from './NewScheduleDialog.tsx';
 import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
 import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';
@@ -56,6 +57,12 @@ export interface AvailabilityScreenProps {
   readonly nameOf: (memberId: string) => string | undefined;
   /** The workspace's active members: who may cover time off (spec 0037, AC-1281). */
   readonly people: readonly StandinChoice[];
+  /**
+   * The reader's scheduling reach sees a colleague (`rosterIsShown`): Mine · Team shows on the tools' row, since
+   * the team's week is this tab's other view (2 November 2026). Without it there is nobody else's week to see, so
+   * no switch is drawn.
+   */
+  readonly hasTeamSwitch?: boolean;
 }
 
 /** The tab: the open schedule's editor, its switcher, the admin's Viewing Select and New schedule. */
@@ -67,6 +74,7 @@ export function AvailabilityScreen({
   members,
   me,
   ownHours,
+  hasTeamSwitch = false,
   nameOf,
   people,
 }: AvailabilityScreenProps) {
@@ -197,14 +205,14 @@ export function AvailabilityScreen({
   ) : (
     newButton
   );
-  // The strip's end, as the Calendar tab's tools are (the owner, 22 October 2026: no row of its own over the card):
-  // the schedule switcher, and an admin's compact member filter (AC-971).
-  // The team's week is Bookings › Roster, a tab of its own (31 October 2026), so no Mine | Team switch stands here.
+  // The strip's end, as Meetings' tools are (the owner, 22 October 2026: no row of its own over the card): the
+  // schedule switcher, Mine · Team where there is a team to see, and an admin's compact member filter (AC-971).
   const tools = (
     <SectionBar
       start={switcher}
       end={
         <>
+          {hasTeamSwitch && <HoursViewSwitch slug={slug} view="mine" />}
           {hasColleagues && (
             <Viewing
               members={members}

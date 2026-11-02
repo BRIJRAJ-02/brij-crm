@@ -175,23 +175,21 @@ export const strings = {
   reschedule: 'When a guest reschedules',
   rescheduleSame: 'Same host when they are free',
   rescheduleRotation: 'Through the group again',
-  // New booking page.
-  whoBooks: 'Who it books',
+  // New booking page. The four choices are kinds of link, not four answers to "who", so that is what the question
+  // asks (2 Nov 2026). Each kind says in one line what it does, under its name: the difference between them is
+  // exactly what somebody making their first one does not know, so it is on the screen, not behind a tip.
+  whoBooks: 'What kind of link?',
   bookMe: 'Me',
+  bookMeLine: 'Guests book time with you.',
   bookRotation: 'Round robin group',
-  bookEveryone: 'Workspace link',
-  /** The one help for Who it books, in its InfoTip. */
-  whoBooksInfo:
-    'Me: guests book you. Round robin group: one host from a group, in turn. Workspace link: whoever is free, on nobody’s profile.',
-  /** Who it books' tip when the Team link is offered too. */
-  whoBooksInfoTeamLink:
-    'Me: guests book you. Round robin group: one host from a group, in turn. Workspace link: whoever is free, on nobody’s profile. Team link: a form asks what they want, then books the right team page.',
+  bookRotationLine: 'Each booking goes to the next free person in a group.',
+  bookEveryone: 'Anyone free',
+  bookEveryoneLine: 'Guests book whoever in the workspace is free. It sits on nobody’s profile.',
   // The Team link (spec 0037, AC-1353): a form in front of the team pages.
   teamLink: 'Team link',
   teamLinkName: 'Book a call',
   teamLinkLine: 'A form asks what they want, then books the right team page.',
-  teamLinkNone: 'Make a team page or the workspace link first.',
-  addTeamLink: 'Add a team link',
+  teamLinkNone: 'Make a Round robin group or Anyone free link first.',
   createTeamLink: 'Create team link',
   // Copy handoff (31 Oct 2026): the switches are the explanation.
   rosterNote: (on: number, all: number) => `${String(on)} of ${String(all)} on.`,

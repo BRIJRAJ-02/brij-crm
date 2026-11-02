@@ -134,6 +134,6 @@ describe('the metrics’ links', () => {
   it('opens the records behind a figure, or nothing where the reader has no such object', () => {
     expect(metricHref('people', 'acme', objects)).toBe('/w/acme/objects/people');
     expect(metricHref('won', 'acme', objects)).toBeUndefined();
-    expect(metricHref('meetings', 'acme', objects)).toBe('/w/acme/bookings/calendar');
+    expect(metricHref('meetings', 'acme', objects)).toBe('/w/acme/bookings/meetings');
   });
 });

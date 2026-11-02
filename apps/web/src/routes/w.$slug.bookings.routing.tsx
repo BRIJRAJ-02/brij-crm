@@ -1,17 +1,23 @@
-import { isDataError, type AttributeDefinition, type DataLayer, type MemberView } from '@crm/data';
-import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
-import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { RoutingPending, RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
-import { strings } from '../features/routing/tab-strings.ts';
-import { SettingsMissing } from '../features/settings/SettingsPage.tsx';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
-// Bookings › Routing (spec 0037, AC-1383): what every routed form and team page shares, for holders of
-// routing.manage (owners and admins). Overview (`?view` absent) and Decisions (`?view=decisions`, with its filters
-// and the decision open in the address). Without routing.manage there is no such page (hidden means absent): the
-// access read comes first, from the data layer's cache, so nothing else is asked for then. The screen holds the
-// Overview and the Decisions log from the data layer, read again whenever the person comes back to the page.
+// Bookings › Routing was a tab of its own until 2 November 2026; it is now Hosts › Rules. A link people already
+// hold lands there carrying everything it had: which part of Routing (`view`), its filters and the decision open.
+// Whether the reader may see it at all is still `routing.manage`, checked by the Hosts route's loader, which
+// sends anyone else to the groups rather than to an empty page.
+
+/** What the old address carried, as the Hosts route reads it back. */
+interface RoutingLink {
+  readonly view: 'overview' | 'decisions' | 'skills' | 'test';
+  readonly surface?: string;
+  readonly rule?: string;
+  readonly host?: string;
+  readonly tag?: 'yes' | 'no' | 'none';
+  readonly period?: 'today' | '7' | '30' | '90';
+  readonly decision?: string;
+}
+
 export const Route = createFileRoute('/w/$slug/bookings/routing')({
-  validateSearch: (raw: Record<string, unknown>): RoutingSearch => {
+  validateSearch: (raw: Record<string, unknown>): RoutingLink => {
     const text = (value: unknown) => (typeof value === 'string' && value !== '' ? value : undefined);
     const tag = text(raw.tag);
     const period = text(raw.period);
@@ -29,69 +35,12 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
       ...(decision === undefined ? {} : { decision }),
     };
   },
-  loader: async ({
-    context,
-    params,
-  }): Promise<{ readonly members?: readonly MemberView[]; readonly stage?: AttributeDefinition }> => {
-    try {
-      const access = await context.data.access.mine(params.slug);
-      if (!access.permissions.includes('routing.manage')) return {};
-      const [members, stage] = await Promise.all([
-        context.data.members.list(params.slug),
-        dealsStage(context.data, params.slug),
-      ]);
-      return { members, ...(stage === undefined ? {} : { stage }) };
-    } catch (error) {
-      // The frame above shows "workspace not found" for this one.
-      if (isDataError(error) && error.code === 'NOT_FOUND') return {};
-      throw error;
-    }
+  beforeLoad: ({ params, search }) => {
+    throw redirect({
+      to: '/w/$slug/bookings/hosts',
+      params: { slug: params.slug },
+      search: { v: 'rules' as const, ...search },
+      replace: true,
+    });
   },
-  pendingComponent: () => (
-    <LoadingNow>
-      <RoutingPending />
-    </LoadingNow>
-  ),
-  errorComponent: RoutingError,
-  component: RoutingRoute,
 });
-
-/** Deals' Stage field (api slug `stage`), for Won means (spec 0037, AC-1385); none when Deals or the field is hidden. */
-async function dealsStage(data: DataLayer, slug: string): Promise<AttributeDefinition | undefined> {
-  const objects = await data.objects.list(slug);
-  const deals = objects.find((each) => each.standardKey === 'deals');
-  if (deals === undefined) return undefined;
-  const attributes = await data.attributes.list(slug, deals.id);
-  return attributes.find((each) => each.apiSlug === 'stage' && !each.isArchived);
-}
-
-function RoutingRoute() {
-  const { members, stage } = Route.useLoaderData();
-  const { slug } = Route.useParams();
-  const search = Route.useSearch();
-  const { data, toasts } = Route.useRouteContext();
-  const navigate = useNavigate({ from: Route.fullPath });
-  if (members === undefined) return <SettingsMissing backTo="home" />;
-  return (
-    <RoutingScreen
-      data={data}
-      slug={slug}
-      search={search}
-      members={members}
-      {...(stage === undefined ? {} : { stage })}
-      toasts={toasts}
-      onSearch={(next) => void navigate({ search: (current) => ({ ...current, ...next }), replace: true })}
-    />
-  );
-}
-
-function RoutingError({ error }: ErrorComponentProps) {
-  const router = useRouter();
-  return (
-    <PageColumn>
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
-        {isDataError(error) ? error.message : strings.failedText}
-      </EmptyState>
-    </PageColumn>
-  );
-}
