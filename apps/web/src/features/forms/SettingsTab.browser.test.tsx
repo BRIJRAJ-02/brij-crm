@@ -137,6 +137,22 @@ function readyList<Item>(items: readonly Item[]) {
   };
 }
 
+/**
+ * The workspace's skills as a held read, with no skills (spec 0037, AC-1382). RulesCard reads this on every render,
+ * so a layer without it renders the error boundary and every locator below times out against a page that already
+ * crashed; `renderInApp` takes a Partial<DataLayer> cast to DataLayer, so only a run catches the omission.
+ *
+ * The snapshot is one frozen value, not a fresh object per call: `useSyncExternalStore` compares snapshots by
+ * identity, so returning a new one each time re-renders for ever ("Maximum update depth exceeded").
+ */
+const NO_SKILLS_SNAPSHOT = { status: 'ready', value: { skills: [], members: [], wonMeansSet: false } } as const;
+const NO_SKILLS = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => NO_SKILLS_SNAPSHOT,
+  retain: () => () => undefined,
+  reload: () => undefined,
+};
+
 /** A data layer holding the workspace's groups and the settings saves, kept. */
 function fakeData(groups: readonly RotationView[], bookingPages: readonly BookingPageView[] = []) {
   const saves: Record<string, unknown>[] = [];
@@ -145,7 +161,10 @@ function fakeData(groups: readonly RotationView[], bookingPages: readonly Bookin
   const data = {
     rotations: { view: () => rotations },
     bookingPages: { view: () => pages },
-    routing: { report: () => readyList([]) },
+    // RulesCard reads the workspace's skills on every render (spec 0037, AC-1382). Without this the card renders
+    // the error boundary and every locator below times out against a page that already crashed: `renderInApp` takes
+    // a Partial<DataLayer> cast to DataLayer, so only a run catches the omission.
+    routing: { report: () => readyList([]), skills: { view: () => NO_SKILLS } },
     forms: {
       hostedUrl: (key: string) => `https://app.example.com/f/${key}`,
       updateSettings: (_slug: string, _formId: string, settings: Record<string, unknown>) => {
