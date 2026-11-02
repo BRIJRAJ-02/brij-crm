@@ -132,9 +132,9 @@ export const strings = {
 
   // Jumps and points (spec 0063, AC-6313, AC-6316, AC-6325)
   jumps: 'Jumps',
-  jumpsHint: 'When answers match, go further down instead of the next step. The first jump that matches wins.',
+  jumpsHint: 'Go further down when answers match. First match wins.',
   addJump: 'Add a jump',
-  removeJump: 'Remove this jump',
+  removeJump: (place: number) => `Remove jump ${String(place)}`,
   jumpsNowhere: 'Add a step below this one, or an ending in Settings, to jump to.',
   jumpTo: 'Then',
   /** One jump among a step's, in the order they are tried. */

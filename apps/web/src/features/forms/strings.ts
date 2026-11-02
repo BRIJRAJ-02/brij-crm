@@ -570,7 +570,7 @@ export const strings = {
   flowEmpty: 'Add a question, and a step to split the form, to see the flow.',
   flowThanks: 'The thank you',
   flowNoLine: 'No line',
-  flowEdit: (name: string) => `Edit ${name}`,
+  flowEdit: 'Edit',
   flowClose: 'Close',
   status: {
     draft: 'Not published',

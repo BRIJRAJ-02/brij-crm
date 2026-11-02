@@ -22,6 +22,7 @@ import {
   Button,
   Callout,
   Checkbox,
+  ConditionRow,
   DatePicker,
   Field,
   InfoTip,
@@ -1329,31 +1330,36 @@ function JumpsEditor({ jumps, readable, choices, isReadOnly, onChange }: JumpsEd
                 onChange(changeJump(jumps, index, { when: storedShowWhen(when) }));
               }}
             />
-            <Select
-              savesOnPick
-              label={strings.jumpTo}
-              items={[...choices]}
-              value={isGone ? null : chosen}
-              isReadOnly={isReadOnly}
-              onChange={(id) => {
-                const target = id === null ? undefined : targetOfId(id);
-                if (target !== undefined) onChange(changeJump(jumps, index, { to: target }));
-              }}
-            />
-            {!isReadOnly && (
-              <Button
-                variant="ghost"
-                icon="x"
-                onPress={() => {
-                  onChange(removeJump(jumps, index));
-                  // Add a jump may now be off (the step's limit, or nowhere left to go): focus moves there only
-                  // while it can take it, since a disabled button would drop focus onto the page itself.
-                  focusLater(() => (addRef.current?.disabled === false ? addRef.current : null));
+            {/* The same row the conditions above it use, so Then starts on When's own left edge and removing a
+                jump is the same control as removing a condition, not a third shape. */}
+            <ConditionRow
+              lead={strings.jumpTo}
+              removeLabel={strings.removeJump(index + 1)}
+              isDisabled={isReadOnly}
+              {...(isReadOnly
+                ? {}
+                : {
+                    onRemove: () => {
+                      onChange(removeJump(jumps, index));
+                      // Add a jump may now be off (the step's limit, or nowhere left to go): focus moves there only
+                      // while it can take it, since a disabled button would drop focus onto the page itself.
+                      focusLater(() => (addRef.current?.disabled === false ? addRef.current : null));
+                    },
+                  })}
+            >
+              <Select
+                savesOnPick
+                label={strings.jumpTo}
+                isLabelHidden
+                items={[...choices]}
+                value={isGone ? null : chosen}
+                isReadOnly={isReadOnly}
+                onChange={(id) => {
+                  const target = id === null ? undefined : targetOfId(id);
+                  if (target !== undefined) onChange(changeJump(jumps, index, { to: target }));
                 }}
-              >
-                {strings.removeJump}
-              </Button>
-            )}
+              />
+            </ConditionRow>
           </SettingsSection>
         );
       })}

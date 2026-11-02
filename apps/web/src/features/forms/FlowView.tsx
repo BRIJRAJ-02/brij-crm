@@ -103,11 +103,11 @@ export function FlowView({ draft, isOpen, questionHref, stepHref, endingsHref, o
                 stepId === undefined ? (
                   // The questions before the first divider have no divider of their own: the first one links instead.
                   <Link href={questionHref(byKey.get(step.keys[0] ?? '')?.id ?? '')} onPress={close}>
-                    {strings.flowEdit(name)}
+                    {strings.flowEdit}
                   </Link>
                 ) : (
                   <Link href={stepHref(stepId)} onPress={close}>
-                    {strings.flowEdit(name)}
+                    {strings.flowEdit}
                   </Link>
                 )
               }
@@ -124,7 +124,7 @@ export function FlowView({ draft, isOpen, questionHref, stepHref, endingsHref, o
           title={strings.flowEndings}
           actions={
             <Link href={endingsHref} onPress={close}>
-              {strings.flowEdit(strings.flowEndings)}
+              {strings.flowEdit}
             </Link>
           }
         >

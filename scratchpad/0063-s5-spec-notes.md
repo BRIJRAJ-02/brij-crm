@@ -45,6 +45,19 @@ A number attribute holds its value as text everywhere in this codebase (`valueFo
 `String(score)`. Nothing in the spec says otherwise; noted because a reader expecting a number in the column will
 find a string, as they would for any number question.
 
+## The verify pass must not sign this off: "Step 3 of 3" counts steps a jump may skip
+
+**Visitor facing, and wrong.** The hosted page's progress line and its "Step 2 of 3" come from the steps the path
+holds for the answers given so far, so a form whose first step jumps past two others tells a visitor there are
+three steps and then gives them two. A visitor told three and given two has been misled, and the progress line is
+the one part of a Steps form that promises how much is left.
+
+This slice did not fix it: the count is slice 1's and a jump can only be known about once the answers that decide
+it are in, so the honest shapes are a count that only ever covers what is certain, a line that stops promising a
+total once a jump is reachable, or a shortest-path count that can only shrink. That is a spec decision, not a lane
+one. **AC-6301's verify pass must not sign this off as it stands**, and AC-6304's "Step 2 of 3" wording needs a
+sentence saying what the total means on a form with jumps.
+
 ## Not built in slice 5, and why
 
 - **A routing rule's Ending route in the rules editor.** The contract, the publish check and the server all handle
