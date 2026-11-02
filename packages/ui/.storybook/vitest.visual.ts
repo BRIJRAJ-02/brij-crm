@@ -5,6 +5,15 @@
 // Menus, popovers, dialogs and tooltips open in a portal outside the story
 // frame, and a floating panel is fixed to the viewport, so while one is open
 // the frame grows to the viewport and the screenshot takes it in.
+//
+// A baseline this job never reshoots is debt nobody is told about. `changes`
+// skips `visual` when a push touches no library file, so a branch can trim a
+// component's copy, move a baseline and land, and the next branch that does run
+// `visual` fails on it as if it had broken something (main's 45bcac5ac did
+// exactly that to MatchCalendar, fixed later in 834b533db). So a failure here
+// is not proof the branch under test caused it: check whether the baseline was
+// simply never retaken. A check that quietly does less than its name says is
+// worse than one that is plainly off.
 import { configure } from 'storybook/test';
 import { afterEach, beforeAll, expect, inject } from 'vitest';
 import { page } from 'vitest/browser';
@@ -58,6 +67,11 @@ afterEach(async (context) => {
   // The frame is as tall as its story; while an overlay is open it fills the
   // viewport, so the screenshot's clip takes in the overlay too.
   if (root !== null && hasOverlay(root)) root.style.minBlockSize = '100dvb';
+  // Both themes are compared before either is allowed to fail. The matcher throws, so
+  // asserting light inside the loop skipped dark whenever light moved, and the dark
+  // half of a story that changed in both themes read as a pass when it had never run
+  // (found by crm-6c, 2 November 2026). A run has to report everything that moved.
+  const moved: { readonly theme: string; readonly why: string }[] = [];
   try {
     for (const name of ['light', 'dark'] as const) {
       html.dataset.theme = name;
@@ -73,7 +87,15 @@ afterEach(async (context) => {
         if (animation.effect?.getComputedTiming().iterations !== Infinity) animation.finish();
       }
       await new Promise((resolve) => requestAnimationFrame(resolve));
-      await expect.element(page.getByTestId('story-root')).toMatchScreenshot(name);
+      // Each theme keeps its own diff attachment, which the matcher writes as it fails.
+      try {
+        await expect.element(page.getByTestId('story-root')).toMatchScreenshot(name);
+      } catch (error) {
+        moved.push({ theme: name, why: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    if (moved.length > 0) {
+      throw new Error(moved.map(({ theme, why }) => `${theme}: ${why}`).join('\n\n'));
     }
   } finally {
     if (theme === undefined) delete html.dataset.theme;
