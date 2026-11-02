@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, screen, userEvent, waitFor } from 'storybook/test';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { VisitorBar } from './VisitorBar.tsx';
 
@@ -62,6 +63,9 @@ export const Match: Story = {
     await userEvent.unhover(link);
     link.blur();
     await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
+    // The dialog's exit is paused at its first frame while the test helpers hold the page, and the screenshot has
+    // caught the whole row blank behind it (run 41473463491). Settling finishes the exit, so the shot is the row.
+    await settleAnimations();
   },
 };
 
