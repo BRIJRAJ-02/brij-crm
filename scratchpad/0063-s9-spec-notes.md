@@ -53,25 +53,37 @@ characters of a SHA-256, so nothing can reach it by guessing; the content is the
 branded page of that workspace shows publicly. Gating them would cost a second read of the live version on a hot
 public route. Flagged in case the verify pass wants it closed anyway.
 
-## 5. The brand's text colour on the hosted form's primary button, in the form's dark Colour
+## 5. A shot taken in the browser harness can show a cascade production never has
 
-Seen in the shots `scratchpad/s9-shots/s9-brand-form-light.png` and `…-dark.png`, both of a form wearing the kit
-`#e8590c` (whose guard picks `#000000` as the text on the accent in both modes):
+While shooting the branded form I photographed what looked like a contrast failure: in the form's dark Colour the
+Send button drew the brand orange with a near-white label (about 3.3:1, under the 4.5:1 spec 0060 AC-5 promises),
+while light drew it near-black. It is **not** a production bug, and the chase is worth writing down because the
+same trap is set in several other test files.
 
-- light Colour: the Send button is the brand orange with a near-black label. Right.
-- dark Colour: the Send button is the brand orange with a near-white label. That pair is about 3.3:1, under the
-  4.5:1 spec 0060 AC-5 promises for text on the accent.
+What it was. `packages/ui/src/styles/index.css` opens with `@layer reset, tokens, base, components, utilities;`,
+and a layer's place in the cascade is fixed by its **first appearance** — a later statement can append names but
+never reorder ones already seen. My test imported `./hosted-form.ts` before `../styles/index.css`, so the
+components' own CSS modules were injected first, `components` was registered before that statement, `reset` landed
+*after* it, and reset's `button { color: inherit }` then beat the primary Button's `color: var(--on-accent)`. The
+label inherited the page's text colour. The fill stayed right because `background` comes from the same rule but is
+not something the reset sets. Moving the stylesheet import to the top of the file turns the label black
+(`rgb(0, 0, 0)`, the colour the guard chose) and sharpens the rest of the shot too — the headline was at the wrong
+weight in the earlier ones for the same reason.
 
-The fill is the kit's own colour in both (asserted in `Brand.browser.test.tsx`), so the brand reaches the control;
-it is only the label's colour that seems to fall back to the product's.
+Production never has this order: the built pages link `/layers.css` from their head (`layerOrder()` in
+`apps/web/vite.config.ts`), before any module CSS, and the app's `main.tsx` imports `@crm/ui/styles.css` first.
 
-Honesty about the diagnosis: I could not pin it down. `getComputedStyle` at the button reported
-`--on-accent: light-dark(#000000, #000000)` — the right value — while reporting the drawn `color` as the theme's
-text colour, and an inline `color: light-dark(#000000, #000000)` on that same button did not change what it
-reported either, which an inline declaration always should. So my measurements of that element contradict
-themselves and I do not trust them; the screenshots are the solid evidence. This is spec 0060's wiring
-(`FormParts.module.css`, `--form-brand-on-accent` → `.card`'s `--on-accent`), not anything slice 9 added — slice 9
-only makes it reachable by choice rather than always.
+What was ruled out along the way, each by measurement, so nobody repeats it: `brandVariables` answers
+`onAccent: "#000000"` for both halves of this accent; `brandProperties` emits all six names and `rootBlock`'s
+filter accepts them, so the served `brand.css` is not implicated; `--form-none` is never reached (a bare probe
+inside the same card painted `var(--on-accent)` as black, so the `light-dark()` chain resolves); and the white was
+not the product's `--on-accent` (`#fcfdff`) but `--text` (`#ebedef` dark, `#18191d` light), which is inheritance,
+not a fallback.
 
-Owed: someone with 0060's CSS in hand should check the dark pair on the hosted page, since AC-6327 leans on that
-guarantee. Nothing was changed for it here.
+Two things owed from this, neither in this slice:
+- `Brand.browser.test.tsx` now imports the stylesheet first and asserts the label's colour, so the pair is held.
+  **The other `packages/ui/src/public-form/*.browser.test.tsx` files still import it last**, so their shots carry
+  the same wrong cascade. Worth a sweep.
+- Nothing in the product changed. `--on-accent` (`#fcfdff`) and `--text` in dark (`#ebedef`) are near-identical,
+  so had this been real on the product's own colours nobody would ever have seen it; a brand whose guard picks
+  black is what made it visible at all.

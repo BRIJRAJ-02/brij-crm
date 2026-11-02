@@ -4,11 +4,18 @@
 //   - "Powered by Timefix" sits under the form in every mode and every layout, and nothing takes it away.
 // The look's own colours come from the page's brand stylesheet (`FormParts.module.css`), which is the served file,
 // so they are not drawn here; what this holds is the markup the page makes of what the read said.
+// The stylesheet FIRST, before anything that pulls a CSS module. `styles/index.css` opens with
+// `@layer reset, tokens, base, components, utilities;`, and a layer's place in the cascade is fixed by its first
+// appearance: a component's module CSS parsed before that statement registers `components` early, `reset` lands
+// after it, and reset's `button { color: inherit }` then beats the primary Button's `color: var(--on-accent)`.
+// That is a harness-only cascade (the built pages link `/layers.css` from their head, before any module), and it
+// draws a brand's button label in the page's text colour instead of the colour its kit chose. Keep this import
+// first, or the shots below stop being what a visitor sees.
+import '../styles/index.css';
 import type { PublicForm } from '@crm/contracts/forms';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
 import { mountHostedForm, type HostedFormHandle, type HostedFormMode } from './hosted-form.ts';
-import '../styles/index.css';
 
 const FORM: PublicForm = {
   key: 'project-enquiry',
@@ -133,12 +140,13 @@ for (const colour of ['light', 'dark'] as const) {
     expect(host.querySelector('footer')?.textContent).toContain('Powered by');
     // After the page settles: the look's own transition is done, so the shot is not caught mid theme change.
     await new Promise((resolve) => globalThis.setTimeout(resolve, 400));
-    // The kit's accent reaches the control the visitor presses (spec 0060, AC-4): the fill is the brand's own
-    // colour for this mode, not the product's. The label's colour is checked by eye in the shots below: see
-    // `scratchpad/0063-s9-spec-notes.md`, note 5, for what that found.
+    // The kit reaches the control the visitor presses, both halves (spec 0060, AC-4, AC-5): the fill is the
+    // brand's own colour for this mode, and the label is the colour the guard chose to read on it (black for this
+    // accent), never the page's text colour. White on this orange is 3.3:1, so this pair is the AA check.
     const send = host.querySelector('button[type="submit"]');
     const painted = send === null ? undefined : globalThis.getComputedStyle(send);
     expect(painted?.backgroundColor).toBe(colour === 'dark' ? 'rgb(232, 89, 12)' : 'rgb(230, 87, 8)');
+    expect(painted?.color).toBe('rgb(0, 0, 0)');
     await page.screenshot({ path: `../../.vitest/shots/s9-brand-form-${colour}.png` });
   });
 }
