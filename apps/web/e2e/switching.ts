@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, type BrowserContext, type CDPSession, type Locator, type Page, type Route } from '@playwright/test';
 import { openFullPage } from './people.ts';
+import { newForm } from './forms.ts';
 
 /** What one switch looked like. */
 export interface Switch {
@@ -263,8 +264,7 @@ export async function switchingWorkspace(
   }
   await page.goto(`/w/${slug}/captures/forms`);
   if (!(await has('Untitled form'))) {
-    await page.getByRole('button', { name: 'New form' }).first().click();
-    await expect(page).toHaveURL(/captures\/forms\/[0-9a-f-]{36}/, { timeout: 60_000 });
+    await newForm(page);
   }
   return { slug, recordId };
 }

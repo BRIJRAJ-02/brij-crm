@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { newWorkspace } from './people.ts';
+import { newForm } from './forms.ts';
 
 test.describe('a form’s first publish', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'One width is enough for the publish dialog.');
@@ -16,8 +17,7 @@ test.describe('a form’s first publish', () => {
     const slug = `publish-${tag}`;
     await newWorkspace(page, `publish-${tag}@example.com`, slug);
     await page.goto(`/w/${slug}/captures/forms`);
-    await page.getByRole('button', { name: 'New form' }).first().click();
-    await expect(page).toHaveURL(/\/captures\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
+    await newForm(page);
 
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
     const publish = page.getByRole('dialog', { name: 'Publish your form' });

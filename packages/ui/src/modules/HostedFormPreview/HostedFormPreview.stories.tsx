@@ -156,3 +156,62 @@ export const LayoutTiles: Story = {
     await expect(canvas.getByRole('radio', { name: 'Steps' })).toBeChecked();
   },
 };
+
+/**
+ * A template's own answers in miniature (`rows`), as the form template gallery's tiles draw them (spec 0063,
+ * AC-6323): every tile keeps its tall preview and takes its name and purpose underneath, so the shapes say what
+ * kind of form it is while the line says what it is for.
+ */
+export const TemplateTiles: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <TileGrid
+        variant="choice"
+        mode="action"
+        label="Start a form"
+        showsDescription
+        keepsPicture
+        tiles={[
+          {
+            id: 'blank',
+            name: 'Blank form',
+            thumbnail: <FormLayoutThumbnail layout="classic" rows={['field', 'field', 'field']} />,
+            description: 'Name, email and phone, to change as you like.',
+          },
+          {
+            id: 'feedback',
+            name: 'Feedback',
+            thumbnail: <FormLayoutThumbnail layout="classic" rows={['field', 'rating', 'long']} />,
+            description: 'A rating and one open question, so you hear why as well as how much.',
+          },
+          {
+            id: 'nps',
+            name: 'Recommendation score (NPS)',
+            thumbnail: <FormLayoutThumbnail layout="classic" rows={['field', 'scale', 'long']} />,
+            description: '0 to 10, and room to say why.',
+          },
+          {
+            id: 'support_request',
+            name: 'Support request',
+            thumbnail: <FormLayoutThumbnail layout="classic" rows={['field', 'long', 'choices']} />,
+            description: 'What broke, how urgent it is, and a screenshot to go with it.',
+          },
+          {
+            id: 'customer_onboarding',
+            name: 'Customer onboarding',
+            thumbnail: <FormLayoutThumbnail layout="steps" rows={['field', 'field', 'date']} />,
+            description: 'Asked a step at a time, so a long form still gets finished.',
+          },
+        ]}
+        onAction={() => undefined}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // Both halves are on the tile, not in a tooltip: the preview to look at and the line to read.
+    await expect(canvas.getByRole('button', { name: 'Feedback' })).toHaveAccessibleDescription(
+      'A rating and one open question, so you hear why as well as how much.',
+    );
+    await expect(canvas.getByText('0 to 10, and room to say why.')).toBeVisible();
+  },
+};

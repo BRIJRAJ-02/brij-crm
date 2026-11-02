@@ -1,0 +1,449 @@
+// The form templates themselves (spec 0063, AC-6323, AC-6324): twelve ready
+// forms, in code and versioned with `FORM_TEMPLATES_VERSION`, never in the
+// database, so a template is read the same on every deployment and a change
+// to one is a reviewed commit.
+//
+// A template is deliberately not a `FormDocument`. It says what to ask and,
+// for each answer, the *slug* of the standard attribute it belongs on
+// (`filesOnto`); `draftOf` turns that into a document against one workspace's
+// own schema, because two workspaces' People have the same slugs but
+// different attribute ids, and a workspace may have renamed, archived or
+// never had a field. An answer whose slug matches nothing is kept with the
+// submission instead (`kept`), and no field is made for it until publish.
+//
+// Every template asks for a name and an email filed on People, because a form
+// whose answers reach the CRM needs both: the email is how a submission finds
+// the record it belongs to, and a name is required on People, so a template
+// without them could never be published (`publishProblem`).
+import type {
+  AnswerType,
+  FormLayout,
+  FormQuestionOptions,
+  FormTemplateId,
+  FormTemplatePreviewRow,
+} from '@crm/contracts';
+
+/** The templates' version, moved whenever a template's questions change, so a report can say which one made a form. */
+export const FORM_TEMPLATES_VERSION = 1;
+
+/** One question a template asks, before it knows a workspace's attribute ids. */
+export interface FormTemplateQuestion {
+  readonly id: string;
+  readonly key: string;
+  readonly label: string;
+  readonly answerType: AnswerType;
+  readonly required: boolean;
+  readonly placeholder?: string;
+  readonly choices?: readonly string[];
+  readonly options?: FormQuestionOptions;
+  /**
+   * The `apiSlug` of the standard attribute this answer belongs on, when the
+   * workspace's target object has one of a type that fits. Absent, or matching
+   * nothing, means the answer is kept with the submission and files nowhere.
+   */
+  readonly filesOnto?: string;
+  /** Starts a new step here (`FormStep`), for a template whose layout is Steps. */
+  readonly step?: { readonly id: string; readonly title: string };
+}
+
+/** One template: what the tile says, what the form looks like, and what it asks. */
+export interface FormTemplate {
+  readonly id: FormTemplateId;
+  /** The tile's name in the gallery: what the person is choosing between. */
+  readonly name: string;
+  /**
+   * What the form it makes is called, when that isn't the tile's own name. The blank tile is "Blank form", because
+   * that is the choice; the form it makes is "Untitled form", because that is what an unnamed form is called
+   * everywhere else in the product (UX review, slice 8).
+   */
+  readonly formName?: string;
+  /** Why you would pick it, in one line (AC-6323). */
+  readonly purpose: string;
+  /** The tile's small preview of its look (AC-6323): the shapes of its first few answers. */
+  readonly preview: readonly FormTemplatePreviewRow[];
+  readonly layout: FormLayout;
+  readonly headline: string;
+  readonly buttonText: string;
+  readonly questions: readonly FormTemplateQuestion[];
+}
+
+/** Name and email, which every template starts with: the two answers a submission needs to become a person. */
+const WHO: readonly FormTemplateQuestion[] = [
+  {
+    id: 'name',
+    key: 'name',
+    label: 'Your name',
+    answerType: 'short_text',
+    placeholder: 'John Doe',
+    required: true,
+    filesOnto: 'name',
+  },
+  {
+    id: 'email',
+    key: 'email',
+    label: 'Work email',
+    answerType: 'email',
+    placeholder: 'john@acme.com',
+    required: true,
+    filesOnto: 'email_addresses',
+  },
+];
+
+const PHONE: FormTemplateQuestion = {
+  id: 'phone',
+  key: 'phone',
+  label: 'Phone or WhatsApp',
+  answerType: 'phone',
+  placeholder: '555 000 1234',
+  required: false,
+  filesOnto: 'phone_numbers',
+};
+
+/** The company a person works at, kept with the submission: People holds its company as a link, not as text. */
+const COMPANY: FormTemplateQuestion = {
+  id: 'company',
+  key: 'company',
+  label: 'Company',
+  answerType: 'short_text',
+  placeholder: 'Acme',
+  required: false,
+};
+
+const JOB_TITLE: FormTemplateQuestion = {
+  id: 'job_title',
+  key: 'job_title',
+  label: 'Job title',
+  answerType: 'short_text',
+  placeholder: 'Head of sales',
+  required: false,
+  filesOnto: 'job_title',
+};
+
+/**
+ * A long open answer. `filesOnto` is deliberately absent, so it is kept with the submission rather than written
+ * onto the person: People · Description is the only standard long text a visitor could fill, and it is a durable,
+ * purpose-neutral field that anyone with People read sees and that exports, search, webhooks and the API all carry.
+ * A support form's "What is happening?", a feedback form's "What could be better?" and an NPS "why" are none of
+ * them a person's description, and the first complaint somebody files should not become their permanent one
+ * (security review, slice 8). `intro` is the exception, for the templates where a short line about the person
+ * genuinely is a description.
+ */
+const note = (id: string, key: string, label: string, placeholder: string): FormTemplateQuestion => ({
+  id,
+  key,
+  label,
+  answerType: 'long_text',
+  placeholder,
+  required: false,
+});
+
+/** A long answer that really is about the person, filed on People · Description where the workspace has it. */
+const intro = (id: string, key: string, label: string, placeholder: string): FormTemplateQuestion => ({
+  ...note(id, key, label, placeholder),
+  filesOnto: 'description',
+});
+
+/**
+ * Every template that exists in code, by id. Two of them,
+ * `lead_qualification` and `booking_intake`, are written here but held out of
+ * the gallery until slice 5 of this spec lands; `OFFERED_FORM_TEMPLATE_IDS`
+ * in `@crm/contracts` says what each is waiting for and how to release it.
+ */
+export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
+  blank: {
+    id: 'blank',
+    name: 'Blank form',
+    // The same name `createForm` gives an unnamed form: the blank tile makes exactly what New form used to.
+    formName: 'Untitled form',
+    purpose: 'Name, email and phone, to change as you like.',
+    preview: ['field', 'field', 'field'],
+    layout: 'classic',
+    headline: 'Fill this in and we will come back to you',
+    buttonText: 'Send',
+    questions: [...WHO, PHONE],
+  },
+
+  contact_us: {
+    id: 'contact_us',
+    name: 'Contact us',
+    purpose: 'Name, email, company and a message.',
+    preview: ['field', 'field', 'long'],
+    layout: 'classic',
+    headline: 'Talk to us',
+    buttonText: 'Send message',
+    questions: [...WHO, COMPANY, intro('message', 'message', 'How can we help?', 'Tell us what you need')],
+  },
+
+  demo_request: {
+    id: 'demo_request',
+    name: 'Demo request',
+    purpose: 'Qualify a demo before you give it: role, company and what they want to see.',
+    preview: ['field', 'field', 'long'],
+    layout: 'classic',
+    headline: 'Book a demo',
+    buttonText: 'Request a demo',
+    questions: [
+      ...WHO,
+      COMPANY,
+      JOB_TITLE,
+      intro('goal', 'goal', 'What would you like to see?', 'The part of your work we should start with'),
+    ],
+  },
+
+  event_signup: {
+    id: 'event_signup',
+    name: 'Event signup',
+    purpose: 'Who is coming, on which day, and which sessions.',
+    preview: ['field', 'field', 'date'],
+    layout: 'classic',
+    headline: 'Save your seat',
+    buttonText: 'Sign me up',
+    questions: [
+      ...WHO,
+      {
+        id: 'day',
+        key: 'day',
+        label: 'Which day suits you?',
+        answerType: 'date',
+        required: true,
+      },
+      {
+        id: 'sessions',
+        key: 'sessions',
+        label: 'Which sessions interest you?',
+        answerType: 'multi_select',
+        required: false,
+        choices: ['Opening keynote', 'Workshops', 'Panel', 'Dinner'],
+        options: { other: true },
+      },
+      {
+        id: 'guest',
+        key: 'guest',
+        label: 'Bringing a guest?',
+        answerType: 'yes_no',
+        required: false,
+      },
+    ],
+  },
+
+  feedback: {
+    id: 'feedback',
+    name: 'Feedback',
+    purpose: 'A rating and one open question, so you hear why as well as how much.',
+    preview: ['field', 'rating', 'long'],
+    layout: 'classic',
+    headline: 'How did we do?',
+    buttonText: 'Send feedback',
+    questions: [
+      ...WHO,
+      {
+        id: 'rating',
+        key: 'rating',
+        label: 'How was it?',
+        answerType: 'rating',
+        required: true,
+      },
+      note('better', 'better', 'What could be better?', 'Anything at all'),
+    ],
+  },
+
+  nps: {
+    id: 'nps',
+    name: 'Recommendation score (NPS)',
+    purpose: '0 to 10, and room to say why.',
+    preview: ['field', 'scale', 'long'],
+    layout: 'classic',
+    headline: 'One question, if you have a moment',
+    buttonText: 'Send',
+    questions: [
+      ...WHO,
+      {
+        id: 'nps',
+        key: 'nps',
+        label: 'How likely are you to recommend us to a colleague?',
+        answerType: 'scale',
+        required: true,
+        options: { from: 0, to: 10, lowLabel: 'Not likely', highLabel: 'Very likely' },
+      },
+      note('why', 'why', 'What made you pick that number?', 'The one thing that decided it'),
+    ],
+  },
+
+  job_application: {
+    id: 'job_application',
+    name: 'Job application',
+    purpose: 'One role, a CV and a link to their work.',
+    preview: ['field', 'choices', 'upload'],
+    layout: 'classic',
+    headline: 'Apply to join us',
+    buttonText: 'Send application',
+    questions: [
+      ...WHO,
+      PHONE,
+      {
+        id: 'role',
+        key: 'role',
+        label: 'Which role?',
+        answerType: 'choice',
+        required: true,
+        choices: ['Engineering', 'Design', 'Sales', 'Support', 'Something else'],
+      },
+      {
+        id: 'portfolio',
+        key: 'portfolio',
+        label: 'A link to your work',
+        answerType: 'website',
+        placeholder: 'https://',
+        required: false,
+      },
+      {
+        id: 'cv',
+        key: 'cv',
+        label: 'Your CV',
+        answerType: 'file',
+        required: false,
+      },
+    ],
+  },
+
+  newsletter: {
+    id: 'newsletter',
+    name: 'Newsletter',
+    purpose: 'Two fields and nothing else, for a footer or a sidebar.',
+    preview: ['field', 'field'],
+    layout: 'classic',
+    headline: 'Get the monthly note',
+    buttonText: 'Subscribe',
+    questions: WHO,
+  },
+
+  support_request: {
+    id: 'support_request',
+    name: 'Support request',
+    purpose: 'What broke, how urgent it is, and a screenshot to go with it.',
+    preview: ['field', 'long', 'choices'],
+    layout: 'classic',
+    headline: 'Tell us what went wrong',
+    buttonText: 'Send request',
+    questions: [
+      ...WHO,
+      note('problem', 'problem', 'What is happening?', 'What you did, and what happened instead'),
+      {
+        id: 'urgency',
+        key: 'urgency',
+        label: 'How urgent is it?',
+        answerType: 'choice',
+        required: true,
+        choices: ['I can’t work at all', 'It’s slowing me down', 'A small annoyance'],
+      },
+      {
+        id: 'screenshot',
+        key: 'screenshot',
+        label: 'A screenshot, if you have one',
+        answerType: 'file',
+        required: false,
+      },
+    ],
+  },
+
+  customer_onboarding: {
+    id: 'customer_onboarding',
+    name: 'Customer onboarding',
+    purpose: 'Asked a step at a time, so a long form still gets finished.',
+    preview: ['field', 'field', 'field'],
+    layout: 'steps',
+    headline: 'Welcome aboard',
+    buttonText: 'Finish setup',
+    questions: [
+      ...WHO,
+      PHONE,
+      { ...JOB_TITLE, step: { id: 'work', title: 'Where you work' } },
+      COMPANY,
+      {
+        id: 'address',
+        key: 'address',
+        label: 'Billing address',
+        answerType: 'address',
+        required: false,
+        filesOnto: 'primary_location',
+        step: { id: 'billing', title: 'Billing' },
+      },
+      {
+        id: 'heard',
+        key: 'heard',
+        label: 'How did you hear about us?',
+        answerType: 'choice',
+        required: false,
+        choices: ['A colleague', 'Search', 'Social', 'An event', 'Somewhere else'],
+      },
+    ],
+  },
+
+  // Held out of the gallery until slice 5 (see `OFFERED_FORM_TEMPLATE_IDS`). The questions are the right ones; what
+  // is missing is the points on each choice and the `scoreFiledOn` that make it a *scored* qualification form
+  // (AC-6316). Without those it is a longer Demo request, which is why it isn't offered yet.
+  lead_qualification: {
+    id: 'lead_qualification',
+    name: 'Lead qualification',
+    purpose: 'Budget, timeline and team size, scored so the best leads stand out.',
+    preview: ['field', 'choices', 'choices'],
+    layout: 'classic',
+    headline: 'Tell us about your team',
+    buttonText: 'Send',
+    questions: [
+      ...WHO,
+      COMPANY,
+      JOB_TITLE,
+      {
+        id: 'budget',
+        key: 'budget',
+        label: 'What budget do you have in mind?',
+        answerType: 'choice',
+        required: true,
+        choices: ['Under $1k', '$1k to $10k', '$10k to $50k', 'Over $50k'],
+      },
+      {
+        id: 'timeline',
+        key: 'timeline',
+        label: 'When would you like to start?',
+        answerType: 'choice',
+        required: true,
+        choices: ['This month', 'This quarter', 'This year', 'Just looking'],
+      },
+      {
+        id: 'team_size',
+        key: 'team_size',
+        label: 'How many people would use it?',
+        answerType: 'choice',
+        required: false,
+        choices: ['Just me', '2 to 10', '11 to 50', 'More than 50'],
+      },
+    ],
+  },
+
+  // Held out of the gallery until slice 5 (see `OFFERED_FORM_TEMPLATE_IDS`). It asks the right things, but the
+  // ending that makes it a *booking* intake — a Book a meeting ending the visitor lands on (AC-6315) — doesn't
+  // exist in the document yet, so picking it today would give a form that thanks the visitor and stops.
+  booking_intake: {
+    id: 'booking_intake',
+    name: 'Booking intake',
+    purpose: 'Ask what the meeting is about, then send them to your calendar.',
+    preview: ['field', 'field', 'long'],
+    layout: 'classic',
+    headline: 'Before we meet',
+    buttonText: 'Continue',
+    questions: [
+      ...WHO,
+      COMPANY,
+      note('agenda', 'agenda', 'What would you like to cover?', 'So we can come prepared'),
+      {
+        id: 'when',
+        key: 'when',
+        label: 'Any times that suit you?',
+        answerType: 'short_text',
+        placeholder: 'Weekday mornings',
+        required: false,
+      },
+    ],
+  },
+};
