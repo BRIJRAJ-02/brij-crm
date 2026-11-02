@@ -8,6 +8,12 @@ export const linksHref = (slug: string) => `/w/${slug}/captures/links`;
 /** Captures › Links with the New booking page dialog open, preset to Link only (Bookings' reserved time). */
 export const newLinkOnlyPageHref = (slug: string) => `/w/${slug}/captures/links?new=link-only`;
 
+/** One managed page's editor (spec 0037, AC-1333): outside the Captures layout, as a page's editor is. */
+export const managedPageHref = (slug: string, templateId: string) => `/w/${slug}/captures/managed/${templateId}`;
+
+/** Captures › Links with the New dialog open on Managed page (New › Managed page). */
+export const newManagedPageHref = (slug: string) => `/w/${slug}/captures/links?new=managed`;
+
 /** The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only. */
 export const PAGE_TABS = ['page', 'meeting', 'questions', 'hosts', 'hours', 'limits'] as const;
 /** One of the editor's tabs, as `?tab=` holds it. */

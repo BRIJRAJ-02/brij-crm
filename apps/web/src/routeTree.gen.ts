@@ -60,6 +60,7 @@ import { Route as WSlugCapturesFormsIndexRouteImport } from './routes/w.$slug.ca
 import { Route as WSlugCapturesLinksIndexRouteImport } from './routes/w.$slug.captures.links.index.tsx'
 import { Route as WSlugCapturesFormsFormIdRouteImport } from './routes/w.$slug.captures_.forms.$formId.tsx'
 import { Route as WSlugCapturesLinksPageIdRouteImport } from './routes/w.$slug.captures_.links.$pageId.tsx'
+import { Route as WSlugCapturesManagedTemplateIdRouteImport } from './routes/w.$slug.captures_.managed.$templateId.tsx'
 import { Route as WSlugListsListImportRouteImport } from './routes/w.$slug.lists.$list_.import.tsx'
 import { Route as WSlugObjectsObjectDuplicatesRouteImport } from './routes/w.$slug.objects.$object_.duplicates.tsx'
 import { Route as WSlugObjectsObjectImportRouteImport } from './routes/w.$slug.objects.$object_.import.tsx'
@@ -362,6 +363,12 @@ const WSlugCapturesLinksPageIdRoute =
     path: '/captures/links/$pageId',
     getParentRoute: () => WSlugRoute,
   } as any)
+const WSlugCapturesManagedTemplateIdRoute =
+  WSlugCapturesManagedTemplateIdRouteImport.update({
+    id: '/captures_/managed/$templateId',
+    path: '/captures/managed/$templateId',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 const WSlugListsListImportRoute = WSlugListsListImportRouteImport.update({
   id: '/lists/$list_/import',
   path: '/lists/$list/import',
@@ -654,6 +661,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
+  '/w/$slug/captures/managed/$templateId': typeof WSlugCapturesManagedTemplateIdRoute
   '/w/$slug/lists/$list/import': typeof WSlugListsListImportRoute
   '/w/$slug/objects/$object/duplicates': typeof WSlugObjectsObjectDuplicatesRoute
   '/w/$slug/objects/$object/import': typeof WSlugObjectsObjectImportRoute
@@ -744,6 +752,7 @@ export interface FileRoutesByTo {
   '/w/$slug/bookings/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
+  '/w/$slug/captures/managed/$templateId': typeof WSlugCapturesManagedTemplateIdRoute
   '/w/$slug/lists/$list/import': typeof WSlugListsListImportRoute
   '/w/$slug/objects/$object/duplicates': typeof WSlugObjectsObjectDuplicatesRoute
   '/w/$slug/objects/$object/import': typeof WSlugObjectsObjectImportRoute
@@ -839,6 +848,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings_/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
   '/w/$slug/captures_/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures_/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
+  '/w/$slug/captures_/managed/$templateId': typeof WSlugCapturesManagedTemplateIdRoute
   '/w/$slug/lists/$list_/import': typeof WSlugListsListImportRoute
   '/w/$slug/objects/$object_/duplicates': typeof WSlugObjectsObjectDuplicatesRoute
   '/w/$slug/objects/$object_/import': typeof WSlugObjectsObjectImportRoute
@@ -935,6 +945,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/availability/$scheduleId'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
+    | '/w/$slug/captures/managed/$templateId'
     | '/w/$slug/lists/$list/import'
     | '/w/$slug/objects/$object/duplicates'
     | '/w/$slug/objects/$object/import'
@@ -1025,6 +1036,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/availability/$scheduleId'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
+    | '/w/$slug/captures/managed/$templateId'
     | '/w/$slug/lists/$list/import'
     | '/w/$slug/objects/$object/duplicates'
     | '/w/$slug/objects/$object/import'
@@ -1119,6 +1131,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings_/availability/$scheduleId'
     | '/w/$slug/captures_/forms/$formId'
     | '/w/$slug/captures_/links/$pageId'
+    | '/w/$slug/captures_/managed/$templateId'
     | '/w/$slug/lists/$list_/import'
     | '/w/$slug/objects/$object_/duplicates'
     | '/w/$slug/objects/$object_/import'
@@ -1534,6 +1547,13 @@ declare module '@tanstack/react-router' {
       path: '/captures/links/$pageId'
       fullPath: '/w/$slug/captures/links/$pageId'
       preLoaderRoute: typeof WSlugCapturesLinksPageIdRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/captures_/managed/$templateId': {
+      id: '/w/$slug/captures_/managed/$templateId'
+      path: '/captures/managed/$templateId'
+      fullPath: '/w/$slug/captures/managed/$templateId'
+      preLoaderRoute: typeof WSlugCapturesManagedTemplateIdRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/lists/$list_/import': {
@@ -1988,6 +2008,7 @@ interface WSlugRouteChildren {
   WSlugBookingsAvailabilityScheduleIdRoute: typeof WSlugBookingsAvailabilityScheduleIdRoute
   WSlugCapturesFormsFormIdRoute: typeof WSlugCapturesFormsFormIdRoute
   WSlugCapturesLinksPageIdRoute: typeof WSlugCapturesLinksPageIdRoute
+  WSlugCapturesManagedTemplateIdRoute: typeof WSlugCapturesManagedTemplateIdRoute
   WSlugListsListImportRoute: typeof WSlugListsListImportRoute
   WSlugObjectsObjectDuplicatesRoute: typeof WSlugObjectsObjectDuplicatesRoute
   WSlugObjectsObjectImportRoute: typeof WSlugObjectsObjectImportRoute
@@ -2020,6 +2041,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
     WSlugBookingsAvailabilityScheduleIdRoute,
   WSlugCapturesFormsFormIdRoute: WSlugCapturesFormsFormIdRoute,
   WSlugCapturesLinksPageIdRoute: WSlugCapturesLinksPageIdRoute,
+  WSlugCapturesManagedTemplateIdRoute: WSlugCapturesManagedTemplateIdRoute,
   WSlugListsListImportRoute: WSlugListsListImportRoute,
   WSlugObjectsObjectDuplicatesRoute: WSlugObjectsObjectDuplicatesRoute,
   WSlugObjectsObjectImportRoute: WSlugObjectsObjectImportRoute,

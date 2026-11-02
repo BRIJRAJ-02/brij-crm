@@ -39,7 +39,6 @@ import type {
   EditorView,
   ManagedLocks,
   ManagedPageView,
-  ManagedPart,
   ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,

@@ -6,7 +6,7 @@ import { isDataError } from '@crm/data';
 import { Button, Tooltip } from '@crm/ui';
 import { useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { linksHref, pageEditorHref } from '../booking/links.ts';
+import { linksHref, managedPageHref, pageEditorHref } from '../booking/links.ts';
 import { NewPageDialog } from '../booking/NewPageDialog.tsx';
 import { strings as bookingStrings } from '../booking/strings.ts';
 import { formHref } from '../forms/paths.ts';
@@ -51,6 +51,8 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
   const isAskedLinkOnly = tab === 'links' && search.new === 'link-only';
   // Routing's "New team link" arrives as `?new=team-link` (spec 0037, AC-1353): the dialog opens on the Team link.
   const isAskedTeamLink = tab === 'links' && search.new === 'team-link' && canManageForms;
+  // New › Managed page (`?new=managed`, spec 0037, AC-1333): `booking.admin`'s, as the template itself is.
+  const isAskedManaged = tab === 'links' && search.new === 'managed' && canBookTeams;
   const [makingForm, setMakingForm] = useState<string | undefined>(undefined);
 
   // New form makes "Untitled form" at once and opens it: no dialog first, the builder is the dialog.
@@ -95,7 +97,7 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
         data={data}
         slug={slug}
         canBookTeams={canBookTeams}
-        isOpen={isAddingPage || isAskedLinkOnly || isAskedTeamLink}
+        isOpen={isAddingPage || isAskedLinkOnly || isAskedTeamLink || isAskedManaged}
         isLinkOnly={isAskedLinkOnly}
         isTeamLinkAsked={isAskedTeamLink}
         {...(canManageForms
@@ -106,9 +108,19 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
               },
             }
           : {})}
+        {...(canBookTeams
+          ? {
+              onManaged: (templateId: string) => {
+                setAddingPage(false);
+                void navigate({ href: managedPageHref(slug, templateId) });
+              },
+            }
+          : {})}
         onClose={() => {
           setAddingPage(false);
-          if (isAskedLinkOnly || isAskedTeamLink) void navigate({ href: linksHref(slug), replace: true });
+          if (isAskedLinkOnly || isAskedTeamLink || isAskedManaged) {
+            void navigate({ href: linksHref(slug), replace: true });
+          }
         }}
         onCreated={(page) => {
           setAddingPage(false);

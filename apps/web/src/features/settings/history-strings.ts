@@ -302,10 +302,27 @@ const SENTENCES: SentenceTemplates = {
     ),
   'rotation.changed': (entry, w) => actor(`changed who is in ${w.thing(entry.target)}`),
   'editors.changed': (entry, w) => actor(`changed who can edit ${w.thing(entry.target)}`),
+  // A managed page (spec 0037, AC-1333 to AC-1335): what changed is said by the counts when people moved, since
+  // that is the change with a consequence — a page was made or deleted for each of them.
+  'managed_page.changed': (entry, w) =>
+    entry.params.added === 0 && entry.params.removed === 0
+      ? actor(`changed the ${w.thing(entry.target)} managed page`)
+      : actor(
+          `changed who has the ${w.thing(entry.target)} managed page${peopleMoved(entry.params.added, entry.params.removed)}`,
+        ),
   'routing.settings_changed': () => actor('changed the routing settings'),
   'routing.skills_changed': () => actor('changed routing skills'),
   'routing.tested': () => actor('tested routing'),
 };
+
+/** How many people a managed page gained and lost, in words (" (2 added, 1 taken off)"); empty when neither moved. */
+function peopleMoved(added: number, removed: number): string {
+  const parts = [
+    ...(added > 0 ? [`${String(added)} added`] : []),
+    ...(removed > 0 ? [`${String(removed)} taken off`] : []),
+  ];
+  return parts.length === 0 ? '' : ` (${parts.join(', ')})`;
+}
 
 /** A delegation's level as its verb: See or Manage. */
 function verbOf(level: 'view' | 'manage'): string {

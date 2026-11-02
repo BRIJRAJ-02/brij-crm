@@ -15,10 +15,12 @@
 // order they were made in until the Links list can be reordered by drag).
 import {
   isDataError,
+  MANAGED_PARTS,
   type BookingPageSettings,
   type BookingPageView,
   type DataLayer,
   type FormTargetChoices,
+  type ManagedPart,
   type MemberSummary,
   type ObjectSummary,
   type ScheduleView,
@@ -71,6 +73,7 @@ import { strings as questionStrings } from '../questions/strings.ts';
 import { linkPageHref } from '../link-page/nav-strings.ts';
 import { objectSettingsHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
+import { managedStrings } from './managed-strings.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { noVideoLinkReason } from './destination.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
@@ -282,6 +285,11 @@ export function PageEditor({
   const navigate = useNavigate();
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
+  // From a managed template (spec 0037, AC-1333, AC-1334): the parts the workspace sets are read only here, and
+  // the note above the tabs names them. The server refuses a write to one whatever this renders, so these are
+  // labels over a guard, never the guard itself.
+  const workspaceSets: ReadonlySet<ManagedPart> = new Set(page.lockedParts ?? []);
+  const readOnly = (part: ManagedPart) => isLocked || workspaceSets.has(part);
   // The link page is the viewer's own: only the page's owner places it there (an admin editing a teammate's page doesn't).
   // A workspace link is nobody's own (30 Oct 2026): no handle, no profile, no social links, only its /b/ link.
   const isWorkspace = page.scope === 'workspace';
@@ -743,7 +751,14 @@ export function PageEditor({
         </InfoTip>
       }
     >
-      <Select label={title} isLabelHidden items={items} isReadOnly={isLocked} value={value} onChange={onChange} />
+      <Select
+        label={title}
+        isLabelHidden
+        items={items}
+        isReadOnly={readOnly('limits')}
+        value={value}
+        onChange={onChange}
+      />
     </SettingsRow>
   );
 
@@ -765,6 +780,8 @@ export function PageEditor({
                 />
                 {/* Someone else's page (spec 0037, AC-1273): whose it is, beside its status. */}
                 {page.ownerName !== undefined && <Badge text={strings.editingFor(page.ownerName)} isWhole />}
+                {/* Made from a managed template (AC-1334): where this page's settings come from, beside its status. */}
+                {workspaceSets.size > 0 && <Badge text={managedStrings.fromTemplate} isWhole />}
               </>
             }
           >
@@ -873,6 +890,19 @@ export function PageEditor({
                           {strings.readOnlyText}
                         </Callout>
                       )}
+                      {/* What the workspace sets on this page, named once rather than on every field (AC-1334):
+                          each of those controls is read only, and a write to one is refused by the server as
+                          well. A page level note, so it sits with the other two rather than inside a tab. */}
+                      {workspaceSets.size > 0 && (
+                        <Callout tone="info" title={managedStrings.fromTemplate}>
+                          {managedStrings.setByWorkspaceNote(
+                            // In the template editor's order, so the page is described the same way on both sides.
+                            MANAGED_PARTS.filter((part) => workspaceSets.has(part)).map(
+                              (part) => managedStrings.partName[part],
+                            ),
+                          )}
+                        </Callout>
+                      )}
                       {/* The note is about the reader's own calendar: not on a colleague's page. */}
                       {hasNoCalendar && !isNoteDismissed && page.ownerName === undefined && (
                         <CalendarNote
@@ -935,7 +965,7 @@ export function PageEditor({
                           isMultiline
                           maxLength={2000}
                           showCounter
-                          isReadOnly={isLocked}
+                          isReadOnly={readOnly('details')}
                           onChange={(description) => change({ description })}
                         />
                         {/* The view the page opens in (the owner, 25 Oct 2026): the host's default, which a
@@ -982,7 +1012,7 @@ export function PageEditor({
                               : {})}
                             maxLength={60}
                             isRequired
-                            isReadOnly={isLocked}
+                            isReadOnly={readOnly('address')}
                             onChange={(value) => change({ slug: value.toLowerCase().replace(/\s+/g, '-') })}
                             onBlur={() => setSlugLeft(true)}
                             {...(isSlugLeft && slugProblem(draft.slug) !== undefined
@@ -1085,11 +1115,11 @@ export function PageEditor({
                           value={draft.title}
                           maxLength={120}
                           isRequired
-                          isReadOnly={isLocked}
+                          isReadOnly={readOnly('details')}
                           onChange={(title) => change({ title })}
                           {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
                         />
-                        {isLocked ? (
+                        {readOnly('durations') ? (
                           // Read only: the chosen lengths as text, which a viewer can reach and read; disabled chips can't be.
                           <DescriptionList
                             items={[
@@ -1134,7 +1164,7 @@ export function PageEditor({
                             }
                           />
                         )}
-                        {!isLocked && (
+                        {!readOnly('durations') && (
                           <Popover
                             label={strings.addLength}
                             triggerRef={customRef}
@@ -1180,7 +1210,7 @@ export function PageEditor({
                           isLabelHidden
                           items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
                           value={location.type}
-                          isReadOnly={isLocked}
+                          isReadOnly={readOnly('location')}
                           {...(location.type === 'video' && noLinkHint !== undefined ? { hint: noLinkHint } : {})}
                           onChange={(type) => {
                             if (type === 'video' || type === 'phone') change({ location: { type } });
@@ -1194,7 +1224,7 @@ export function PageEditor({
                             value={location.value}
                             maxLength={500}
                             isRequired
-                            isReadOnly={isLocked}
+                            isReadOnly={readOnly('location')}
                             {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
                             onChange={(value) => change({ location: { type: location.type, value } })}
                           />
@@ -1215,7 +1245,7 @@ export function PageEditor({
                         <Switch
                           label={strings.addToCrm}
                           isSelected={draft.fileToCrm}
-                          isReadOnly={isLocked}
+                          isReadOnly={readOnly('on_booking')}
                           onChange={(fileToCrm) => change({ fileToCrm })}
                         />
                       </Card>
@@ -1271,7 +1301,7 @@ export function PageEditor({
                             optionDescription="below"
                             {...(isAnyUnmatched ? { hint: strings.answersObjectRule } : {})}
                             value={answersObject}
-                            isReadOnly={isLocked}
+                            isReadOnly={readOnly('on_booking')}
                             isDisabled={isMovingAnswers}
                             onChange={moveAnswers}
                           />
@@ -1297,7 +1327,7 @@ export function PageEditor({
                         newId={() => crypto.randomUUID()}
                         toasts={toasts}
                         canCreate={canBuild}
-                        isReadOnly={isLocked}
+                        isReadOnly={readOnly('questions')}
                         {...(shownProblem === undefined ? {} : { problem: shownProblem })}
                       />
                     </>
@@ -1373,7 +1403,7 @@ export function PageEditor({
                             isLabelHidden
                             items={hours.items}
                             value={draft.scheduleId ?? 'default'}
-                            isReadOnly={isLocked || hours.items.length === 0 || isWeekDirty}
+                            isReadOnly={readOnly('hours') || hours.items.length === 0 || isWeekDirty}
                             {...(hours.items.length === 0
                               ? { readOnlyReason: strings.followOwnerHint }
                               : isWeekDirty
@@ -1416,11 +1446,11 @@ export function PageEditor({
                           </Card>
                         ) : (
                           <>
-                            <WeekCard availability={week.shown} onChange={changeWeek} isReadOnly={isLocked} />
+                            <WeekCard availability={week.shown} onChange={changeWeek} isReadOnly={readOnly('hours')} />
                             <DaysOff
                               availability={week.shown}
                               onChange={(next) => changeWeek(() => next)}
-                              isReadOnly={isLocked}
+                              isReadOnly={readOnly('hours')}
                             />
                           </>
                         ))}
