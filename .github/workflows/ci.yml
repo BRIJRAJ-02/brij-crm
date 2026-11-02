@@ -574,33 +574,26 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
             timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
             sudo dpkg --configure -a || true
           done
-      # Two shards per engine, each split into passes of at most 30 story files. A pass is one `vitest run`
-      # and so one fresh browser page, and `scripts/story-shard.ts` decides the split.
+      # Two shards per engine, one `vitest run` each and so one browser page each. `scripts/story-shard.ts`
+      # picks which files go in which shard; vitest still decides the order inside a shard.
       #
-      # The cap is the point. WebKit has died after the 37th file four times (41477180390, 41478500792,
-      # 41490051715, 41491888165) across two shardings, two file counts per page and four trees, and what the
-      # page was scheduled to run never moved that figure: 91 files or 178, the same 37. So the ceiling looks
-      # to be counted in FILES, not in their content, which means a pass that stays under it should live. If
-      # that is right, every pass of 30 or fewer passes. If a pass of 30 dies anyway, the count hypothesis is
-      # wrong, and one observation already argues against it: a pass of 86 died after 3 (41485749715).
+      # The shards are a MITIGATION for the shared page running out of memory, and nothing has shown they
+      # help. Do not collapse them into one run, do not add a third, do not raise the timeout, and keep
+      # isolation on: `--no-isolate` hangs identically (41448193169).
       #
-      # What this replaces: the four files that used to run in a page of their own. That quarantine rested on
-      # a theory we refuted — they passed 4 of 4 alone while a pass of ordinary files died after 3 — and
-      # under a cap it is unnecessary anyway, since every pass is already small.
+      # A cap of 30 files per page was tried here and REMOVED. It made a prediction — a page under the
+      # ceiling survives, since WebKit had died after the 37th file four times — and failed it: a fresh page
+      # of 23 crashed after 9 (41495821106). It is recorded rather than kept, because machinery that failed
+      # its own test should not be carried on trust.
       #
-      # Isolation stays on, there is no third shard and no timeout change. `--no-isolate` hangs identically
-      # (41448193169). docs/runbooks/story-page-leak.md has every observation; read it before concluding
-      # anything from one run, because a green here is one sample and so is a red.
-      #
-      # `story-shard.ts` picks membership and pass boundaries only: the files reach vitest as filters, so the
-      # order inside a pass is still vitest's own.
+      # docs/runbooks/story-page-leak.md lists every observation. Read it before concluding anything from one
+      # run: a green here is one sample and so is a red, and this fails on untouched code too.
       - name: Run the stories, in two shards
         run: |
           for shard in 1 2; do
-            while read -r pass; do
-              # shellcheck disable=SC2086
-              pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" $pass
-            done < <(node packages/ui/scripts/story-shard.ts "$shard" 2)
+            # shellcheck disable=SC2046
+            pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" \
+              $(node packages/ui/scripts/story-shard.ts "$shard" 2)
           done
         env:
           CRM_STORY_BROWSERS: ${{ matrix.browser }}

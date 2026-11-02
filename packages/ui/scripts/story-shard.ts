@@ -1,25 +1,22 @@
-// `node scripts/story-shard.ts <index> <count>`: what one CI shard should run, as one
-// line per pass, each line a space separated list of story files. The shard runs a
-// `vitest run` per line.
+// `node scripts/story-shard.ts <index> <count>`: the story files one CI shard should run,
+// as one space separated line. The shard runs them in a single `vitest run`.
 //
-// Why this exists rather than vitest's own `--shard`. Every story file in an engine
-// shares one long lived browser page, and sometimes that page runs out of memory. It is
-// a MITIGATION, not a fix, and not a demonstrated one: the crash point is a distribution
-// rather than a property of a tree, and splitting the set has one green behind it
-// (41469582229) against a branch with no library change that both passed its whole set
-// three times and crashed at 37 of 178. Read docs/runbooks/story-page-leak.md, which
-// lists every observation, before concluding anything from a run of this.
+// Why this exists rather than vitest's own `--shard`: that orders files by the sha1 of
+// their path and, with no cache on a fresh runner, its sequencer leaves that order alone,
+// so which files land first is a coin toss, and a 5 of 91 run came out of it
+// (41457814575). This deals them heaviest first instead, so the two shards carry about
+// the same.
 //
-// What it does: deal the files heaviest first into the shards, so each carries about the
-// same, and give KEEPS_A_PAGE a pass of its own. It picks membership and pass boundaries,
-// never order, because the files reach vitest as filters and vitest still runs them in
-// whatever order it collected them. A pass is one `vitest run`, so each pass is a fresh
-// page. We avoided vitest's own `--shard` because it orders files by the sha1 of their
-// path and, with no cache on a fresh runner, its `sort()` leaves that order alone, so
-// which files land first is a coin toss; a 5 of 91 run came out of that (41457814575).
+// It picks membership, never order: the files reach vitest as filters, and vitest still
+// runs them in whatever order it collected them.
 //
-// File isolation stays on, and the shard count is a reading of the symptom, not a knob:
-// if a shard dies again, what a story leaves in the page has grown.
+// The shards exist because the shared browser page sometimes runs out of memory, and they
+// are a MITIGATION that has never been demonstrated to help. Do not collapse them into one
+// run, do not add a third, do not raise the timeout, and keep isolation on
+// (`--no-isolate` hangs identically, 41448193169). A cap on files per page WAS tried here
+// and removed: it predicted that a pass under the cap would survive, and a fresh page of
+// 23 died after 9 (41495821106). docs/runbooks/story-page-leak.md has every observation;
+// read it before concluding anything from a single run, green or red.
 import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
@@ -39,16 +36,6 @@ export function storyFiles(root: string = UI): readonly StoryFile[] {
 }
 
 /**
- * The most files one pass may run. WebKit has died after the 37th file four times, on
- * two shardings, two file counts per page and four trees (41477180390, 41478500792,
- * 41490051715, 41491888165), while what the page was scheduled to run never moved that
- * figure. If the ceiling really is counted in files, a pass below it survives, so every
- * pass is kept comfortably under. 30 rather than 36 because 37 is the only count we have
- * seen it reach, not a measured limit.
- */
-export const MAX_PER_PASS = 30;
-
-/**
  * The files for shard `index` of `count` (both 1 based). Dealing heaviest first gives
  * every shard about the same total and keeps the heaviest files apart.
  */
@@ -63,31 +50,11 @@ export function shardStories(files: readonly StoryFile[], index: number, count: 
   return alternating;
 }
 
-/**
- * A shard's passes, each one a `vitest run` of its own and so a browser page of its own,
- * none holding more than `MAX_PER_PASS` files. Split into as few passes as that allows
- * and then evenly, so no pass is a straggler of one.
- */
-export function shardPasses(
-  files: readonly StoryFile[],
-  index: number,
-  count: number,
-  maxPerPass: number = MAX_PER_PASS,
-): readonly (readonly string[])[] {
-  const mine = shardStories(files, index, count);
-  if (mine.length === 0) return [];
-  const howMany = Math.ceil(mine.length / maxPerPass);
-  const passes: string[][] = Array.from({ length: howMany }, () => []);
-  mine.forEach((file, place) => passes[place % howMany]?.push(file));
-  return passes.filter((pass) => pass.length > 0);
-}
-
 if (process.argv[1] === import.meta.filename) {
   const [index, count] = process.argv.slice(2).map(Number);
   if (!Number.isInteger(index) || !Number.isInteger(count) || index === undefined || count === undefined) {
     throw new Error('story-shard needs an index and a count, as in `story-shard.ts 1 2`');
   }
   if (index < 1 || count < 1 || index > count) throw new Error(`a shard ${index} of ${count} doesn't exist`);
-  const passes = shardPasses(storyFiles(), index, count);
-  process.stdout.write(`${passes.map((pass) => pass.join(' ')).join('\n')}\n`);
+  process.stdout.write(`${shardStories(storyFiles(), index, count).join(' ')}\n`);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_PER_PASS, shardPasses, shardStories, storyFiles, type StoryFile } from './story-shard.ts';
+import { shardStories, storyFiles, type StoryFile } from './story-shard.ts';
 
 /** Ten files, heaviest to lightest, so the weights are easy to read in an expectation. */
 const FILES: readonly StoryFile[] = Array.from({ length: 10 }, (_, place) => ({
@@ -41,41 +41,6 @@ describe('shardStories', () => {
 
   it('runs every file when the count is one', () => {
     expect(shardStories(FILES, 1, 1)).toHaveLength(FILES.length);
-  });
-});
-
-describe('shardPasses', () => {
-  it('never puts more than MAX_PER_PASS files in one pass', () => {
-    for (const index of [1, 2]) {
-      for (const pass of shardPasses(storyFiles(), index, 2)) {
-        expect(pass.length).toBeLessThanOrEqual(MAX_PER_PASS);
-      }
-    }
-  });
-
-  it('runs every file of its shard exactly once, across the passes', () => {
-    const shard = shardStories(FILES, 1, 2);
-    expect(shardPasses(FILES, 1, 2).flat().sort()).toEqual([...shard].sort());
-  });
-
-  it('uses as few passes as the cap allows, and splits them evenly', () => {
-    const files: readonly StoryFile[] = Array.from({ length: 10 }, (_, place) => ({
-      file: `src/f${place}.stories.tsx`,
-      size: 100,
-    }));
-    // Ten files under a cap of four: three passes, never 4 + 4 + 2 with a straggler.
-    const passes = shardPasses(files, 1, 1, 4);
-    expect(passes).toHaveLength(3);
-    expect(passes.map((pass) => pass.length)).toEqual([4, 3, 3]);
-  });
-
-  it('is one pass when the shard fits under the cap', () => {
-    expect(shardPasses(FILES, 1, 2, 100)).toHaveLength(1);
-  });
-
-  it('never leaves a pass empty, since vitest would then run everything', () => {
-    expect(shardPasses(storyFiles(), 1, 2).every((pass) => pass.length > 0)).toBe(true);
-    expect(shardPasses(storyFiles(), 2, 2).every((pass) => pass.length > 0)).toBe(true);
   });
 });
 

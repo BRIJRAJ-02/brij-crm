@@ -120,8 +120,10 @@ What this rules out, added to the list above: **the number of files scheduled in
 directions. Large pages sometimes finish (178, three times) and small fresh ones sometimes die (23 → 9,
 86 → 3).
 
-The cap is kept anyway, but on honest terms: it is cheap, it gives more fresh pages, and it is no longer
-backed by evidence. Do not defend it as a fix. If it is ever in the way, remove it.
+**The cap was removed** (the owner, 2 November 2026). A branch should not carry CI machinery into main that
+is known to be unjustified, and this had just refuted its own only evidence. We are back to two plain
+shards, one `vitest run` each. A fix that failed its own test and was taken out is a better entry in this
+file than one quietly kept.
 
 ### What we did about it, which was also the experiment
 
