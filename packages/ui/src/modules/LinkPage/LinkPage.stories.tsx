@@ -58,11 +58,14 @@ const ORANGE_BRAND = [
   ['--brand-link-dark', '#fd6c2b'],
 ] as const;
 
+/** Where the foot's "Claim your free page" goes, as `claimPageHref('booking_profile')` tags it. */
+const CLAIM = 'https://www.timefix.com/?utm_content=claim_link';
+
 const meta = {
   title: 'Modules/LinkPage',
   component: LinkPage,
   args: {
-    foot: <BookingFoot page="booking_profile" claimHref="https://www.timefix.com/?utm_content=claim_link" />,
+    foot: <BookingFoot placement="card" page="booking_profile" claimHref={CLAIM} />,
     onPress: fn(),
   },
   render: (args) => (
@@ -278,6 +281,58 @@ export const ThemedDark: Story = {
     person: { name: 'Ada Lovelace', id: 'ada', bio: 'Numbers, engines and the odd poem.' },
     theme: { ...PLAIN, ground: 'ink', mode: 'dark', shape: 'square', fill: 'outline' },
     blocks: [{ kind: 'link', id: 'site', title: 'ada.dev', href: 'https://ada.dev', hue: 'blue' }],
+    // The page pins its mark to the owner's look, as ProfilePage's foot does, so the white mark draws on the dark box.
+    foot: <BookingFoot placement="card" page="booking_profile" claimHref={CLAIM} scheme="dark" />,
+  },
+};
+
+/**
+ * The foot at 390 wide: the booking page's boxed card ("same box", the owner, 1 November 2026), "Powered by" over the
+ * wordmark and Claim your free page under a hairline, as wide as the column and no wider than the booking rail's.
+ */
+export const Foot: Story = {
+  args: { person: PERSON, blocks: anishBlocks().slice(0, 2) },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await settleAnimations();
+    const foot = canvasElement.querySelector('footer[data-placement="card"]');
+    await expect(foot).toBeVisible();
+    // The claim link the page had before the box: tagged as the profile, opened in this tab.
+    const claim = canvas.getByRole('link', { name: /Claim your free page/ });
+    await expect(claim).toHaveAttribute('href', CLAIM);
+    await expect(claim).not.toHaveAttribute('target');
+    await expect(canvas.getByRole('link', { name: /Powered by/ })).toBeVisible();
+    // The box fits the phone's column: nothing pushes the page sideways.
+    const column = foot?.parentElement?.getBoundingClientRect();
+    const box = foot?.getBoundingClientRect();
+    await expect(box?.width ?? 0).toBeLessThanOrEqual(column?.width ?? 0);
+    await expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
+  },
+};
+
+/**
+ * On the ink ground in the owner's light (a dark page whose tokens are still light), the box keeps the raised surface
+ * and the mark pinned to light, so the wordmark always has its own ground to read on.
+ */
+export const FootOnInk: Story = {
+  args: {
+    person: PERSON,
+    theme: { ...PLAIN, ground: 'ink', fill: 'outline' },
+    blocks: anishBlocks().slice(0, 2),
+    foot: <BookingFoot placement="card" page="booking_profile" claimHref={CLAIM} scheme="light" />,
+  },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await settleAnimations();
+    await expect(canvas.getByRole('link', { name: /Claim your free page/ })).toBeVisible();
   },
 };
 

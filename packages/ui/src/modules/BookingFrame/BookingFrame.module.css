@@ -579,6 +579,34 @@
     outline-offset: var(--border-width-thick);
   }
 
+  /* The boxed card: "Powered by" over the wordmark, then the claim link under a hairline. The rail draws it on a
+     wide booking page only (below); `card` draws it under a single column on every screen, the measure wide at
+     most, so on a phone it fits the column and on a wide link page it is the rail's own size, centred. */
+  .foot:is([data-placement='rail'], [data-placement='card']) {
+    box-sizing: border-box;
+    align-items: stretch;
+    padding: var(--space-12) var(--space-16);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+  }
+
+  .foot[data-placement='card'] {
+    align-self: center;
+    inline-size: 100%;
+    max-inline-size: var(--size-measure);
+  }
+
+  .foot:is([data-placement='rail'], [data-placement='card']) .brand {
+    align-items: flex-start;
+  }
+
+  .foot:is([data-placement='rail'], [data-placement='card']) .claim {
+    justify-content: space-between;
+    padding-block-start: var(--space-8);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
   /* `compact` keeps the stacked layout however wide the window is (27 October 2026): a page drawn in something
      narrow that is not a frame of its own, so a media query would read the window and lay out two columns in a
      phone. First run's preview of a page that doesn't exist yet, and so can't be shown in a PreviewFrame. */
@@ -606,21 +634,6 @@
 
     .root:not([data-compact]) .foot[data-placement='rail'] {
       display: flex;
-      align-items: stretch;
-      padding: var(--space-12) var(--space-16);
-      border: var(--border-width-hairline) solid var(--border);
-      border-radius: var(--radius-lg);
-      background: var(--surface-raised);
-    }
-
-    .foot[data-placement='rail'] .brand {
-      align-items: flex-start;
-    }
-
-    .foot[data-placement='rail'] .claim {
-      justify-content: space-between;
-      padding-block-start: var(--space-8);
-      border-block-start: var(--border-width-hairline) solid var(--border-subtle);
     }
 
     .root:not([data-compact]) .foot[data-placement='page'] {

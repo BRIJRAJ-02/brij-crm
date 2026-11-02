@@ -124,12 +124,14 @@ function folderInAddress(): string | undefined {
 }
 
 /**
- * The page's foot: "Powered by Timefix", tagged as the profile, and Claim your free page. The mark is pinned to
+ * The page's foot: "Powered by Timefix", tagged as the profile, and Claim your free page, in the booking page's boxed
+ * card (`placement="card"`, the owner's "same box", 1 November 2026). The mark is pinned to
  * the look its owner picked, not the visitor's own (26 October 2026): a light page read on a phone in dark mode
  * drew the white mark on white, so the foot showed "POWERED BY" over nothing.
  */
 const footOf = (mode: 'light' | 'dark' | 'system') => (
   <BookingFoot
+    placement="card"
     page="booking_profile"
     claimHref={claimPageHref('booking_profile')}
     // Follow the visitor (spec 0060, AC-15) pins nothing, so the mark follows the visitor too.
@@ -331,8 +333,7 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
   }
   // While loading: the person's and the blocks' own shapes at once (this is the page's first paint, so there is no
   // content for a skeleton to flash in front of), so nothing moves when they arrive.
-  if (loaded.state === 'loading')
-    return <LinkPage foot={<BookingFoot page="booking_profile" claimHref={claimPageHref('booking_profile')} />} />;
+  if (loaded.state === 'loading') return <LinkPage foot={footOf('system')} />;
 
   const { profile, items } = loaded;
   const current = profile.handle;

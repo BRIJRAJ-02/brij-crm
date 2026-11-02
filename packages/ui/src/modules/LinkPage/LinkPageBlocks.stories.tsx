@@ -57,12 +57,15 @@ const PERSON = {
   bio: 'Cofounder at Timefix. Ask me about scheduling that books itself.',
 };
 
+/** Where the foot's "Claim your free page" goes, as `claimPageHref('booking_profile')` tags it. */
+const CLAIM = 'https://www.timefix.com/?utm_content=claim_link';
+
 const meta = {
   title: 'Modules/LinkPage/Blocks',
   component: LinkPage,
   args: {
     person: PERSON,
-    foot: <BookingFoot page="booking_profile" claimHref="https://www.timefix.com/?utm_content=claim_link" />,
+    foot: <BookingFoot placement="card" page="booking_profile" claimHref={CLAIM} />,
     onPress: fn(),
   },
   render: (args) => (
