@@ -546,11 +546,15 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
             timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
             sudo dpkg --configure -a || true
           done
-      # Two shards, one vitest process each, so each starts a fresh browser page. Every story file in an
-      # engine shares one long lived page, and what 181 files leave behind in it adds up: WebKit ran out of
-      # memory and killed the page part way through, at a point that moved between two runs of the same tree
-      # (62 files in on run 41448200887, 74 on 41453929022), which is what accumulation looks like rather than
-      # one heavy story. Halving what one page carries is the fix; file isolation inside a shard stays on.
+      # Two shards, one vitest process each, so each starts a fresh browser page. The shards are here because
+      # the page accumulates as the files run, not because the suite is slow: do not merge them back into one
+      # run to save a few minutes. Every story file in an engine shares one long lived page, and what it keeps
+      # adds up until the page dies: WebKit ran out of memory part way through, at a point that moved between
+      # two runs of the same tree (62 files in on run 41448200887, 74 on 41453929022), and Firefox hangs the
+      # same way. It is not the per file context: `--no-isolate` hangs identically (run 41448193169), so don't
+      # repeat that experiment, and isolation inside a shard stays on. Two shards raise the ceiling, they do
+      # not close the leak, and the number is a reading of the symptom: if a shard hangs again the answer is
+      # that the leak has grown, not that we need a third.
       - name: Run the stories, in two shards
         run: |
           for shard in 1 2; do
