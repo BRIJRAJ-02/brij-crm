@@ -2,6 +2,14 @@
    Every look is a data attribute declared once, here. States read React Aria's
    attributes (data-hovered, data-pressed, data-focus-visible, data-disabled,
    data-pending, data-selected). */
+/* How long a changed label takes to resolve in: none by default, so a page opts in. */
+@property --label-swap {
+  syntax: '<time>';
+  inherits: true;
+  /* stylelint-disable-next-line unit-disallowed-list -- zero, the off value, no token stands for none */
+  initial-value: 0s;
+}
+
 @layer components {
   .root {
     display: inline-flex;
@@ -27,12 +35,31 @@
     transition:
       background-color var(--duration-hover) var(--ease-hover),
       border-color var(--duration-hover) var(--ease-hover),
-      color var(--duration-hover) var(--ease-hover);
+      color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  /* Held, a button eases to --scale-press: the token's 1 in the app (nothing shrinks, 20 October 2026), 0.97 inside a
+     public booking page, which sets it on its own root (1 November 2026). */
+  .root[data-pressed]:not([data-disabled]) {
+    scale: var(--scale-press);
   }
 
   .label {
+    /* The blur a changed label resolves out of (transitions.dev's text swap), a literal until the artifact has a
+       blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --swap-blur: 2px;
+
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* A changed label resolves in over --label-swap: 0s in the app, where nothing moves; the public booking page sets
+     it on its own root (1 November 2026), as it does --scale-press. */
+  .label[data-swapped],
+  .label[data-reserve] > [data-swapped] {
+    animation: label-swap var(--label-swap) var(--ease-in-out);
   }
 
   /* A label that may swap (Copy link, Copied): both take one cell, the wider sets the width, the other hides. */
@@ -430,6 +457,31 @@
     .root[data-disabled] {
       border-color: GrayText;
       color: GrayText;
+    }
+  }
+
+  @keyframes label-swap {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+      filter: blur(var(--swap-blur));
+    }
+  }
+
+  @keyframes label-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-pressed]:not([data-disabled]) {
+      scale: none;
+    }
+
+    .label[data-swapped],
+    .label[data-reserve] > [data-swapped] {
+      animation-name: label-fade;
     }
   }
 }

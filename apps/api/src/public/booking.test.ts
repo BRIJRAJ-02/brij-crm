@@ -17,16 +17,33 @@ import { failure, memberWithWorkspace, tag } from '../../test/workspace.ts';
 import { BOT_REFUSED } from './booking.ts';
 import { createMemoryLimiter } from './limits.ts';
 
-/** Sunday 1 November 2026, midnight UTC. */
-const NOW = new Date('2026-11-01T00:00:00.000Z');
-const MONDAY_9 = '2026-11-02T09:00:00.000Z';
+/** Whole days, in milliseconds. */
+const DAY_MS = 86_400_000;
+/**
+ * The coming Monday at least two days out, read in UTC. A booking fixture has to stay ahead of the database's own
+ * clock (it files reminders and upcoming lists against it), so a fixed date turns this suite red the day it arrives,
+ * as 2 November 2026 did. The rest of the week hangs off it.
+ */
+const MONDAY = ((): string => {
+  const soon = Date.now() + 2 * DAY_MS;
+  const hop = (8 - new Date(soon).getUTCDay()) % 7;
+  return new Date(soon + hop * DAY_MS).toISOString().slice(0, 10);
+})();
+/** A day either side of the Monday, as `YYYY-MM-DD`. */
+const dayFrom = (offset: number): string =>
+  new Date(Date.parse(`${MONDAY}T00:00:00.000Z`) + offset * DAY_MS).toISOString().slice(0, 10);
+const SUNDAY = dayFrom(-1);
+const TUESDAY = dayFrom(1);
+/** The Sunday before, midnight UTC: the clock every booking here reads. */
+const NOW = new Date(`${SUNDAY}T00:00:00.000Z`);
+const MONDAY_9 = `${MONDAY}T09:00:00.000Z`;
 
 let db: Database;
 let identity: IdentityStore;
 const events: BookingEvent[] = [];
 const calendar: BookingCalendar = {
   busy: () =>
-    Promise.resolve({ status: 'read', busy: [{ start: '2026-11-02T12:00:00.000Z', end: '2026-11-02T13:00:00.000Z' }] }),
+    Promise.resolve({ status: 'read', busy: [{ start: `${MONDAY}T12:00:00.000Z`, end: `${MONDAY}T13:00:00.000Z` }] }),
   events: (event) => {
     events.push(event);
     return Promise.resolve({ meetingId: newId() });
@@ -336,12 +353,12 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     expect(JSON.parse(body)).toMatchObject({ title: 'Intro call', durations: [30], location: { type: 'video' } });
 
     const slots = await visit(
-      `${page.publicKey}/slots?from=2026-11-02T00:00:00.000Z&to=2026-11-03T00:00:00.000Z&duration=30&tz=America/New_York`,
+      `${page.publicKey}/slots?from=${MONDAY}T00:00:00.000Z&to=${TUESDAY}T00:00:00.000Z&duration=30&tz=America/New_York`,
     );
     const { slots: offered } = (await slots.json()) as { slots: { start: string }[] };
     // 09:00 to 17:00 UTC is sixteen half hours; the busy hour at 12:00 takes two.
     expect(offered).toHaveLength(14);
-    expect(offered.map((slot) => slot.start)).not.toContain('2026-11-02T12:00:00.000Z');
+    expect(offered.map((slot) => slot.start)).not.toContain(`${MONDAY}T12:00:00.000Z`);
 
     const booked = await visit(`${page.publicKey}/book`, { method: 'POST', body: booking() });
     expect(booked.status).toBe(200);
@@ -349,7 +366,7 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     expect(answer).toMatchObject({
       booking: {
         start: MONDAY_9,
-        end: '2026-11-02T09:30:00.000Z',
+        end: `${MONDAY}T09:30:00.000Z`,
         title: 'Intro call',
         hostName: 'Ada',
         location: { type: 'video' },
@@ -402,7 +419,7 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     expect(unknown.status).toBe(404);
     expect(await unknown.json()).toMatchObject({ code: 'NOT_FOUND', message: 'This page is no longer available.' });
     const slotsQuery = await visit(
-      `${page.publicKey}/slots?from=2026-11-02T00:00:00.000Z&to=2027-02-02T00:00:00.000Z&duration=30&tz=UTC`,
+      `${page.publicKey}/slots?from=${MONDAY}T00:00:00.000Z&to=${dayFrom(92)}T00:00:00.000Z&duration=30&tz=UTC`,
     );
     expect(slotsQuery.status).toBe(400);
   });
@@ -416,14 +433,14 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
       const answer = await visit(`${page.publicKey}/book`, {
         method: 'POST',
         ip,
-        body: booking({ start: `2026-11-02T${hour}:00:00.000Z`, email: `v${hour}@visitor.example` }),
+        body: booking({ start: `${MONDAY}T${hour}:00:00.000Z`, email: `v${hour}@visitor.example` }),
       });
       expect(answer.status).toBe(200);
     }
     const sixth = await visit(`${page.publicKey}/book`, {
       method: 'POST',
       ip,
-      body: booking({ start: '2026-11-02T15:00:00.000Z' }),
+      body: booking({ start: `${MONDAY}T15:00:00.000Z` }),
     });
     expect(sixth.status).toBe(429);
     expect(Number(sixth.headers.get('retry-after'))).toBeGreaterThan(0);
@@ -443,15 +460,15 @@ describe('the guest page’s changes and the host’s (milestone 2: AC-638 to AC
 
   it('moves to a time the page offers, adds guests, then cancels with a reason', async () => {
     const { m, token } = await booked();
-    const slots = await visit(`manage/${token}/slots?from=2026-11-02T00:00:00.000Z&to=2026-11-03T00:00:00.000Z&tz=UTC`);
+    const slots = await visit(`manage/${token}/slots?from=${MONDAY}T00:00:00.000Z&to=${TUESDAY}T00:00:00.000Z&tz=UTC`);
     expect(slots.status).toBe(200);
     const { slots: offered } = (await slots.json()) as { slots: { start: string }[] };
-    expect(offered.map((slot) => slot.start)).toContain('2026-11-02T10:00:00.000Z');
+    expect(offered.map((slot) => slot.start)).toContain(`${MONDAY}T10:00:00.000Z`);
 
-    const moved = await visit(`manage/${token}/move`, { method: 'POST', body: { start: '2026-11-02T10:00:00.000Z' } });
+    const moved = await visit(`manage/${token}/move`, { method: 'POST', body: { start: `${MONDAY}T10:00:00.000Z` } });
     expect(moved.status).toBe(200);
     expect(await moved.json()).toMatchObject({
-      booking: { start: '2026-11-02T10:00:00.000Z', state: 'confirmed', canMove: true },
+      booking: { start: `${MONDAY}T10:00:00.000Z`, state: 'confirmed', canMove: true },
     });
 
     const guests = await visit(`manage/${token}/guests`, {
@@ -466,7 +483,7 @@ describe('the guest page’s changes and the host’s (milestone 2: AC-638 to AC
     expect(await removed.json()).toEqual({ guests: [] });
 
     // A taken time names it, and a bad body says what is wrong.
-    const taken = await visit(`manage/${token}/move`, { method: 'POST', body: { start: '2026-11-02T12:00:00.000Z' } });
+    const taken = await visit(`manage/${token}/move`, { method: 'POST', body: { start: `${MONDAY}T12:00:00.000Z` } });
     expect(taken.status).toBe(409);
     expect(await taken.json()).toMatchObject({ code: 'SLOT_TAKEN' });
     const bad = await visit(`manage/${token}/guests`, { method: 'POST', body: { emails: ['not an email'] } });
@@ -508,15 +525,15 @@ describe('the guest page’s changes and the host’s (milestone 2: AC-638 to AC
     const slots = await m.client.bookings.moveSlots({
       workspace: m.slug,
       bookingId: listed.id,
-      from: '2026-11-02T00:00:00.000Z',
-      to: '2026-11-03T00:00:00.000Z',
+      from: `${MONDAY}T00:00:00.000Z`,
+      to: `${TUESDAY}T00:00:00.000Z`,
     });
     expect(slots.slots.length).toBeGreaterThan(0);
     expect(
       await m.client.bookings.move({
         workspace: m.slug,
         bookingId: listed.id,
-        start: '2026-11-02T11:00:00.000Z',
+        start: `${MONDAY}T11:00:00.000Z`,
         mutationId: newId(),
       }),
     ).toEqual({ moved: true });

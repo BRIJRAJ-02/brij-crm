@@ -13,6 +13,12 @@ export const strings = {
   google: 'Google',
   outlook: 'Outlook',
   apple: 'Apple / .ics',
+  shareHeading: 'Share this meeting',
+  share: 'Share',
+  shareVia: 'Share via…',
+  copyDetails: 'Copy details',
+  copiedDetails: 'Details copied',
+  addLine: (url: string) => `Add it to your calendar: ${url}`,
   cancelledNext: 'Nothing more to do here.',
   pastNext: 'This one has already happened.',
 } as const;

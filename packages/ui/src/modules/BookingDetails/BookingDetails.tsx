@@ -8,6 +8,9 @@ import {
 } from '@crm/contracts/forms';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { GuestChips } from '../../molecules/GuestChips/GuestChips.tsx';
 import { countriesIn } from '../../lib/countries.ts';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { answerOf, focusQuestion, Question } from '../../public-form/Question.tsx';
@@ -35,7 +38,11 @@ export interface BookingDetailsValues {
 
 /** What sending the details answered, as the page's client words it. */
 export type BookingDetailsOutcome =
-  | { readonly kind: 'done' }
+  /**
+   * Booked. `next` runs a beat later (one `--duration-move`, while Confirm shows Booked with a tick): where the page
+   * moves on to the receipt (the owner, 1 November 2026). Without it, the page has already moved on.
+   */
+  | { readonly kind: 'done'; readonly next?: () => void }
   /**
    * Errors by field: `name`, `email`, `phone`, `guest-<n>` (the n-th guest
    * sent, blanks left out), `answers.<key>` (a question's). `message` is the answer's own sentence, said in
@@ -66,6 +73,14 @@ export interface BookingDetailsProps {
   readonly onSubmit: (values: BookingDetailsValues) => Promise<BookingDetailsOutcome>;
 }
 
+/** One `--duration-move`, read from the page so it follows the token, in milliseconds. */
+const beatOf = (element: Element | null): number => {
+  const value = element === null ? '' : getComputedStyle(element).getPropertyValue('--duration-move').trim();
+  const amount = Number.parseFloat(value);
+  if (Number.isNaN(amount)) return 0;
+  return value.endsWith('ms') ? amount : amount * 1000;
+};
+
 /** The field a question's error is on, before its key: the server names it the same way. */
 const ANSWER_FIELD = 'answers.';
 
@@ -77,6 +92,8 @@ const WORDS = formStrings('en');
 
 /** A rough email shape; the server checks it properly. */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** What ends one guest's address: a comma, a semicolon, a space or a new line (a pasted list). */
+const GUEST_SEPARATORS = /[\s,;]+/;
 
 /**
  * The answer's errors the form can show under a field. A guest's `guest-<n>`
@@ -126,7 +143,19 @@ export function BookingDetails({
   const [name, setName] = useState(prefill?.name ?? '');
   const [email, setEmail] = useState(prefill?.email ?? '');
   const [phone, setPhone] = useState('');
-  const [guests, setGuests] = useState<readonly string[]>([]);
+  // Guests are chips (the owner, 1 November 2026): an address becomes one when Enter, a comma, a space or leaving the
+  // field ends it, and whatever is still typed is taken on Confirm, so a guest is never dropped.
+  const [guests, setGuestsState] = useState<readonly string[]>([]);
+  // The latest guests, for a chip made after a render (the blur's timer).
+  const latestGuests = useRef<readonly string[]>([]);
+  const setGuests = (next: readonly string[] | ((current: readonly string[]) => readonly string[])) => {
+    const value = typeof next === 'function' ? next(latestGuests.current) : next;
+    latestGuests.current = value;
+    setGuestsState(value);
+  };
+  const [guestDraft, setGuestDraft] = useState('');
+  const [isAddingGuests, setAddingGuests] = useState(false);
+  const [guestNote, setGuestNote] = useState('');
   const [note, setNote] = useState('');
   const [trap, setTrap] = useState('');
   const countryNames = useMemo(
@@ -148,8 +177,31 @@ export function BookingDetails({
   const shown = questions.length === 0 ? new Set<string>() : visibleQuestions(questions, given);
   const showing = questions.filter((question) => shown.has(question.key));
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
+  // Each refused Confirm shakes the fields it found wrong once (transitions.dev's error state shake). The round flips
+  // between two names so the same field shakes again on the next refusal.
+  const [shake, setShake] = useState<{ readonly round: number; readonly fields: ReadonlySet<string> }>({
+    round: 0,
+    fields: new Set(),
+  });
+  const shakeOf = (field: string) => (shake.fields.has(field) ? (shake.round % 2 === 0 ? 'even' : 'odd') : undefined);
   const [line, setLine] = useState('');
   const [isBusy, setBusy] = useState(false);
+  // The fields a refused Confirm marked wrong: once one is right again it says so with a calm tick (stageshow's
+  // form-error), so the visitor sees the fix land rather than only the red going away.
+  const [wasWrong, setWasWrong] = useState<ReadonlySet<string>>(new Set());
+  const fixed = (field: 'name' | 'email', isRight: boolean) =>
+    wasWrong.has(field) && errors[field] === undefined && isRight
+      ? {
+          suffix: (
+            <span className={styles.fixed}>
+              <Icon name="check" size="sm" tone="success" />
+            </span>
+          ),
+        }
+      : {};
+  const [isDone, setDone] = useState(false);
+  const doneTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => globalThis.clearTimeout(doneTimer.current), []);
   const [bookingAs, setBookingAs] = useState(
     prefill?.name !== undefined && prefill.name !== '' ? prefill.name : undefined,
   );
@@ -157,19 +209,76 @@ export function BookingDetails({
   const headingId = useId();
   const trapId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
-  // The step's heading takes focus as it arrives: no field grabs it, so a phone keeps its keyboard down.
-  useEffect(() => heading.current?.focus(), []);
+  // The first empty field takes focus as the step arrives, so a visitor at a keyboard just types (the owner,
+  // 2 November 2026); under a finger the heading takes it instead, so a phone keeps its keyboard down until a field is
+  // tapped.
+  useEffect(() => {
+    const first = globalThis.matchMedia('(pointer: fine)').matches
+      ? [...(form.current?.querySelectorAll<HTMLInputElement>('input[name="name"], input[name="email"]') ?? [])].find(
+          (input) => input.value === '',
+        )
+      : undefined;
+    (first ?? heading.current)?.focus();
+  }, []);
   const focusField = (field: string) =>
     globalThis.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>(`[name="${field}"]`)?.focus());
+
+  /**
+   * Takes typed text into chips: each well formed, new address joins the guests (up to the most a booking takes);
+   * anything else stays in the field to fix, with what's wrong. Returns the guests and what is left.
+   */
+  const takeGuests = (
+    text: string,
+  ): { readonly taken: readonly string[]; readonly left: string; readonly problem?: string } => {
+    const parts = text.split(GUEST_SEPARATORS).filter((part) => part !== '');
+    const current = latestGuests.current;
+    const known = new Set(current.map((guest) => guest.toLowerCase()));
+    const added: string[] = [];
+    const kept: string[] = [];
+    let problem: string | undefined;
+    for (const part of parts) {
+      if (!EMAIL.test(part)) {
+        kept.push(part);
+        problem ??= strings.guestNotEmail(part);
+      } else if (known.has(part.toLowerCase())) continue;
+      else if (current.length + added.length >= maxGuests) {
+        kept.push(part);
+        problem ??= strings.guestsMax(maxGuests);
+      } else {
+        known.add(part.toLowerCase());
+        added.push(part);
+      }
+    }
+    const taken = [...current, ...added];
+    if (added.length > 0) {
+      setGuests(taken);
+      setGuestNote(strings.guestAdded(added));
+    }
+    const left = kept.join(' ');
+    setGuestDraft(left);
+    setErrors((current) => {
+      const { guests: _, ...rest } = current;
+      return problem === undefined ? rest : { ...rest, guests: problem };
+    });
+    return problem === undefined ? { taken, left } : { taken, left, problem };
+  };
+  const removeGuest = (index: number) => {
+    const gone = guests[index];
+    if (gone === undefined) return;
+    setGuests((current) => current.filter((_, at) => at !== index));
+    setGuestNote(strings.guestRemoved(gone));
+    // A server's word on a guest no longer applies once the list changes.
+    setErrors((current) =>
+      Object.fromEntries(Object.entries(current).filter(([field]) => !field.startsWith('guest-'))),
+    );
+    focusField('guests');
+  };
 
   const check = (): Record<string, string> => {
     const found: Record<string, string> = {};
     if (name.trim() === '') found.name = strings.nameRequired;
     if (!EMAIL.test(email.trim())) found.email = strings.emailRequired;
     if (needsPhone && phone.trim() === '') found.phone = strings.phoneRequired;
-    guests.forEach((guest, index) => {
-      if (guest.trim() !== '' && !EMAIL.test(guest.trim())) found[`guest-${String(index)}`] = strings.guestInvalid;
-    });
     // The questions showing, checked as the server will (its Show when already decided here).
     if (showing.length > 0) {
       const visible = showing.map(({ showWhen: _decided, ...question }) => question);
@@ -180,11 +289,20 @@ export function BookingDetails({
     }
     return found;
   };
+  // A booking the server turned down with no field to blame: Confirm shakes its head once, beside the line saying why,
+  // the same no as a field's (transitions.dev's error shake).
+  const refused = () => setShake((current) => ({ round: current.round + 1, fields: new Set(['actions']) }));
   const showErrors = (found: Readonly<Record<string, string>>) => {
     setErrors(found);
+    setWasWrong((current) => new Set([...current, ...Object.keys(found)]));
+    setShake((current) => ({
+      round: current.round + 1,
+      fields: new Set(Object.keys(found).map((field) => (field.startsWith('guest-') ? 'guests' : field))),
+    }));
     const first = [
       'name',
       'email',
+      'guests',
       ...guests.map((_, index) => `guest-${String(index)}`),
       'phone',
       ...showing.map((question) => `${ANSWER_FIELD}${question.key}`),
@@ -192,7 +310,7 @@ export function BookingDetails({
     if (first?.startsWith(ANSWER_FIELD) === true) {
       const key = first.slice(ANSWER_FIELD.length);
       globalThis.requestAnimationFrame(() => focusQuestion(form.current, key));
-    } else if (first !== undefined) focusField(first);
+    } else if (first !== undefined) focusField(first.startsWith('guest-') ? 'guests' : first);
   };
   const clear = (field: string) => {
     if (errors[field] === undefined) return;
@@ -203,40 +321,55 @@ export function BookingDetails({
   const submit = () => {
     if (isBusy) return;
     setLine('');
-    const found = check();
+    // An address still in the guests field goes with the booking: taken now, never dropped.
+    const pending = guestDraft.trim() === '' ? { taken: guests, left: '' } : takeGuests(guestDraft);
+    const found = {
+      ...check(),
+      ...('problem' in pending && pending.problem !== undefined ? { guests: pending.problem } : {}),
+    };
     if (Object.keys(found).length > 0) {
       showErrors(found);
       return;
     }
     setErrors({});
     setBusy(true);
-    const typed = guests.map((guest) => guest.trim());
-    // The row each guest that goes sits on: blank rows stay behind.
-    const sentRows = typed.flatMap((guest, row) => (guest === '' ? [] : [row]));
+    const typed = pending.taken;
+    // Every chip goes, in order: the server's guest-n is the n-th chip.
+    const sentRows = typed.map((_, row) => row);
     onSubmit({
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim(),
-      guests: typed.filter((guest) => guest !== ''),
+      guests: typed,
       note: note.trim(),
       answers: Object.fromEntries(showing.map((question) => [question.key, given[question.key]])),
       trap,
     }).then(
       (outcome) => {
-        if (outcome.kind === 'done') return;
+        if (outcome.kind === 'done') {
+          // Confirm says Booked for one move's length, so the visitor sees it land before the receipt takes over.
+          setDone(true);
+          if (outcome.next !== undefined) doneTimer.current = globalThis.setTimeout(outcome.next, beatOf(form.current));
+          return;
+        }
         setBusy(false);
         if (outcome.kind === 'failed') {
           setLine(outcome.message);
+          refused();
           return;
         }
         const drawn = drawnErrors(outcome.fields, needsPhone, sentRows, shown);
         // A refusal on nothing the form draws still says why, in the line, so the visitor isn't left guessing.
         if (Object.keys(drawn).length > 0) showErrors(drawn);
-        else setLine(outcome.message === undefined || outcome.message === '' ? strings.failed : outcome.message);
+        else {
+          setLine(outcome.message === undefined || outcome.message === '' ? strings.failed : outcome.message);
+          refused();
+        }
       },
       () => {
         setBusy(false);
         setLine(strings.failed);
+        refused();
       },
     );
   };
@@ -272,103 +405,137 @@ export function BookingDetails({
           </button>
         </p>
       )}
-      <Field
-        label={strings.name}
-        name="name"
-        autoComplete="name"
-        maxLength={200}
-        isRequired
-        value={name}
-        onChange={(next) => {
-          setName(next);
-          clear('name');
-        }}
-        {...(errors.name === undefined ? {} : { error: errors.name })}
-      />
-      <Field
-        label={strings.email}
-        name="email"
-        type="email"
-        autoComplete="email"
-        placeholder={strings.emailPlaceholder}
-        maxLength={254}
-        isRequired
-        value={email}
-        onChange={(next) => {
-          setEmail(next);
-          clear('email');
-        }}
-        {...(errors.email === undefined ? {} : { error: errors.email })}
-      />
-      {guests.length > 0 && (
-        <div className={styles.guests}>
-          {guests.map((guest, index) => {
-            const field = `guest-${String(index)}`;
-            return (
-              <Field
-                key={field}
-                label={strings.guest(index + 1)}
-                name={field}
-                type="email"
-                placeholder={strings.guestPlaceholder}
-                maxLength={254}
-                value={guest}
-                onChange={(next) => {
-                  setGuests((current) => current.map((each, at) => (at === index ? next : each)));
-                  clear(field);
-                }}
-                suffix={
-                  <Button
-                    variant="ghost"
-                    icon="x"
-                    label={strings.removeGuest(index + 1)}
-                    onPress={() => {
-                      setGuests((current) => current.filter((_, at) => at !== index));
-                      setErrors({});
-                      // The row goes with its button: focus the row before it, or Add guests.
-                      if (guests.length > 1) focusField(`guest-${String(Math.max(0, index - 1))}`);
-                      else
-                        globalThis.requestAnimationFrame(() =>
-                          form.current?.querySelector<HTMLElement>('[data-add-guest] button')?.focus(),
-                        );
-                    }}
-                  />
-                }
-                {...(errors[field] === undefined ? {} : { error: errors[field] })}
-              />
-            );
-          })}
+      <div className={styles.shaker} data-shake={shakeOf('name')}>
+        <Field
+          label={strings.name}
+          name="name"
+          autoComplete="name"
+          maxLength={200}
+          isRequired
+          value={name}
+          onChange={(next) => {
+            setName(next);
+            clear('name');
+          }}
+          {...fixed('name', name.trim() !== '')}
+          {...(errors.name === undefined ? {} : { error: errors.name })}
+        />
+      </div>
+      <div className={styles.shaker} data-shake={shakeOf('email')}>
+        <Field
+          label={strings.email}
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder={strings.emailPlaceholder}
+          maxLength={254}
+          isRequired
+          value={email}
+          onChange={(next) => {
+            setEmail(next);
+            clear('email');
+          }}
+          {...fixed('email', EMAIL.test(email.trim()))}
+          {...(errors.email === undefined ? {} : { error: errors.email })}
+        />
+      </div>
+      {isAddingGuests || guests.length > 0 ? (
+        <div
+          className={styles.guests}
+          data-shake={shakeOf('guests')}
+          // Opened by Add guests, it grows into place; guests a visitor came back with are simply there.
+          data-opening={isAddingGuests || undefined}
+        >
+          <GuestChips
+            guests={guests}
+            label={strings.guestsList}
+            removeLabel={strings.removeGuest}
+            onRemove={removeGuest}
+            invalid={
+              new Set(guests.flatMap((_, index) => (errors[`guest-${String(index)}`] === undefined ? [] : [index])))
+            }
+          />
+          <Field
+            label={strings.guests}
+            name="guests"
+            type="text"
+            inputMode="email"
+            autoComplete="off"
+            placeholder={strings.guestPlaceholder}
+            hint={strings.guestsHint}
+            maxLength={2000}
+            value={guestDraft}
+            onChange={(next) => {
+              // A separator ends an address: what comes before the last one is taken, the rest is still being typed.
+              const end = next.search(/[\s,;]+[^\s,;]*$/);
+              if (end < 0) {
+                setGuestDraft(next);
+                clear('guests');
+                return;
+              }
+              const tail = next.slice(end).replace(GUEST_SEPARATORS, '');
+              const { left } = takeGuests(next.slice(0, end));
+              setGuestDraft([left, tail].filter((part) => part !== '').join(' '));
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && guestDraft.trim() !== '') {
+                // Enter ends the address here; with nothing typed it books, as everywhere else in the form.
+                event.preventDefault();
+                takeGuests(guestDraft);
+              } else if (event.key === 'Backspace' && guestDraft === '' && guests.length > 0) {
+                event.preventDefault();
+                removeGuest(guests.length - 1);
+              }
+            }}
+            onBlur={() => {
+              if (guestDraft.trim() === '') return;
+              const draft = guestDraft;
+              // Layout only, never correctness: submit takes the draft itself, and taking an address already a chip
+              // does nothing, so whichever runs first the booking carries each guest once. Waiting a task just keeps
+              // the chip from moving Confirm under the pointer mid click.
+              globalThis.setTimeout(() => takeGuests(draft), 0);
+            }}
+            {...(errors.guests === undefined
+              ? Object.keys(errors).some((field) => field.startsWith('guest-'))
+                ? { error: strings.guestInvalid }
+                : {}
+              : { error: errors.guests })}
+          />
+          <VisuallyHidden>
+            <span role="status">{guestNote}</span>
+          </VisuallyHidden>
         </div>
-      )}
-      {guests.length < maxGuests && (
+      ) : (
         <div className={styles.add} data-add-guest="">
           <Button
             variant="ghost"
             icon="user-plus"
             onPress={() => {
-              setGuests((current) => [...current, '']);
-              focusField(`guest-${String(guests.length)}`);
+              setAddingGuests(true);
+              focusField('guests');
             }}
           >
-            {guests.length === 0 ? strings.addGuests : strings.addAnotherGuest}
+            {strings.addGuests}
           </Button>
         </div>
       )}
       {needsPhone && (
-        <Field
-          label={strings.phone}
-          name="phone"
-          type="tel"
-          autoComplete="tel"
-          maxLength={40}
-          isRequired
-          value={phone}
-          onChange={(next) => {
-            setPhone(next);
-            clear('phone');
-          }}
-          {...(errors.phone === undefined ? {} : { error: errors.phone })}
-        />
+        <div className={styles.shaker} data-shake={shakeOf('phone')}>
+          <Field
+            label={strings.phone}
+            name="phone"
+            type="tel"
+            autoComplete="tel"
+            maxLength={40}
+            isRequired
+            value={phone}
+            onChange={(next) => {
+              setPhone(next);
+              clear('phone');
+            }}
+            {...(errors.phone === undefined ? {} : { error: errors.phone })}
+          />
+        </div>
       )}
       <Field
         label={strings.note}
@@ -414,12 +581,18 @@ export function BookingDetails({
       <p className={styles.line} role="alert">
         {line}
       </p>
-      <div className={styles.actions}>
+      <div className={styles.actions} data-shake={shakeOf('actions')}>
         <Button variant="ghost" isDisabled={isBusy} onPress={onBack}>
           {strings.back}
         </Button>
-        <Button variant="primary" size="lg" type="submit" isPending={isBusy}>
-          {isBusy ? strings.confirming : strings.confirm}
+        <Button
+          variant="primary"
+          size="lg"
+          type="submit"
+          isPending={isBusy && !isDone}
+          {...(isDone ? { icon: 'check' as const } : {})}
+        >
+          {isDone ? strings.booked : isBusy ? strings.confirming : strings.confirm}
         </Button>
       </div>
     </form>

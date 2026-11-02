@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { socialLinksDraftOf, type SocialLinkDraft } from './draft.ts';
 import { SocialLinksEditor, type SocialLinksEditorProps } from './SocialLinksEditor.tsx';
@@ -90,6 +91,8 @@ export const Refused: Story = {
     const field = canvas.getByRole('textbox', { name: 'LinkedIn' });
     await userEvent.type(field, 'https://instagram.com/ada');
     await userEvent.tab();
+    // The error grows open under the field; read it once it has.
+    await settleAnimations();
     await expect(canvas.getByText('That’s a link to Instagram, not LinkedIn.')).toBeVisible();
   },
 };

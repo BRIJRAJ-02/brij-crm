@@ -1,7 +1,10 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { DialogTrigger } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
-import { ButtonLink } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
+import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
+import { Popover } from '../../molecules/Popover/Popover.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
 import { DescriptionList, type DescriptionItem } from '../../molecules/DescriptionList/DescriptionList.tsx';
@@ -38,6 +41,12 @@ export interface BookingReceiptProps {
   readonly joinUrl?: string;
   /** Add to calendar: Google, Outlook, and an .ics file. */
   readonly calendars?: { readonly google: string; readonly outlook: string; readonly ics: string };
+  /**
+   * Share this meeting (the owner, 2 November 2026): the details anyone can be sent (what, when, where, the call's
+   * link) and a link that adds it to their own calendar. Never the visitor's note, and never this page's link, which
+   * would let whoever has it move or cancel.
+   */
+  readonly share?: { readonly title: string; readonly lines: readonly string[]; readonly calendarUrl: string };
   /** For a cancelled or past booking: a way to book again ("Book another time with Ada"). */
   readonly again?: { readonly label: string; readonly href: string };
   /** What the guest may change, at the card's foot while it's ahead (BookingChanges). */
@@ -71,6 +80,7 @@ export function BookingReceipt({
   facts,
   joinUrl,
   calendars,
+  share,
   again,
   changes,
   notice,
@@ -89,12 +99,17 @@ export function BookingReceipt({
           ? strings.welcome
           : strings.confirmed;
   return (
-    <main className={styles.root}>
+    <main className={styles.root} data-welcome={(isLive && isWelcome) || undefined}>
       <div className={styles.column}>
         <header className={styles.head}>
           <span className={styles.avatar}>
             <Avatar name={hostName} size="lg" isDecorative {...(hostImage === undefined ? {} : { src: hostImage })} />
-            <span className={styles.mark} data-state={state} aria-hidden="true">
+            <span
+              className={styles.mark}
+              data-state={state}
+              data-welcome={(isLive && isWelcome) || undefined}
+              aria-hidden="true"
+            >
               <Icon name={state === 'confirmed' ? 'check' : state === 'cancelled' ? 'x' : 'clock'} size="xs" />
             </span>
           </span>
@@ -145,6 +160,11 @@ export function BookingReceipt({
                     <ButtonLink provider="apple-calendar" href={calendars.ics} download="booking.ics">
                       {strings.apple}
                     </ButtonLink>
+                    {share !== undefined && (
+                      <span className={styles.shareAt}>
+                        <ShareMeeting share={share} />
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -176,5 +196,47 @@ export function BookingReceipt({
         />
       </div>
     </main>
+  );
+}
+
+/**
+ * Share: one quiet button at the end of Add to calendar, opening a small popover (stageshow's share): the meeting in
+ * two lines as it will be sent, then Copy details, and the device's own share sheet where it has one (a phone). What
+ * is sent carries a link that puts the meeting in the receiver's calendar.
+ */
+function ShareMeeting({ share }: { readonly share: NonNullable<BookingReceiptProps['share']> }) {
+  const [first, ...rest] = share.lines;
+  const message = [...share.lines, strings.addLine(share.calendarUrl)].join('\n');
+  // The device's share sheet, where there is one; everywhere else Copy details does the job alone.
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  return (
+    <DialogTrigger>
+      <Button variant="ghost" icon="share">
+        {strings.share}
+      </Button>
+      <Popover label={strings.shareHeading} placement="bottom end">
+        <div className={styles.sharePanel}>
+          <p className={styles.shareTitle}>{first}</p>
+          <p className={styles.shareLines}>{rest.join(' · ')}</p>
+          <div className={styles.shareActions}>
+            <CopyButton value={message} label={strings.copyDetails} announcement={strings.copiedDetails} />
+            {canShare && (
+              <Button
+                variant="primary"
+                icon="share"
+                onPress={() => {
+                  // A dismissed sheet rejects; nothing to say about that.
+                  navigator
+                    .share({ title: share.title, text: share.lines.join('\n'), url: share.calendarUrl })
+                    .catch(() => undefined);
+                }}
+              >
+                {strings.shareVia}
+              </Button>
+            )}
+          </div>
+        </div>
+      </Popover>
+    </DialogTrigger>
   );
 }
