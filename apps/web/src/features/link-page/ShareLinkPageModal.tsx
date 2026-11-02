@@ -2,12 +2,15 @@
 // Purpose: the one Share modal for a person's link page (spec 0051, AC-5122; the owner's Share design, 25 October
 // 2026): the QR code large enough to scan across a table, the address to copy, and the two ways to go on.
 // Main task: hand the page to somebody standing in front of you, or save the code to print on a badge or a card.
-// Leaves out: the figures footer (this month's views and clicks, "See all clicks"), which waits for the editor's
-// own figures surface. Loaded with the chunk that opens it, so neither it nor the QR library is in the first load.
-import { Button, ButtonLink, Callout, Field, Modal, QrCode } from '@crm/ui';
+// Leaves out: the figures, which live in Insights on the overview. Loaded with the chunk that opens it, so neither it
+// nor the QR library is in the first load. The code is drawn in the owner's saved style (spec 0061, AC-6124), and
+// Links for each place opens from beside the address (AC-6125).
+import { Button, ButtonGroup, ButtonLink, Callout, Field, Modal, QrCode } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { qrPng, saveFile } from './qr-png.ts';
+import { reachStrings } from './reach-strings.ts';
+import type { DrawnQrStyle } from './ShareTools.tsx';
 import { shareStrings as strings } from './share-strings.ts';
 
 /** Props for the Share modal. */
@@ -25,6 +28,10 @@ export interface ShareLinkPageModalProps {
   readonly isPublic: boolean;
   /** The Live switch's on, offered beside the private line: the switch itself is behind this modal's scrim. */
   readonly onGoLive: () => void;
+  /** The code in the owner's saved style (spec 0061, AC-6124); left out, the plain code. */
+  readonly qrStyle?: DrawnQrStyle;
+  /** Opens Links for each place (AC-6125), offered beside the address while the page is Live. */
+  readonly onShareLinks?: () => void;
   /** Kept mounted while it closes, so the Modal's own exit plays. */
   readonly isOpen: boolean;
   readonly onClose: () => void;
@@ -37,6 +44,8 @@ export function ShareLinkPageModal({
   workspaceName,
   isPublic,
   onGoLive,
+  qrStyle,
+  onShareLinks,
   isOpen,
   onClose,
 }: ShareLinkPageModalProps) {
@@ -72,7 +81,7 @@ export function ShareLinkPageModal({
         </>
       }
     >
-      <QrCode ref={codeRef} value={address} label={strings.qrLabel} size="fill" />
+      <QrCode ref={codeRef} value={address} label={strings.qrLabel} size="fill" {...qrStyle} />
       {/* A code explains itself: only whose page it opens is said (spec 0056, AC-5617). */}
       {isPublic ? (
         workspaceName !== undefined && <p>{strings.inWorkspace(workspaceName)}</p>
@@ -89,6 +98,13 @@ export function ShareLinkPageModal({
         </Callout>
       )}
       <Field label={strings.address} isLabelHidden variant="copy" icon="link" value={shown} copyLabel={strings.copy} />
+      {isPublic && onShareLinks !== undefined && (
+        <ButtonGroup label={reachStrings.shareLinksOpen} layout="row">
+          <Button variant="ghost" size="sm" icon="link" onPress={onShareLinks}>
+            {reachStrings.shareLinksOpen}
+          </Button>
+        </ButtonGroup>
+      )}
     </Modal>
   );
 }

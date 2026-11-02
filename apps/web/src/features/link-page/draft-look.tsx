@@ -19,13 +19,25 @@ export function DraftLook({ look, children }: { readonly look: DraftLookValue; r
   return <DraftLookContext value={look}>{children}</DraftLookContext>;
 }
 
+/** How the page lays its blocks out (spec 0061, AC-6103): its look's `layout`, a list when no screen gave one. */
+export function usePageLayout(): 'list' | 'grid' {
+  return useContext(DraftLookContext)?.theme.layout ?? 'list';
+}
+
 /** A block's draft (`layout="blocks"`), in the page's own look when the screen gave one. */
 export function DraftPage(props: LinkPageProps) {
   const look = useContext(DraftLookContext);
   return (
     <LinkPage
       {...props}
-      {...(look === undefined ? {} : { theme: look.theme, photos: look.photos, variables: look.variables })}
+      {...(look === undefined
+        ? {}
+        : {
+            theme: look.theme,
+            photos: look.photos,
+            variables: look.variables,
+            ...(look.theme.layout === undefined ? {} : { pageLayout: look.theme.layout }),
+          })}
     />
   );
 }

@@ -8,7 +8,9 @@ import {
   Button,
   ButtonLink,
   Callout,
+  Checkbox,
   ChoiceChips,
+  Disclosure,
   EmptyState,
   Field,
   Form,
@@ -26,7 +28,9 @@ import { createContext, useContext, useEffect, useId, useMemo, useRef, useState,
 import { createPortal } from 'react-dom';
 import { formsHref } from '../captures/tabs.ts';
 import { linksHref } from '../booking/links.ts';
+import { heldPicture, PictureField, useBlockExtras, type HeldPicture } from './block-extras.tsx';
 import { DraftPage } from './draft-look.tsx';
+import { reachStrings } from './reach-strings.ts';
 import { contactHref, contactWords, pageFacts, type BlockEditorProps, type EditorChrome } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
 
@@ -54,12 +58,17 @@ export function useFocusesFirstField(): boolean {
   return useContext(EditorFrameContext)?.focusesFields ?? true;
 }
 
-/** The first field of the chosen kind: the first one in the dialog that isn't in the picker. */
+/**
+ * The first field of the chosen kind: the first control in its form, outside the picker. A picture's kinds open on
+ * their drop zone's browse button, and Social icons, which has nothing to type, on its Schedule fold.
+ */
 function firstFieldOutside(picker: HTMLElement): HTMLElement | undefined {
   const dialog = picker.closest('[role="dialog"]');
   if (dialog === null) return undefined;
-  const fields = dialog.querySelectorAll<HTMLElement>('input:not([type="hidden"]), textarea, select');
-  return [...fields].find((field) => !picker.contains(field));
+  const fields = dialog.querySelectorAll<HTMLElement>(
+    'form input:not([type="hidden"]), form textarea, form select, form button',
+  );
+  return [...fields].find((field) => !picker.contains(field) && field.offsetParent !== null);
 }
 
 /**
@@ -136,13 +145,14 @@ export function BlockEditorFrame({
 }
 
 /** The Modal every block editor sits in: its title, Cancel and the submit, and "How it looks" under the fields. */
-function EditorModal({
+export function EditorModal({
   title,
   formId,
   submitLabel,
   onClose,
   preview,
   canSubmit = true,
+  isWaiting = false,
   chrome,
   children,
 }: {
@@ -153,6 +163,8 @@ function EditorModal({
   readonly preview?: ReactNode;
   /** False while there is nothing to submit (the choices loading, failed or empty): only Cancel shows. */
   readonly canSubmit?: boolean;
+  /** A picture is still uploading: the submit waits, spinning, so nothing is saved without it (spec 0061). */
+  readonly isWaiting?: boolean;
   readonly chrome?: EditorChrome;
   readonly children: ReactNode;
 }) {
@@ -160,7 +172,13 @@ function EditorModal({
   const submit = canSubmit ? (
     // Inside the Add modal it travels into a slot of the footer: full width of that slot, so on a phone, where the
     // footer stacks its buttons the dialog's width, it is as wide as Cancel; beside Cancel it keeps its own width.
-    <Button variant="primary" type="submit" form={formId} {...(frame === undefined ? {} : { isFullWidth: 'center' })}>
+    <Button
+      variant="primary"
+      type="submit"
+      form={formId}
+      isPending={isWaiting}
+      {...(frame === undefined ? {} : { isFullWidth: 'center' })}
+    >
       {chrome?.submitLabel ?? submitLabel}
     </Button>
   ) : undefined;
@@ -220,10 +238,23 @@ function siteOf(url: string): string | undefined {
   }
 }
 
-/** Add or edit a link: its title, address, note and icon, with the block drawn as typed under them. */
+/** A link's notice as its chips name it (AC-6113): none first. */
+const NOTICE_CHOICES = [
+  { id: 'none', label: reachStrings.noticeNone },
+  { id: 'sensitive', label: reachStrings.noticeSensitive },
+  { id: '18', label: reachStrings.notice18 },
+  { id: '21', label: reachStrings.notice21 },
+] as const;
+
+/**
+ * Add or edit a link: its title, address, note and icon, then spec 0061's picture (uploaded, or the site's own),
+ * its card (a row or featured), a notice to confirm first, its size on a grid and its window, with the block drawn
+ * as typed under them.
+ */
 export function LinkEditor({
   item,
   items,
+  slug,
   newHue,
   linkPage,
   socialNetworks,
@@ -241,6 +272,16 @@ export function LinkEditor({
   const [url, setUrl] = useState(editing?.url ?? '');
   const [note, setNote] = useState(editing?.note ?? '');
   const [icon, setIcon] = useState<string>(editing?.icon ?? 'auto');
+  const [thumb, setThumb] = useState<HeldPicture | undefined>(() =>
+    editing?.thumb === undefined ? undefined : heldPicture(linkPage, slug, editing.thumb),
+  );
+  // On an add the link isn't saved yet, so its site's picture is fetched once the add lands (the server reads the
+  // saved address, never one typed here).
+  const [wantsSiteThumb, setWantsSiteThumb] = useState(false);
+  const [isSending, setSending] = useState(false);
+  const [style, setStyle] = useState<'row' | 'featured'>(editing?.style ?? 'row');
+  const [notice, setNotice] = useState<'none' | 'sensitive' | '18' | '21'>(editing?.notice ?? 'none');
+  const extras = useBlockExtras(editing, true);
   const [problems, setProblems] = useState<BlockProblems>({});
   const icons = useMemo(() => iconItems(linkPage.icons), [linkPage]);
   // Left empty, the title is the address's site ("example.com"), shown as the placeholder and in the preview, so
@@ -253,6 +294,10 @@ export function LinkEditor({
     note,
     ...(icon === 'auto' ? {} : { icon }),
     ...(editing === undefined ? {} : { hue: editing.hue }),
+    ...(thumb === undefined ? {} : { thumb: thumb.image }),
+    ...(style === 'featured' ? { style } : {}),
+    ...(notice === 'none' ? {} : { notice }),
+    ...extras.draft,
   };
   // The block as it will show: the address as it will be stored when it can be, else as typed.
   const checked = linkPage.check(draft, items, editing?.id);
@@ -260,19 +305,27 @@ export function LinkEditor({
   const mark = linkPage.markOf(shownUrl);
   // Allowed all the same: someone may want their LinkedIn as a big row too (crm-87, phase 1c review).
   const isInSocials = mark !== undefined && socialNetworks.includes(mark);
+  // The site's own picture is read by the server from the address it holds, so it is fetched once the save lands,
+  // for an add and an edit alike (an edited address is read as saved, never as typed).
+  const canUseSite = guessed !== undefined && thumb === undefined;
   const submit = () => {
+    if (isSending) return;
     if (!checked.ok) {
       setProblems(checked.problems);
+      extras.take(checked.problems);
       return;
     }
-    onSubmit(draft);
+    onSubmit(draft, undefined, wantsSiteThumb && canUseSite ? { siteThumb: true } : undefined);
   };
+  // Shown as and Ask first are for some links, not most: folded, and open by themselves once either is set.
+  const [isMoreOpen, setMoreOpen] = useState(style === 'featured' || notice !== 'none');
   return (
     <EditorModal
       title={editing === undefined ? strings.newLink : strings.editLink}
       formId={formId}
       submitLabel={editing === undefined ? strings.add : strings.save}
       onClose={onClose}
+      isWaiting={isSending}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
         <DraftPage
@@ -289,6 +342,8 @@ export function LinkEditor({
               ...(note.trim() === '' ? {} : { note: note.trim() }),
               ...(mark === undefined ? {} : { mark }),
               ...(icon === 'auto' ? {} : { icon: icon as IconName }),
+              ...(thumb === undefined ? {} : { thumb: { src: thumb.src, width: thumb.width, height: thumb.height } }),
+              ...(style === 'featured' ? { style } : {}),
             },
           ]}
         />
@@ -359,6 +414,58 @@ export function LinkEditor({
           onChange={(next) => setIcon(next ?? 'auto')}
           {...(problems.icon === undefined ? {} : { error: problems.icon })}
         />
+        <PictureField
+          label={thumb === undefined ? reachStrings.thumbUpload : reachStrings.imageReplace}
+          linkPage={linkPage}
+          slug={slug}
+          {...(thumb === undefined ? {} : { value: thumb })}
+          onChange={(next) => {
+            setThumb(next);
+            setWantsSiteThumb(false);
+          }}
+          onSendingChange={setSending}
+          isRemovable
+          {...(canUseSite
+            ? {
+                extra: (
+                  <Checkbox label={reachStrings.thumbSite} isSelected={wantsSiteThumb} onChange={setWantsSiteThumb} />
+                ),
+              }
+            : {})}
+        />
+        <Disclosure
+          title={reachStrings.moreOptions}
+          variant="fields"
+          headingLevel={4}
+          isExpanded={isMoreOpen || problems.style !== undefined}
+          onExpandedChange={setMoreOpen}
+        >
+          <ChoiceChips
+            isSingle
+            label={reachStrings.style}
+            choices={[
+              { id: 'row', label: reachStrings.styleRow },
+              { id: 'featured', label: reachStrings.styleFeatured },
+            ]}
+            selected={[style]}
+            onChange={(picked) => {
+              if (picked[0] === 'row' || picked[0] === 'featured') setStyle(picked[0]);
+              setProblems((held) => ({ ...held, style: undefined }));
+            }}
+            {...(problems.style === undefined ? {} : { error: problems.style })}
+          />
+          <ChoiceChips
+            isSingle
+            label={reachStrings.notice}
+            choices={NOTICE_CHOICES}
+            selected={[notice]}
+            onChange={(picked) => {
+              const found = NOTICE_CHOICES.find((each) => each.id === picked[0]);
+              if (found !== undefined) setNotice(found.id);
+            }}
+          />
+        </Disclosure>
+        {extras.fields}
       </Form>
     </EditorModal>
   );
@@ -580,14 +687,16 @@ export function TestimonialEditor({ item, items, linkPage, chrome, onSubmit, onC
   const [author, setAuthor] = useState(editing?.author ?? '');
   const [role, setRole] = useState(editing?.role ?? '');
   const [problems, setProblems] = useState<BlockProblems>({});
+  const extras = useBlockExtras(editing, false);
   const draft = () => {
     const kept = role.trim();
-    return { kind: 'testimonial' as const, quote, author, ...(kept === '' ? {} : { role: kept }) };
+    return { kind: 'testimonial' as const, quote, author, ...(kept === '' ? {} : { role: kept }), ...extras.draft };
   };
   const submit = () => {
     const checked = linkPage.check(draft(), items, editing?.id);
     if (!checked.ok) {
       setProblems(checked.problems);
+      extras.take(checked.problems);
       return;
     }
     onSubmit(draft());
@@ -665,6 +774,7 @@ export function TestimonialEditor({ item, items, linkPage, chrome, onSubmit, onC
           }}
           {...(problems.role === undefined ? {} : { error: problems.role })}
         />
+        {extras.fields}
       </Form>
     </EditorModal>
   );
@@ -678,14 +788,16 @@ export function TextEditor({ item, items, linkPage, chrome, onSubmit, onClose }:
   const [title, setTitle] = useState(editing?.title ?? '');
   const [body, setBody] = useState(editing?.body ?? '');
   const [problems, setProblems] = useState<BlockProblems>({});
+  const extras = useBlockExtras(editing, false);
   const draft = () => {
     const kept = title.trim();
-    return { kind: 'text' as const, body, ...(kept === '' ? {} : { title: kept }) };
+    return { kind: 'text' as const, body, ...(kept === '' ? {} : { title: kept }), ...extras.draft };
   };
   const submit = () => {
     const checked = linkPage.check(draft(), items, editing?.id);
     if (!checked.ok) {
       setProblems(checked.problems);
+      extras.take(checked.problems);
       return;
     }
     onSubmit(draft());
@@ -748,6 +860,7 @@ export function TextEditor({ item, items, linkPage, chrome, onSubmit, onClose }:
           }}
           {...(problems.body === undefined ? {} : { error: problems.body })}
         />
+        {extras.fields}
       </Form>
     </EditorModal>
   );
@@ -782,6 +895,7 @@ export function FaqEditor({ item, items, linkPage, chrome, onSubmit, onClose }: 
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set(editing === undefined ? ['q0'] : []));
   const [problems, setProblems] = useState<BlockProblems>({});
   const minted = useRef(asked.length);
+  const extras = useBlockExtras(editing, false);
 
   const draft = () => {
     const kept = title.trim();
@@ -789,12 +903,14 @@ export function FaqEditor({ item, items, linkPage, chrome, onSubmit, onClose }: 
       kind: 'faq' as const,
       items: asked.map((each) => ({ question: each.question, answer: each.answer })),
       ...(kept === '' ? {} : { title: kept }),
+      ...extras.draft,
     };
   };
   const submit = () => {
     const checked = linkPage.check(draft(), items, editing?.id);
     if (!checked.ok) {
       setProblems(checked.problems);
+      extras.take(checked.problems);
       // A question that was refused opens, so its reason is on screen rather than folded away.
       setOpenIds(
         new Set(
@@ -958,6 +1074,7 @@ export function FaqEditor({ item, items, linkPage, chrome, onSubmit, onClose }: 
           }}
         />
         {problems.items !== undefined && <Callout tone="danger">{problems.items}</Callout>}
+        {extras.fields}
       </Form>
     </EditorModal>
   );
@@ -1074,6 +1191,7 @@ export function ContactEditor({
     website: shownCount([editing?.website, editing?.website2, editing?.website3]),
   }));
   const [problems, setProblems] = useState<BlockProblems>({});
+  const extras = useBlockExtras(editing, false);
   const sent = (value: PhoneFieldValue) => (value.national.trim() === '' ? '' : toE164(value.country, value.national));
   const draft: BlockDraft = {
     kind: 'contact',
@@ -1081,11 +1199,13 @@ export function ContactEditor({
     phone: sent(typed.phone),
     phone2: sent(typed.phone2),
     phone3: sent(typed.phone3),
+    ...extras.draft,
   };
   const submit = () => {
     const checked = linkPage.check(draft, items, editing?.id);
     if (!checked.ok) {
       setProblems(checked.problems);
+      extras.take(checked.problems);
       return;
     }
     onSubmit(draft);
@@ -1205,6 +1325,7 @@ export function ContactEditor({
           maxLength={120}
           showCounter
         />
+        {extras.fields}
       </Form>
     </EditorModal>
   );
@@ -1219,7 +1340,49 @@ type Choices =
  * Add a booking page: the person's Public pages from every workspace not on the page yet, the workspace named beside
  * each (AC-5117), read fresh each time it opens.
  */
-export function PageChooser({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+export function PageChooser(props: BlockEditorProps) {
+  // A booking page block already placed has only its size and its window to change (spec 0061).
+  if (props.item?.kind === 'page') return <PlacedPageEditor {...props} />;
+  return <PageChoice {...props} />;
+}
+
+/** A placed booking page block: its size on a grid and its window (AC-6103, AC-6111), the page itself fixed. */
+function PlacedPageEditor({ item, items, linkPage, onSubmit, onClose }: BlockEditorProps) {
+  const formId = useId();
+  const editing = item?.kind === 'page' ? item : undefined;
+  const extras = useBlockExtras(editing, true);
+  if (editing === undefined) return null;
+  const submit = () => {
+    const draft: BlockDraft = {
+      kind: 'page',
+      workspaceId: editing.workspaceId,
+      pageId: editing.pageId,
+      ...extras.draft,
+    };
+    const checked = linkPage.check(draft, items, editing.id);
+    if (!checked.ok) {
+      extras.take(checked.problems);
+      return;
+    }
+    onSubmit(draft, editing.page === undefined ? undefined : { page: editing.page });
+  };
+  return (
+    <EditorModal title={strings.editPageBlock} formId={formId} submitLabel={strings.save} onClose={onClose}>
+      <Form id={formId} onSubmit={submit} label={strings.editPageBlock}>
+        <Field
+          label={strings.page}
+          isReadOnly
+          readOnlyReason={strings.pageFixed}
+          value={editing.page?.title ?? strings.bookingPage}
+        />
+        {extras.fields}
+      </Form>
+    </EditorModal>
+  );
+}
+
+/** Add a booking page: the person's Public pages not on the page yet. */
+function PageChoice({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
   const focusFirst = useFocusesFirstField();
   const formId = useId();
   const [choices, setChoices] = useState<Choices>({ status: 'loading' });
@@ -1347,6 +1510,7 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
   const [touched, setTouched] = useState(editing !== undefined);
   const [problems, setProblems] = useState<BlockProblems>({});
   const [attempt, setAttempt] = useState(0);
+  const extras = useBlockExtras(editing, false);
   useEffect(() => {
     // Editing one: the form is already chosen, and only its label is open.
     if (editing !== undefined) return;
@@ -1380,11 +1544,13 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
       ? { ...(chosen === undefined ? {} : { workspaceId: chosen.workspaceId, formId: chosen.formId }) }
       : { workspaceId: editing.workspaceId, formId: editing.formId }),
     label,
+    ...extras.draft,
   });
   const submit = () => {
     const checked = linkPage.check(draft(), items, editing?.id);
     if (!checked.ok) {
       setProblems(checked.problems);
+      extras.take(checked.problems);
       return;
     }
     onSubmit(draft(), chosen === undefined ? undefined : { form: chosen.facts });
@@ -1464,6 +1630,7 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
           }}
           {...(problems.title === undefined ? {} : { error: problems.title })}
         />
+        {extras.fields}
       </Form>
     );
   }

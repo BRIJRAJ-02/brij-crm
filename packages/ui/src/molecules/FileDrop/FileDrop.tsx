@@ -43,8 +43,18 @@ export interface FileDropProps {
    * where a drop area would draw the picture twice. Same checks, same refusal line; nothing to drop onto.
    */
   readonly variant?: 'zone' | 'button';
-  /** With `variant="button"`: what was picked is on its way, so the button spins and takes no second press. */
+  /**
+   * What was picked is on its way: with `variant="button"` the button spins and takes no second press; on the zone
+   * (spec 0061, a link page's picture) the zone stays where it is, says so, and its browse button keeps focus but
+   * takes no second pick, so a keyboard never loses its place while a picture uploads.
+   */
   readonly isPending?: boolean;
+  /**
+   * The screen's own refusal about what was picked or what is missing ("Add a picture."), drawn in the zone's own
+   * refusal line, so it reads as the control's error rather than a note beside it. Its own type and size checks
+   * take its place while they speak.
+   */
+  readonly error?: string;
   /**
    * The screen's own refusal for a file of a type it doesn't take, when it has a better one than "Choose .csv"
    * (an Excel file: how to save it as CSV); undefined keeps the built in sentence.
@@ -76,6 +86,7 @@ export function FileDrop({
   isReadOnly = false,
   variant = 'zone',
   isPending = false,
+  error: given,
   wrongTypeText,
 }: FileDropProps) {
   const { locale } = useFormatSettings();
@@ -100,11 +111,12 @@ export function FileDrop({
   const limits = [types, maxSize === undefined ? undefined : strings.upTo(formatFileSize(maxSize, locale))].filter(
     (part) => part !== undefined,
   );
+  const said = error ?? given;
   const refusal =
-    error === undefined ? undefined : (
+    said === undefined ? undefined : (
       <span className={styles.error} role="alert">
         <Icon name="circle-alert" size="xs" />
-        {error}
+        {said}
       </span>
     );
   if (isReadOnly) {
@@ -142,8 +154,9 @@ export function FileDrop({
     <div className={styles.field}>
       <DropZone
         className={styles.root}
-        isDisabled={isDisabled}
+        isDisabled={isDisabled || isPending}
         aria-label={label}
+        aria-busy={isPending || undefined}
         onDrop={(event) => {
           void Promise.all(event.items.flatMap((item) => (item.kind === 'file' ? [item.getFile()] : []))).then(take);
         }}
@@ -172,8 +185,8 @@ export function FileDrop({
               if (list !== null) take([...list]);
             }}
           >
-            <AriaButton className={styles.browse} isDisabled={isDisabled}>
-              {strings.browse}
+            <AriaButton className={styles.browse} isDisabled={isDisabled} isPending={isPending}>
+              {isPending ? strings.sending : strings.browse}
             </AriaButton>
           </FileTrigger>
         </span>

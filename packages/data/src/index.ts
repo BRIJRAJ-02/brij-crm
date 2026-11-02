@@ -288,6 +288,15 @@ import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
 export type {
+  DraftWindow,
+  InsightsHeld,
+  InsightsState,
+  LinkPageReach,
+  QrStyleHeld,
+  QrStyleState,
+  StoredPicture,
+} from './link-page/reach.ts';
+export type {
   BrandColours,
   BrandHeld,
   BrandHeldState,
@@ -588,6 +597,8 @@ export type {
   ProfileBlock,
   ProfileCounts,
   ProfileBlockKind,
+  ProfileQrStyle,
+  FetchedThumbnail,
   ProfileItem,
   ProfileLinkIcon,
   ProfileLinkImport,
@@ -5391,6 +5402,8 @@ export function createDataLayer({
             call,
             mintId,
             notify,
+            // A link page's picture (spec 0061, AC-6101, AC-6108): sent from the store's own chunk, to this origin.
+            origin,
             summary: refusalSummary,
             signup: {
               /** The workspaces an Email signup form may be made in: the person's own, oldest first (AC-5217). */

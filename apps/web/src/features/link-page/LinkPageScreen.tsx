@@ -25,6 +25,8 @@ import {
   EmptyState,
   focusLater,
   HUES,
+  memoIntl,
+  useFormatSettings,
   LinkList,
   LinkListRowOrder,
   LinkPage,
@@ -34,6 +36,7 @@ import {
   MenuSeparator,
   MenuTrigger,
   PreviewLayout,
+  SegmentedControl,
   SocialLinks,
   SpotIllustration,
   TopBar,
@@ -62,15 +65,17 @@ import {
   pressesChip,
   previewBlock,
   rowWords,
-  isNewKind,
   type AddableKind,
+  type AfterSave,
   type ChosenFacts,
 } from './registry.tsx';
+import { reachStrings } from './reach-strings.ts';
 import { ImportLinksModal } from './ImportLinksModal.tsx';
 import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
 import { LiveSwitch, useLinkPageLive, type LinkPageLive } from './private-page.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
+import { drawnQrStyle, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the Link page screen. */
@@ -126,7 +131,7 @@ const THEME_SAVE_DELAY = 500;
 /** Whether two looks are the same six words, so an answer that changed nothing costs no render. */
 function sameTheme(one: PageTheme, other: PageTheme | undefined): boolean {
   if (other === undefined) return false;
-  const keys = ['ground', 'hue', 'mode', 'shape', 'fill', 'font'] as const;
+  const keys = ['ground', 'hue', 'mode', 'shape', 'fill', 'font', 'layout'] as const;
   return keys.every((key) => one[key] === other[key]);
 }
 
@@ -136,10 +141,16 @@ function nextHue(items: readonly ProfileItem[]) {
 }
 
 /** The block as the list shows it before the server answers: the checked block, as the server will store it. */
-function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined, facts?: ChosenFacts): ProfileItem {
+function shownItem(
+  id: string,
+  block: ProfileBlock,
+  was: ProfileItem | undefined,
+  facts: ChosenFacts | undefined,
+  linkPage: LinkPageStore,
+): ProfileItem {
   const updatedAt = new Date().toISOString();
   if (block.kind === 'heading') return { kind: 'heading', id, title: block.title, updatedAt };
-  if (block.kind === 'page') {
+  if (block.kind === 'page' || block.kind === 'times') {
     const page = facts !== undefined && 'page' in facts ? facts.page : undefined;
     return { ...block, id, ...(page === undefined ? {} : { page }), updatedAt };
   }
@@ -147,16 +158,51 @@ function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined
     const form = facts !== undefined && 'form' in facts ? facts.form : undefined;
     return { ...block, id, ...(form === undefined ? {} : { form }), updatedAt };
   }
-  if (block.kind === 'contact') return { ...block, id, updatedAt };
-  if (block.kind === 'text' || block.kind === 'faq' || block.kind === 'testimonial') {
-    return { ...block, id, updatedAt };
+  if (block.kind === 'media') {
+    // The server parses the link into its service and id and reads the title and poster once; until it answers,
+    // the row names the service from the address and keeps what the saved block had.
+    const kept = was?.kind === 'media' ? was : undefined;
+    const same = kept !== undefined && kept.url === block.url ? kept : undefined;
+    const title = block.title ?? same?.title;
+    const poster = same?.poster;
+    return {
+      kind: 'media',
+      id,
+      provider: linkPage.reach.rules.mediaProviderOf(block.url) ?? kept?.provider ?? 'youtube',
+      ref: same?.ref ?? '',
+      url: block.url,
+      ...(title === undefined ? {} : { title }),
+      ...(poster === undefined ? {} : { poster }),
+      ...(block.size === undefined ? {} : { size: block.size }),
+      ...(block.showFrom === undefined ? {} : { showFrom: block.showFrom }),
+      ...(block.hideAfter === undefined ? {} : { hideAfter: block.hideAfter }),
+      updatedAt,
+    };
   }
-  // Spec 0061's kinds: the server's answer is what the list shows (their editors arrive with lane R4).
-  if (block.kind !== 'link') {
-    if (was !== undefined) return was;
-    throw new Error('This editor adds no block of this kind yet.');
-  }
+  if (block.kind !== 'link') return { ...block, id, updatedAt };
   return { ...block, id, hue: block.hue ?? (was?.kind === 'link' ? was.hue : 'blue'), updatedAt };
+}
+
+/**
+ * Now, for the blocks' windows (AC-6111): it moves on by itself at the next start or end among the blocks, so a block
+ * whose time comes while the editor is open joins or leaves the phone and its row's chip changes then, and it stays
+ * the same moment between those renders.
+ */
+function useWindowClock(items: readonly ProfileItem[]): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const at = now.getTime();
+    const edges = items
+      .flatMap((item) => (item.kind === 'heading' ? [] : [item.showFrom, item.hideAfter]))
+      .flatMap((edge) => (edge === undefined ? [] : [Date.parse(edge)]))
+      .filter((edge) => edge > at);
+    if (edges.length === 0) return undefined;
+    // A day at most, so a long wait never overflows the timer; a little after the edge, so it has passed.
+    const wait = Math.min(Math.min(...edges) - at + 500, 86_400_000);
+    const timer = setTimeout(() => setNow(new Date()), wait);
+    return () => clearTimeout(timer);
+  }, [items, now]);
+  return now;
 }
 
 /** The link page editor: the blocks beside the phone. */
@@ -177,6 +223,9 @@ export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing
                 live={live}
                 handle={handle}
                 workspaceName={profile.workspaceName}
+                linkPage={linkPage}
+                slug={slug}
+                personImage={profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image}
                 isEditing={isEditing}
                 onEditing={onEditing}
               />
@@ -219,18 +268,28 @@ export function HeaderActions({
   live,
   handle,
   workspaceName,
+  linkPage,
+  slug,
+  personImage,
   isEditing,
   onEditing,
 }: {
   readonly live: LinkPageLive;
   readonly handle: string;
   readonly workspaceName?: string | undefined;
+  /** The store and workspace the saved QR style is read from (spec 0061, AC-6124). */
+  readonly linkPage: LinkPageStore;
+  readonly slug: string;
+  /** The person's picture, when it shows on their pages: a styled code may carry it. */
+  readonly personImage?: string | undefined;
   readonly isEditing: boolean;
   readonly onEditing: (isEditing: boolean) => void;
 }) {
   const address = publicProfileUrl(handle);
   const shown = address.replace(/^https?:\/\//, '');
   const [isSharing, setSharing] = useState(false);
+  const [isMarking, setMarking] = useState(false);
+  const qrStyle = drawnQrStyle(useQrStyle(linkPage, slug), linkPage, slug, personImage);
   return (
     <>
       <LiveSwitch live={live} />
@@ -275,9 +334,16 @@ export function HeaderActions({
         workspaceName={workspaceName}
         isPublic={live.isLive}
         onGoLive={() => live.setLive(true)}
+        qrStyle={qrStyle}
+        onShareLinks={() => {
+          // One dialog at a time: Share steps aside for the links, rather than stacking two scrims.
+          setSharing(false);
+          setMarking(true);
+        }}
         isOpen={isSharing}
         onClose={() => setSharing(false)}
       />
+      <ShareLinksModal address={address} isOpen={isMarking} onClose={() => setMarking(false)} />
     </>
   );
 }
@@ -377,7 +443,10 @@ function Blocks({
    * dozen choices in a few seconds, and each one used to be its own round trip whose answer set the state again:
    * production logged 19 saves in 15 seconds, every one of them re drawing the preview (25 October 2026).
    */
-  const chooseTheme = (next: PageTheme) => {
+  const chooseTheme = (picked: PageTheme) => {
+    // A starting look names the ten looks' keys, never the layout (spec 0061): picking one keeps the blocks' layout.
+    const next: PageTheme =
+      picked.layout === undefined && theme.layout !== undefined ? { ...picked, layout: theme.layout } : picked;
     // The look to put back is the one before this run of choices, not the one half a second ago.
     before.current ??= theme;
     shown.current = next;
@@ -491,9 +560,33 @@ function Blocks({
     );
   };
   const items = useMemo(() => (state.status === 'ready' ? state.items : []), [state]);
+  // Spec 0061: a stored picture as the owner's own browser reads it (live or not), and now, for each block's window.
+  const picture = (imageId: string) => ({ src: linkPage.reach.pictureSrc(slug, imageId), width: 4, height: 3 });
+  const now = useWindowClock(items);
+  const { locale, timeZone } = useFormatSettings();
+  const whenFormat = memoIntl(
+    `link-window:${locale}:${timeZone}`,
+    () =>
+      new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone }),
+  );
+  /** Whether a block's window keeps it off the page now: not started yet, or ended. */
+  const isOutOfWindow = (item: ProfileItem) => {
+    const at = linkPage.reach.rules.windowStateOf(item, now).state;
+    return at === 'starts' || at === 'ended';
+  };
+  /** A block's window as its row's chip (AC-6111): "Starts 3 Nov, 09:00", "Ends 10 Nov, 18:00", "Ended". */
+  const windowChip = (item: ProfileItem): readonly string[] => {
+    const at = linkPage.reach.rules.windowStateOf(item, now);
+    if (at.state === 'always') return [];
+    if (at.state === 'ended') return [reachStrings.ended];
+    const when = whenFormat.format(new Date(at.at));
+    return [at.state === 'starts' ? reachStrings.starts(when) : reachStrings.ends(when)];
+  };
   const counts = state.status === 'ready' ? state.counts : undefined;
   const socialNetworks = useMemo(() => (profile.socials ?? []).map((link) => link.network), [profile.socials]);
-  const archived = state.status === 'ready' ? state.archived : [];
+  const archived = useMemo(() => (state.status === 'ready' ? state.archived : []), [state]);
+  // Every block, live and archived, for Insights' names of each block's clicks.
+  const everyItem = useMemo(() => [...items, ...archived], [items, archived]);
   const pending = state.status === 'ready' ? state.pendingIds : new Set<string>();
 
   const move = (id: string, toIndex: number) => {
@@ -561,13 +654,13 @@ function Blocks({
   const copyHrefOf = (item: ProfileItem): string | undefined => {
     if (item.kind === 'link') return item.url;
     // The card's vCard, as a visitor saves it: the same address Save contact opens, and a QR code can carry.
-    if (item.kind === 'contact') return `${publicBookingOrigin()}${contactHref(handle)}`;
+    if (item.kind === 'contact') return `${publicBookingOrigin()}${contactHref(handle, item.id)}`;
     if (item.kind === 'page' && item.page !== undefined) {
       return `${publicBookingOrigin()}/${encodeURIComponent(handle)}/${encodeURIComponent(item.page.slug)}`;
     }
     return undefined;
   };
-  const submit = (draft: BlockDraft, facts?: ChosenFacts) => {
+  const submit = (draft: BlockDraft, facts?: ChosenFacts, after?: AfterSave) => {
     const was = editing?.item;
     setEditing(undefined);
     const withHue: BlockDraft =
@@ -575,15 +668,42 @@ function Blocks({
     const checked = linkPage.check(withHue, items, was?.id);
     if (!checked.ok) return;
     const id = was?.id ?? editing?.id ?? linkPage.newId();
-    void linkPage.save(slug, id, checked.block, shownItem(id, checked.block, was, facts));
+    const shown = shownItem(id, checked.block, was, facts, linkPage);
+    void linkPage.save(slug, id, checked.block, shown).then((landed) => {
+      // A new link's own site picture (AC-6101): read once the link is saved, since the server reads only the
+      // address it holds; then the link is saved again with it, as an edit would.
+      if (!landed || after?.siteThumb !== true || checked.block.kind !== 'link') return;
+      const asked = checked.block;
+      linkPage.reach.fetchThumbnail(slug, id).then(
+        (found) => {
+          if ('none' in found) {
+            toasts.toast({ tone: 'info', message: reachStrings.thumbSiteNone });
+            return;
+          }
+          // The link as it stands now, not as it was sent: the read takes seconds, and meanwhile the owner may have
+          // edited it, picked a picture, or archived or deleted it. Only the same live link at the same address,
+          // still with no picture, takes the one the server read.
+          const now = held.getSnapshot();
+          const current = now.status === 'ready' ? now.items.find((each) => each.id === id) : undefined;
+          if (current?.kind !== 'link' || current.url !== asked.url || current.thumb !== undefined) return;
+          const { id: _id, updatedAt: _at, outsideWorkspace: _outside, ...fields } = current;
+          const block: ProfileBlock = { ...fields, thumb: found.image };
+          void linkPage.save(slug, id, block, { ...current, thumb: found.image });
+        },
+        (error: unknown) =>
+          toasts.toast({
+            tone: 'danger',
+            message: error instanceof Error && error.message !== '' ? error.message : reachStrings.pictureFailed,
+          }),
+      );
+    });
   };
 
   const rowMenu = (item: ProfileItem, index: number) => {
     const words = rowWords(item);
     const href = copyHrefOf(item);
-    // Spec 0061's kinds have no editor here yet (lane R4): their rows offer what every row does, and no Edit.
-    const kind = isNewKind(item) ? { isEditable: false } : BLOCK_KINDS[item.kind];
-    const editKind = isNewKind(item) ? undefined : item.kind;
+    const kind = BLOCK_KINDS[item.kind];
+    const editKind = item.kind;
     return (
       <MenuTrigger>
         <Button variant="ghost" icon="ellipsis" label={strings.moreFor(words.title)} />
@@ -591,12 +711,18 @@ function Blocks({
           {kind.isEditable && (
             <MenuItem
               id="edit"
-              icon="pencil"
+              icon={item.kind === 'page' ? 'clock' : 'pencil'}
               onAction={() => {
-                if (editKind !== undefined) setEditing({ kind: editKind, item, id: item.id });
+                setEditing({ kind: editKind, item, id: item.id });
               }}
             >
-              {strings.edit}
+              {/* A booking page block's own editor holds its window (and its size on a grid page); "Edit booking
+                  page" below opens the page itself, so this one is named for what it opens. */}
+              {item.kind !== 'page'
+                ? strings.edit
+                : theme.layout === 'grid'
+                  ? reachStrings.sizeAndSchedule
+                  : reachStrings.schedule}
             </MenuItem>
           )}
           {href !== undefined && (
@@ -632,7 +758,8 @@ function Blocks({
   };
 
   const tileOf = (item: ProfileItem): LinkPageBlock => {
-    const block = previewBlock(item, handle, linkPage.markOf);
+    // The row's tile draws the block whatever its window, so a scheduled block still reads as itself.
+    const block = previewBlock(item, handle, linkPage.markOf, { picture, socials: shownSocials });
     if (block !== undefined) return block;
     // A paused or unavailable page still shows its calendar tile in the list.
     return { kind: 'page', id: item.id, title: rowWords(item).title, href: '', facts: '' };
@@ -666,7 +793,9 @@ function Blocks({
       address: words.address,
       // Its presses over 30 days, once the figures are here (a pending block has none yet). The figures are read
       // apart from the blocks, so until they land the chip's line is held, and the row never grows under a thumb.
-      chips: isPending ? [] : pressesChip(item, counts),
+      chips: isPending ? [] : [...windowChip(item), ...pressesChip(item, counts)],
+      // Outside its window a block has left the page, so its row reads as off, as a paused page's does (AC-6111).
+      ...(isOutOfWindow(item) ? { isOff: true } : {}),
       ...(isPending || counts !== undefined || (state.status === 'ready' && state.countsFailed === true)
         ? {}
         : { areChipsPending: true }),
@@ -685,7 +814,11 @@ function Blocks({
   // A button opens the modal on the kind it names, unless that kind is full: then it opens on the first kind that
   // isn't, so the picker never opens on a choice that can't be taken. Every kind full disables the button.
   // Email signup makes a form block, so what it needs room for is a form (`blockKindOf`), not a kind of its own.
-  const roomFor = (kind: AddableKind) => linkPage.limit(items, blockKindOf(kind)) === undefined;
+  // Why a kind can't be added now: its limit's sentence, or, for Social icons, that there are no links to show yet.
+  const offReason = (kind: AddableKind) =>
+    linkPage.limit(items, blockKindOf(kind)) ??
+    (kind === 'socials' && shownSocials.length === 0 ? reachStrings.socialsNone : undefined);
+  const roomFor = (kind: AddableKind) => offReason(kind) === undefined;
   const openAdd = (kind: AddableKind) => {
     const open = roomFor(kind) ? kind : ADDABLE.find(roomFor);
     if (open !== undefined) setEditing({ kind: open, id: linkPage.newId() });
@@ -725,14 +858,14 @@ function Blocks({
     editing === undefined || editing.item !== undefined ? undefined : (
       <KindPicker
         value={editing.kind}
-        fullReason={(kind) => linkPage.limit(items, blockKindOf(kind))}
+        fullReason={offReason}
         // The id is minted once and kept as the kind changes, so the save that follows is still the one add.
         onChange={(kind) => setEditing({ kind, id: editing.id })}
       />
     );
 
   const previewBlocks = items.flatMap((item) => {
-    const block = previewBlock(item, handle, linkPage.markOf);
+    const block = previewBlock(item, handle, linkPage.markOf, { picture, socials: shownSocials, now });
     return block === undefined ? [] : [block];
   });
   const preview = (
@@ -755,6 +888,7 @@ function Blocks({
       }}
       {...(state.status === 'ready' ? { blocks: previewBlocks } : {})}
       theme={theme}
+      {...(theme.layout === undefined ? {} : { pageLayout: theme.layout })}
       photos={lookPhotos}
       variables={lookVariables}
       // Their own set of networks (the Social links card below), under the bio as visitors see it.
@@ -835,12 +969,11 @@ function Blocks({
         onOpen={(id) => {
           const item = items.find((each) => each.id === id);
           if (item === undefined) return;
-          if (isNewKind(item)) return;
-          if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item, id: item.id });
-          // A booking page block opens the booking page's own editor, in its workspace.
-          else if (item.kind === 'page' && item.page !== undefined) {
+          // A booking page block opens the booking page's own editor, in its workspace; its menu's Edit holds the
+          // block's own size and window.
+          if (item.kind === 'page' && item.page !== undefined) {
             void navigate({ href: pageEditorHref(item.page.workspaceSlug, item.pageId) });
-          }
+          } else if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item, id: item.id });
         }}
         onMove={move}
         rowOrder={LinkListRowOrder}
@@ -867,6 +1000,10 @@ function Blocks({
             openAdd('link');
           }}
           onGoLive={onGoLive}
+          linkPage={linkPage}
+          items={everyItem}
+          personImage={profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image}
+          quickPicks={brand.quickPicks}
         />
       </PreviewLayout>
     );
@@ -887,6 +1024,22 @@ function Blocks({
               : strings.blocksText,
         ].join(' ')}
         {...(state.status === 'ready' && items.length === 0 ? {} : { footer: addButtons })}
+        actions={
+          // How the blocks lay out on the page (spec 0061, AC-6103): one column of rows, or tiles on a grid, whose
+          // sizes each sized block's editor then offers. Saved with the look, as every other look choice is.
+          <SegmentedControl
+            label={reachStrings.layout}
+            size="compact"
+            value={theme.layout ?? 'list'}
+            onChange={(next) => {
+              if (next === 'list' || next === 'grid') chooseTheme({ ...theme, layout: next });
+            }}
+            segments={[
+              { value: 'list', label: reachStrings.layoutList, icon: 'list' },
+              { value: 'grid', label: reachStrings.layoutGrid, icon: 'layout-grid' },
+            ]}
+          />
+        }
       >
         {list}
       </Card>
@@ -976,6 +1129,7 @@ function Blocks({
               linkPage={linkPage}
               socialNetworks={socialNetworks}
               ownerName={profile.name}
+              socialLinks={shownSocials}
               onSubmit={submit}
               onClose={() => setEditing(undefined)}
             />

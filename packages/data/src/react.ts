@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { BrandHeld, BrandHeldState } from './brand/store.ts';
+import type { InsightsHeld, InsightsState, QrStyleHeld, QrStyleState } from './link-page/reach.ts';
 import type { DataError } from './errors.ts';
 import type { FilesState, RecordFilesSource } from './files/store.ts';
 import type { OperatorHeld } from './operator/store.ts';
@@ -516,6 +517,16 @@ export function useScheduling<State>(held: Retained<State>): State {
 
 /** The person's link page blocks (Settings › Account › Link page, spec 0051), read when first held. */
 export function useLinkPage(held: LinkPageHeld): LinkPageState {
+  return useRetained(held);
+}
+
+/** A link page's Insights for one period (spec 0061, AC-6118), held while the screen shows it. */
+export function useLinkPageInsights(held: InsightsHeld): InsightsState {
+  return useRetained(held);
+}
+
+/** A link page's share QR style (spec 0061, AC-6124), held while the screen shows it. */
+export function useLinkPageQrStyle(held: QrStyleHeld): QrStyleState {
   return useRetained(held);
 }
 

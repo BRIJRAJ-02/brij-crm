@@ -18,6 +18,11 @@ export const PAGE_PATTERNS = ['dots', 'grid', 'lines', 'waves'] as const;
 export const PAGE_HEADERS = ['centred', 'cover', 'left'] as const;
 /** The avatar's shape, or none at all (spec 0060, AC-13). */
 export const PAGE_AVATARS = ['circle', 'rounded', 'none'] as const;
+/**
+ * How the blocks lay out (spec 0061, AC-6103): one column of rows, or tiles on a grid. Optional on the look, absent
+ * is `list`, so every look stored before it draws as it did; the database's check holds the same two words.
+ */
+export const PAGE_LAYOUTS = ['list', 'grid'] as const;
 /** The corner every row and button takes (AC-5409). */
 export const PAGE_SHAPES = ['soft', 'pill', 'square'] as const;
 /** How a row is filled (AC-5409). */
@@ -58,6 +63,7 @@ export const PageTheme = z
     pattern: z.enum(PAGE_PATTERNS, { error: PAGE_THEME_REFUSAL }),
     header: z.enum(PAGE_HEADERS, { error: PAGE_THEME_REFUSAL }),
     avatar: z.enum(PAGE_AVATARS, { error: PAGE_THEME_REFUSAL }),
+    layout: z.enum(PAGE_LAYOUTS, { error: PAGE_THEME_REFUSAL }).optional(),
   })
   // No unknown key: a look is exactly these ten, so there is never a field the page doesn't draw.
   .strict();
