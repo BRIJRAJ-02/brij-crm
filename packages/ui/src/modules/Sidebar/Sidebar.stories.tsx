@@ -616,6 +616,10 @@ export const KeptFold: Story = {
     await expect(canvas.getByRole('link', { name: 'Bookings' })).toBeInTheDocument();
     await userEvent.click(label);
     await expect(label).toHaveAttribute('aria-expanded', 'false');
+    // The click leaves the pointer on the label, so the screenshot can catch it hovered: the shot is taken once the
+    // page settles, which is not always before the hover paints. Take the pointer away and the render is the resting
+    // one the baseline holds.
+    await userEvent.unhover(label);
   },
 };
 
