@@ -165,7 +165,11 @@ async function livePage(tx: WorkspaceTx, entry: BookingEntry): Promise<PageRecor
 
 /** `livePage` for a page already read, so a caller never reads it twice. */
 function liveOf(page: PageRecord | undefined): PageRecord {
-  if (page === undefined || page.isDeleted) throw refuse('NOT_FOUND', 'This page is no longer available.');
+  // A managed template is not a page (spec 0037, AC-1333): it holds settings for its members' pages, and its own
+  // public link answers as a deleted page does, so nobody ever books the template.
+  if (page === undefined || page.isDeleted || page.kind === 'managed') {
+    throw refuse('NOT_FOUND', 'This page is no longer available.');
+  }
   if (page.status !== 'live') throw refuse('BOOKING_CLOSED', 'This page isn’t taking bookings right now.');
   return page;
 }
@@ -367,7 +371,10 @@ export async function readAddressedPage(entry: BookingEntry & { readonly handle:
   checkEntry(entry);
   return inWorkspace(entry.scope, async (tx) => {
     const page = await loadPage(tx, entry.pageId);
-    if (page === undefined || page.isDeleted) throw refuse('NOT_FOUND', 'This page is no longer available.');
+    // A managed template has no address of its own (AC-1333).
+    if (page === undefined || page.isDeleted || page.kind === 'managed') {
+      throw refuse('NOT_FOUND', 'This page is no longer available.');
+    }
     return { publicKey: page.publicKey, handle: entry.handle, slug: page.slug };
   });
 }

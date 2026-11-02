@@ -98,6 +98,7 @@ export const ERROR_MAP = {
   TIME_OFF_LIMIT: CONFLICT,
   // Page and rotation editors (spec 0037, AC-1331): "A page or rotation can have at most 20 editors."
   EDITOR_LIMIT: CONFLICT,
+  MANAGED_MEMBERS_LIMIT: CONFLICT,
   // Routing (spec 0037, AC-1341): "Rule 3 of Contact us sends people here. Change the rule first."
   ROUTING_IN_USE: CONFLICT,
   // Skills (spec 0037, AC-1382): "Spanish is used by Rule 3 of Intro call." and "A workspace can have at most 100 skills."

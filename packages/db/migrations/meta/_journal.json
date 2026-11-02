@@ -1121,6 +1121,13 @@
       "when": 1795502300000,
       "tag": "0159_custom_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 160,
+      "version": "7",
+      "when": 1795502400000,
+      "tag": "0xxx_managed_booking_pages",
+      "breakpoints": true
     }
   ]
 }

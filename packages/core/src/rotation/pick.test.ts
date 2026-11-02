@@ -110,6 +110,7 @@ function teamPage(over: Partial<PageRecord> = {}): PageRecord {
     workspaceId: 'workspace',
     publicKey: 'aaaaaaaaaaaaaaaa',
     kind: 'round_robin',
+    templateId: null,
     scope: 'member',
     ownerMemberId: 'a',
     ownerUserId: null,

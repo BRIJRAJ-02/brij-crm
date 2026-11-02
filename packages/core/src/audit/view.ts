@@ -781,6 +781,19 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: [],
       };
     }
+    // A managed page template (spec 0037, AC-1333 to AC-1335): the target is the template page, and how many
+    // members were added and removed. The counts are written as numbers, not lists, so no member id is listed here.
+    case 'managed_page.changed': {
+      const count = (value: unknown) =>
+        typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
+      return {
+        ...base,
+        action,
+        target: thing('booking_page', names.bookingPages),
+        params: { added: count(after.added), removed: count(after.removed) },
+        changes: [],
+      };
+    }
     case 'rotation.changed': {
       const many = (value: unknown) => (Array.isArray(value) ? value.length : 0);
       return {

@@ -85,6 +85,8 @@ export const ENGINE_REFUSAL_CODES = [
   'TIME_OFF_LIMIT',
   // Page and rotation editors (spec 0037, AC-1331): a page or rotation with 20 editors.
   'EDITOR_LIMIT',
+  // Managed booking pages (spec 0037, AC-1333): a template naming more than 200 members.
+  'MANAGED_MEMBERS_LIMIT',
   // Routing (spec 0037, AC-1341): a booking page a published form's rule, or its After someone sends it, still books.
   'ROUTING_IN_USE',
   // Skills (spec 0037, AC-1382): a skill a host route names, or the workspace's 100th.

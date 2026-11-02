@@ -29,6 +29,7 @@ import {
 import { auditColumns, id, timestamptz, workspaceId } from './common.ts';
 import { actorConstraints, members } from './workspaces.ts';
 import { objects } from './definitions.ts';
+import { teams } from './teams.ts';
 
 /** A `tstzrange`, read and written as Postgres' text form (`["2026-10-19 09:45:00+00","2026-10-19 10:45:00+00")`). */
 /** Every meeting length a page may offer, as a Postgres array literal: 5 to 480 minutes in steps of 5 (contracts' `BookingDuration`). */
@@ -151,6 +152,24 @@ export const bookingPages = pgTable(
      * back to the owner's default. Cleared when the page's "Add bookings to" is set again. Shown to the owner only.
      */
     destinationRemovedName: text('destination_removed_name'),
+    /**
+     * Managed booking pages (spec 0037, AC-1333): the template this page was made from, on a member page. Its
+     * foreign key (`booking_pages_template`, on delete set null on this column only) is hand written in the
+     * migration: drizzle can't say `set null (template_id)`, and a plain set null would null `workspace_id` too.
+     * Deleting a template leaves every member page standing as that member's own, no longer linked (AC-1335).
+     */
+    templateId: uuid('template_id'),
+    /**
+     * Which parts of a template a member may not change (spec 0037, AC-1333), on a `managed` template only: a subset
+     * of `details`, `durations`, `location`, `questions`, `on_booking`, `limits`, `hours`. Null on every other page.
+     * A member page reads its template's list: the lock lives on the template, so one save moves every page at once.
+     */
+    locked: text('locked').array(),
+    /**
+     * The team a template follows (spec 0037, AC-1333), on a `managed` template only: its active non guest members
+     * each get a page, instead of the chosen members in `managed_page_members`. Null when members are chosen.
+     */
+    followTeamId: uuid('follow_team_id'),
     ...auditColumns(),
     deletedAt: timestamptz('deleted_at'),
   },
@@ -166,6 +185,12 @@ export const bookingPages = pgTable(
       columns: [t.workspaceId, t.answersObjectId],
       foreignColumns: [objects.workspaceId, objects.id],
     }),
+    // The team a template follows: kept, so a team in use can't vanish under its managed pages.
+    foreignKey({
+      name: 'booking_pages_follow_team',
+      columns: [t.workspaceId, t.followTeamId],
+      foreignColumns: [teams.workspaceId, teams.id],
+    }).onDelete('restrict'),
     uniqueIndex('booking_pages_public_key').on(t.publicKey),
     uniqueIndex('booking_pages_slug')
       .on(t.workspaceId, t.ownerMemberId, t.slug)
@@ -188,7 +213,7 @@ export const bookingPages = pgTable(
     check('booking_pages_profile_section', sql`char_length(${t.profileSection}) between 1 and 40`),
     check('booking_pages_profile_position', sql`${t.profilePosition} between 0 and 999`),
     check('booking_pages_slug_shape', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`),
-    check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin')`),
+    check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin', 'managed')`),
     check('booking_pages_scope', sql`${t.scope} in ('member', 'workspace')`),
     check('booking_pages_scope_kind', sql`${t.scope} = 'member' or ${t.kind} = 'round_robin'`),
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),
@@ -201,6 +226,23 @@ export const bookingPages = pgTable(
       sql`jsonb_typeof(${t.questions}) = 'array' and jsonb_array_length(${t.questions}) <= 20`,
     ),
     check('booking_pages_destination_removed_name', sql`char_length(${t.destinationRemovedName}) <= 255`),
+    // A template holds the locks and the team it follows; nothing else does, and a template is nobody's member page.
+    check(
+      'booking_pages_managed',
+      sql`(${t.kind} = 'managed' and ${t.templateId} is null)
+        or (${t.kind} <> 'managed' and ${t.locked} is null and ${t.followTeamId} is null)`,
+    ),
+    check(
+      'booking_pages_locked_parts',
+      sql`${t.locked} is null
+        or ${t.locked} <@ '{details,durations,location,questions,on_booking,limits,hours}'::text[]`,
+    ),
+    // A template is a page of its own, never round robin and never the workspace's link.
+    check('booking_pages_managed_scope', sql`${t.kind} <> 'managed' or ${t.scope} = 'member'`),
+    // A template's member pages: the propagation's read, and the "From <template>" badge.
+    index('booking_pages_by_template')
+      .on(t.workspaceId, t.templateId)
+      .where(sql`${t.templateId} is not null and ${t.deletedAt} is null`),
     check('booking_pages_title', sql`char_length(${t.title}) between 1 and 120`),
     check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),
     check(
@@ -335,6 +377,48 @@ export const bookingPageMembers = pgTable(
     // A member's pages, and the member foreign key's check.
     index('booking_page_members_by_member').on(t.workspaceId, t.memberId),
     check('booking_page_members_position', sql`${t.position} between 0 and 7`),
+  ],
+);
+
+/**
+ * Who a managed template makes a page for (spec 0037, AC-1333), when it names members rather than following a team:
+ * one row per chosen member, at most 200 (`MANAGED_MEMBERS_MAX`, checked in core). Removing a row deletes that
+ * member's page the way spec 0025 AC-648 deletes one (AC-1335); the member page itself is a `booking_pages` row
+ * carrying `template_id`, so these rows say who *should* have one and the pages say who does.
+ */
+export const managedPageMembers = pgTable(
+  'managed_page_members',
+  {
+    workspaceId: workspaceId(),
+    /** The template (`booking_pages.id`, `kind = 'managed'`). */
+    templateId: uuid('template_id').notNull(),
+    memberId: uuid('member_id').notNull(),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'managed_page_members_pkey', columns: [t.workspaceId, t.templateId, t.memberId] }),
+    foreignKey({
+      name: 'managed_page_members_template',
+      columns: [t.workspaceId, t.templateId],
+      foreignColumns: [bookingPages.workspaceId, bookingPages.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'managed_page_members_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    // Which templates a member is on: the member's Links screen, and the removal when they leave.
+    index('managed_page_members_by_member').on(t.workspaceId, t.memberId),
+    ...actorConstraints('managed_page_members', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('managed_page_members', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
   ],
 );
 

@@ -563,6 +563,16 @@ export {
   reorderProfilePages,
   updateBookingPage,
 } from './booking/pages.ts';
+// Managed booking pages (spec 0037, AC-1333 to AC-1336): one template, a page per member, locked parts kept in step.
+export {
+  createManagedPage,
+  deleteManagedPage,
+  getManagedPage,
+  listManagedPages,
+  setManagedMembers,
+  updateManagedPage,
+} from './booking/managed.ts';
+export { LOCKED_BY_WORKSPACE, LOCKED_PART_REFUSAL, lockedPartOfWrite } from './booking/managed-locks.ts';
 // Availability schedules (spec 0035): a member's named hours, the one the slot engine resolves for a page, and the
 // default schedule's hours behind `bookings.hours` and `bookings.setHours`.
 export {

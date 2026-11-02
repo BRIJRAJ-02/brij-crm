@@ -61,6 +61,7 @@ export {
   bookingPages,
   bookings,
   bookingTimeBlocks,
+  managedPageMembers,
 } from './booking.ts';
 export { exportChunks, exports } from './exports.ts';
 export { auditEvents, invitations, joinRequests, workspaceDomains, workspaceSecurity } from './team.ts';

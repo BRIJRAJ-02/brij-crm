@@ -90,6 +90,7 @@ export const AUDIT_KINDS = {
     'booking_page.changed_for',
     'rotation.changed',
     'editors.changed',
+    'managed_page.changed',
     'routing.settings_changed',
     'routing.skills_changed',
     'routing.tested',

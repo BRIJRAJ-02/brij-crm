@@ -417,6 +417,22 @@ export const EditorAddedEmail = z.strictObject({
 /** The editor added email's params. */
 export type EditorAddedEmail = z.infer<typeof EditorAddedEmail>;
 
+/**
+ * Managed booking page (spec 0037, AC-1335): to the member whose page a template made ("You have a new booking page:
+ * Intro call"), or whose page it removed (`removed`: "Your Intro call page was removed"). The page's title and,
+ * while it exists, where to open it.
+ */
+export const ManagedPageEmail = z.strictObject({
+  /** The page's title, which is the template's. */
+  pageTitle: z.string().trim().min(1).max(200),
+  removed: z.boolean().optional(),
+  byName: Name,
+  /** The member's own page, while they have one; the Links screen after it went. */
+  path: AppPath,
+});
+/** The managed page email's params. */
+export type ManagedPageEmail = z.infer<typeof ManagedPageEmail>;
+
 /** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
@@ -434,6 +450,7 @@ export const EMAIL_PARAMS = {
   scheduling_access_given: SchedulingAccessGivenEmail,
   scheduling_access_removed: SchedulingAccessRemovedEmail,
   editor_added: EditorAddedEmail,
+  managed_page: ManagedPageEmail,
 } as const;
 
 /** A kind of email with a template. */
@@ -465,6 +482,7 @@ export const QUEUED_EMAIL_KINDS = [
   'scheduling_access_given',
   'scheduling_access_removed',
   'editor_added',
+  'managed_page',
 ] as const satisfies readonly EmailKind[];
 /** A kind that goes through the workspace email queue. */
 export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);

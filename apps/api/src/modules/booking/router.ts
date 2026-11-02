@@ -2,6 +2,12 @@ import {
   bookAsHost,
   listEditors,
   setEditors,
+  createManagedPage,
+  deleteManagedPage,
+  getManagedPage,
+  listManagedPages,
+  setManagedMembers,
+  updateManagedPage,
   bookingAssignments,
   reassignBooking,
   reassignUpcoming,
@@ -390,6 +396,47 @@ export const editorsRouter = member.editors.router({
         resourceId: input.resourceId,
         memberIds: input.memberIds,
       }),
+    ),
+  ),
+});
+
+// Managed booking pages (spec 0037, AC-1333 to AC-1336): one template, a page per member, locked parts kept in
+// step. Settings, not CRM data: no outbox row, but every write goes through `commitWrite`.
+export const managedPagesRouter = member.managedPages.router({
+  list: member.managedPages.list.handler(({ context }) => listManagedPages(context.scope)),
+  get: member.managedPages.get.handler(({ context, input }) =>
+    getManagedPage(context.scope, { templateId: input.templateId }),
+  ),
+  create: member.managedPages.create.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      createManagedPage(context.scope, {
+        id: input.id,
+        title: input.title,
+        timeZone: input.timeZone,
+        ...(input.settings === undefined ? {} : { settings: input.settings }),
+        ...(input.locked === undefined ? {} : { locked: input.locked }),
+        ...(input.memberIds === undefined ? {} : { memberIds: input.memberIds }),
+        ...(input.followTeamId === undefined ? {} : { followTeamId: input.followTeamId }),
+      }),
+    ),
+  ),
+  update: member.managedPages.update.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      updateManagedPage(context.scope, {
+        templateId: input.templateId,
+        ...(input.settings === undefined ? {} : { settings: input.settings }),
+        ...(input.locked === undefined ? {} : { locked: input.locked }),
+      }),
+    ),
+  ),
+  setMembers: member.managedPages.setMembers.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      setManagedMembers(context.scope, { templateId: input.templateId, memberIds: input.memberIds }),
+    ),
+  ),
+  delete: member.managedPages.delete.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      deleteManagedPage(context.scope, { templateId: input.templateId }),
     ),
   ),
 });

@@ -17,6 +17,7 @@ import {
   editorAdded,
   importFinished,
   jobFailed,
+  managedPage,
   schedulingAccessGiven,
   schedulingAccessRemoved,
   schedulingChanged,
@@ -186,6 +187,15 @@ export const CATALOG: Catalog = {
     sample: {
       resourceType: 'booking_page',
       resourceName: 'Intro call',
+      byName: 'Priya Shah',
+      path: '/w/acme/captures/links',
+    },
+  },
+  managed_page: {
+    template: managedPage,
+    medium: 'email_calendar_alert',
+    sample: {
+      pageTitle: 'Intro call',
       byName: 'Priya Shah',
       path: '/w/acme/captures/links',
     },

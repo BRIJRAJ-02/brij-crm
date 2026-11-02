@@ -146,6 +146,9 @@ export const AUDIT_ACTIONS = [
   // Who may edit a booking page or a rotation changed (spec 0037, AC-1331): the target is the page or the rotation;
   // `after` lists the members added and removed as editors.
   'editors.changed',
+  // A managed booking page template changed (spec 0037, AC-1333 to AC-1335): the target is the template; `after`
+  // names the locks it holds and how many members were added and removed.
+  'managed_page.changed',
   // Bookings › Routing (spec 0037, AC-1374, AC-1392): the shared settings (Won means), a skill or someone's skills,
   // each with before and after; and a Test run that named an email, the target the workspace.
   'routing.settings_changed',

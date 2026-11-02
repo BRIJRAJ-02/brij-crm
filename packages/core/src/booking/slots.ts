@@ -10,6 +10,7 @@ import {
   BookingLocation,
   BookingQuestions,
   isTimeZone,
+  ManagedPart,
   minutesOf,
   RoutingRules,
   WEEKDAYS,
@@ -43,12 +44,20 @@ export interface PageRecord extends BookingPageSettings {
   /** The workspace the page lives in: its owner's handle there is the one its address uses (spec 0056). */
   readonly workspaceId: string;
   readonly publicKey: string;
-  readonly kind: 'personal' | 'collective' | 'round_robin';
+  /**
+   * A page's kind. `managed` is a template (spec 0037, AC-1333): it holds a page's settings for its members' pages
+   * and is never bookable itself, so its public link answers "no longer available".
+   */
+  readonly kind: 'personal' | 'collective' | 'round_robin' | 'managed';
   /** A person's page (`member`), or the workspace's own link (`workspace`), which its `ownerMemberId` only made. */
   readonly scope: 'member' | 'workspace';
   readonly ownerMemberId: string;
   /** The owner member's identity, which their handle belongs to; null for a member without one. */
   readonly ownerUserId: string | null;
+  /** The managed template this page was made from (spec 0037, AC-1333); null on every page that has none. */
+  readonly templateId: string | null;
+  /** On a template, the parts its member pages may not change (AC-1333); undefined on every other page. */
+  readonly locked?: readonly ManagedPart[];
   readonly isDeleted: boolean;
   /** A private page books inside its host's holds and waives its minimum notice (spec 0027, AC-707). */
   readonly isPrivate: boolean;
@@ -61,7 +70,7 @@ export interface PageRecord extends BookingPageSettings {
 }
 
 const SLOT_STEPS = new Set([15, 30, 60]);
-const KINDS = new Set(['personal', 'collective', 'round_robin']);
+const KINDS = new Set(['personal', 'collective', 'round_robin', 'managed']);
 
 /** A page's stored row (`booking_pages`). */
 export type PageRow = typeof bookingPages.$inferSelect;
@@ -119,6 +128,10 @@ export function pageOf(
     slotStep: step !== null && SLOT_STEPS.has(step) ? (step as 15 | 30 | 60) : null,
     status: row.status === 'paused' ? 'paused' : 'live',
     rescheduleHost: row.rescheduleHost === 'rotation' ? 'rotation' : 'same',
+    templateId: row.templateId,
+    ...(row.locked === null
+      ? {}
+      : { locked: row.locked.filter((part): part is ManagedPart => ManagedPart.safeParse(part).success) }),
     isDeleted: row.deletedAt !== null,
     isPrivate: row.isPrivate,
     showSocials: row.showSocials,
