@@ -547,7 +547,9 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
             timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
             sudo dpkg --configure -a || true
           done
-      - run: pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})"
+      # DIAGNOSTIC, wip/visual-ffhang only, never to be landed: one file, to tell a hang inside
+      # LinkPageBlocks.stories.tsx from an interaction with the files that run before it.
+      - run: pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" src/modules/LinkPage/LinkPageBlocks.stories.tsx
         env:
           CRM_STORY_BROWSERS: ${{ matrix.browser }}
 
