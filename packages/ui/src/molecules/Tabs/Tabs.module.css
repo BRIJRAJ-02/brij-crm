@@ -104,12 +104,14 @@
     transition: color var(--duration-hover) var(--ease-hover);
   }
 
-  /* In the bar, a tab and the tools beside it fill its height, the underline on its hairline. Tabs sit a little
-     closer than elsewhere (space-6 each side, space-2 apart), so six of them and a tab's tools share one row on a
-     1280 screen (Bookings, 31 October 2026: the Roster made six, and List's tools wrapped under them). */
+  /* In the bar, a tab and the tools beside it fill its height, the underline on its hairline. A tab is wider than
+     the strip's (space-12 each side instead of space-8, the same space-4 apart), so each label reads as its own tab
+     rather than as one run-on line of words (the owner, 2 November 2026: Bookings' seven tabs). The space-6/space-2
+     tightening of 31 October 2026, which fitted six tabs and a tab's tools on one 1280 row, is gone: Bookings has
+     seven tabs now, so the row scrolls at its narrowest anyway, and the strip already fades and scrolls at its ends. */
   .bar[data-variant='bar'] .tab {
     block-size: calc(var(--size-bar) - var(--border-width-hairline));
-    padding-inline: var(--space-6);
+    padding-inline: var(--space-12);
   }
 
   /* No inset (a settings page): the first tab's label lines up with the table's first column, the tools end
@@ -161,9 +163,9 @@
      rather than cutting the last tab (Tasks, Bookings; the owner, 21 October 2026). */
   .bar[data-variant='bar'] .list {
     flex: 1 0 auto;
-    gap: var(--space-2);
+    gap: var(--space-4);
     max-inline-size: 100%;
-    padding-inline: calc(var(--space-16) - var(--space-6)) 0;
+    padding-inline: calc(var(--space-16) - var(--space-12)) 0;
   }
 
   .tab[data-selected] {
@@ -193,6 +195,13 @@
     transition-duration: var(--duration-move);
     transition-property: translate, width;
     transition-timing-function: var(--ease-in-out);
+  }
+
+  /* The bar's underline stays the label's width rather than the whole tab's, so the first tab's underline starts on
+     the page's gutter under the TopBar's title instead of hanging space-12 out past it (2 November 2026, with the
+     wider tabs above). */
+  .bar[data-variant='bar'] .indicator {
+    inset-inline: var(--space-12);
   }
 
   .list[data-instant] .indicator {
