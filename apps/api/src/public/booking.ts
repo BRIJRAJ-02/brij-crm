@@ -1072,6 +1072,16 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     const back = returnPath(key, c.req.query('return'));
     const appUrl = services.visitor?.appUrl ?? services.ics.appOrigin;
     if (back === undefined) return c.redirect(new URL('/', new URL(appUrl).origin).toString());
+    // Google sends the visitor back to the app's host, so the state cookie has to be set there. A page opened on
+    // another of our hosts (a booking page on timefix.com) set it on that host instead, the callback couldn't read
+    // it, and every first connect failed (owner, 2 November 2026). So the start always hops once through the app's
+    // own address, marked, before it sets anything: behind the edge the function can't trust which host it was
+    // asked on, and the mark means the hop can never loop.
+    if (c.req.query('via') !== 'app') {
+      const here = new URL(c.req.url);
+      here.searchParams.set('via', 'app');
+      return c.redirect(new URL(`${here.pathname}${here.search}`, new URL(appUrl).origin).toString());
+    }
     const refused = limited([[`booking:connect:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]);
     if (refused !== undefined) return c.redirect(backTo(appUrl, back, 'failed'));
     const visitor = services.visitor;

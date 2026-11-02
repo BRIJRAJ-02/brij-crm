@@ -997,8 +997,14 @@ function Booking({
   const showsBar = viewer !== undefined && !viewer.isHost && (person !== undefined || connectHref !== undefined);
   // Its space is held while the page asks who the visitor is, so the card doesn't jump down under a reaching hand.
   const holdsBar = viewer === undefined && !isPreview;
+  // A connect that went wrong says so only while the page has no calendar to show for the visitor: one already
+  // connected (an earlier connect, or a second try) is the truth, and a stale "couldn't connect" beside it reads as
+  // a lie (owner, 2 November 2026).
+  const isConnected = person?.source === 'google';
   const connectNote =
-    connected === undefined || connected === 'connected' || notYou ? undefined : strings.connectResults[connected];
+    connected === undefined || connected === 'connected' || notYou || isConnected
+      ? undefined
+      : strings.connectResults[connected];
   const banner =
     showsBar || holdsBar || connectNote !== undefined ? (
       <>
