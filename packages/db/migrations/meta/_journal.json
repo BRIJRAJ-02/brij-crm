@@ -1170,6 +1170,13 @@
       "when": 1795504500000,
       "tag": "0166_form_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "7",
+      "when": 1795505000000,
+      "tag": "0167_booking_flow_rules",
+      "breakpoints": true
     }
   ]
 }

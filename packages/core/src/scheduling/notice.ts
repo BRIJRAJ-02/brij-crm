@@ -370,6 +370,14 @@ function pageChange(field: string, from: unknown, to: unknown, scheduleName: str
       return to === true ? 'bookers now added to People' : 'bookers no longer added to People';
     case 'answersObjectId':
       return 'where answers are filed changed';
+    case 'afterBooking':
+      return to === 'redirect' ? 'now sends bookers to another site' : 'now shows its own confirmation';
+    case 'cancelCutoffMinutes':
+      return fromTo(minutesWords, 'cancel cutoff');
+    case 'moveCutoffMinutes':
+      return fromTo(minutesWords, 'move cutoff');
+    case 'requiresConfirmation':
+      return to === true ? 'bookings now wait for a Confirm' : 'bookings no longer wait for a Confirm';
     default:
       return undefined;
   }

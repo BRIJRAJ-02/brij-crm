@@ -130,6 +130,30 @@ export const bookingPages = pgTable(
     /** A private page (spec 0027, AC-707, AC-708): it may book inside the host's holds, and waives its minimum notice. */
     isPrivate: boolean('is_private').notNull().default(false),
     /**
+     * What the page does once a booking commits (spec 0062, AC-6201, migration 0167): `confirmation`, which is
+     * what every page did before, or `redirect` to `redirect_url`. Nothing is backfilled.
+     */
+    afterBooking: text('after_booking').notNull().default('confirmation'),
+    /** Where a `redirect` page sends the visitor; null otherwise. https only, except localhost. */
+    redirectUrl: text('redirect_url'),
+    /**
+     * Whether that redirect carries the booking as query values (AC-6201): off by default, because it puts the
+     * visitor's name and address into the host's own server logs.
+     */
+    sendBookingDetails: boolean('send_booking_details').notNull().default(false),
+    /**
+     * How long before the start a guest may no longer cancel, in minutes (AC-6202, migration 0167): 0 is what
+     * every page did before. The host's own cancel ignores it, so this never blocks the people who own the page.
+     */
+    cancelCutoffMinutes: integer('cancel_cutoff_minutes').notNull().default(0),
+    /** The same for moving a booking; the host's own move ignores it. */
+    moveCutoffMinutes: integer('move_cutoff_minutes').notNull().default(0),
+    /**
+     * Whether a booking waits for the host's Confirm (spec 0062, AC-6203, migration 0167): off by default. A
+     * waiting booking holds its slot and stays off the calendar until confirmed; see `bookings.approval`.
+     */
+    requiresConfirmation: boolean('requires_confirmation').notNull().default(false),
+    /**
      * Whether the page shows its owner's social links under their name (booking socials, migration 0097): on by
      * default. Read only for a personal page; a team page names no host, so never shows them (AC-754).
      */
@@ -251,6 +275,17 @@ export const bookingPages = pgTable(
     ),
     check('booking_pages_buffers', sql`${t.bufferBefore} between 0 and 60 and ${t.bufferAfter} between 0 and 60`),
     check('booking_pages_notice', sql`${t.minNoticeMinutes} between 0 and 20160`),
+    check('booking_pages_after', sql`${t.afterBooking} in ('confirmation', 'redirect')`),
+    // A redirect page without an address would strand every visitor, so the pairing is the database's rule as well
+    // as the contract's (spec 0062, AC-6201).
+    check(
+      'booking_pages_redirect',
+      sql`(${t.afterBooking} = 'redirect') = (${t.redirectUrl} is not null) and (${t.redirectUrl} is null or char_length(${t.redirectUrl}) <= 2048)`,
+    ),
+    check(
+      'booking_pages_cutoffs',
+      sql`${t.cancelCutoffMinutes} between 0 and 20160 and ${t.moveCutoffMinutes} between 0 and 20160`,
+    ),
     check('booking_pages_window', sql`${t.windowDays} between 1 and 365`),
     check('booking_pages_daily_limit', sql`${t.dailyLimit} is null or ${t.dailyLimit} between 1 and 50`),
     check('booking_pages_slot_step', sql`${t.slotStep} is null or ${t.slotStep} in (15, 30, 60)`),
@@ -504,6 +539,20 @@ export const bookings = pgTable(
     /** Marked by a host or a booking admin after the meeting when the guest didn't come (spec 0043, AC-1613). */
     noShowAt: timestamptz('no_show_at'),
     noShowByMemberId: uuid('no_show_by_member_id'),
+    /**
+     * A booking on a page that requires confirmation (spec 0062, AC-6203, migration 0167): `pending` until the
+     * host decides, then `approved` or `declined`; null on every other booking. A pending booking keeps `status =
+     * 'confirmed'`, so it holds its slot through every read and both exclusion constraints; a declined one is
+     * cancelled. Only `approval` says whether the calendar event, the confirmation and the reminders may go yet.
+     */
+    approval: text('approval'),
+    /** When the host (or, with no member, the expiry job) decided a pending booking. */
+    decidedAt: timestamptz('decided_at'),
+    decidedByMemberId: uuid('decided_by_member_id'),
+    /** The host's optional reason for a decline, sent to the visitor (up to 500 characters). */
+    declineReason: text('decline_reason'),
+    /** The one off link it was booked through, while that link exists (AC-6204). */
+    oneOffLinkId: uuid('one_off_link_id'),
     ...auditColumns(),
   },
   (t) => [
@@ -574,6 +623,24 @@ export const bookings = pgTable(
       sql`(${t.cancelledBy} is null and ${t.cancelledAt} is null) or (${t.status} = 'cancelled' and ${t.cancelledBy} in ('guest', 'host', 'calendar') and ${t.cancelledAt} is not null)`,
     ),
     check('bookings_video_url', sql`${t.videoUrl} is null or char_length(${t.videoUrl}) <= 2000`),
+    check('bookings_approval', sql`${t.approval} is null or ${t.approval} in ('pending', 'approved', 'declined')`),
+    check(
+      'bookings_decided',
+      sql`(${t.decidedAt} is null) = (${t.approval} is null or ${t.approval} = 'pending') and (${t.decidedByMemberId} is null or ${t.decidedAt} is not null)`,
+    ),
+    check(
+      'bookings_declined',
+      sql`(${t.approval} is distinct from 'declined' or ${t.status} = 'cancelled') and (${t.declineReason} is null or (${t.approval} = 'declined' and char_length(${t.declineReason}) <= 500))`,
+    ),
+    foreignKey({
+      name: 'bookings_decided_by',
+      columns: [t.workspaceId, t.decidedByMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    // The pending bookings in a range: the expiry sweep and the host's requests.
+    index('bookings_pending')
+      .on(t.workspaceId, t.startsAt)
+      .where(sql`${t.approval} = 'pending'`),
     ...actorConstraints('bookings', 'created_by', t.workspaceId, {
       type: t.createdByType,
       id: t.createdById,
@@ -751,5 +818,45 @@ export const bookingPageViews = pgTable(
     index('booking_page_views_day').on(t.workspaceId, t.day),
     check('booking_page_views_visitor', sql`${t.visitor} ~ '^[0-9a-f]{32}$'`),
     check('booking_page_views_count', sql`${t.views} >= 1`),
+  ],
+);
+
+/**
+ * One off links (spec 0062, AC-6204, migration 0167): a link that books its page up to `max_uses` times, then
+ * answers "This link has been used". Only the SHA-256 of its 32 byte token is kept; the token travels in the
+ * address's fragment. A use is counted when the booking commits, under the page's booking lock.
+ */
+export const bookingPageLinks = pgTable(
+  'booking_page_links',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    pageId: uuid('page_id').notNull(),
+    label: text('label'),
+    tokenHash: text('token_hash').notNull(),
+    maxUses: smallint('max_uses').notNull().default(1),
+    uses: smallint('uses').notNull().default(0),
+    expiresAt: timestamptz('expires_at'),
+    revokedAt: timestamptz('revoked_at'),
+    createdByMemberId: uuid('created_by_member_id').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'booking_page_links_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'booking_page_links_page',
+      columns: [t.workspaceId, t.pageId],
+      foreignColumns: [bookingPages.workspaceId, bookingPages.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'booking_page_links_created_by',
+      columns: [t.workspaceId, t.createdByMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    uniqueIndex('booking_page_links_token_hash').on(t.workspaceId, t.tokenHash),
+    index('booking_page_links_by_page').on(t.workspaceId, t.pageId, t.createdAt),
+    check('booking_page_links_label', sql`${t.label} is null or char_length(${t.label}) between 1 and 60`),
+    check('booking_page_links_token', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check('booking_page_links_uses', sql`${t.maxUses} between 1 and 50 and ${t.uses} between 0 and ${t.maxUses}`),
   ],
 );

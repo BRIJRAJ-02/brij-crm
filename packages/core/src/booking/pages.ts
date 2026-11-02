@@ -10,6 +10,7 @@ import {
   defaultAvailability,
   PERMISSIONS,
   slugFromTitle,
+  type BookingAfter,
   type BookingPageSettings,
   type BookingPageView,
   type BookingView,
@@ -349,6 +350,12 @@ function viewOf(
     fileToCrm: page.fileToCrm,
     answersObjectId: page.answersObjectId,
     formOnly: page.formOnly,
+    afterBooking: page.afterBooking,
+    redirectUrl: page.redirectUrl,
+    sendBookingDetails: page.sendBookingDetails,
+    cancelCutoffMinutes: page.cancelCutoffMinutes,
+    moveCutoffMinutes: page.moveCutoffMinutes,
+    requiresConfirmation: page.requiresConfirmation,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     // Who hosts it and how it routes are for those who manage it: a member seeing a workspace link gets neither.
     ...(hosts === undefined || !changeable ? {} : { hosts }),
@@ -841,7 +848,14 @@ export async function createBookingPage(
       fileToCrm: given.fileToCrm ?? true,
       answersObjectId: given.answersObjectId ?? null,
       formOnly: kind === 'round_robin' && given.formOnly === true,
+      afterBooking: given.afterBooking ?? 'confirmation',
+      redirectUrl: given.redirectUrl ?? null,
+      sendBookingDetails: given.sendBookingDetails ?? false,
+      cancelCutoffMinutes: given.cancelCutoffMinutes ?? 0,
+      moveCutoffMinutes: given.moveCutoffMinutes ?? 0,
+      requiresConfirmation: given.requiresConfirmation ?? false,
     };
+    checkAfterBooking(settings.afterBooking, settings.redirectUrl);
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
     if (settings.answersObjectId !== null) {
       await checkAnswersObject(tx, scope, settings.answersObjectId, settings.questions);
@@ -890,6 +904,12 @@ export async function createBookingPage(
           fileToCrm: settings.fileToCrm,
           answersObjectId: settings.answersObjectId,
           formOnly: settings.formOnly,
+          afterBooking: settings.afterBooking,
+          redirectUrl: settings.redirectUrl,
+          sendBookingDetails: settings.sendBookingDetails,
+          cancelCutoffMinutes: settings.cancelCutoffMinutes,
+          moveCutoffMinutes: settings.moveCutoffMinutes,
+          requiresConfirmation: settings.requiresConfirmation,
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -975,6 +995,11 @@ export async function updateBookingPage(
     // Only through a form is a team page's (spec 0037, AC-1388): a personal page has no form in front of it.
     if (settings.formOnly === true && page.kind !== 'round_robin') {
       throw refuseOn('CONFIG_INVALID', 'Only a team page books through a form only.', 'formOnly');
+    }
+    // Redirect after booking (spec 0062, AC-6201): checked as the page will be, so switching to Redirect without
+    // an address, or clearing the address of a redirect page, is refused rather than stranding every visitor.
+    if (settings.afterBooking !== undefined || settings.redirectUrl !== undefined) {
+      checkAfterBooking(settings.afterBooking ?? page.afterBooking, afterRedirect(settings, page));
     }
     // A page a published form still sends visitors to stays live until that form changes (AC-1341).
     if (settings.status === 'paused' && page.status === 'live') await checkNotRouted(tx, scope.access, page.id);
@@ -1106,6 +1131,19 @@ export async function updateBookingPage(
           ...(settings.fileToCrm === undefined ? {} : { fileToCrm: settings.fileToCrm }),
           ...(settings.answersObjectId === undefined ? {} : { answersObjectId: settings.answersObjectId }),
           ...(settings.formOnly === undefined ? {} : { formOnly: settings.formOnly }),
+          // Confirmation drops the address with it, so the database's pairing of the two always holds.
+          ...(settings.afterBooking === undefined && settings.redirectUrl === undefined
+            ? {}
+            : {
+                afterBooking: settings.afterBooking ?? page.afterBooking,
+                redirectUrl: afterRedirect(settings, page),
+              }),
+          ...(settings.sendBookingDetails === undefined ? {} : { sendBookingDetails: settings.sendBookingDetails }),
+          ...(settings.cancelCutoffMinutes === undefined ? {} : { cancelCutoffMinutes: settings.cancelCutoffMinutes }),
+          ...(settings.moveCutoffMinutes === undefined ? {} : { moveCutoffMinutes: settings.moveCutoffMinutes }),
+          ...(settings.requiresConfirmation === undefined
+            ? {}
+            : { requiresConfirmation: settings.requiresConfirmation }),
           ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
@@ -1472,4 +1510,20 @@ export async function pauseGuestPages(context: WriteContext, memberId: string): 
     where m.workspace_id = ${scope.workspaceId}::uuid and m.member_id = ${memberId}::uuid
       and p.workspace_id = m.workspace_id and p.id = m.page_id and p.owner_member_id is distinct from ${memberId}::uuid
   `);
+}
+
+/** The address a page redirects to after a write: none on a confirmation page, else the one sent or the one kept. */
+function afterRedirect(
+  settings: { readonly afterBooking?: BookingAfter | undefined; readonly redirectUrl?: string | null | undefined },
+  page: { readonly afterBooking: BookingAfter; readonly redirectUrl: string | null },
+): string | null {
+  if ((settings.afterBooking ?? page.afterBooking) === 'confirmation') return null;
+  return settings.redirectUrl === undefined ? page.redirectUrl : settings.redirectUrl;
+}
+
+/** A redirect page needs an address to send its visitors to (spec 0062, AC-6201). */
+function checkAfterBooking(after: BookingAfter, url: string | null): void {
+  if (after === 'redirect' && url === null) {
+    throw refuseOn('VALUE_REQUIRED', 'Give the address to send visitors to.', 'redirectUrl');
+  }
 }

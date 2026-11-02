@@ -145,6 +145,13 @@ export function pageOf(
     answersObjectId: row.answersObjectId,
     // Only a round robin page books through a form only (AC-1388); any other reads off.
     formOnly: row.kind === 'round_robin' && row.formOnly,
+    // Spec 0062, L1: a stored value the checks somehow let through reads as today's behaviour.
+    afterBooking: row.afterBooking === 'redirect' && row.redirectUrl !== null ? 'redirect' : 'confirmation',
+    redirectUrl: row.afterBooking === 'redirect' ? row.redirectUrl : null,
+    sendBookingDetails: row.sendBookingDetails,
+    cancelCutoffMinutes: row.cancelCutoffMinutes,
+    moveCutoffMinutes: row.moveCutoffMinutes,
+    requiresConfirmation: row.requiresConfirmation,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     createdAt: row.createdAt,

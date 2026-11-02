@@ -4,7 +4,7 @@
 import * as z from 'zod';
 import { DateValue } from '../values/attribute-values.ts';
 import { Uuid } from '../values/ids.ts';
-import { FormQuestion } from '../forms/document.ts';
+import { FormQuestion, RedirectUrl } from '../forms/document.ts';
 
 /** The meeting lengths offered as ready picks, in minutes; any other length in steps of 5 is a custom one. */
 export const BOOKING_DURATIONS = [15, 30, 45, 60, 90] as const;
@@ -34,6 +34,30 @@ export const SCHEDULE_OVERRIDES_FULL =
   'A schedule holds at most 400 date overrides. Remove some, or set usual hours instead.';
 /** The longest minimum notice: 14 days. */
 export const BOOKING_NOTICE_MAX = 14 * 24 * 60;
+/**
+ * The longest cancel or move cutoff (spec 0062, AC-6202): 14 days, the same reach as the notice, since a page that
+ * needs two weeks' notice to book may reasonably want two weeks' notice to change.
+ */
+export const BOOKING_CUTOFF_MAX = 14 * 24 * 60;
+
+/** What a page does once a booking commits: show the confirmation (today's behaviour) or send the visitor on. */
+export const BOOKING_AFTERS = ['confirmation', 'redirect'] as const;
+/** What a page does once a booking commits. */
+export const BookingAfter = z.enum(BOOKING_AFTERS);
+/** What a page does once a booking commits. */
+export type BookingAfter = z.infer<typeof BookingAfter>;
+
+/** How long before the start a guest may no longer cancel or move, in minutes; 0 is no cutoff. */
+export const BookingCutoff = z
+  .number({ error: 'Give the cutoff in minutes.' })
+  .int({ error: 'Give the cutoff in whole minutes.' })
+  .min(0, { error: 'A cutoff is 0 minutes to 14 days.' })
+  .max(BOOKING_CUTOFF_MAX, { error: 'A cutoff is at most 14 days.' });
+/** A cancel or move cutoff, in minutes before the start. */
+export type BookingCutoff = z.infer<typeof BookingCutoff>;
+
+/** What a guest reads where Cancel or Move would be, inside the page's cutoff (AC-6202). */
+export const BOOKING_TOO_LATE = 'Too close to the meeting to change it here. Reply to your confirmation email.';
 
 /** One meeting length: 5 to 480 minutes, in steps of 5 (the database's `booking_pages_durations` check). */
 export const BookingDuration = z
@@ -313,6 +337,32 @@ export const BookingPageSettings = z.object({
    * no page changes behaviour on its own; meaningless on a personal page, whose writes refuse it.
    */
   formOnly: z.boolean(),
+  /**
+   * What the page does once a booking commits (spec 0062, AC-6201): `confirmation` is today's behaviour and the
+   * default. `redirect` sends the visitor to `redirectUrl` after the booking has committed, never before, so a
+   * visitor who lands on the host's address has a booking. The confirmation email and manage links go either way.
+   */
+  afterBooking: BookingAfter,
+  /** Where a `redirect` page sends the visitor; null on a `confirmation` page. Refused unless it starts https. */
+  redirectUrl: RedirectUrl.nullable(),
+  /**
+   * Whether a redirect carries the booking as query values (AC-6201): `name`, `email`, `start` (ISO UTC), `tz` and
+   * `page` (the slug). Off by default, because it puts the visitor's name and address in the host's server logs.
+   */
+  sendBookingDetails: z.boolean(),
+  /**
+   * How long before the start a guest may no longer cancel, in minutes (AC-6202): 0, the default, is today's
+   * behaviour. The host's own cancel ignores it.
+   */
+  cancelCutoffMinutes: BookingCutoff,
+  /** The same for moving a booking to another time; the host's own move ignores it. */
+  moveCutoffMinutes: BookingCutoff,
+  /**
+   * Whether a booking waits for the host's Confirm or Decline (spec 0062, AC-6203). Off by default. A waiting
+   * booking holds its slot, and declines itself at the earlier of 24 hours after the request and 1 hour before the
+   * start.
+   */
+  requiresConfirmation: z.boolean(),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;

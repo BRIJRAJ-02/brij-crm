@@ -25,6 +25,11 @@ export const PAGE_AUDIT_FIELDS = [
   'defaultView',
   'fileToCrm',
   'answersObjectId',
+  // Spec 0062, L1: what happens after a booking (never the address), the cutoffs and the Confirm step.
+  'afterBooking',
+  'cancelCutoffMinutes',
+  'moveCutoffMinutes',
+  'requiresConfirmation',
 ] as const;
 
 /** One of the fields a page's audit row compares. */

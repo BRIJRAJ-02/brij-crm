@@ -65,6 +65,7 @@ export {
   availabilitySchedules,
   bookingHosts,
   bookingMemberHours,
+  bookingPageLinks,
   bookingPageMembers,
   bookingPageSlugs,
   bookingPageViews,
