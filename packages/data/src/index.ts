@@ -37,6 +37,9 @@ import type {
   RotationAdjustment,
   EditorResource,
   EditorView,
+  ManagedLocks,
+  ManagedPageView,
+  ManagedPart,
   ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
@@ -479,6 +482,10 @@ export type {
   RotationAdjustment,
   EditorResource,
   EditorView,
+  ManagedLocks,
+  ManagedMemberView,
+  ManagedPageView,
+  ManagedPart,
   ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
@@ -661,6 +668,9 @@ export { opensInline, RECORD_FILE_ACCEPT, RECORD_FILE_MAX_BYTES } from '@crm/con
 // The link page's look (spec 0054): the default and the named starting points are values the editor presses, not
 // only types, so they come through the one data layer like every other shape a screen uses.
 export { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme } from '@crm/contracts';
+// Managed booking pages (spec 0037, AC-1333): the lockable parts in the order the template editor lists them, and
+// how many people one covers — values a screen renders, not only types, so they come through the one data layer.
+export { MANAGED_MEMBERS_MAX, MANAGED_PART_KEYS, MANAGED_PARTS } from '@crm/contracts';
 export type {
   BookingsCalendarHeld,
   BookingsCalendarState,
@@ -2869,6 +2879,13 @@ export function createDataLayer({
   const rotationLists = createCaptureList<RotationView>({
     read: (workspace) => call((options) => api.rotations.list({ workspace }, options)),
   });
+  // Captures › Links › Managed pages (spec 0037, AC-1333): one held list per workspace, patched by every write
+  // below, so a template made or changed shows without a refresh. A template carries its members, so the editor
+  // reads its own row out of this list rather than holding a second store.
+  const managedPageLists = createCaptureList<ManagedPageView>({
+    read: (workspace) =>
+      call((options) => api.managedPages.list({ workspace }, options)).then((answer) => answer.templates),
+  });
   // Sharing (spec 0037, AC-1331): one held list per page or rotation, keyed `workspace|type|id`, patched by `set`.
   const editorKey = (workspace: string, type: EditorResource, id: string) => `${workspace}|${type}|${id}`;
   const editorLists = createCaptureList<EditorView>({
@@ -4447,6 +4464,96 @@ export function createDataLayer({
         rotationLists.write(workspace, {
           send: () => call((options) => api.rotations.delete({ workspace, rotationId, mutationId: mintId() }, options)),
           ...shownDrop(rotationLists.items(workspace), rotationId),
+        }),
+    },
+    /**
+     * Managed booking pages (spec 0037, AC-1333 to AC-1336): the templates as a held list (`view`), and the four
+     * writes, each shown at once and put back on a refusal. A template is not a booking page: it never appears in
+     * `bookingPages.view`, and its own public link answers no longer available.
+     *
+     * `setMembers` and `remove` are the two opposite endings (AC-1335): taking a member off deletes their page
+     * (their bookings stay), while deleting the template keeps every member page as that member's own. Both ask
+     * first, in a Modal, in the screens that call them.
+     */
+    managedPages: {
+      /** A new template's id: mint it once per dialog, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /** The templates the reader may change, as the held list; `useCaptureList` reads it. */
+      view: (workspace: string): CaptureListView<ManagedPageView> => managedPageLists.view(workspace),
+      /** The same list for a loader beside other work (the template editor's route). */
+      held: async (workspace: string): Promise<readonly ManagedPageView[]> => {
+        await managedPageLists.view(workspace).ready();
+        return managedPageLists.items(workspace) ?? [];
+      },
+      /**
+       * A new template, which makes each named member their page at once. Refusals: `ID_TAKEN`,
+       * `MANAGED_MEMBERS_LIMIT`, `CONFIG_INVALID` (on `memberIds.<n>` or `followTeamId`), `FORBIDDEN`.
+       */
+      create: (
+        workspace: string,
+        input: { id: string; title: string; timeZone: string; locked?: ManagedLocks; memberIds?: string[] },
+      ): Promise<ManagedPageView> =>
+        managedPageLists.write(workspace, {
+          send: () =>
+            call((options) => api.managedPages.create({ workspace, ...input, mutationId: mintId() }, options)),
+          land: (items, template) => upsertFirst(template)(items),
+        }),
+      /**
+       * Changes the template's settings, and its locks when given, copying every locked part to every member page
+       * in one transaction on the server. Refusals: `CONFIG_INVALID` (on its field), `NOT_FOUND`, `FORBIDDEN`.
+       */
+      update: (
+        workspace: string,
+        templateId: string,
+        change: { settings?: Partial<BookingPageSettings>; locked?: ManagedLocks },
+      ): Promise<ManagedPageView> =>
+        managedPageLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.managedPages.update(
+                {
+                  workspace,
+                  templateId,
+                  ...(change.settings === undefined ? {} : { settings: change.settings }),
+                  ...(change.locked === undefined ? {} : { locked: change.locked }),
+                  mutationId: mintId(),
+                },
+                options,
+              ),
+            ),
+          ...shownPatch(managedPageLists.items(workspace), templateId, (template) => ({
+            ...template,
+            ...(change.settings?.title === undefined ? {} : { title: change.settings.title }),
+            ...(change.locked === undefined ? {} : { locked: [...change.locked] }),
+          })),
+          land: (items, template) => patchItem<ManagedPageView>(templateId, () => template)(items),
+        }),
+      /**
+       * Replaces who the template makes pages for: someone added gets their page, someone removed has theirs
+       * deleted as spec 0025 AC-648 deletes one (AC-1335), and each is emailed. Refusals:
+       * `MANAGED_MEMBERS_LIMIT`, `CONFIG_INVALID` (on `memberIds.<n>`), `ROUTING_IN_USE` (a form still books a
+       * page that would go), `FORBIDDEN`, `NOT_FOUND`.
+       */
+      setMembers: (workspace: string, templateId: string, memberIds: readonly string[]): Promise<ManagedPageView> =>
+        managedPageLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.managedPages.setMembers(
+                { workspace, templateId, memberIds: [...memberIds], mutationId: mintId() },
+                options,
+              ),
+            ),
+          land: (items, template) => patchItem<ManagedPageView>(templateId, () => template)(items),
+        }),
+      /**
+       * Deletes the template, gone from the list at once and back on a refusal. Every member page STAYS, as that
+       * member's own: the opposite of taking a member off (AC-1335). `booking.admin` only.
+       */
+      remove: (workspace: string, templateId: string): Promise<{ deleted: true }> =>
+        managedPageLists.write(workspace, {
+          send: () =>
+            call((options) => api.managedPages.delete({ workspace, templateId, mutationId: mintId() }, options)),
+          ...shownDrop(managedPageLists.items(workspace), templateId),
         }),
     },
     /**

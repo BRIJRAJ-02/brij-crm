@@ -17,6 +17,7 @@ export const MANAGED_MEMBERS_MAX = 200;
  * part is the workspace's: the member sees it read only, and the server refuses their write to it (AC-1334).
  */
 export const MANAGED_PARTS = [
+  'address',
   'details',
   'durations',
   'location',
@@ -38,12 +39,20 @@ export type ManagedPart = z.infer<typeof ManagedPart>;
  * opens in. Keyed by part so one list serves the lock check, the propagation and the editor's read only fields.
  */
 export const MANAGED_PART_KEYS = {
+  // The address is the template's by AC-1333 (`intro-call-sam`, the Value sourcing table), not a judgement call:
+  // a member who renamed it would break links already shared and drift the workspace's addressing (coordinator,
+  // 3 November 2026). `status`, `isPrivate`, the profile placement, `showSocials`, `defaultView` and `formOnly`
+  // stay the member's own: the workspace sets what the page asks, the member owns whether it takes bookings, so
+  // someone away can always stop their page sending them meetings.
+  address: ['slug'],
   details: ['title', 'description'],
-  durations: ['durations', 'slotStep'],
+  durations: ['durations'],
   location: ['location'],
   questions: ['questions'],
   on_booking: ['fileToCrm', 'answersObjectId'],
-  limits: ['bufferBefore', 'bufferAfter', 'minNoticeMinutes', 'windowDays', 'dailyLimit'],
+  // `slotStep` belongs to Limits, not Durations: the part names are what the editor shows, and the editor puts
+  // "Slots start every" under Limits with the buffers and the window.
+  limits: ['bufferBefore', 'bufferAfter', 'minNoticeMinutes', 'windowDays', 'dailyLimit', 'slotStep'],
   // The Hours rule, not the hours: a member page always books on its own member's hours (AC-1336). Locked, the
   // member's default schedule is used and they may not name another; unlocked, they pick one (spec 0035, AC-966).
   hours: ['scheduleId'],
@@ -79,6 +88,8 @@ export const ManagedPageView = z.object({
   title: z.string(),
   /** The template's own slug: every member page's address starts with it. */
   slug: z.string(),
+  /** The description every member page takes from it, when Details is locked; its editor shows it either way. */
+  description: z.string(),
   locked: ManagedLocks,
   /** The team the template follows, when it follows one instead of naming members. */
   followTeamId: Uuid.nullable(),

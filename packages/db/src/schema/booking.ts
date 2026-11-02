@@ -235,7 +235,7 @@ export const bookingPages = pgTable(
     check(
       'booking_pages_locked_parts',
       sql`${t.locked} is null
-        or ${t.locked} <@ '{details,durations,location,questions,on_booking,limits,hours}'::text[]`,
+        or ${t.locked} <@ '{address,details,durations,location,questions,on_booking,limits,hours}'::text[]`,
     ),
     // A template is a page of its own, never round robin and never the workspace's link.
     check('booking_pages_managed_scope', sql`${t.kind} <> 'managed' or ${t.scope} = 'member'`),

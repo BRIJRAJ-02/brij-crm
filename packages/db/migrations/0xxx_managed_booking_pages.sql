@@ -55,7 +55,7 @@ ALTER TABLE "booking_pages" ADD CONSTRAINT "booking_pages_kind" CHECK ("booking_
 ALTER TABLE "booking_pages" ADD CONSTRAINT "booking_pages_managed" CHECK (("booking_pages"."kind" = 'managed' and "booking_pages"."template_id" is null)
         or ("booking_pages"."kind" <> 'managed' and "booking_pages"."locked" is null and "booking_pages"."follow_team_id" is null));--> statement-breakpoint
 ALTER TABLE "booking_pages" ADD CONSTRAINT "booking_pages_locked_parts" CHECK ("booking_pages"."locked" is null
-        or "booking_pages"."locked" <@ '{details,durations,location,questions,on_booking,limits,hours}'::text[]);--> statement-breakpoint
+        or "booking_pages"."locked" <@ '{address,details,durations,location,questions,on_booking,limits,hours}'::text[]);--> statement-breakpoint
 ALTER TABLE "booking_pages" ADD CONSTRAINT "booking_pages_managed_scope" CHECK ("booking_pages"."kind" <> 'managed' or "booking_pages"."scope" = 'member');--> statement-breakpoint
 CREATE INDEX "booking_pages_by_template" ON "booking_pages" USING btree ("workspace_id","template_id") WHERE "booking_pages"."template_id" is not null and "booking_pages"."deleted_at" is null;--> statement-breakpoint
 -- Hand written from here.

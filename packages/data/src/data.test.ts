@@ -883,6 +883,14 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.editors.list.handler(notServed),
       set: os.editors.set.handler(notServed),
     },
+    managedPages: {
+      list: os.managedPages.list.handler(notServed),
+      get: os.managedPages.get.handler(notServed),
+      create: os.managedPages.create.handler(notServed),
+      update: os.managedPages.update.handler(notServed),
+      setMembers: os.managedPages.setMembers.handler(notServed),
+      delete: os.managedPages.delete.handler(notServed),
+    },
     nav: {
       get: os.nav.get.handler(notServed),
       change: os.nav.change.handler(notServed),

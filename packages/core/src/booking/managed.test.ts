@@ -241,6 +241,34 @@ describe('managed booking pages (AC-1333 to AC-1336)', () => {
     expect(sent[1]?.params.removed).toBe(true);
   });
 
+  it('locks the address without copying it: each member keeps their own slug, and may not rename it', async () => {
+    const w = await world();
+    const sam = await w.add('Sam Lee');
+    const kim = await w.add('Kim Park');
+    const template = await createManagedPage(w.owner, {
+      id: newId(),
+      title: 'Intro call',
+      timeZone: 'UTC',
+      // Limits locked beside the address, so the save really does propagate: that is what proves the slugs
+      // survive a propagation rather than there being nothing to propagate.
+      locked: ['address', 'limits'],
+      memberIds: [sam, kim],
+    });
+    const of = (memberId: string) => template.members.find((each) => each.id === memberId)?.pageId ?? '';
+    // A locked address is the member's to keep, not the template's to copy: copying one value onto every page
+    // would break `booking_pages_slug`, so `address` is propagated as a rule, not a value.
+    const refusal = await refusalOf(updateBookingPage(w.as(sam), { pageId: of(sam), settings: { slug: 'mine' } }));
+    expect(refusal).toMatchObject({ code: 'FORBIDDEN', message: 'Your workspace sets this part of the page.' });
+    // A save of the template leaves every member's own address standing.
+    await updateManagedPage(w.owner, { templateId: template.id, settings: { windowDays: 14 } });
+    const after = await w.rows<{ slug: string; window_days: number }>(
+      'select slug, window_days from booking_pages where workspace_id = $1 and template_id = $2 order by slug',
+      [template.id],
+    );
+    expect(after.map((row) => row.slug)).toEqual(['intro-call-kim', 'intro-call-sam']);
+    expect(after.every((row) => row.window_days === 14)).toBe(true);
+  });
+
   it('is not a page to booking.pages: no update, no delete and not listed in Links (security review, finding 1)', async () => {
     const w = await world();
     const sam = await w.add('Sam Lee');

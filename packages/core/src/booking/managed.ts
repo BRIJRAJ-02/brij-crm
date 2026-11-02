@@ -90,11 +90,22 @@ async function templateToChange(
 }
 
 /**
- * Every setting a lock propagates as a value: each key of each lockable part but `hours`, whose lock is not a copy
- * (AC-1336, below). The type is exhaustive on purpose, so a part gained later without a column here is a type
- * error rather than a silent half lock that refuses the member and propagates nothing.
+ * The two parts whose lock is not a copy. `hours` is the member's own default schedule (AC-1336); `address` is a
+ * slug built per member at `<template slug>-<first name>` (AC-1333's Value sourcing table), so copying the
+ * template's one value onto every member page would both be wrong and break `booking_pages_slug`. Locking either
+ * means "the member may not change this", which the write check enforces on its own.
  */
-type PropagatedKey = (typeof MANAGED_PART_KEYS)[Exclude<ManagedPart, 'hours'>][number];
+const NOT_COPIED = ['address', 'hours'] as const;
+
+/** A part whose lock is not a copy. */
+type NotCopied = (typeof NOT_COPIED)[number];
+
+/**
+ * Every setting a lock propagates as a value: each key of each lockable part but the two in `NOT_COPIED`. The type
+ * is exhaustive on purpose, so a part gained later without a column here is a type error rather than a silent half
+ * lock that refuses the member and propagates nothing.
+ */
+type PropagatedKey = (typeof MANAGED_PART_KEYS)[Exclude<ManagedPart, NotCopied>][number];
 
 /** The column each propagated setting lives in: what the one propagation statement sets. */
 const SETTING_COLUMNS: Record<PropagatedKey, string> = {
@@ -128,7 +139,7 @@ async function propagateLocked(tx: WorkspaceTx, scope: EngineScope, template: Te
   const locked = locksOf(template);
   if (locked.length === 0) return;
   const columns = locked
-    .filter((part): part is Exclude<ManagedPart, 'hours'> => part !== 'hours')
+    .filter((part): part is Exclude<ManagedPart, NotCopied> => !(NOT_COPIED as readonly string[]).includes(part))
     .flatMap((part) => MANAGED_PART_KEYS[part].map((key: PropagatedKey) => SETTING_COLUMNS[key]));
   const sets = columns.map((column) => sql`${sql.raw(column)} = t.${sql.raw(column)}`);
   // Locked Hours: every member page follows its own owner's default schedule (AC-1336).
@@ -216,6 +227,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, template: TemplateRow
     id: template.id,
     title: template.title,
     slug: template.slug,
+    description: template.description,
     locked: [...locksOf(template)],
     followTeamId: template.followTeamId,
     members: [...list],
@@ -599,16 +611,14 @@ async function makePagesFor(
     throw slugRefusal(error) ?? error;
   }
   // Every page hosts its own owner, as a personal page does.
-  await tx
-    .insert(bookingPageMembers)
-    .values(
-      made.map((each) => ({
-        workspaceId: scope.workspaceId,
-        pageId: each.pageId,
-        memberId: each.memberId,
-        position: 0,
-      })),
-    );
+  await tx.insert(bookingPageMembers).values(
+    made.map((each) => ({
+      workspaceId: scope.workspaceId,
+      pageId: each.pageId,
+      memberId: each.memberId,
+      position: 0,
+    })),
+  );
   await tellMembers(tx, scope, template, made, false);
 }
 
