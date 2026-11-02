@@ -48,7 +48,7 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
     try {
       const onSubmissions = deps.tab === 'submissions';
       // Every read at once: one round trip, not the form first and then its submissions.
-      const [form, target, members, objects, submissions, openSubmission] = await Promise.all([
+      const [form, target, members, objects, submissions, openSubmission, brand] = await Promise.all([
         context.data.forms.get(params.slug, params.formId),
         context.data.forms.attributes(params.slug, params.formId),
         context.data.members.list(params.slug),
@@ -63,8 +63,17 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
         onSubmissions && deps.submission !== undefined
           ? context.data.submissions.get(params.slug, deps.submission).catch(() => undefined)
           : Promise.resolve(undefined),
+        // The brand kit the Form tab's preview wears while the look is Brand (spec 0063, AC-6327). Its own chunk,
+        // and never the editor's undoing: a store or a read that fails leaves the preview the product's accent.
+        context.data.brand
+          .load()
+          .then(async (store) => {
+            await store.readKit(params.slug);
+            return store;
+          })
+          .catch(() => undefined),
       ]);
-      return { page: { form, target, members, objects, submissions, openSubmission } };
+      return { page: { form, target, members, objects, submissions, openSubmission, brand } };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined };
       throw error;
@@ -136,6 +145,7 @@ function FormRoute() {
       submissions={page.submissions}
       state={search.state}
       openSubmission={page.openSubmission}
+      {...(page.brand === undefined ? {} : { brand: page.brand })}
       {...(search.question === undefined ? {} : { question: search.question })}
     />
   );

@@ -10,6 +10,17 @@ import { stepsOfBreaks } from './breaks.ts';
 import { isHiddenFact, isRecordFact } from './conditions.ts';
 import { NUMBER_OPS, type Condition, type ShowWhen } from './show-when.ts';
 import { recalledKeys, SCORE_FACT } from './recall.ts';
+import {
+  BRAND_HEX_PATTERN,
+  brandVariables,
+  CONTROL_CONTRAST,
+  contrastRatio,
+  DARK_SURFACES,
+  LIGHT_SURFACES,
+  TEXT_CONTRAST,
+  type BrandAccent,
+  type BrandSwatch,
+} from '../brand-colour.ts';
 
 /** An attribute as the check needs it: its name, type, and whether the publisher may write it. */
 export interface PublishAttribute {
@@ -47,6 +58,8 @@ export interface PublishInput {
     readonly endings?: FormDocument['endings'];
     /** Where the score is filed (AC-6316): checked like a question's filing. */
     readonly scoreFiledOn?: FormDocument['scoreFiledOn'];
+    /** Its look (spec 0063, AC-6327): only `theme: 'brand'` makes the brand kit part of what publishes. */
+    readonly look?: Pick<FormDocument['look'], 'theme'>;
   };
   /** The main object's live attributes, by id (archived and deleted ones absent). */
   readonly attributes: ReadonlyMap<string, PublishAttribute>;
@@ -58,6 +71,13 @@ export interface PublishInput {
    * telling them to file a question that is already filed (late trap #17).
    */
   readonly canChangeAttributes?: boolean;
+  /**
+   * The workspace's brand kit accent pair, when the form wears it (spec 0063, AC-6327): the server reads it from
+   * `workspace_brands` on the publish path, and the builder from the kit it already holds, so both run spec 0060's
+   * contrast guard over the same pair. Absent means the kit sets no colour, which is the product's own accent and
+   * always readable.
+   */
+  readonly brand?: BrandAccent;
 }
 
 /** The first problem: a stable code, the sentence, and the question it is about. */
@@ -78,7 +98,8 @@ export interface PublishProblem {
     | 'JUMP_INVALID'
     | 'ENDING_INVALID'
     | 'RECALL_INVALID'
-    | 'SCORE_FILING_INVALID';
+    | 'SCORE_FILING_INVALID'
+    | 'BRAND_UNREADABLE';
   readonly message: string;
   readonly questionId?: string;
   /** The step at fault (spec 0063): its Show when, or nothing under it. */
@@ -544,10 +565,47 @@ function scoreFilingProblem(input: PublishInput): PublishProblem | undefined {
  * and filing (gone, a type that doesn't fit, or an attribute the publisher
  * can't write), and file questions, which wait for file attachments (#32).
  */
+/** Every pair spec 0060's guard promises of one mode's swatch, with the surfaces it has to hold on. */
+function unreadableSwatch(swatch: BrandSwatch, surfaces: readonly string[]): boolean {
+  if (contrastRatio(swatch.accent, swatch.onAccent) < TEXT_CONTRAST) return true;
+  return surfaces.some(
+    (surface) =>
+      contrastRatio(swatch.link, surface) < TEXT_CONTRAST || contrastRatio(swatch.accent, surface) < CONTROL_CONTRAST,
+  );
+}
+
+/**
+ * Why a brand kit can't go on a public page (spec 0063, AC-6327; spec 0060, AC-5), as one sentence, or undefined.
+ * Spec 0060's guard keeps every checked hex readable by moving its lightness, so a kit saved through `brand.save`
+ * answers undefined here. What this catches is a pair that never went through that door: a colour that isn't a
+ * checked six digit hex, or one the guard could not lift to AA on every surface. The form's publish path runs it
+ * (`publishProblem`), so an unreadable pair is refused there and not only on the brand kit's own screen.
+ */
+export function unreadableBrand(brand: BrandAccent): string | undefined {
+  const cannot = 'This form wears your brand colour, and it can’t be made readable. Change it in Settings › Brand.';
+  for (const hex of [brand.accent, brand.accentDark]) {
+    if (hex !== undefined && !BRAND_HEX_PATTERN.test(hex)) return cannot;
+  }
+  let colours;
+  try {
+    colours = brandVariables(brand);
+  } catch {
+    return cannot;
+  }
+  return unreadableSwatch(colours.light, LIGHT_SURFACES) || unreadableSwatch(colours.dark, DARK_SURFACES)
+    ? cannot
+    : undefined;
+}
+
 export function publishProblem(input: PublishInput): PublishProblem | undefined {
   if (input.name.trim() === '') return { code: 'NAME_MISSING', message: 'Give the form a name.' };
   if (!FORM_SLUG.test(input.slug)) {
     return { code: 'ADDRESS_INVALID', message: 'The address needs 2 to 40 lowercase letters, numbers or hyphens.' };
+  }
+  // The look before the questions: a brand the page could not be read in is about the whole form, not one answer.
+  if (input.document.look?.theme === 'brand' && input.brand !== undefined) {
+    const unreadable = unreadableBrand(input.brand);
+    if (unreadable !== undefined) return { code: 'BRAND_UNREADABLE', message: unreadable };
   }
   const { questions, targets } = input.document;
   if (targets.main !== undefined) {

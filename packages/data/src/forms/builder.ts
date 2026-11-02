@@ -68,6 +68,7 @@ export type {
   FormJump,
   FormLanguage,
   FormLook,
+  FormLookTheme,
   FormQuestionPoints,
   FormStep,
   JumpTarget,

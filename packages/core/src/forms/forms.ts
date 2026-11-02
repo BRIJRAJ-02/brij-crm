@@ -43,6 +43,7 @@ import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
 import { withdrawSubmissionNotices } from '../notifications/notify.ts';
+import { brandRowOf } from '../brand/brand.ts';
 import {
   canSeeForm,
   fileable,
@@ -117,7 +118,8 @@ function firstDraft(
         : { main: { objectId: target.objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
     layout: 'classic',
     steps: [],
-    look: { colour: 'light', corners: 'rounded' },
+    // Brand by default now the kit exists (spec 0063, AC-6327): a new form wears the workspace's accent and logo.
+    look: { colour: 'light', corners: 'rounded', theme: 'brand' },
     headline: 'Fill this in and we will come back to you',
     buttonText: 'Send',
     language: 'en',
@@ -731,10 +733,22 @@ export async function publishForm(
       await checkFormRoutes(tx, scope, draft.document.routing.rules, 'live');
       // Again on publish (spec 0056, AC-5612): a redirect that has come to name another workspace's page is refused.
       await checkFormAddresses(tx, scope.workspaceId, draft.document, options.publicOrigins ?? []);
+      // The brand kit only when the draft wears it (AC-6327): spec 0060's contrast guard runs on this path, so an
+      // unreadable pair is refused here and never reaches the hosted page.
+      const kit = draft.document.look.theme === 'brand' ? await brandRowOf(tx, scope.workspaceId) : undefined;
+      const accent = kit?.accent ?? undefined;
       const problem = publishProblem({
         name: form.name,
         slug: form.publicKey,
         document: draft.document,
+        ...(accent === undefined
+          ? {}
+          : {
+              brand: {
+                accent,
+                ...(kit?.accentDark === null || kit?.accentDark === undefined ? {} : { accentDark: kit.accentDark }),
+              },
+            }),
         attributes: await publishAttributes(tx, scope.access, form.mainObjectId),
         // So a refusal names the object the form files onto, not People whatever it is (27 October 2026).
         ...(form.mainObjectId === null ? {} : { objectName: await objectName(tx, form.mainObjectId) }),
@@ -746,14 +760,16 @@ export async function publishForm(
           code,
           problem.message,
           problem.questionId ??
-            // A step's refusal names its step (spec 0063), never the form's name.
-            (problem.stepId !== undefined
-              ? `steps.${problem.stepId}`
-              : problem.ruleId !== undefined
-                ? 'routing'
-                : problem.code === 'ADDRESS_INVALID'
-                  ? 'slug'
-                  : 'name'),
+            // A look's refusal names the look (spec 0063, AC-6327), a step's its step, never the form's name.
+            (problem.code === 'BRAND_UNREADABLE'
+              ? 'look'
+              : problem.stepId !== undefined
+                ? `steps.${problem.stepId}`
+                : problem.ruleId !== undefined
+                  ? 'routing'
+                  : problem.code === 'ADDRESS_INVALID'
+                    ? 'slug'
+                    : 'name'),
         );
       }
       // A change to the rules is audited when it goes live (spec 0043, AC-1616).

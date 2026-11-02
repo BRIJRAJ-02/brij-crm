@@ -193,8 +193,11 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
         }),
         formBrandAnswer({ scope }),
       ]);
+      // Only a form whose look is Brand wears the kit (spec 0063, AC-6327). A plain form's read names none, so its
+      // page links no brand stylesheet and draws no logo, whatever the workspace has saved.
+      const worn = form.look.theme === 'brand' ? brand : undefined;
       // Never kept: a pause, a resume or a new version shows on the visitor's next load, not a minute later.
-      return c.json(brand === undefined ? form : { ...form, brand }, 200, {
+      return c.json(worn === undefined ? form : { ...form, brand: worn }, 200, {
         'cache-control': PUBLIC_FORM_CACHE_CONTROL,
         'x-robots-tag': 'noindex',
       });
