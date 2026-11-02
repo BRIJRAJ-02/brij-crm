@@ -124,6 +124,25 @@ export const bookingPages = pgTable(
     /** A private page (spec 0027, AC-707, AC-708): it may book inside the host's holds, and waives its minimum notice. */
     isPrivate: boolean('is_private').notNull().default(false),
     /**
+     * What the page does once a booking commits (spec 0062, AC-6201, migration 0166): `confirmation`, which is
+     * what every page did before, or `redirect` to `redirect_url`. Nothing is backfilled.
+     */
+    afterBooking: text('after_booking').notNull().default('confirmation'),
+    /** Where a `redirect` page sends the visitor; null otherwise. https only, except localhost. */
+    redirectUrl: text('redirect_url'),
+    /**
+     * Whether that redirect carries the booking as query values (AC-6201): off by default, because it puts the
+     * visitor's name and address into the host's own server logs.
+     */
+    sendBookingDetails: boolean('send_booking_details').notNull().default(false),
+    /**
+     * How long before the start a guest may no longer cancel, in minutes (AC-6202, migration 0166): 0 is what
+     * every page did before. The host's own cancel ignores it, so this never blocks the people who own the page.
+     */
+    cancelCutoffMinutes: integer('cancel_cutoff_minutes').notNull().default(0),
+    /** The same for moving a booking; the host's own move ignores it. */
+    moveCutoffMinutes: integer('move_cutoff_minutes').notNull().default(0),
+    /**
      * Whether the page shows its owner's social links under their name (booking socials, migration 0097): on by
      * default. Read only for a personal page; a team page names no host, so never shows them (AC-754).
      */
@@ -204,6 +223,17 @@ export const bookingPages = pgTable(
     ),
     check('booking_pages_buffers', sql`${t.bufferBefore} between 0 and 60 and ${t.bufferAfter} between 0 and 60`),
     check('booking_pages_notice', sql`${t.minNoticeMinutes} between 0 and 20160`),
+    check('booking_pages_after', sql`${t.afterBooking} in ('confirmation', 'redirect')`),
+    // A redirect page without an address would strand every visitor, so the pairing is the database's rule as well
+    // as the contract's (spec 0062, AC-6201).
+    check(
+      'booking_pages_redirect',
+      sql`(${t.afterBooking} = 'redirect') = (${t.redirectUrl} is not null) and (${t.redirectUrl} is null or char_length(${t.redirectUrl}) <= 2048)`,
+    ),
+    check(
+      'booking_pages_cutoffs',
+      sql`${t.cancelCutoffMinutes} between 0 and 20160 and ${t.moveCutoffMinutes} between 0 and 20160`,
+    ),
     check('booking_pages_window', sql`${t.windowDays} between 1 and 365`),
     check('booking_pages_daily_limit', sql`${t.dailyLimit} is null or ${t.dailyLimit} between 1 and 50`),
     check('booking_pages_slot_step', sql`${t.slotStep} is null or ${t.slotStep} in (15, 30, 60)`),

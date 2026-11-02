@@ -69,6 +69,9 @@ export const ERROR_MAP = {
   // Booking pages (spec 0025, AC-632): "That time was just taken", with fresh slots; a paused or deleted page.
   SLOT_TAKEN: CONFLICT,
   BOOKING_CLOSED: CONFLICT,
+  // A guest changing a booking inside the page's cancel or move cutoff (spec 0062, AC-6202): the booking is real
+  // and the time is still theirs, so it is a conflict with the page's rule rather than a missing thing.
+  TOO_LATE: CONFLICT,
   CALENDAR_NOT_CONNECTED: CONFLICT,
   // Invitations (spec 0031, AC-805, AC-808, AC-809): every invalid token answers the same 404.
   INVITE_INVALID: { status: 404 },
