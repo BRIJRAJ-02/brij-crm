@@ -184,7 +184,10 @@
     '.sk i:nth-child(1){inline-size:60%;block-size:20px}.sk i:nth-child(2n){block-size:32px}.sk i:last-child{inline-size:100%;block-size:36px}' +
     '[data-ready] .sk{display:none}' +
     '@keyframes tfx-pulse{from{opacity:.55}to{opacity:1}}' +
-    '.veil{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;' +
+    // `block-size:100dvh` beside `inset:0`: on a phone the viewport shrinks as the address bar slides away, and a
+    // panel measured in `vh` keeps the taller figure, so its foot (the submit button, the Book button) sits below
+    // the fold with nothing to scroll. `dvh` follows the bar. The `inset` stays for browsers without `dvh`.
+    '.veil{position:fixed;inset:0;block-size:100dvh;z-index:2147483000;display:flex;align-items:center;justify-content:center;' +
     'background:rgba(15,18,25,.55);opacity:0;transition:opacity 240ms ease-out;overscroll-behavior:contain}' +
     '.veil:not([data-open]){transition-duration:120ms}' +
     '.veil[hidden]{display:none}.veil[data-open]{opacity:1}' +
@@ -204,24 +207,31 @@
     'transform:translateX(16px) scale(.99)}' +
     '.veil[data-side][data-open] .panel{transform:none}' +
     '.veil[data-side] .panel iframe{block-size:100%;max-block-size:none}' +
-    '.panel iframe{opacity:1;max-block-size:calc(100vh - 64px);block-size:var(--tfx-h,480px)}' +
+    // Until the page inside posts its height, a dialog opened at a flat 480px was shorter than almost every form
+    // and booking page, so the first thing a visitor saw was a scrollbar, and then a jump when the real height
+    // arrived. 70dvh opens near the room it has, and the transition eases to the measured height rather than
+    // snapping. The reduced motion block below turns that transition off with the rest.
+    '.panel iframe{opacity:1;max-block-size:calc(100dvh - 64px);block-size:var(--tfx-h,70dvh);' +
+    'transition:block-size 200ms ease-out}' +
     '.x{position:absolute;inset-block-start:8px;inset-inline-end:8px;z-index:1;display:grid;place-items:center;inline-size:32px;block-size:32px;' +
     'padding:0;border:0;border-radius:8px;background:var(--tfx-bg);color:var(--tfx-fg);cursor:pointer}' +
     '.x:focus-visible,.fab:focus-visible,.off a:focus-visible{outline:2px solid #fff;outline-offset:2px;box-shadow:0 0 0 4px #111318}' +
     '.off{position:absolute;inset:0;display:grid;place-items:center;padding:24px;box-sizing:border-box;' +
     'font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--tfx-fg)}.off a{color:inherit}' +
-    '.fab{position:fixed;inset-block-end:16px;inset-inline-end:16px;z-index:2147482999;box-sizing:border-box;min-block-size:44px;' +
+    // Two corner buttons on one site (a form and a booking page, say) would otherwise sit on exactly the same
+    // 16px, one hiding the other. Each one we draw lifts the next by its own height plus a gap.
+    '.fab{position:fixed;inset-block-end:calc(16px + var(--tfx-lift,0px));inset-inline-end:16px;z-index:2147482999;box-sizing:border-box;min-block-size:44px;' +
     'max-inline-size:calc(100vw - 32px);padding:0 20px;border:0;border-radius:22px;background:var(--tfx-accent);color:var(--tfx-on);' +
     'font:600 15px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.2);cursor:pointer;' +
     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
     '.fab:has(.mark){display:inline-flex;align-items:center;gap:8px}' +
     '.mark{display:grid;place-items:center;flex:none}' +
-    '@media (max-width:640px){.panel{inline-size:100%;block-size:100%;max-block-size:none;border-radius:0}' +
+    '@media (max-width:640px){.panel{inline-size:100%;block-size:100dvh;max-block-size:none;border-radius:0}' +
     '.panel iframe{block-size:100%;max-block-size:none}' +
     // A 390px wide "side" panel is the whole screen pretending to be a panel, so on a phone it is a sheet that
     // rises from the bottom instead, which is where a thumb is and which no longer claims to be beside anything.
     '.veil[data-side]{align-items:flex-end;justify-content:center}' +
-    '.veil[data-side] .panel{inline-size:100%;block-size:92%;border-radius:16px 16px 0 0;transform:translateY(16px)}' +
+    '.veil[data-side] .panel{inline-size:100%;block-size:92dvh;border-radius:16px 16px 0 0;transform:translateY(16px)}' +
     '.veil[data-side][data-open] .panel{transform:none}' +
     '.veil[data-grow] .panel{transform:translateY(16px)}}' +
     '@media (prefers-reduced-motion:reduce){.veil,.panel,iframe{transition:opacity 160ms ease-out}' +
@@ -250,6 +260,8 @@
 
   // Where a key's page is: a form at /f/KEY; a booking page at /b/KEY, or at /HANDLE/SLUG when given that way.
   var HANDLE_ADDRESS = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  /** A page's own key: what `/f/KEY` and `/b/KEY` take. */
+  var PLAIN_KEY = /^[A-Za-z0-9_-]{1,64}$/;
   function pageUrl(kind, key) {
     if (kind === 'booking' && HANDLE_ADDRESS.test(key)) return new URL('/' + key, ORIGIN);
     return new URL((kind === 'booking' ? '/b/' : '/f/') + encodeURIComponent(key), ORIGIN);
@@ -470,6 +482,8 @@
     return light > 0.179 ? '#111318' : '#ffffff';
   }
 
+  // How many corner buttons we have drawn, so the next one sits above the last rather than on top of it.
+  var fabs = 0;
   function floating(holder, kind, key, side) {
     var parts = shell(holder.getAttribute('data-timefix-theme') === 'dark');
     var colour = holder.getAttribute('data-timefix-color') || '';
@@ -489,6 +503,8 @@
       glyph.innerHTML = mark;
       button.insertBefore(glyph, button.firstChild);
     }
+    button.style.setProperty('--tfx-lift', fabs * 56 + 'px');
+    fabs += 1;
     button.style.setProperty('--tfx-accent', colour);
     button.style.setProperty('--tfx-on', onColour(colour));
     button.addEventListener('click', function () {
@@ -625,7 +641,14 @@
       own(element, legacyPost || key, Boolean(legacyPost));
       return;
     }
-    if (!key || !/^[A-Za-z0-9_-]{1,64}$/.test(key)) return;
+    // A booking page's key is either its own `publicKey` or the `handle/slug` address the editor hands out, which
+    // carries a slash. Checking only the plain shape skipped every handled page's snippet in silence, so a site
+    // owner saw nothing at all and nothing to search for (reported 2 November 2026). `pageUrl` has always known
+    // both shapes; only this guard did not.
+    if (!key || !(PLAIN_KEY.test(key) || (kind === 'booking' && HANDLE_ADDRESS.test(key)))) {
+      if (key && window.console) window.console.warn('Timefix: unknown page address ' + key);
+      return;
+    }
     seen.add(element);
     var mode = element.getAttribute('data-timefix-mode') || 'inline';
     // Two separate choices, so they compose: `mode` is what the visitor presses (their own button, or the
