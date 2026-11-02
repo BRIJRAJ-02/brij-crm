@@ -151,15 +151,15 @@
   }
 
   /* The pick settles in at the movement pace, so a tap reads as landing; letting go of it takes the quicker
-     hover pace. Nothing moves or scales: only the fill comes and goes. */
+     hover pace. Nothing moves or scales: only the fill comes and goes. The words turn at once, so they never sit
+     mid-way at a contrast an accessibility check (or a reader) would refuse. */
   .slot[aria-pressed='true'] {
     border-color: var(--accent);
     background: var(--accent);
     color: var(--on-accent);
     transition:
       border-color var(--duration-move) var(--ease-out),
-      background-color var(--duration-move) var(--ease-out),
-      color var(--duration-move) var(--ease-out);
+      background-color var(--duration-move) var(--ease-out);
   }
 
   .slot[data-busy] {

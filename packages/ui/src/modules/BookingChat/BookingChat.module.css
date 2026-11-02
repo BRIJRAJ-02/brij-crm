@@ -11,10 +11,6 @@
        the app), because this module only ever mounts on the public pages. */
     --scale-press: 0.97;
 
-    /* The blur a reply's words resolve out of (transitions.dev's streaming text, 1px), named here because the token
-       set has no blur yet: the artifact owes a motion blur token. */
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
-    --stream-blur: 1px;
     /* One word's beat as a reply writes itself: 40ms, about 25 words a second (stageshow's ai-chat), quick enough to
        feel live and slow enough to read along (the owner, 2 November 2026: the chat was too fast to use). */
     /* stylelint-disable-next-line unit-disallowed-list -- a reading pace, no motion token stands for it */
@@ -320,7 +316,6 @@
   @keyframes word-in {
     from {
       opacity: 0;
-      filter: blur(var(--stream-blur));
     }
   }
 
