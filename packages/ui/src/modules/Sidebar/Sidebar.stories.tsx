@@ -616,6 +616,10 @@ export const KeptFold: Story = {
     await expect(canvas.getByRole('link', { name: 'Bookings' })).toBeInTheDocument();
     await userEvent.click(label);
     await expect(label).toHaveAttribute('aria-expanded', 'false');
+    // The click leaves the pointer on the label, so the screenshot was of a hovered label, which is
+    // darker than the resting one. Whether the hover had landed by the time the shot was taken
+    // differed between runs, so the baseline was both wrong and unstable (2 November 2026).
+    await userEvent.unhover(label);
   },
 };
 
