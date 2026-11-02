@@ -321,6 +321,13 @@ export const publicHandles = auth.table(
     createdAt: createdAt(),
     /** When it was let go (its person's account deleted, or room made at the cap): set with a null `userId` only. */
     releasedAt: timestamptz('released_at'),
+    /**
+     * The link page this handle names (spec 0064, AC-6413): its current handle and every old one it held. Null for a
+     * handle that names nobody, and for one whose page was deleted, which still names its person and finds their
+     * primary page. Checked at the commit (`public_handles_page_fk`, migration 0166), since a new page and its first
+     * handle name each other.
+     */
+    profileId: uuid('profile_id'),
   },
   (t) => [
     primaryKey({ name: 'public_handles_pkey', columns: [t.handle] }),
@@ -335,13 +342,25 @@ export const publicHandles = auth.table(
       sql`${t.handle} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.handle}) between 3 and 40`,
     ),
     foreignKey({ name: 'public_handles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('set null'),
+    index('public_handles_page')
+      .on(t.profileId)
+      .where(sql`${t.profileId} is not null`),
   ],
 );
 
-/** A person's public profile in ONE workspace (spec 0056): their current handle there and a one line bio. */
+/**
+ * One of a person's link pages in ONE workspace (spec 0056; several since spec 0064, AC-6413): its own id, handle,
+ * private name, one line bio, look, search setting, share image and numbers. Up to 5 per person and workspace, one of
+ * them the primary page (Home's card, the handle their booking pages live under). The trigger
+ * `public_profiles_place` (migration 0166) keeps the limit, makes a person's first page there primary and places
+ * every new page last.
+ */
 export const publicProfiles = auth.table(
   'public_profiles',
   {
+    id: uuid('id')
+      .notNull()
+      .default(sql`public.uuidv7()`),
     userId: uuid('user_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
     handle: text('handle').notNull(),
@@ -395,10 +414,25 @@ export const publicProfiles = auth.table(
      * bytes, null for the plain code. Written only by `crm_save_profile_qr_style`.
      */
     qrStyle: jsonb('qr_style'),
+    /** The page's private name (spec 0064, AC-6413), "Side project": at most 40, only its owner sees it. */
+    name: text('name').notNull().default(''),
+    /** The person's primary page in this workspace: exactly one of their pages there (AC-6415). */
+    isPrimary: boolean('is_primary').notNull().default(false),
+    /** Where the page stands in the switcher, set as it is made. */
+    position: smallint('position').notNull(),
     updatedAt: updatedAt(),
   },
   (t) => [
-    primaryKey({ name: 'public_profiles_pkey', columns: [t.userId, t.workspaceId] }),
+    primaryKey({ name: 'public_profiles_pkey', columns: [t.id] }),
+    index('public_profiles_user_workspace').on(t.userId, t.workspaceId),
+    uniqueIndex('public_profiles_primary')
+      .on(t.userId, t.workspaceId)
+      .where(sql`${t.isPrimary}`),
+    check(
+      'public_profiles_name',
+      sql`char_length(${t.name}) <= 40 and ${t.name} !~ '[[:cntrl:]]' and ${t.name} = btrim(${t.name})`,
+    ),
+    check('public_profiles_position', sql`${t.position} between 0 and 99`),
     uniqueIndex('public_profiles_handle').on(t.handle),
     check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
     check(
@@ -475,6 +509,12 @@ export const profileItems = auth.table(
       .default(sql`'{}'::jsonb`),
     /** The workspace whose link page this block is on (spec 0056, AC-5604): every kind carries one. */
     workspaceId: uuid('workspace_id').notNull(),
+    /**
+     * The link page this block is on (spec 0064, AC-6417). Null only for a block kept before migration 0166 by a
+     * person with no page in that workspace: it reaches nobody, and their first page there adopts it. Every new
+     * block names its page (`profile_items_on_a_page`).
+     */
+    profileId: uuid('profile_id'),
     pageId: uuid('page_id'),
     /** Set only for `kind = 'form'`, always beside `workspaceId` (spec 0052, AC-5213). */
     formId: uuid('form_id'),
@@ -484,6 +524,9 @@ export const profileItems = auth.table(
   },
   (t) => [
     foreignKey({ name: 'profile_items_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    foreignKey({ name: 'profile_items_page_fk', columns: [t.profileId], foreignColumns: [publicProfiles.id] }).onDelete(
+      'cascade',
+    ),
     check(
       'profile_items_kind',
       sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial', 'socials', 'media', 'image', 'gallery', 'times', 'banner')`,
@@ -500,17 +543,17 @@ export const profileItems = auth.table(
       sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial', 'socials', 'media', 'image', 'gallery', 'banner') or (${t.pageId} is null and ${t.formId} is null)`,
     ),
     uniqueIndex('profile_items_page_once')
-      .on(t.userId, t.workspaceId, t.pageId)
+      .on(t.profileId, t.pageId)
       .where(sql`${t.kind} = 'page' and ${t.archivedAt} is null`),
     uniqueIndex('profile_items_form_once')
-      .on(t.userId, t.workspaceId, t.formId)
+      .on(t.profileId, t.formId)
       .where(sql`${t.kind} = 'form' and ${t.archivedAt} is null`),
     // Up to three contact cards since spec 0061 (AC-6114): the cap is crm_save_profile_item's, as every kind's is.
     uniqueIndex('profile_items_heading_once')
-      .on(t.userId, t.workspaceId, sql`lower(btrim(${t.data} ->> 'title'))`)
+      .on(t.profileId, sql`lower(btrim(${t.data} ->> 'title'))`)
       .where(sql`${t.kind} = 'heading' and ${t.archivedAt} is null`),
     index('profile_items_archived')
-      .on(t.userId, t.workspaceId, t.archivedAt)
+      .on(t.profileId, t.archivedAt)
       .where(sql`${t.archivedAt} is not null`),
   ],
 );
@@ -525,6 +568,8 @@ export const profileViews = auth.table(
   {
     userId: uuid('user_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
+    /** The page viewed (spec 0064, AC-6417): views are per page. */
+    profileId: uuid('profile_id').notNull(),
     day: date('day', { mode: 'string' }).notNull(),
     visitor: text('visitor').notNull(),
     views: integer('views').notNull().default(1),
@@ -532,7 +577,10 @@ export const profileViews = auth.table(
     lastAt: timestamptz('last_at').notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({ name: 'profile_views_pkey', columns: [t.userId, t.workspaceId, t.day, t.visitor] }),
+    primaryKey({ name: 'profile_views_pkey', columns: [t.profileId, t.day, t.visitor] }),
+    foreignKey({ name: 'profile_views_page_fk', columns: [t.profileId], foreignColumns: [publicProfiles.id] }).onDelete(
+      'cascade',
+    ),
     foreignKey({ name: 'profile_views_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     // The cleanup's pick, oldest days first.
     index('profile_views_day').on(t.day),
@@ -617,12 +665,19 @@ export const profileViewDays = auth.table(
   {
     userId: uuid('user_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
+    /** The page viewed (spec 0064, AC-6417). */
+    profileId: uuid('profile_id').notNull(),
     day: date('day', { mode: 'string' }).notNull(),
     views: integer('views').notNull().default(0),
     visitors: integer('visitors').notNull().default(0),
   },
   (t) => [
-    primaryKey({ name: 'profile_view_days_pkey', columns: [t.userId, t.workspaceId, t.day] }),
+    primaryKey({ name: 'profile_view_days_pkey', columns: [t.profileId, t.day] }),
+    foreignKey({
+      name: 'profile_view_days_page_fk',
+      columns: [t.profileId],
+      foreignColumns: [publicProfiles.id],
+    }).onDelete('cascade'),
     foreignKey({ name: 'profile_view_days_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete(
       'cascade',
     ),
@@ -654,9 +709,10 @@ export const profileItemPressDays = auth.table(
 /**
  * The pictures of a person's link page in one workspace (spec 0061, AC-6101, AC-6108, AC-6128): an upload, a link's
  * thumbnail, or a media block's poster, each a private object in the file store under `link-page/` with its metadata
- * removed. A block names one by `id` in its `data`; the bytes are served only while a live block on that page uses
- * it (`crm_profile_image_public`), and one no block uses is swept after a day. Goes with its page
- * (`public_profiles`, so a purged workspace's go too) and with its person.
+ * removed. Shared by the person's pages in that workspace since spec 0064. A block names one by `id` in its `data`;
+ * the bytes are served only while a live block on that page uses it (`crm_profile_image_public`), and one no block of
+ * any of their pages uses is swept after a day. Goes with the person's last page there (so a purged workspace's go
+ * too) and with its person.
  *
  * Forced row level security with one policy, for crm_handle, whose definers are the only way in (migration 0147);
  * crm_app holds no grant, and the identity login's default grant reads nothing through the policy.
@@ -690,11 +746,8 @@ export const profileImages = auth.table(
         and ${t.width} between 1 and 4096 and ${t.height} between 1 and 4096`,
     ),
     foreignKey({ name: 'profile_images_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
-    foreignKey({
-      name: 'profile_images_page_fk',
-      columns: [t.userId, t.workspaceId],
-      foreignColumns: [publicProfiles.userId, publicProfiles.workspaceId],
-    }).onDelete('cascade'),
+    // Shared by the person's pages in that workspace, they go with the last of those pages, the purge's delete
+    // included (`crm_public_profiles_drop_images`, an after delete trigger, migration 0166).
   ],
 );
 
@@ -710,6 +763,8 @@ export const profileViewSourceDays = auth.table(
   {
     userId: uuid('user_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
+    /** The page viewed (spec 0064, AC-6417). */
+    profileId: uuid('profile_id').notNull(),
     day: date('day', { mode: 'string' }).notNull(),
     fact: text('fact').notNull(),
     value: text('value').notNull(),
@@ -717,7 +772,7 @@ export const profileViewSourceDays = auth.table(
     visitors: integer('visitors').notNull().default(0),
   },
   (t) => [
-    primaryKey({ name: 'profile_view_source_days_pkey', columns: [t.userId, t.workspaceId, t.day, t.fact, t.value] }),
+    primaryKey({ name: 'profile_view_source_days_pkey', columns: [t.profileId, t.day, t.fact, t.value] }),
     index('profile_view_source_days_day').on(t.day),
     check('profile_view_source_days_fact', sql`${t.fact} in ('referrer', 'source', 'country', 'device')`),
     check(
@@ -727,8 +782,8 @@ export const profileViewSourceDays = auth.table(
     check('profile_view_source_days_count', sql`${t.views} >= 0 and ${t.visitors} >= 0`),
     foreignKey({
       name: 'profile_view_source_days_page_fk',
-      columns: [t.userId, t.workspaceId],
-      foreignColumns: [publicProfiles.userId, publicProfiles.workspaceId],
+      columns: [t.profileId],
+      foreignColumns: [publicProfiles.id],
     }).onDelete('cascade'),
   ],
 );
@@ -743,17 +798,19 @@ export const profileBookingDays = auth.table(
   {
     userId: uuid('user_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
+    /** The page the bookings came from (spec 0064, AC-6417). */
+    profileId: uuid('profile_id').notNull(),
     day: date('day', { mode: 'string' }).notNull(),
     bookings: integer('bookings').notNull().default(0),
   },
   (t) => [
-    primaryKey({ name: 'profile_booking_days_pkey', columns: [t.userId, t.workspaceId, t.day] }),
+    primaryKey({ name: 'profile_booking_days_pkey', columns: [t.profileId, t.day] }),
     index('profile_booking_days_day').on(t.day),
     check('profile_booking_days_count', sql`${t.bookings} >= 0`),
     foreignKey({
       name: 'profile_booking_days_page_fk',
-      columns: [t.userId, t.workspaceId],
-      foreignColumns: [publicProfiles.userId, publicProfiles.workspaceId],
+      columns: [t.profileId],
+      foreignColumns: [publicProfiles.id],
     }).onDelete('cascade'),
   ],
 );

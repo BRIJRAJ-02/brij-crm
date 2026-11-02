@@ -865,6 +865,8 @@ interface HandleOwnerRow extends Record<string, unknown> {
   readonly indexable: boolean;
   readonly share_image_version: string | null;
   readonly shown: boolean;
+  readonly profile_id: string;
+  readonly page_name: string;
 }
 
 /** The person a handle names (current or old): their identity, current handle, and what their profile shows. */
@@ -872,7 +874,12 @@ export interface HandleOwner {
   readonly userId: string;
   /** The one workspace this handle, and the link page behind it, belong to (spec 0056, AC-5601). Never sent out. */
   readonly workspaceId: string;
-  /** Their current handle: an old one's address moves to it. */
+  /**
+   * The link page the handle names (spec 0064, AC-6413): a person may keep several in one workspace, and every read
+   * of the page (its blocks, look, pictures, share image and counts) is that page's. Never sent out.
+   */
+  readonly profileId: string;
+  /** That page's current handle: an old one's address moves to it. */
   readonly handle: string;
   readonly bio: string;
   /** Their account's name; empty for an email code account that never gave one. */
@@ -911,13 +918,14 @@ async function handleOwner(
   if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return undefined;
   return db.withWorkspace(NO_WORKSPACE, async (tx) => {
     const found = await tx.execute<HandleOwnerRow>(
-      sql`select user_id::text as user_id, workspace_id::text as workspace_id, handle, bio, name, image, theme, indexable, share_image_version, shown from crm_handle_owner(${handle})`,
+      sql`select user_id::text as user_id, workspace_id::text as workspace_id, handle, bio, name, image, theme, indexable, share_image_version, shown, profile_id::text as profile_id, page_name from crm_handle_owner(${handle})`,
     );
     const [row] = found.rows;
     if (row === undefined) return undefined;
     return {
       userId: row.user_id,
       workspaceId: row.workspace_id,
+      profileId: row.profile_id,
       handle: row.handle,
       bio: row.bio,
       name: row.name,
@@ -1265,11 +1273,12 @@ export async function enterShareImage(
   deps: { readonly db: Database },
   userId: string,
   workspaceId: string,
+  profileId?: string,
 ): Promise<{ readonly bytes: Uint8Array; readonly type: string; readonly version: string } | undefined> {
-  if (!isUuid(userId) || !isUuid(workspaceId)) return undefined;
+  if (!isUuid(userId) || !isUuid(workspaceId) || (profileId !== undefined && !isUuid(profileId))) return undefined;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<{ bytes: Buffer | null; kind: string | null; version: string | null }>(
-      sql`select bytes, kind, version from crm_profile_share_image(${userId}::uuid, ${workspaceId}::uuid)`,
+      sql`select bytes, kind, version from crm_profile_share_image(${userId}::uuid, ${workspaceId}::uuid, ${profileId ?? null}::uuid)`,
     ),
   );
   const row = found.rows[0];
@@ -1297,7 +1306,7 @@ export async function enterLinkBlocks(
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer, ${owner.profileId}::uuid)`,
     ),
   );
   return { owner, rows: found.rows };
@@ -1339,7 +1348,7 @@ export async function enterLinkPage(
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer, ${owner.profileId}::uuid)`,
     ),
   );
   const rows = await withinWorkspace(deps, owner, found.rows, query.publicOrigins ?? []);
@@ -1427,11 +1436,14 @@ export async function countProfileView(
    * The definer checks each value's shape again and leaves out one outside it.
    */
   facts: Readonly<Partial<Record<'referrer' | 'source' | 'country' | 'device', string>>> = {},
+  /** The page viewed (spec 0064, AC-6417), as the handle read found it; its owner's primary page when left out. */
+  profileId?: string,
 ): Promise<void> {
   if (!isUuid(ownerUserId) || !isUuid(workspaceId) || !PROFILE_VISITOR.test(visitor)) return;
+  if (profileId !== undefined && !isUuid(profileId)) return;
   await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute(
-      sql`select crm_count_profile_view(${ownerUserId}::uuid, ${workspaceId}::uuid, ${visitor}, ${facts.referrer ?? null}, ${facts.source ?? null}, ${facts.country ?? null}, ${facts.device ?? null})`,
+      sql`select crm_count_profile_view(${ownerUserId}::uuid, ${workspaceId}::uuid, ${visitor}, ${facts.referrer ?? null}, ${facts.source ?? null}, ${facts.country ?? null}, ${facts.device ?? null}, ${profileId ?? null}::uuid)`,
     ),
   );
 }
@@ -1471,7 +1483,7 @@ export async function enterLinkImage(
   if (owner === undefined) throw missing();
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<{ path: string; content_type: string }>(
-      sql`select path, content_type from crm_profile_image_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${imageId}::uuid)`,
+      sql`select path, content_type from crm_profile_image_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${imageId}::uuid, ${owner.profileId}::uuid)`,
     ),
   );
   const row = found.rows[0];
@@ -1490,7 +1502,7 @@ export async function linkImageSizes(
   // One statement however many: each id through the same live check its own route makes.
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<{ id: string; width: number; height: number }>(
-      sql`select w.id::text as id, x.width, x.height from pg_catalog.unnest(${`{${ids.join(',')}}`}::uuid[]) w(id) cross join lateral crm_profile_image_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, w.id) x`,
+      sql`select w.id::text as id, x.width, x.height from pg_catalog.unnest(${`{${ids.join(',')}}`}::uuid[]) w(id) cross join lateral crm_profile_image_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, w.id, ${owner.profileId}::uuid) x`,
     ),
   );
   return new Map(found.rows.map((row) => [row.id, { width: row.width, height: row.height }]));
@@ -1513,7 +1525,7 @@ export async function enterTimesBlock(
   if (owner === undefined) throw missing();
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where id = ${itemId}::uuid and kind = 'times'`,
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer, ${owner.profileId}::uuid) where id = ${itemId}::uuid and kind = 'times'`,
     ),
   );
   const row = found.rows[0];
@@ -1595,7 +1607,7 @@ export async function enterContactCard(
   const card = options.card ?? null;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<{ readonly data: unknown } & Record<string, unknown>>(
-      sql`select data from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where kind = 'contact' and (${card}::uuid is null or id = ${card}::uuid) order by position, id limit 1`,
+      sql`select data from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer, ${owner.profileId}::uuid) where kind = 'contact' and (${card}::uuid is null or id = ${card}::uuid) order by position, id limit 1`,
     ),
   );
   const [row] = found.rows;

@@ -119,10 +119,15 @@ begin
   set local row_security = off;
   alter table auth.public_handles alter column workspace_id drop not null;
   alter table auth.public_profiles drop constraint public_profiles_membership_fk;
-  -- Spec 0061's tables hang off the page's key (migration 0147), which a database before 0114 didn't have.
-  alter table auth.profile_images drop constraint profile_images_page_fk;
+  -- Spec 0061's tables hang off the page's key (migration 0147), which a database before 0114 didn't have, and since
+  -- several pages (migration 0166) so do the blocks, views and handles: a page's own id, which it didn't have either.
   alter table auth.profile_view_source_days drop constraint profile_view_source_days_page_fk;
   alter table auth.profile_booking_days drop constraint profile_booking_days_page_fk;
+  alter table auth.profile_items drop constraint profile_items_page_fk;
+  alter table auth.profile_views drop constraint profile_views_page_fk;
+  alter table auth.profile_view_days drop constraint profile_view_days_page_fk;
+  alter table auth.public_handles drop constraint public_handles_page_fk;
+  alter table auth.profile_items drop constraint profile_items_on_a_page;
   alter table auth.public_profiles drop constraint public_profiles_pkey;
   alter table auth.public_profiles alter column workspace_id drop not null;
   alter table auth.profile_items alter column workspace_id drop not null;
@@ -130,6 +135,8 @@ begin
   alter table auth.profile_views alter column workspace_id drop not null;
   alter table auth.profile_view_days drop constraint profile_view_days_pkey;
   alter table auth.profile_view_days alter column workspace_id drop not null;
+  alter table auth.profile_views alter column profile_id drop not null;
+  alter table auth.profile_view_days alter column profile_id drop not null;
   -- The rule 0104 left, as a database before this migration holds it: the migration's own statements drop it.
   alter table auth.profile_items drop constraint profile_items_target;
   alter table auth.profile_items add constraint profile_items_target

@@ -141,7 +141,7 @@ function imageOf(path: string | null, type: string | null, version: string | nul
  */
 export async function readHandleLook(deps: { readonly db: Database }, owner: HandleOwner): Promise<PageLook> {
   return deps.db.withWorkspace(owner.workspaceId, async (tx: WorkspaceTx) => {
-    const own = await lookRowOf(tx, owner.userId, owner.workspaceId);
+    const own = await lookRowOf(tx, owner.userId, owner.workspaceId, owner.profileId);
     const brand = await brandRowOf(tx, owner.workspaceId);
     const accents = accentsOf(own, brand);
     const cover = imageOf(own?.cover_path ?? null, own?.cover_type ?? null, own?.cover_version ?? null);

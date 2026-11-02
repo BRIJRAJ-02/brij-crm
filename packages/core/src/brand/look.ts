@@ -29,11 +29,19 @@ export interface LookRow extends Record<string, unknown> {
   readonly ground_version: string | null;
 }
 
-/** `owner`'s look columns in `workspace`, or undefined: no page there, or not an active member of it. */
-export async function lookRowOf(tx: WorkspaceTx, owner: string, workspace: string): Promise<LookRow | undefined> {
+/**
+ * The look columns of one of `owner`'s link pages in `workspace` (spec 0064: `page`, else their primary page), or
+ * undefined: no such page there, or not an active member of it.
+ */
+export async function lookRowOf(
+  tx: WorkspaceTx,
+  owner: string,
+  workspace: string,
+  page?: string,
+): Promise<LookRow | undefined> {
   const found = await tx.execute<LookRow>(
     sql`select accent, accent_dark, cover_path, cover_type, cover_version, ground_path, ground_type, ground_version
-        from crm_profile_look(${owner}::uuid, ${workspace}::uuid)`,
+        from crm_profile_look(${owner}::uuid, ${workspace}::uuid, ${page ?? null}::uuid)`,
   );
   return found.rows[0];
 }
@@ -42,9 +50,9 @@ export async function lookRowOf(tx: WorkspaceTx, owner: string, workspace: strin
 const NO_PAGE = 'Pick a handle before you choose a look.';
 
 /** The caller's own link page accent and photos in this workspace (the Design panel's read); empty with no page. */
-export async function readProfileLook(scope: EngineScope): Promise<ProfileLook> {
+export async function readProfileLook(scope: EngineScope, page?: string): Promise<ProfileLook> {
   const owner = ownUserId(scope);
-  const row = await inWorkspace(scope, (tx) => lookRowOf(tx, owner, scope.workspaceId));
+  const row = await inWorkspace(scope, (tx) => lookRowOf(tx, owner, scope.workspaceId, page));
   return {
     ...(typeof row?.accent === 'string' ? { accent: row.accent } : {}),
     ...(typeof row?.accent_dark === 'string' ? { accentDark: row.accent_dark } : {}),
@@ -68,6 +76,7 @@ function definerRefusal(error: unknown): never {
 export async function saveProfileAccent(
   scope: EngineScope,
   input: { readonly accent: string | null; readonly accentDark: string | null },
+  page?: string,
 ): Promise<ProfileAccent> {
   const owner = ownUserId(scope);
   const check = (value: string | null, field: string): string | null => {
@@ -83,9 +92,9 @@ export async function saveProfileAccent(
   return inWorkspace(scope, async (tx) => {
     try {
       const saved = await tx.execute<{ accent: string | null; accent_dark: string | null }>(
-        sql`select accent, accent_dark from crm_save_profile_accent(${owner}::uuid, ${scope.workspaceId}::uuid, ${accent}, ${accentDark})`,
+        sql`select accent, accent_dark from crm_save_profile_accent(${owner}::uuid, ${scope.workspaceId}::uuid, ${accent}, ${accentDark}, ${page ?? null}::uuid)`,
       );
-      await showLinkPage(tx, owner, scope.workspaceId);
+      await showLinkPage(tx, owner, scope.workspaceId, page);
       const row = saved.rows[0];
       return { accent: row?.accent ?? null, accentDark: row?.accent_dark ?? null };
     } catch (error) {
@@ -113,6 +122,7 @@ export function pageImageFolder(userId: string, workspaceId: string): string {
 export async function saveProfileImage(
   scope: EngineScope,
   input: { readonly slot: PageImageSlot; readonly image?: StoredPageImage },
+  page?: string,
 ): Promise<{ readonly previous?: string }> {
   const owner = ownUserId(scope);
   const { slot, image } = input;
@@ -125,9 +135,9 @@ export async function saveProfileImage(
   const previous = await inWorkspace(scope, async (tx) => {
     try {
       const saved = await tx.execute<{ previous: string | null }>(
-        sql`select crm_save_profile_image(${owner}::uuid, ${scope.workspaceId}::uuid, ${slot}, ${image?.path ?? null}, ${image?.type ?? null}, ${image?.version ?? null}) as previous`,
+        sql`select crm_save_profile_image(${owner}::uuid, ${scope.workspaceId}::uuid, ${slot}, ${image?.path ?? null}, ${image?.type ?? null}, ${image?.version ?? null}, ${page ?? null}::uuid) as previous`,
       );
-      await showLinkPage(tx, owner, scope.workspaceId);
+      await showLinkPage(tx, owner, scope.workspaceId, page);
       return saved.rows[0]?.previous ?? undefined;
     } catch (error) {
       return definerRefusal(error);

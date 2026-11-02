@@ -120,6 +120,18 @@ export function memberLogoPath(workspace: string, version: string): string {
 export const UPLOAD_WORKSPACE_HEADER = 'x-crm-workspace';
 
 /**
+ * The header a link page photo upload names which of the person's pages it is for (spec 0064, AC-6413): the page's
+ * id, or absent for their primary page, as `profileId` is in every RPC input.
+ */
+export const UPLOAD_LINK_PAGE_HEADER = 'x-crm-link-page';
+
+/** A link page id as an upload header or a query names it: a UUID, else nothing usable (refused, never the primary). */
+export function linkPageIdOf(value: string | undefined): string | undefined | false {
+  if (value === undefined || value === '') return undefined;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value.toLowerCase() : false;
+}
+
+/**
  * The brand procedures. Any member reads the kit (everyone sees it, read only); saving it takes `workspace.manage`
  * (owners and admins). Neither touches a record, so no change event is stored.
  */

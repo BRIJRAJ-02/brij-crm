@@ -85,9 +85,14 @@ interface ShownRow extends Record<string, unknown> {
  * one they ever asked for. True when the page is public after this; false when they set it Private, or have no page
  * here. It never overrules their own choice, so it is safe on every claim, open and edit.
  */
-export async function showLinkPage(tx: WorkspaceTx, userId: string, workspaceId: string): Promise<boolean> {
+export async function showLinkPage(
+  tx: WorkspaceTx,
+  userId: string,
+  workspaceId: string,
+  page?: string,
+): Promise<boolean> {
   const found = await tx.execute<ShownRow>(
-    sql`select crm_show_public_profile(${userId}::uuid, ${workspaceId}::uuid) as shown`,
+    sql`select crm_show_public_profile(${userId}::uuid, ${workspaceId}::uuid, ${page ?? null}::uuid) as shown`,
   );
   return found.rows[0]?.shown === true;
 }
@@ -95,16 +100,18 @@ export async function showLinkPage(tx: WorkspaceTx, userId: string, workspaceId:
 /**
  * The Live or Private switch (`crm_set_public_profile_live`; spec 0058, AC-23): the person's link page in this
  * workspace is public when `live`, private otherwise, and their own choice from now on. Answers whether it is
- * public after this; false, writing nothing, when they have no page here.
+ * public after this; false, writing nothing, when they have no page here. `page` is one of their pages there
+ * (spec 0064), their primary page when left out.
  */
 export async function setLinkPageLive(
   tx: WorkspaceTx,
   userId: string,
   workspaceId: string,
   live: boolean,
+  page?: string,
 ): Promise<boolean> {
   const found = await tx.execute<ShownRow>(
-    sql`select crm_set_public_profile_live(${userId}::uuid, ${workspaceId}::uuid, ${live}) as shown`,
+    sql`select crm_set_public_profile_live(${userId}::uuid, ${workspaceId}::uuid, ${live}, ${page ?? null}::uuid) as shown`,
   );
   return found.rows[0]?.shown === true;
 }
@@ -113,8 +120,10 @@ export async function setLinkPageLive(
 const HANDLE_CLAIM_CONSTRAINT = 'public_handles_pkey';
 
 /**
- * Claims `handle` for the person and sets their bio (`crm_save_public_profile`): their old handle keeps finding
- * them. A handle another person holds or held is `SLUG_TAKEN` on `handle`; past 20 held, `LIMIT_REACHED`.
+ * Claims `handle` for one of the person's link pages and sets its bio (`crm_save_public_profile`): the page's old
+ * handle keeps finding it. `page` is one of their pages there (spec 0064), their primary page when left out (made,
+ * when they have none). A handle another person holds or held, or another of their pages uses, is `SLUG_TAKEN` on
+ * `handle`; past 20 held, `LIMIT_REACHED`; a page that isn't theirs here, `NOT_FOUND`.
  */
 export async function savePublicProfile(
   tx: WorkspaceTx,
@@ -122,9 +131,12 @@ export async function savePublicProfile(
   workspaceId: string,
   handle: string,
   bio: string,
+  page?: string,
 ): Promise<void> {
   try {
-    await tx.execute(sql`select crm_save_public_profile(${userId}::uuid, ${workspaceId}::uuid, ${handle}, ${bio})`);
+    await tx.execute(
+      sql`select crm_save_public_profile(${userId}::uuid, ${workspaceId}::uuid, ${handle}, ${bio}, ${page ?? null}::uuid)`,
+    );
   } catch (error) {
     const pg = postgresError(error);
     if (pg?.code === '23505' && pg.constraint === HANDLE_CLAIM_CONSTRAINT) {
@@ -135,6 +147,7 @@ export async function savePublicProfile(
       throw refuseOn('LIMIT_REACHED', 'You have link pages in 20 workspaces, the most one person can have.', 'handle');
     }
     if (pg?.code === '42501') throw refuse('FORBIDDEN', 'You’re not a member of this workspace.');
+    if (pg?.code === 'P0002') throw refuse('NOT_FOUND', 'That link page isn’t yours any more.');
     throw error;
   }
 }

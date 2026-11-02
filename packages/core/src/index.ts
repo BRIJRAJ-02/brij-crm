@@ -182,6 +182,8 @@ export {
   saveQrStyle,
   type ResolvedMedia,
 } from './profile/items.ts';
+// Several link pages (spec 0064): the switcher's list, a new page, its name, the primary page and delete.
+export { createLinkPage, deleteLinkPage, listLinkPages, renameLinkPage, setPrimaryLinkPage } from './profile/pages.ts';
 // Link page blocks and reach (spec 0061): media links, picture checks, view facts and scheduled blocks, for the api's
 // signed in routes (the public ones take them from `@crm/core/public`).
 export {

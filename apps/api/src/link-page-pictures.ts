@@ -12,6 +12,7 @@
 // page keeps passed the same checks. Nothing here logs a picture, its path or an address it read.
 import { randomUUID } from 'node:crypto';
 import {
+  linkPageIdOf,
   PROFILE_IMAGE_TYPES,
   UPLOAD_WORKSPACE_HEADER,
   type MediaProvider,
@@ -261,10 +262,13 @@ export function mountLinkPagePictures(app: Hono<{ Variables: ImageVariables }>, 
     }
     const from = c.req.query('from') ?? '';
     const to = c.req.query('to') ?? '';
+    // Which of the person's pages (spec 0064, AC-6417): `page`, else their primary page.
+    const page = linkPageIdOf(c.req.query('page'));
+    if (page === false) return errorResponse('NOT_FOUND', 'That link page isn’t yours any more.');
     try {
-      const body = await profileInsightsCsv(scope, { from, to });
+      const body = await profileInsightsCsv(scope, { from, to }, page);
       // The file is named by the page's own handle (AC-6120), never by anything in the request.
-      const stem = (await getMyProfile(scope)).handle ?? 'link-page';
+      const stem = (await getMyProfile(scope, {}, page)).handle ?? 'link-page';
       return new Response(body, {
         headers: {
           'content-type': 'text/csv; charset=utf-8',

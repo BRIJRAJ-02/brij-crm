@@ -1,6 +1,11 @@
 import { brandCacheTags, linkPageCacheTags, myPicturePath } from '@crm/contracts';
 import {
   archiveProfileItem,
+  createLinkPage,
+  deleteLinkPage,
+  listLinkPages,
+  renameLinkPage,
+  setPrimaryLinkPage,
   importProfileLinks,
   isImportableHost,
   readImportedPage,
@@ -70,11 +75,14 @@ const PICTURE_KINDS: ReadonlySet<string> = new Set(['link', 'image', 'gallery', 
  * Deletes the edge's copies of the caller's own page (its pictures among them, spec 0061, AC-6129) once a change
  * that may have let a picture go has committed. A page with no handle has nothing cached.
  */
-async function forgetPictures(context: {
-  readonly scope: Parameters<typeof getMyProfile>[0];
-  readonly edgeCache: EdgeCache;
-}): Promise<void> {
-  const { handle } = await getMyProfile(context.scope);
+async function forgetPictures(
+  context: {
+    readonly scope: Parameters<typeof getMyProfile>[0];
+    readonly edgeCache: EdgeCache;
+  },
+  page?: string,
+): Promise<void> {
+  const { handle } = await getMyProfile(context.scope, {}, page);
   if (handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(handle));
 }
 
@@ -85,7 +93,9 @@ const SITE_READS = { window: 60, max: 60 } as const;
 
 // Settings › Account › Profile (spec 0031, slice 7, AC-821): the caller's own member row, behind the member door.
 export const profileRouter = member.profile.router({
-  get: member.profile.get.handler(async ({ context }) => getMyProfile(context.scope, await extrasOf(context))),
+  get: member.profile.get.handler(async ({ context, input }) =>
+    getMyProfile(context.scope, await extrasOf(context), input.profileId),
+  ),
   update: member.profile.update.handler(async ({ context, input }) => {
     const extras = await extrasOf(context);
     return commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
@@ -103,12 +113,13 @@ export const profileRouter = member.profile.router({
         extras,
         hooks,
         sourceOf(context),
+        input.profileId,
       ),
     );
   }),
   // The link page (spec 0051): the caller's own blocks, in every workspace the same, never another person's.
-  items: member.profile.items.handler(({ context }) =>
-    readProfileItems(context.scope, { publicOrigins: context.publicOrigins }),
+  items: member.profile.items.handler(({ context, input }) =>
+    readProfileItems(context.scope, { publicOrigins: context.publicOrigins }, input.profileId),
   ),
   /**
    * A link to save the caller's own page to a wallet (26 October 2026). The pass holds only what their page already
@@ -120,7 +131,7 @@ export const profileRouter = member.profile.router({
   walletLink: member.profile.walletLink.handler(async ({ context, input }) => {
     const wallet = context.walletLink(input.wallet);
     if (wallet === undefined) return { off: true as const };
-    const me = await getMyProfile(context.scope);
+    const me = await getMyProfile(context.scope, {}, input.profileId);
     if (me.handle === undefined) throw apiError('NOT_FOUND', 'Pick a handle before you save your page.');
     return {
       url: wallet({ handle: me.handle, name: me.name, ...(me.bio === '' ? {} : { bio: me.bio }) }),
@@ -129,19 +140,19 @@ export const profileRouter = member.profile.router({
   /** Opening the caller's own link page, or its Live or Private switch (spec 0058, AC-23). */
   show: member.profile.show.handler(async ({ context, input }) => {
     const shown = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      showMyLinkPage(context.scope, input.live),
+      showMyLinkPage(context.scope, input.live, input.profileId),
     );
     // The switch, either way: the edge's copies of the page (its shell, card, picture and share image) are deleted
     // once the change has committed, so a page made Private stops being served at once and one made Live stops
     // answering its cached 404. Opening the page changes nothing a visitor was sent, so it purges nothing.
     if (input.live !== undefined) {
-      const { handle } = await getMyProfile(context.scope);
+      const { handle } = await getMyProfile(context.scope, {}, input.profileId);
       await context.edgeCache.forget(linkPageCacheTags(handle));
     }
     return shown;
   }),
   counts: member.profile.counts.handler(async ({ context, input }) => {
-    const counts = await readProfileCounts(context.scope, new Date(), input.days ?? 30);
+    const counts = await readProfileCounts(context.scope, new Date(), input.days ?? 30, input.profileId);
     return { ...counts, presses: [...counts.presses] };
   }),
   /**
@@ -151,7 +162,7 @@ export const profileRouter = member.profile.router({
    * a minute per person and 60 per site. The editor saves the link with the picture's id.
    */
   fetchThumbnail: member.profile.fetchThumbnail.handler(async ({ context, input }) => {
-    const address = await readOwnLinkAddress(context.scope, input.id);
+    const address = await readOwnLinkAddress(context.scope, input.id, input.profileId);
     if (address === undefined) throw apiError('NOT_FOUND', 'That link isn’t on your link page any more.');
     const mine = await context.limiter.consumeRateLimit(`link-page-read:${context.user.id}`, OUTSIDE_READS);
     const site = await context.limiter.consumeRateLimit(`link-page-site:${new URL(address).hostname}`, SITE_READS);
@@ -166,37 +177,41 @@ export const profileRouter = member.profile.router({
       return stored.ok ? { image: stored.image, width: stored.width, height: stored.height } : { none: true as const };
     });
   }),
-  qrStyle: member.profile.qrStyle.handler(({ context }) => readQrStyle(context.scope)),
+  qrStyle: member.profile.qrStyle.handler(({ context, input }) => readQrStyle(context.scope, input.profileId)),
   saveQrStyle: member.profile.saveQrStyle.handler(async ({ context, input }) => {
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveQrStyle(context.scope, input.style),
+      saveQrStyle(context.scope, input.style, input.profileId),
     );
     // A centre picture no longer named stops being served from the edge (AC-6129).
-    await forgetPictures(context);
+    await forgetPictures(context, input.profileId);
     return saved;
   }),
-  pageChoices: member.profile.pageChoices.handler(async ({ context }) => [
-    ...(await listProfilePageChoices(context.scope)),
+  pageChoices: member.profile.pageChoices.handler(async ({ context, input }) => [
+    ...(await listProfilePageChoices(context.scope, input.profileId)),
   ]),
-  formChoices: member.profile.formChoices.handler(async ({ context }) => [
-    ...(await listProfileFormChoices(context.scope)),
+  formChoices: member.profile.formChoices.handler(async ({ context, input }) => [
+    ...(await listProfileFormChoices(context.scope, input.profileId)),
   ]),
   saveTheme: member.profile.saveTheme.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => saveProfileTheme(context.scope, input.theme)),
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      saveProfileTheme(context.scope, input.theme, input.profileId),
+    ),
   ),
   // The page's own accent and photos (spec 0060, AC-14): read for the Design panel, the accent saved whole. The
   // photos go up as bytes through `/api/me/link-page/{cover,ground}` (`link-page-images.ts`).
-  look: member.profile.look.handler(({ context }) => readProfileLook(context.scope)),
+  look: member.profile.look.handler(({ context, input }) => readProfileLook(context.scope, input.profileId)),
   saveAccent: member.profile.saveAccent.handler(async ({ context, input }) => {
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveProfileAccent(context.scope, { accent: input.accent, accentDark: input.accentDark }),
+      saveProfileAccent(context.scope, { accent: input.accent, accentDark: input.accentDark }, input.profileId),
     );
     // A personal booking page wears its owner's own accent, so its `brand.css` copies go too (AC-14, AC-21).
     await context.edgeCache.forget(brandCacheTags(context.scope.workspaceId));
     return saved;
   }),
   setIndexable: member.profile.setIndexable.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => setProfileIndexable(context.scope, input.indexable)),
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      setProfileIndexable(context.scope, input.indexable, input.profileId),
+    ),
   ),
   /**
    * The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511). The contract bounds the
@@ -204,7 +219,9 @@ export const profileRouter = member.profile.router({
    * column through the one definer.
    */
   setShareImage: member.profile.setShareImage.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => saveProfileShareImage(context.scope, input.image)),
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      saveProfileShareImage(context.scope, input.image, input.profileId),
+    ),
   ),
   /**
    * Bringing a link in bio page across (spec 0055, AC-5524 to AC-5528). Three steps, in this order and nowhere
@@ -247,6 +264,7 @@ export const profileRouter = member.profile.router({
           skipped: page.skipped,
         },
         { publicOrigins: context.publicOrigins },
+        input.profileId,
       ),
     );
   }),
@@ -275,16 +293,17 @@ export const profileRouter = member.profile.router({
           ...(input.isEdit === undefined ? {} : { isEdit: input.isEdit }),
         },
         { publicOrigins: context.publicOrigins, ...(readMedia === undefined ? {} : { readMedia }) },
+        input.profileId,
       ),
     );
     // An edit that may have let a picture go (a link's thumbnail, a picture, a gallery, a poster): the edge's copies
     // of the page's pictures go with it, so one no live block uses answers 404 at once (AC-6129).
-    if (input.isEdit === true && PICTURE_KINDS.has(input.block.kind)) await forgetPictures(context);
+    if (input.isEdit === true && PICTURE_KINDS.has(input.block.kind)) await forgetPictures(context, input.profileId);
     return saved;
   }),
   orderItems: member.profile.orderItems.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      orderProfileItems(context.scope, input.ids, { publicOrigins: context.publicOrigins }),
+      orderProfileItems(context.scope, input.ids, { publicOrigins: context.publicOrigins }, input.profileId),
     ),
   ),
   archiveItem: member.profile.archiveItem.handler(async ({ context, input }) => {
@@ -293,16 +312,47 @@ export const profileRouter = member.profile.router({
         context.scope,
         { id: input.id, archived: input.archived },
         { publicOrigins: context.publicOrigins },
+        input.profileId,
       ),
     );
-    if (input.archived) await forgetPictures(context);
+    if (input.archived) await forgetPictures(context, input.profileId);
     return items;
   }),
   deleteItem: member.profile.deleteItem.handler(async ({ context, input }) => {
     const gone = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      deleteProfileItem(context.scope, input.id),
+      deleteProfileItem(context.scope, input.id, input.profileId),
     );
-    await forgetPictures(context);
+    await forgetPictures(context, input.profileId);
     return gone;
   }),
+  // Several link pages (spec 0064, AC-6413 to AC-6416): the caller's own, in this workspace, each answering the list.
+  pages: {
+    list: member.profile.pages.list.handler(async ({ context }) => [...(await listLinkPages(context.scope))]),
+    create: member.profile.pages.create.handler(async ({ context, input }) => [
+      ...(await commitWrite(context, { mutationId: input.mutationId }, () =>
+        createLinkPage(context.scope, { id: input.id, handle: input.handle, name: input.name }),
+      )),
+    ]),
+    rename: member.profile.pages.rename.handler(async ({ context, input }) => [
+      ...(await commitWrite(context, { mutationId: input.mutationId }, () =>
+        renameLinkPage(context.scope, { profileId: input.profileId, name: input.name }),
+      )),
+    ]),
+    setPrimary: member.profile.pages.setPrimary.handler(async ({ context, input }) => {
+      const pages = await commitWrite(context, { mutationId: input.mutationId }, () =>
+        setPrimaryLinkPage(context.scope, input.profileId),
+      );
+      // The person's booking pages live under the primary page's handle, and their `brand.css` wears its accent.
+      await context.edgeCache.forget(brandCacheTags(context.scope.workspaceId));
+      return [...pages];
+    }),
+    delete: member.profile.pages.delete.handler(async ({ context, input }) => {
+      const { pages, handle } = await commitWrite(context, { mutationId: input.mutationId }, () =>
+        deleteLinkPage(context.scope, input.profileId),
+      );
+      // The deleted page stops being served at once: its handle now finds the person's primary page.
+      await context.edgeCache.forget(linkPageCacheTags(handle));
+      return [...pages];
+    }),
+  },
 });

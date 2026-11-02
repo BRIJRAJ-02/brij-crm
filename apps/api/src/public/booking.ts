@@ -448,7 +448,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     try {
       // A handle no one holds throws NOT_FOUND here, which `refusalAnswer` turns into the same 404 as no picture.
       const owner = await findHandleOwner({ db }, handle);
-      const picture = await enterShareImage({ db }, owner.userId, owner.workspaceId);
+      const picture = await enterShareImage({ db }, owner.userId, owner.workspaceId, owner.profileId);
       // The whole query, exactly: anything added would miss the edge's copy and cost the read each time.
       if (picture === undefined || new URL(c.req.url).search !== `?v=${picture.version}`) return noShareImage();
       services.edgeCache?.tag(linkPageCacheTags(owner.handle, handle));
@@ -515,7 +515,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
    * AC-6116): the referring host and `utm_source` the page sent (`ref`, `src`), checked again; the edge's country;
    * and the device class from the user agent, which is then dropped. No address, no agent, no cookie is kept.
    */
-  const countView = (c: Context<{ Variables: Variables }>, ownerUserId: string, workspaceId: string): void => {
+  const countView = (
+    c: Context<{ Variables: Variables }>,
+    ownerUserId: string,
+    workspaceId: string,
+    profileId: string,
+  ): void => {
     const visitor = profileVisitor(c, ownerUserId);
     if (visitor === undefined || services.views === undefined) return;
     const ref = c.req.query('ref');
@@ -532,7 +537,9 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (!limiter(`profile:view-owner:${ownerUserId}`, BOOKING_LIMITS.viewsPerHandle).allowed) return;
     const counted = signedInAs(c)
       .then((userId) =>
-        userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, workspaceId, visitor, facts),
+        userId === ownerUserId
+          ? undefined
+          : countProfileView({ db }, ownerUserId, workspaceId, visitor, facts, profileId),
       )
       .catch((error: unknown) => {
         log.warn('profile.view.failed', { requestId: c.get('requestId'), ...errorFields(error) });
@@ -636,7 +643,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       // machine's or the owner's own (AC-5124), counted after the answer is made and never holding it up. Its
       // facts (`ref`, `src`, spec 0061) ride on the same read.
       if (c.req.query('q') === undefined && position === undefined)
-        countView(c, found.owner.userId, found.owner.workspaceId);
+        countView(c, found.owner.userId, found.owner.workspaceId, found.owner.profileId);
       return ok(look === undefined ? page : { ...page, look });
     } catch (error) {
       return refusalAnswer(error);

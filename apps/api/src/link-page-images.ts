@@ -10,7 +10,7 @@
 // the photos through the handle's own routes (`public/look.ts`). The global Origin check refuses a write from
 // anywhere but the app. Nothing here logs a photo or its path.
 import { randomUUID } from 'node:crypto';
-import { UPLOAD_WORKSPACE_HEADER, type PageImageSlot } from '@crm/contracts';
+import { linkPageIdOf, UPLOAD_LINK_PAGE_HEADER, UPLOAD_WORKSPACE_HEADER, type PageImageSlot } from '@crm/contracts';
 import { pageImageFolder, saveProfileImage } from '@crm/core';
 import type { Context, Hono } from 'hono';
 import {
@@ -35,6 +35,9 @@ export function mountLinkPageImages(app: Hono<{ Variables: ImageVariables }>, de
       const entered = await memberScopeOf(c, deps, c.req.header(UPLOAD_WORKSPACE_HEADER));
       if (entered instanceof Response) return entered;
       const { scope, session } = entered;
+      // Which of the person's pages (spec 0064): the header's id, else their primary page.
+      const page = linkPageIdOf(c.req.header(UPLOAD_LINK_PAGE_HEADER));
+      if (page === false) return errorResponse('NOT_FOUND', 'That link page isn’t yours any more.');
       if (files === undefined) return errorResponse('API_UNAVAILABLE', 'Photos can’t be uploaded here yet.');
       const decision = limiter(`link-page-image:${session.user.id}`, IMAGE_UPLOAD_LIMIT);
       if (!decision.allowed) {
@@ -51,10 +54,11 @@ export function mountLinkPageImages(app: Hono<{ Variables: ImageVariables }>, de
       }
       let previous: string | undefined;
       try {
-        ({ previous } = await saveProfileImage(scope, {
-          slot,
-          image: { path: stored, type: image.type, version: image.version },
-        }));
+        ({ previous } = await saveProfileImage(
+          scope,
+          { slot, image: { path: stored, type: image.type, version: image.version } },
+          page,
+        ));
       } catch (error) {
         // Nothing points at it (no page, say): the store keeps no orphan.
         await files.remove([stored]).catch(() => undefined);
@@ -72,9 +76,11 @@ export function mountLinkPageImages(app: Hono<{ Variables: ImageVariables }>, de
     app.delete(path, async (c) => {
       const entered = await memberScopeOf(c, deps, c.req.header(UPLOAD_WORKSPACE_HEADER));
       if (entered instanceof Response) return entered;
+      const page = linkPageIdOf(c.req.header(UPLOAD_LINK_PAGE_HEADER));
+      if (page === false) return errorResponse('NOT_FOUND', 'That link page isn’t yours any more.');
       let previous: string | undefined;
       try {
-        ({ previous } = await saveProfileImage(entered.scope, { slot }));
+        ({ previous } = await saveProfileImage(entered.scope, { slot }, page));
       } catch (error) {
         return refusalResponse(error, errorResponse);
       }

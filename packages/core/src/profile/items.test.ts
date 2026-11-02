@@ -57,6 +57,9 @@ async function person(name: string, userId: string = randomUUID(), workspace = '
     actor: { type: 'member', id: created.memberId },
     userId,
   });
+  // A link page to hold the blocks (spec 0064: every block is on one of the person's pages), as a membership's own
+  // is made with it in the app.
+  await updateMyMemberProfile(scope, { handle: `page-${randomUUID().slice(0, 8)}` });
   return { ...created, userId, scope };
 }
 
@@ -610,7 +613,8 @@ describe('a link page', () => {
     const gone = await add(ada.scope, link('Gone', 'gone.dev'));
     const visitor = (n: number) => n.toString(16).padStart(32, '0');
     const day = (back: number) => new Date(Date.now() - back * 86_400_000).toISOString().slice(0, 10);
-    // A visitor's row and the day's row, as crm_count_profile_view keeps them.
+    // A visitor's row and the day's row, as crm_count_profile_view keeps them, on the person's primary page (the
+    // rows name no page, so they land on it).
     const view = async (back: number, n: number, views = 1) => {
       await testQuery(
         ownerUrl,
@@ -620,7 +624,7 @@ describe('a link page', () => {
       await testQuery(
         ownerUrl,
         `insert into auth.profile_view_days (user_id, workspace_id, day, views, visitors) values ($1, $2, $3, $4, 1)
-         on conflict (user_id, workspace_id, day) do update set views = profile_view_days.views + excluded.views,
+         on conflict (profile_id, day) do update set views = profile_view_days.views + excluded.views,
            visitors = profile_view_days.visitors + 1`,
         [ada.userId, ada.workspaceId, day(back), views],
       );

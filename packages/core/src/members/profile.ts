@@ -29,6 +29,7 @@ import {
   suggestHandle,
 } from '../booking/handles.ts';
 import { isPictureHidden, savePictureHidden } from '../booking/picture-choice.ts';
+import { linkPagesOf } from '../profile/pages.ts';
 import { checkedSocialLinks, sameSocialLinks, saveSocialLinks, socialLinksOfUser } from '../booking/socials.ts';
 import { touched } from '../engine/definitions.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
@@ -75,6 +76,7 @@ async function readProfile(
   memberId: string,
   extras: ProfileExtras,
   lock: boolean,
+  page?: string,
 ): Promise<MyProfile> {
   const query = tx
     .select({
@@ -95,7 +97,26 @@ async function readProfile(
   // The account's picture as our own origin serves it (the api's path), else the member's own https one.
   const image = extras.image ?? safeImage(row.avatarUrl ?? undefined);
   const userId = selfUserId(scope);
-  const held = userId === undefined ? undefined : (await publicProfilesOf(tx, scope.workspaceId, [userId])).get(userId);
+  // One of their link pages (spec 0064): the one asked for, else the primary page. A page that isn't theirs here is
+  // no page, refused rather than read as their primary, so a stale switcher never edits the wrong page.
+  const pages = userId === undefined ? [] : await linkPagesOf(tx, userId, scope.workspaceId);
+  const chosen = page === undefined ? pages.find((each) => each.isPrimary) : pages.find((each) => each.id === page);
+  if (page !== undefined && chosen === undefined) throw refuse('NOT_FOUND', 'That link page isn’t yours any more.');
+  const primary =
+    chosen === undefined && userId !== undefined
+      ? (await publicProfilesOf(tx, scope.workspaceId, [userId])).get(userId)
+      : undefined;
+  const held =
+    chosen === undefined
+      ? primary
+      : {
+          handle: chosen.handle,
+          bio: chosen.bio,
+          theme: chosen.theme,
+          indexable: chosen.indexable,
+          isShown: chosen.isPublic,
+          ...(chosen.shareImageVersion === undefined ? {} : { shareImageVersion: chosen.shareImageVersion }),
+        };
   // While they have no handle, the field starts from a free one made from their name.
   const suggested = held === undefined && userId !== undefined ? await suggestHandle(tx, row.name) : undefined;
   // The person's choice; a member with no identity of their own has none to make.
@@ -122,6 +143,7 @@ async function readProfile(
     ...(image === undefined ? {} : { image }),
     ...(extras.google === undefined ? {} : { google: extras.google }),
     ...(held === undefined ? {} : { handle: held.handle }),
+    ...(chosen === undefined ? {} : { profileId: chosen.id, pageName: chosen.name }),
     ...(suggested === undefined ? {} : { suggestedHandle: suggested }),
     bio: held?.bio ?? '',
     ...(pictureHidden === undefined ? {} : { pictureHidden }),
@@ -136,9 +158,9 @@ async function readProfile(
 }
 
 /** The caller's own profile in this workspace (any active member, themself only). */
-export async function getMyProfile(scope: EngineScope, extras: ProfileExtras = {}): Promise<MyProfile> {
+export async function getMyProfile(scope: EngineScope, extras: ProfileExtras = {}, page?: string): Promise<MyProfile> {
   const memberId = selfId(scope);
-  return inWorkspace(scope, (tx) => readProfile(tx, scope, memberId, extras, false));
+  return inWorkspace(scope, (tx) => readProfile(tx, scope, memberId, extras, false, page));
 }
 
 /**
@@ -160,6 +182,7 @@ export async function updateMyMemberProfile(
   extras: ProfileExtras = {},
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
+  page?: string,
 ): Promise<MyProfile> {
   const memberId = selfId(scope);
   const name = input.name?.trim();
@@ -170,7 +193,7 @@ export async function updateMyMemberProfile(
     scope,
     async (context) => {
       const { tx } = context;
-      const now = await readProfile(tx, scope, memberId, extras, true);
+      const now = await readProfile(tx, scope, memberId, extras, true, page);
       const before: Record<string, unknown> = {};
       const after: Record<string, unknown> = {};
       if (name !== undefined && name !== now.name) {
@@ -212,7 +235,7 @@ export async function updateMyMemberProfile(
         if (userId === undefined) throw refuseOn('FORBIDDEN', 'Only a signed in person has a handle.', 'handle');
         const nextHandle = handle ?? now.handle;
         if (nextHandle === undefined) throw refuseOn('VALUE_REQUIRED', 'Pick a handle first.', 'handle');
-        await savePublicProfile(tx, userId, scope.workspaceId, nextHandle, bio ?? now.bio);
+        await savePublicProfile(tx, userId, scope.workspaceId, nextHandle, bio ?? now.bio, page);
         if (handle !== undefined) {
           before.handle = now.handle ?? null;
           after.handle = handle;
@@ -253,9 +276,9 @@ export async function updateMyMemberProfile(
       const claimant = input.handle === undefined ? undefined : selfUserId(scope);
       if (Object.keys(after).length === 0) {
         if (claimant === undefined || now.isPublic !== false) return now;
-        return { ...now, isPublic: await showLinkPage(tx, claimant, scope.workspaceId) };
+        return { ...now, isPublic: await showLinkPage(tx, claimant, scope.workspaceId, page) };
       }
-      if (claimant !== undefined) await showLinkPage(tx, claimant, scope.workspaceId);
+      if (claimant !== undefined) await showLinkPage(tx, claimant, scope.workspaceId, page);
       if (after.name !== undefined || 'timeZone' in after || 'jobTitle' in after) {
         await tx
           .update(members)
@@ -275,7 +298,7 @@ export async function updateMyMemberProfile(
         source,
       );
       context.record({ members: [memberId] });
-      return readProfile(tx, scope, memberId, extras, false);
+      return readProfile(tx, scope, memberId, extras, false, page);
     },
     hooks,
   );
@@ -287,14 +310,18 @@ export async function updateMyMemberProfile(
  * a page made for them that nobody has chosen for goes live, once, and one they set Private stays so. With `live`,
  * it is their Live or Private switch. Answers whether the page is public now; false when they have no page here.
  */
-export async function showMyLinkPage(scope: EngineScope, live?: boolean): Promise<{ readonly isPublic: boolean }> {
+export async function showMyLinkPage(
+  scope: EngineScope,
+  live?: boolean,
+  page?: string,
+): Promise<{ readonly isPublic: boolean }> {
   const userId = selfUserId(scope);
   if (userId === undefined) return { isPublic: false };
   return {
     isPublic: await inWorkspace(scope, (tx) =>
       live === undefined
-        ? showLinkPage(tx, userId, scope.workspaceId)
-        : setLinkPageLive(tx, userId, scope.workspaceId, live),
+        ? showLinkPage(tx, userId, scope.workspaceId, page)
+        : setLinkPageLive(tx, userId, scope.workspaceId, live, page),
     ),
   };
 }

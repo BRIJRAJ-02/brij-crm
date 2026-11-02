@@ -175,7 +175,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       // A booking made from a link page (spec 0061, AC-6119).
       { name: 'crm_count_profile_booking', owner: 'crm_handle' },
       { name: 'crm_count_profile_view', owner: 'crm_handle' },
+      // Several link pages (spec 0064, migration 0166): made, deleted, listed, renamed and made primary.
+      { name: 'crm_create_profile_page', owner: 'crm_handle' },
       { name: 'crm_delete_profile_item', owner: 'crm_handle' },
+      { name: 'crm_delete_profile_page', owner: 'crm_handle' },
       // Pictures no block uses, dropped by the daily cleanup (spec 0061).
       { name: 'crm_drop_profile_images', owner: 'crm_handle' },
       // The workspace's automation task (parity #53, migration 0140).
@@ -223,13 +226,17 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_items_archived', owner: 'crm_handle' },
       { name: 'crm_profile_items_public', owner: 'crm_handle' },
       { name: 'crm_profile_look', owner: 'crm_handle' },
+      { name: 'crm_profile_pages', owner: 'crm_handle' },
       // The share QR's style (spec 0061, AC-6124).
       { name: 'crm_profile_qr_style', owner: 'crm_handle' },
       // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112).
       { name: 'crm_profile_share_image', owner: 'crm_handle' },
+      // A person's pictures go with their last page in a workspace (spec 0064, migration 0166): a trigger's.
+      { name: 'crm_public_profiles_drop_images', owner: 'crm_handle' },
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
+      { name: 'crm_rename_profile_page', owner: 'crm_handle' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_profile_accent', owner: 'crm_handle' },
       { name: 'crm_save_profile_image', owner: 'crm_handle' },
@@ -243,6 +250,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
+      { name: 'crm_set_primary_profile_page', owner: 'crm_handle' },
       // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
@@ -290,7 +298,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       // A plpgsql body since spec 0061: one view, then each fact's value, a new one past 50 folded into Other.
       { name: 'crm_count_profile_view', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it answers whether the block was the owner's, and closes the gap it left.
+      // Several link pages (spec 0064, migration 0166): plpgsql bodies that check the workspace, the membership and
+      // the limit of 5, and raise the taken handle's unique violation.
+      { name: 'crm_create_profile_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_delete_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      // A plpgsql body: it refuses a person's only page and passes the primary page on.
+      { name: 'crm_delete_profile_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it answers how many unused pictures' rows it removed.
       { name: 'crm_drop_profile_images', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_automation', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -335,11 +348,15 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_items_archived', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_look', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_qr_style', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_share_image', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A trigger's plpgsql body: a person's pictures go with their last page in a workspace (migration 0166).
+      { name: 'crm_public_profiles_drop_images', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_rename_profile_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it checks the workspace and the membership, and raises PROFILE_MISSING (spec 0060).
       { name: 'crm_save_profile_accent', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -362,6 +379,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         atomic: true,
       },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_set_primary_profile_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it checks the workspace and the membership before it writes, as the one below does.
       { name: 'crm_set_public_profile_live', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it checks the workspace and the membership before it writes.
@@ -593,55 +611,69 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_qr_style',
         'crm_profile_qr_style',
         'crm_sitemap_handles',
+        // Several link pages (spec 0064, migration 0166). Which page a call means runs only inside the others, as
+        // the pack does, so it has no signature below.
+        'crm_profile_page_of',
+        'crm_public_profiles_drop_images',
+        'crm_profile_pages',
+        'crm_create_profile_page',
+        'crm_rename_profile_page',
+        'crm_set_primary_profile_page',
+        'crm_delete_profile_page',
       ],
       [
-        'crm_save_public_profile(uuid, uuid, text, text)',
+        'crm_save_public_profile(uuid, uuid, text, text, uuid)',
         'crm_public_profiles_of(uuid[], uuid)',
         'crm_handle_owner(text)',
         'crm_save_picture_hidden(uuid, boolean)',
         'crm_pictures_hidden(uuid[])',
         'crm_save_social_links(uuid, text[], text[])',
         'crm_social_links_of(uuid[])',
-        'crm_profile_items(uuid, uuid)',
-        'crm_profile_items_archived(uuid, uuid)',
-        'crm_profile_items_public(uuid, uuid, smallint, uuid, integer)',
-        'crm_save_profile_item(uuid, uuid, uuid, text, jsonb, uuid, uuid)',
-        'crm_order_profile_items(uuid, uuid, uuid[])',
-        'crm_archive_profile_item(uuid, uuid, uuid, boolean)',
-        'crm_delete_profile_item(uuid, uuid, uuid)',
+        'crm_profile_items(uuid, uuid, uuid)',
+        'crm_profile_items_archived(uuid, uuid, uuid)',
+        'crm_profile_items_public(uuid, uuid, smallint, uuid, integer, uuid)',
+        'crm_save_profile_item(uuid, uuid, uuid, text, jsonb, uuid, uuid, uuid)',
+        'crm_order_profile_items(uuid, uuid, uuid[], uuid)',
+        'crm_archive_profile_item(uuid, uuid, uuid, boolean, uuid)',
+        'crm_delete_profile_item(uuid, uuid, uuid, uuid)',
         'crm_place_profile_page(uuid, uuid, uuid)',
-        'crm_count_profile_view(uuid, uuid, text, text, text, text, text)',
+        'crm_count_profile_view(uuid, uuid, text, text, text, text, text, uuid)',
         'crm_count_item_press(uuid, uuid, uuid, text)',
-        'crm_profile_counts(uuid, uuid, date, date)',
+        'crm_profile_counts(uuid, uuid, date, date, uuid)',
         'crm_sweep_profile_counts(integer)',
-        'crm_save_profile_theme(uuid, uuid, jsonb)',
-        'crm_save_profile_indexable(uuid, uuid, boolean)',
-        'crm_import_profile_links(uuid, uuid, uuid, text, jsonb, jsonb)',
-        'crm_save_profile_share_image(uuid, uuid, bytea, text)',
-        'crm_profile_share_image(uuid, uuid)',
+        'crm_save_profile_theme(uuid, uuid, jsonb, uuid)',
+        'crm_save_profile_indexable(uuid, uuid, boolean, uuid)',
+        'crm_import_profile_links(uuid, uuid, uuid, text, jsonb, jsonb, uuid)',
+        'crm_save_profile_share_image(uuid, uuid, bytea, text, uuid)',
+        'crm_profile_share_image(uuid, uuid, uuid)',
         'crm_handle_taken(text)',
         'crm_profile_handles_of(uuid)',
         'crm_ensure_public_profile(uuid, uuid, text)',
-        'crm_show_public_profile(uuid, uuid)',
-        'crm_set_public_profile_live(uuid, uuid, boolean)',
+        'crm_show_public_profile(uuid, uuid, uuid)',
+        'crm_set_public_profile_live(uuid, uuid, boolean, uuid)',
         'crm_sweep_released_handles(integer)',
-        'crm_profile_look(uuid, uuid)',
-        'crm_save_profile_accent(uuid, uuid, text, text)',
-        'crm_save_profile_image(uuid, uuid, text, text, text, text)',
+        'crm_profile_look(uuid, uuid, uuid)',
+        'crm_save_profile_accent(uuid, uuid, text, text, uuid)',
+        'crm_save_profile_image(uuid, uuid, text, text, text, text, uuid)',
         'crm_count_profile_booking(text, uuid)',
-        'crm_profile_insights(uuid, uuid, date, date)',
+        'crm_profile_insights(uuid, uuid, date, date, uuid)',
         'crm_add_profile_image(uuid, uuid, uuid, text, text, text, integer, integer, integer)',
         'crm_profile_image_of(uuid, uuid, uuid)',
-        'crm_profile_image_public(uuid, uuid, uuid)',
+        'crm_profile_image_public(uuid, uuid, uuid, uuid)',
         'crm_profile_images_unused(integer)',
         'crm_drop_profile_images(uuid[])',
-        'crm_save_profile_qr_style(uuid, uuid, jsonb)',
-        'crm_profile_qr_style(uuid, uuid)',
+        'crm_save_profile_qr_style(uuid, uuid, jsonb, uuid)',
+        'crm_profile_qr_style(uuid, uuid, uuid)',
         'crm_sitemap_handles(text, integer)',
+        'crm_profile_pages(uuid, uuid)',
+        'crm_create_profile_page(uuid, uuid, uuid, text, text)',
+        'crm_rename_profile_page(uuid, uuid, uuid, text)',
+        'crm_set_primary_profile_page(uuid, uuid, uuid)',
+        'crm_delete_profile_page(uuid, uuid, uuid)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 43 }, () => 'app'),
+      Array.from({ length: 48 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2300,6 +2332,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'public_handles INSERT',
       'public_handles SELECT',
       'public_profiles DELETE',
+      // Its owner deletes one of their several link pages (spec 0064, AC-6416, migration 0166).
+      'public_profiles DELETE',
       'public_profiles INSERT',
       'public_profiles SELECT',
       'social_links DELETE',
@@ -2357,6 +2391,10 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth."user".id SELECT',
       'auth."user".image SELECT',
       'auth."user".name SELECT',
+      // Several link pages (spec 0064, migration 0166): a kept block adopted by its person's first page there, the
+      // page a handle names, and a page's private name, primacy and place.
+      'auth.profile_items.profile_id UPDATE',
+      'auth.public_handles.profile_id UPDATE',
       // Letting an old handle go into the hold to make room at the cap (late trap #76, migration 0124): the person
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
@@ -2378,6 +2416,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // Whether search engines may show their page (spec 0055, migration 0108): one more column, and only
       // through crm_save_profile_indexable. This line is the whole of what that spec widened.
       'auth.public_profiles.indexable UPDATE',
+      'auth.public_profiles.is_primary UPDATE',
+      'auth.public_profiles.name UPDATE',
+      'auth.public_profiles.position UPDATE',
       // The share QR's style (spec 0061, migration 0147), only through crm_save_profile_qr_style.
       'auth.public_profiles.qr_style UPDATE',
       // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112): three more

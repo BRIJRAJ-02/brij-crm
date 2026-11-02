@@ -149,8 +149,13 @@ async function ensureUuidV7(client: pg.Client): Promise<void> {
  * Applies Graphile Worker's migrations, then ours, then the queue rights, all
  * as the owner on `ownerUrl` (a direct connection: Graphile's migrations
  * notify). Graphile's are idempotent, so each run only applies what is new.
+ * `migrationsFolder` is for a migration's own test, which stops short of it to stage the data it moves.
  */
-export async function applyMigrations(ownerUrl: string, applicationName: string): Promise<void> {
+export async function applyMigrations(
+  ownerUrl: string,
+  applicationName: string,
+  migrationsFolder: string = fileURLToPath(new URL('../migrations', import.meta.url)),
+): Promise<void> {
   const client = new pg.Client({ connectionString: ownerUrl, application_name: applicationName });
   await client.connect();
   try {
@@ -163,9 +168,7 @@ export async function applyMigrations(ownerUrl: string, applicationName: string)
   const second = new pg.Client({ connectionString: ownerUrl, application_name: applicationName });
   await second.connect();
   try {
-    await migrate(drizzle({ client: second }), {
-      migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)),
-    });
+    await migrate(drizzle({ client: second }), { migrationsFolder });
     await grantQueueRights(second);
   } finally {
     await second.end();

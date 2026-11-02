@@ -14,7 +14,7 @@ import {
   ProfilePageChoice,
   ProfileQrStyle,
 } from './booking/link-page.ts';
-import { PROFILE_INSIGHT_DAYS } from './booking/link-page-rules.ts';
+import { linkPageNameProblem, PROFILE_INSIGHT_DAYS } from './booking/link-page-rules.ts';
 import { PageTheme } from './booking/page-theme.ts';
 import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
@@ -22,6 +22,15 @@ import { checkSocialLink, socialLinkProblem } from './values/social.ts';
 import { SOCIAL_LINK_NAMES, SOCIAL_LINK_NETWORKS, SOCIAL_LINKS_MAX } from './values/social-networks.ts';
 import { BrandHex, ImageVersion } from './workspace-brand.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+
+/**
+ * The input of every procedure that reads or writes one link page (spec 0064, AC-6413): the workspace, and which of
+ * the caller's pages there. Left out, the caller's primary page, so every call made before several pages reads and
+ * writes exactly the page it did. A page that is not the caller's own in that workspace is no page at all.
+ */
+export const LinkPageScoped = WorkspaceScoped.extend({ profileId: Uuid.optional() });
+/** The input of every procedure that reads or writes one link page. */
+export type LinkPageScoped = z.infer<typeof LinkPageScoped>;
 
 /** A member's name in a workspace: 1 to 80 characters, trimmed (AC-821). */
 export const MemberName = z.string().trim().min(1, 'Enter your name.').max(80, 'Use at most 80 characters.');
@@ -135,6 +144,13 @@ export const MyProfile = z.object({
   /** Their handle in this workspace (each workspace has its own, spec 0056); absent until they pick one. */
   handle: z.string().optional(),
   /**
+   * Which of their link pages this profile reads (spec 0064, AC-6413): the one asked for, else their primary page.
+   * Absent with no handle. The handle, bio, look, search setting, Live switch and share image below are that page's.
+   */
+  profileId: Uuid.optional(),
+  /** That page's private name (spec 0064, AC-6413); empty until they give one. Absent with no handle. */
+  pageName: z.string().optional(),
+  /**
    * The other workspaces they belong to where they already have a link page (spec 0056, AC-5618): only workspaces
    * they are an active member of, as ids. Absent when there are none. The ids are named in the browser, from the
    * workspaces `me.get` already answers: a workspace's name is the directory's, and the member door has no
@@ -192,7 +208,7 @@ const SHARE_IMAGE_MAX_BASE64 = Math.ceil(SHARE_IMAGE_MAX_BYTES / 3) * 4;
  * the one JSON procedure that carries bytes; `image` absent clears it. The length is checked here and the bytes are
  * checked again on the server, which is what decides: a client can claim any type it likes.
  */
-export const SetShareImageInput = WorkspaceScoped.extend({
+export const SetShareImageInput = LinkPageScoped.extend({
   image: z
     .object({
       type: z.enum(SHARE_IMAGE_TYPES, { error: 'A share image has to be a PNG or a JPEG.' }),
@@ -210,7 +226,7 @@ export type SetShareImageInput = z.infer<typeof SetShareImageInput>;
  * A change to the caller's own profile: a new name, a time zone (null follows the workspace's), a handle and bio,
  * whether their picture stays off their public pages, or their social links; any of them at once.
  */
-export const UpdateMyProfileInput = WorkspaceScoped.extend({
+export const UpdateMyProfileInput = LinkPageScoped.extend({
   name: MemberName.optional(),
   timeZone: TimeZoneName.nullable().optional(),
   /** Their job title; empty clears it (spec 0037, AC-1441). */
@@ -231,7 +247,7 @@ export type UpdateMyProfileInput = z.infer<typeof UpdateMyProfileInput>;
  * Adds or edits one block of the caller's link page (spec 0051, AC-5107): idempotent on the id the browser minted,
  * so a retry of the same add answers the block already made and adds nothing.
  */
-export const SaveProfileItemInput = WorkspaceScoped.extend({
+export const SaveProfileItemInput = LinkPageScoped.extend({
   id: Uuid,
   block: ProfileBlock,
   /** An edit of a block the editor showed: refused as gone when another tab deleted it, never made again. */
@@ -242,7 +258,7 @@ export const SaveProfileItemInput = WorkspaceScoped.extend({
 export type SaveProfileItemInput = z.infer<typeof SaveProfileItemInput>;
 
 /** The caller's live blocks in their new order: exactly the live blocks, each once (AC-5116). */
-export const OrderProfileItemsInput = WorkspaceScoped.extend({
+export const OrderProfileItemsInput = LinkPageScoped.extend({
   ids: z.array(Uuid).min(1).max(60),
   mutationId: Uuid,
 });
@@ -250,7 +266,7 @@ export const OrderProfileItemsInput = WorkspaceScoped.extend({
 export type OrderProfileItemsInput = z.infer<typeof OrderProfileItemsInput>;
 
 /** Archives one block of the caller's link page, or restores it to the end (AC-5106). */
-export const ArchiveProfileItemInput = WorkspaceScoped.extend({
+export const ArchiveProfileItemInput = LinkPageScoped.extend({
   id: Uuid,
   archived: z.boolean(),
   mutationId: Uuid,
@@ -259,7 +275,7 @@ export const ArchiveProfileItemInput = WorkspaceScoped.extend({
 export type ArchiveProfileItemInput = z.infer<typeof ArchiveProfileItemInput>;
 
 /** Deletes one block of the caller's link page for good (AC-5106: the editor asks first). */
-export const DeleteProfileItemInput = WorkspaceScoped.extend({
+export const DeleteProfileItemInput = LinkPageScoped.extend({
   id: Uuid,
   mutationId: Uuid,
 });
@@ -271,7 +287,7 @@ export type DeleteProfileItemInput = z.infer<typeof DeleteProfileItemInput>;
  * the same import adds nothing twice, and `url` is the page to read, which must be one of the services on the
  * allow list. Every row it makes lands hidden; nothing it brings is on the public page until a person turns it on.
  */
-export const ImportProfileLinksInput = WorkspaceScoped.extend({
+export const ImportProfileLinksInput = LinkPageScoped.extend({
   id: Uuid,
   url: z.string().max(400),
   mutationId: Uuid,
@@ -297,7 +313,7 @@ export type ProfileLook = z.infer<typeof ProfileLook>;
  * Sets or clears the caller's own link page accent pair (spec 0060, AC-14), whole: `null` clears one, and the page
  * then follows the workspace's brand. A dark accent needs a light one beside it.
  */
-export const SaveProfileAccentInput = WorkspaceScoped.extend({
+export const SaveProfileAccentInput = LinkPageScoped.extend({
   accent: BrandHex.nullable(),
   accentDark: BrandHex.nullable(),
   mutationId: Uuid,
@@ -314,7 +330,7 @@ export const ProfileAccent = z.object({ accent: BrandHex.nullable(), accentDark:
 export type ProfileAccent = z.infer<typeof ProfileAccent>;
 
 /** Which period the link page's figures cover (spec 0061, AC-6118): 7, 30 or 90 days, 30 when absent. */
-export const ProfileCountsInput = WorkspaceScoped.extend({
+export const ProfileCountsInput = LinkPageScoped.extend({
   days: z
     .union(
       PROFILE_INSIGHT_DAYS.map((days) => z.literal(days)),
@@ -330,7 +346,7 @@ export type ProfileCountsInput = z.infer<typeof ProfileCountsInput>;
  * owner presses "Use the site's picture". The link is named by id: the address read is the one saved, never an
  * input, so this is never a way to have our server read an address somebody chose for it.
  */
-export const FetchThumbnailInput = WorkspaceScoped.extend({ id: Uuid, mutationId: Uuid });
+export const FetchThumbnailInput = LinkPageScoped.extend({ id: Uuid, mutationId: Uuid });
 /** Fetches a link's own site picture as its thumbnail. */
 export type FetchThumbnailInput = z.infer<typeof FetchThumbnailInput>;
 
@@ -343,30 +359,93 @@ export const FetchedThumbnail = z.union([
 export type FetchedThumbnail = z.infer<typeof FetchedThumbnail>;
 
 /** Saves the share QR's style (spec 0061, AC-6124), whole: `null` clears it back to the plain code. */
-export const SaveQrStyleInput = WorkspaceScoped.extend({ style: ProfileQrStyle.nullable(), mutationId: Uuid });
+export const SaveQrStyleInput = LinkPageScoped.extend({ style: ProfileQrStyle.nullable(), mutationId: Uuid });
 /** Saves the share QR's style. */
 export type SaveQrStyleInput = z.infer<typeof SaveQrStyleInput>;
+
+/** A link page's private name (spec 0064, AC-6413): at most 40 characters on one line; empty is no name. */
+export const LinkPageName = z
+  .string()
+  .trim()
+  .check((ctx) => {
+    const problem = linkPageNameProblem(ctx.value);
+    if (problem !== undefined) ctx.issues.push({ code: 'custom', message: problem, input: ctx.value });
+  });
+/** A link page's private name. */
+export type LinkPageName = z.infer<typeof LinkPageName>;
+
+/**
+ * One of the caller's link pages in a workspace, as the switcher draws its tile (AC-6414): its handle, private name,
+ * whether it is the primary page and public, and its look for the small thumbnail.
+ */
+export const LinkPageSummary = z.object({
+  id: Uuid,
+  handle: z.string(),
+  name: z.string(),
+  isPrimary: z.boolean(),
+  isPublic: z.boolean(),
+  bio: z.string(),
+  theme: PageTheme,
+});
+/** One of the caller's link pages. */
+export type LinkPageSummary = z.infer<typeof LinkPageSummary>;
+
+/**
+ * A new link page (AC-6414): only a handle and a private name. Idempotent on `id`, which the browser mints, so a retry
+ * answers the page already made. It is live at once, since its owner made it on purpose (spec 0058, AC-23).
+ */
+export const CreateLinkPageInput = WorkspaceScoped.extend({
+  id: Uuid,
+  handle: PublicHandle,
+  name: LinkPageName,
+  mutationId: Uuid,
+});
+/** A new link page. */
+export type CreateLinkPageInput = z.infer<typeof CreateLinkPageInput>;
+
+/** Renames one of the caller's pages; empty clears the name. */
+export const RenameLinkPageInput = WorkspaceScoped.extend({ profileId: Uuid, name: LinkPageName, mutationId: Uuid });
+/** Renames one of the caller's pages. */
+export type RenameLinkPageInput = z.infer<typeof RenameLinkPageInput>;
+
+/** One of the caller's pages, for Make primary and Delete. */
+export const LinkPageInput = WorkspaceScoped.extend({ profileId: Uuid, mutationId: Uuid });
+/** One of the caller's pages. */
+export type LinkPageInput = z.infer<typeof LinkPageInput>;
+
+/**
+ * The caller's several link pages (spec 0064, AC-6413 to AC-6416), each call answering the whole list as it stands.
+ * `create` is refused `LIMIT_REACHED` at 5 and `SLUG_TAKEN` on a handle held elsewhere; `delete` is refused
+ * `CONFIG_INVALID` for the only page, and keeps the page's handles reserved to the caller (spec 0056).
+ */
+export const linkPagesContract = {
+  list: oc.input(WorkspaceScoped).output(z.array(LinkPageSummary)),
+  create: oc.input(CreateLinkPageInput).output(z.array(LinkPageSummary)),
+  rename: oc.input(RenameLinkPageInput).output(z.array(LinkPageSummary)),
+  setPrimary: oc.input(LinkPageInput).output(z.array(LinkPageSummary)),
+  delete: oc.input(LinkPageInput).output(z.array(LinkPageSummary)),
+};
 
 /**
  * The profile procedures: any active member, for themself only. The link page's (spec 0051) act on the caller's own
  * account in every workspace: the owner is the session's, never an input, and no role reaches another person's.
  */
 export const profileContract = {
-  get: oc.input(WorkspaceScoped).output(MyProfile),
+  get: oc.input(LinkPageScoped).output(MyProfile),
   update: oc.input(UpdateMyProfileInput).output(MyProfile),
-  items: oc.input(WorkspaceScoped).output(ProfileItems),
-  pageChoices: oc.input(WorkspaceScoped).output(z.array(ProfilePageChoice)),
+  items: oc.input(LinkPageScoped).output(ProfileItems),
+  pageChoices: oc.input(LinkPageScoped).output(z.array(ProfilePageChoice)),
   /** The forms the caller may place on their link page (spec 0052, AC-5213), their own and not placed yet. */
-  formChoices: oc.input(WorkspaceScoped).output(z.array(ProfileFormChoice)),
+  formChoices: oc.input(LinkPageScoped).output(z.array(ProfileFormChoice)),
   /** The look of the caller's own link page (spec 0054): read with the profile, saved whole. */
-  saveTheme: oc.input(WorkspaceScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
+  saveTheme: oc.input(LinkPageScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
   /** The caller's own link page accent and photos (spec 0060), for the Design panel. */
-  look: oc.input(WorkspaceScoped).output(ProfileLook),
+  look: oc.input(LinkPageScoped).output(ProfileLook),
   /** The caller's own link page accent pair (spec 0060, AC-14): their page and personal booking pages wear it. */
   saveAccent: oc.input(SaveProfileAccentInput).output(ProfileAccent),
   /** Whether search engines may show the caller's own link page (spec 0055, AC-5506): read with the profile. */
   setIndexable: oc
-    .input(WorkspaceScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))
+    .input(LinkPageScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))
     .output(z.object({ indexable: z.boolean() })),
   /**
    * The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511). `image` absent clears it back
@@ -386,7 +465,7 @@ export const profileContract = {
    * which is what the editor reads to decide whether to offer the button at all.
    */
   walletLink: oc
-    .input(WorkspaceScoped.extend({ wallet: z.enum(WALLET_KINDS) }))
+    .input(LinkPageScoped.extend({ wallet: z.enum(WALLET_KINDS) }))
     .output(z.object({ url: z.string() }).or(z.object({ off: z.literal(true) }))),
   /**
    * The link page's figures (spec 0051, AC-5127; spec 0061, AC-6118, AC-6119): views, visitors and each block's
@@ -396,7 +475,7 @@ export const profileContract = {
   /** Fetches a link's own site picture as its thumbnail (spec 0061, AC-6101). */
   fetchThumbnail: oc.input(FetchThumbnailInput).output(FetchedThumbnail),
   /** The share QR's style (spec 0061, AC-6124), absent keys for the plain code. */
-  qrStyle: oc.input(WorkspaceScoped).output(ProfileQrStyle),
+  qrStyle: oc.input(LinkPageScoped).output(ProfileQrStyle),
   /** Saves the share QR's style (spec 0061, AC-6124). Refused with a hint when the colour is too light to scan. */
   saveQrStyle: oc.input(SaveQrStyleInput).output(ProfileQrStyle),
   /**
@@ -406,6 +485,8 @@ export const profileContract = {
    * own choice from then on. Answers whether the page is public now.
    */
   show: oc
-    .input(WorkspaceScoped.extend({ mutationId: Uuid, live: z.boolean().optional() }))
+    .input(LinkPageScoped.extend({ mutationId: Uuid, live: z.boolean().optional() }))
     .output(z.object({ isPublic: z.boolean() })),
+  /** The caller's several link pages in this workspace (spec 0064, AC-6413 to AC-6416). */
+  pages: linkPagesContract,
 };

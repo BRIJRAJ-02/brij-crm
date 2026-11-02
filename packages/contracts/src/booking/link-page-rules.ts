@@ -684,3 +684,25 @@ export function checkContactCard(typed: Readonly<Partial<Record<ProfileContactFi
 
 /** How many days the editor's figures cover (AC-5127), and the period before them is the comparison. */
 export const PROFILE_COUNT_DAYS = 30;
+
+/** How many link pages one person keeps in one workspace (spec 0064, AC-6413): the database refuses a sixth too. */
+export const LINK_PAGES_MAX = 5;
+
+/** The longest private name a link page takes (spec 0064, AC-6413), "Side project". */
+export const LINK_PAGE_NAME_MAX = 40;
+
+/** Why a private name can't be saved as typed, or undefined: one line, at most 40, the same rule the column keeps. */
+export function linkPageNameProblem(name: string): string | undefined {
+  const trimmed = name.trim();
+  if (trimmed.length > LINK_PAGE_NAME_MAX) return `Keep the name to ${String(LINK_PAGE_NAME_MAX)} characters.`;
+  // Any control character, a line break among them, as the column's check refuses. Code units suffice: every control
+  // character is one.
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const unit = trimmed.charCodeAt(index);
+    if (unit < 0x20 || unit === 0x7f) return 'Keep the name to one line.';
+  }
+  return undefined;
+}
+
+/** The sentence a sixth page is refused with (AC-6413), the same on the tile and from the server. */
+export const LINK_PAGES_FULL = `You have ${String(LINK_PAGES_MAX)} link pages, the most one person can have here.`;
