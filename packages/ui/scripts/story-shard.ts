@@ -39,13 +39,15 @@ export function storyFiles(root: string = UI): readonly StoryFile[] {
 }
 
 /**
- * The stories kept to a page of their own. They were in front of one shard when it ran
- * out of memory once (run 41461134131), which is the whole case against them: the same
- * four ran among 178 in a single page on a branch with no library change and that page
- * finished. They are separated because it is cheap, not because they are guilty. The
- * crash point is a distribution rather than a property of any tree, so neither a pass
- * nor a failure of one run says much — see docs/runbooks/story-page-leak.md before
- * changing this list, and don't bisect a tree over it.
+ * The stories kept to a page of their own. Quarantined for cheap and historical reasons,
+ * NOT because any evidence points at them. They were in front of one shard when it ran
+ * out of memory once (41461134131); since then the same four ran among 178 in a single
+ * page on a branch with no library change and that page finished, and on 41485749715
+ * they passed 4 of 4 in their own page while a pass of ordinary files died after 3 and
+ * shard 1 took all 91. A page can die after three of anything. The crash point is a
+ * distribution rather than a property of any tree, so neither a pass nor a failure of
+ * one run says much — read docs/runbooks/story-page-leak.md before changing this list,
+ * and don't bisect a tree over it.
  */
 export const KEEPS_A_PAGE: readonly string[] = [
   'src/modules/WeekCalendar/WeekCalendar.stories.tsx',

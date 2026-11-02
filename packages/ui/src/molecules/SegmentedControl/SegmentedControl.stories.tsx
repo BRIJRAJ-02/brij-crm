@@ -192,9 +192,14 @@ export const ColourDots: Story = {
     const all = canvas.getByRole('radio', { name: 'All calendars' });
     await expect(all).toBeChecked();
     await userEvent.click(all);
-    // The click leaves the pointer on "All calendars", and the arrow then moves the selection off it, so the
-    // shot caught a segment that is hovered but no longer chosen: its label reads --text where at rest it
-    // reads --text-secondary (measured, 26 against 92 at its darkest). Step off before the keyboard.
+    // A play function that clicks and then uses the keyboard leaves the pointer where it clicked, so the
+    // screenshot catches a control that is hovered but no longer chosen. Unhover before the keyboard.
+    //
+    // This is the third story with that shape today (LongText's Show less, Sidebar's KeptFold, this one), and
+    // the signature is always the same: --text at 26 against --text-secondary at 92, measured at the label's
+    // darkest pixel in light. The DIRECTION is not guessable from a diff image, which only says two things
+    // differ: here and in LongText the render held the hover, in KeptFold the committed baseline did. So
+    // measure the label in both images and fix whichever is wrong; do not assume the new one is the hover.
     await userEvent.unhover(all);
     await userEvent.keyboard('{ArrowRight}');
     await expect(canvas.getByRole('radio', { name: 'Work' })).toBeChecked();

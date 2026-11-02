@@ -28,6 +28,7 @@ run behind it, and so far nothing has that.
 | 41464493730 | `wip/embed-only`, no `packages/ui` change | one page, 178 files | passed **178** |
 | (two more, same branch, same day) | `wip/embed-only` | one page, 178 files | passed **178**, twice |
 | 41478500792 | `wip/embed-only`, same branch | one page, fresh runner, nothing before it | crashed after **37** of 178 |
+| 41485749715 | car, f6d75ff14 | pass split | shard 1 **91/91**; the quarantined four **4/4**; the other 86 crashed after **3** |
 
 Read the first six rows alone and our tree looks implicated. Read the last four and it plainly is not: the
 same unchanged branch passes its whole set three times and then dies at 37.
@@ -46,10 +47,13 @@ same unchanged branch passes its whole set three times and then dies at 37.
 
 ## What we believed and withdrew
 
-- **"The four files are the cause."** WeekCalendar, LinkPage, SettingsLayout and LinkList were the files in
-  front of one shard when it died once (41461134131). They ran in one page among 178 on `wip/embed-only` and
-  that page finished. They are not the cause; `KEEPS_A_PAGE` keeps them apart because it is cheap, not
-  because they are guilty.
+- **"The four files are the cause."** Refuted, not refined. WeekCalendar, LinkPage, SettingsLayout and
+  LinkList were the files in front of one shard when it died once (41461134131). They ran in one page among
+  178 on `wip/embed-only` and that page finished. Then on 41485749715 they passed **4 of 4 in a page of their
+  own**, shard 1 took all 91, and the pass holding the other 86 ordinary files **died after 3**. So the
+  quarantine is holding files that are not the problem while the crash walks off into ordinary ones, and a
+  page can die after three of anything. `KEEPS_A_PAGE` keeps them apart for cheap and historical reasons; no
+  evidence now points at them.
 - **"The pass split fixed WebKit."** It has exactly one green behind it (41469582229) and has not been
   repeated. At this variance one pass proves no more than one failure does.
 - **"The runner was the ceiling."** Disproved by 41469582229, where the 91 ran last on a used machine and
@@ -73,3 +77,29 @@ as files run, on a branch that both passes and crashes, rather than to look for 
 
 `KEEPS_A_PAGE` in `packages/ui/scripts/story-shard.ts` can hold any set, including one file, if that helps an
 experiment. Changing it needs no code change elsewhere.
+
+---
+
+## A separate problem found the same day: baselines drift under the threshold
+
+Not the page leak. Recorded here because it has the same shape — a check that cannot fail — and because the
+next person to see one of these two stories go red needs to know it had been moving for a while.
+
+The screenshot comparator tolerates a difference up to a threshold. Two stories are **passing** today while
+their committed baseline and what CI actually renders are measurably apart (run 41485749715, light):
+
+| Story | Differing pixels | Worst channel delta | Where |
+|---|---|---|---|
+| `Sidebar/Item-Menu` | 13,273 of 1,080,000 | 47 | the menu, x 32..507, y 131..232 |
+| `Sidebar/Section-Menu-And-Fold` | 1,201 of 854,400 | 69 | scattered; mean, min and max over the sidebar are identical, so antialiasing |
+
+Item-Menu is the one that matters: thirteen thousand pixels moving by up to 47 is a real change, consistent
+with this branch's shadow and border tokens moving a menu, and the comparator is designed not to see it. We
+only know because the images were diffed by hand after the job had already passed.
+
+So the suite tolerates change until something tips over, at which point it reads as a sudden regression with
+no cause. If `Item-Menu` fails later, it did not break then: it has been drifting since the token pass.
+
+**Do not tighten the threshold to fix this,** and do not adopt the drifted shots as baselines. A passing
+baseline that has drifted is drift, not a decision, and changing a comparator threshold on a branch that is
+trying to land turns a landing into a week. It needs its own pass, deliberately, when nothing is in flight.
