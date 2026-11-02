@@ -131,6 +131,7 @@ function folderInAddress(): string | undefined {
 const footOf = (mode: 'light' | 'dark' | 'system') => (
   <BookingFoot
     page="booking_profile"
+    placement="card"
     claimHref={claimPageHref('booking_profile')}
     // Follow the visitor (spec 0060, AC-15) pins nothing, so the mark follows the visitor too.
     {...(mode === 'system' ? {} : { scheme: mode })}
@@ -332,7 +333,11 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
   // While loading: the person's and the blocks' own shapes at once (this is the page's first paint, so there is no
   // content for a skeleton to flash in front of), so nothing moves when they arrive.
   if (loaded.state === 'loading')
-    return <LinkPage foot={<BookingFoot page="booking_profile" claimHref={claimPageHref('booking_profile')} />} />;
+    return (
+      <LinkPage
+        foot={<BookingFoot page="booking_profile" placement="card" claimHref={claimPageHref('booking_profile')} />}
+      />
+    );
 
   const { profile, items } = loaded;
   const current = profile.handle;
