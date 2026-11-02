@@ -119,3 +119,28 @@ Carried here rather than fixed, so they are not lost:
   `listManagedPages` is N+1 in the same way.
 - **The template consumes its owner's slug namespace**, so the admin who created `intro-call` can never have a real
   page of their own at that address.
+
+## 11. The UI lane's owed items (reviewers, 3 November)
+
+`design-system-guardian` and `ux-interaction-reviewer` both ran on the UI. What was fixed is in commit
+`e3f9141e1`. Left owed, in the order the UX reviewer ranked them:
+
+- **Both confirms close before the server answers** (Modal's README, "While it works"): the commit should keep the
+  dialog mounted and `isBusy`, label itself "Deleting…", and show a refusal as a danger Callout inside the dialog
+  so it can be retried. Today the dialog closes first and a refusal is only a toast. Applies to the two confirms in
+  `ManagedPageEditor.tsx` and the one in `LinksScreen.tsx`.
+- **"Page being made" never clears**: the editor holds its template from the loader and nothing subscribes to
+  `data.managedPages.view(slug)`, so a row added keeps the Badge until the reader navigates away and back.
+  `LinksScreen` does it right off `pendingIds`.
+- **The picker + rows + remove confirm is now assembled twice**, here and in `SharingPanel.tsx`, down to the
+  details. It wants extracting before a third screen copies it.
+- **"That managed page doesn't exist any more" is shown to anyone who merely lacks `booking.admin`**, because the
+  route treats unreachable as absent. A member following a link an admin pasted is told the page was deleted; it
+  should say only admins set up managed pages.
+- **A failed read of the workspace's members** renders the picker's "Everyone here already has this page", which is
+  the opposite of the truth.
+- **`readOnlyReason` on the member's locked controls**: the Callout names the parts once, but a member who clicks a
+  locked control directly gets no local answer. `PageEditor` already uses `readOnlyReason` elsewhere.
+- **No screenshot or browser test of the member's own page** (see the commit message): it renders through
+  `PageEditor`, and faking that screen produced pictures of an error boundary twice. The honest way to shoot it is
+  the real app against a database.
