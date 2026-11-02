@@ -4,7 +4,18 @@
 // Main task: pick a way, copy the snippet. Nothing else has to be touched for it to work, and changing the page
 //   here never changes the snippet.
 // Leaves out: the view beacon and the embed's own stats (L3's other halves), and forms, which have their own tab.
-import { AccentPicker, Card, Field, InfoTip, SegmentedControl, Select, TileGrid, type AccentQuickPick } from '@crm/ui';
+import {
+  AccentPicker,
+  Card,
+  Disclosure,
+  Field,
+  InfoTip,
+  SegmentedControl,
+  Select,
+  TileGrid,
+  type AccentQuickPick,
+  type IconName,
+} from '@crm/ui';
 import { useState } from 'react';
 import {
   EMBED_ICONS,
@@ -46,17 +57,44 @@ const MODE_TILES = [
 ] as const;
 
 /**
+ * The four ways nearly everyone wants it, each one press (the owner, 2 November 2026: the step by step version was
+ * "too much to go through"). They are the same two choices underneath, so picking a setup and then opening the
+ * details shows exactly what it set, rather than a second, separate state.
+ */
+const SETUPS = [
+  { id: 'corner', mode: 'floating', panel: 'centre', icon: 'message-square', ...strings.setups.corner },
+  // panel-left-open rather than a right facing one: the registry ships to every page under UiProvider, so a
+  // new mark costs about 90 bytes of the first load, and this one already says "a panel at one side".
+  { id: 'side', mode: 'floating', panel: 'side', icon: 'panel-left-open', ...strings.setups.side },
+  { id: 'own', mode: 'popup', panel: 'centre', icon: 'square', ...strings.setups.own },
+  { id: 'inline', mode: 'inline', panel: 'centre', icon: 'monitor', ...strings.setups.inline },
+] as const satisfies readonly {
+  readonly id: string;
+  readonly mode: EmbedMode;
+  readonly panel: EmbedPanel;
+  readonly icon: IconName;
+  readonly name: string;
+  readonly description: string;
+}[];
+
+/** Which setup a mode and panel are, so the tiles show the one in force rather than forgetting it. */
+const setupOf = (mode: EmbedMode, panel: EmbedPanel) =>
+  SETUPS.find((each) => each.mode === mode && each.panel === panel)?.id;
+
+/**
  * The embed, built from the same `embedSnippet` the form's Install tab uses, so a booking page and a form are
  * pasted the same way and a change to the script reaches both. The choices are local: nothing here is saved,
  * because the snippet is the only thing that leaves, and the site holds it from then on.
  */
 export function EmbedCard({ script, publicKey, title, isLive, quickPicks }: EmbedCardProps) {
-  const [mode, setMode] = useState<EmbedMode>('popup');
+  // The corner button first: it is the only setup that needs nothing on the site but the snippet.
+  const [mode, setMode] = useState<EmbedMode>('floating');
   const [panel, setPanel] = useState<EmbedPanel>('centre');
   const [words, setWords] = useState<string>(strings.wordsPlaceholder);
   const [accent, setAccent] = useState<string | undefined>(undefined);
   const [icon, setIcon] = useState<EmbedIcon>('calendar');
 
+  const current = setupOf(mode, panel);
   const opens = mode !== 'inline';
   const corner = mode === 'floating';
   const snippet = embedSnippet(
@@ -78,24 +116,22 @@ export function EmbedCard({ script, publicKey, title, isLive, quickPicks }: Embe
     <Card title={strings.title} actions={<InfoTip label={strings.title}>{strings.tip}</InfoTip>}>
       <TileGrid
         variant="choice"
-        label={strings.mode}
+        label={strings.setup}
         showsDescription
-        tiles={MODE_TILES}
-        value={mode}
+        tiles={SETUPS.map(({ id, name, icon: tileIcon, description }) => ({
+          id,
+          name,
+          icon: tileIcon,
+          description,
+        }))}
+        {...(current === undefined ? {} : { value: current })}
         onChange={(id) => {
-          const tile = MODE_TILES.find((each) => each.id === id);
-          if (tile !== undefined) setMode(tile.id);
+          const setup = SETUPS.find((each) => each.id === id);
+          if (setup === undefined) return;
+          setMode(setup.mode);
+          setPanel(setup.panel);
         }}
       />
-      {opens && (
-        <SegmentedControl
-          label={strings.panel}
-          isLabelVisible
-          segments={EMBED_PANELS.map((each) => ({ value: each, label: strings.panels[each] }))}
-          value={panel}
-          onChange={(value) => setPanel(value === 'side' ? 'side' : 'centre')}
-        />
-      )}
       {opens && (
         <Field
           label={strings.words}
@@ -127,6 +163,27 @@ export function EmbedCard({ script, publicKey, title, isLive, quickPicks }: Embe
           }
         />
       )}
+      <Disclosure title={strings.details} variant="quiet">
+        <TileGrid
+          variant="choice"
+          label={strings.mode}
+          showsDescription
+          tiles={MODE_TILES}
+          value={mode}
+          onChange={(id) => {
+            const tile = MODE_TILES.find((each) => each.id === id);
+            if (tile !== undefined) setMode(tile.id);
+          }}
+        />
+        {opens && (
+          <SegmentedControl
+            label={strings.panel}
+            segments={EMBED_PANELS.map((each) => ({ value: each, label: strings.panels[each] }))}
+            value={panel}
+            onChange={(value) => setPanel(value === 'side' ? 'side' : 'centre')}
+          />
+        )}
+      </Disclosure>
       {isLive ? (
         <Field label={strings.snippet} variant="copy" isMultiline copyLabel={strings.copy} value={snippet} />
       ) : (

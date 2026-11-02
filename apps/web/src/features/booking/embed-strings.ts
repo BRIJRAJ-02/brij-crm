@@ -2,6 +2,14 @@
 export const embedStrings = {
   title: 'Put it on your site',
   tip: 'Paste the snippet once. It keeps working when you change the page here.',
+  setup: 'Pick one',
+  setups: {
+    corner: { name: 'Corner button', description: 'A button, bottom right. Opens in the middle.' },
+    side: { name: 'Side panel', description: 'A corner button. Slides in from the right.' },
+    own: { name: 'Your own button', description: 'Your button opens it in the middle.' },
+    inline: { name: 'In the page', description: 'Sits in the page and grows to fit.' },
+  },
+  details: 'Change the details',
   mode: 'How it opens',
   modes: {
     inline: { name: 'In the page', description: 'Sits in your page and grows to fit.' },
