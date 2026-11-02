@@ -43,6 +43,11 @@ export function ToastRegion({ toasts }: { readonly toasts: Toasts }) {
           </span>
           <AriaToastContent className={styles.content}>
             <Text slot="title">{toast.content.message}</Text>
+            {toast.content.consequence !== undefined && (
+              <Text slot="description" className={styles.consequence}>
+                {toast.content.consequence}
+              </Text>
+            )}
           </AriaToastContent>
           {toast.content.action !== undefined && (
             <Button

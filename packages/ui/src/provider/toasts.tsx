@@ -31,6 +31,14 @@ export interface ToastAction {
 export interface ToastContent {
   readonly tone: ToastTone;
   readonly message: string;
+  /**
+   * What now follows from the change, where the change reaches past this
+   * screen: "Jessica gets the new time by email", "Everyone on the deal sees
+   * the new stage". One short sentence, present tense, naming who or what is
+   * affected. Leave it out when nothing happens beyond the save: a toast that
+   * explains an ordinary edit is noise.
+   */
+  readonly consequence?: string;
   readonly action?: ToastAction;
   /**
    * Work under way (an export being written): a spinner in the icon's place, and it stays until the screen

@@ -66,6 +66,13 @@
     min-inline-size: 0;
   }
 
+  /* What follows from the change, under the line that says it was made: quieter, and never more than a line or two. */
+  .consequence {
+    display: block;
+    margin-block-start: var(--space-2);
+    color: var(--text-secondary);
+  }
+
   @media (forced-colors: active) {
     .toast {
       border-color: CanvasText;

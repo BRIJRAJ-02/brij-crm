@@ -37,6 +37,7 @@ import { formatTimeRange } from '../../lib/format.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { safeHref } from '../../lib/safe-href.ts';
 import type { ListSource } from '../../lib/list-source.ts';
+import { useDropIn } from '../../lib/motion/motion.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { sizeToken } from '../../lib/token-values.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
@@ -377,6 +378,9 @@ function FeedContent({
   // Focus is on one of the feed's entries (or inside one).
   const holdsFocus = useRef(false);
   const idBase = useId();
+  // A line that has just arrived drops in at the top, so an entry someone else wrote is seen landing.
+  const newest = entries.getItem(0);
+  const newLine = useDropIn<HTMLDivElement>(newest === undefined ? undefined : entries.getKey(newest));
   // Sizes are kept by entry, not by place, so entries arriving above keep every measured height. A new function
   // only with a new source, since the virtualiser measures everything again when it changes.
   const keyAt = useCallback(
@@ -532,6 +536,7 @@ function FeedContent({
     >
       <div
         className={styles.body}
+        ref={newLine}
         {...(isInline ? {} : { style: { '--feed-height': `${String(virtualizer.getTotalSize())}px` } })}
       >
         {drawn.map((item) => {

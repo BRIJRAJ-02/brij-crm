@@ -1,8 +1,12 @@
 import {
   createContext,
   createElement,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
+  useState,
   type JSX,
   type KeyboardEvent,
   type ReactElement,
@@ -33,9 +37,10 @@ import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { ListSource } from '../../lib/list-source.ts';
+import { useReducedMotion } from '../../lib/motion/motion.ts';
 import { RowShown, useRangeReporter } from '../../lib/range-reporter.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
-import { sizeToken } from '../../lib/token-values.ts';
+import { durationToken, sizeToken } from '../../lib/token-values.ts';
 import { Popover, type PopoverPlacement, type PopoverWidth } from '../Popover/Popover.tsx';
 import styles from './Menu.module.css';
 import { strings } from './strings.ts';
@@ -62,16 +67,58 @@ export interface MenuTriggerProps {
   readonly onOpenChange?: (isOpen: boolean) => void;
 }
 
+/**
+ * Told by the menu inside it that a choice was just made, so the trigger can
+ * let the check land on that row before the menu closes. Only a menu that
+ * chooses has a check to see, so only those signal.
+ */
+const Picked = createContext<(() => void) | undefined>(undefined);
+
+/** How long the chosen row holds before the menu goes, the menu's own time. */
+const SEEN_MS = durationToken('duration-popover');
+
 /** Opens a Menu from the Button before it. Enter, Space or the arrow keys open it; Esc closes it and returns focus. */
 export function MenuTrigger({ children, trigger, isOpen, defaultOpen, onOpenChange }: MenuTriggerProps) {
+  const isStill = useReducedMotion();
+  const [isOpenHere, setOpenHere] = useState(defaultOpen ?? false);
+  const justPicked = useRef(false);
+  const holding = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(holding.current);
+    },
+    [],
+  );
+
+  const change = useCallback(
+    (next: boolean) => {
+      const close = (): void => {
+        setOpenHere(next);
+        onOpenChange?.(next);
+      };
+      if (next || !justPicked.current || isStill) {
+        justPicked.current = false;
+        close();
+        return;
+      }
+      // Closed by a choice: the check lands on the row that was picked, and only then does the menu go.
+      justPicked.current = false;
+      holding.current = setTimeout(close, SEEN_MS);
+    },
+    [isStill, onOpenChange],
+  );
+
+  const pick = useCallback(() => {
+    justPicked.current = true;
+  }, []);
+
   return (
     <AriaMenuTrigger
       {...(trigger === undefined ? {} : { trigger })}
-      {...(isOpen === undefined ? {} : { isOpen })}
-      {...(defaultOpen === undefined ? {} : { defaultOpen })}
-      {...(onOpenChange === undefined ? {} : { onOpenChange })}
+      isOpen={isOpen ?? isOpenHere}
+      onOpenChange={change}
     >
-      {children}
+      <Picked.Provider value={pick}>{children}</Picked.Provider>
     </AriaMenuTrigger>
   );
 }
@@ -197,10 +244,11 @@ interface Row {
   readonly id: number;
 }
 
-function selectionHandler(onSelectionChange: MenuLook['onSelectionChange']) {
+function selectionHandler(onSelectionChange: MenuLook['onSelectionChange'], onPicked?: () => void) {
   if (onSelectionChange === undefined) return {};
   return {
     onSelectionChange: (keys: Selection) => {
+      onPicked?.();
       onSelectionChange(keys === 'all' ? new Set() : keys);
     },
   };
@@ -225,6 +273,8 @@ export function Menu<T extends object>(props: MenuProps<T>) {
   const { search, emptyLabel = strings.noResults, width = 'menu', placement, isInline = false } = props;
   const { header, anchorRef, autoFocus } = props;
   const { contains } = useFilter({ sensitivity: 'base' });
+  // A choice made here holds its check for a beat before the trigger closes the menu.
+  const onPicked = useContext(Picked);
   const onShown = useRangeReporter(props.source);
   const count = props.source?.count ?? 0;
   const rows = useMemo<readonly Row[]>(() => Array.from({ length: count }, (_, index) => ({ id: index })), [count]);
@@ -245,7 +295,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
     ...(defaultSelectedKeys === undefined ? {} : { defaultSelectedKeys }),
     ...(disabledKeys === undefined ? {} : { disabledKeys }),
     ...(autoFocus === undefined ? {} : { autoFocus }),
-    ...selectionHandler(onSelectionChange),
+    ...selectionHandler(onSelectionChange, onPicked),
   };
 
   let menu: ReactNode;
@@ -580,6 +630,7 @@ export function MenuSection({
   isJoined = false,
   isPinned = false,
 }: MenuSectionProps) {
+  const onPicked = useContext(Picked);
   // A pinned section's heading would only add height at the foot: its label names it for screen readers.
   const isHeadingDrawn = !isLabelHidden && !isJoined && !isPinned;
   return (
@@ -590,7 +641,7 @@ export function MenuSection({
       {...(isHeadingDrawn ? {} : { 'aria-label': label })}
       {...(selectionMode === undefined ? {} : { selectionMode })}
       {...(selectedKeys === undefined ? {} : { selectedKeys })}
-      {...selectionHandler(onSelectionChange)}
+      {...selectionHandler(onSelectionChange, onPicked)}
     >
       {isHeadingDrawn && <Header className={styles.heading}>{label}</Header>}
       {children}
