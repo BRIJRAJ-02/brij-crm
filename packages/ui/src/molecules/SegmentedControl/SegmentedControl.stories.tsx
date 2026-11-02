@@ -192,6 +192,10 @@ export const ColourDots: Story = {
     const all = canvas.getByRole('radio', { name: 'All calendars' });
     await expect(all).toBeChecked();
     await userEvent.click(all);
+    // The click leaves the pointer on "All calendars", and the arrow then moves the selection off it, so the
+    // shot caught a segment that is hovered but no longer chosen: its label reads --text where at rest it
+    // reads --text-secondary (measured, 26 against 92 at its darkest). Step off before the keyboard.
+    await userEvent.unhover(all);
     await userEvent.keyboard('{ArrowRight}');
     await expect(canvas.getByRole('radio', { name: 'Work' })).toBeChecked();
     await expect(args.onChange).toHaveBeenLastCalledWith('work');
