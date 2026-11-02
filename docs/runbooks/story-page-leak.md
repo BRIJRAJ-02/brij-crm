@@ -31,6 +31,7 @@ run behind it, and so far nothing has that.
 | 41485749715 | car, f6d75ff14 | pass split | shard 1 **91/91**; the quarantined four **4/4**; the other 86 crashed after **3** |
 | 41490051715 | `wip/embed-handle-fix`, off `33dfbed7b` | one page, 178 files, fresh runner | crashed after **37** of 178 |
 | 41491888165 | car, 60fe63aec | pass split | shard 1 crashed after **37** of 91 |
+| 41495821106 | car, 0d01d83fe | passes capped at 30 | 23/23, 23/23, then crashed after **9** of 23 |
 
 Read the first six rows alone and our tree looks implicated. Read the last four and it plainly is not: the
 same unchanged branch passes its whole set three times and then dies at 37.
@@ -72,9 +73,10 @@ dropping it to 40 rows was green. But do not read that as cause and effect, whic
 page did: a later run with the 40 row version crashed shard 1 at **the same 37** (41491888165). Two samples
 either side of a change, at this variance, say nothing.
 
-## The structure: it dies after 37 files, whatever is scheduled
+## 37, four times — unexplained, and NOT a ceiling in files
 
-The series, in the order observed: **62, 74, 5, 178, 178, 178, 37, 37, (91 + 4 + 3), 37, 37.**
+The series, in the order observed:
+**62, 74, 5, 178, 178, 178, 37, 37, (91 + 4 + 3), 37, 37, (23 + 23 + 9).**
 
 **37 has now appeared four times, and in both arrangements:**
 
@@ -88,19 +90,40 @@ The series, in the order observed: **62, 74, 5, 178, 178, 178, 37, 37, (91 + 4 +
 Four different trees, two different file counts per page, sharded and unsharded alike, and the same figure.
 Every other number in the series appears once.
 
-An earlier version of this page called it "37 twice, both on a full unsharded 178-file run", and said the
-sharded runs were not comparable. That was wrong, and it was wrong in the direction of a tidy story: the
-sharded runs land on 37 too. **What the page is scheduled to run does not change where it dies.** Whatever
-the limit is, it is counted in files, not in the content of those files, and not in how many are queued
-behind them.
+Two readings of this have already been wrong, both towards a tidier story, and they are left here as a
+warning about the third.
 
-That makes the per-file cost the suspect rather than any file's weight — something allocated once per file
-and not released, hitting a ceiling at around the 37th. It also explains why the heaviest files pass
-happily in a page of their own: four files never reach the count.
+The first called it "37 twice, both on a full unsharded 178-file run from a cold runner" and set the sharded
+runs aside as not comparable. The sharded runs land on 37 too.
 
-It does NOT explain 62, 74, 5, 3, or the three clean 178s, so this is a strong lead and not an answer.
+The second said the limit must therefore be counted in files rather than content — a per-file cost hitting a
+ceiling near the 37th — and predicted that a pass under the ceiling would survive. **That was tested and it
+failed**: a fresh page of 23 crashed after 9 (41495821106). See the section below.
 
-### What we did about it, which is also the experiment
+So four identical figures remain the most striking thing here, and no account of them survives contact.
+Whatever produces 37 is not a count of files, because 9 and 3 happen on pages that never approach it.
+
+### The cap was tried, and it FAILED the prediction
+
+Run **41495821106**, the first under the 30-file cap: pass 1 **23/23**, pass 2 **23/23**, pass 3 **crashed
+after 9 of 23**.
+
+The prediction was written before the run: a pass of 30 or fewer survives if the ceiling is counted in
+files, and the hypothesis is wrong if one dies anyway. One died. **The count hypothesis is refuted.** A
+fresh page of 23 files crashed after 9, which is the same shape as the pass of 86 that died after 3.
+
+So the four 37s are not a ceiling in files. They remain unexplained — four identical figures in eleven
+observations is still the most striking thing on this page — but whatever produces them, it is not "the
+37th file is one too many", because 9 and 3 happen on pages that never get near 37.
+
+What this rules out, added to the list above: **the number of files scheduled in a page**, in both
+directions. Large pages sometimes finish (178, three times) and small fresh ones sometimes die (23 → 9,
+86 → 3).
+
+The cap is kept anyway, but on honest terms: it is cheap, it gives more fresh pages, and it is no longer
+backed by evidence. Do not defend it as a fix. If it is ever in the way, remove it.
+
+### What we did about it, which was also the experiment
 
 Every pass is now capped at **30 files** (`MAX_PER_PASS` in `packages/ui/scripts/story-shard.ts`), so two
 shards of ~91 become four passes and three. Each pass is a fresh `vitest run` and so a fresh page.
@@ -109,9 +132,8 @@ The prediction, written before the first run under the cap: **if the ceiling is 
 of 30 or fewer survives and WebKit goes green. If a pass of 30 dies anyway, the count hypothesis is wrong.**
 Either way the run costs what an unchanged push would have cost.
 
-One observation already argues against the hypothesis and should not be forgotten while reading a green: a
-pass of 86 died after **3** (41485749715). If the ceiling were simply 37 files, that pass should have
-reached 37.
+It died. See the section above: a pass of 23 crashed after 9. The pass of 86 that died after 3
+(41485749715) had already argued the same way, and the cap's own run settled it.
 
 The quarantine of four files went at the same time. It rested on a theory this page refutes, and under a cap
 it is redundant: every pass is small now.
