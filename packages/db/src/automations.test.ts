@@ -139,6 +139,7 @@ describe('automations and their runs', () => {
         'scheduling_changed',
         'task_assigned',
         'task_due',
+        'webhook_off',
       ].sort(),
     );
     for (const { label } of kinds.rows) expect(def).toContain(`'${label}'`);

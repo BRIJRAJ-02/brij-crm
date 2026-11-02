@@ -129,7 +129,12 @@ describe('the name attribute (late trap #15)', () => {
 
   it("keeps a standard object's Name, read only, and says why", async () => {
     await renderTab({ ...PROJECTS, apiSlug: 'people', pluralName: 'People', isStandard: true });
-    await expect.element(page.getByText('People, Companies and Deals are always named by their Name.')).toBeVisible();
+    // The row's Select has no visible label, so its reason rides on the lock (Select, 1 November 2026).
+    await expect
+      .element(
+        page.getByRole('img', { name: 'Read only: People, Companies and Deals are always named by their Name.' }),
+      )
+      .toBeVisible();
   });
 
   it('puts the name attribute back, and says why, when the save is refused', async () => {
@@ -178,7 +183,11 @@ describe('the name attribute (late trap #15)', () => {
         permissions: ['schema.manage'],
       },
     );
-    await expect.element(page.getByText("Couldn't load this object's attributes. Reload to choose one.")).toBeVisible();
+    await expect
+      .element(
+        page.getByRole('img', { name: "Read only: Couldn't load this object's attributes. Reload to choose one." }),
+      )
+      .toBeVisible();
     await expect.element(page.getByRole('button', { name: /Name attribute/ })).not.toBeInTheDocument();
   });
 });
