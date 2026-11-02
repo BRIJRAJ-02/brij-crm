@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { shardStories, storyFiles, type StoryFile } from './story-shard.ts';
+import { KEEPS_A_PAGE, shardPasses, shardStories, storyFiles, type StoryFile } from './story-shard.ts';
 
 /** Ten files, heaviest to lightest, so the weights are easy to read in an expectation. */
 const FILES: readonly StoryFile[] = Array.from({ length: 10 }, (_, place) => ({
@@ -41,6 +41,36 @@ describe('shardStories', () => {
 
   it('runs every file when the count is one', () => {
     expect(shardStories(FILES, 1, 1)).toHaveLength(FILES.length);
+  });
+});
+
+describe('shardPasses', () => {
+  it('gives the files that keep a page one of their own, ahead of the rest', () => {
+    const files: readonly StoryFile[] = [
+      { file: 'src/a.stories.tsx', size: 400 },
+      { file: 'src/killer.stories.tsx', size: 300 },
+      { file: 'src/b.stories.tsx', size: 200 },
+      { file: 'src/c.stories.tsx', size: 100 },
+    ];
+    const passes = shardPasses(files, 1, 1, ['src/killer.stories.tsx']);
+    expect(passes[0]).toEqual(['src/killer.stories.tsx']);
+    expect(passes[1]).not.toContain('src/killer.stories.tsx');
+    expect(passes.flat().sort()).toEqual(files.map(({ file }) => file).sort());
+  });
+
+  it('is one pass when the shard holds none of them', () => {
+    expect(shardPasses(FILES, 1, 2, [])).toHaveLength(1);
+  });
+
+  it('quarantines the four that killed shard 2, and only in the shard that holds them', () => {
+    const passes = [shardPasses(storyFiles(), 1, 2), shardPasses(storyFiles(), 2, 2)];
+    const alone = passes.flatMap((shard) => (shard.length > 1 ? (shard[0] ?? []) : []));
+    expect([...alone].sort()).toEqual([...KEEPS_A_PAGE].sort());
+  });
+
+  it('never leaves a pass empty, since vitest would run everything', () => {
+    expect(shardPasses(storyFiles(), 1, 2).every((pass) => pass.length > 0)).toBe(true);
+    expect(shardPasses(storyFiles(), 2, 2).every((pass) => pass.length > 0)).toBe(true);
   });
 });
 

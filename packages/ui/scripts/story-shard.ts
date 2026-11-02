@@ -1,5 +1,6 @@
-// `node scripts/story-shard.ts <index> <count>`: the story files one CI shard should
-// run, one per line, in the order it should run them.
+// `node scripts/story-shard.ts <index> <count>`: what one CI shard should run, as one
+// line per pass, each line a space separated list of story files. The shard runs a
+// `vitest run` per line.
 //
 // Why this exists rather than vitest's own `--shard`. Every story file in an engine
 // shares one long lived browser page, and what a file leaves behind in that page is
@@ -12,9 +13,16 @@
 //
 // So we choose the split ourselves: deal the files heaviest first into the shards, which
 // balances what each shard carries and keeps the heaviest files apart. That got shard 1
-// through all 91 of its files on run 41461134131. It is membership we control, not
-// order: the files are passed to vitest as filters, so vitest still runs them in its own
-// order, and the alternating output below is the list rather than the running order.
+// through all 91 of its files on run 41461134131, while shard 2 died after 7.
+//
+// This picks membership and pass boundaries, not order. The files reach vitest as
+// filters, so vitest still runs them in whatever order it collected them; what we decide
+// is which files share a page. A pass is one `vitest run`, so each pass gets a page of
+// its own, which is stronger than ordering inside one page. That is why KEEPS_A_PAGE
+// below runs alone: on run 41461134131 those four ran first in shard 2 and killed it,
+// and they are the same set crm-6c's bisect hung on. Give them their own page and the
+// other 86 never meet what they leave behind.
+//
 // File isolation stays on, and the shard count is a reading of the symptom, not a knob:
 // if a shard dies again, what a story leaves in the page has grown.
 import { readdirSync, statSync } from 'node:fs';
@@ -36,9 +44,20 @@ export function storyFiles(root: string = UI): readonly StoryFile[] {
 }
 
 /**
- * The files for shard `index` of `count` (both 1 based), ordered heavy, light, heavy,
- * light. Dealing heaviest first gives every shard about the same total, and alternating
- * inside it keeps heavy files apart, which is what the browser page cannot survive.
+ * The stories that leave so much in the browser page that the files after them run out
+ * of memory. They get a page to themselves. Take one out only with a run that shows the
+ * shard holding it finishing without it quarantined.
+ */
+export const KEEPS_A_PAGE: readonly string[] = [
+  'src/modules/WeekCalendar/WeekCalendar.stories.tsx',
+  'src/modules/LinkPage/LinkPage.stories.tsx',
+  'src/modules/SettingsLayout/SettingsLayout.stories.tsx',
+  'src/modules/LinkList/LinkList.stories.tsx',
+];
+
+/**
+ * The files for shard `index` of `count` (both 1 based). Dealing heaviest first gives
+ * every shard about the same total and keeps the heaviest files apart.
  */
 export function shardStories(files: readonly StoryFile[], index: number, count: number): readonly string[] {
   const heaviestFirst = [...files].sort((a, b) => b.size - a.size || a.file.localeCompare(b.file));
@@ -51,11 +70,29 @@ export function shardStories(files: readonly StoryFile[], index: number, count: 
   return alternating;
 }
 
+/**
+ * A shard's passes, each one a `vitest run` of its own and so a browser page of its own.
+ * The files in `KEEPS_A_PAGE` this shard holds go in a pass by themselves, ahead of the
+ * rest; a shard holding none of them is a single pass, exactly as it was.
+ */
+export function shardPasses(
+  files: readonly StoryFile[],
+  index: number,
+  count: number,
+  quarantined: readonly string[] = KEEPS_A_PAGE,
+): readonly (readonly string[])[] {
+  const mine = shardStories(files, index, count);
+  const alone = mine.filter((file) => quarantined.includes(file));
+  const rest = mine.filter((file) => !quarantined.includes(file));
+  return [alone, rest].filter((pass) => pass.length > 0);
+}
+
 if (process.argv[1] === import.meta.filename) {
   const [index, count] = process.argv.slice(2).map(Number);
   if (!Number.isInteger(index) || !Number.isInteger(count) || index === undefined || count === undefined) {
     throw new Error('story-shard needs an index and a count, as in `story-shard.ts 1 2`');
   }
   if (index < 1 || count < 1 || index > count) throw new Error(`a shard ${index} of ${count} doesn't exist`);
-  process.stdout.write(`${shardStories(storyFiles(), index, count).join('\n')}\n`);
+  const passes = shardPasses(storyFiles(), index, count);
+  process.stdout.write(`${passes.map((pass) => pass.join(' ')).join('\n')}\n`);
 }
