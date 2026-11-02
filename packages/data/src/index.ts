@@ -67,7 +67,9 @@ import type {
   FormStatus,
   FormSummary,
   FormTargetChoices,
+  FormTemplateSummary,
   FormView,
+  OfferedFormTemplateId,
   PublishFormInput,
   SaveFormDraftInput,
   InvitationView,
@@ -514,7 +516,10 @@ export type {
   FormStatus,
   FormSummary,
   FormTargetChoices,
+  FormTemplatePreviewRow,
+  FormTemplateSummary,
   FormView,
+  OfferedFormTemplateId,
   PublicForm,
   AnswerType,
   InputIssue,
@@ -6974,6 +6979,14 @@ export function createDataLayer({
         call((options) => api.forms.slugAvailable({ workspace, formId, slug }, options)).then(
           (answer) => answer.available,
         ),
+      /**
+       * The template gallery's tiles (spec 0063, AC-6323): the templates
+       * offered, in their order, each with its one line purpose and the small
+       * preview of its look. The same list on every workspace, so it is read
+       * once per opening and nothing is held.
+       */
+      templates: (workspace: string): Promise<readonly FormTemplateSummary[]> =>
+        call((options) => api.forms.templates({ workspace }, options)).then((page) => page.items),
       /** A new form id: mint it once, and send the same one on a retry. */
       newId: (): string => mintId(),
       /** Creates an untitled form at once (AC-649), waiting for the server (`forms.manage`). */
@@ -6984,6 +6997,21 @@ export function createDataLayer({
       ) =>
         formLists.write(workspace, {
           send: () => call((options) => api.forms.create({ workspace, ...form, mutationId: mintId() }, options)),
+          land: (items, made) => landForm(made.id)(items, made),
+        }),
+      /**
+       * Makes a draft from one template (AC-6323), waiting for the server
+       * (`forms.manage`): its questions arrive already filed onto the
+       * workspace's matching standard attributes, and the held list takes the
+       * new form as `create` does, so it is on Forms before its editor opens.
+       */
+      createFromTemplate: (
+        workspace: string,
+        form: { readonly id: string; readonly templateId: OfferedFormTemplateId; readonly name?: string },
+      ) =>
+        formLists.write(workspace, {
+          send: () =>
+            call((options) => api.forms.createFromTemplate({ workspace, ...form, mutationId: mintId() }, options)),
           land: (items, made) => landForm(made.id)(items, made),
         }),
       /** Saves the draft quietly. Rejects `FORM_CHANGED` when someone saved since `expectedRevision`. */

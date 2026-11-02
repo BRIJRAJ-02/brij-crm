@@ -1,8 +1,7 @@
 // Brief
 // Purpose: Captures' one New, owned by the Captures layout, so it sits in the TopBar at one place and one width on both tabs, loading or not.
-// Main task: make a booking page on Links (its dialog, then its editor) and a form on Forms (made at once, then its builder).
+// Main task: make a booking page on Links (its dialog, then its editor) and a form on Forms (its template gallery, then its builder).
 // Leaves out: the lists themselves (each tab's screen) and what a new page or form holds (their editors).
-import { isDataError } from '@crm/data';
 import { Button, Tooltip } from '@crm/ui';
 import { useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { createContext, useContext, useState, type ReactNode } from 'react';
@@ -11,6 +10,7 @@ import { NewPageDialog } from '../booking/NewPageDialog.tsx';
 import { strings as bookingStrings } from '../booking/strings.ts';
 import { formHref } from '../forms/paths.ts';
 import { strings as formStrings } from '../forms/strings.ts';
+import { TemplateGallery } from '../forms/TemplateGallery.tsx';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import type { CaptureTab } from './tabs.ts';
 
@@ -40,7 +40,7 @@ export interface CapturesCreateProviderProps {
 
 /** Holds the tab's New and its New booking page dialog for the whole layout, so switching tabs remounts neither. */
 export function CapturesCreateProvider({ slug, tab, children }: CapturesCreateProviderProps) {
-  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const { data } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const canManageForms = useCan('forms.manage');
   // Round robin pages are booking.admin's (spec 0029, AC-751).
@@ -49,27 +49,9 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
   // Bookings' "Create a link only page" arrives as `?new=link-only`: the dialog opens preset, and closing it drops it.
   const search: { readonly new?: unknown } = useSearch({ strict: false });
   const isAskedLinkOnly = tab === 'links' && search.new === 'link-only';
-  const [makingForm, setMakingForm] = useState<string | undefined>(undefined);
-
-  // New form makes "Untitled form" at once and opens it: no dialog first, the builder is the dialog.
-  const makeForm = () => {
-    if (makingForm !== undefined) return;
-    const id = data.forms.newId();
-    setMakingForm(id);
-    data.forms.create(slug, { id }).then(
-      (form) => {
-        setMakingForm(undefined);
-        void navigate({ href: formHref(slug, form.id) });
-      },
-      (error: unknown) => {
-        setMakingForm(undefined);
-        toasts.toast({
-          tone: 'danger',
-          message: `${formStrings.createFailed} ${isDataError(error) ? error.message : formStrings.failedText}`,
-        });
-      },
-    );
-  };
+  // New form opens the template gallery (spec 0063, AC-6323), which makes the draft and hands it back: nobody
+  // starts from an empty page any more, and Blank is still one press away as its first tile.
+  const [isPickingTemplate, setPickingTemplate] = useState(false);
 
   const value: CapturesCreate =
     tab === 'links'
@@ -82,8 +64,15 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
         }
       : {
           label: formStrings.newForm,
-          ...(canManageForms ? { create: makeForm } : { refusal: formStrings.manageOnly }),
-          isPending: makingForm !== undefined,
+          ...(canManageForms
+            ? {
+                create: () => {
+                  setPickingTemplate(true);
+                },
+              }
+            : { refusal: formStrings.manageOnly }),
+          // The gallery is the dialog now, so New itself is never left spinning.
+          isPending: false,
         };
 
   return (
@@ -102,6 +91,18 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
         onCreated={(page) => {
           setAddingPage(false);
           void navigate({ to: pageEditorHref(slug, page.id) });
+        }}
+      />
+      <TemplateGallery
+        data={data}
+        slug={slug}
+        isOpen={isPickingTemplate}
+        onClose={() => {
+          setPickingTemplate(false);
+        }}
+        onCreated={(form) => {
+          setPickingTemplate(false);
+          void navigate({ href: formHref(slug, form.id) });
         }}
       />
     </CapturesCreateContext>

@@ -697,12 +697,14 @@ export {
 // submission into records (the `forms.process` kind, registered in `jobKinds`).
 export {
   createForm,
+  createFormFromTemplate,
   deleteForm,
   duplicateForm,
   formAttributes,
   getForm,
   isSlugAvailable,
   listForms,
+  listFormTemplates,
   newPublicKey,
   previewForm,
   publishForm,
@@ -715,11 +717,24 @@ export {
   UNTITLED_FORM,
   updateFormSettings,
   type CreateFormInput,
+  type CreateFromTemplateServiceInput,
   type FormSettingsInput,
   type PublishInput,
   type SaveDraftInput,
 } from './forms/forms.ts';
 export { workspacePublicKey } from './forms/shared.ts';
+// The form templates (spec 0063, AC-6323, AC-6324): the catalog in code, and the pure draft builder the test uses.
+export {
+  FORM_TEMPLATES,
+  FORM_TEMPLATES_VERSION,
+  formTemplate,
+  offeredFormTemplates,
+  templateDocument,
+  type FormTemplate,
+  type FormTemplateQuestion,
+  type TemplateAttribute,
+  type TemplateTarget,
+} from './forms/templates/index.ts';
 export {
   FORM_CLOSED_MESSAGE,
   getPublicForm,
