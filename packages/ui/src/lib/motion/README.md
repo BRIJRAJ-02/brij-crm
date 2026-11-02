@@ -16,11 +16,15 @@ collapseAway(rowElement, () => remove(id)); // a row leaving a list
 const isStill = useReducedMotion(); //        when a component has to branch itself
 ```
 
-- `useRowWash(stamp)` washes the row once, in `accent-soft`, whenever the stamp changes after the row is first drawn: an edit made here, or a patch arriving over realtime. Pass `updatedAt`, not a counter, so the same change washes once. It never runs on the first draw, so a list that has just loaded stays quiet.
-- `useDropIn(topKey)` goes on the list, not the row: when the key of the first item becomes one the list hasn't seen, that first row drops in. For a feed or an inbox where new lines arrive at the top.
-- `collapseAway(element, remove)` fades the row and closes its height, then calls `remove`. `remove` always runs, even with no element and in a browser that can't animate, so a row is never stranded. Use it wherever a row leaves a list: a task done, a record removed, a file deleted, a list entry removed.
+- `useRowWash(stamp)` washes the row once, from `accent-soft` back to the row's own background, whenever the stamp changes after the row is first drawn: an edit made here, or a patch arriving over realtime. Pass `updatedAt`, not a counter, so the same change washes once. It never runs on the first draw, so a list that has just loaded stays quiet.
+- `useDropIn(topKey)` goes on the list, not the row: when the key of the top item becomes one the list hasn't seen, the row marked `data-drop-in` drops in (the first child, in a plain list with no such mark). A virtual list draws a window, so its first child is whatever is in view: mark the row for index 0 and nothing else moves. The first key a list learns, as it loads, is never an arrival.
+- `collapseAway(element, remove)` fades the row and closes its height, then clears everything it set and calls `remove`. `remove` always runs, even with no element and in a browser that can't animate, and a removal that is refused leaves the row exactly as it was rather than an invisible strip in the tab order. The caller guards a second press and moves focus on (`FileItem` does both). Use it wherever a row leaves a list: a task done, a record removed, a file deleted, a list entry removed.
 - `useValueFade(value)` fades the new value in where the old one stood. Tag and StatusDot use it on their label, so every select and status display crossfades rather than swapping.
-- The wash lasts four times `duration-move`; everything else uses `duration-move` or `duration-popover`.
+- The wash lasts four times `duration-move` (800ms). That multiplier is **owed a `duration-wash` token**: the artifact has no long one-shot duration yet, so it is derived here until the owner adds one. Everything else uses `duration-move`, `duration-popover` or `space-2`, straight from the tokens.
+
+## Not a substitute for words
+
+The wash is the only sign a row changed, and it is visual. Where a change arrives from someone else, the screen still has to say so in words (a feed line, a presence note): nothing here announces anything.
 
 ## Reduced motion
 

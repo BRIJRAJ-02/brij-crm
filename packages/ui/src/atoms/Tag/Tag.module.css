@@ -5,11 +5,6 @@
   .root {
     display: inline-flex;
     flex: none;
-    /* A value changed under the viewer: the chip turns to its new hue rather than swapping colour. */
-    transition:
-      background-color var(--duration-move) var(--ease-hover),
-      border-color var(--duration-move) var(--ease-hover),
-      color var(--duration-move) var(--ease-hover);
     align-items: center;
     max-inline-size: 100%;
     block-size: var(--size-chip);

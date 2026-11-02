@@ -40,6 +40,27 @@ function ToastButtons() {
   );
 }
 
+/** A write that reaches past this screen: the toast says what follows, with Undo. */
+function ConsequenceButton() {
+  const toasts = useToasts();
+  return (
+    <Stage>
+      <Button
+        onPress={() => {
+          toasts.toast({
+            tone: 'success',
+            message: 'Moved to Thursday 10:00',
+            consequence: 'Jessica gets the new time by email.',
+            action: { label: 'Undo', onAction: () => undefined },
+          });
+        }}
+      >
+        Move the meeting
+      </Button>
+    </Stage>
+  );
+}
+
 /** News about someone else's change: the info tone. */
 function InfoButton() {
   const toasts = useToasts();
@@ -120,6 +141,22 @@ export const Keyboard: Story = {
     // The region leaves with its last toast, and focus returns to where it was.
     await waitFor(() => expect(findRegion()).toBeNull());
     await expect(lastOnPage).toHaveFocus();
+  },
+};
+
+/** The consequence line: what now happens away from this screen, under the line that says it was done. */
+export const Consequence: Story = {
+  render: () => <ConsequenceButton />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Move the meeting' }));
+    const region = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[role="region"][aria-label="Notifications"]');
+      if (found === null) throw new Error('no toast region');
+      return found;
+    });
+    await expect(within(region).getByText('Moved to Thursday 10:00')).toBeInTheDocument();
+    await expect(within(region).getByText('Jessica gets the new time by email.')).toBeInTheDocument();
+    await expect(within(region).getByRole('button', { name: 'Undo' })).toBeInTheDocument();
   },
 };
 

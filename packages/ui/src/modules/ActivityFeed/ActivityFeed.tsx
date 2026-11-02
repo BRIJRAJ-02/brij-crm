@@ -565,6 +565,8 @@ function FeedContent({
                 ? {}
                 : { ref: virtualizer.measureElement, style: { '--entry-offset': `${String(item.start)}px` } })}
               data-index={item.index}
+              // The newest entry, when it is drawn: what drops in as a line arrives (useDropIn).
+              {...(item.index === 0 ? { 'data-drop-in': '' } : {})}
               className={styles.slot}
               // Every entry is an article that takes the tab stop, loaded or not, so focus never lands nowhere.
               role="article"

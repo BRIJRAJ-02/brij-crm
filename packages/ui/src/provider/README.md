@@ -25,7 +25,7 @@ const toasts = createToasts(); // once, in main.tsx; also handed to the data lay
 
 - `locale` and `timeZone`: every date, number and amount formats in these (`useFormatSettings()` inside the library).
 - `navigate` and `useHref`: React Aria's router, so library links route through TanStack Router.
-- `toasts`: the queue from `createToasts()`. Raise one with `toasts.toast({ tone, message, action? })`.
+- `toasts`: the queue from `createToasts()`. Raise one with `toasts.toast({ tone, message, consequence?, action? })`. `consequence` is the one quiet line under the message that names what now happens past this screen ("They get an email with a link to join."), for a write that reaches somebody else; leave it out when nothing happens beyond the save (1 November 2026).
 - `clock` (optional): the shared clock behind relative times (`useNow()`), ticking every 30 seconds and paused while the tab is hidden. Stories pass `createFixedClock()`.
 - `loadingTiming` (optional): when skeletons appear. Storybook turns the delay off.
 - `FormatScope`: changes the time zone, date format (`auto`, `dmy`, `mdy`, `ymd`) or week start (`auto`, `monday`, `sunday`, `saturday`) for everything inside it. The web app wraps each workspace in one with the member's preferences (Settings › Account › Preferences), so dates, calendars and "today" follow them. `useFormatSettings()` reads the result; `formatDate`, `formatDay` and `firstDayOfWeek` are the same helpers the library uses, for screens that write a date themselves.

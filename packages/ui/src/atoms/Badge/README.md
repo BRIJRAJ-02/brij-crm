@@ -39,3 +39,7 @@ It takes no focus.
 
 - `count` is a number, not children, so it formats in the viewer's language and caps at `max`. A label goes in `text`, a string, never markup.
 - `tone="accent"` replaces the `ws-badge-accent` class.
+
+## Motion
+
+A count is drawn through `RollingNumber`: only the characters that changed roll, a beat after the edit that fed them, and a count arriving in place of a loading `0` doesn't roll at all. Its figures are tabular, so a count never shifts width as it changes. A `text` label just changes (1 November 2026).

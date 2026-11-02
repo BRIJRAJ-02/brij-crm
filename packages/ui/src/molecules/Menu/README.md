@@ -57,3 +57,7 @@ Enter, Space or the arrow keys open it from the trigger. Up and Down move; Home 
 - `width` takes `menu` or `trigger`, not a number; the 240px comes from tokens (`size-sidebar` less `space-20`) until a `size-menu` token exists.
 - `searchPlaceholder` and `searchId` become `search`; `checked` becomes the menu's selection; `active` is React Aria's focus; `submenu` comes from `SubmenuTrigger`; `danger` is `isDanger`.
 - Exit animations and keyboard instant opening are new.
+
+## Motion
+
+A menu of one choice (`selectionMode="single"`) holds the check on the row just picked for `duration-popover` before it closes, so the choice is seen being made. A menu of plain actions closes at once, since it has no check to show, and so does a menu of several, which stays open anyway. Esc and a press outside are never held. Reduced motion closes at once (1 November 2026).

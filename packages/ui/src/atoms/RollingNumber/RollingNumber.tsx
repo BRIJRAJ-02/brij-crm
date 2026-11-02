@@ -36,14 +36,17 @@ export function RollingNumber({ children }: RollingNumberProps) {
 
   useEffect(() => {
     if (shown === next) return;
+    // A count arriving is not a count changing: a list draws 0 while it counts, and the real number landing
+    // must not slot-machine every count on the screen at once.
+    const wasPlaceholder = shown === '' || shown === '0';
     const beat = setTimeout(
       () => {
         setShown(next);
-        if (isStill) return;
+        if (isStill || wasPlaceholder) return;
         const was = charsOf(shown);
         setRolled(charsOf(next).map((char, index) => char !== was[index]));
       },
-      isStill ? 0 : BEAT_MS,
+      isStill || wasPlaceholder ? 0 : BEAT_MS,
     );
     return () => {
       clearTimeout(beat);

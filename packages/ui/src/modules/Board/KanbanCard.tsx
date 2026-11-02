@@ -13,7 +13,6 @@ import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { isEmptyValue } from '../../fields/values.ts';
 import type { DragGrip } from '../../lib/drag/drag.tsx';
-import { useRowWash } from '../../lib/motion/motion.ts';
 import styles from './KanbanCard.module.css';
 import { strings } from './strings.ts';
 import type { BoardCard } from './types.ts';
@@ -40,11 +39,8 @@ export interface KanbanCardProps {
 export const KanbanCard = memo(function KanbanCard({ card, fields, grip, onOpenPanel }: KanbanCardProps) {
   const { record } = card;
   const shown = fields.filter((attribute) => !isEmptyValue(card.values[attribute.id]));
-  // A card changed under the viewer washes once. The values object is handed back unchanged until the record
-  // changes, so this catches an edit made here and a patch arriving from someone else, and nothing else.
-  const washed = useRowWash<HTMLSpanElement>(card.values);
   return (
-    <span className={styles.root} ref={washed}>
+    <span className={styles.root}>
       <span className={styles.head}>
         <Avatar
           name={record.name}

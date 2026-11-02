@@ -83,9 +83,11 @@ export function MenuTrigger({ children, trigger, isOpen, defaultOpen, onOpenChan
   const [isOpenHere, setOpenHere] = useState(defaultOpen ?? false);
   const justPicked = useRef(false);
   const holding = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const picking = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
     () => () => {
       clearTimeout(holding.current);
+      clearTimeout(picking.current);
     },
     [],
   );
@@ -110,6 +112,11 @@ export function MenuTrigger({ children, trigger, isOpen, defaultOpen, onOpenChan
 
   const pick = useCallback(() => {
     justPicked.current = true;
+    // The flag covers the close that follows a pick, not a dismissal later on: Esc and a press outside stay instant.
+    clearTimeout(picking.current);
+    picking.current = setTimeout(() => {
+      justPicked.current = false;
+    }, SEEN_MS);
   }, []);
 
   return (
@@ -273,8 +280,10 @@ export function Menu<T extends object>(props: MenuProps<T>) {
   const { search, emptyLabel = strings.noResults, width = 'menu', placement, isInline = false } = props;
   const { header, anchorRef, autoFocus } = props;
   const { contains } = useFilter({ sensitivity: 'base' });
-  // A choice made here holds its check for a beat before the trigger closes the menu.
-  const onPicked = useContext(Picked);
+  // A single choice holds its check for a beat before the trigger closes the menu. A menu of several stays open
+  // anyway, so it signals nothing.
+  const picked = useContext(Picked);
+  const onPicked = selectionMode === 'single' ? picked : undefined;
   const onShown = useRangeReporter(props.source);
   const count = props.source?.count ?? 0;
   const rows = useMemo<readonly Row[]>(() => Array.from({ length: count }, (_, index) => ({ id: index })), [count]);
@@ -630,7 +639,8 @@ export function MenuSection({
   isJoined = false,
   isPinned = false,
 }: MenuSectionProps) {
-  const onPicked = useContext(Picked);
+  const picked = useContext(Picked);
+  const onPicked = selectionMode === 'single' ? picked : undefined;
   // A pinned section's heading would only add height at the foot: its label names it for screen readers.
   const isHeadingDrawn = !isLabelHidden && !isJoined && !isPinned;
   return (

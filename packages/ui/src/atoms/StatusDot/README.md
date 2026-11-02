@@ -30,3 +30,7 @@ It takes no focus.
 
 - `hue` replaces `color`, and is required; `isArchived` is new.
 - The dot is `size-dot` (10px), one step up from the artifact's 8px (the owner, 31 October 2026), so a status reads at a glance in a dense table; it stays centred on the label's line in cells, tags, board column headers and selects.
+
+## Motion
+
+A status changing under the viewer fades in where the old one stood, the dot's new hue and the new words together (`useValueFade`, `lib/motion`), keyed on the hue and the label, so a theme switch moves nothing. Reduced motion keeps the fade and drops the lift (1 November 2026).

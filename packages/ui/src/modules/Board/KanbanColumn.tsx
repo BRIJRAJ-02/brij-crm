@@ -18,6 +18,7 @@ import { RowShown, useRangeReporter } from '../../lib/range-reporter.tsx';
 import { sizeToken, spaceToken } from '../../lib/token-values.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import styles from './KanbanColumn.module.css';
+import { useRowWash } from '../../lib/motion/motion.ts';
 import { KanbanCard } from './KanbanCard.tsx';
 import { strings } from './strings.ts';
 import type { BoardCard, BoardColumn } from './types.ts';
@@ -75,6 +76,10 @@ function SortableCard({
   readonly onOpenPanel?: ((card: BoardCard) => void) | undefined;
 }) {
   const isLocked = card.readOnlyReason !== undefined;
+  // A card changed under the viewer washes once: the values object is handed back unchanged until the record
+  // changes, so an edit made here and a patch from someone else both show, and nothing else does. The surface,
+  // border and radius belong to the row around this content, so that is the element that washes.
+  const wash = useRowWash<HTMLElement>(card.values);
   const { bind, grip, onPointerDown } = useSortableItem(id, {
     isDisabled: !canMove || isLocked,
     refusesDrop,
@@ -85,7 +90,10 @@ function SortableCard({
     // The row's own element drops aria-current (React Aria filters what an item passes through), so the card's
     // content carries it.
     <span
-      ref={bind}
+      ref={(node) => {
+        bind(node);
+        wash(node?.parentElement ?? null);
+      }}
       className={styles.content}
       onPointerDown={onPointerDown}
       aria-current={isOpen ? 'true' : undefined}

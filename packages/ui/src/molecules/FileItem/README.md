@@ -31,3 +31,7 @@ The name link and the remove button take focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Motion
+
+Remove closes the row up first (`collapseAway`, `lib/motion`): it fades while its height goes to nothing, so the rows below glide into its place, and only then does `onRemove` run. A caller that deletes optimistically therefore sees the press a beat later, and a second press meanwhile is ignored. Nothing the closing set is left on the row, so a removal that is refused leaves it exactly as it was. Focus follows on to the next row's remove. Reduced motion removes it at once (1 November 2026).

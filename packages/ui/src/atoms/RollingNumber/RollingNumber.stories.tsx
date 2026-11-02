@@ -19,7 +19,9 @@ export const Default: Story = {};
 
 /** A count beside the thing that changes it: adding one rolls the last digit only. */
 export const Rolls: Story = {
-  parameters: { crm: { preview: true } },
+  // Mid roll the characters are drawn one by one, and a paused animation sits at its first frame, so a shot of
+  // this story would catch invisible digits. The steady story is the one that is shot.
+  parameters: { crm: { preview: true, screenshot: false } },
   render: function Rolls() {
     const [count, setCount] = useState(1284);
     return (
@@ -45,6 +47,7 @@ export const Rolls: Story = {
 
 /** A count that gains a digit: every place after the change rolls, the ones before hold still. */
 export const GainsADigit: Story = {
+  parameters: { crm: { screenshot: false } },
   render: function GainsADigit() {
     const [count, setCount] = useState(99);
     return (

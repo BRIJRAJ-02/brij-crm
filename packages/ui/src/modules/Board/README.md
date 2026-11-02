@@ -59,3 +59,7 @@ Tab enters the first column; the up and down arrows move between cards, and Tab 
 ## Differences from the artifact
 
 The artifact's board is a static picture; this one moves cards and takes them from a source.
+
+## Motion
+
+A card whose record changed washes once in `accent-soft` and back to its own surface (`useRowWash`, `lib/motion`), whoever changed it: an edit made here, or a patch arriving over realtime. The wash is on the card's row, which owns the surface and the radius, not on its content. It never washes on the first draw, so a board that has just loaded is quiet (1 November 2026).

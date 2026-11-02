@@ -3,6 +3,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { FileIcon } from '../../atoms/FileIcon/FileIcon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
 import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { collapseAway } from '../../lib/motion/motion.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import styles from './FileItem.module.css';
@@ -63,6 +64,8 @@ export function FileItem({
 }: FileItemProps) {
   const { locale } = useFormatSettings();
   const root = useRef<HTMLDivElement>(null);
+  // One press closes the row up; a second while it closes would remove it twice.
+  const isLeaving = useRef(false);
   if (variant === 'chip') {
     return (
       <span className={styles.root} data-variant="chip">
@@ -121,8 +124,16 @@ export function FileItem({
           icon="x"
           label={strings.remove(name)}
           onPress={() => {
-            // The row closes up as it goes, so the list below glides rather than jumping.
-            collapseAway(root.current, onRemove);
+            if (isLeaving.current) return;
+            isLeaving.current = true;
+            // The row closes up as it goes, so the list below glides rather than jumping. Focus follows on to the
+            // next row's remove, since the button pressed leaves with the row.
+            collapseAway(root.current, () => {
+              const next = root.current?.nextElementSibling ?? root.current?.previousElementSibling;
+              onRemove();
+              isLeaving.current = false;
+              focusLater(() => next?.querySelector<HTMLElement>('button'));
+            });
           }}
         />
       )}

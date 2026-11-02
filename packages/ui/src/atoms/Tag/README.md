@@ -30,3 +30,7 @@ Tags take no focus. The "+N" chip is a button: Enter or Space opens the popover,
 
 - `hue` replaces `color`; `isArchived` is new.
 - `TagList` takes `tags` (id, label, hue) rather than children, so it can count and fold the rest into "+N".
+
+## Motion
+
+A value changed under the viewer is a change of mind, not a new tag: the chip fades in where the old one stood, hue and words together (`useValueFade`, `lib/motion`), keyed on the hue and the label, so a theme switch moves nothing. Reduced motion keeps the fade and drops the lift (1 November 2026).

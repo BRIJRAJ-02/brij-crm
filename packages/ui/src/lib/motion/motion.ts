@@ -6,7 +6,7 @@
 // own component. Every duration and curve still comes from a token, and
 // reduced motion keeps the fade and drops the movement.
 import { useEffect, useRef, useSyncExternalStore, type RefCallback } from 'react';
-import { durationToken, easingToken } from '../token-values.ts';
+import { durationToken, easingToken, spaceToken } from '../token-values.ts';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
@@ -57,9 +57,13 @@ export function useRowWash<T extends HTMLElement>(stamp: unknown): RefCallback<T
     const row = element.current;
     if (!canAnimate(row)) return;
     // The wash colour is a token, so it has to be read where the row sits: light and dark hold different values.
-    const wash = getComputedStyle(row).getPropertyValue('--accent-soft').trim();
+    const style = getComputedStyle(row);
+    const wash = style.getPropertyValue('--accent-soft').trim();
     if (wash === '') return;
-    row.animate([{ backgroundColor: wash }, { backgroundColor: 'transparent' }], {
+    // It fades back to the row's own background, not to nothing: a row with a surface would otherwise flash
+    // through to the page behind it on the last frame.
+    const own = style.backgroundColor;
+    row.animate([{ backgroundColor: wash }, { backgroundColor: own }], {
       duration: WASH_MS,
       easing: easingToken('ease-out'),
     });
@@ -80,8 +84,14 @@ export function useDropIn<T extends HTMLElement>(topKey: string | undefined): Re
   const seen = useRef<string | undefined>(topKey);
   useEffect(() => {
     if (seen.current === topKey) return;
+    const isFirstKey = seen.current === undefined;
     seen.current = topKey;
-    const first = element.current?.firstElementChild;
+    // The key a list learns as it loads is not an arrival: only a key replacing one already on screen is.
+    if (isFirstKey || topKey === undefined) return;
+    const list = element.current;
+    // The row the key belongs to, when the list says which is which (a virtual list draws a window, so its
+    // first child is whatever is in view); otherwise the first child, for a plain list.
+    const first = list?.querySelector('[data-drop-in]') ?? list?.firstElementChild;
     if (!canAnimate(first)) return;
     const still = prefersReducedMotion();
     first.animate(
@@ -125,15 +135,19 @@ const CLOSED: Keyframe = {
  * it held, and only then is it taken out. Call it with the row's element and
  * the removal itself. The removal always runs, even when the element is gone
  * or the browser can't animate it, so a row is never stranded on screen.
- * Reduced motion removes it at once.
+ * Reduced motion removes it at once. Whatever it set on the element is cleared
+ * before `remove` runs, so a removal that is refused leaves the row exactly as
+ * it was rather than a strip of nothing in the tab order.
  */
 export function collapseAway(element: HTMLElement | null | undefined, remove: () => void): void {
   if (!canAnimate(element) || prefersReducedMotion()) {
     remove();
     return;
   }
-  element.style.overflow = 'hidden';
-  const animation = element.animate([boxOf(element), CLOSED], {
+  const row = element;
+  const overflowWas = row.style.overflow;
+  row.style.overflow = 'hidden';
+  const animation = row.animate([boxOf(row), CLOSED], {
     duration: durationToken('duration-move'),
     easing: easingToken('ease-in-out'),
     fill: 'forwards',
@@ -142,6 +156,9 @@ export function collapseAway(element: HTMLElement | null | undefined, remove: ()
   const finish = (): void => {
     if (isDone) return;
     isDone = true;
+    // The row is handed back whole: if the removal doesn't take, nothing of the closing is left on it.
+    animation.cancel();
+    row.style.overflow = overflowWas;
     remove();
   };
   animation.addEventListener('finish', finish);
@@ -165,7 +182,7 @@ export function useValueFade<T extends HTMLElement>(value: string | number | und
     const still = prefersReducedMotion();
     node.animate(
       [
-        { opacity: 0, transform: still ? 'none' : 'translateY(2px)' },
+        { opacity: 0, transform: still ? 'none' : `translateY(${String(spaceToken('space-2'))}px)` },
         { opacity: 1, transform: 'none' },
       ],
       { duration: durationToken('duration-popover'), easing: easingToken('ease-out') },
