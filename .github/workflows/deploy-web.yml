@@ -77,7 +77,7 @@ jobs:
           # What that trades: a flow failure is found after the deploy rather than before, and the answer is
           # `vercel rollback`, which takes seconds. That is the right trade while the product has no customers to
           # protect. Put the flows back the moment it has them.
-          REQUIRED=("check" "ui")
+          REQUIRED=("check" "ui" "visual")
           # These run only when the change touched packages/ui (`needs.changes` in ci.yml), so on any other change
           # they are skipped rather than green. Reading skipped as "not passed" meant the fast path declined every
           # time the library was untouched, which is most changes, so the path never once fired (26 October 2026).
@@ -89,6 +89,65 @@ jobs:
           # arrive, so the path still declined every time, fifteen minutes later (27 October 2026). `settled_ui`
           # below reads either shape: all three browsers, or the one skipped matrix. The name is matched by its
           # shape rather than written out, so Actions doesn't read it as an expression of this job's own.
+          # One line per job, `conclusion<TAB>name`, from the run that answers the question this gate asks:
+          # did this commit pass the jobs main holds it to. It is NOT "the newest check run anyone attached".
+          #
+          # A sha accumulates check runs across every run AND every workflow that touched it, and nothing ever
+          # removes one. A landing branch fast forwarded onto main is the same commit, so its sha carries the
+          # branch's CI run and main's. Reading the union and asking whether a name appears in a list is
+          # unsound against that: a job red on the branch and green on main is in `failed` and `passed` at
+          # once, `failed` is tested first, and that commit can then never deploy however green main goes,
+          # since nothing removes a check run.
+          #
+          # That is a real hazard and this closes it, but it is NOT what the empty commits were for. Checked
+          # against the two we paid for: `ee288d453` had main's own CI red (`check` failed, everything else
+          # green), and `45bcac5ac` had main's own CI cancelled. Both were main's verdict, not a branch's red
+          # outliving it. The cure for those is to re-run main's CI, not a fresh sha, and a cancelled run
+          # stays what it has been all along: not a result.
+          #
+          # Scoped by workflow and event and branch, not by branch alone: the same sha also carries unrelated
+          # workflows, and a scheduled `Load smoke` run on main reports `head_branch: main` with its own
+          # conclusion. Branch alone would read that as main's answer.
+          #
+          # Three rules, in this order, per name (the owner, 2 November 2026). They are written out rather
+          # than folded into one expression, because every variant of this bug so far has come from a clever
+          # membership test over a set wider than the question:
+          #   1. main's CI push run has a conclusion for the name  -> that is the verdict, whatever it is.
+          #   2. otherwise, any run on this sha has `success` for it -> passed.
+          #   3. otherwise                                          -> it waits.
+          # A non-main, non-success is never consulted at all, so a branch's red or its filter skip cannot
+          # veto anything, while rule 2 keeps the fast path: a landing branch tested the identical tree, so
+          # its green still deploys at once rather than waiting for main's own run.
+          job_lines() {
+            local sha="$1" ci_run main_lines decided decided_names borrowed
+            # `actions/runs?head_sha=` answers a short sha with an empty list and no error, which would read
+            # as "no run on main yet" and quietly fall back. Both callers pass a full sha; this makes sure.
+            if [ "${#sha}" -ne 40 ] || [ -n "$(tr -d '0-9a-f' <<< "$sha")" ]; then
+              echo "The sha \"$sha\" is not 40 hex characters, so the run lookup would quietly find nothing." >&2
+              return 1
+            fi
+            ci_run=$(gh api "repos/$REPO/actions/runs?head_sha=$sha&per_page=100" \
+              -q '[.workflow_runs[] | select(.name == "CI" and .event == "push" and .head_branch == "main")]
+                  | sort_by(.id) | last | .id // empty' || true)
+            main_lines=''
+            if [ -n "$ci_run" ]; then
+              # A job still running has a null conclusion, and reports here as `running`.
+              main_lines=$(gh api --paginate "repos/$REPO/actions/runs/$ci_run/jobs?per_page=100" \
+                -q '.jobs[] | "\(.conclusion // "running")\t\(.name)"' || true)
+            fi
+            # Rule 1. A name main's run has finished, whatever it concluded. `running` is not a conclusion, so
+            # it is left out here and the name goes on to rule 2, and to rule 3 if nothing green answers it.
+            decided=$(awk -F'\t' '$1 != "running"' <<< "$main_lines" || true)
+            decided_names=$(cut -f2- <<< "$decided" | sort -u || true)
+            # Rule 2. A success from any run on this sha, for a name rule 1 has not already settled. Only
+            # `success` is read from these: a branch's red, its filter skip and its cancel are never consulted.
+            borrowed=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
+              -q '.check_runs[] | select(.conclusion == "success") | .name' \
+              | sort -u | grep -vxF -f <(printf '%s\n' "$decided_names") | sed 's/^/success\t/' || true)
+            # Rule 3 needs no line: a name neither rule answered is absent, so it stays in `waiting`.
+            # Blank lines dropped, so an empty half never reaches the callers' greps as a nameless entry.
+            printf '%s\n%s\n' "$decided" "$borrowed" | grep -v '^$' || true
+          }
           settled_ui() {
             grep -Fxq "visual" <<< "$1" || return 1
             grep -Fxq "stories (chromium)" <<< "$1" \
@@ -106,13 +165,16 @@ jobs:
             # waits on has ever taken; CI finishing is then the second route, as before.
             deadline=$((SECONDS + 900))
             while true; do
-              runs=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
-                -q '.check_runs[] | "\(.conclusion)\t\(.name)"' || true)
+              runs=$(job_lines "$sha")
               # `|| true`: no line of a kind is an empty list, not a failure, and `set -e` would end the job.
               passed=$(grep -E '^success\s' <<< "$runs" | cut -f2- | sort -u || true)
               settled=$(grep -E '^(success|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
               # A job that ended any other way is never going to pass on this commit, so stop waiting for it.
-              failed=$(grep -E '^(failure|cancelled|timed_out|action_required)\s' <<< "$runs" | cut -f2- | sort -u || true)
+              # `skipped` refuses too. Now that one run answers for a name, a required job that skipped really
+              # did not run, and the owner asked for a refusal said at once rather than a wait that expires in
+              # silence (2 November 2026). `settled_ui` still reads `skipped` as settled for `stories`, which
+              # is not required.
+              failed=$(grep -E '^(failure|cancelled|timed_out|action_required|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
               waiting=''
               for name in "${REQUIRED[@]}"; do
                 if grep -Fxq "$name" <<< "$failed"; then
@@ -159,11 +221,14 @@ jobs:
           # and all. That is the twenty minutes the fast path exists to remove, arriving by the back door.
           deadline=$((SECONDS + 900))
           while true; do
-            runs=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
-              -q '.check_runs[] | "\(.conclusion)\t\(.name)"' || true)
+            runs=$(job_lines "$sha")
             passed=$(grep -E '^success\s' <<< "$runs" | cut -f2- | sort -u || true)
             settled=$(grep -E '^(success|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
-            failed=$(grep -E '^(failure|cancelled|timed_out|action_required)\s' <<< "$runs" | cut -f2- | sort -u || true)
+            # `skipped` refuses too. Now that one run answers for a name, a required job that skipped really
+            # did not run, and the owner asked for a refusal said at once rather than a wait that expires in
+            # silence (2 November 2026). `settled_ui` still reads `skipped` as settled for `stories`, which
+            # is not required.
+            failed=$(grep -E '^(failure|cancelled|timed_out|action_required|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
             waiting=''
             for name in "${REQUIRED[@]}"; do
               if grep -Fxq "$name" <<< "$failed"; then
