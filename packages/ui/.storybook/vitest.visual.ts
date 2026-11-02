@@ -66,6 +66,13 @@ afterEach(async (context) => {
         .getAnimations()
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity);
       await Promise.all(finite.map((animation) => animation.finished));
+      // An entrance can start a frame after the list above was read (a link page's blocks rise as a lazy block
+      // mounts, and the gallery grid's light shot caught them part faded, 2 Nov 2026), so finish what started since.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      for (const animation of document.getAnimations()) {
+        if (animation.effect?.getComputedTiming().iterations !== Infinity) animation.finish();
+      }
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       await expect.element(page.getByTestId('story-root')).toMatchScreenshot(name);
     }
   } finally {
