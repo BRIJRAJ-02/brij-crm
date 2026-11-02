@@ -1126,7 +1126,7 @@
       "idx": 160,
       "version": "7",
       "when": 1795502400000,
-      "tag": "0xxx_managed_booking_pages",
+      "tag": "0160_managed_booking_pages",
       "breakpoints": true
     }
   ]
