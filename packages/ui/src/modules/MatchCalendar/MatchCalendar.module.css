@@ -113,8 +113,6 @@
     animation: match-arrive var(--duration-modal) var(--ease-out) backwards;
   }
 
-
-
   /* While the two calendars are matched: three dots crossing the gap, one after another. */
   .dots {
     display: flex;
