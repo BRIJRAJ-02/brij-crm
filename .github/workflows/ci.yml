@@ -567,9 +567,14 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
       # four that killed shard 2 now run alone, and the other 86 get a page that never sees what they leave
       # behind. That is membership and pass boundaries, which we do control; the order inside a pass is still
       # vitest's, since the files reach it as filters.
+      # Shard 2 before shard 1 on purpose. Both shards run here, one after the other on ONE runner, so shard 2
+      # has always met a machine that just ran shard 1's 91 files, and "shard 2 died after 7" may be the
+      # runner's free memory rather than anything those 7 left in the page. Running it first tells the two
+      # apart in one run: if its set passes first and shard 1's 91 now dies, the ceiling is the runner, not the
+      # files, and the next move is a runner each rather than anything in the library.
       - name: Run the stories, in two shards
         run: |
-          for shard in 1 2; do
+          for shard in 2 1; do
             while read -r pass; do
               # shellcheck disable=SC2086
               pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})" $pass
