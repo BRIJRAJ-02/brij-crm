@@ -97,6 +97,17 @@
     resize: none;
   }
 
+  /* A phone zooms the page into a field whose text is under 16px (iOS Safari), so under a finger every field's text
+     is 16px and the page stays put as it is tapped (the owner, 2 November 2026). */
+  @media (pointer: coarse) {
+    .input {
+      /* stylelint-disable-next-line unit-disallowed-list -- the size iOS needs to not zoom; no text token is 16px */
+      --touch-text: 16px;
+
+      font-size: var(--touch-text);
+    }
+  }
+
   .input::placeholder {
     color: var(--text-tertiary);
   }
@@ -224,6 +235,13 @@
     color: var(--danger);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+    /* An error fades in on the field that caused it, as the edge turns red; it goes when the field is fixed. The
+       element stays while the field is invalid, so a message that replaces another changes in place, with no
+       second fade (the story ErrorChangesInPlace). */
+    /* It opens to its own height, so the fields under it move down smoothly rather than jumping a line (stageshow's
+       form-error). */
+    interpolate-size: allow-keywords;
+    animation: field-error-in var(--duration-move) var(--ease-out) backwards;
   }
 
   /* In a grid cell: on a raised surface under the cell, over the rows below,
@@ -380,6 +398,27 @@
 
     .root[data-variant='cell'] .box:focus-within {
       outline: none;
+    }
+  }
+
+  /* Asked for less motion, the error is simply there with its red edge. */
+  @media (prefers-reduced-motion: reduce) {
+    .error {
+      animation: none;
+    }
+  }
+
+  @keyframes field-error-in {
+    from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
+      opacity: 0;
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
     }
   }
 }

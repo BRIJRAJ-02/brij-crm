@@ -61,6 +61,8 @@ export const strings = {
   phoneRequired: 'Give a number to call you on.',
   trap: 'Leave this empty',
   // Book by chat (spec 0042).
+  /** The chat's confirm card names the meeting as the confirmation does. */
+  chatCardTitle: (title: string, host: string) => `${title} with ${host}`,
   chatGreeting: (host: string, title: string, minutes: number) =>
     `Booking your ${String(minutes)} min ${title} with ${host}. When suits you?`,
   chatNoTimes: (host: string) => `${host} has nothing open right now. Check back soon.`,

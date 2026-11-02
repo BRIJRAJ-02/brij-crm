@@ -1,4 +1,4 @@
-import { lazy, Suspense, useContext, useRef, type JSX, type ReactNode, type Ref } from 'react';
+import { lazy, Suspense, useContext, useRef, useState, type JSX, type ReactNode, type Ref } from 'react';
 import {
   Button as AriaButton,
   Link as AriaLink,
@@ -198,6 +198,11 @@ function keycaps(kbd: ButtonLook['kbd'], variant: ButtonVariant): ReactNode {
 
 function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; isPending: boolean }) {
   const variant = look.variant ?? 'secondary';
+  // A label that changes after the first paint ("Book" to "Book Thu Oct 8 at 9:30 AM") is drawn anew and marked, so
+  // a page that asks for it (--label-swap) resolves it in. The first label is simply there.
+  const [shown, setShown] = useState({ label: face.children, isSwapped: false });
+  if (shown.label !== face.children) setShown({ label: face.children, isSwapped: true });
+  const swapped = shown.isSwapped ? { 'data-swapped': true } : {};
   return (
     <>
       {isPending ? (
@@ -224,10 +229,14 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
       )}
       {face.children !== undefined &&
         (look.labelReserve === undefined ? (
-          <span className={styles.label}>{face.children}</span>
+          <span key={face.children} className={styles.label} {...swapped}>
+            {face.children}
+          </span>
         ) : (
           <span className={styles.label} data-reserve>
-            <span>{face.children}</span>
+            <span key={face.children} {...swapped}>
+              {face.children}
+            </span>
             <span className={styles.reserve} aria-hidden="true">
               {look.labelReserve}
             </span>

@@ -446,6 +446,10 @@ export const PublicChatReply = z.object({
   text: z.string(),
   offers: z.array(Timestamp),
   suggestions: z.array(z.string()),
+  /** The suggestion that books what was just read back ("Yes, book it"): drawn as the answer's own confirm button. */
+  confirm: z.string().optional(),
+  /** With `confirm`: what it would book, so the page can draw the read back as a card (when, who). */
+  readBack: z.object({ start: Timestamp, name: z.string(), email: z.string() }).optional(),
   duration: BookingDuration,
   booked: PublicBooked.optional(),
 });

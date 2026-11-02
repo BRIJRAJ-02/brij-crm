@@ -52,6 +52,10 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 
 Empty (placeholder), filled, near its limit (the count shows), focus (a 1px `accent-line` border and the faint halo; inside a Popover the border alone, see below), invalid (danger border and message, in place of the hint), read only (filled, lock, reason), disabled (faded, reason), copy (read only, drawn live, with its Copy button, on one line or many). The `cell` variant has none of these looks of its own: its grid cell draws focus and the refusal, and the message floats under the cell on a raised surface. The `title` variant has no box in any state: empty shows its placeholder, read only is plain text.
 
+## Motion
+
+An error fades in under the field that caused it, as its edge turns red, and goes when the field is fixed.
+
 ## Keyboard
 
 Tab reaches it. In a single line field and a wrapping one, Enter calls `onSubmit` (a cell commits on it); in a multiline one it breaks the line.

@@ -22,7 +22,7 @@ Idle; Move open; Guests open (the list, Adding…, Invited bob@…, They're alre
 
 - The top row keeps its own small flex row rather than ButtonGroup's `row` layout: Cancel booking sits apart at the row's end, which ButtonGroup doesn't offer.
 - Why not ListEditor for the guests: ListEditor edits a list value and commits it whole through an attribute's schema; here each add and each remove is its own server call that emails or uninvites someone, so the panel keeps one list and one field.
-- The panel is a disclosure: it fades in and closes at once, as Disclosure does.
+- The panel is a disclosure: it fades in and closes at once, as Disclosure does. An invited guest drops into the list (a fade under reduced motion), and inside the public pages its buttons answer a press through the receipt's `--scale-press`.
 
 ## Keyboard
 
@@ -31,3 +31,5 @@ Tab reaches Move, Guests and Cancel booking; Move and Guests are read as expande
 ## Differences from the artifact
 
 Not in the artifact.
+
+Guests are GuestChips (2 November 2026), the same chips the booking form adds guests with, so adding and removing guests looks one way everywhere. Each chip's remove still asks first, in the remove dialog.

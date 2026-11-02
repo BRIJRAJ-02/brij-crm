@@ -2,7 +2,20 @@
    quiet button under the email, then Back and Confirm at the end. */
 @layer components {
   .root {
+    /* The booking page answers a press (the owner, 1 November 2026, public booking page only): any Button in here
+       eases to this scale while held. Set here, not in tokens.css (generated from the artifact, where it stays 1 for
+       the app), because this module only ever mounts on the public pages. */
+    --scale-press: 0.97;
+    /* The blur a new guest chip resolves out of (transitions.dev's 2px), a literal because the token set has no blur
+       yet: the artifact owes a motion blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --chip-blur: 2px;
+    /* A panel opening, transitions.dev's 400ms (the owner, 2 November 2026), a literal until the artifact has it. */
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --panel-duration: 480ms;
+
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: var(--space-16);
     inline-size: 100%;
@@ -47,6 +60,32 @@
     outline-offset: var(--border-width-hairline);
   }
 
+  /* A field's own wrapper, so a refused Confirm can shake the field it found wrong: twice side to side, small, then
+     still. Two names for one shake, so the next refusal replays it. */
+  /* Add guests opens the Guests field as a card expansion (stageshow's ai-cards): it grows to its height, so Anything
+     the host should know moves down as one. Where a height can't animate, it fades in. */
+  .guests[data-opening] {
+    interpolate-size: allow-keywords;
+    animation: guests-open var(--panel-duration) var(--ease-out);
+  }
+
+  .shaker,
+  .guests {
+    min-inline-size: 0;
+  }
+
+  .shaker[data-shake='even'],
+  .guests[data-shake='even'],
+  .actions[data-shake='even'] {
+    animation: shake-even calc(var(--duration-move) * 2) var(--ease-out);
+  }
+
+  .shaker[data-shake='odd'],
+  .guests[data-shake='odd'],
+  .actions[data-shake='odd'] {
+    animation: shake-odd calc(var(--duration-move) * 2) var(--ease-out);
+  }
+
   .guests {
     display: flex;
     flex-direction: column;
@@ -78,7 +117,15 @@
     min-block-size: 0;
   }
 
+  /* What went wrong fades in where it will stay, rather than appearing at once under the form. */
+  .line:not(:empty) {
+    animation: line-in var(--duration-move) var(--ease-out) both;
+  }
+
+  /* Back and Confirm sit at the card's foot, where Book sat on the step before (as Cal.com keeps them), so the card
+     keeps the month's size, nothing on the page shifts, and the press moves from Book to Confirm in one place. */
   .actions {
+    margin-block-start: auto;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -88,6 +135,86 @@
   @media (hover: hover) and (pointer: fine) {
     .inline:hover {
       text-decoration: underline;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fixed {
+      animation-name: line-in;
+    }
+
+    .shaker[data-shake],
+    .guests[data-shake],
+    .actions[data-shake] {
+      animation: none;
+    }
+
+    .guests[data-opening]:not([data-shake]) {
+      animation-name: line-in;
+    }
+  }
+
+  /* The calm tick on a field put right: it opens out of a soft blur, as the guest chips do. */
+  .fixed {
+    display: inline-flex;
+    animation: chip-in var(--duration-modal) var(--ease-out) backwards;
+  }
+
+  @keyframes guests-open {
+    from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
+      opacity: 0;
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
+    }
+  }
+
+  @keyframes shake-even {
+    20% {
+      translate: calc(-1 * var(--space-8)) 0;
+    }
+    40% {
+      translate: var(--space-8) 0;
+    }
+    60% {
+      translate: calc(-1 * var(--space-6)) 0;
+    }
+    80% {
+      translate: var(--space-6) 0;
+    }
+  }
+
+  @keyframes shake-odd {
+    20% {
+      translate: calc(-1 * var(--space-8)) 0;
+    }
+    40% {
+      translate: var(--space-8) 0;
+    }
+    60% {
+      translate: calc(-1 * var(--space-6)) 0;
+    }
+    80% {
+      translate: var(--space-6) 0;
+    }
+  }
+
+  @keyframes chip-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+      filter: blur(var(--chip-blur));
+    }
+  }
+
+  @keyframes line-in {
+    from {
+      opacity: 0;
     }
   }
 }

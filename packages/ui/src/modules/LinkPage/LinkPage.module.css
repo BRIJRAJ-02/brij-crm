@@ -284,6 +284,11 @@
      visitor's own light or dark; nothing else needs a block of its own. */
 
   .root {
+    /* The social marks arrive one after another and lift a touch under the pointer (SocialLinks), as on a booking
+       page. */
+    --social-arrive: var(--duration-modal);
+    /* stylelint-disable-next-line unit-disallowed-list -- a lift with no token, the public pages' own */
+    --social-lift: 2px;
     --page-surface: var(--surface);
     --page-text: var(--text);
     --page-text-quiet: var(--text-secondary);

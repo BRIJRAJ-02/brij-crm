@@ -9,4 +9,5 @@ export const strings = {
   best: 'a best time for you both',
   busyTag: 'You’re busy',
   busy: 'your calendar is busy then',
+  picked: 'picked',
 } as const;

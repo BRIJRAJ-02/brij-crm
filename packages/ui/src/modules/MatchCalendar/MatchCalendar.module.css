@@ -37,6 +37,11 @@
 
   /* The host and the visitor, the same shape in every state. */
   .pair {
+    /* The blurs the answer resolves out of (transitions.dev's text reveal and success check), literals until the
+       artifact has blur tokens. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --match-check-blur: 8px;
+
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     gap: var(--space-12);
@@ -80,8 +85,10 @@
     color: var(--text-tertiary);
   }
 
+  /* Matched: the tick opens out of a wide blur (transitions.dev's success check). */
   .pair[data-step='matched'] .middle {
     color: var(--success);
+    animation: match-check var(--duration-modal) var(--ease-out) both;
   }
 
   .pair[data-step='failed'] .middle {
@@ -91,6 +98,22 @@
   .pair:not([data-step='waiting']) .middle {
     animation: match-middle-in var(--duration-popover) var(--ease-out) both;
   }
+
+  /* Matched: the two of them lean in to meet the tick once, then settle back: the moment the calendars agree. */
+  .pair[data-step='matched'] .face {
+    animation: match-meet var(--duration-modal) var(--ease-in-out);
+  }
+
+  .pair[data-step='matched'] .face[data-side='visitor'] {
+    animation-name: match-meet-back;
+  }
+
+  /* The visitor's face arrives in place of the held circle once Google says who they are. */
+  .face[data-side='visitor'] .portrait[data-known] {
+    animation: match-arrive var(--duration-modal) var(--ease-out) backwards;
+  }
+
+
 
   /* While the two calendars are matched: three dots crossing the gap, one after another. */
   .dots {
@@ -126,6 +149,9 @@
 
   /* The answer's words, in a block tall enough for the longest of them. */
   .message {
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --match-say-blur: 3px;
+
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
@@ -134,7 +160,9 @@
     text-align: center;
   }
 
+  /* Each step's words resolve in where the last ones stood (transitions.dev's text reveal), the note a beat after. */
   .lead {
+    animation: match-say var(--duration-modal) var(--ease-in-out) backwards;
     margin: 0;
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
@@ -150,6 +178,7 @@
   }
 
   .note {
+    animation: match-say var(--duration-modal) var(--ease-in-out) var(--duration-hover) backwards;
     margin: 0;
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -178,8 +207,52 @@
     }
 
     .pair[data-step='waiting'] .portrait,
-    .face[data-side='visitor'] .portrait {
+    .face[data-side='visitor'] .portrait,
+    .pair[data-step='matched'] .face {
       animation: none;
+    }
+
+    .pair[data-step='matched'] .middle,
+    .face[data-side='visitor'] .portrait[data-known],
+    .lead,
+    .note {
+      animation-name: match-fade;
+    }
+  }
+
+  @keyframes match-check {
+    from {
+      opacity: 0;
+      scale: var(--scale-shrunk);
+      filter: blur(var(--match-check-blur));
+    }
+  }
+
+  @keyframes match-meet {
+    40% {
+      translate: var(--space-6) 0;
+    }
+  }
+
+  @keyframes match-meet-back {
+    40% {
+      translate: calc(var(--space-6) * -1) 0;
+    }
+  }
+
+  @keyframes match-arrive {
+    from {
+      opacity: 0;
+      scale: var(--scale-enter);
+      filter: blur(var(--match-check-blur));
+    }
+  }
+
+  @keyframes match-say {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+      filter: blur(var(--match-say-blur));
     }
   }
 

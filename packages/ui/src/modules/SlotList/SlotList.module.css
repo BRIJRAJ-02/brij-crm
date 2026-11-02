@@ -4,6 +4,11 @@
    to four across as room allows. */
 @layer components {
   .root {
+    /* The soft blur words resolve out of when they change in place (transitions.dev's text swap soft, 2px). A literal
+       because the token set has no blur yet: the artifact owes a motion blur token, and this becomes it. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --swap-blur: 2px;
+
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
@@ -26,11 +31,13 @@
     margin-inline-start: auto;
   }
 
+  /* A new day's name fades in where the last one was: the row never moves, only the words change. */
   .heading {
     margin: 0;
     color: var(--text);
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
+    animation: slot-swap var(--duration-move) var(--ease-in-out) both;
   }
 
   /* The offers variant's day: a label over its times (the booking chat). */
@@ -134,13 +141,25 @@
     transition:
       border-color var(--duration-hover) var(--ease-hover),
       background-color var(--duration-hover) var(--ease-hover),
-      flex-grow var(--duration-move) var(--ease-out);
+      flex-grow var(--duration-move) var(--ease-out),
+      scale var(--duration-press) var(--ease-out);
   }
 
+  /* A press eases the time down to --scale-press: 1 in the app, 0.97 where the public booking page sets it. */
+  .slot:active {
+    scale: var(--scale-press);
+  }
+
+  /* The pick settles in at the movement pace, so a tap reads as landing; letting go of it takes the quicker
+     hover pace. Nothing moves or scales: only the fill comes and goes. */
   .slot[aria-pressed='true'] {
     border-color: var(--accent);
     background: var(--accent);
     color: var(--on-accent);
+    transition:
+      border-color var(--duration-move) var(--ease-out),
+      background-color var(--duration-move) var(--ease-out),
+      color var(--duration-move) var(--ease-out);
   }
 
   .slot[data-busy] {
@@ -153,8 +172,11 @@
     outline-offset: var(--border-width-hairline);
   }
 
+  /* A time changes in place when the clock switches between 12h and 24h: the box stays, the old words go and the
+     new ones fade in, so the list never redraws or reorders under the visitor. */
   .time {
     white-space: nowrap;
+    animation: slot-swap var(--duration-move) var(--ease-in-out) both;
   }
 
   .best,
@@ -177,8 +199,27 @@
     padding-block: var(--space-8);
   }
 
+  /* An answered offer (the chat's record): the picked time keeps a fill and a check beside its time, the rest go
+     quiet, and none takes a press. */
+  .root[data-answered] .slot {
+    cursor: default;
+  }
+
+  .item[data-answer] .slot {
+    flex-direction: row;
+    gap: var(--space-6);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--link);
+  }
+
+  .item[data-quiet] .slot {
+    border-color: var(--border-subtle);
+    color: var(--text-tertiary);
+  }
+
   @media (hover: hover) and (pointer: fine) {
-    .slot:not([aria-pressed='true']):hover {
+    .root:not([data-answered]) .slot:not([aria-pressed='true']):hover {
       border-color: var(--text);
     }
   }
@@ -190,15 +231,32 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .item {
+    .item,
+    .heading,
+    .time {
       animation-name: slot-fade;
+    }
+
+    .slot:active {
+      scale: none;
     }
   }
 
+  /* Times resolve out of their placeholders with a little blur, as content settles out of a skeleton. */
   @keyframes slot-in {
     from {
       opacity: 0;
       translate: 0 var(--space-4);
+      filter: blur(var(--swap-blur));
+    }
+  }
+
+  /* Words that change in place resolve out of a soft blur (transitions.dev's text swap), so the change reads as
+     the same words settling rather than a cut. */
+  @keyframes slot-swap {
+    from {
+      opacity: 0;
+      filter: blur(var(--swap-blur));
     }
   }
 

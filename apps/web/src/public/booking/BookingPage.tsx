@@ -766,8 +766,13 @@ function Booking({
       })
       .then(
         (booked): BookingDetailsOutcome => {
-          onBooked(booked.manageToken);
-          return { kind: 'done' };
+          // The receipt opens once Confirm has shown Booked for a beat.
+          return {
+            kind: 'done',
+            next: () => {
+              onBooked(booked.manageToken);
+            },
+          };
         },
         (error: unknown): BookingDetailsOutcome | Promise<BookingDetailsOutcome> => {
           if (!isDataError(error)) return { kind: 'failed', message: strings.errors.failed };

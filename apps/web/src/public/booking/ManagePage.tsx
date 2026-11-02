@@ -151,6 +151,13 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
     details,
     location: whereOf(booking),
   }).toString()}`;
+  // What a shared copy carries: the meeting itself, never the visitor's note or this page's link.
+  const forOthers = `https://calendar.google.com/calendar/render?${new URLSearchParams({
+    action: 'TEMPLATE',
+    text: summary,
+    dates: `${compact(booking.start)}/${compact(booking.end)}`,
+    location: whereOf(booking),
+  }).toString()}`;
   const outlook = `https://outlook.live.com/calendar/0/deeplink/compose?${new URLSearchParams({
     path: '/calendar/action/compose',
     rru: 'addevent',
@@ -233,6 +240,16 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
         label: changeStrings.poweredBy,
       }}
       calendars={{ google, outlook, ics: client.icsUrl(token) }}
+      share={{
+        title: summary,
+        lines: [
+          summary,
+          `${longDate(booking.start, zone, locale)}, ${rangeLabel(booking.start, booking.end, zone, locale)}`,
+          zoneDisplay(zone, now()),
+          whereOf(booking),
+        ],
+        calendarUrl: forOthers,
+      }}
       again={{
         label: booking.state === 'cancelled' ? strings.bookAnother(booking.hostName) : strings.bookAgain,
         href: `/b/${encodeURIComponent(booking.publicKey)}`,
