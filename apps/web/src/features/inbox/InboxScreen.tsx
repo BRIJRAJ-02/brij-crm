@@ -278,6 +278,8 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
                 members={members}
                 meId={meId}
                 onClose={closeTask}
+                // The list focus goes back to after a delete, since the notice it was opened from stays put.
+                listLabel={strings.listLabel(tabLabel, kindLabel)}
                 onOpenTask={(taskId) => {
                   openedHere.current = true;
                   go({ ...filtersOnly({}), task: taskId }, true);

@@ -78,8 +78,13 @@ export function useRowWash<T extends HTMLElement>(stamp: unknown): RefCallback<T
  * list, not the row: pass the key of whatever is first, and the first child
  * drops in whenever that key becomes one the list hasn't seen. Reduced motion
  * fades it in without the drop.
+ *
+ * `needsMark` is for a windowed list, whose first child is whatever is in view:
+ * nothing moves unless the row the key belongs to is marked `data-drop-in` and
+ * drawn, so a list scrolled away from its top never animates a row that didn't
+ * arrive.
  */
-export function useDropIn<T extends HTMLElement>(topKey: string | undefined): RefCallback<T> {
+export function useDropIn<T extends HTMLElement>(topKey: string | undefined, needsMark = false): RefCallback<T> {
   const element = useRef<T | null>(null);
   const seen = useRef<string | undefined>(topKey);
   useEffect(() => {
@@ -91,7 +96,8 @@ export function useDropIn<T extends HTMLElement>(topKey: string | undefined): Re
     const list = element.current;
     // The row the key belongs to, when the list says which is which (a virtual list draws a window, so its
     // first child is whatever is in view); otherwise the first child, for a plain list.
-    const first = list?.querySelector('[data-drop-in]') ?? list?.firstElementChild;
+    const marked = list?.querySelector('[data-drop-in]');
+    const first = needsMark ? marked : (marked ?? list?.firstElementChild);
     if (!canAnimate(first)) return;
     const still = prefersReducedMotion();
     first.animate(
@@ -101,7 +107,7 @@ export function useDropIn<T extends HTMLElement>(topKey: string | undefined): Re
       ],
       { duration: durationToken('duration-popover'), easing: easingToken('ease-out') },
     );
-  }, [topKey]);
+  }, [topKey, needsMark]);
   return (node) => {
     element.current = node;
   };

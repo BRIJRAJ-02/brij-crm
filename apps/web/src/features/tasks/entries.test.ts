@@ -94,18 +94,30 @@ describe('stepTask', () => {
     },
   });
 
-  it('steps to the task before and after', () => {
-    expect(stepTask(rows(['a', 'b', 'c']), 'b', 'previous')).toBe('a');
-    expect(stepTask(rows(['a', 'b', 'c']), 'b', 'next')).toBe('c');
+  it('names the task before and after', () => {
+    expect(stepTask(rows(['a', 'b', 'c']), 'b')).toEqual({ previous: 'a', next: 'c' });
   });
 
   it('stops at either end', () => {
-    expect(stepTask(rows(['a', 'b']), 'a', 'previous')).toBeUndefined();
-    expect(stepTask(rows(['a', 'b']), 'b', 'next')).toBeUndefined();
+    expect(stepTask(rows(['a', 'b']), 'a')).toEqual({ next: 'b' });
+    expect(stepTask(rows(['a', 'b']), 'b')).toEqual({ previous: 'a' });
   });
 
   it('has no step for a task the list does not hold, or a neighbour not read yet', () => {
-    expect(stepTask(rows(['a', 'b']), 'z', 'next')).toBeUndefined();
-    expect(stepTask(rows(['a', undefined]), 'a', 'next')).toBeUndefined();
+    expect(stepTask(rows(['a', 'b']), 'z')).toEqual({});
+    expect(stepTask(rows(['a', undefined]), 'a')).toEqual({});
+  });
+
+  it('asks for each row at most once', () => {
+    let reads = 0;
+    const counted = {
+      count: 3,
+      getItem: (index: number) => {
+        reads += 1;
+        return { id: ['a', 'b', 'c'][index] ?? '', title: 'x', isDone: false } satisfies TaskEntry;
+      },
+    };
+    stepTask(counted, 'b');
+    expect(reads).toBeLessThanOrEqual(4);
   });
 });

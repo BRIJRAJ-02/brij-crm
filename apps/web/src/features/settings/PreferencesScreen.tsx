@@ -33,6 +33,7 @@ import {
   weekStartChoices,
 } from './preferences.ts';
 import { NotificationSections, NotificationSectionsLoading } from './NotificationSections.tsx';
+import { strings as notificationStrings } from './notifications-strings.ts';
 import { strings } from './preferences-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -65,6 +66,8 @@ export interface PreferencesScreenProps {
   readonly notifications?: InboxSettings;
   /** The notification sections are still being read: their cards show busy, so nothing moves as they arrive. */
   readonly isLoadingNotifications?: boolean;
+  /** The read failed: the sections say so in their place, and this reads them again. */
+  readonly onRetryNotifications?: () => void;
   /** The screen's slug, for the notification sections' writes. */
   readonly slug: string;
 }
@@ -84,6 +87,7 @@ export function PreferencesScreen({
   customiseSidebar,
   notifications,
   isLoadingNotifications = false,
+  onRetryNotifications,
 }: PreferencesScreenProps) {
   // The controller is the one source: a change here, in another tab or on the status page shows at once.
   const choice = useSyncExternalStore(
@@ -130,7 +134,15 @@ export function PreferencesScreen({
         <NotificationSections slug={slug} settings={notifications} />
       ) : isLoadingNotifications ? (
         <NotificationSectionsLoading />
-      ) : null}
+      ) : (
+        <SettingsSection title={notificationStrings.title}>
+          <EmptyState
+            tone="error"
+            title={notificationStrings.loadFailed}
+            {...(onRetryNotifications === undefined ? {} : { onRetry: onRetryNotifications })}
+          />
+        </SettingsSection>
+      )}
     </SettingsPage>
   );
 }

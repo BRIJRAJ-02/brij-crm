@@ -352,6 +352,8 @@ function TaskShell({
   actions,
   quickActions,
   empty,
+  notice,
+  isStepping,
   children,
 }: {
   readonly title: string;
@@ -363,6 +365,10 @@ function TaskShell({
   readonly actions?: ReactNode;
   readonly quickActions?: ReactNode;
   readonly empty?: ReactNode;
+  /** One line over the body that never scrolls away: a refused tick, which belongs to the header's quick action. */
+  readonly notice?: ReactNode;
+  /** The next task is on its way (a step): this one stays, with the panel's thin progress line over it. */
+  readonly isStepping?: boolean;
   readonly children?: ReactNode;
 }) {
   return (
@@ -372,6 +378,8 @@ function TaskShell({
         icon: SUBJECT_ICON,
         previousLabel: strings.previousTask,
         nextLabel: strings.nextTask,
+        failedLabel: strings.loadFailed,
+        loadingLabel: strings.loading,
       }}
       width="lg"
       isOpen
@@ -383,6 +391,8 @@ function TaskShell({
       {...(actions === undefined ? {} : { actions })}
       {...(quickActions === undefined ? {} : { quickActions })}
       {...(empty === undefined ? {} : { empty })}
+      {...(notice === undefined ? {} : { notice })}
+      {...(isStepping === undefined ? {} : { isStepping })}
       {...(children === undefined ? {} : { body: children })}
     />
   );
@@ -404,15 +414,15 @@ function SavedTask({
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const state = useTask(subscription);
   const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
+  // The task last read: a step keeps it on screen while the next one loads, so the panel never empties and fills
+  // again (the record panel's `isStepping`, which it shows as a thin line over the body).
+  const [held, setHeld] = useState<TaskView | undefined>(undefined);
+  if (state.task !== undefined && state.task !== held) setHeld(state.task);
   const steps = { ...(onPrevious === undefined ? {} : { onPrevious }), ...(onNext === undefined ? {} : { onNext }) };
-  if (state.status === 'loading') {
-    return <TaskShell title={strings.task} onClose={onClose} status="loading" {...steps} />;
-  }
   if (state.status === 'error') {
     return <TaskShell title={strings.task} onClose={onClose} status="error" onRetry={subscription.retry} {...steps} />;
   }
-  const task: TaskView | undefined = state.task;
-  if (state.status === 'missing' || task === undefined) {
+  if (state.status === 'missing') {
     return (
       <TaskShell
         title={strings.task}
@@ -421,6 +431,10 @@ function SavedTask({
         {...steps}
       />
     );
+  }
+  const task: TaskView | undefined = state.task ?? held;
+  if (task === undefined) {
+    return <TaskShell title={strings.task} onClose={onClose} status="loading" {...steps} />;
   }
   const change = (next: TaskChange) => {
     const field = fieldOf(next);
@@ -483,18 +497,33 @@ function SavedTask({
       title={task.title}
       onClose={onClose}
       {...steps}
-      // The one action the panel is opened for, where the eye lands: Done was a checkbox among the fields.
+      // A step on its way: this task stays, with the thin line over it, rather than the panel emptying.
+      isStepping={state.status === 'loading'}
+      // A refused tick belongs to the quick action in the header, so it sits over the body rather than inside it.
+      {...(errors.isDone === undefined
+        ? {}
+        : {
+            notice: (
+              <Callout tone="danger" isAnnounced>
+                {errors.isDone}
+              </Callout>
+            ),
+          })}
+      // The one action the panel is opened for, where the eye lands: Done was a checkbox among the fields. Read
+      // only, it says why on hover and focus, as the checkbox's description did.
       quickActions={
-        <Button
-          variant={task.isDone ? 'secondary' : 'primary'}
-          icon={task.isDone ? 'undo-2' : 'check'}
-          isDisabled={!task.canChange}
-          onPress={() => {
-            change({ isDone: !task.isDone });
-          }}
-        >
-          {task.isDone ? strings.reopen : strings.markDone}
-        </Button>
+        <Tooltip content={strings.readOnly} isDisabled={task.canChange}>
+          <Button
+            variant={task.isDone ? 'secondary' : 'primary'}
+            icon={task.isDone ? 'undo-2' : 'check'}
+            isDisabled={!task.canChange}
+            onPress={() => {
+              change({ isDone: !task.isDone });
+            }}
+          >
+            {task.isDone ? strings.reopen : strings.markDone}
+          </Button>
+        </Tooltip>
       }
       actions={
         // More: Copy link, and Delete task for someone who may change it (milestone 4).
@@ -522,7 +551,6 @@ function SavedTask({
       }
     >
       <Form id={`task-${task.id}`} onSubmit={() => undefined} label={strings.task}>
-        {errors.isDone !== undefined && <Callout tone="danger">{errors.isDone}</Callout>}
         <TaskFields
           slug={slug}
           title={task.title}

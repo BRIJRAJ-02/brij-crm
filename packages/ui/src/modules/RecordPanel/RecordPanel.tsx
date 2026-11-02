@@ -39,6 +39,10 @@ export interface RecordPanelSubject {
   /** What stepping is called here, since it isn't a record ("Previous task", "Next task"). */
   readonly previousLabel: string;
   readonly nextLabel: string;
+  /** What a failed read says, in the subject's own words ("This task didn’t load."): the panel's are a record's. */
+  readonly failedLabel: string;
+  /** What it says while it is still coming ("Loading the task"), heard by a screen reader as the panel opens. */
+  readonly loadingLabel: string;
 }
 
 /** Props for RecordPanel. */
@@ -144,7 +148,15 @@ export function RecordPanel({
   if (empty !== undefined) {
     content = <div className={styles.content}>{empty}</div>;
   } else if (status === 'error') {
-    content = <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />;
+    content = (
+      <div className={styles.content}>
+        <EmptyState
+          tone="error"
+          title={subject?.failedLabel ?? strings.failed}
+          {...(onRetry === undefined ? {} : { onRetry })}
+        />
+      </div>
+    );
   } else if (status === 'no-access') {
     content = (
       <EmptyState tone="locked" title={strings.noAccess}>
@@ -161,7 +173,12 @@ export function RecordPanel({
   return (
     <Panel
       title={
-        name ?? (empty !== undefined ? strings.unavailable : status === 'error' ? strings.failed : strings.loading)
+        name ??
+        (empty !== undefined
+          ? strings.unavailable
+          : status === 'error'
+            ? (subject?.failedLabel ?? strings.failed)
+            : (subject?.loadingLabel ?? strings.loading))
       }
       variant="floating"
       isFlush
@@ -179,7 +196,8 @@ export function RecordPanel({
         : {})}
       leading={
         subject !== undefined ? (
-          <Icon name={subject.icon} size="md" tone="muted" />
+          // lg, so the mark fills the 24px slot the record's avatar takes.
+          <Icon name={subject.icon} size="lg" tone="muted" />
         ) : (
           record !== undefined && (
             <Avatar
@@ -252,7 +270,7 @@ export function RecordPanel({
           {body === undefined ? (
             <div className={styles.tabs}>
               <Tabs
-                label={name ?? strings.loading}
+                label={name ?? subject?.loadingLabel ?? strings.loading}
                 tabs={tabs}
                 {...(selectedTab === undefined ? {} : { selectedKey: selectedTab })}
                 {...(onTabChange === undefined ? {} : { onSelectionChange: onTabChange })}

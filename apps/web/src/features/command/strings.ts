@@ -53,7 +53,8 @@ export const strings = {
   reportsTerms: ['charts', 'forecast', 'pipeline', 'analytics', 'graph', 'dashboard'],
   trashTerms: ['deleted', 'bin', 'restore', 'go to trash'],
   settingsTerms: ['preferences', 'options'],
-  preferencesTerms: ['theme', 'appearance', 'dark', 'light'],
+  // Notifications live in Preferences since the simplify pass, so its old words find this page.
+  preferencesTerms: ['theme', 'appearance', 'dark', 'light', 'notifications', 'email', 'digest', 'mentions'],
   calendarsTerms: ['google', 'outlook', 'sync', 'connect'],
   roundRobinTerms: ['rotation', 'rotations', 'team', 'share out', 'distribution'],
   objectsTerms: ['attributes', 'fields', 'columns', 'schema'],

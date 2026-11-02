@@ -304,7 +304,8 @@ function TaskListContent({
   );
   // A task made here lands at the top: that one row drops in, and the rest stay still (a virtual list draws a
   // window, so only the row at index 0 is marked).
-  const listRef = useDropIn(rows[0]?.id);
+  // Marked rows only: this list is windowed, so nothing moves unless the row the key belongs to is drawn.
+  const listRef = useDropIn(rows[0]?.id, true);
 
   if (status === 'error') {
     return (

@@ -252,7 +252,8 @@ function LoadedPeek(
     (kinds: Parameters<typeof data.activity.forRecord>[3]) => data.activity.forRecord(slug, recordId, object.id, kinds),
     [data, slug, recordId, object.id],
   );
-  // A task or note opens over the panel, as on the page; their address stays the list's, so closing leaves the panel.
+  // A note or a new task opens over the panel, as on the page; a saved task's panel takes its place and gives it
+  // back on close. Their address stays the list's, so closing leaves the panel.
   const [task, setTask] = useState<string | undefined>(undefined);
   const [note, setNote] = useState<string | undefined>(undefined);
   const [log, setLog] = useState<string | undefined>(undefined);
@@ -275,7 +276,10 @@ function LoadedPeek(
     void navigate({ href: pageHref({ ...props, recordId }) });
   };
   const common = {
-    isOpen: true,
+    // One floating panel in the slot at a time: with a saved task's panel open, the peek steps aside rather than
+    // sitting under a panel the viewer can't see but Tab could still reach (2 November 2026). A new task is a
+    // dialog with its own scrim, so the peek stays behind it.
+    isOpen: task === undefined || task === 'new',
     width: 'lg' as const,
     onClose,
     onOpenPage: openPage,

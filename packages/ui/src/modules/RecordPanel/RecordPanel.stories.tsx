@@ -354,6 +354,32 @@ export const NoAccess: Story = {
   },
 };
 
+/** The task subject the three stories below share: one shell, its own words. */
+const TASK_SUBJECT = {
+  title: 'Call Ada back',
+  icon: 'square-check',
+  previousLabel: 'Previous task',
+  nextLabel: 'Next task',
+  failedLabel: 'This task didn’t load.',
+  loadingLabel: 'Loading the task',
+} as const;
+
+/** The task shell in one state, for the stories that differ only by it. */
+function TaskShellSample({ status }: { readonly status: LoadStatus }) {
+  return (
+    <Stage height="page">
+      <RecordPanel
+        subject={{ ...TASK_SUBJECT, title: TASK_SUBJECT.loadingLabel }}
+        width="lg"
+        isOpen
+        onClose={fn()}
+        status={status}
+        {...(status === 'error' ? { onRetry: fn() } : {})}
+      />
+    </Stage>
+  );
+}
+
 /**
  * A task in the same shell (`subject` with `body`): its icon where a record's avatar sits, its own step names, one
  * quick action and one scrolling body in place of the tabs.
@@ -362,12 +388,7 @@ export const AsATask: Story = {
   render: () => (
     <Stage height="page">
       <RecordPanel
-        subject={{
-          title: 'Call Ada back',
-          icon: 'square-check',
-          previousLabel: 'Previous task',
-          nextLabel: 'Next task',
-        }}
+        subject={TASK_SUBJECT}
         width="lg"
         isOpen
         onClose={fn()}
@@ -393,5 +414,22 @@ export const AsATask: Story = {
     const panel = canvas.getByRole('dialog', { name: 'Call Ada back' });
     await expect(within(panel).getByRole('button', { name: 'Previous task' })).toBeInTheDocument();
     await expect(within(panel).queryByRole('tablist')).not.toBeInTheDocument();
+  },
+};
+
+/** The task is still coming: skeletons in place of its fields, and the panel named by what it is. */
+export const AsATaskLoading: Story = {
+  render: () => <TaskShellSample status="loading" />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('dialog', { name: 'Loading the task' })).toBeInTheDocument();
+  },
+};
+
+/** The task didn't load: its own words, not a record's, with Try again. */
+export const AsATaskError: Story = {
+  render: () => <TaskShellSample status="error" />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('This task didn’t load.')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   },
 };

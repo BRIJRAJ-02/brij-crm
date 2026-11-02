@@ -52,4 +52,4 @@ Not in the artifact. `record` and `recordHref` on a task gave way to `records` a
 
 ## Motion
 
-A task made here lands at the top of the list, and that one row drops in (`useDropIn`): the list carries the hook and the row at index 0 carries `data-drop-in`, so in a virtual list nothing else moves. A row's count badge rolls its changed digit through `Badge`. A ticked task is struck through and leaves when the list settles; it does not `collapseAway`, because the rows below a virtualised row are placed by the layout, so there would be nothing to glide.
+A task made here that lands at the top of the list drops in (`useDropIn` with `needsMark`): the list carries the hook and the row at index 0 carries `data-drop-in`, so nothing moves unless that row is drawn, and never a row that only happens to be in view. A list grouped by day (My tasks) often takes a new task into a later group, and then nothing animates. A row's count badge rolls its changed digit through `Badge`. A ticked task is struck through and leaves when the list settles; it does not `collapseAway`, because the rows below a virtualised row are placed by the layout, so there would be nothing to glide.

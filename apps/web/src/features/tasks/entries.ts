@@ -49,20 +49,25 @@ export interface TaskRows {
 }
 
 /**
- * The task before or after `taskId` in the list the panel was opened from, as
- * the record panel steps through its view. Undefined at either end, for a task
- * the list doesn't hold (it was deleted, or the panel was opened from the
- * inbox), and where the neighbour's page hasn't been read yet, so the step's
- * button is disabled rather than going nowhere.
+ * The tasks either side of `taskId` in the list the panel was opened from, as
+ * the record panel steps through its view. Either is undefined at that end of
+ * the list, for a task the list doesn't hold (it was deleted, or the panel was
+ * opened from the inbox), and where the neighbour's page hasn't been read yet,
+ * so the step's button is disabled rather than going nowhere. It walks the
+ * drawn rows once and never asks for a page, so stepping loads nothing;
+ * callers memoise it, since a windowed list republishes as patches arrive.
  */
-export function stepTask(rows: TaskRows, taskId: string, step: 'previous' | 'next'): string | undefined {
+export function stepTask(rows: TaskRows, taskId: string): { readonly previous?: string; readonly next?: string } {
   for (let index = 0; index < rows.count; index += 1) {
     if (rows.getItem(index)?.id !== taskId) continue;
-    const next = index + (step === 'next' ? 1 : -1);
-    if (next < 0 || next >= rows.count) return undefined;
-    return rows.getItem(next)?.id;
+    const previous = index > 0 ? rows.getItem(index - 1)?.id : undefined;
+    const next = index + 1 < rows.count ? rows.getItem(index + 1)?.id : undefined;
+    return {
+      ...(previous === undefined ? {} : { previous }),
+      ...(next === undefined ? {} : { next }),
+    };
   }
-  return undefined;
+  return {};
 }
 
 /**

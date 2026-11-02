@@ -103,8 +103,12 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
   };
   // Previous and Next step through this list, as a record's panel steps through its view. At either end the prop
   // is left out, so the panel disables that button; with neither neighbour it shows no steps at all.
-  const before = task === undefined || task === 'new' ? undefined : stepTask(entries, task, 'previous');
-  const after = task === undefined || task === 'new' ? undefined : stepTask(entries, task, 'next');
+  // One walk of the drawn rows per change, not one per render: the list is windowed and republishes on every patch.
+  const neighbours = useMemo(
+    () => (task === undefined || task === 'new' ? {} : stepTask(entries, task)),
+    [entries, task],
+  );
+  const { previous: before, next: after } = neighbours;
   const empty = emptyOf(filter, status);
   const filterLabel = FILTERS.find((each) => each.value === filter)?.label ?? strings.myTasks;
   const statusLabel = STATUSES.find((each) => each.value === status)?.label ?? strings.open;
@@ -192,6 +196,8 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
                 meId={meId}
                 onClose={closeTask}
                 onOpenTask={openTask}
+                // The list focus goes back to after a delete, since the row it was opened from has gone.
+                listLabel={strings.listLabel(filterLabel, statusLabel)}
                 {...(before === undefined
                   ? {}
                   : {
