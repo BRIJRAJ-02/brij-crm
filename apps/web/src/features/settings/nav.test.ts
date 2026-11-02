@@ -19,7 +19,7 @@ describe('settingsNav', () => {
     // Scheduling is gone: Calendars and Round robin are tabs of Bookings (25 October 2026).
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace', 'Super admin']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Profile', 'Preferences', 'Sign in and devices', 'Notifications', 'Scheduling access'],
+      ['Profile', 'Preferences', 'Sign in and devices', 'Scheduling access'],
       [
         'General',
         'Brand',
@@ -43,7 +43,6 @@ describe('settingsNav', () => {
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       profile: '/w/acme/settings/account/profile',
       preferences: '/w/acme/settings/account/preferences',
-      notifications: '/w/acme/settings/account/notifications',
       'scheduling-access': '/w/acme/settings/account/scheduling',
       general: '/w/acme/settings/general',
       // The brand kit (spec 0060): every member reads it, owners and admins change it.
@@ -110,7 +109,7 @@ describe('visibleSettingsNav', () => {
     ).toEqual(workspaceGroups);
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
-      ['profile', 'preferences', 'security', 'notifications', 'scheduling-access'],
+      ['profile', 'preferences', 'security', 'scheduling-access'],
       ['general', 'brand', 'members', 'teams', 'objects', 'lists', 'jobs', 'history', 'trash'],
     ]);
   });
@@ -119,7 +118,7 @@ describe('visibleSettingsNav', () => {
     expect(
       visibleSettingsNav(settingsNav('acme'), [], false, true).map((group) => group.entries.map((entry) => entry.id)),
     ).toEqual([
-      ['profile', 'preferences', 'security', 'notifications'],
+      ['profile', 'preferences', 'security'],
       ['general', 'members', 'history', 'trash'],
     ]);
   });

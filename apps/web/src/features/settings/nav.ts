@@ -13,7 +13,6 @@ import { strings as developer } from './developer-nav-strings.ts';
 import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
-import { strings as notifications } from './notifications-strings.ts';
 import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
 import { strings as brand } from './brand-strings.ts';
 import { strings as teams } from './teams-nav-strings.ts';
@@ -70,13 +69,10 @@ export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/member
 /** Settings › Workspace › Teams (spec 0031, slice 8): the groups of people that access rules name. */
 export const teamsSettingsHref = (slug: string) => `/w/${slug}/settings/teams`;
 
-/** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
-export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
-
 /** Settings › Account › Scheduling access (spec 0037, AC-1266): who can see or manage the member's scheduling. */
 export const schedulingAccessHref = (slug: string) => `/w/${slug}/settings/account/scheduling`;
 
-/** Settings › Account › Sign in and devices (spec 0033): two factor, the devices signed in and recent activity. */
+/** Settings › Account › Sign in and devices (spec 0033): two factor and the devices signed in. */
 export const securitySettingsHref = (slug: string) => `/w/${slug}/settings/account/sign-in`;
 
 /** The settings navigation's pages: Account's, then Scheduling's and Workspace's. */
@@ -84,7 +80,6 @@ export type SettingsPageId =
   | 'profile'
   | 'preferences'
   | 'security'
-  | 'notifications'
   | 'scheduling-access'
   | 'general'
   | 'brand'
@@ -162,7 +157,7 @@ export interface SettingsNavGroup {
 
 /**
  * The settings navigation (spec 0026, AC-682): Account (Profile, spec 0031;
- * Preferences, Notifications, spec 0038), Scheduling (Calendars, 21 Oct 2026)
+ * Preferences, which holds the notification settings too), Scheduling (Calendars, 21 Oct 2026)
  * and Workspace (General and Members, spec 0031; Objects, Background jobs,
  * Trash). Every entry is a page in Settings: the Booking pages and Forms links into
  * Captures went on 20 Oct 2026, as neither has workspace wide settings yet
@@ -180,7 +175,6 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         { id: 'profile', label: workspace.profileTitle, href: profileHref(slug), icon: 'user-round' },
         { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
         { id: 'security', label: security.title, href: securitySettingsHref(slug), icon: 'shield-check' },
-        { id: 'notifications', label: notifications.title, href: notificationSettingsHref(slug), icon: 'bell' },
         // Who can see or manage the member's scheduling, and whose they reach (spec 0037, AC-1266): every member
         // but a guest, who has no scheduling.
         {
@@ -309,7 +303,8 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'general') return 'general';
   if (rest === 'brand') return 'brand';
-  if (rest === 'account/notifications') return 'notifications';
+  // Notifications folded into Preferences (the simplify pass, 2 November 2026): its old address lands there.
+  if (rest === 'account/notifications') return 'preferences';
   if (rest === 'account/scheduling') return 'scheduling-access';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';

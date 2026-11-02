@@ -57,20 +57,16 @@ export const strings = {
   objectSettings: 'Object settings',
   listSettings: 'List settings',
   copyLink: 'Copy link',
-  openInNewTab: 'Open in new tab',
   /** The object's deleted records, in Settings › Trash (it left the view's menu, owner item 52). */
   openTrash: 'Open trash',
   linkCopied: 'Link copied',
   /** Hide from sidebar's toast on an object, with Undo. */
   hiddenFromSidebar: (pluralName: string) => `${pluralName} hidden from sidebar`,
-  moveUp: 'Move up',
-  moveDown: 'Move down',
   customiseSidebar: 'Customise sidebar',
   /** Customise sidebar's code didn't load. */
   customiseUnavailable: 'Couldn’t open. Reload.',
-  /** An item's and a section's menu, for screen readers: "Deals options". */
+  /** An item's menu, for screen readers: "Deals options". */
   itemOptions: (name: string) => `${name} options`,
-  sectionOptions: (title: string) => `${title} options`,
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',

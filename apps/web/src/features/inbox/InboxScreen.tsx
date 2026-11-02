@@ -20,7 +20,7 @@ import {
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useMemo, useRef } from 'react';
-import { notificationSettingsHref } from '../settings/nav.ts';
+import { preferencesHref } from '../settings/nav.ts';
 import { TaskPanel } from '../tasks/TaskPanel.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { targetOf, toNotificationItem } from './entries.ts';
@@ -264,7 +264,7 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
                   : {
                       // An empty inbox's quiet way to what lands in it and what is emailed.
                       emptyActions: (
-                        <ButtonLink variant="ghost" icon="bell" href={notificationSettingsHref(slug)}>
+                        <ButtonLink variant="ghost" icon="bell" href={preferencesHref(slug)}>
                           {strings.notificationSettings}
                         </ButtonLink>
                       ),

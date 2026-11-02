@@ -1,8 +1,9 @@
 // Brief
-// Purpose: Settings › Account › Sign in and devices (spec 0033): how this account signs in, the devices signed in to it, and what happened lately.
+// Purpose: Settings › Account › Sign in and devices (spec 0033): how this account signs in and the devices signed in to it.
 // Main task: see each device (browser and system, rough place, last use) and sign one out, or every other one, after a confirm.
-// Leaves out: signing this device out (the account menu does).
-import { type AccountSession, type ActivityPage, type DataLayer } from '@crm/data';
+// Leaves out: signing this device out (the account menu does), and what happened lately: the sign in history lives
+// in one place, Settings › Workspace › History › Your sign ins (the simplify pass, 2 November 2026).
+import { type AccountSession, type DataLayer } from '@crm/data';
 import { useAccountSecurity, useAccountSessions } from '@crm/data/react';
 import {
   Badge,
@@ -22,7 +23,6 @@ import { currentFirst, deviceIcon, deviceName, devicePlace } from './security-li
 import { strings } from './security-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { useStepUp } from './StepUp.tsx';
-import { RecentActivitySection } from './RecentActivitySection.tsx';
 import { TwoFactorSection } from './TwoFactorSection.tsx';
 
 /** How long the confirm takes to leave (`duration-exit` and a frame), before focus is checked again. */
@@ -56,8 +56,8 @@ function BusyRows({
 }
 
 /**
- * The page while it loads: every section in its place (two factor,
- * devices, recent activity), each a busy card, so nothing moves as it arrives.
+ * The page while it loads: both sections in their place (two factor and
+ * devices), each a busy card, so nothing moves as it arrives.
  */
 export function SecurityLoading() {
   return (
@@ -66,10 +66,6 @@ export function SecurityLoading() {
         <BusyRows rows={1} />
       </SettingsSection>
       <DevicesLoading />
-      <SettingsSection title={strings.activity.section} description={strings.activity.description}>
-        {/* Activity rows have no control, as its own loading rows don't. */}
-        <BusyRows rows={3} hasControl={false} />
-      </SettingsSection>
     </>
   );
 }
@@ -105,17 +101,13 @@ export interface SecurityScreenProps {
   readonly data: DataLayer;
   /** The app's toast queue (router context), for how a sign out went. */
   readonly toasts: Toasts;
-  /** Recent activity's first page as the route's loader started it: undefined once read when that read failed. */
-  readonly activity?: Promise<ActivityPage | undefined>;
-  /** Reads Recent activity's first page again: after a failure, and after a change here lands (a device signed out). */
-  readonly onActivityRetry?: () => void;
 }
 
 /** Which confirm is showing: one device's sign out, or every other device's. */
 type Confirm = { readonly kind: 'one'; readonly session: AccountSession } | { readonly kind: 'others' };
 
 /** Settings › Account › Sign in and devices: each section a Card of rows, each ending asked first in a danger Modal. */
-export function SecurityScreen({ data, toasts, activity, onActivityRetry = () => undefined }: SecurityScreenProps) {
+export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
   const view = data.account.sessions();
   const state = useAccountSessions(view);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -167,7 +159,6 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     void data.account.signOut(session.id).then((landed) => {
       if (!landed) return;
       toasts.toast({ tone: 'success', message: strings.signedOut(deviceName(session)) });
-      onActivityRetry();
     });
   };
 
@@ -183,7 +174,6 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
       setIsOpen(false);
       focusTitle();
       toasts.toast({ tone: 'success', message: strings.signedOutOthers(answer.count) });
-      onActivityRetry();
     } else if (answer.code === 'STEP_UP_REQUIRED') {
       // The check ran out meanwhile: read the state again, so the confirm asks for it inline.
       void data.account.security().reload();
@@ -279,15 +269,8 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   const onePlace = one === undefined ? undefined : devicePlace(one);
   return (
     <SettingsPage title={strings.title} titleRef={titleRef}>
-      <TwoFactorSection
-        data={data}
-        security={security}
-        toasts={toasts}
-        onFocusLost={focusTitle}
-        onChanged={onActivityRetry}
-      />
+      <TwoFactorSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       {body}
-      {activity !== undefined && <RecentActivitySection data={data} first={activity} onRetry={onActivityRetry} />}
       <Modal
         title={one === undefined ? strings.signOutOthersTitle : strings.signOutTitle(deviceName(one))}
         variant="confirm"

@@ -6,7 +6,7 @@ import type { DataError, DataLayer, InboxSettings, InboxSettingsState, Notificat
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
-import { NotificationSettingsScreen } from './NotificationSettingsScreen.tsx';
+import { NotificationSections } from './NotificationSections.tsx';
 import { strings } from './notifications-strings.ts';
 
 let shown: InApp | undefined;
@@ -66,7 +66,7 @@ function store(refuse = false) {
 
 async function render(refuse = false) {
   const { settings, data, sent } = store(refuse);
-  shown = await renderInApp(() => <NotificationSettingsScreen slug="acme" settings={settings} />, {
+  shown = await renderInApp(() => <NotificationSections slug="acme" settings={settings} />, {
     data,
     pattern: '/w/$slug/settings/account/notifications',
     at: '/w/acme/settings/account/notifications',

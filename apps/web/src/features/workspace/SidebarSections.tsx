@@ -42,14 +42,13 @@ export interface SidebarSectionsProps {
   readonly currentPage?: SidebarPage;
   /** For Hide from sidebar's toast, whose Undo shows the object again. */
   readonly toasts: Toasts;
-  /** Opens the Customise sidebar dialog. */
-  readonly onCustomise: () => void;
 }
 
 /**
- * The sections in the member's order (AC-931, AC-932, AC-933): each folds from its label, moves by its grip or its
- * menu (Move up, Move down, Customise sidebar), and its items reorder by their grips and hide from their menus,
- * each change kept for the member.
+ * The sections in the member's order (AC-931, AC-932, AC-933): each folds from its label and moves by its grip
+ * (pointer or keyboard), and its items reorder by their grips and hide from their menus, each change kept for the
+ * member. A section has no menu of its own: it only repeated the grip and Settings' Customise sidebar (the simplify
+ * pass, 2 November 2026).
  */
 export function SidebarSections({
   data,
@@ -62,7 +61,6 @@ export function SidebarSections({
   currentObject,
   currentPage,
   toasts,
-  onCustomise,
 }: SidebarSectionsProps) {
   const change = (op: NavOperation) => {
     void data.nav.change(slug, op, universe);
@@ -104,8 +102,9 @@ export function SidebarSections({
     return path === href || path.startsWith(`${href}/`);
   })?.id;
   const navigate = useNavigate();
-  // A row's own menu (owner item 90): its settings (where its name and icon change), its link, a new tab, its trash,
-  // and Hide from sidebar last, apart. Each item does what it says, so no Rename that only opens a page.
+  // A row's own menu (owner item 90): its settings (where its name and icon change), its link, its trash, and Hide
+  // from sidebar last, apart. Each item does what it says, so no Rename that only opens a page. Open in a new tab
+  // went on 2 November 2026: ⌘ or a middle click on the row's own link already does it.
   const go = (href: string) => {
     void navigate({ href });
   };
@@ -124,9 +123,6 @@ export function SidebarSections({
       },
     );
   };
-  const openInNewTab = (href: string) => {
-    window.open(href, '_blank', 'noopener');
-  };
   const objectMenu = (object: ObjectSummary) => {
     const href = objectHref(slug, object);
     return (
@@ -135,7 +131,6 @@ export function SidebarSections({
         onAction={(key) => {
           if (key === 'settings') go(objectSettingsHref(slug, object, 'configuration'));
           if (key === 'copy') copyLink(href);
-          if (key === 'tab') openInNewTab(href);
           if (key === 'trash') go(`${trashHref(slug)}?object=${encodeURIComponent(object.id)}`);
           if (key === 'hide') hideObject(object);
         }}
@@ -145,9 +140,6 @@ export function SidebarSections({
         </MenuItem>
         <MenuItem id="copy" icon="link">
           {strings.copyLink}
-        </MenuItem>
-        <MenuItem id="tab" icon="external-link">
-          {strings.openInNewTab}
         </MenuItem>
         <MenuItem id="trash" icon="archive-restore">
           {strings.openTrash}
@@ -167,7 +159,6 @@ export function SidebarSections({
         onAction={(key) => {
           if (key === 'settings') go(listSettingsHref(slug, list));
           if (key === 'copy') copyLink(href);
-          if (key === 'tab') openInNewTab(href);
           if (key === 'hide') hideList(list);
         }}
       >
@@ -176,9 +167,6 @@ export function SidebarSections({
         </MenuItem>
         <MenuItem id="copy" icon="link">
           {strings.copyLink}
-        </MenuItem>
-        <MenuItem id="tab" icon="external-link">
-          {strings.openInNewTab}
         </MenuItem>
         <MenuSeparator />
         <MenuItem id="hide" icon="eye-off">
@@ -233,31 +221,6 @@ export function SidebarSections({
             onMoveSection={(toIndex) => {
               moveSection(section.key, toIndex);
             }}
-            menu={
-              <Menu
-                label={strings.sectionOptions(section.title)}
-                onAction={(key) => {
-                  if (key === 'up') moveSection(section.key, index - 1);
-                  if (key === 'down') moveSection(section.key, index + 1);
-                  if (key === 'customise') onCustomise();
-                }}
-              >
-                {/* Only the moves there is room for: the first has no Move up, the last no Move down. */}
-                {index > 0 && (
-                  <MenuItem id="up" icon="arrow-up">
-                    {strings.moveUp}
-                  </MenuItem>
-                )}
-                {index < sections.length - 1 && (
-                  <MenuItem id="down" icon="arrow-down">
-                    {strings.moveDown}
-                  </MenuItem>
-                )}
-                <MenuItem id="customise" icon="sliders-horizontal">
-                  {strings.customiseSidebar}
-                </MenuItem>
-              </Menu>
-            }
             onReorder={(id, visibleIndex) => {
               const entry = section.entries.find((each) => navKey(each) === id);
               if (entry === undefined) return;

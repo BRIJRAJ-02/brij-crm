@@ -1,5 +1,7 @@
 // Brief
-// Purpose: Settings › Account › Notifications (spec 0038): what reaches this person from this workspace.
+// Purpose: the notification sections of Settings › Account › Preferences (spec 0038): what reaches this person from
+// this workspace. They had a page of their own until the simplify pass (2 November 2026), which folded them in, so
+// one screen holds everything a person sets about themselves.
 // Main task: turn records they follow in the inbox, each kind of email, and the daily digest on or off; each switch
 // saves at once, then says so in a toast with Undo.
 // Leaves out: the rest of the inbox (always on, said under the Email heading), other workspaces, push notifications.
@@ -7,9 +9,8 @@ import type { InboxSettings, NotificationSettings, NotificationSettingsChange } 
 import { useNotificationSettings } from '@crm/data/react';
 import { Card, EmptyState, InfoTip, Skeleton, SettingsRow, SettingsSection, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { strings } from './notifications-strings.ts';
-import { SettingsPage } from './SettingsPage.tsx';
 
 /** One email switch: its setting and its name. */
 interface Kind {
@@ -31,8 +32,8 @@ export function stillShown(shown: NotificationSettings | undefined, change: Noti
   return switches.every((key) => change[key] === undefined || change[key] === shown[key]);
 }
 
-/** The page while the settings load: the Inbox and Email cards, busy, in the loaded page's shape. */
-export function NotificationSettingsLoading() {
+/** While the settings load: the Inbox and Email cards, busy, in the loaded sections' shape. */
+export function NotificationSectionsLoading() {
   return (
     <>
       <SettingsSection title={strings.inbox} description={strings.inboxDescription}>
@@ -50,19 +51,19 @@ export function NotificationSettingsLoading() {
   );
 }
 
-/** Props for the Notifications page. */
-export interface NotificationSettingsScreenProps {
+/** Props for the notification sections. */
+export interface NotificationSectionsProps {
   readonly slug: string;
   readonly settings: InboxSettings;
 }
 
 /**
- * Settings › Account › Notifications (AC-1179): a switch per kind of email and
- * the daily digest, short labels with their help in InfoTips. Each switch saves at once through the
+ * The Inbox and Email sections of Preferences (AC-1179): a switch per kind of
+ * email and the daily digest, short labels with their help in InfoTips. Each switch saves at once through the
  * data layer: once it lands, "Notifications saved" with Undo; a refusal is put back with the data layer's
  * own toast. A change in another tab shows here live (AC-1180).
  */
-export function NotificationSettingsScreen({ slug, settings }: NotificationSettingsScreenProps) {
+export function NotificationSections({ slug, settings }: NotificationSectionsProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const state = useNotificationSettings(settings);
   // What the page shows now, for an Undo pressed later.
@@ -93,7 +94,7 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
     });
   };
 
-  let email;
+  let email: ReactNode;
   if (state.status === 'error') {
     email = (
       <SettingsSection title={strings.title}>
@@ -103,7 +104,7 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
       </SettingsSection>
     );
   } else if (state.settings === undefined) {
-    email = <NotificationSettingsLoading />;
+    email = <NotificationSectionsLoading />;
   } else {
     const shown = state.settings;
     email = (
@@ -164,5 +165,5 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
     );
   }
 
-  return <SettingsPage title={strings.title}>{email}</SettingsPage>;
+  return email;
 }

@@ -1,5 +1,5 @@
 // Brief
-// Purpose: History › Your sign ins (spec 0046, AC-4619): the reader's own sign ins and sign in changes, the same list Account › Sign in and devices shows.
+// Purpose: History › Your sign ins (spec 0046, AC-4619): the reader's own sign ins and sign in changes, and since the simplify pass (2 November 2026) the one place they are shown.
 // Main task: check recent sign ins on this account, in every workspace, for the last 90 days.
 // Leaves out: anyone else's sign ins (owners included, AC-4620), IP addresses, and the devices list (Sign in and devices keeps it).
 import type { ActivityPage, DataLayer } from '@crm/data';
@@ -15,7 +15,7 @@ export interface SignInsTabProps {
   readonly onRetry: () => void;
 }
 
-/** Your sign ins: Recent activity as it is, two doors to one list (owner decision 2), under the tab's own heading. */
+/** Your sign ins: Recent activity under the tab's own heading, the one door to the list. */
 export function SignInsTab({ data, first, onRetry }: SignInsTabProps) {
   return (
     <RecentActivitySection

@@ -24,7 +24,6 @@ export interface ColumnActions {
   readonly onHide: () => void;
   readonly onSort?: (direction: 'ascending' | 'descending') => void;
   readonly onFilter?: () => void;
-  readonly onStartResize: () => void;
   /** A pointer resize: the width while dragging, then once more on release. */
   readonly onResize: (width: number, isDone: boolean) => void;
   /** A dropped column lands before or after this one, by which half of it the pointer is over. */

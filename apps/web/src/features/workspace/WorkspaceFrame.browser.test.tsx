@@ -562,17 +562,12 @@ describe('the app’s sidebar (spec 0034)', () => {
     expect(said).toContain('Companies, moved to position 1 of 2.');
   });
 
-  it('opens Customise sidebar from a section’s menu, listing Your work and each section’s items', async () => {
+  it('gives a section no menu of its own: its grip moves it, and Settings holds Customise sidebar', async () => {
     await renderFrame(undefined, { objects: OBJECTS });
-    await pick('Records options', 'Customise sidebar');
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    });
-    const dialog = document.querySelector('[role="dialog"]');
-    expect(dialog?.textContent).toContain('Customise sidebar');
-    expect(dialog?.textContent).toContain('Your work');
-    // Tasks, People, Companies, Bookings and Captures, each with its switch.
-    expect(dialog?.querySelectorAll('[role="switch"]')).toHaveLength(5);
+    const options = [...document.querySelectorAll('button')].filter((each) =>
+      (each.getAttribute('aria-label') ?? '').endsWith('options'),
+    );
+    expect(options.map((each) => each.getAttribute('aria-label'))).not.toContain('Records options');
   });
 
   it('badges Tasks with my open tasks overdue or due today, and draws none at zero (AC-924)', async () => {

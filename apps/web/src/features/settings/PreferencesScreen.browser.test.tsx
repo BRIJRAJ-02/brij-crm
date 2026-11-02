@@ -33,6 +33,7 @@ async function render() {
     const state: PreferencesState = { status: 'ready', preferences };
     return (
       <PreferencesScreen
+        slug="acme"
         theme={theme}
         preferences={state}
         objects={[]}

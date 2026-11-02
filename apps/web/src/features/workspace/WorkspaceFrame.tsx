@@ -33,7 +33,6 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useLocation, useNavigate } from '@tanstack/react-router';
-import { LazyCustomiseSidebarDialog } from './LazyCustomiseSidebarDialog.tsx';
 import { LazyNewListModal } from '../lists/LazyNewListModal.tsx';
 import { listHref } from '../lists/paths.ts';
 import { Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -251,12 +250,6 @@ export function WorkspaceFrame({
   // Quick actions (spec 0039 with spec 0034, AC-921): the sidebar's button opens the command menu, so a touch
   // screen reaches it too; below the compact breakpoint the shell folds the sidebar to its rail, which keeps it.
   const commandMenu = useCommandMenu();
-  const [isCustomising, setCustomising] = useState(false);
-  const [hasCustomised, setHasCustomised] = useState(false);
-  const openCustomise = useCallback(() => {
-    setHasCustomised(true);
-    setCustomising(true);
-  }, []);
   const signOut = () => {
     if (isSigningOut) return;
     setSigningOut(true);
@@ -385,7 +378,6 @@ export function WorkspaceFrame({
                 {...(currentObject === undefined ? {} : { currentObject })}
                 {...(currentPage === undefined ? {} : { currentPage })}
                 toasts={toasts}
-                onCustomise={openCustomise}
               />
             ))}
           {/* Tasks (and Inbox once it exists) after the sections, as timefix has Tasks below the CRM rows. */}
@@ -430,7 +422,6 @@ export function WorkspaceFrame({
       lists,
       canMakeLists,
       openNewList,
-      openCustomise,
       toasts,
     ],
   );
@@ -486,19 +477,6 @@ export function WorkspaceFrame({
                 toasts.toast({ tone: 'success', message: listStrings.listMade(list.name) });
                 void navigate({ href: listHref(slug, list) });
               }}
-            />
-          </Suspense>
-        )}
-        {hasCustomised && nav !== undefined && (
-          <Suspense fallback={null}>
-            <LazyCustomiseSidebarDialog
-              data={data}
-              slug={slug}
-              nav={nav}
-              objects={objects}
-              lists={lists}
-              isOpen={isCustomising}
-              onOpenChange={setCustomising}
             />
           </Suspense>
         )}

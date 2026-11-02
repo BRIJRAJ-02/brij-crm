@@ -1,10 +1,12 @@
 // Brief
-// Purpose: Settings › Account › Preferences (spec 0026): how the app looks and reads for this person.
-// Main task: pick the theme, time zone, date format, week start and start page, and show or hide the setup checklist;
-// each applies the moment it changes; open Customise sidebar (spec 0034). The theme is kept on this browser and shows
-// at once, so it has no toast; the rest save with a toast and Undo.
+// Purpose: Settings › Account › Preferences (spec 0026): everything this person sets about themselves, in one
+// screen: how the app looks and reads, and what reaches them (Notifications had its own page until the simplify
+// pass, 2 November 2026).
+// Main task: pick the theme, time zone, date format, week start and start page, and turn the inbox's and the email's
+// notices on or off; each applies the moment it changes; open Customise sidebar (spec 0034). The theme is kept on
+// this browser and shows at once, so it has no toast; the rest save with a toast and Undo.
 // Leaves out: the language (the browser's) and the clock's 12 or 24 hours (both later).
-import type { MemberPreferences, ObjectSummary, PreferencesChange, PreferencesState } from '@crm/data';
+import type { InboxSettings, MemberPreferences, ObjectSummary, PreferencesChange, PreferencesState } from '@crm/data';
 import {
   Card,
   EmptyState,
@@ -30,6 +32,7 @@ import {
   stillShows,
   weekStartChoices,
 } from './preferences.ts';
+import { NotificationSections, NotificationSectionsLoading } from './NotificationSections.tsx';
 import { strings } from './preferences-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -55,10 +58,23 @@ export interface PreferencesScreenProps {
   readonly onRetry: () => void;
   /** The way into Customise sidebar (spec 0034): the route hands it in, over the workspace's sidebar. */
   readonly customiseSidebar?: ReactNode;
+  /**
+   * The member's notification settings in this workspace, through the data layer: the Inbox and Email sections
+   * under the rest. Left out while the route's read is still on its way, or when it failed.
+   */
+  readonly notifications?: InboxSettings;
+  /** The notification sections are still being read: their cards show busy, so nothing moves as they arrive. */
+  readonly isLoadingNotifications?: boolean;
+  /** The screen's slug, for the notification sections' writes. */
+  readonly slug: string;
 }
 
-/** Settings › Account › Preferences: Appearance (the theme), Dates and time, the Start page, then the Sidebar. */
+/**
+ * Settings › Account › Preferences: Appearance (the theme), Dates and time, the Start page, the Sidebar, then what
+ * reaches this person (Inbox and Email).
+ */
 export function PreferencesScreen({
+  slug,
   theme,
   preferences,
   objects,
@@ -66,6 +82,8 @@ export function PreferencesScreen({
   toasts,
   onRetry,
   customiseSidebar,
+  notifications,
+  isLoadingNotifications = false,
 }: PreferencesScreenProps) {
   // The controller is the one source: a change here, in another tab or on the status page shows at once.
   const choice = useSyncExternalStore(
@@ -107,6 +125,12 @@ export function PreferencesScreen({
           </Card>
         </SettingsSection>
       )}
+      {/* What reaches this person, last: the inbox and the emails, in the sections that were their own page. */}
+      {notifications !== undefined ? (
+        <NotificationSections slug={slug} settings={notifications} />
+      ) : isLoadingNotifications ? (
+        <NotificationSectionsLoading />
+      ) : null}
     </SettingsPage>
   );
 }

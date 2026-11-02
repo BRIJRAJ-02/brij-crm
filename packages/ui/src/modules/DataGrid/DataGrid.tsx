@@ -1484,10 +1484,6 @@ export function DataGrid<Row>({
             onFilter(column.id);
           },
         }),
-    onStartResize: () => {
-      setResizing(column.id);
-      goTo({ row: -1, col: placed.findIndex((each) => each.column.id === column.id) + 1 });
-    },
     onResize: (width: number, isDone: boolean) => {
       const next = resizeColumn(layout, column.id, width, LIMITS);
       if (isDone) commitLayout(next);
@@ -1559,9 +1555,6 @@ export function DataGrid<Row>({
           },
           onHide: () => {
             now().onHide();
-          },
-          onStartResize: () => {
-            now().onStartResize();
           },
           onResize: (width, isDone) => {
             now().onResize(width, isDone);
