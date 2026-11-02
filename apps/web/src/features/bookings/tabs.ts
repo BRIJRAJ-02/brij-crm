@@ -12,8 +12,9 @@
  * - `hours`: when we are free. Views `mine` (the member's own schedules, spec 0035) and `team` (the team's
  *   bookable week, spec 0037 job J6, shown only to whoever sees someone else's scheduling, `rosterIsShown`).
  *   Was Availability and Roster.
- * - `hosts`: who takes the booking. Views `groups` (round robin, spec 0029) and `rules` (routing, spec 0037
- *   AC-1383, for holders of `routing.manage` only). Was Round robin and Routing.
+ * - `hosts`: who takes the booking, the tab reading "Who hosts" (not "Hosts", which is one letter from Hours and
+ *   the tab beside it). Views `groups` (round robin, spec 0029) and `rules` (routing, spec 0037 AC-1383, for
+ *   holders of `routing.manage` only). Was Round robin and Routing.
  * - `calendars`: where it lands (specs 0024 and 0026). It keeps a tab of its own rather than joining a setup
  *   page, because a member with no calendar connected is why every other tab is empty.
  *

@@ -13,7 +13,9 @@ export const strings = {
   pageTabs: {
     meetings: 'Meetings',
     hours: 'Hours',
-    hosts: 'Hosts',
+    // "Who hosts", not "Hosts": one letter from Hours, the same length, the same two opening letters and the
+    // tab beside it. Fixing three word collisions and shipping a fourth would be the same mistake in a new place.
+    hosts: 'Who hosts',
     calendars: 'Calendars',
   },
   /**

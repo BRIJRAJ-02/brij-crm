@@ -37,7 +37,7 @@ export const strings = {
   availability: 'Hours',
   bookingPages: 'Booking pages',
   calendars: 'Calendars',
-  roundRobin: 'Hosts',
+  roundRobin: 'Who hosts',
   forms: 'Forms',
   /** The charts page (the reports lane), which has no sidebar item: Home and this menu reach it. */
   reports: 'Reports',

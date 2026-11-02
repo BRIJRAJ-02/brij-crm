@@ -1523,6 +1523,10 @@ function WeekView(props: BookingsCalendarScreenProps) {
           <SegmentedControl
             label={strings.viewLabel}
             size="compact"
+            // Each segment as wide as its own word, not all of them as wide as "Team day": at phone width the four
+            // equal cells left Day and List in wide empty ones and pushed Filter onto a row of its own, a fourth
+            // band of chrome over the grid (2 November 2026).
+            isFitted
             value={view}
             onChange={(next) => {
               if (next === 'day' || next === 'week' || next === 'team' || next === 'list') setView(next);
@@ -2297,6 +2301,7 @@ function ListBar({
           <SegmentedControl
             label={strings.viewLabel}
             size="compact"
+            isFitted
             value="list"
             onChange={(next) => {
               if (next === 'day' || next === 'week') onSearch({ view: next });

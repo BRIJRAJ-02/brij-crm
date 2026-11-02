@@ -71,7 +71,7 @@ const ALL_SCREENS: readonly Screen[] = [
   { name: 'bookings list', start: at('bookings/meetings'), target: segment('List') },
   { name: 'bookings hours', start: at('bookings/meetings'), target: tab('Hours') },
   { name: 'bookings team hours', start: at('bookings/hours'), target: segment('Team') },
-  { name: 'bookings hosts', start: at('bookings/meetings'), target: tab('Hosts') },
+  { name: 'bookings hosts', start: at('bookings/meetings'), target: tab('Who hosts') },
   { name: 'bookings calendars', start: at('bookings/meetings'), target: tab('Calendars') },
   { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
