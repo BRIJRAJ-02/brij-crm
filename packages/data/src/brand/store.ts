@@ -313,6 +313,13 @@ export function openBrand(given: {
     /** The link page's Design panel: the page's own accent pair and photos, read when first held. */
     look: (workspace: string): BrandHeld<BrandHeldState<PageLookExtras>> => lookOf(workspace).held,
     /**
+     * Another of the person's link pages was picked (spec 0064): the held look was the last page's, so it goes, and
+     * the next screen to hold it reads the new page's.
+     */
+    forgetLook: (workspace: string): void => {
+      looks.delete(workspace);
+    },
+    /**
      * The page's own accent pair (AC-14), whole: undefined follows the workspace's brand again. Shown at once;
      * answers the refusal, or undefined once it landed. Their personal booking pages wear it too.
      */

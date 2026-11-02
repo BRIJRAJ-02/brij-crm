@@ -578,6 +578,13 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       orderItems: os.profile.orderItems.handler(notServed),
       archiveItem: os.profile.archiveItem.handler(notServed),
       deleteItem: os.profile.deleteItem.handler(notServed),
+      pages: {
+        list: os.profile.pages.list.handler(notServed),
+        create: os.profile.pages.create.handler(notServed),
+        rename: os.profile.pages.rename.handler(notServed),
+        setPrimary: os.profile.pages.setPrimary.handler(notServed),
+        delete: os.profile.pages.delete.handler(notServed),
+      },
     },
     joinRequests: {
       domains: os.joinRequests.domains.handler(notServed),

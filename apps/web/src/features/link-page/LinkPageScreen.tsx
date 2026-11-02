@@ -11,6 +11,7 @@ import {
   type DataError,
   type DataLayer,
   type LinkPageStore,
+  type LinkPageSummary,
   type MyProfile,
   type PageTheme,
   type ProfileBlock,
@@ -69,6 +70,7 @@ import {
 import { ImportLinksModal } from './ImportLinksModal.tsx';
 import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
+import { PageSwitcher } from './PageSwitcher.tsx';
 import { LiveSwitch, useLinkPageLive, type LinkPageLive } from './private-page.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 import { strings } from './strings.ts';
@@ -87,6 +89,12 @@ export interface LinkPageScreenProps {
   readonly isEditing: boolean;
   /** Opens or closes the editor, as a change of the page's own address, so Back leaves the editor. */
   readonly onEditing: (isEditing: boolean) => void;
+  /** The person's link pages here (spec 0064, AC-6414): the switcher at the top. */
+  readonly pages?: readonly LinkPageSummary[];
+  /** Opens another of them. */
+  readonly onPick?: (page: string) => void;
+  /** They changed: read them again, opening `open` when it is named. */
+  readonly onPagesChanged?: (open?: string) => void;
 }
 
 /** Which editor is open: a kind's add, or a block's edit. */
@@ -160,8 +168,33 @@ function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined
 }
 
 /** The link page editor: the blocks beside the phone. */
-export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing, onEditing }: LinkPageScreenProps) {
+export function LinkPageScreen({
+  data,
+  linkPage,
+  brand,
+  slug,
+  profile,
+  isEditing,
+  onEditing,
+  pages = [],
+  onPick,
+  onPagesChanged,
+}: LinkPageScreenProps) {
   const handle = profile.handle;
+  // The switcher heads the screen once there is a page to switch from (spec 0064, AC-6414).
+  const current = profile.profileId;
+  const switcher =
+    current === undefined || pages.length === 0 ? undefined : (
+      <PageSwitcher
+        data={data}
+        slug={slug}
+        pages={pages}
+        current={current}
+        onPick={(page) => onPick?.(page)}
+        onChanged={(open) => onPagesChanged?.(open)}
+        onStartEditing={() => onEditing(true)}
+      />
+    );
   // Live or Private (spec 0058, AC-23): opening the screen is what puts a page made for its owner live, once.
   const live = useLinkPageLive(data, slug, profile.isPublic, { opens: handle !== undefined });
   return (
@@ -202,6 +235,7 @@ export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing
               onGoLive={live.goLive}
               isEditing={isEditing}
               onEditing={onEditing}
+              switcher={switcher}
             />
           ),
       }}
@@ -294,6 +328,7 @@ function Blocks({
   onGoLive,
   isEditing,
   onEditing,
+  switcher,
 }: {
   readonly data: DataLayer;
   readonly linkPage: LinkPageStore;
@@ -307,6 +342,8 @@ function Blocks({
   readonly onGoLive: () => void;
   readonly isEditing: boolean;
   readonly onEditing: (isEditing: boolean) => void;
+  /** The person's pages, first in both the overview and the editor (spec 0064). */
+  readonly switcher?: ReactNode;
 }) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -860,6 +897,7 @@ function Blocks({
   if (!isEditing) {
     return (
       <PreviewLayout preview={preview} previewShare="wide">
+        {switcher}
         <LinkPageOverview
           data={data}
           slug={slug}
@@ -879,6 +917,7 @@ function Blocks({
   }
   return (
     <PreviewLayout preview={preview} previewShare="wide">
+      {switcher}
       {/* What is on the page comes first (its blocks, the archived ones, the social links), then how it looks:
           content is what the editor is opened for (flow walks, 29 October 2026: L2). */}
       <Card

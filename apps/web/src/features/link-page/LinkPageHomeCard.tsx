@@ -1,17 +1,19 @@
 // Brief
-// Purpose: Home's "Your link page" card (spec 0051, AC-5121 to AC-5123): the QR code that opens the person's page.
+// Purpose: Home's "Your link page" card (spec 0051, AC-5121 to AC-5123): the QR code that opens the person's page,
+// their main one when they have several (spec 0064, AC-6415), with a line naming how many more and opening them.
 // Main task: show the page to someone (scan the code, Copy link, Open); and the same Live or Private switch the
 // link page screen has (spec 0058, AC-23), with one line saying what Private means.
 // Leaves out: editing the page (Edit opens the editor) and its figures (phase 3). A page with no handle is claimed on
 // the link page screen, never in Profile (AC-8). Loaded with its own chunk, so neither it nor the QR library is in
 // the app's first load.
 import type { DataLayer, MyProfile } from '@crm/data';
-import { ButtonGroup, ButtonLink, Card, CopyButton, EmptyState, QrCode, Skeleton } from '@crm/ui';
+import { ButtonGroup, ButtonLink, Card, CopyButton, EmptyState, Link, QrCode, Skeleton } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { publicProfileUrl } from '../booking/links.ts';
 import { homeStrings as strings } from './home-strings.ts';
 import { linkPageHref } from './nav-strings.ts';
+import { pagesStrings } from './pages-strings.ts';
 import { LiveSwitch, useLinkPageLive, useWalletLink } from './private-page.tsx';
 
 /** Props for the card. */
@@ -22,7 +24,7 @@ export interface LinkPageHomeCardProps {
 type Read =
   | { readonly status: 'loading' }
   | { readonly status: 'error' }
-  | { readonly status: 'ready'; readonly profile: MyProfile };
+  | { readonly status: 'ready'; readonly profile: MyProfile; readonly pages: number };
 
 /** The person's profile, through the data layer: its handle decides what the card shows. */
 function useProfile(data: DataLayer, slug: string) {
@@ -30,9 +32,18 @@ function useProfile(data: DataLayer, slug: string) {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let isCurrent = true;
-    data.profile.get(slug).then(
-      (profile) => {
-        if (isCurrent) setRead({ status: 'ready', profile });
+    // Home's card is the main page's (AC-6415): its Live switch and wallet calls never go to a page picked elsewhere.
+    data.linkPage.pick(slug, undefined);
+    Promise.all([
+      data.profile.get(slug),
+      // How many pages there are: the line under the main page's code. A failed read is no line.
+      data.linkPage.pages.list(slug).then(
+        (pages) => pages.length,
+        () => 0,
+      ),
+    ]).then(
+      ([profile, pages]) => {
+        if (isCurrent) setRead({ status: 'ready', profile, pages });
       },
       () => {
         if (isCurrent) setRead({ status: 'error' });
@@ -85,7 +96,7 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
       </Card>
     );
   }
-  return <ReadyCard data={data} slug={slug} profile={read.profile} handle={handle} />;
+  return <ReadyCard data={data} slug={slug} profile={read.profile} handle={handle} pages={read.pages} />;
 }
 
 /** The card once there is a page: the switch and Edit, then the code with its address, Copy link and Open. */
@@ -94,11 +105,14 @@ function ReadyCard({
   slug,
   profile,
   handle,
+  pages,
 }: {
   readonly data: DataLayer;
   readonly slug: string;
   readonly profile: MyProfile;
   readonly handle: string;
+  /** How many link pages the person has here, the main one included. */
+  readonly pages: number;
 }) {
   const live = useLinkPageLive(data, slug, profile.isPublic);
   const wallet = useWalletLink(data, slug, live.isLive);
@@ -130,6 +144,12 @@ function ReadyCard({
         </p>
         {/* A private page says the one thing it can't do. */}
         {!live.isLive && <p>{strings.privateLine}</p>}
+        {/* Their other pages are on the link page screen's switcher (spec 0064, AC-6415). */}
+        {pages > 1 && (
+          <p>
+            <Link href={linkPageHref(slug)}>{pagesStrings.morePages(pages - 1)}</Link>
+          </p>
+        )}
         <ButtonGroup label={strings.shareLabel} layout="row">
           {/* A private page's link opens for nobody, so Copy link is only the primary while it is Live. */}
           <CopyButton

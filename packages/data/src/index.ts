@@ -112,6 +112,7 @@ import type {
   WorkspaceDomainsView,
   DeletedWorkspace,
   MyProfile,
+  LinkPageSummary,
   SocialLink,
   WorkspaceSettings,
 } from '@crm/contracts';
@@ -586,6 +587,7 @@ export type {
   WorkspaceSummary,
   DeletedWorkspace,
   MyProfile,
+  LinkPageSummary,
   ProfileBlock,
   ProfileCounts,
   ProfileBlockKind,
@@ -2596,6 +2598,20 @@ export function createDataLayer({
   // rules load with the first screen that asks, never in the first load; the store builds its calls from the
   // profile procedures and the one call path, in its own chunk.
   let linkPage: Promise<LinkPageStore> | undefined;
+  // Which of the person's link pages each workspace's editor is on (spec 0064, AC-6414): the switcher picks it, and
+  // every link page call the stores make names it as `profileId`. None is their primary page, as before.
+  const linkPageChoice = new Map<string, string>();
+  const onPage = <Input extends { readonly workspace: string }>(input: Input): Input & { profileId?: string } => {
+    const page = linkPageChoice.get(input.workspace);
+    return page === undefined ? input : { ...input, profileId: page };
+  };
+  /** One profile procedure, sent for the picked page. */
+  const paged =
+    <Input extends { readonly workspace: string }, Output>(
+      run: (input: Input & { profileId?: string }, options: { signal?: AbortSignal }) => Promise<Output>,
+    ) =>
+    (input: Input, options: { signal?: AbortSignal }): Promise<Output> =>
+      run(onPage(input), options);
   // Settings › Brand and the link page's Design panel (spec 0060): the workspace's kit and a page's own colour and
   // photos, loaded with the first screen that asks, never in the first load.
   let brand: Promise<BrandStore> | undefined;
@@ -2605,10 +2621,13 @@ export function createDataLayer({
     workspace: string,
     body?: Blob,
   ): Promise<{ readonly version?: string; readonly removed?: boolean }> => {
+    // A link page photo names the picked page (spec 0064); the brand logo is the workspace's and names none.
+    const page = path.startsWith('/api/me/link-page/') ? linkPageChoice.get(workspace) : undefined;
     const response = await fetch(new URL(path, origin).href, {
       method: body === undefined ? 'DELETE' : 'POST',
       headers: {
         'x-crm-workspace': workspace,
+        ...(page === undefined ? {} : { 'x-crm-link-page': page }),
         ...(body === undefined ? {} : { 'content-type': body.type }),
       },
       ...(body === undefined ? {} : { body }),
@@ -5388,7 +5407,22 @@ export function createDataLayer({
       load: (): Promise<LinkPageStore> =>
         (linkPage ??= import('./link-page/store.ts').then(({ openLinkPage }) =>
           openLinkPage({
-            profile: api.profile,
+            profile: {
+              items: paged(api.profile.items),
+              counts: paged(api.profile.counts),
+              pageChoices: paged(api.profile.pageChoices),
+              formChoices: paged(api.profile.formChoices),
+              saveTheme: paged(api.profile.saveTheme),
+              setIndexable: paged(api.profile.setIndexable),
+              setShareImage: paged(api.profile.setShareImage),
+              walletLink: paged(api.profile.walletLink),
+              show: paged(api.profile.show),
+              importLinks: paged(api.profile.importLinks),
+              saveItem: paged(api.profile.saveItem),
+              orderItems: paged(api.profile.orderItems),
+              archiveItem: paged(api.profile.archiveItem),
+              deleteItem: paged(api.profile.deleteItem),
+            },
             call,
             mintId,
             notify,
@@ -5406,6 +5440,43 @@ export function createDataLayer({
             },
           }),
         )),
+      /** Which of the person's link pages the editor in `workspace` is on (spec 0064); undefined is the primary. */
+      picked: (workspace: string): string | undefined => linkPageChoice.get(workspace),
+      /**
+       * Picks one of the person's link pages for the editor in `workspace` (the switcher, AC-6414): every link page
+       * read and write from then on names it, and the copies the stores held of the last page go, so the next screen
+       * reads the new one. Undefined goes back to the primary page.
+       */
+      pick: (workspace: string, page: string | undefined): void => {
+        if (linkPageChoice.get(workspace) === page) return;
+        if (page === undefined) linkPageChoice.delete(workspace);
+        else linkPageChoice.set(workspace, page);
+        void linkPage?.then((store) => store.clear());
+        void brand?.then((store) => store.forgetLook(workspace));
+      },
+      /**
+       * The person's link pages in a workspace (AC-6413 to AC-6416), each call answering the whole list as it now
+       * stands; the screen holds the list and shows a change once it lands. A refusal rejects with its DataError.
+       */
+      pages: {
+        list: (workspace: string): Promise<readonly LinkPageSummary[]> =>
+          call((options) => api.profile.pages.list({ workspace }, options)),
+        /** A new page, idempotent on `id` (minted once as the form opens): only a handle and a private name. */
+        create: (
+          workspace: string,
+          page: { readonly id: string; readonly handle: string; readonly name: string },
+        ): Promise<readonly LinkPageSummary[]> =>
+          call((options) => api.profile.pages.create({ workspace, ...page, mutationId: mintId() }, options)),
+        rename: (workspace: string, profileId: string, name: string): Promise<readonly LinkPageSummary[]> =>
+          call((options) => api.profile.pages.rename({ workspace, profileId, name, mutationId: mintId() }, options)),
+        setPrimary: (workspace: string, profileId: string): Promise<readonly LinkPageSummary[]> =>
+          call((options) => api.profile.pages.setPrimary({ workspace, profileId, mutationId: mintId() }, options)),
+        /** Deletes a page for good (the screen asks first); its handle stays the person's. */
+        remove: (workspace: string, profileId: string): Promise<readonly LinkPageSummary[]> =>
+          call((options) => api.profile.pages.delete({ workspace, profileId, mutationId: mintId() }, options)),
+        /** A new page's id. */
+        newId: (): string => mintId(),
+      },
     },
     /**
      * The workspace's brand kit (Settings › Brand) and a link page's own colour and photos (its Design panel), spec
@@ -5416,7 +5487,7 @@ export function createDataLayer({
         (brand ??= import('./brand/store.ts').then(({ openBrand }) =>
           openBrand({
             brand: api.brand,
-            profile: api.profile,
+            profile: { look: paged(api.profile.look), saveAccent: paged(api.profile.saveAccent) },
             call,
             mintId,
             send: sendImage,
@@ -5452,8 +5523,14 @@ export function createDataLayer({
         members.clear();
         return typeof answer.image === 'string' ? answer.image : undefined;
       },
-      /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
-      get: (workspace: string): Promise<MyProfile> => pictureChoice.read(workspace),
+      /**
+       * Reads the profile now (the route's loader); whether their picture shows comes with it, held below. With
+       * `page` (spec 0064), the handle, bio, look and Live switch are that link page's rather than the primary's.
+       */
+      get: (workspace: string, page?: string): Promise<MyProfile> =>
+        page === undefined
+          ? pictureChoice.read(workspace)
+          : call((options) => api.profile.get({ workspace, profileId: page }, options)),
       /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
       picture: (workspace: string): PictureChoiceHeld => pictureChoice.of(workspace),
       /**
@@ -5485,11 +5562,19 @@ export function createDataLayer({
           /** Their whole set of social links, in order. */
           readonly socials?: readonly SocialLink[];
         },
+        /** One of their link pages (spec 0064) whose handle or bio this changes; their primary page when left out. */
+        page?: string,
       ): Promise<MyProfile> {
         const { socials, ...rest } = change;
         const updated = await call((options) =>
           api.profile.update(
-            { workspace, ...rest, ...(socials === undefined ? {} : { socials: [...socials] }), mutationId: mintId() },
+            {
+              workspace,
+              ...rest,
+              ...(socials === undefined ? {} : { socials: [...socials] }),
+              ...(page === undefined ? {} : { profileId: page }),
+              mutationId: mintId(),
+            },
             options,
           ),
         );

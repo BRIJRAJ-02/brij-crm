@@ -13,15 +13,38 @@ import { strings } from '../features/settings/workspace-strings.ts';
 export const Route = createFileRoute('/w/$slug/link-page')({
   // The page opens on what it is for, sharing itself; `?edit` is the builder (27 October 2026). It is in the
   // address so Back leaves the editor, and a link can open it straight into one.
-  validateSearch: (search: Record<string, unknown>): { readonly edit?: true } =>
-    search['edit'] === undefined || search['edit'] === false || search['edit'] === 'false' ? {} : { edit: true },
-  loader: async ({ context, params }) => {
+  // `?page` names which of the person's link pages (spec 0064, AC-6414), so the switcher's pick is an address Back
+  // returns from and a link can open; left out, their main page.
+  validateSearch: (search: Record<string, unknown>): { readonly edit?: true; readonly page?: string } => ({
+    ...(search['edit'] === undefined || search['edit'] === false || search['edit'] === 'false' ? {} : { edit: true }),
+    ...(typeof search['page'] === 'string' && PAGE_ID.test(search['page']) ? { page: search['page'] } : {}),
+  }),
+  loaderDeps: ({ search }) => ({ page: search.page }),
+  loader: async ({ context, params, deps }) => {
+    const { data } = context;
+    const read = async (page: string | undefined) => {
+      data.linkPage.pick(params.slug, page);
+      const [profile, pages] = await Promise.all([
+        data.profile.get(params.slug, page),
+        // The switcher's tiles; none before the first handle is claimed, and a failed read is no switcher.
+        data.linkPage.pages.list(params.slug).catch(() => []),
+      ]);
+      return { profile, pages };
+    };
     try {
-      return { profile: await context.data.profile.get(params.slug) };
+      return await read(deps.page);
     } catch (error) {
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { profile: undefined };
+      if (isDataError(error) && error.code === 'NOT_FOUND') {
+        // A page deleted in another tab, or never theirs: their main page instead.
+        if (deps.page !== undefined) return read(undefined).catch(() => ({ profile: undefined, pages: [] }));
+        return { profile: undefined, pages: [] };
+      }
       throw error;
     }
+  },
+  // Every other screen's link page calls (Home's card, Settings) are for the main page again.
+  onLeave: ({ context, params }) => {
+    context.data.linkPage.pick(params.slug, undefined);
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -33,22 +56,34 @@ export const Route = createFileRoute('/w/$slug/link-page')({
 });
 
 function LinkPageRoute() {
-  const { profile } = Route.useLoaderData();
+  const { profile, pages } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
-  const { edit } = Route.useSearch();
+  const { edit, page } = Route.useSearch();
   const navigate = Route.useNavigate();
+  const router = useRouter();
   if (profile === undefined) return <SettingsMissing backTo="home" />;
+  const at = (search: { readonly edit?: true; readonly page?: string }) => void navigate({ search });
   return (
     <LinkPageLoader
       data={data}
       slug={slug}
       profile={profile}
+      pages={pages}
       isEditing={edit === true}
-      onEditing={(isEditing) => void navigate({ search: isEditing ? { edit: true } : {} })}
+      onEditing={(isEditing) => at({ ...(page === undefined ? {} : { page }), ...(isEditing ? { edit: true } : {}) })}
+      onPick={(picked) => at({ page: picked })}
+      onPagesChanged={(open) => {
+        // A page made, deleted or made main: the list and the profile are read again, on the page to open.
+        if (open === undefined || open === page) void router.invalidate();
+        else at({ page: open });
+      }}
     />
   );
 }
+
+/** A link page id in the address: a UUID, else the main page. */
+const PAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function LinkPageError({ error }: ErrorComponentProps) {
   const router = useRouter();

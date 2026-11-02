@@ -1,6 +1,6 @@
 // Settings › Account › Profile's link page view (`?view=link-page`, spec 0051): its store loads with the view (never
 // in the app's first load), its read starts at once, and the editor's own loading shape stands meanwhile.
-import type { BrandStore, DataLayer, LinkPageStore, MyProfile } from '@crm/data';
+import type { BrandStore, DataLayer, LinkPageStore, LinkPageSummary, MyProfile } from '@crm/data';
 import { useEffect, useState } from 'react';
 import { LinkPagePending } from './LinkPagePending.tsx';
 import { LinkPageScreen } from './LinkPageScreen.tsx';
@@ -10,13 +10,28 @@ export interface LinkPageLoaderProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly profile: MyProfile;
+  /** The person's link pages here (spec 0064), for the switcher; empty before the first handle. */
+  readonly pages?: readonly LinkPageSummary[];
   /** The builder is open (`?edit`); without it the page opens on the overview. */
   readonly isEditing: boolean;
   readonly onEditing: (isEditing: boolean) => void;
+  /** Opens another of the person's pages. */
+  readonly onPick?: (page: string) => void;
+  /** The pages changed: read them again, opening `open` when it is named. */
+  readonly onPagesChanged?: (open?: string) => void;
 }
 
 /** The link page editor once its store has loaded; its loading shape until then. */
-export function LinkPageLoader({ data, slug, profile, isEditing, onEditing }: LinkPageLoaderProps) {
+export function LinkPageLoader({
+  data,
+  slug,
+  profile,
+  pages = [],
+  isEditing,
+  onEditing,
+  onPick,
+  onPagesChanged,
+}: LinkPageLoaderProps) {
   const [store, setStore] = useState<{ readonly linkPage: LinkPageStore; readonly brand: BrandStore } | undefined>(
     undefined,
   );
@@ -35,14 +50,18 @@ export function LinkPageLoader({ data, slug, profile, isEditing, onEditing }: Li
   if (store === undefined) return <LinkPagePending />;
   return (
     <LinkPageScreen
-      key={profile.memberId}
+      // Another page is another screen: its blocks, look and figures are read afresh (spec 0064).
+      key={`${profile.memberId}:${profile.profileId ?? ''}`}
       data={data}
       linkPage={store.linkPage}
       brand={store.brand}
       slug={slug}
       profile={profile}
+      pages={pages}
       isEditing={isEditing}
       onEditing={onEditing}
+      {...(onPick === undefined ? {} : { onPick })}
+      {...(onPagesChanged === undefined ? {} : { onPagesChanged })}
     />
   );
 }
