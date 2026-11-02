@@ -80,6 +80,11 @@ export interface TaskListProps {
   readonly onToggle: (task: TaskEntry, isDone: boolean) => void;
   /** Enter or a click on a row: open the task. */
   readonly onAction?: (task: TaskEntry) => void;
+  /**
+   * The task open in the panel beside the list: its row is marked and scrolled into view as it changes, so
+   * stepping with Previous and Next walks the list rather than losing your place in it.
+   */
+  readonly openId?: string;
   /** Hide the record chips. */
   readonly hideRecord?: boolean;
   /** Nobody here can tick tasks: every checkbox is read only. */
@@ -184,6 +189,7 @@ export function TaskList({
   tasks,
   onToggle,
   onAction,
+  openId,
   hideRecord = false,
   isReadOnly = false,
   status = 'ready',
@@ -219,6 +225,7 @@ export function TaskList({
       {...{ label, tasks, onToggle, hideRecord, isReadOnly, status, layout, maxRows }}
       isFramed={toolbar !== undefined || footer !== undefined}
       {...(onAction === undefined ? {} : { onAction })}
+      {...(openId === undefined ? {} : { openId })}
       {...(onRetry === undefined ? {} : { onRetry })}
       {...(recordHref === undefined ? {} : { recordHref })}
       {...(sectionOf === undefined ? {} : { sectionOf })}
@@ -273,6 +280,7 @@ function TaskListContent({
   tasks,
   onToggle,
   onAction,
+  openId,
   hideRecord = false,
   isReadOnly = false,
   status = 'ready',
@@ -303,9 +311,20 @@ function TaskListContent({
     [rows, tasks, sectionOf],
   );
   // A task made here lands at the top: that one row drops in, and the rest stay still (a virtual list draws a
-  // window, so only the row at index 0 is marked).
-  // Marked rows only: this list is windowed, so nothing moves unless the row the key belongs to is drawn.
-  const listRef = useDropIn(rows[0]?.id, true);
+  // window, so only the row at index 0 is marked, and `needsMark` keeps the drop to it).
+  const dropIn = useDropIn<HTMLDivElement>(rows[0]?.id, true);
+  const listEl = useRef<HTMLDivElement | null>(null);
+  const listRef = (node: HTMLDivElement | null) => {
+    listEl.current = node;
+    dropIn(node);
+  };
+  // The open task's row comes into view as it changes (a step): `nearest`, so a row already on screen doesn't move
+  // the list under the person. A row the window hasn't drawn has nothing to scroll, and stepping goes one row at a
+  // time, so the next one is in view already.
+  useEffect(() => {
+    if (openId === undefined) return;
+    listEl.current?.querySelector('[data-open]')?.scrollIntoView({ block: 'nearest' });
+  }, [openId]);
 
   if (status === 'error') {
     return (
@@ -375,6 +394,7 @@ function TaskListContent({
         className={styles.row}
         textValue={task.title}
         {...(row.index === 0 ? { 'data-drop-in': '' } : {})}
+        data-open={task.id === openId || undefined}
         data-done={task.isDone || undefined}
         data-pressable={onAction === undefined ? undefined : ''}
       >
@@ -447,7 +467,7 @@ function TaskListContent({
   };
 
   // Rows follow their task; the collection draws them again when the tasks behind them change.
-  const dependencies = [tasks, hideRecord, isReadOnly, dueOf, recordHref, newIds];
+  const dependencies = [tasks, hideRecord, isReadOnly, dueOf, recordHref, newIds, openId];
   const actions =
     onAction === undefined
       ? {}

@@ -50,6 +50,10 @@ Tab enters the list. The up and down arrows move between rows (section headings 
 
 Not in the artifact. `record` and `recordHref` on a task gave way to `records` and the list's `recordHref(record)` (spec 0019), so one task can name several records; `recordCount` stays for a count past the listed ones but draws nothing of its own.
 
+## The open task
+
+`openId` marks the row whose task is open in the panel beside the list (`data-open`, the surface the grid marks its open record with) and brings it into view as it changes, `block: 'nearest'`, so a row already on screen stays where it is. Why a prop: stepping with the panel's Previous and Next otherwise walked out of sight, and the list is the only thing that knows where its rows are.
+
 ## Motion
 
 A task made here that lands at the top of the list drops in (`useDropIn` with `needsMark`): the list carries the hook and the row at index 0 carries `data-drop-in`, so nothing moves unless that row is drawn, and never a row that only happens to be in view. A list grouped by day (My tasks) often takes a new task into a later group, and then nothing animates. A row's count badge rolls its changed digit through `Badge`. A ticked task is struck through and leaves when the list settles; it does not `collapseAway`, because the rows below a virtualised row are placed by the layout, so there would be nothing to glide.

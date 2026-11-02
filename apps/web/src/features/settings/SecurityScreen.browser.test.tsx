@@ -81,7 +81,7 @@ function layer() {
 
 async function render(data: Partial<DataLayer>) {
   const toasts = createToasts();
-  shown = await renderInApp(() => <SecurityScreen data={data as DataLayer} toasts={toasts} />, {
+  shown = await renderInApp(() => <SecurityScreen data={data as DataLayer} slug="acme" toasts={toasts} />, {
     data,
     pattern: '/w/$slug/settings/account/sign-in',
     at: '/w/acme/settings/account/sign-in',

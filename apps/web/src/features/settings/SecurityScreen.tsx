@@ -2,12 +2,14 @@
 // Purpose: Settings › Account › Sign in and devices (spec 0033): how this account signs in and the devices signed in to it.
 // Main task: see each device (browser and system, rough place, last use) and sign one out, or every other one, after a confirm.
 // Leaves out: signing this device out (the account menu does), and what happened lately: the sign in history lives
-// in one place, Settings › Workspace › History › Your sign ins (the simplify pass, 2 November 2026).
+// in one place, Settings › Workspace › History › Your sign ins (the simplify pass, 2 November 2026), which this page
+// links to rather than drawing again.
 import { type AccountSession, type DataLayer } from '@crm/data';
 import { useAccountSecurity, useAccountSessions } from '@crm/data/react';
 import {
   Badge,
   Button,
+  ButtonLink,
   Card,
   EmptyState,
   Icon,
@@ -20,6 +22,8 @@ import {
 } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { currentFirst, deviceIcon, deviceName, devicePlace } from './security-lines.ts';
+import { historyHref } from './history-href.ts';
+import { strings as history } from './history-strings.ts';
 import { strings } from './security-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { useStepUp } from './StepUp.tsx';
@@ -99,6 +103,8 @@ function DeviceLine({ session }: { readonly session: AccountSession }) {
 /** Props for the Security screen. */
 export interface SecurityScreenProps {
   readonly data: DataLayer;
+  /** The workspace, for the link to History › Your sign ins, where the sign in history is read. */
+  readonly slug: string;
   /** The app's toast queue (router context), for how a sign out went. */
   readonly toasts: Toasts;
 }
@@ -107,7 +113,7 @@ export interface SecurityScreenProps {
 type Confirm = { readonly kind: 'one'; readonly session: AccountSession } | { readonly kind: 'others' };
 
 /** Settings › Account › Sign in and devices: each section a Card of rows, each ending asked first in a danger Modal. */
-export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
+export function SecurityScreen({ data, slug, toasts }: SecurityScreenProps) {
   const view = data.account.sessions();
   const state = useAccountSessions(view);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -228,18 +234,20 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
     body = (
       <SettingsSection
         title={strings.devices}
-        // The one action over the whole list sits at its heading, beside the rows it ends.
-        {...(hasOthers
-          ? {
-              actions: (
-                <>
-                  <Button ref={othersRef} variant="danger" onPress={() => ask({ kind: 'others' })}>
-                    {strings.signOutOthers}
-                  </Button>
-                </>
-              ),
-            }
-          : {})}
+        // The one action over the whole list sits at its heading, beside the rows it ends, with the way to the sign
+        // in history beside it: one link, since this page no longer draws that list itself.
+        actions={
+          <>
+            <ButtonLink variant="link" href={historyHref(slug, 'sign-ins')}>
+              {history.signInsTitle}
+            </ButtonLink>
+            {hasOthers && (
+              <Button ref={othersRef} variant="danger" onPress={() => ask({ kind: 'others' })}>
+                {strings.signOutOthers}
+              </Button>
+            )}
+          </>
+        }
       >
         <Card>
           {state.items.length === 0 ? (

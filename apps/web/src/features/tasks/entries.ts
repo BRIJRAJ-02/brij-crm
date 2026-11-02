@@ -42,10 +42,14 @@ export function toTaskEntry(task: TaskView, members: readonly MemberSummary[], p
   };
 }
 
-/** What a stepping panel reads: the rows a list has drawn so far, by place. */
+/**
+ * What a stepping panel reads: the rows a list has drawn so far, by place.
+ * Their ids are all it needs, so a list of `TaskEntry` (what the library draws)
+ * and one of `TaskView` (what the store holds) both fit.
+ */
 export interface TaskRows {
   readonly count: number;
-  readonly getItem: (index: number) => TaskEntry | undefined;
+  readonly getItem: (index: number) => { readonly id: string } | undefined;
 }
 
 /**

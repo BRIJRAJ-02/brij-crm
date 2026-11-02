@@ -41,6 +41,9 @@ test.describe('the task panel', () => {
       .click();
     await expect(page.getByRole('dialog', { name: 'Call Ada back' })).toBeVisible();
 
+    // The open task's row is marked, so stepping never loses your place in the list.
+    await expect(page.locator('[role="row"][data-open]')).toHaveCount(1);
+
     // Done is the panel's one quick action, and the list shows it at once.
     await panel.getByRole('button', { name: 'Mark done' }).click();
     await expect(panel.getByRole('button', { name: 'Reopen' })).toBeVisible();
@@ -59,6 +62,11 @@ test.describe('the simplify pass', () => {
     const tag = randomUUID().slice(0, 8);
     const slug = `simplify-${tag}`;
     await newWorkspace(page, `simplify-${tag}@example.com`, slug);
+
+    // One link to the sign in history, where it is read; the page no longer draws the list itself.
+    await page.goto(`/w/${slug}/settings/account/sign-in`);
+    await expect(page.getByRole('link', { name: 'Your sign ins' })).toBeVisible();
+    await expect(page.getByText('Recent activity')).toHaveCount(0);
 
     // One screen for everything about this person: the old Notifications address lands on it.
     await page.goto(`/w/${slug}/settings/account/notifications`);

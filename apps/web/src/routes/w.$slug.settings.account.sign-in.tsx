@@ -21,5 +21,6 @@ export const Route = createFileRoute('/w/$slug/settings/account/sign-in')({
 
 function SecurityRoute() {
   const { data, toasts } = Route.useRouteContext();
-  return <SecurityScreen data={data} toasts={toasts} />;
+  const { slug } = Route.useParams();
+  return <SecurityScreen data={data} slug={slug} toasts={toasts} />;
 }

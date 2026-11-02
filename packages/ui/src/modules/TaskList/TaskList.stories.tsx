@@ -38,6 +38,8 @@ interface SampleProps {
   readonly isPhone?: boolean;
   /** A card on a phone (a record's Open tasks): the sidebar's width. */
   readonly isNarrowCard?: boolean;
+  /** The task open in the panel beside the list: its row is marked and kept in view. */
+  readonly openId?: string;
 }
 
 /** The list holding its own tasks, as the data layer would, in a fixed height slot. */
@@ -54,6 +56,7 @@ function SampleTasks({
   withLocked = false,
   isPhone = false,
   isNarrowCard = false,
+  openId,
 }: SampleProps) {
   const [tasks, setTasks] = useState<readonly TaskEntry[]>(() =>
     isEmpty
@@ -82,6 +85,7 @@ function SampleTasks({
         {...(onRetry === undefined ? {} : { onRetry })}
         {...(hideRecord === undefined ? {} : { hideRecord })}
         {...(isReadOnly === undefined ? {} : { isReadOnly })}
+        {...(openId === undefined ? {} : { openId })}
       />
     </Stage>
   );
@@ -646,5 +650,16 @@ export const SectionsLoading: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('rowheader', { name: 'Overdue' })).toBeInTheDocument();
     await expect(canvas.getByRole('rowheader', { name: 'Upcoming' })).toBeInTheDocument();
+  },
+};
+
+/** The task open in the panel beside the list keeps its row marked, so stepping never loses your place. */
+export const OpenRow: Story = {
+  args: { openId: SAMPLE_TASKS[1]?.id ?? '', onAction: fn() },
+  play: async ({ canvas }) => {
+    const rows = canvas.getAllByRole('row');
+    const open = rows.filter((row) => row.getAttribute('data-open') !== null);
+    await expect(open).toHaveLength(1);
+    await expect(open[0]).toHaveTextContent(SAMPLE_TASKS[1]?.title ?? '');
   },
 };

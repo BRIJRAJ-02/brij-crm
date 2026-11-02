@@ -40,6 +40,12 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* The row whose task is open in the panel beside the list, as the grid marks its open record: without it,
+     stepping with Previous and Next loses your place in a long list. */
+  .row[data-open] {
+    background: var(--surface-selected);
+  }
+
   /* The parts beside the title never shrink (React Aria's row holds them in a display: contents cell, so they are
      flex items of the row and each carries its own rule): the checkbox, a lock, the New badge and the assignee. */
   .check,
@@ -189,6 +195,12 @@
     .row[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));
+    }
+
+    /* A background alone doesn't survive forced colours, so the open row keeps a hairline instead. */
+    .row[data-open] {
+      outline: var(--border-width-hairline) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-hairline));
     }
   }
 }

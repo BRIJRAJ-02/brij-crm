@@ -30,6 +30,7 @@ import {
   useNoteTotal,
   useRecord,
   useRecordEntries,
+  useTaskList,
   useTaskTotal,
   useTrashed,
 } from '@crm/data/react';
@@ -64,7 +65,7 @@ import { NotesTab } from '../notes/NotesTab.tsx';
 import { strings as noteStrings } from '../notes/strings.ts';
 import { LogActivityDialog } from '../notes/LogActivityDialog.tsx';
 import { NoteWindow } from '../notes/NoteWindow.tsx';
-import { tabCount } from '../tasks/entries.ts';
+import { stepTask, tabCount } from '../tasks/entries.ts';
 import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
 import { strings as taskStrings } from '../tasks/strings.ts';
 import { TaskPanel } from '../tasks/TaskPanel.tsx';
@@ -461,6 +462,9 @@ function RecordScreen({
   // Rename, from the More menu: the name is the header's, no longer a row in Details (owner, 31 Oct).
   const [isRenaming, setRenaming] = useState(false);
   const openTotal = useTaskTotal(open);
+  // The open tasks as rows, for the task panel's Previous and Next on the Tasks tab (the same held source the tab
+  // reads, so this adds a listener, not a read).
+  const openTasks = useTaskList(open);
   const notesTotal = useNoteTotal(notes);
   const commentCount = useCommentCount(comments);
   const fileCount = useRecordFileCount(files);
@@ -681,6 +685,7 @@ function RecordScreen({
         canAdd={canAddTasks}
         recordHref={chipHref}
         onOpenTask={openTask}
+        {...(task === undefined || task === 'new' ? {} : { openTaskId: task })}
       />
     );
   } else if (tab === 'tasks') {
@@ -715,6 +720,12 @@ function RecordScreen({
       </>
     );
   }
+  // Previous and Next step through the Tasks tab's open list, as they do on My tasks; over another tab there is no
+  // list beside the panel, so no steps show.
+  const taskNeighbours: { readonly previous?: string; readonly next?: string } =
+    task === undefined || task === 'new' || tab !== 'tasks' ? {} : stepTask(openTasks.source, task);
+  const stepBack = taskNeighbours.previous;
+  const stepOn = taskNeighbours.next;
   const dialog =
     task === undefined ? undefined : (
       <TaskPanel
@@ -727,6 +738,20 @@ function RecordScreen({
         meId={meId}
         onClose={closeTask}
         onOpenTask={openTask}
+        {...(stepBack === undefined
+          ? {}
+          : {
+              onPrevious: () => {
+                openTask(stepBack);
+              },
+            })}
+        {...(stepOn === undefined
+          ? {}
+          : {
+              onNext: () => {
+                openTask(stepOn);
+              },
+            })}
         {...(tab === 'tasks' ? { listLabel: taskStrings.openTasks } : {})}
       />
     );

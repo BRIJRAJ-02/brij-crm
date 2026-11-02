@@ -162,6 +162,7 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
                   onRetry={list.retry}
                   newIds={state.newIds}
                   {...(sectionOf === undefined ? {} : { sectionOf })}
+                  {...(task === undefined || task === 'new' ? {} : { openId: task })}
                   emptyTitle={empty.title}
                   {...(empty.body === undefined ? {} : { emptyBody: empty.body })}
                   {...(status === 'open'

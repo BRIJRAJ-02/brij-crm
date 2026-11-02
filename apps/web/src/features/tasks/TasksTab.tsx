@@ -27,6 +27,8 @@ export interface TasksTabProps {
   readonly recordHref: (record: RecordRefDisplay) => string | undefined;
   /** Opens the task panel on a task, or on a new one. */
   readonly onOpenTask: (taskId: string) => void;
+  /** The task open in the panel beside the tab: its row is marked and kept in view as the panel steps. */
+  readonly openTaskId?: string;
 }
 
 /** The quick add: Enter makes a task with that title, this record linked, assigned to the person. */
@@ -204,7 +206,17 @@ function CompletedList({
  * and assignee one press away, over its open tasks by due date, ticked in place (a ticked task stays
  * struck through until the list settles), and Completed under them.
  */
-export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref, onOpenTask }: TasksTabProps) {
+export function TasksTab({
+  slug,
+  record,
+  open,
+  members,
+  meId,
+  canAdd,
+  recordHref,
+  onOpenTask,
+  openTaskId,
+}: TasksTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const state = useTaskList(open);
   const entries = useTaskEntries(state.source, members, record.recordId);
@@ -218,6 +230,7 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
       // One way to add (owner, 31 Oct: an input, a New task button and an empty state said the same thing three
       // times): the quick add, with its due date and assignee one press away; empty, the list is one quiet line.
       emptyTitle={strings.noOpenTasksShort}
+      {...(openTaskId === undefined ? {} : { openId: openTaskId })}
       recordHref={recordHref}
       onToggle={(task, isDone) => {
         tickTask(toasts, (next) => data.tasks.setDone(slug, task.id, next), isDone);
