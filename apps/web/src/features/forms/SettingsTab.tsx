@@ -36,6 +36,7 @@ import { useState } from 'react';
 import { linksHref, pageEditorHref } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
 import { afterPageProblem } from './after-page.ts';
+import { EndingsCard } from './EndingsCard.tsx';
 import { isRedirectAddress, sameValue } from './draft.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
@@ -228,7 +229,7 @@ export function SettingsTab({
   isRetargeting,
   showGaps,
 }: SettingsTabProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   // What each follow up last held, so switching back and forth keeps what was typed.
   const [kept, setKept] = useState({
     message: draft.after.kind === 'redirect' ? '' : draft.after.message,
@@ -615,6 +616,14 @@ export function SettingsTab({
           />
         )}
       </Card>
+      <EndingsCard
+        draft={draft}
+        target={target}
+        pages={usable}
+        isReadOnly={isReadOnly}
+        toasts={toasts}
+        onDraftChange={onDraftChange}
+      />
       <RulesCard
         data={data}
         slug={slug}

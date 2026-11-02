@@ -6,6 +6,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { isHiddenFact, RECORD_FACT } from './conditions.ts';
+import { SCORE_FACT } from './recall.ts';
 import { CONDITION_OPS, CONDITIONS_MAX, NUMBER_OPS, VALUELESS_OPS } from './show-when.ts';
 import { QUESTION_KEY } from './answer-types.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
@@ -18,7 +19,7 @@ import { WorkspaceScoped } from '../workspaces.ts';
 export const FactKey = z
   .string()
   .max(80)
-  .refine((key) => QUESTION_KEY.test(key) || RECORD_FACT.test(key) || isHiddenFact(key), {
+  .refine((key) => QUESTION_KEY.test(key) || RECORD_FACT.test(key) || isHiddenFact(key) || key === SCORE_FACT, {
     error: 'Pick a question or a field.',
   });
 
@@ -86,6 +87,14 @@ const RouteUrl = z
   );
 
 /**
+ * One of the form's endings a rule may send a visitor to (spec 0063, AC-6315). The same shape `EndingId` mints in
+ * `document.ts`, written again here because the document imports this module and not the other way round.
+ */
+const EndingRef = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, { error: 'An ending id is 1 to 40 lower case letters, digits, - or _.' });
+
+/**
  * Where a rule sends a lead. A form's rules use `book` (a booking page, the
  * meeting type, optionally only some of a team page's hosts), `message` or
  * `redirect`; a team page's rules use `hosts`.
@@ -103,6 +112,8 @@ export const Route = z.discriminatedUnion('kind', [
   }),
   z.strictObject({ kind: z.literal('redirect'), url: RouteUrl }),
   z.strictObject({ kind: z.literal('hosts'), hosts: RouteHosts }),
+  /** One of the form's own endings (spec 0063, AC-6315): the visitor lands there instead of the thank you. */
+  z.strictObject({ kind: z.literal('ending'), endingId: EndingRef }),
 ]);
 /** Where a rule sends a lead. */
 export type Route = z.infer<typeof Route>;
@@ -145,7 +156,7 @@ export type RoutingRules = z.infer<typeof RoutingRules>;
 export type RoutingRulesInput = z.input<typeof RoutingRules>;
 
 /** The routes a form's rules may take (AC-1604). */
-export const FORM_ROUTES: readonly Route['kind'][] = ['book', 'message', 'redirect'];
+export const FORM_ROUTES: readonly Route['kind'][] = ['book', 'message', 'redirect', 'ending'];
 /** The routes a team page's rules may take (AC-1608). */
 export const PAGE_ROUTES: readonly Route['kind'][] = ['hosts'];
 

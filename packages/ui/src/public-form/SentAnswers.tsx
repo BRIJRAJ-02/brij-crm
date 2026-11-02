@@ -31,7 +31,7 @@ export function SentAnswers({
   state,
 }: {
   readonly form: PublicForm;
-  readonly state: Pick<HostedFormState, 'answers' | 'shown' | 'words'>;
+  readonly state: Pick<HostedFormState, 'answers' | 'shown' | 'words' | 'read'>;
 }) {
   const sent = form.questions.flatMap((question) => {
     if (!state.shown.has(question.key)) return [];
@@ -41,7 +41,8 @@ export function SentAnswers({
       : [
           {
             key: question.key,
-            label: question.label.trim() === '' ? state.words.untitledQuestion : question.label,
+            // Read as the question was asked (spec 0063, AC-6317): the same recall the visitor answered under.
+            label: question.label.trim() === '' ? state.words.untitledQuestion : state.read(question.label),
             text,
           },
         ];

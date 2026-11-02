@@ -1,7 +1,7 @@
 // Brief
 // Purpose: one form's editor (spec 0023, 0023-experience.md, Builder): its questions beside a live preview, and Settings (what happens after sending, routing, the owner) from the start; Install and Submissions once published.
 // Main task: shape the draft (saved quietly as you go), publish it, and share it.
-// Leaves out: jumps and endings (spec 0063 slice 5), round robin (#58), booking (#59), analytics.
+// Leaves out: round robin (#58), booking (#59), analytics. Jumps, endings, points and the Flow view arrived with spec 0063 slice 5: the jumps on a step divider (Form tab), the endings and the score's filing in Settings.
 import {
   isDataError,
   type FormDocument,
@@ -50,6 +50,7 @@ import {
   withFlow,
   withQuestions,
 } from './draft.ts';
+import { FlowView } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
@@ -67,6 +68,9 @@ import { strings as questionStrings } from '../questions/strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
+
+/** The refusals that are fixed in Settings, not on the Form tab (spec 0063, AC-6315, AC-6316, AC-6326). */
+const IN_SETTINGS: readonly PublishProblem['code'][] = ['ENDING_INVALID', 'SCORE_FILING_INVALID'];
 
 /** Props for the editor: what its route loaded through the data layer. */
 export interface FormEditorProps {
@@ -127,6 +131,8 @@ export function FormEditor(props: FormEditorProps) {
   const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
   // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
+  // The Flow view (spec 0063, AC-6325): the steps, their jumps and the endings, read only, from the Form tab.
+  const [isFlowOpen, setFlowOpen] = useState(false);
   // The name, address and owner, saved together from the SaveBar on the Settings tab.
   const settings = useFormSettings({
     slug,
@@ -199,7 +205,10 @@ export function FormEditor(props: FormEditorProps) {
       document: draft,
       attributes: publishAttributesOf(target),
     });
-    return still?.code === problem.code && still.questionId === problem.questionId && still.stepId === problem.stepId
+    return still?.code === problem.code &&
+      still.questionId === problem.questionId &&
+      still.stepId === problem.stepId &&
+      still.endingId === problem.endingId
       ? problem
       : undefined;
   }, [draft, problem, form.name, form.publicKey, target]);
@@ -399,7 +408,11 @@ export function FormEditor(props: FormEditorProps) {
       (problem.code === 'EMAIL_MISSING' && canBuild && emailToMakeUnique(draft, target) !== undefined);
     if (found !== undefined && (isPublished || !dialogFixes(found))) {
       setProblem(found);
-      if (tab !== 'form') void navigate({ href: formHref(slug, form.id) });
+      // Each refusal opens the tab that holds what it is about (spec 0063, AC-6326): the endings and the score's
+      // filing live in Settings, everything else on the Form tab.
+      // A recall refused in an ending's words carries its ending, so it goes to Settings too.
+      const where = IN_SETTINGS.includes(found.code) || found.endingId !== undefined ? 'settings' : 'form';
+      if (tab !== where) void navigate({ href: formHref(slug, form.id, where) });
       return;
     }
     if (!isPublished) {
@@ -683,12 +696,30 @@ export function FormEditor(props: FormEditorProps) {
                 setDraft((before) => ({ ...before, layout }));
               }}
             />
+            <Button
+              variant="secondary"
+              icon="git-branch"
+              onPress={() => {
+                setFlowOpen(true);
+              }}
+            >
+              {strings.flowOpen}
+            </Button>
+            <FlowView
+              draft={draft}
+              isOpen={isFlowOpen}
+              questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
+              stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
+              endingsHref={formHref(slug, form.id, 'settings')}
+              onOpenChange={setFlowOpen}
+            />
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               onOpened={setPreviewRow}
               steps={{
                 steps: draft.steps,
                 layout: draft.layout,
+                ...(draft.endings === undefined ? {} : { endings: draft.endings }),
                 onChange: (update) => {
                   setDraft((before) => withFlow(before, update({ questions: before.questions, steps: before.steps })));
                 },

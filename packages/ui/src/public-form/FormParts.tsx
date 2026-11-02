@@ -8,7 +8,7 @@ import {
   type PublicQuestion,
 } from '@crm/contracts/forms';
 import { useState, type ReactNode, type Ref } from 'react';
-import { Button } from '../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
 import { Link } from '../atoms/Link/Link.tsx';
 import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
@@ -199,15 +199,28 @@ export function FormThanks({
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
 }) {
-  const text = state.view.kind === 'thanks' ? state.view.text : '';
+  const landed = state.view.kind === 'thanks' ? state.view : undefined;
+  const text = landed?.text ?? '';
+  // An ending's own heading and line stand in for the thank you's (spec 0063, AC-6315); its line may be the only
+  // words it has, so an ending with none still reads as a thank you rather than as an empty card.
+  const title = landed?.heading ?? '';
+  const button = landed?.button;
   return (
     <FormConfirmation
       mode={mode}
       heading={heading}
-      title={state.words.thanksTitle}
+      title={title !== '' ? title : state.words.thanksTitle}
       text={text !== '' ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
       summary={<SentAnswers form={form} state={state} />}
     >
+      {button !== undefined && (
+        // A real link, through `ButtonLink`'s `safeHref`: an owner's typed address is untrusted, so a `javascript:`
+        // one is refused rather than run, and the visitor keeps a link's own middle click and new tab. A preview
+        // never leaves the page it is drawn in.
+        <ButtonLink variant="primary" href={button.url} isExternal isDisabled={state.preview}>
+          {button.label}
+        </ButtonLink>
+      )}
       <Button variant="ghost" onPress={state.sendAnother}>
         {state.words.sendAnother}
       </Button>
@@ -336,7 +349,7 @@ export function ErrorSummary({
       <span className={styles.summaryList}>
         {listed.map((question) => (
           <Link key={question.key} href={`#question-${question.key}`} onPress={() => state.focus(question.key)}>
-            {labelOf(question, state.words)}
+            {labelOf(question, state.words, state.read)}
           </Link>
         ))}
       </span>

@@ -9,6 +9,7 @@ import type { FormDocument } from './document.ts';
 import { stepsOfBreaks } from './breaks.ts';
 import { isHiddenFact, isRecordFact } from './conditions.ts';
 import { NUMBER_OPS, type Condition, type ShowWhen } from './show-when.ts';
+import { recalledKeys, SCORE_FACT } from './recall.ts';
 
 /** An attribute as the check needs it: its name, type, and whether the publisher may write it. */
 export interface PublishAttribute {
@@ -42,6 +43,10 @@ export interface PublishInput {
     /** Steps are checked only with the Steps layout, the one that draws them (spec 0063). */
     readonly layout?: FormDocument['layout'];
     readonly steps?: FormDocument['steps'];
+    /** The endings a jump or a rule may name (spec 0063, AC-6315). */
+    readonly endings?: FormDocument['endings'];
+    /** Where the score is filed (AC-6316): checked like a question's filing. */
+    readonly scoreFiledOn?: FormDocument['scoreFiledOn'];
   };
   /** The main object's live attributes, by id (archived and deleted ones absent). */
   readonly attributes: ReadonlyMap<string, PublishAttribute>;
@@ -69,13 +74,19 @@ export interface PublishProblem {
     | 'REQUIRED_MISSING'
     | 'SHOW_WHEN_INVALID'
     | 'ROUTING_INVALID'
-    | 'STEP_EMPTY';
+    | 'STEP_EMPTY'
+    | 'JUMP_INVALID'
+    | 'ENDING_INVALID'
+    | 'RECALL_INVALID'
+    | 'SCORE_FILING_INVALID';
   readonly message: string;
   readonly questionId?: string;
   /** The step at fault (spec 0063): its Show when, or nothing under it. */
   readonly stepId?: string;
   /** The routing rule at fault (spec 0043, AC-1605). */
   readonly ruleId?: string;
+  /** The ending at fault (spec 0063, AC-6315): one a jump or a rule names, or whose words recall too late. */
+  readonly endingId?: string;
 }
 
 /** A question's name in a sentence: its label, or its key while it has none. */
@@ -119,6 +130,8 @@ function conditionProblem(
 ): string | undefined {
   const question = readable.get(condition.key);
   if (question === undefined) {
+    // The form's score (AC-6316) is worked out from the answers read so far, so any rule or jump may compare it.
+    if (condition.key === SCORE_FACT) return undefined;
     if (isRecordFact(condition.key)) return READS_RECORD_FIELD;
     if (isHiddenFact(condition.key)) {
       if (!isRule) return 'reads a hidden field such as a UTM tag, which only routing rules can read';
@@ -367,6 +380,162 @@ function stepsProblem(input: PublishInput): PublishProblem | undefined {
   return undefined;
 }
 
+/** An ending's name in a sentence: its heading, or its place while it has none. */
+const endingNamed = (ending: { readonly heading: string }, index: number) =>
+  ending.heading.trim() === '' ? `Ending ${String(index + 1)}` : `“${ending.heading.trim()}”`;
+
+/**
+ * The first problem with a form's jumps (spec 0063, AC-6313, AC-6326), or undefined: a jump to a step or an ending
+ * the form no longer has, a jump backwards (which would let a visitor loop), and a jump whose conditions read an
+ * answer that doesn't come before it. Only the layouts that draw jumps are checked: Steps carries them on its step
+ * dividers, One at a time on its questions, and Classic shows everything at once, so it has nowhere to jump from.
+ */
+function jumpsProblem(input: PublishInput): PublishProblem | undefined {
+  const { questions, layout, steps = [], endings = [] } = input.document;
+  const all: Readable = new Map(questions.map((question) => [question.key, question]));
+  const endingIds = new Set(endings.map((ending) => ending.id));
+  const stepped = layout === 'steps';
+  if (!stepped && layout !== 'conversational') return undefined;
+  // One at a time asks one question per screen, so each question is a step named by its key (`groupsOf`).
+  const resolved = stepped
+    ? stepsOfBreaks(questions, steps).map((step, index) => ({
+        id: step.id,
+        keys: step.keys,
+        name: stepNamed(step.title, index),
+        jumps: steps.find((each) => each.id === step.id)?.jumps ?? [],
+      }))
+    : questions.map((question) => ({
+        id: question.key,
+        keys: [question.key],
+        name: named(question),
+        jumps: question.jumps ?? [],
+      }));
+  const placeOf = new Map(resolved.flatMap((step, index) => (step.id === undefined ? [] : [[step.id, index]])));
+  const before = new Map<string, FormDocument['questions'][number]>();
+  for (const [index, step] of resolved.entries()) {
+    // A jump reads its own step's answers too: they are given before the jump decides.
+    for (const key of step.keys) {
+      const question = all.get(key);
+      if (question !== undefined) before.set(key, question);
+    }
+    for (const jump of step.jumps) {
+      const stepId = step.id;
+      const where = stepId === undefined ? {} : stepped ? { stepId } : {};
+      const reads = showWhenProblem(jump.when, before, all);
+      if (reads !== undefined) {
+        return {
+          code: 'JUMP_INVALID',
+          message: `${step.name} jumps on an answer that ${reads}. Change its Jumps.`,
+          ...where,
+        };
+      }
+      if ('ending' in jump.to) {
+        if (!endingIds.has(jump.to.ending)) {
+          return {
+            code: 'JUMP_INVALID',
+            message: `${step.name} jumps to an ending that is no longer on the form. Choose another in its Jumps.`,
+            ...where,
+          };
+        }
+        continue;
+      }
+      const to = placeOf.get(jump.to.step);
+      if (to === undefined) {
+        return {
+          code: 'JUMP_INVALID',
+          message: `${step.name} jumps to a step that is no longer on the form. Choose another in its Jumps.`,
+          ...where,
+        };
+      }
+      if (to <= index) {
+        return {
+          code: 'JUMP_INVALID',
+          message: `${step.name} jumps back to ${resolved[to]?.name ?? 'an earlier step'}, which would send a visitor round in circles. Jumps only go forward.`,
+          ...where,
+        };
+      }
+    }
+  }
+  return undefined;
+}
+
+/** The first problem with a form's endings (AC-6315), or undefined: an ending with nothing at its head. */
+function endingsProblem(input: PublishInput): PublishProblem | undefined {
+  for (const [index, ending] of (input.document.endings ?? []).entries()) {
+    if (ending.heading.trim() === '') {
+      return {
+        code: 'ENDING_INVALID',
+        message: `Ending ${String(index + 1)} has no heading. Give it one, or remove the ending.`,
+        endingId: ending.id,
+      };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The first recall that can't be read (AC-6317), or undefined: a question's label or help line recalling itself, a
+ * question that comes after it, or one the form no longer has, each as one sentence naming both. An ending's words
+ * come after every question, so only a question that is gone is refused there. `{{score}}` is always readable.
+ */
+function recallProblem(input: PublishInput): PublishProblem | undefined {
+  const { questions, endings = [] } = input.document;
+  const all: Readable = new Map(questions.map((question) => [question.key, question]));
+  const before = new Map<string, FormDocument['questions'][number]>();
+  const unreadable = (text: string, readable: Readable) =>
+    recalledKeys(text).find((key) => key.toLowerCase() !== SCORE_FACT && !readable.has(key));
+  for (const question of questions) {
+    const key = unreadable(question.label, before);
+    before.set(question.key, question);
+    if (key === undefined) continue;
+    const later = all.get(key);
+    return {
+      code: 'RECALL_INVALID',
+      message:
+        later === undefined
+          ? `${named(question)} recalls “${key}”, which is no longer a question on this form. Take it out of the label.`
+          : `${named(question)} recalls ${named(later)}, which comes after it, so there is nothing to recall yet. Move it earlier, or take it out of the label.`,
+      questionId: question.id,
+    };
+  }
+  for (const [index, ending] of endings.entries()) {
+    const key = unreadable(ending.heading, all) ?? unreadable(ending.line ?? '', all);
+    if (key === undefined) continue;
+    return {
+      code: 'RECALL_INVALID',
+      message: `${endingNamed(ending, index)} recalls “${key}”, which is no longer a question on this form. Take it out of the ending.`,
+      endingId: ending.id,
+    };
+  }
+  return undefined;
+}
+
+/** Why the score can't be filed where it is pointed (AC-6316), or undefined: an attribute gone, not a number, or read only. */
+function scoreFilingProblem(input: PublishInput): PublishProblem | undefined {
+  const filed = input.document.scoreFiledOn;
+  if (filed === undefined) return undefined;
+  const attribute = input.attributes.get(filed.attributeId);
+  if (attribute === undefined) {
+    return {
+      code: 'SCORE_FILING_INVALID',
+      message: 'The score is filed on an attribute that no longer exists. Choose another, or file it nowhere.',
+    };
+  }
+  if (attribute.type !== 'number') {
+    return {
+      code: 'SCORE_FILING_INVALID',
+      message: `The score is filed on ${attribute.objectName} · ${attribute.title}, which doesn’t hold a number. Choose a number field, or file it nowhere.`,
+    };
+  }
+  if (!attribute.canWrite) {
+    return {
+      code: 'SCORE_FILING_INVALID',
+      message: `You can’t write to ${attribute.objectName} · ${attribute.title}, so this form can’t file its score there.`,
+    };
+  }
+  return undefined;
+}
+
 /**
  * The first problem that stops a draft going live, or undefined when it can.
  * In order: the name, the address, an email question filed on the match
@@ -418,13 +587,31 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
   if (problem !== undefined) return problem;
   const steps = stepsProblem(input);
   if (steps !== undefined) return steps;
+  // Logic last (spec 0063, AC-6326), in the order a member reads the form: its endings, its jumps, its recalls,
+  // then where its score is filed.
+  const endings = endingsProblem(input);
+  if (endings !== undefined) return endings;
+  const jumps = jumpsProblem(input);
+  if (jumps !== undefined) return jumps;
+  const recalled = recallProblem(input);
+  if (recalled !== undefined) return recalled;
+  const scored = scoreFilingProblem(input);
+  if (scored !== undefined) return scored;
   const all: Readable = new Map(questions.map((question) => [question.key, question]));
   for (const [index, rule] of (input.document.routing?.rules ?? []).entries()) {
     const problem = showWhenProblem(rule.when, all, all, true);
     if (problem !== undefined) {
       return { code: 'ROUTING_INVALID', message: ruleMessage(rule, index, problem), ruleId: rule.id };
     }
-    if (rule.then.kind === 'hosts') {
+    const route = rule.then;
+    if (route.kind === 'ending' && !(input.document.endings ?? []).some((each) => each.id === route.endingId)) {
+      return {
+        code: 'ROUTING_INVALID',
+        message: ruleMessage(rule, index, 'goes to an ending that is no longer on the form'),
+        ruleId: rule.id,
+      };
+    }
+    if (route.kind === 'hosts') {
       return {
         code: 'ROUTING_INVALID',
         message: `Rule ${String(index + 1)} picks people without a booking page. Choose a booking page for it.`,

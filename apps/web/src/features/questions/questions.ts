@@ -3,7 +3,15 @@
 // check every rule here. A form wraps them over its document (`features/forms/draft.ts`); a booking page uses them as
 // they are.
 import type { AnswerType, FormAttributeChoice, FormQuestion } from '@crm/data';
-import { CHOICE_TYPES, FILES_ONTO, fitsAttribute, freeKey, keyFromLabel, type QuestionPreset } from '@crm/data/forms';
+import {
+  CHOICE_TYPES,
+  FILES_ONTO,
+  fitsAttribute,
+  freeKey,
+  keyFromLabel,
+  SCORED_TYPES,
+  type QuestionPreset,
+} from '@crm/data/forms';
 import { strings } from './strings.ts';
 
 /** A list of questions, in order. */
@@ -108,6 +116,8 @@ export interface QuestionChange {
   readonly showWhen?: FormQuestion['showWhen'] | null;
   /** What its type sets (spec 0063), merged over what it had: a part set to undefined is cleared. */
   readonly options?: Partial<NonNullable<FormQuestion['options']>>;
+  /** What its answers are worth (spec 0063, AC-6316): new points, or null for none. */
+  readonly points?: FormQuestion['points'] | null;
 }
 
 /**
@@ -133,7 +143,7 @@ export function changeQuestion(
       }
       return question;
     }
-    const { filedOn, showWhen: shownWhen, kept: wasKept, options: hadOptions, ...rest } = question;
+    const { filedOn, showWhen: shownWhen, kept: wasKept, options: hadOptions, points: hadPoints, ...rest } = question;
     const merged = Object.fromEntries(
       Object.entries({ ...hadOptions, ...change.options }).filter(
         ([, value]: [string, unknown]) => value !== undefined && value !== '',
@@ -141,6 +151,16 @@ export function changeQuestion(
     );
     const options = Object.keys(merged).length === 0 ? undefined : (merged as NonNullable<FormQuestion['options']>);
     const showWhen = change.showWhen === null ? undefined : (change.showWhen ?? shownWhen);
+    // Points go with the answers they are for: a type that carries none drops them, as the document refuses them.
+    const kinds = change.points === null ? undefined : (change.points ?? hadPoints);
+    const scored =
+      kinds === undefined || !SCORED_TYPES.includes(change.answerType ?? question.answerType) ? undefined : kinds;
+    // Points belong to their choice, not to a place in the list: a choice dragged, removed or added takes its own
+    // number with it, matched by the words it had. A renamed choice keeps the number at its place.
+    const points =
+      scored === undefined || scored === 'value' || change.choices === undefined
+        ? scored
+        : movedPoints(question.choices ?? [], change.choices, scored);
     const label = change.label ?? question.label;
     const answerType = change.answerType ?? question.answerType;
     const key =
@@ -179,9 +199,36 @@ export function changeQuestion(
       ...(kept ? { kept: true as const } : {}),
       ...(showWhen === undefined ? {} : { showWhen }),
       ...(options === undefined ? {} : { options }),
+      ...(points === undefined ? {} : { points: points === 'value' ? points : [...points] }),
     };
   });
   return renamedKeys(questions, changed).reduce((list, [from, to]) => renameShowWhen(list, from, to), changed);
+}
+
+/**
+ * A question's points after its choices changed (spec 0063, AC-6316): each new choice takes the number of the old
+ * choice with the same words, and one whose words are new keeps the number at its own place, which is what a rename
+ * is. Trailing zeros are dropped, so a list of nothing but zeros reads as no points at all.
+ */
+export function movedPoints(
+  before: readonly string[],
+  after: readonly string[],
+  points: readonly number[],
+): readonly number[] | undefined {
+  const taken = new Set<number>();
+  const moved = after.map((choice, place) => {
+    const from = before.findIndex(
+      (each, at) => !taken.has(at) && each.trim().toLowerCase() === choice.trim().toLowerCase(),
+    );
+    if (from !== -1) {
+      taken.add(from);
+      return points[from] ?? 0;
+    }
+    // New words at this place: a rename, so the number that was here stays here unless another choice took it.
+    return taken.has(place) ? 0 : (points[place] ?? 0);
+  });
+  while (moved.length > 0 && moved.at(-1) === 0) moved.pop();
+  return moved.every((each) => each === 0) ? undefined : moved;
 }
 
 /** Each key a question changed between two lists of the same questions, as `[from, to]`. */

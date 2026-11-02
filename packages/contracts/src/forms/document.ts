@@ -16,7 +16,8 @@ import {
   QUESTION_KEY,
 } from './answer-types.ts';
 import { stepsOfBreaks, type ResolvedStep } from './breaks.ts';
-import { FORM_LAYOUTS, FORM_STEP_TITLE_MAX } from './path.ts';
+import { FORM_ENDINGS_MAX, FORM_LAYOUTS, FORM_STEP_TITLE_MAX, STEP_JUMPS_MAX } from './path.ts';
+import { POINTS_LIMIT, SCORED_TYPES } from './score.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
@@ -64,6 +65,92 @@ export const FormQuestionOptions = z.strictObject({
 /** What a question's type may set beyond its choices. */
 export type FormQuestionOptions = z.infer<typeof FormQuestionOptions>;
 
+/** A step's id inside its document: stable across versions, never shown. */
+export const StepId = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, { error: 'A step id is 1 to 40 lower case letters, digits, - or _.' });
+
+/** A redirect after submitting: an absolute https address (http only for localhost, for local testing). */
+export const RedirectUrl = z
+  .url({ error: 'Give a full address that starts with https://.' })
+  .max(2_048)
+  .refine(
+    (value) => {
+      // Zod 4 runs this even after `.url()` has refused the value, so a partial address ("https://") must not
+      // throw here: a throw turned a field's refusal into a 500, which the builder showed as a lost connection.
+      if (!URL.canParse(value)) return false;
+      const url = new URL(value);
+      return url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost');
+    },
+    { error: 'Give a full address that starts with https://.' },
+  );
+
+/** An ending's id inside its document: stable across versions, never shown. */
+export const EndingId = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, { error: 'An ending id is 1 to 40 lower case letters, digits, - or _.' });
+
+/**
+ * One ending beside the default thank you (spec 0063, AC-6315): a heading, one line, and an optional button, which
+ * goes to a web address or on to a booking page. A jump or a routing rule names it; otherwise the form's own After
+ * someone sends it decides, as it always has. Its heading and line may recall an earlier answer or the score.
+ */
+export const FormEnding = z.strictObject({
+  id: EndingId,
+  heading: z.string().trim().max(120, { error: 'Keep an ending’s heading to 120 characters.' }),
+  line: z.string().trim().max(2_000, { error: 'Keep an ending’s line to 2,000 characters.' }).optional(),
+  button: z
+    .discriminatedUnion('kind', [
+      z.strictObject({
+        kind: z.literal('url'),
+        url: RedirectUrl,
+        label: z.string().trim().max(40, { error: 'Keep the button text to 40 characters.' }).optional(),
+      }),
+      z.strictObject({
+        kind: z.literal('booking'),
+        bookingPageId: uuidWith('Pick a booking page.'),
+        label: z.string().trim().max(40, { error: 'Keep the button text to 40 characters.' }).optional(),
+      }),
+    ])
+    .optional(),
+});
+/** One ending beside the default thank you. */
+export type FormEnding = z.infer<typeof FormEnding>;
+
+/** Where a jump sends a visitor (AC-6313): a step further down the form, or one of its endings. */
+export const JumpTarget = z.union([z.strictObject({ step: StepId }), z.strictObject({ ending: EndingId })]);
+/** Where a jump sends a visitor. */
+export type JumpTarget = z.infer<typeof JumpTarget>;
+
+/**
+ * One jump on a step (AC-6313): when the answers so far match, go there. A step's jumps are tried in order and the
+ * first match decides; no match goes to the next step. Jumps only go forward, which publish refuses a document for
+ * breaking (`publishProblem`) and `walkPath` ignores at run time, so a visitor can never loop.
+ */
+export const FormJump = z.strictObject({ when: ShowWhenSchema, to: JumpTarget });
+/** One jump on a step. */
+export type FormJump = z.infer<typeof FormJump>;
+
+/**
+ * What a question's answers are worth (spec 0063, AC-6316): one whole number per choice, in the order of
+ * `choices` (a choice question, a multi select, and a yes or no, whose two numbers are yes then no); for a rating
+ * and a scale, one per point it offers, lowest first, or `'value'` for the answer itself.
+ */
+export const FormQuestionPoints = z.union([
+  z
+    .array(
+      z
+        .number()
+        .int({ error: 'Give points as a whole number.' })
+        .min(-POINTS_LIMIT, { error: `Keep points between -${String(POINTS_LIMIT)} and ${String(POINTS_LIMIT)}.` })
+        .max(POINTS_LIMIT, { error: `Keep points between -${String(POINTS_LIMIT)} and ${String(POINTS_LIMIT)}.` }),
+    )
+    .max(FORM_CHOICES_MAX, { error: 'A question scores at most one number per choice.' }),
+  z.literal('value'),
+]);
+/** What a question's answers are worth. */
+export type FormQuestionPoints = z.infer<typeof FormQuestionPoints>;
+
 /** One question. A draft may hold an empty label; publishing refuses it (`publishProblem`). */
 export const FormQuestion = z.strictObject({
   id: QuestionId,
@@ -99,14 +186,20 @@ export const FormQuestion = z.strictObject({
   showWhen: ShowWhenSchema.optional(),
   /** What its type sets beyond its choices (spec 0063): a date's range, a scale's ends, a hidden value's default. */
   options: FormQuestionOptions.optional(),
+  /** What its answers are worth towards the form's score (spec 0063, AC-6316); absent, it scores nothing. */
+  points: FormQuestionPoints.optional(),
+  /**
+   * Where this question sends a visitor when their answer matches (AC-6313), in order. Drawn only by One at a time,
+   * where each question is a screen of its own; Steps carries its jumps on the step divider, and Classic, which
+   * shows every question at once, has nowhere to jump from.
+   */
+  jumps: z
+    .array(FormJump)
+    .max(STEP_JUMPS_MAX, { error: `Use at most ${String(STEP_JUMPS_MAX)} jumps on one question.` })
+    .optional(),
 });
 /** One question. */
 export type FormQuestion = z.infer<typeof FormQuestion>;
-
-/** A step's id inside its document: stable across versions, never shown. */
-export const StepId = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, { error: 'A step id is 1 to 40 lower case letters, digits, - or _.' });
 
 /**
  * A break in the questions (spec 0063, AC-6303): a new step starts at `startsAt`, the id of its first question, with
@@ -123,6 +216,11 @@ export const FormStep = z.strictObject({
   startsAt: QuestionId.optional(),
   /** Shown only when earlier answers match (AC-6312); absent, it always shows. */
   showWhen: ShowWhenSchema.optional(),
+  /** Where this step sends a visitor when their answers match (AC-6313), in order; no match goes to the next step. */
+  jumps: z
+    .array(FormJump)
+    .max(STEP_JUMPS_MAX, { error: `Use at most ${String(STEP_JUMPS_MAX)} jumps on one step.` })
+    .optional(),
 });
 /** A break in the questions. */
 export type FormStep = z.infer<typeof FormStep>;
@@ -134,21 +232,6 @@ export const FormLook = z.strictObject({
 });
 /** How the page looks. */
 export type FormLook = z.infer<typeof FormLook>;
-
-/** A redirect after submitting: an absolute https address (http only for localhost, for local testing). */
-export const RedirectUrl = z
-  .url({ error: 'Give a full address that starts with https://.' })
-  .max(2_048)
-  .refine(
-    (value) => {
-      // Zod 4 runs this even after `.url()` has refused the value, so a partial address ("https://") must not
-      // throw here: a throw turned a field's refusal into a 500, which the builder showed as a lost connection.
-      if (!URL.canParse(value)) return false;
-      const url = new URL(value);
-      return url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost');
-    },
-    { error: 'Give a full address that starts with https://.' },
-  );
 
 /** The countdown before a visitor goes on to book (AC-1056): 5 seconds unless set, 0 for at once, at most 30. */
 export const BOOKING_COUNTDOWN = { default: 5, min: 0, max: 30 } as const;
@@ -216,6 +299,17 @@ export const FormDocument = z
       .array(FormStep)
       .max(FORM_QUESTIONS_MAX, { error: `A form holds at most ${String(FORM_QUESTIONS_MAX)} steps.` })
       .default([]),
+    /**
+     * The endings beside the default thank you (spec 0063, AC-6315); a jump or a routing rule names one. Absent on
+     * a form with none, as every document written before this spec: `endingsOf` reads absent and empty alike, so
+     * no stored document and no fixture has to carry an empty list.
+     */
+    endings: z
+      .array(FormEnding)
+      .max(FORM_ENDINGS_MAX, { error: `A form holds at most ${String(FORM_ENDINGS_MAX)} endings beside the default.` })
+      .optional(),
+    /** Where the form's score is filed (spec 0063, AC-6316): a number attribute, for example a lead score. */
+    scoreFiledOn: FiledOn.optional(),
     look: FormLook.default({ colour: 'light', corners: 'rounded' }),
     headline: z.string().trim().max(120, { error: 'Keep the headline to 120 characters.' }).default(DEFAULT_HEADLINE),
     subheading: z.string().trim().max(240, { error: 'Keep the subheading to 240 characters.' }).optional(),
@@ -315,6 +409,52 @@ export const FormDocument = z
         context.addIssue({ code: 'custom', path: [...at, 'max'], message: 'The most picks is fewer than the least.' });
       }
     });
+    // Points (spec 0063, AC-6316): only the types that carry them, and one number per thing they offer.
+    document.questions.forEach((question, index) => {
+      const { points } = question;
+      if (points === undefined) return;
+      const where = ['questions', index, 'points'];
+      if (!SCORED_TYPES.includes(question.answerType)) {
+        context.addIssue({ code: 'custom', path: where, message: 'This kind of answer can’t carry points.' });
+        return;
+      }
+      if (points === 'value') {
+        if (question.answerType !== 'rating' && question.answerType !== 'scale') {
+          context.addIssue({
+            code: 'custom',
+            path: where,
+            message: 'Only a rating or a scale can score the answer itself.',
+          });
+        }
+        return;
+      }
+      const offered =
+        question.answerType === 'yes_no'
+          ? 2
+          : question.answerType === 'rating'
+            ? 5
+            : question.answerType === 'scale'
+              ? (question.options?.to ?? 10) - (question.options?.from ?? 0) + 1
+              : (question.choices ?? []).length;
+      if (points.length > offered) {
+        context.addIssue({
+          code: 'custom',
+          path: where,
+          message: 'There are more points here than there are answers.',
+        });
+      }
+    });
+    // Endings (AC-6315): one id each, and a heading apiece, since a visitor lands on one.
+    const endingIds = new Set<string>();
+    (document.endings ?? []).forEach((ending, index) => {
+      if (endingIds.has(ending.id)) {
+        context.addIssue({ code: 'custom', path: ['endings', index, 'id'], message: 'Two endings share one id.' });
+      }
+      endingIds.add(ending.id);
+    });
+    // A jump's target, a recall's key and a backward jump are publish's refusals, in one sentence each
+    // (`publishProblem`, AC-6326): a draft stays savable while a question or an ending is being moved or removed,
+    // and the member is told what to put right when they go to publish.
     if (files > 1) {
       context.addIssue({
         code: 'custom',

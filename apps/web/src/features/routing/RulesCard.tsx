@@ -139,7 +139,10 @@ function RulesCardBody({
           ? strings.toMessage
           : then.kind === 'redirect'
             ? strings.toRedirect(then.url)
-            : strings.toHosts(then.hosts.map(nameOf));
+            : then.kind === 'hosts'
+              ? strings.toHosts(then.hosts.map(nameOf))
+              : // An ending of the form (spec 0063, AC-6315): the form's own Endings card words it.
+                strings.toEnding;
     return strings.routeLine(route, tag);
   };
 

@@ -264,7 +264,7 @@ export function HostedFormSteps({
                   <p className={styles.ask} data-mode={mode} aria-hidden="true">
                     <span className={styles.number}>{String(index + 1)}</span>
                     <span>
-                      {labelOf(question, words)}
+                      {labelOf(question, words, state.read)}
                       {aside !== undefined && (
                         <>
                           {' '}
@@ -281,6 +281,7 @@ export function HostedFormSteps({
                   error={state.errors[question.key]}
                   countryGuess={countryGuess}
                   countryNames={state.countryNames}
+                  read={state.read}
                   onChange={(value) => {
                     state.change(question, value);
                     if (

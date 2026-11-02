@@ -9,6 +9,8 @@ export * from './dial-codes.ts';
 export * from './email-hint.ts';
 export * from './breaks.ts';
 export * from './path.ts';
+export * from './recall.ts';
+export * from './score.ts';
 export * from './presets.ts';
 export * from './publish.ts';
 export * from './conditions.ts';
@@ -18,7 +20,9 @@ export * from './uploads.ts';
 export type {
   FillTicket,
   FormLanguage,
+  PublicEnding,
   PublicForm,
+  PublicJump,
   PublicQuestion,
   PublicStep,
   SubmitBody,
@@ -28,4 +32,15 @@ export type {
   SubmitResult,
 } from './public.ts';
 export type { SubmissionContext, SubmitContext } from './context.ts';
-export type { FiledOn, FormAfter, FormDocument, FormLook, FormQuestion, FormStep } from './document.ts';
+export type {
+  FiledOn,
+  FormAfter,
+  FormDocument,
+  FormEnding,
+  FormJump,
+  FormLook,
+  FormQuestion,
+  FormQuestionPoints,
+  FormStep,
+  JumpTarget,
+} from './document.ts';

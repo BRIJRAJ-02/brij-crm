@@ -11,6 +11,10 @@ import {
   FORM_STEP_TITLE_MAX,
   NO_PLACEHOLDER_TYPES,
   QUESTION_PRESETS,
+  SCORED_TYPES,
+  STEP_JUMPS_MAX,
+  type FormEnding,
+  type FormJump,
   type FormLayout,
   type FormStep,
 } from '@crm/data/forms';
@@ -55,6 +59,7 @@ import {
   type QuestionChange,
   type Questions,
 } from './questions.ts';
+import { addJump, changeJump, idOfTarget, jumpChoices, removeJump, targetOfId } from './jumps.ts';
 import {
   addStep,
   changeStep,
@@ -64,6 +69,7 @@ import {
   removeStep,
   restoreStep,
   stepPlaces,
+  stepQuestionsOf,
   type Flow,
   type StepChange,
 } from './steps.ts';
@@ -143,6 +149,8 @@ export interface QuestionsSectionProps {
 export interface StepsProps {
   readonly steps: readonly FormStep[];
   readonly layout: FormLayout;
+  /** The form's endings (spec 0063, AC-6315): where a step's jumps may end instead of going on. */
+  readonly endings?: readonly FormEnding[];
   /** A change to the questions and dividers together, as a function of what it applies to. */
   readonly onChange: (update: (before: Flow) => Flow) => void;
   /** The divider a publish refused, and why: kept open, with the error under its title. */
@@ -478,6 +486,13 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             <StepEditor
               step={step}
               earlier={questionsBefore(flow, stepId)}
+              // A jump decides once its own step has been answered, so it reads that step's questions too.
+              readable={questions.filter((each) =>
+                [...questionsBefore(flow, stepId), ...stepQuestionsOf(flow, stepId)].some(
+                  (readable) => readable.id === each.id,
+                ),
+              )}
+              jumpTargets={jumpChoices(flow, breaks.endings ?? [], stepId)}
               isReadOnly={isReadOnly}
               isJustAdded={justAdded === id || stepProblem?.stepId === stepId}
               {...(stepProblem?.stepId === stepId ? { problem: stepProblem.message } : {})}
@@ -709,6 +724,7 @@ function QuestionEditor({
         />
       )}
       <TypeOptions question={question} isReadOnly={isReadOnly} onChange={onChange} />
+      <PointsEditor question={question} isReadOnly={isReadOnly} onChange={onChange} />
       {!NO_PLACEHOLDER_TYPES.includes(question.answerType) && (
         <Field
           label={strings.placeholder}
@@ -1141,10 +1157,234 @@ function ShowWhenEditor({ showWhen, earlier: before, words, isReadOnly, onChange
   );
 }
 
+/** Props for a question's points. */
+interface PointsEditorProps {
+  readonly question: FormQuestion;
+  readonly isReadOnly: boolean;
+  readonly onChange: (change: QuestionChange) => void;
+}
+
+/** One points field: a whole number between -1,000 and 1,000, where blank is no points at that place. */
+function PointsField({
+  label,
+  value,
+  isReadOnly,
+  onChange,
+}: {
+  readonly label: string;
+  readonly value: number | undefined;
+  readonly isReadOnly: boolean;
+  readonly onChange: (points: number | undefined) => void;
+}) {
+  // The typed text is held while it is on its way to a number, so "-5" survives its first keystroke and a field
+  // emptied stays empty instead of snapping back to 0. An outside change (Undo, a type change) takes over again.
+  const [typed, setTyped] = useState<string | undefined>(undefined);
+  const settled = value === undefined ? '' : String(value);
+  const text = typed === undefined || Number(typed) === value ? settled : typed;
+  return (
+    <Field
+      label={label}
+      size="sm"
+      inputMode="numeric"
+      value={text}
+      isReadOnly={isReadOnly}
+      onChange={(next) => {
+        setTyped(next);
+        const number = Number(next.trim());
+        if (next.trim() === '' || !Number.isInteger(number)) {
+          if (next.trim() === '') onChange(undefined);
+          return;
+        }
+        onChange(number);
+      }}
+    />
+  );
+}
+
+/**
+ * What a question's answers are worth (spec 0063, AC-6316, AC-6325): a number beside each choice, two for a yes or
+ * no, and for a rating or a scale the answer itself. Only the types that can carry points show the row; every other
+ * one scores nothing, as the document refuses points on it.
+ */
+function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
+  if (!SCORED_TYPES.includes(question.answerType)) return null;
+  const { points } = question;
+  const numbers = points === undefined || points === 'value' ? [] : points;
+  const at = (place: number) => numbers[place];
+  const set = (place: number, value: number | undefined) => {
+    const next = [...numbers];
+    while (next.length <= place) next.push(0);
+    next[place] = value ?? 0;
+    // Nothing but zeros is no points at all: the question goes back to scoring nothing.
+    onChange({ points: next.every((each) => each === 0) ? null : next });
+  };
+  if (question.answerType === 'rating' || question.answerType === 'scale') {
+    return (
+      <SettingsRow title={strings.points} description={strings.pointsValueHint}>
+        <Select
+          label={strings.pointsScale}
+          isLabelHidden
+          size="sm"
+          items={[
+            { id: 'off', label: strings.pointsOff },
+            { id: 'value', label: strings.pointsValue },
+          ]}
+          value={points === 'value' ? 'value' : 'off'}
+          isReadOnly={isReadOnly}
+          onChange={(kind) => {
+            onChange({ points: kind === 'value' ? 'value' : null });
+          }}
+        />
+      </SettingsRow>
+    );
+  }
+  if (question.answerType === 'yes_no') {
+    return (
+      <SettingsRow title={strings.points} description={strings.pointsHint}>
+        <PointsField
+          label={strings.pointsYes}
+          value={at(0)}
+          isReadOnly={isReadOnly}
+          onChange={(value) => {
+            set(0, value);
+          }}
+        />
+        <PointsField
+          label={strings.pointsNo}
+          value={at(1)}
+          isReadOnly={isReadOnly}
+          onChange={(value) => {
+            set(1, value);
+          }}
+        />
+      </SettingsRow>
+    );
+  }
+  // Each choice at its own place in the list, blanks skipped but never closed up: the score reads `points` against
+  // `choices` itself (`pointsOf`), so filtering first would hang every number below a blank choice on the wrong one.
+  const choices = question.choices ?? [];
+  if (choices.every((choice) => choice.trim() === '')) {
+    return <SettingsRow title={strings.points} description={strings.pointsNoChoices} />;
+  }
+  // One row of small numbers, as the yes or no branch does, rather than a full width field per choice: the choices
+  // are listed right above, so each number only has to say which one it is for.
+  return (
+    <SettingsRow title={strings.points} description={strings.pointsHint}>
+      {choices.flatMap((choice, place) =>
+        choice.trim() === ''
+          ? []
+          : [
+              <PointsField
+                key={String(place)}
+                label={strings.pointsFor(choice)}
+                value={at(place)}
+                isReadOnly={isReadOnly}
+                onChange={(value) => {
+                  set(place, value);
+                }}
+              />,
+            ],
+      )}
+    </SettingsRow>
+  );
+}
+
+/** Props for a step's jumps. */
+interface JumpsEditorProps {
+  readonly jumps: readonly FormJump[];
+  /** What a jump's conditions may read: the questions up to and including this step's own. */
+  readonly readable: readonly FormQuestion[];
+  /** Where a jump may go: the steps below this one, then the endings. */
+  readonly choices: readonly { readonly id: string; readonly label: string }[];
+  readonly isReadOnly: boolean;
+  readonly onChange: (jumps: readonly FormJump[]) => void;
+}
+
+/**
+ * A step's jumps (spec 0063, AC-6313, AC-6325), in order: each "when these answers match, go there", the first
+ * match deciding and no match going to the next step. Only forward targets are offered, so a backward jump is
+ * nothing the editor can make.
+ */
+function JumpsEditor({ jumps, readable, choices, isReadOnly, onChange }: JumpsEditorProps) {
+  const addRef = useRef<HTMLButtonElement>(null);
+  const facts = questionFacts(readable);
+  const canAdd = !isReadOnly && choices.length > 0 && facts.length > 0 && jumps.length < STEP_JUMPS_MAX;
+  return (
+    <SettingsSection
+      title={strings.jumps}
+      description={choices.length === 0 ? strings.jumpsNowhere : strings.jumpsHint}
+    >
+      {jumps.map((jump, index) => {
+        const chosen = idOfTarget(jump.to);
+        const isGone = !choices.some((choice) => choice.id === chosen);
+        return (
+          <SettingsSection key={String(index)} title={strings.jumpNumber(index + 1)}>
+            {isGone && <Callout tone="danger">{strings.jumpGone}</Callout>}
+            <ConditionsEditor
+              value={jump.when}
+              facts={facts}
+              factLabel={routingStrings.question}
+              isReadOnly={isReadOnly}
+              onChange={(when) => {
+                onChange(changeJump(jumps, index, { when: storedShowWhen(when) }));
+              }}
+            />
+            <Select
+              savesOnPick
+              label={strings.jumpTo}
+              items={[...choices]}
+              value={isGone ? null : chosen}
+              isReadOnly={isReadOnly}
+              onChange={(id) => {
+                const target = id === null ? undefined : targetOfId(id);
+                if (target !== undefined) onChange(changeJump(jumps, index, { to: target }));
+              }}
+            />
+            {!isReadOnly && (
+              <Button
+                variant="ghost"
+                icon="x"
+                onPress={() => {
+                  onChange(removeJump(jumps, index));
+                  // Add a jump may now be off (the step's limit, or nowhere left to go): focus moves there only
+                  // while it can take it, since a disabled button would drop focus onto the page itself.
+                  focusLater(() => (addRef.current?.disabled === false ? addRef.current : null));
+                }}
+              >
+                {strings.removeJump}
+              </Button>
+            )}
+          </SettingsSection>
+        );
+      })}
+      {!isReadOnly && (
+        <Button
+          ref={addRef}
+          variant="dashed"
+          icon="plus"
+          isDisabled={!canAdd}
+          onPress={() => {
+            const first = choices[0];
+            if (first === undefined) return;
+            const target = targetOfId(first.id);
+            onChange(addJump(jumps, target, storedShowWhen(firstConditions(facts))));
+          }}
+        >
+          {strings.addJump}
+        </Button>
+      )}
+    </SettingsSection>
+  );
+}
+
 /** Props for one open step divider. */
 interface StepEditorProps {
   readonly step: FormStep;
   readonly earlier: readonly FormQuestion[];
+  /** What its jumps may read: the questions before it and its own (AC-6313). */
+  readonly readable: readonly FormQuestion[];
+  /** Where its jumps may go: the steps below it, then the form's endings. */
+  readonly jumpTargets: readonly { readonly id: string; readonly label: string }[];
   readonly isReadOnly: boolean;
   /** Just added: its title takes focus, and the divider comes into view. */
   readonly isJustAdded: boolean;
@@ -1153,7 +1393,16 @@ interface StepEditorProps {
 }
 
 /** One step divider open (spec 0063, AC-6303, AC-6312): its title, then its Show when over the questions before it. */
-function StepEditor({ step, earlier, isReadOnly, isJustAdded, problem, onChange }: StepEditorProps) {
+function StepEditor({
+  step,
+  earlier,
+  readable,
+  jumpTargets,
+  isReadOnly,
+  isJustAdded,
+  problem,
+  onChange,
+}: StepEditorProps) {
   const titleRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!isJustAdded) return;
@@ -1185,6 +1434,15 @@ function StepEditor({ step, earlier, isReadOnly, isJustAdded, problem, onChange 
         isReadOnly={isReadOnly}
         onChange={(showWhen) => {
           onChange({ showWhen });
+        }}
+      />
+      <JumpsEditor
+        jumps={step.jumps ?? []}
+        readable={readable}
+        choices={jumpTargets}
+        isReadOnly={isReadOnly}
+        onChange={(jumps) => {
+          onChange({ jumps: [...jumps] });
         }}
       />
     </>

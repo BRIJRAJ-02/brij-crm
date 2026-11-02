@@ -145,9 +145,12 @@ export interface FormStrings {
   readonly signaturePreview: string;
   /** A signature as words, where an answer is read back. */
   readonly signed: string;
+  /** An ending's button when the form gives it no words of its own (spec 0063, AC-6315). */
+  readonly endingButton: string;
 }
 
 const EN: FormStrings = {
+  endingButton: 'Continue',
   required: 'Answer this question.',
   requiredCheckbox: 'Tick this to go on.',
   pickOption: 'Pick one of the choices.',

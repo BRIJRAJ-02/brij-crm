@@ -3,6 +3,7 @@
 // a publish will and never imports `@crm/contracts` itself. Plain TypeScript
 // with no Zod: the builder's route loads it.
 import {
+  formStrings,
   stepsOfBreaks as breaksToSteps,
   type FormDocument,
   type FormLanguage,
@@ -19,8 +20,16 @@ export {
   FORM_CHOICES_MAX,
   FORM_LAYOUTS,
   FORM_QUESTIONS_MAX,
+  FORM_ENDINGS_MAX,
   FORM_STEP_TITLE_MAX,
   pathOf,
+  // Jumps, the score and recall (spec 0063 slice 5): the builder's Flow view, its points rows and its preview.
+  recall,
+  recalledKeys,
+  SCORE_FACT,
+  SCORED_TYPES,
+  scoreOf,
+  STEP_JUMPS_MAX,
   stepsOfBreaks,
   type FormLayout,
   FORM_SLUG,
@@ -53,7 +62,17 @@ export {
   type HiddenField,
   type ShowWhen,
 } from '@crm/contracts/forms';
-export type { FormAfter, FormLanguage, FormLook, FormStep, PublicQuestion } from '@crm/contracts/forms';
+export type {
+  FormAfter,
+  FormEnding,
+  FormJump,
+  FormLanguage,
+  FormLook,
+  FormQuestionPoints,
+  FormStep,
+  JumpTarget,
+  PublicQuestion,
+} from '@crm/contracts/forms';
 
 /**
  * A draft as its visitor would get it, for the builder's preview: what the
@@ -86,10 +105,38 @@ export function previewOf(
       required: question.required,
       ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
       ...(question.options === undefined ? {} : { options: question.options }),
+      // Jumps and points, as the server sends them (spec 0063): the preview jumps and scores as a visitor would.
+      ...(question.jumps === undefined ? {} : { jumps: question.jumps }),
+      ...(question.points === undefined ? {} : { points: question.points }),
     })),
-    // As the server's `layoutOf`: nothing for Classic, the steps only with Steps.
+    // As the server's `layoutOf`: nothing for Classic, the steps only with Steps, each with its own jumps.
     ...(document.layout === 'classic' ? {} : { layout: document.layout }),
-    ...(document.layout === 'steps' ? { steps: breaksToSteps(document.questions, document.steps) } : {}),
+    ...(document.layout === 'steps'
+      ? {
+          steps: breaksToSteps(document.questions, document.steps).map((step) => {
+            const jumps = document.steps.find((each) => each.id === step.id)?.jumps;
+            return { ...step, ...(jumps === undefined ? {} : { jumps }) };
+          }),
+        }
+      : {}),
+    // The endings a jump may land on (AC-6315); a booking button is the server's own, so the preview shows none.
+    ...((document.endings ?? []).length === 0
+      ? {}
+      : {
+          endings: (document.endings ?? []).map((ending) => ({
+            id: ending.id,
+            heading: ending.heading,
+            ...(ending.line === undefined || ending.line === '' ? {} : { line: ending.line }),
+            ...(ending.button?.kind === 'url'
+              ? {
+                  button: {
+                    url: ending.button.url,
+                    label: ending.button.label ?? formStrings(context.language ?? document.language).endingButton,
+                  },
+                }
+              : {}),
+          })),
+        }),
     ...(document.after.kind === 'message' && document.after.message !== '' ? { thanks: document.after.message } : {}),
     offersMeeting: false,
   };

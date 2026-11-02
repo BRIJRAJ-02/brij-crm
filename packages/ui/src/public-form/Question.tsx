@@ -38,8 +38,10 @@ export function focusQuestion(container: HTMLElement | null, key: string): void 
 }
 
 /** A question's words: its label, or "Untitled question" while it has none. */
-export function labelOf(question: PublicQuestion, words: FormStrings): string {
-  return question.label.trim() === '' ? words.untitledQuestion : question.label;
+export function labelOf(question: PublicQuestion, words: FormStrings, read?: (text: string) => string): string {
+  if (question.label.trim() === '') return words.untitledQuestion;
+  // `read` is the form's recall (spec 0063, AC-6317): plain text in, plain text out, drawn as the characters it is.
+  return read === undefined ? question.label : read(question.label);
 }
 
 /** "(optional)" after an optional question's label; a tick box or a yes or no is never marked, since blank is an answer. */
@@ -112,6 +114,8 @@ export interface QuestionProps {
   readonly isLabelHidden?: boolean;
   /** A line under a long text answer: how to break a line where Enter goes on (one at a time, spec 0063). */
   readonly hint?: string | undefined;
+  /** Reads the recalls in the label (spec 0063, AC-6317): `HostedFormState.read`. */
+  readonly read?: ((text: string) => string) | undefined;
 }
 
 /** One question, drawn with the library's control for its answer type. */
@@ -126,8 +130,9 @@ export function Question({
   files,
   isLabelHidden = false,
   hint,
+  read,
 }: QuestionProps) {
-  const label = labelOf(question, words);
+  const label = labelOf(question, words, read);
   const aside = asideOf(question, words);
   // Hidden behind a larger heading, the name still says it is optional.
   const labelProps = isLabelHidden

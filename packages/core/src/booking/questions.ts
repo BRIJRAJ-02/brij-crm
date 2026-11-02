@@ -383,7 +383,7 @@ export function chatIsOff(questions: BookingQuestions): boolean {
 
 /** A page's questions as its public page draws them (AC-5709): never where an answer is filed. */
 export function publicQuestionsOf(questions: BookingQuestions): readonly PublicQuestion[] {
-  return questions.map(publicQuestionOf);
+  return questions.map((question) => publicQuestionOf(question));
 }
 
 /**

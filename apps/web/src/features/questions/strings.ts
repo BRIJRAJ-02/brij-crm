@@ -129,4 +129,33 @@ export const strings = {
   whereItGoesHelpBooking: 'The booker’s field this answer fills in.',
   cantCreateBooking: 'You can’t add attributes, so this stays with the booking.',
   offCrm: 'Turn on Add to the CRM to file answers on the person.',
+
+  // Jumps and points (spec 0063, AC-6313, AC-6316, AC-6325)
+  jumps: 'Jumps',
+  jumpsHint: 'When answers match, go further down instead of the next step. The first jump that matches wins.',
+  addJump: 'Add a jump',
+  removeJump: 'Remove this jump',
+  jumpsNowhere: 'Add a step below this one, or an ending in Settings, to jump to.',
+  jumpTo: 'Then',
+  /** One jump among a step's, in the order they are tried. */
+  jumpNumber: (place: number) => `Jump ${String(place)}`,
+  jumpToStep: (place: number, title: string | undefined) =>
+    title === undefined || title.trim() === ''
+      ? `Go to step ${String(place)}`
+      : `Go to step ${String(place)}, ${title}`,
+  jumpToEnding: (place: number, heading: string) =>
+    heading.trim() === '' ? `End with ending ${String(place)}` : `End with “${heading.trim()}”`,
+  jumpGone: 'This jump no longer points to a step below this one. Choose where it goes.',
+  jumpsFull: (most: number) => `A step holds ${String(most)} jumps.`,
+  jumpsNoAnswers: 'This step has no answers to jump on yet.',
+  points: 'Points',
+  pointsHint: 'What each answer adds to the form’s score.',
+  pointsNoChoices: 'Add a choice to score it.',
+  pointsFor: (choice: string) => `Points for ${choice}`,
+  pointsYes: 'Points for Yes',
+  pointsNo: 'Points for No',
+  pointsOff: 'No points',
+  pointsValue: 'The answer itself',
+  pointsValueHint: 'A scale of 0 to 10 scores 0 to 10, with nothing to key in.',
+  pointsScale: 'What it scores',
 } as const;

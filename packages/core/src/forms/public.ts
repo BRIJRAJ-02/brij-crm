@@ -10,10 +10,14 @@ import {
   checkAnswers,
   formStrings,
   hiddenFacts,
+  pathOf,
+  recall,
+  scoreOf,
   storedContext,
   SubmitBody,
   type Facts,
   type FormDocument,
+  type FormEnding,
   type PublicForm,
   type Route,
   type SubmitNext,
@@ -32,7 +36,15 @@ import { FORMS_PROCESS } from './process.ts';
 import { attachUploads, claimSpamUploads, claimUploads } from './uploads.ts';
 import { routeSubmission, storedRoute, submissionDecision } from '../routing/forms.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
-import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow, type VersionRow } from './shared.ts';
+import {
+  loadForm,
+  loadVersions,
+  logicFormOf,
+  publicFormOf,
+  workspacePublicKey,
+  type FormRow,
+  type VersionRow,
+} from './shared.ts';
 import {
   judgeSubmission,
   REPEAT_WINDOW_HOURS,
@@ -98,12 +110,32 @@ async function nextOf(
   sign: SignHandoff | undefined,
   route: Route | undefined,
   where: { readonly workspaceId: string; readonly publicOrigins: readonly string[] },
+  /** The ending the stored answers led to, and the score they came to (spec 0063, AC-6315, AC-6316). */
+  landed: {
+    readonly ending?: string | undefined;
+    readonly score?: number | undefined;
+    readonly answers?: Readonly<Record<string, unknown>> | undefined;
+  } = {},
 ): Promise<SubmitNext> {
   const { after } = document;
   // A redirect that has come to name another workspace's page is never followed (spec 0056, AC-5612): a rule's falls
   // through to the form's own next step, and the form's own is answered as its thank you.
   const stays = async (url: string) =>
     (await workspaceAddressProblem(tx, where.workspaceId, url, where.publicOrigins)) === undefined;
+  // An ending the submission landed on (AC-6315): a routing rule naming one first, then the jump's own. Its words
+  // are read from the stored answers and the score the server worked out, so the page can't dictate either.
+  const named = route?.kind === 'ending' ? route.endingId : landed.ending;
+  const ending = named === undefined ? undefined : (document.endings ?? []).find((each) => each.id === named);
+  if (ending !== undefined) {
+    const landedOn = await endingNext(tx, ending, {
+      ...landed,
+      submissionId,
+      sign,
+      stays,
+      countdownSeconds: after.kind === 'booking' ? after.countdownSeconds : BOOKING_COUNTDOWN.default,
+    });
+    if (landedOn !== undefined) return landedOn;
+  }
   if (route?.kind === 'message') return { kind: 'message', text: route.message, offersMeeting: false };
   if (route?.kind === 'redirect' && (await stays(route.url))) return { kind: 'redirect', url: route.url };
   if (route?.kind === 'book' && submissionId !== undefined) {
@@ -122,6 +154,54 @@ async function nextOf(
       ? undefined
       : await bookingNext(tx, after.bookingPageId, submissionId, sign, after.countdownSeconds, after.message);
   return booked ?? { kind: 'message', text: after.message, offersMeeting: false };
+}
+
+/**
+ * One ending as a next step (spec 0063, AC-6315, AC-6317): its heading and line with their recalls read as plain
+ * text, and its button. A button that books a meeting becomes the booking hand off the server signs; one that
+ * names a web address rides along, unless the address has come to name another workspace's page, which is never
+ * linked to (spec 0056, AC-5612). Undefined when its booking page is paused or gone, so the form's own After
+ * someone sends it decides instead.
+ */
+async function endingNext(
+  tx: WorkspaceTx,
+  ending: FormEnding,
+  input: {
+    readonly answers?: Readonly<Record<string, unknown>> | undefined;
+    readonly score?: number | undefined;
+    readonly submissionId: string | undefined;
+    readonly sign: SignHandoff | undefined;
+    readonly stays: (url: string) => Promise<boolean>;
+    readonly countdownSeconds: number;
+  },
+): Promise<SubmitNext | undefined> {
+  const facts = {
+    ...(input.answers === undefined ? {} : { answers: input.answers }),
+    ...(input.score === undefined ? {} : { score: input.score }),
+  };
+  const heading = recall(ending.heading, facts);
+  const text = recall(ending.line ?? '', facts);
+  const { button } = ending;
+  if (button?.kind === 'booking' && input.submissionId !== undefined) {
+    const booked = await bookingNext(
+      tx,
+      button.bookingPageId,
+      input.submissionId,
+      input.sign,
+      input.countdownSeconds,
+      text,
+    );
+    if (booked !== undefined) return booked;
+  }
+  const linked = button?.kind === 'url' && (await input.stays(button.url)) ? button : undefined;
+  return {
+    kind: 'message',
+    text,
+    offersMeeting: false,
+    heading,
+    ending: ending.id,
+    ...(linked === undefined ? {} : { button: { url: linked.url, label: linked.label ?? 'Continue' } }),
+  };
 }
 
 /** On to a booking page with a signed hand off, when the page is live; undefined when it is paused or gone. */
@@ -392,6 +472,21 @@ async function publishedVersion(tx: WorkspaceTx, formId: string, number: number)
 }
 
 /**
+ * Where the stored answers led and what they were worth (spec 0063, AC-6314, AC-6316): the path walked again over
+ * the version's own document, its ending, and the score added up from those answers alone. The page's view of
+ * either is only what the visitor was shown: nothing the page sends is read here, and a forged score or an answer
+ * to a question off the path changes neither number.
+ */
+function landed(
+  document: FormDocument,
+  answers: Readonly<Record<string, unknown>>,
+): { readonly ending?: string; readonly score: number; readonly answers: Readonly<Record<string, unknown>> } {
+  const logic = logicFormOf(document);
+  const ending = pathOf(logic, answers).ending;
+  return { ...(ending === undefined ? {} : { ending }), score: scoreOf(logic, answers), answers };
+}
+
+/**
  * Stores one submission (AC-553 to AC-556). The form must be live (a paused
  * one is 410 `FORM_CLOSED`, AC-662), and its answers are checked against the
  * live version whatever version the page loaded (unknown keys dropped; a
@@ -557,6 +652,7 @@ export async function submitForm(
           input.signHandoff,
           same ? await storedRoute(tx, live.document, first.id) : undefined,
           { workspaceId: scope.workspaceId, publicOrigins: input.publicOrigins ?? [] },
+          landed(live.document, answers),
         );
         return { next: again, verdict: judged.verdict, replayed: true };
       }
@@ -579,10 +675,15 @@ export async function submitForm(
               context: cameFrom,
             })
           : undefined;
-      const next = await nextOf(tx, live.document, row.id, input.signHandoff, route, {
-        workspaceId: scope.workspaceId,
-        publicOrigins: input.publicOrigins ?? [],
-      });
+      const next = await nextOf(
+        tx,
+        live.document,
+        row.id,
+        input.signHandoff,
+        route,
+        { workspaceId: scope.workspaceId, publicOrigins: input.publicOrigins ?? [] },
+        landed(live.document, answers),
+      );
       return { next, verdict: judged.verdict, replayed: false };
     },
     hooks,

@@ -9,7 +9,7 @@
 import { choiceKeysOf, LONG_ANSWER_MAX, SHORT_ANSWER_MAX } from './answer-keys.ts';
 import type { AnswerType } from './answer-types.ts';
 import { countryOfE164, DIAL_CODES } from './dial-codes.ts';
-import { groupsOf, type FormLayout, type PathStep } from './path.ts';
+import { walkPath, type FormLayout, type PathStep } from './path.ts';
 import type { FormLanguage, PublicQuestion } from './public.ts';
 import { matchesShowWhen } from './show-when.ts';
 import { formStrings, type FormStrings } from './strings.ts';
@@ -379,30 +379,34 @@ export function checkAnswers(
   options: { readonly absentNotAsked?: boolean } = {},
 ): AnswerCheck {
   const words = formStrings(form.language);
-  const values: Record<string, CheckedAnswer> = {};
   const fields: Record<string, string> = {};
   const byKey = new Map(form.questions.map((question) => [question.key, question]));
-  // In the form's order, step by step (spec 0063, AC-6314): a step whose Show when fails over the answers kept
-  // before it takes its questions off the path, so they are never required and never kept, as a hidden question's.
-  const checkQuestion = (question: (typeof form.questions)[number]): void => {
+  // In the form's order, step by step and jump by jump (spec 0063, AC-6313, AC-6314): `walkPath` owns the order, so
+  // a step its Show when hides, a step a jump skipped and an ending left behind all take their questions off the
+  // path here exactly as on the page, and those answers are never required and never kept.
+  const checkQuestion = (
+    question: (typeof form.questions)[number],
+    values: Readonly<Record<string, CheckedAnswer>>,
+  ): Readonly<Record<string, CheckedAnswer>> | undefined => {
     // A question whose Show when doesn't hold over the answers kept so far is skipped: never required, never kept.
-    if (!matchesShowWhen(question.showWhen, values)) return;
-    if (options.absentNotAsked === true && !Object.hasOwn(answers, question.key)) return;
+    if (!matchesShowWhen(question.showWhen, values)) return undefined;
+    if (options.absentNotAsked === true && !Object.hasOwn(answers, question.key)) return undefined;
     const given = Object.hasOwn(answers, question.key) ? answers[question.key] : undefined;
     // A hidden question takes the link's value, else its default (AC-6309), and is never refused for being empty:
     // a visitor can't see it to answer it.
     const raw = question.answerType === 'hidden' && isBlank(given) ? question.options?.default : given;
-    if (question.answerType === 'hidden' && isBlank(raw)) return;
+    if (question.answerType === 'hidden' && isBlank(raw)) return undefined;
     if (question.answerType === 'checkbox' || question.answerType === 'yes_no') {
       const ticked = raw === true || raw === 'yes' || raw === 'true';
-      if (question.answerType === 'checkbox' && question.required && !ticked)
+      if (question.answerType === 'checkbox' && question.required && !ticked) {
         fields[question.key] = words.requiredCheckbox;
-      else values[question.key] = ticked;
-      return;
+        return undefined;
+      }
+      return { ...values, [question.key]: ticked };
     }
     if (isBlank(raw)) {
       if (question.required) fields[question.key] = words.required;
-      return;
+      return undefined;
     }
     const checked = checkOne(
       question.answerType,
@@ -412,15 +416,21 @@ export function checkAnswers(
       words,
       question.options ?? {},
     );
-    if (checked.error !== undefined) fields[question.key] = checked.error;
-    else if (checked.value !== undefined) values[question.key] = checked.value;
-  };
-  for (const group of groupsOf(form)) {
-    if (!matchesShowWhen(group.showWhen, values)) continue;
-    for (const key of group.keys) {
-      const question = byKey.get(key);
-      if (question !== undefined) checkQuestion(question);
+    if (checked.error !== undefined) {
+      fields[question.key] = checked.error;
+      return undefined;
     }
-  }
+    return checked.value === undefined ? undefined : { ...values, [question.key]: checked.value };
+  };
+  // The answers kept are the facts the walk gathered: one question's canonical answer is what the next one's Show
+  // when, the next step's and the next jump's all read, here and on the page alike.
+  let values: Readonly<Record<string, CheckedAnswer>> = {};
+  walkPath(form, (key) => {
+    const question = byKey.get(key);
+    const next = question === undefined ? undefined : checkQuestion(question, values);
+    if (next === undefined) return { shown: false, seen: values };
+    values = next;
+    return { shown: true, seen: next };
+  });
   return Object.keys(fields).length > 0 ? { ok: false, fields } : { ok: true, answers: values };
 }

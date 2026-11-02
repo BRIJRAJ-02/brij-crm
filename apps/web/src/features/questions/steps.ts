@@ -80,10 +80,18 @@ export function restoreStep(flow: Flow, step: FormStep, index: number): Flow {
   return fromItems({ ...flow, steps }, itemsOf({ ...flow, steps }));
 }
 
-/** What a break's editor changes: its title, or its Show when (null: always shows). */
+/** The questions under the break `id`: its own step, which its jumps read along with everything before it. */
+export function stepQuestionsOf(flow: Flow, id: string): readonly FormQuestion[] {
+  const keys = new Set(stepsOfBreaks(flow.questions, flow.steps).find((step) => step.id === id)?.keys ?? []);
+  return flow.questions.filter((question) => keys.has(question.key));
+}
+
+/** What a break's editor changes: its title, its Show when (null: always shows), or its jumps. */
 export interface StepChange {
   readonly title?: string;
   readonly showWhen?: FormStep['showWhen'] | null;
+  /** Its jumps in order (spec 0063, AC-6313); an empty list is no jumps at all. */
+  readonly jumps?: NonNullable<FormStep['jumps']>;
 }
 
 /** The flow with the break `id` changed. A blank title is no title. */
@@ -92,13 +100,15 @@ export function changeStep(flow: Flow, id: string, change: StepChange): Flow {
     ...flow,
     steps: flow.steps.map((step) => {
       if (step.id !== id) return step;
-      const { title: _title, showWhen: _showWhen, ...rest } = step;
+      const { title: _title, showWhen: _showWhen, jumps: _jumps, ...rest } = step;
       const title = change.title ?? step.title;
       const showWhen = change.showWhen === null ? undefined : (change.showWhen ?? step.showWhen);
+      const jumps = change.jumps ?? step.jumps;
       return {
         ...rest,
         ...(title === undefined || title === '' ? {} : { title }),
         ...(showWhen === undefined ? {} : { showWhen }),
+        ...(jumps === undefined || jumps.length === 0 ? {} : { jumps: [...jumps] }),
       };
     }),
   };

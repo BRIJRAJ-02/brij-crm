@@ -6,9 +6,13 @@ import { createHash } from 'node:crypto';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   choiceKeysOf,
+  formStrings,
   FormDocument,
+  recalledKeys,
+  SCORE_FACT,
   stepsOf,
   type FormQuestion,
+  type PublicEnding,
   type PublicForm,
   type PublicQuestion,
   type PublishAttribute,
@@ -283,10 +287,34 @@ function choicesOf(question: FormDocument['questions'][number]): {
 }
 
 /**
- * One question as a visitor's page renders it: what drawing and checking need, never where its answer is filed or
- * how. A form and a booking page (spec 0057) both send theirs through here.
+ * Whether the page is told what its answers are worth (spec 0063, AC-6316): only a form whose own logic or words
+ * read the score, so a form that never shows one sends no points at all. The page's score is a convenience either
+ * way: the server adds the stored answers up again and files only its own total.
  */
-export function publicQuestionOf(question: FormQuestion): PublicQuestion {
+export function readsScore(document: FormDocument): boolean {
+  const reads = (showWhen: { readonly rules: readonly { readonly key: string }[] } | undefined) =>
+    (showWhen?.rules ?? []).some((condition) => condition.key === SCORE_FACT);
+  const recallsScore = (text: string | undefined) =>
+    text !== undefined && recalledKeys(text).some((key) => key.toLowerCase() === SCORE_FACT);
+  return (
+    document.questions.some(
+      (question) =>
+        reads(question.showWhen) ||
+        (question.jumps ?? []).some((jump) => reads(jump.when)) ||
+        recallsScore(question.label),
+    ) ||
+    document.steps.some((step) => reads(step.showWhen) || (step.jumps ?? []).some((jump) => reads(jump.when))) ||
+    document.routing.rules.some((rule) => reads(rule.when)) ||
+    (document.endings ?? []).some((ending) => recallsScore(ending.heading) || recallsScore(ending.line))
+  );
+}
+
+/**
+ * One question as a visitor's page renders it: what drawing and checking need, never where its answer is filed or
+ * how. A form and a booking page (spec 0057) both send theirs through here. `withPoints` sends what its answers are
+ * worth, for a form whose page reads the score (`readsScore`).
+ */
+export function publicQuestionOf(question: FormQuestion, withPoints = false): PublicQuestion {
   return {
     id: question.id,
     key: question.key,
@@ -297,7 +325,25 @@ export function publicQuestionOf(question: FormQuestion): PublicQuestion {
     required: question.required,
     ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
     ...(question.options === undefined ? {} : { options: question.options }),
+    ...(question.jumps === undefined ? {} : { jumps: question.jumps }),
+    ...(withPoints && question.points !== undefined ? { points: question.points } : {}),
   };
+}
+
+/**
+ * The endings the page may draw (spec 0063, AC-6315): their words, and a button to a web address. An ending whose
+ * button books a meeting carries none here: that button is a signed booking hand off, which only the server can
+ * make, so it arrives with the submit's own next step instead.
+ */
+export function endingsOf(document: FormDocument, words: { readonly bookButton: string }): PublicEnding[] {
+  return (document.endings ?? []).map((ending) => ({
+    id: ending.id,
+    heading: ending.heading,
+    ...(ending.line === undefined || ending.line === '' ? {} : { line: ending.line }),
+    ...(ending.button?.kind === 'url'
+      ? { button: { url: ending.button.url, label: ending.button.label ?? words.bookButton } }
+      : {}),
+  }));
 }
 
 /**
@@ -305,9 +351,42 @@ export function publicQuestionOf(question: FormQuestion): PublicQuestion {
  * always has; the layout for One at a time; with Steps, its steps over the questions' keys too.
  */
 export function layoutOf(document: FormDocument): Pick<PublicForm, 'layout' | 'steps'> {
-  if (document.layout === 'classic') return {};
-  if (document.layout === 'conversational') return { layout: 'conversational' };
-  return { layout: 'steps', steps: stepsOf(document) };
+  // Only the layout and the steps: the questions `logicFormOf` carries are the document's own, with their filing
+  // and their points on them, and a visitor's page must never be sent those (the leak the forms suite caught).
+  const { layout, steps } = logicFormOf(document);
+  return {
+    ...(layout === undefined || layout === 'classic' ? {} : { layout }),
+    ...(steps === undefined ? {} : { steps }),
+  };
+}
+
+/**
+ * A version's document as the path and the score read it (spec 0063, AC-6314, AC-6316): its layout, its steps
+ * resolved to question keys with their jumps, and its questions with their points. The server builds this from the
+ * stored document every time it needs to know what was asked or what it was worth, and never from the page's word.
+ */
+export function logicFormOf(
+  document: Pick<FormDocument, 'questions'> & Partial<Pick<FormDocument, 'layout' | 'steps'>>,
+): {
+  readonly layout?: FormDocument['layout'];
+  readonly questions: FormDocument['questions'];
+  readonly steps?: PublicForm['steps'];
+} {
+  const { questions } = document;
+  const layout = document.layout ?? 'classic';
+  if (layout === 'classic') return { questions };
+  if (layout === 'conversational') return { layout, questions };
+  // A step's jumps ride with it (AC-6313), so the page can show the step the server will agree the visitor saw.
+  const breaks = document.steps ?? [];
+  const jumpsOf = new Map(breaks.map((step) => [step.id, step.jumps]));
+  return {
+    layout,
+    questions,
+    steps: stepsOf({ questions, steps: breaks }).map((step) => {
+      const jumps = step.id === undefined ? undefined : jumpsOf.get(step.id);
+      return { ...step, ...(jumps === undefined ? {} : { jumps }) };
+    }),
+  };
 }
 
 /**
@@ -326,8 +405,11 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
     buttonText: document.buttonText,
     language: document.language,
     look: document.look,
-    questions: document.questions.map(publicQuestionOf),
+    questions: document.questions.map((question) => publicQuestionOf(question, readsScore(document))),
     ...layoutOf(document),
+    ...((document.endings ?? []).length === 0
+      ? {}
+      : { endings: endingsOf(document, { bookButton: formStrings(document.language).endingButton }) }),
     ...(document.after.kind === 'message' && document.after.message !== '' ? { thanks: document.after.message } : {}),
     offersMeeting: false,
     ...(context.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: context.recaptchaSiteKey }),

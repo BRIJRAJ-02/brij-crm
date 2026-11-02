@@ -28,12 +28,25 @@ const PublicShowWhen = z.object({
   ),
 });
 
-/** One step as the visitor's page draws it (spec 0063): its questions by key, its title and its Show when. */
+/** Where a jump sends a visitor, as the page reads it (spec 0063, AC-6313): a step further down, or an ending. */
+export const PublicJump = z.object({
+  when: PublicShowWhen.optional(),
+  to: z.union([z.object({ step: z.string() }), z.object({ ending: z.string() })]),
+});
+/** Where a jump sends a visitor, as the page reads it. */
+export type PublicJump = z.infer<typeof PublicJump>;
+
+/**
+ * One step as the visitor's page draws it (spec 0063): its questions by key, its title, its Show when and its
+ * jumps. The page follows them so the visitor sees the step the server will agree they saw; the server works the
+ * path out again from the stored answers and never takes the page's word for it (AC-6314).
+ */
 export const PublicStep = z.object({
   id: z.string().optional(),
   title: z.string().optional(),
   keys: z.array(z.string()),
   showWhen: PublicShowWhen.optional(),
+  jumps: z.array(PublicJump).optional(),
 });
 /** One step as the visitor's page draws it. */
 export type PublicStep = z.infer<typeof PublicStep>;
@@ -51,6 +64,14 @@ export const PublicQuestion = z.object({
   showWhen: PublicShowWhen.optional(),
   placeholder: z.string().optional(),
   required: z.boolean(),
+  /** Its jumps (AC-6313), with One at a time, where each question is a screen of its own. */
+  jumps: z.array(PublicJump).optional(),
+  /**
+   * What its answers are worth (AC-6316), sent only to a form whose own logic or words read the score, so a page
+   * that never shows a score carries no points. The score the page works out is a convenience: the server adds the
+   * stored answers up again and files only its own total.
+   */
+  points: z.union([z.array(z.number()), z.literal('value')]).optional(),
   /** What its type sets (spec 0063): a date's range, a scale's ends and words, a multi select's picks and Other. */
   options: z
     .object({
@@ -71,6 +92,20 @@ export const PublicQuestion = z.object({
 export type PublicQuestion = z.infer<typeof PublicQuestion>;
 
 /**
+ * One ending as the visitor's page draws it (spec 0063, AC-6315): its heading, its line and an optional button to a
+ * web address. An ending whose button books a meeting carries none here: that button is the booking hand off, which
+ * only the server can sign, so it arrives with the submit's own next step.
+ */
+export const PublicEnding = z.object({
+  id: z.string(),
+  heading: z.string(),
+  line: z.string().optional(),
+  button: z.object({ url: z.string(), label: z.string() }).optional(),
+});
+/** One ending as the visitor's page draws it. */
+export type PublicEnding = z.infer<typeof PublicEnding>;
+
+/**
  * `GET /api/public/forms/:address`: a form as its hosted page renders it. A
  * paused form answers `status: 'paused'` and no questions. `preview` marks
  * the builder's rendering of a draft, which never sends.
@@ -89,6 +124,8 @@ export const PublicForm = z.object({
   layout: z.enum(FORM_LAYOUTS).optional(),
   /** With Steps, the steps over `questions` (`stepsOf`); absent otherwise, since no other layout draws them. */
   steps: z.array(PublicStep).optional(),
+  /** The endings beside the default thank you (AC-6315); absent on a form with none. */
+  endings: z.array(PublicEnding).optional(),
   /** What the thank you says, when the form has its own words for it. */
   thanks: z.string().optional(),
   /** Whether the thank you offers a meeting (#59): false until booking pages exist. */
@@ -169,7 +206,17 @@ export type SubmitBody = z.input<typeof SubmitBody>;
  * personal rides in the link (the page asks the API for the name and email).
  */
 export const SubmitNext = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('message'), text: z.string(), offersMeeting: z.boolean().optional() }),
+  z.object({
+    kind: z.literal('message'),
+    text: z.string(),
+    offersMeeting: z.boolean().optional(),
+    /** The ending's heading, with its recalls already read (spec 0063, AC-6315, AC-6317); absent for the thank you. */
+    heading: z.string().optional(),
+    /** The ending's button: a web address and its words, both the server's own. */
+    button: z.object({ url: z.string(), label: z.string() }).optional(),
+    /** Which ending this is, for the page's own tests and nothing else. */
+    ending: z.string().optional(),
+  }),
   z.object({ kind: z.literal('redirect'), url: z.string() }),
   z.object({
     kind: z.literal('booking'),

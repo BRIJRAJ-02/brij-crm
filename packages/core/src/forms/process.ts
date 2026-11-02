@@ -19,7 +19,7 @@
 // the write and its ledger row after it, all in this one transaction.
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
-import { fitsAttribute, type EngineRefusal, type FormDocument } from '@crm/contracts';
+import { fitsAttribute, scoreOf, type EngineRefusal, type FormDocument } from '@crm/contracts';
 import { isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
@@ -32,7 +32,7 @@ import type { WriteContext } from '../engine/write.ts';
 import { enterAsForm, type RuleSource } from '../access/door.ts';
 import { formAccess } from '../access/policy.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../jobs/registry.ts';
-import { liveOptions, loadForm, loadVersions, type FormRow } from './shared.ts';
+import { liveOptions, loadForm, loadVersions, logicFormOf, type FormRow } from './shared.ts';
 import { parseAttributeInput } from '../engine/parse-value.ts';
 import { lockRotation } from '../rotation/ledger.ts';
 import { pickLeadOwner, recordLeadOwner, type LeadOwner } from '../rotation/owner.ts';
@@ -240,8 +240,42 @@ export const fieldChanged = (attribute: AttributeDef): string =>
  * The answers a version's questions file on live attributes, as each attribute takes them now (no I/O). A booking
  * page's questions (spec 0057) are planned here too.
  */
+/** The question id the score is planned under: the form's own score is no question, so it is named as itself. */
+export const SCORE_QUESTION_ID = 'score';
+
+/**
+ * The form's score as one planned value (spec 0063, AC-6316): worked out again here from the answers the
+ * submission stored, never from anything the page sent, and filed onto the number attribute the document points
+ * at. Nothing is planned when the form files no score, when that attribute is gone, archived, system or no longer
+ * a number, or when the score itself can't be parsed as that attribute's value.
+ */
+function planScore(
+  document: Pick<FormDocument, 'questions'> & Partial<Pick<FormDocument, 'layout' | 'steps' | 'scoreFiledOn'>>,
+  attributes: ReadonlyMap<string, AttributeDef>,
+  answers: Readonly<Record<string, unknown>>,
+): { readonly planned: readonly Planned[]; readonly refused: { questionId: string; message: string }[] } {
+  const filed = document.scoreFiledOn;
+  if (filed === undefined) return { planned: [], refused: [] };
+  const attribute = attributes.get(filed.attributeId);
+  if (attribute === undefined || attribute.isSystem || isArchivedNow(attribute)) {
+    return { planned: [], refused: [{ questionId: SCORE_QUESTION_ID, message: fieldGone(attribute) }] };
+  }
+  if (attribute.type !== 'number') {
+    return { planned: [], refused: [{ questionId: SCORE_QUESTION_ID, message: fieldChanged(attribute) }] };
+  }
+  // A number field holds its value as text, as every decimal is held (`valueFor`), so the score goes in as text too.
+  const parsed = parseAttributeInput(attribute, String(scoreOf(logicFormOf(document), answers)));
+  if (!parsed.ok) return { planned: [], refused: [{ questionId: SCORE_QUESTION_ID, message: parsed.error.message }] };
+  if (parsed.value === null) return { planned: [], refused: [] };
+  return {
+    // Always: a submission's score is worked out again from its own answers, so the newest one stands.
+    planned: [{ attribute, questionId: SCORE_QUESTION_ID, value: parsed.value, always: true }],
+    refused: [],
+  };
+}
+
 export function plan(
-  document: Pick<FormDocument, 'questions'>,
+  document: Pick<FormDocument, 'questions'> & Partial<Pick<FormDocument, 'layout' | 'steps' | 'scoreFiledOn'>>,
   attributes: ReadonlyMap<string, AttributeDef>,
   options: ReadonlyMap<string, readonly { id: string; label: string }[]>,
   answers: Readonly<Record<string, unknown>>,
@@ -277,7 +311,9 @@ export function plan(
     if (parsed.value === null) continue;
     planned.push({ attribute, questionId: question.id, value: parsed.value, always: question.update === 'always' });
   }
-  return { planned, refused };
+  // The score last, so a question filed on the same attribute is planned first and the score's own `always` wins.
+  const score = planScore(document, attributes, answers);
+  return { planned: [...planned, ...score.planned], refused: [...refused, ...score.refused] };
 }
 
 /** What a file answer says when the blob store isn't configured, so its bytes can't be given a record's home. */

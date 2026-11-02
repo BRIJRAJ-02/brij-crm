@@ -148,6 +148,7 @@ export function HostedForm({
                   countryNames={state.countryNames}
                   onChange={(value) => state.change(question, value)}
                   files={state.files}
+                  read={state.read}
                 />
               </QuestionSlot>
             ))}

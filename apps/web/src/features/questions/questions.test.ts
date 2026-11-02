@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { FormAttributeChoice, FormQuestion } from '@crm/data';
-import { addQuestion, changeQuestion, fileByLabel, planNewAttributes, renamedKeys, typeChange } from './questions.ts';
+import {
+  addQuestion,
+  changeQuestion,
+  fileByLabel,
+  movedPoints,
+  planNewAttributes,
+  renamedKeys,
+  typeChange,
+} from './questions.ts';
 
 const JOB = '0199f0a0-0000-7000-8000-0000000000aa';
 
@@ -107,5 +115,44 @@ describe('changing a filed question’s answer type (late trap #46)', () => {
     expect(typeChange(filed, attributes, 'long_text')).toEqual({ answerType: 'long_text' });
     expect(typeChange(filed, [], 'number')).toEqual({ answerType: 'number' });
     expect(typeChange({}, attributes, 'number')).toEqual({ answerType: 'number' });
+  });
+});
+
+describe('points follow their choice (spec 0063, AC-6316)', () => {
+  const choices = ['Small', 'Medium', 'Large'];
+
+  it('moves a number with the choice it is on when the list is reordered', () => {
+    expect(movedPoints(choices, ['Large', 'Small', 'Medium'], [2, 3, 5])).toEqual([5, 2, 3]);
+  });
+
+  it('drops the number of a choice that was removed', () => {
+    expect(movedPoints(choices, ['Small', 'Large'], [2, 3, 5])).toEqual([2, 5]);
+  });
+
+  it('gives a choice added at the end no points, and keeps a renamed choice’s own', () => {
+    expect(movedPoints(choices, [...choices, 'Enormous'], [2, 3, 5])).toEqual([2, 3, 5]);
+    expect(movedPoints(choices, ['Small', 'Mid', 'Large'], [2, 3, 5])).toEqual([2, 3, 5]);
+  });
+
+  it('is no points at all once every number is gone', () => {
+    expect(movedPoints(choices, ['Enormous'], [0, 0, 0])).toBeUndefined();
+    expect(movedPoints(choices, ['Medium'], [2, 0, 5])).toBeUndefined();
+  });
+
+  it('keeps a question’s points with its choices through a change', () => {
+    const question: FormQuestion = {
+      id: 'q9',
+      key: 'budget',
+      label: 'Budget',
+      answerType: 'choice',
+      required: false,
+      update: 'fill',
+      choices,
+      points: [2, 3, 5],
+    };
+    const [changed] = changeQuestion([question], 'q9', { choices: ['Large', 'Small', 'Medium'] });
+    expect(changed?.points).toEqual([5, 2, 3]);
+    const [typed] = changeQuestion([question], 'q9', { answerType: 'short_text' });
+    expect(typed?.points).toBeUndefined();
   });
 });

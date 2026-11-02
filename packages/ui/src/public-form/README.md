@@ -31,6 +31,20 @@ Until 19 October 2026 this was plain DOM, drawn to look like the library, to sta
 
 Date, Time and Date and time are the platform's own inputs in a Field (`temporal`): its picker, its keyboard and its phone wheel, no date library on the page. A date and time sends its moment with the visitor's time zone. Rating is the Rating atom as a form question (`field`), five stars that are a radio group; Scale is ChoiceChips with one choice and its end words under the row (`ends`); Multi select is ChoiceChips with Other opening a box under it. Address is `AddressQuestion`. A hidden question draws nothing and takes the link's value, else its default. Each is checked by `checkAnswers`, as the server checks it. None of them is heavy, so none is a lazy chunk.
 
+## Jumps, endings and recall (spec 0063 slice 5)
+
+A step's (and, with One at a time, a question's) jumps ride in the public form, so the page walks the same path the
+server will: `pathOf` takes the first jump whose conditions hold, forward only, and a jump to an ending ends the
+form there, which shows as the steps shrinking and the step the visitor is on becoming the last. Nothing about the
+path or the score is the page's to decide: the server works both out again from the answers it stored
+(`landed` in `@crm/core`), drops the answers to questions off the path and files its own score.
+
+A label, a help line and an ending's words may recall an earlier answer or the score with `{{key}}` and
+`{{score}}`. `recall` gives plain text back and the page draws it as text, so a name holding `<b>` shows its angle
+brackets. Nothing here ever builds HTML. An ending's own heading, line and web-address button come with the
+submit's next step; an ending that books a meeting arrives as the booking next step, since only the server signs a
+hand off.
+
 ## Rules it follows
 
 - Every word comes from `formStrings` in `@crm/contracts/forms`, and every check from `checkAnswers`, the one the submit endpoint runs again, so a visitor sees the server's own message.

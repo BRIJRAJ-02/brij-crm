@@ -9,6 +9,8 @@ import {
   formStrings,
   isBlank,
   pathOf,
+  recall,
+  scoreOf,
   SHORT_ANSWER_MAX,
   suggestEmail,
   type FormPath,
@@ -71,7 +73,14 @@ type Messages = Readonly<Record<string, string>>;
 /** Which view the form shows. */
 export type HostedFormView =
   | { readonly kind: 'form' }
-  | { readonly kind: 'thanks'; readonly text: string }
+  | {
+      readonly kind: 'thanks';
+      readonly text: string;
+      /** The ending's own heading, when the server answered with one (spec 0063, AC-6315). */
+      readonly heading?: string | undefined;
+      /** The ending's button: a web address and its words. */
+      readonly button?: { readonly url: string; readonly label: string } | undefined;
+    }
   | { readonly kind: 'closed' }
   /** Sent, and going on to a booking page after a countdown (AC-1059). */
   | { readonly kind: 'booking'; readonly url: string; readonly seconds: number; readonly text: string };
@@ -91,6 +100,13 @@ export interface HostedFormState {
   readonly shown: ReadonlySet<string>;
   /** The visitor's path (spec 0063, `pathOf`): the steps they see for the answers so far, each with its questions. */
   readonly path: FormPath;
+  /**
+   * The score of the answers so far (spec 0063, AC-6316), for what the page shows: the server adds the stored
+   * answers up again at submit and files only its own total, so this number decides nothing.
+   */
+  readonly score: number;
+  /** A label's or an ending's recalls read as plain text (AC-6317): never markup, whatever a visitor typed. */
+  readonly read: (text: string) => string;
   /** What a polite live line says after an answer shows or hides questions; empty otherwise. */
   readonly shownNote: string;
   readonly alert: string;
@@ -290,6 +306,10 @@ export function useHostedForm({
   // The path decides what shows (spec 0063, AC-6314): a question's Show when, and with Steps its step's too.
   const path = pathOf(form, given);
   const shown = path.keys;
+  // What the answers so far are worth, and the reader a label's recalls go through (AC-6316, AC-6317).
+  const score = scoreOf(form, given);
+  const answerTypes = Object.fromEntries(form.questions.map((question) => [question.key, question.answerType]));
+  const read = (text: string) => recall(text, { answers: given, score, answerTypes });
   // Questions that appear or go with an answer are said aloud once (spec 0043): the count is compared on render.
   const [seenCount, setSeenCount] = useState(shown.size);
   const [shownNote, setShownNote] = useState('');
@@ -351,8 +371,14 @@ export function useHostedForm({
     focus(question.key);
   };
 
-  const thank = (text: string) => {
-    setView({ kind: 'thanks', text });
+  const thank = (
+    text: string,
+    ending?: {
+      readonly heading?: string | undefined;
+      readonly button?: { readonly url: string; readonly label: string } | undefined;
+    },
+  ) => {
+    setView({ kind: 'thanks', text, ...(ending ?? {}) });
     setFocusTarget('heading');
   };
 
@@ -390,9 +416,18 @@ export function useHostedForm({
       show(result.fields, form.questions);
       return;
     }
-    // A page with nowhere to send (a draft opened to try) checks the answers, then thanks.
+    // A page with nowhere to send (a draft opened to try) checks the answers, then thanks: with the ending the
+    // path named, so the builder's preview shows the ending a visitor would land on (AC-6315).
     if (onSubmit === undefined) {
-      thank(form.thanks ?? '');
+      const ending = (form.endings ?? []).find((each) => each.id === path.ending);
+      if (ending === undefined) {
+        thank(form.thanks ?? '');
+        return;
+      }
+      thank(read(ending.line ?? ''), {
+        heading: read(ending.heading),
+        ...(ending.button === undefined ? {} : { button: ending.button }),
+      });
       return;
     }
     // A hidden question's answer stays behind: the server would drop it too.
@@ -412,7 +447,10 @@ export function useHostedForm({
             setView({ kind: 'booking', url, seconds: countdownSeconds, text });
             setFocusTarget('heading');
             if (countdownSeconds === 0) onRedirect?.(url);
-          } else thank(outcome.next.text);
+          } else {
+            const { text, heading, button } = outcome.next;
+            thank(text, { ...(heading === undefined ? {} : { heading }), ...(button === undefined ? {} : { button }) });
+          }
           return;
         case 'invalid':
           // A question this page never drew (late trap #18): the form was published again more than a day after it
@@ -483,6 +521,8 @@ export function useHostedForm({
     summary,
     shown,
     path,
+    score,
+    read,
     shownNote,
     alert,
     isSending,

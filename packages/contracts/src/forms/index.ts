@@ -13,6 +13,8 @@ export * from './path.ts';
 export * from './presets.ts';
 export * from './public.ts';
 export * from './publish.ts';
+export * from './recall.ts';
+export * from './score.ts';
 export * from './routing.ts';
 export * from './conditions.ts';
 export * from './show-when.ts';
