@@ -6,14 +6,16 @@
 // frame, and a floating panel is fixed to the viewport, so while one is open
 // the frame grows to the viewport and the screenshot takes it in.
 //
-// A baseline this job never reshoots is debt nobody is told about. `changes`
-// skips `visual` when a push touches no library file, so a branch can trim a
-// component's copy, move a baseline and land, and the next branch that does run
-// `visual` fails on it as if it had broken something (main's 45bcac5ac did
-// exactly that to MatchCalendar, fixed later in 834b533db). So a failure here
-// is not proof the branch under test caused it: check whether the baseline was
-// simply never retaken. A check that quietly does less than its name says is
-// worse than one that is plainly off.
+// A baseline this job never reshoots is debt nobody is told about, and a
+// cancelled run is how it gets left: a cancel is not a result, but it owes
+// whatever it would have reshot, and the commit after a cancel is usually a
+// chore touching no library file, which `changes` then rightly skips. So
+// nothing re-runs what the cancel owed. Main's 45bcac5ac was cancelled owing a
+// MatchCalendar baseline, 368e98ec3 redeployed the same tree and skipped this
+// job, and it surfaced on the next branch that ran it, looking like that
+// branch's regression (fixed in 834b533db). A push to main now runs everything
+// for that reason. So a failure here is not proof the branch under test caused
+// it: check whether the baseline was simply never retaken.
 import { configure } from 'storybook/test';
 import { afterEach, beforeAll, expect, inject } from 'vitest';
 import { page } from 'vitest/browser';

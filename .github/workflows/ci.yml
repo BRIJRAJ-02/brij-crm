@@ -36,6 +36,17 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           BEFORE: ${{ github.event.before }}
         run: |
           set -u
+          # A push to main runs everything, whatever changed. A cancelled run is not a result, but it leaves
+          # its debt behind, and the commit after a cancel is usually a chore that touches no library file, so
+          # the filter rightly skips the very job the cancel owed and nobody is told (main's 45bcac5ac was
+          # cancelled with a MatchCalendar baseline owed, then 368e98ec3 redeployed the same tree and skipped
+          # `visual`; it surfaced on the next branch that ran it, looking like that branch's regression).
+          # Landings are rare and are exactly the pushes that must not inherit a gap. Branch pushes keep the
+          # filter, and no job name changes, so the required checks and the deploy gate read what they always did.
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            echo "A push to main: running everything, so a landing never inherits what a cancelled run owed."
+            echo "ui=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
           if [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             echo "A new branch: running everything."
             echo "ui=true" >> "$GITHUB_OUTPUT"; exit 0
