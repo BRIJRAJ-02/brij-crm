@@ -29,6 +29,8 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
       contents: read
     outputs:
       ui: ${{ steps.filter.outputs.ui }}
+      # `visual` alone, so a push to main can run it without running `stories`. See the step below.
+      visual: ${{ steps.filter.outputs.visual }}
     steps:
       - uses: actions/checkout@v7
       - id: filter
@@ -36,32 +38,39 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           BEFORE: ${{ github.event.before }}
         run: |
           set -u
-          # A push to main runs everything, whatever changed. A cancelled run is not a result, but it leaves
-          # its debt behind, and the commit after a cancel is usually a chore that touches no library file, so
-          # the filter rightly skips the very job the cancel owed and nobody is told (main's 45bcac5ac was
-          # cancelled with a MatchCalendar baseline owed, then 368e98ec3 redeployed the same tree and skipped
-          # `visual`; it surfaced on the next branch that ran it, looking like that branch's regression).
-          # Landings are rare and are exactly the pushes that must not inherit a gap. Branch pushes keep the
-          # filter, and no job name changes, so the required checks and the deploy gate read what they always did.
+          # A push to main always runs `visual`, whatever changed. A cancelled run is not a result, but it
+          # leaves its debt behind, and the commit after a cancel is usually a chore that touches no library
+          # file, so the filter rightly skips the very job the cancel owed and nobody is told (main's
+          # 45bcac5ac was cancelled with a MatchCalendar baseline owed, then 368e98ec3 redeployed the same
+          # tree and skipped `visual`; it surfaced on the next branch that ran it, looking like that branch's
+          # regression). Landings are rare and are exactly the pushes that must not inherit a gap.
+          #
+          # `stories` is deliberately NOT forced, and forcing it would stop production deploying on every
+          # landing. deploy-web.yml requires only `check` and `ui`, but it also waits for `visual` and all
+          # three `stories` browsers to be settled, where settled means success or skipped. Today a main push
+          # that touches no library file skips all four and the gate is satisfied. Force `stories` to run and
+          # `stories (firefox)` runs every time, hangs and ends `timed_out`, which is neither passed nor
+          # settled and is not required, so the gate waits out its deadline and refuses the deploy. Add
+          # `stories` here only once the Firefox hang is fixed, not before.
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
-            echo "A push to main: running everything, so a landing never inherits what a cancelled run owed."
-            echo "ui=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "A push to main: running visual, so a landing never inherits what a cancelled run owed."
+            echo "visual=true" >> "$GITHUB_OUTPUT"
           fi
           if [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             echo "A new branch: running everything."
-            echo "ui=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "ui=true" >> "$GITHUB_OUTPUT"; echo "visual=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           if ! git fetch --no-tags --depth=1 origin "$BEFORE" 2>/dev/null; then
             echo "The commit this push replaced is not reachable (a force push, or a prune): running everything."
-            echo "ui=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "ui=true" >> "$GITHUB_OUTPUT"; echo "visual=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           if ! changed=$(git diff --name-only "$BEFORE" "$GITHUB_SHA" 2>/dev/null); then
             echo "The two commits do not compare: running everything."
-            echo "ui=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "ui=true" >> "$GITHUB_OUTPUT"; echo "visual=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           printf '%s\n' "$changed" | sed 's/^/  /'
           if printf '%s\n' "$changed" | grep -qE '^(packages/ui/|packages/tokens/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)'; then
-            echo "ui=true" >> "$GITHUB_OUTPUT"
+            echo "ui=true" >> "$GITHUB_OUTPUT"; echo "visual=true" >> "$GITHUB_OUTPUT"
           else
             echo "ui=false" >> "$GITHUB_OUTPUT"
           fi
@@ -598,7 +607,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
   # `pnpm test:visual` uses locally, so fonts and rendering match exactly.
   visual:
     needs: changes
-    if: ${{ needs.changes.outputs.ui == 'true' }}
+    if: ${{ needs.changes.outputs.visual == 'true' }}
     runs-on: ubuntu-24.04
     # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
     timeout-minutes: 35
