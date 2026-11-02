@@ -172,3 +172,37 @@ no cause. If `Item-Menu` fails later, it did not break then: it has been driftin
 **Do not tighten the threshold to fix this,** and do not adopt the drifted shots as baselines. A passing
 baseline that has drifted is drift, not a decision, and changing a comparator threshold on a branch that is
 trying to land turns a landing into a week. It needs its own pass, deliberately, when nothing is in flight.
+
+### And a third, which compounds with it: `--update` adopts other people's frames
+
+`pnpm test:visual --update` rewrites **every** story's baseline, not the ones you changed. Run three times
+on an unchanged tree by another lane, it rewrote baselines for components that lane never touched on two of
+the three runs — ChoiceChips, Code and LinkPageBlocks once, SettingsLayout another — different files each
+time (found by crm-50).
+
+This is worse than a blank shot, which "open the image before adopting" already catches. These frames render
+correctly. They are somebody else's unsettled frame in a file nobody was looking at, and once adopted the
+drift they carry is invisible to everyone.
+
+**It applies to the CI artifact too**, which looked like the safe route: `ci.yml`'s regeneration step is
+literally `pnpm test:visual --update`, run when `visual` fails, and the `screenshot-baselines` artifact is
+its output. So the artifact can hand you the same contaminated frame.
+
+The defence, either route: **diff the whole set against what is committed, copy only the files you named,
+and ask why anything else moved.** After any local `--update`, `git status packages/ui/__screenshots__` and
+revert everything unintended.
+
+### What this branch carries
+
+Checked rather than asserted. Against the artifact of run 41485749715, **6 of 2,234 images differ from what
+is committed**, and all six are three stories we can account for:
+
+| Story | Why |
+|---|---|
+| `SegmentedControl/Colour-Dots` (both themes) | the render held a hover; fixed in the story, baseline untouched |
+| `Sidebar/Item-Menu` (both themes) | sub-threshold drift from this branch's shadow and border tokens |
+| `Sidebar/Section-Menu-And-Fold` (both themes) | antialiasing; mean, min and max over the sidebar are identical |
+
+Nothing else moved. That is the evidence that no contaminated frame is being carried: a frame adopted from
+an unsettled render would almost certainly not reproduce byte for byte on a later run, so it would appear
+here as a difference. Six, all explained, is a far stronger claim than "we were careful".
