@@ -168,22 +168,31 @@ export async function setPrimaryLinkPage(scope: EngineScope, profileId: string):
 export async function deleteLinkPage(
   scope: EngineScope,
   profileId: string,
-): Promise<{ readonly pages: readonly LinkPageSummary[]; readonly handle: string }> {
+): Promise<{
+  readonly pages: readonly LinkPageSummary[];
+  readonly handle: string;
+  /** The store paths of its cover and photo ground, which the caller deletes once this has committed. */
+  readonly photos: readonly string[];
+}> {
   const owner = ownUserId(scope);
   if (!isUuid(profileId)) throw refuse('NOT_FOUND', PAGE_GONE);
   return inWorkspace(scope, async (tx) => {
-    let handle: string | null | undefined;
+    let gone: { handle: string; cover_path: string | null; ground_path: string | null } | undefined;
     try {
-      const found = await tx.execute<{ handle: string | null }>(
-        sql`select crm_delete_profile_page(${owner}::uuid, ${scope.workspaceId}::uuid, ${profileId}::uuid) as handle`,
+      const found = await tx.execute<{ handle: string; cover_path: string | null; ground_path: string | null }>(
+        sql`select handle, cover_path, ground_path from crm_delete_profile_page(${owner}::uuid, ${scope.workspaceId}::uuid, ${profileId}::uuid)`,
       );
-      handle = found.rows[0]?.handle;
+      gone = found.rows[0];
     } catch (error) {
       const pg = postgresError(error);
       if (pg?.code === '55000') throw refuse('CONFIG_INVALID', 'Keep at least one link page.');
       throw error;
     }
-    if (handle === null || handle === undefined) throw refuse('NOT_FOUND', PAGE_GONE);
-    return { pages: (await linkPagesOf(tx, owner, scope.workspaceId)).map(summaryOf), handle };
+    if (gone === undefined) throw refuse('NOT_FOUND', PAGE_GONE);
+    return {
+      pages: (await linkPagesOf(tx, owner, scope.workspaceId)).map(summaryOf),
+      handle: gone.handle,
+      photos: [gone.cover_path, gone.ground_path].filter((path): path is string => path !== null),
+    };
   });
 }

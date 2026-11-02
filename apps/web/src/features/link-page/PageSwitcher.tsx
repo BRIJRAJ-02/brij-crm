@@ -75,7 +75,9 @@ export function PageSwitcher({ data, slug, pages, current, onPick, onChanged, on
       toasts.toast({ tone: 'success', message: strings.deleted });
       // The main page opens in its place, and focus goes to its tile rather than falling to the page.
       onChanged(left.find((page) => page.isPrimary)?.id);
-      focusLater(() => document.querySelector<HTMLElement>('[role="radiogroup"] input:checked'));
+      focusLater(() =>
+        document.querySelector<HTMLElement>(`[role="radiogroup"][aria-label="${strings.switcher}"] input:checked`),
+      );
     }, fail);
   };
   return (

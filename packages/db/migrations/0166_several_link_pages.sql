@@ -409,13 +409,13 @@ begin atomic
   where i.id = r.id and i.position is distinct from (r.n - 1)::smallint;
 end;
 --> statement-breakpoint
--- The page a handle names, by its current or an old handle: the person and workspace, the page's id, private name,
--- current handle, bio, look, search setting, share image and whether it is public, the person's name and picture
+-- The page a handle names, by its current or an old handle: the person and workspace, the page's id (never its
+-- private name, which is its owner's alone), current handle, bio, look, search setting, share image and whether it is public, the person's name and picture
 -- (unless hidden), never an email. A handle whose page was deleted still names its person, and finds their primary
 -- page. No row for a handle that names nobody, or unless that person is still an active member of that workspace.
 create function crm_handle_owner(wanted text)
   returns table (user_id uuid, workspace_id uuid, handle text, bio text, name text, image text, theme jsonb,
-    indexable boolean, share_image_version text, shown boolean, profile_id uuid, page_name text)
+    indexable boolean, share_image_version text, shown boolean, profile_id uuid)
   language sql
   stable
   security definer
@@ -424,7 +424,7 @@ create function crm_handle_owner(wanted text)
 begin atomic
   select p.user_id, p.workspace_id, p.handle, p.bio, u.name,
     case when coalesce(k.picture_hidden, false) then null else u.image end,
-    p.theme, p.indexable, p.share_image_version, p.shown_at is not null, p.id, p.name
+    p.theme, p.indexable, p.share_image_version, p.shown_at is not null, p.id
   from auth.public_handles h
   join auth.public_profiles p on p.user_id = h.user_id and p.workspace_id = h.workspace_id
     and (p.id = h.profile_id or (h.profile_id is null and p.is_primary))
@@ -1591,9 +1591,10 @@ $$;
 -- Deletes one of the caller's pages for good (AC-6416), its blocks and numbers with it. Its handles stay theirs,
 -- held against their 20 as every old handle is, and find their primary page. Never their only page there (55000
 -- `PROFILE_PAGE_LAST`); deleting the primary page makes the next in order primary. Answers the deleted page's
--- handle, so the caller can drop the edge's copies, or null when the page is not theirs there.
+-- handle, so the caller can drop the edge's copies, and the store paths of its cover and photo ground, so it can
+-- delete those files once this commits; no row when the page is not theirs there.
 create function crm_delete_profile_page(owner uuid, workspace uuid, profile uuid)
-  returns text
+  returns table (handle text, cover_path text, ground_path text)
   language plpgsql
   security definer
   set search_path = pg_catalog, pg_temp
@@ -1604,14 +1605,14 @@ declare
 begin
   if workspace is distinct from nullif(pg_catalog.current_setting('app.workspace_id', true), '')::uuid
     or profile is null or not public.crm_workspace_member(owner, workspace) then
-    return null;
+    return;
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('crm_public_handle:' || owner::text, 0));
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('crm_profile_items:' || owner::text, 0));
   select * into gone from auth.public_profiles p
   where p.id = profile and p.user_id = owner and p.workspace_id = workspace for update;
   if not found then
-    return null;
+    return;
   end if;
   select p.id into next_page from auth.public_profiles p
   where p.user_id = owner and p.workspace_id = workspace and p.id <> profile
@@ -1623,7 +1624,7 @@ begin
   if gone.is_primary then
     update auth.public_profiles p set is_primary = true where p.id = next_page;
   end if;
-  return gone.handle;
+  return query select gone.handle, gone.cover_path, gone.ground_path;
 end;
 $$;
 --> statement-breakpoint

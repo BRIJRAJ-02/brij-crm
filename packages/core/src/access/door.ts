@@ -866,7 +866,6 @@ interface HandleOwnerRow extends Record<string, unknown> {
   readonly share_image_version: string | null;
   readonly shown: boolean;
   readonly profile_id: string;
-  readonly page_name: string;
 }
 
 /** The person a handle names (current or old): their identity, current handle, and what their profile shows. */
@@ -918,7 +917,7 @@ async function handleOwner(
   if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return undefined;
   return db.withWorkspace(NO_WORKSPACE, async (tx) => {
     const found = await tx.execute<HandleOwnerRow>(
-      sql`select user_id::text as user_id, workspace_id::text as workspace_id, handle, bio, name, image, theme, indexable, share_image_version, shown, profile_id::text as profile_id, page_name from crm_handle_owner(${handle})`,
+      sql`select user_id::text as user_id, workspace_id::text as workspace_id, handle, bio, name, image, theme, indexable, share_image_version, shown, profile_id::text as profile_id from crm_handle_owner(${handle})`,
     );
     const [row] = found.rows;
     if (row === undefined) return undefined;

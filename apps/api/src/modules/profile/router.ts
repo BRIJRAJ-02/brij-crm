@@ -347,11 +347,15 @@ export const profileRouter = member.profile.router({
       return [...pages];
     }),
     delete: member.profile.pages.delete.handler(async ({ context, input }) => {
-      const { pages, handle } = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      const { pages, handle, photos } = await commitWrite(context, { mutationId: input.mutationId }, () =>
         deleteLinkPage(context.scope, input.profileId),
       );
-      // The deleted page stops being served at once: its handle now finds the person's primary page.
+      // The deleted page stops being served at once: its handle now finds the person's primary page, and a deleted
+      // primary page hands the booking pages' accent to the next one.
       await context.edgeCache.forget(linkPageCacheTags(handle));
+      await context.edgeCache.forget(brandCacheTags(context.scope.workspaceId));
+      // Its cover and photo ground go from the store too; nothing serves them any more.
+      if (photos.length > 0) await context.files?.remove([...photos]).catch(() => undefined);
       return [...pages];
     }),
   },
