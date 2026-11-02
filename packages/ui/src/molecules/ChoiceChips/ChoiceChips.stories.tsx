@@ -121,5 +121,7 @@ export const WithEnds: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('radiogroup')).toHaveAccessibleDescription('Not likely Very likely');
+    // The scale takes its column's width: a size container in a column that sizes to its content once collapsed.
+    await expect(canvas.getByRole('radiogroup').getBoundingClientRect().width).toBeGreaterThan(200);
   },
 };

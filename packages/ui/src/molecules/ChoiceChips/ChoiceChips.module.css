@@ -33,8 +33,11 @@
 
   /* A scale (ends): its points share the row's width evenly, from end word to end word. A long one (0 to 10) too
      narrow for one line of whole numbers takes two even rows (0 to 5 over 6 to 10), never a clipped 10. */
+  /* Its own width, the slot's: a size container has no width of its own to give a parent that sizes to its content,
+     so without it the scale collapses to nothing in a narrow column (the WithEnds screenshot, 2 November 2026). */
   .root[data-scale] {
     container-type: inline-size;
+    inline-size: 100%;
   }
 
   .root[data-scale] .row {

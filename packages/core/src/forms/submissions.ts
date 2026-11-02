@@ -659,7 +659,15 @@ export async function retrySubmission(
 ): Promise<SubmissionView> {
   requirePermission(scope, 'forms.manage');
   // A failed one was received when it arrived and fired `form.submitted` then, so a retry fires nothing (AC-6422).
-  return requeue(scope, registry, input.submissionId, 'failed', 'Only a failed submission can be retried.', hooks, false);
+  return requeue(
+    scope,
+    registry,
+    input.submissionId,
+    'failed',
+    'Only a failed submission can be retried.',
+    hooks,
+    false,
+  );
 }
 
 /** Deletes a submission (AC-575): its answers go; the records it created stay. */

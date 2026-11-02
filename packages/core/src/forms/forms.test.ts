@@ -904,7 +904,10 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
 });
 
 describe('a submission taken as received fires form.submitted (spec 0064, AC-6422)', () => {
-  const webhookDeps = { key: decodeWebhookKey(randomBytes(32).toString('base64')), checkHost: () => Promise.resolve(undefined) };
+  const webhookDeps = {
+    key: decodeWebhookKey(randomBytes(32).toString('base64')),
+    checkHost: () => Promise.resolve(undefined),
+  };
 
   /** The `form.submitted` deliveries queued in the workspace, oldest first. */
   const fired = (w: Awaited<ReturnType<typeof workspace>>) =>
