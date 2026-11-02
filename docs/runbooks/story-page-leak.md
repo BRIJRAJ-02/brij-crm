@@ -30,6 +30,7 @@ run behind it, and so far nothing has that.
 | 41478500792 | `wip/embed-only`, same branch | one page, fresh runner, nothing before it | crashed after **37** of 178 |
 | 41485749715 | car, f6d75ff14 | pass split | shard 1 **91/91**; the quarantined four **4/4**; the other 86 crashed after **3** |
 | 41490051715 | `wip/embed-handle-fix`, off `33dfbed7b` | one page, 178 files, fresh runner | crashed after **37** of 178 |
+| 41491888165 | car, 60fe63aec | pass split | shard 1 crashed after **37** of 91 |
 
 Read the first six rows alone and our tree looks implicated. Read the last four and it plainly is not: the
 same unchanged branch passes its whole set three times and then dies at 37.
@@ -65,36 +66,51 @@ same unchanged branch passes its whole set three times and then dies at 37.
 A green `stories (webkit)` is not evidence the problem is solved. It is still the gate, for us as for
 everyone, so a landing waits for a green one as it always would — but write down that it is one sample.
 
-Adding weight does make it likelier: a 300 row version of `FloatingBarScrolled`, in the library's heaviest
-story file, crashed shard 1 at 37 (41477180390), and dropping it to 40 rows cleared that. So keep story
-fixtures small. That is a tendency worth respecting, not a mechanism anyone has shown.
+Keep story fixtures small anyway, on general grounds: a 300 row version of `FloatingBarScrolled`, in the
+library's heaviest story file, sat in a run that crashed shard 1 at 37 (41477180390), and the next run after
+dropping it to 40 rows was green. But do not read that as cause and effect, which an earlier version of this
+page did: a later run with the 40 row version crashed shard 1 at **the same 37** (41491888165). Two samples
+either side of a change, at this variance, say nothing.
 
-## The one piece of possible structure: 37, twice
+## The structure: it dies after 37 files, whatever is scheduled
 
-The series so far, in the order observed: **62, 74, 5, 178, 178, 178, 37, (91 + 4 + 3), 37.**
+The series, in the order observed: **62, 74, 5, 178, 178, 178, 37, 37, (91 + 4 + 3), 37, 37.**
 
-Every figure appears once except **37, which has appeared twice** — 41478500792 on `wip/embed-only` and
-41490051715 on `wip/embed-handle-fix`. Both were a **full unsharded run of all 178 files from a cold
-runner**, on two branches whose trees differ by six `apps/web` files that no story imports.
+**37 has now appeared four times, and in both arrangements:**
 
-Nobody is claiming that means anything on a sample this small. It is either the only structure in the data
-or it is a coincidence, and the point of writing it down is that it is the only thing here we can actually
-test.
+| Run | Branch | Arrangement | Files in that page |
+|---|---|---|---|
+| 41477180390 | car | sharded, shard 1 | 37 of **91** |
+| 41478500792 | `wip/embed-only` | unsharded, cold runner | 37 of **178** |
+| 41490051715 | `wip/embed-handle-fix` | unsharded, cold runner | 37 of **178** |
+| 41491888165 | car | sharded, shard 1 | 37 of **91** |
+
+Four different trees, two different file counts per page, sharded and unsharded alike, and the same figure.
+Every other number in the series appears once.
+
+An earlier version of this page called it "37 twice, both on a full unsharded 178-file run", and said the
+sharded runs were not comparable. That was wrong, and it was wrong in the direction of a tidy story: the
+sharded runs land on 37 too. **What the page is scheduled to run does not change where it dies.** Whatever
+the limit is, it is counted in files, not in the content of those files, and not in how many are queued
+behind them.
+
+That makes the per-file cost the suspect rather than any file's weight — something allocated once per file
+and not released, hitting a ceiling at around the 37th. It also explains why the heaviest files pass
+happily in a page of their own: four files never reach the count.
+
+It does NOT explain 62, 74, 5, 3, or the three clean 178s, so this is a strong lead and not an answer.
 
 ### Start here: the experiment with a prediction
 
-Repeat the **full unsharded 178-file run from a cold runner** on an unchanged tree, several times.
+Repeat the same run on an unchanged tree several times, and vary only the number of files scheduled.
 
-- If the crash keeps landing on or near 37, the crash point is a function of the ordering and of what ran
-  before it, and the thing to look at next is what the 37th file in that order leaves behind.
-- If it scatters, 37 twice was chance, and the search moves to the runner and the image rather than the
-  suite.
+- If it keeps landing on 37 across different file counts, the limit is a count of files, and the next thing
+  to find is what is allocated per file and never released. Vitest browser mode with isolation on is the
+  obvious place: something per test file that outlives it.
+- If it scatters once the sample grows, the four 37s were chance and the search moves to the runner and the
+  image.
 
 Either outcome is informative, which is more than anything else on this page offers.
-
-**The sharded runs cannot be used for this.** They have a different ordering and a different number of files
-per page, so their figures are not comparable with the unsharded ones. The repeats have to be the plain
-178-file run or they mean nothing.
 
 ## If you pick this up
 
