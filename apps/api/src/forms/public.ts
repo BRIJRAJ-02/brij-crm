@@ -19,6 +19,7 @@ import {
   getPublicForm,
   isRefusal,
   postingRules,
+  resumePartial,
   submitForm,
   type JobRegistry,
   type PostingRules,
@@ -27,6 +28,7 @@ import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { commitWrite } from '../hooks.ts';
+import { isMachine, utcDay, visitorId } from '../analytics/visitor.ts';
 import { formBrandAnswer } from '../public/brand-css.ts';
 import { errorFields, log } from '../log.ts';
 import { captureFault } from '../monitoring/sentry.ts';
@@ -62,6 +64,12 @@ export interface PublicFormsDeps {
   readonly answersKey: string;
   /** Signs the hand off to a booking page after a send (AC-1057); `handoffKey` from the session secret. */
   readonly handoffKey?: Buffer;
+  /**
+   * The key daily visitor ids are made with (spec 0047), so an accepted submit marks today's visit complete
+   * (spec 0063, AC-6320). Without it nothing is counted; the submission itself is unaffected either way.
+   */
+  readonly visitorKey?: Buffer;
+  readonly now?: () => Date;
 }
 
 interface Variables {
@@ -144,7 +152,7 @@ function refusalAnswer(error: unknown, headers?: Record<string, string>): Respon
 }
 
 /** Whose post this is, by the form's posting settings: the hosted page, a listed site (signed when it must be), or nobody. */
-function postFrom(
+export function postFrom(
   posting: PostingRules,
   publicOrigin: string,
   origin: string | undefined,
@@ -167,6 +175,24 @@ export const PUBLIC_FORM_CACHE_CONTROL = 'no-store';
 export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: PublicFormsDeps): void {
   const { handoffKey } = deps;
   const allowedHosts = new Set([new URL(deps.publicOrigin).hostname]);
+  const now = deps.now ?? (() => new Date());
+
+  /**
+   * Today's visitor id for a submit (spec 0047), or undefined for a machine or with no key: the same daily hash
+   * the beacon uses, so a completion lands on the row the visit's view and start made. The address and the user
+   * agent go into the HMAC and neither is kept.
+   */
+  const submitVisitor = (c: Context<{ Variables: Variables }>, formId: string): string | undefined => {
+    const { visitorKey } = deps;
+    const userAgent = c.req.header('user-agent');
+    if (visitorKey === undefined || userAgent === undefined || isMachine(userAgent)) return undefined;
+    return visitorId(visitorKey, {
+      day: utcDay(now()),
+      ip: c.get('clientIp'),
+      userAgent,
+      place: `form:${formId}`,
+    });
+  };
 
   app.get('/public/forms/:publicKey', async (c) => {
     // Every read is a database read now nothing caches it (late trap #69): limited before the form is looked up, by
@@ -196,11 +222,23 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
       // Only a form whose look is Brand wears the kit (spec 0063, AC-6327). A plain form's read names none, so its
       // page links no brand stylesheet and draws no logo, whatever the workspace has saved.
       const worn = form.look.theme === 'brand' ? brand : undefined;
+      // A `?resume=` token (spec 0063, AC-6319): the answers and step kept for it ride with the form, so the page
+      // reopens where the visitor left off in one request. A token that is unknown, expired or another form's
+      // simply adds nothing — never an error, since the form itself is perfectly readable.
+      const given = c.req.query('resume');
+      const resumed =
+        given === undefined
+          ? undefined
+          : await resumePartial(scope, { formId, resumeToken: given }).catch(() => undefined);
       // Never kept: a pause, a resume or a new version shows on the visitor's next load, not a minute later.
-      return c.json(worn === undefined ? form : { ...form, brand: worn }, 200, {
-        'cache-control': PUBLIC_FORM_CACHE_CONTROL,
-        'x-robots-tag': 'noindex',
-      });
+      return c.json(
+        { ...form, ...(worn === undefined ? {} : { brand: worn }), ...(resumed === undefined ? {} : { resumed }) },
+        200,
+        {
+          'cache-control': PUBLIC_FORM_CACHE_CONTROL,
+          'x-robots-tag': 'noindex',
+        },
+      );
     } catch (error) {
       return refusalAnswer(error, { 'cache-control': PUBLIC_FORM_CACHE_CONTROL });
     }
@@ -248,6 +286,8 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
         return answer('FORBIDDEN_ORIGIN', 'This form takes submissions only from its own page and the sites it lists.');
       const ipHash = hashAddress(deps.ipSalt, c.get('clientIp'));
       const address = ipHash ?? 'unknown';
+      // The same daily hash the beacon keys on, so a completion lands on the row this visit's view made.
+      const visitor = submitVisitor(c, formId);
       /** 429 at the first spent limit, else undefined. */
       const limited = (checks: readonly (readonly [string, LimitRule])[]): Response | undefined => {
         for (const [key, limit] of checks) {
@@ -302,6 +342,10 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
               answersKey: deps.answersKey,
               publicOrigins: deps.publicOrigins,
               ...(ipHash === undefined ? {} : { ipHash }),
+              // The partial this fill was saved as goes with the submit, and today's visit becomes a completion
+              // (spec 0063, AC-6319, AC-6320). Both only for an accepted submission: the core decides that.
+              ...(body.resumeToken === undefined ? {} : { resumeToken: body.resumeToken }),
+              ...(visitor === undefined ? {} : { visitor }),
               ...(handoffKey === undefined ? {} : { signHandoff: (handoff) => signHandoff(handoffKey, handoff) }),
             },
             hooks,

@@ -11,7 +11,7 @@ import {
   calendarReconnectAsked,
   signInAlert,
 } from './templates/account.ts';
-import { formConfirmation, formSubmission } from './templates/forms.ts';
+import { formConfirmation, formResume, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
 import {
   editorAdded,
@@ -74,6 +74,16 @@ export const CATALOG: Catalog = {
         { label: 'What can we help with?', value: 'We want round robin across three reps.' },
       ],
       submittedAt: AT,
+      timeZone: 'Europe/London',
+    },
+  },
+  form_resume: {
+    template: formResume,
+    medium: 'email_form_confirmation',
+    sample: {
+      formName: 'Lead qualification',
+      resumeUrl: 'https://example.com/f/contact-us?resume=Zm9ybS1yZXN1bWUtdG9rZW4tc2FtcGxlLTMyLWJ5dGVz',
+      expiresAt: AT,
       timeZone: 'Europe/London',
     },
   },

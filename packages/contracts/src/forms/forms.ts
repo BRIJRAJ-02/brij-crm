@@ -11,6 +11,7 @@ import { WorkspaceScoped } from '../workspaces.ts';
 import { SubmissionContext } from './context.ts';
 import { FormDocument } from './document.ts';
 import { PublicForm } from './public.ts';
+import { FormAnalytics, FormAnalyticsInput } from './visits.ts';
 import { FormTemplateSummary, OfferedFormTemplateId } from './templates.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
 
@@ -569,6 +570,8 @@ export const formsContract = {
   list: oc.input(ListFormsInput).output(z.object({ items: z.array(FormSummary) })),
   get: oc.input(FormIdInput).output(FormView),
   attributes: oc.input(FormIdInput).output(FormTargetChoices),
+  /** How the form performs over a range (spec 0063, AC-6321): counts only, never a visitor. */
+  analytics: oc.input(FormAnalyticsInput).output(FormAnalytics),
   /** The draft as visitors would see it (AC-657): the hosted page's shape, sending nothing. */
   preview: oc.input(FormIdInput).output(PublicForm),
   slugAvailable: oc.input(SlugInput).output(z.object({ available: z.boolean() })),

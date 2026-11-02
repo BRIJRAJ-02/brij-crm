@@ -54,6 +54,7 @@ import {
 import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from './FormBrand.tsx';
 import { FlowView } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
+import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { PublishDialog } from './PublishDialog.tsx';
@@ -241,6 +242,14 @@ export function FormEditor(props: FormEditorProps) {
   }
 
   const isPublished = form.liveVersionNumber !== undefined;
+  // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
+  // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
+  // reuses what this already holds rather than asking again.
+  const analyticsView = useMemo(
+    () => (isPublished ? data.forms.analytics(slug, form.id, FORM_CHIP_RANGE) : undefined),
+    [isPublished, data, slug, form.id],
+  );
+  const questionStats = useQuestionStats(analyticsView);
   const isChanged = isPublished && !sameDocument(draft, form.live);
   const status = statusOf(form, isChanged);
   const liveIds = useMemo(() => new Set(form.live?.questions.map((question) => question.id) ?? []), [form.live]);
@@ -664,6 +673,9 @@ export function FormEditor(props: FormEditorProps) {
         );
       case 'install':
         return <InstallTab slug={slug} form={form} isReadOnly={!canManage} onFormChange={setForm} />;
+      case 'analytics':
+        // Only a live form has analytics, and the tab is offered only once it is published (see the tab list).
+        return <AnalyticsTab data={data} slug={slug} form={form} />;
       case 'submissions':
         return props.submissions === undefined ? null : (
           <SubmissionsTab
@@ -723,6 +735,7 @@ export function FormEditor(props: FormEditorProps) {
             />
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
+              {...(questionStats === undefined ? {} : { stats: questionStats })}
               onOpened={setPreviewRow}
               steps={{
                 steps: draft.steps,
@@ -945,6 +958,11 @@ export function FormEditor(props: FormEditorProps) {
                           id: 'submissions',
                           label: strings.tabSubmissions,
                           href: formHref(slug, form.id, 'submissions'),
+                        },
+                        {
+                          id: 'analytics',
+                          label: strings.tabAnalytics,
+                          href: formHref(slug, form.id, 'analytics'),
                         },
                       ]
                     : []),

@@ -15,6 +15,7 @@ import {
   type CalendarDisconnectedEmail,
   type EmailParams,
   type FormConfirmationEmail,
+  type FormResumeEmail,
   type FormSubmissionEmail,
   type ImportFinishedEmail,
   type JobFailedEmail,
@@ -195,6 +196,29 @@ export function queueFormConfirmation(
     ids: [input.submissionId],
     to: { address: input.address },
     ...(input.replyToMemberId === undefined ? {} : { replyToMemberId: input.replyToMemberId }),
+    params: input.params,
+  });
+}
+
+/**
+ * The resume link a visitor asked for (spec 0063, AC-6319), to the address
+ * they already typed into the form. Keyed by the partial and the day, so
+ * asking again the same day sends nothing more: one link a day per saved
+ * form, however many times the button is pressed.
+ */
+export function queueFormResume(
+  tx: WorkspaceTx,
+  input: {
+    readonly partialId: string;
+    readonly day: string;
+    readonly address: string;
+    readonly params: FormResumeEmail;
+  },
+): Promise<QueuedEmail> {
+  return queueEmail(tx, {
+    kind: 'form_resume',
+    ids: [input.partialId, input.day],
+    to: { address: input.address },
     params: input.params,
   });
 }

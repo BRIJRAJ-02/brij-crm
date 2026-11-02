@@ -132,6 +132,12 @@ export interface QuestionsSectionProps {
   readonly toasts: Toasts;
   /** The question a publish refused, and why: kept open, with the error inline. */
   readonly problem?: { readonly questionId: string; readonly message: string };
+  /**
+   * How each question performs, by question id (spec 0063, AC-6322): a short chip on the card's second line, so a
+   * weak question is visible where it is edited. Absent on a form with no analytics, and a question nobody has
+   * reached has no entry.
+   */
+  readonly stats?: ReadonlyMap<string, { readonly stat: string; readonly statTitle: string }>;
   /** A question to open and bring into view as the screen shows (a link from Settings' map of where answers go). */
   readonly focusQuestionId?: string;
   /** Whether the member may add attributes: an unfiled question is then filed onto a new one when the form is published. */
@@ -179,6 +185,7 @@ const BOOKING_TYPE_ITEMS = TYPE_ITEMS.filter((item) => BOOKING_ANSWER_TYPES.incl
 /** The questions: a header with the count and Add a question, then the cards. */
 export function QuestionsSection(props: QuestionsSectionProps) {
   const { questions, onChange, attributes, objectName, liveIds, newId, toasts, problem, isReadOnly } = props;
+  const { stats } = props;
   const isFilingOff = props.isFilingOff === true;
   const isLocked = (question: FormQuestion) => props.locked?.ids.has(question.id) === true;
   const words =
@@ -327,6 +334,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             conditionsLine(question.showWhen, questionFacts(questions.slice(0, questions.indexOf(question)))),
           ),
         }),
+    ...(stats?.get(question.id) ?? {}),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
   // With dividers, each in its place among the questions (spec 0063): a step's place and title, what it holds, its

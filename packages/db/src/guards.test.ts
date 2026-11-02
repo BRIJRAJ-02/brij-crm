@@ -1814,6 +1814,10 @@ describe('forms (spec 0023, milestone 1)', () => {
     const versionId = randomUUID();
     const submissionId = randomUUID();
     const publicKey = `key${randomUUID().replaceAll('-', '')}`;
+    const partialId = randomUUID();
+    // A token hash is 64 hex digits, and a visitor 32: both are checked by the tables themselves.
+    const tokenHash = randomUUID().replaceAll('-', '').repeat(2);
+    const visitor = randomUUID().replaceAll('-', '');
     await db.withWorkspace(workspaceId, async (tx) => {
       await tx.execute(
         sql`insert into records (workspace_id, id, object_id, created_by_type, updated_by_type) values (${workspaceId}, ${recordId}, ${objectId}, 'system', 'system')`,
@@ -1830,8 +1834,15 @@ describe('forms (spec 0023, milestone 1)', () => {
       await tx.execute(
         sql`insert into form_submission_records (workspace_id, submission_id, object_id, record_id, action, role) values (${workspaceId}, ${submissionId}, ${objectId}, ${recordId}, 'created', 'main')`,
       );
+      // Save and resume, and a day's visit counts (spec 0063, AC-6329): both tenant tables, in this workspace.
+      await tx.execute(
+        sql`insert into form_partials (workspace_id, id, form_id, version_id, token_hash, answers, expires_at) values (${workspaceId}, ${partialId}, ${formId}, ${versionId}, ${tokenHash}, '{}', now() + interval '30 days')`,
+      );
+      await tx.execute(
+        sql`insert into form_visits (workspace_id, form_id, day, visitor, version_id, source) values (${workspaceId}, ${formId}, (now() at time zone 'UTC')::date, ${visitor}, ${versionId}, 'direct')`,
+      );
     });
-    return { objectId, recordId, formId, versionId, submissionId, publicKey };
+    return { objectId, recordId, formId, versionId, submissionId, publicKey, partialId, tokenHash, visitor };
   };
 
   it("reads none of another workspace's forms, versions, submissions or touched records", async () => {
@@ -1851,6 +1862,42 @@ describe('forms (spec 0023, milestone 1)', () => {
       tx.execute<{ record_id: string }>(sql`select record_id::text from form_submission_records`),
     );
     expect(touched.rows).toEqual([{ record_id: inA.recordId }]);
+    // Save and resume, and the visit counts (spec 0063, AC-6329): a cross workspace read of either returns
+    // nothing, even with no filter at all. B's rows exist, so an empty answer here is isolation, not an empty table.
+    const partials = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`select id::text as id from form_partials`),
+    );
+    expect(partials.rows).toEqual([{ id: inA.partialId }]);
+    const visits = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ visitor: string }>(sql`select visitor from form_visits`),
+    );
+    expect(visits.rows).toEqual([{ visitor: inA.visitor }]);
+    // B's own rows are there, read from B: the reads above were scoped, not simply empty.
+    const partialsInB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`select id::text as id from form_partials`),
+    );
+    expect(partialsInB.rows).toEqual([{ id: inB.partialId }]);
+    // A resume token is found by its hash inside one workspace only: B's token opens nothing in A.
+    const foreignToken = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`select id::text as id from form_partials where token_hash = ${inB.tokenHash}`),
+    );
+    expect(foreignToken.rows).toEqual([]);
+    // A visitor is a daily hash and can be nothing else: the table refuses an address outright (AC-6320).
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into form_visits (workspace_id, form_id, day, visitor, version_id) values (${a.workspaceId}, ${inA.formId}, (now() at time zone 'UTC')::date - 1, '203.0.113.9', ${inA.versionId})`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'form_visits_visitor' } });
+    // A partial of A's naming B's version: the composite key finds no such version in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into form_partials (workspace_id, form_id, version_id, token_hash, answers, expires_at) values (${a.workspaceId}, ${inA.formId}, ${inB.versionId}, ${randomUUID().replaceAll('-', '').repeat(2)}, '{}', now())`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'form_partials_version' } });
     // A's submission naming B's record: the composite key finds no such record in A.
     await expect(
       db.withWorkspace(a.workspaceId, (tx) =>
@@ -1870,6 +1917,22 @@ describe('forms (spec 0023, milestone 1)', () => {
         }
       }),
     ).rejects.toMatchObject({ cause: { code: '23505', constraint: 'form_submissions_attempt' } });
+  });
+
+  it('forces row level security on form_partials and form visits, each with its own policy (AC-6329)', async () => {
+    // The sweep above enumerates the catalog, so it covers these two as well. This names them, so dropping the
+    // RLS tail from their migration fails a test that says which table and why, not one that says "some table".
+    const found = await owner.query<{ table: string; enabled: boolean; forced: boolean; policies: number }>(`
+      select c.relname as table, c.relrowsecurity as enabled, c.relforcerowsecurity as forced,
+        (select count(*)::int from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname) as policies
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relname in ('form_partials', 'form_visits')
+      order by c.relname
+    `);
+    expect(found.rows).toEqual([
+      { table: 'form_partials', enabled: true, forced: true, policies: 1 },
+      { table: 'form_visits', enabled: true, forced: true, policies: 1 },
+    ]);
   });
 
   it('finds a form by its public key across workspaces, answering ids only', async () => {

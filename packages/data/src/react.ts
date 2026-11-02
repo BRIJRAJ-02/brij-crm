@@ -27,6 +27,7 @@ import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, Calend
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from './calendar/calendars.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
+import type { FormAnalyticsHeld, FormAnalyticsState } from './forms/analytics.ts';
 import type { RoutingReportHeld, RoutingReportState } from './routing/reports.ts';
 import type { PageRulesHeld } from './routing/page-rules.ts';
 import type { AutomationsHeld, AutomationsState } from './automations/store.ts';
@@ -442,6 +443,15 @@ export function useTeamToday(view: HomeHeld<TeamTodayState>): TeamTodayState {
  * screen is mounted, so it is read again when the person comes back to the page or marks a booking no show.
  */
 export function useRoutingReport(view: RoutingReportHeld): RoutingReportState {
+  return useRetained(view);
+}
+
+/**
+ * A form's analytics over a range (spec 0063, AC-6321), re-rendering when it is read again. Held while the
+ * Analytics tab is mounted, so it is read again whenever the person comes back to the page: a visitor's view or
+ * submission sends no change event into this workspace, so returning to the tab is the refresh.
+ */
+export function useFormAnalytics(view: FormAnalyticsHeld): FormAnalyticsState {
   return useRetained(view);
 }
 

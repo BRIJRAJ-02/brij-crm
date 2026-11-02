@@ -7,7 +7,7 @@
 export { formsHref } from '../captures/tabs.ts';
 
 /** A form's tabs. */
-export const FORM_TABS = ['form', 'settings', 'install', 'submissions'] as const;
+export const FORM_TABS = ['form', 'settings', 'install', 'submissions', 'analytics'] as const;
 /** One of a form's tabs. */
 export type FormTab = (typeof FORM_TABS)[number];
 

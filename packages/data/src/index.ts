@@ -63,6 +63,7 @@ import type {
   CreateFormInput,
   CreateWorkspaceInput,
   contract,
+  FormAnalyticsRange,
   FormDocument,
   FormStatus,
   FormSummary,
@@ -166,6 +167,7 @@ import {
   type HomeRecentsState,
   type TeamTodayState,
 } from './home/store.ts';
+import { createFormAnalytics, type FormAnalyticsHeld } from './forms/analytics.ts';
 import {
   createRoutingReports,
   type RoutingReportDays,
@@ -509,6 +511,8 @@ export type {
   OnboardingArea,
   OnboardingRole,
   OnboardingTeamSize,
+  FormAnalytics,
+  FormAnalyticsRange,
   FormAttributeChoice,
   FormDocument,
   FormLook,
@@ -663,6 +667,7 @@ export type {
 } from './bookings/store.ts';
 export type { TeamDay, TeamDayColumn, TeamDayIssue, TeamDayItem, TeamDayOrder, TeamDaySpan } from '@crm/contracts';
 export type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
+export type { FormAnalyticsHeld, FormAnalyticsState } from './forms/analytics.ts';
 export type {
   RoutingReportDays,
   RoutingReportHeld,
@@ -2461,6 +2466,10 @@ export function createDataLayer({
 
   // Routing reports (spec 0043, AC-1612): held per workspace, surface and window, read again on return and after a
   // no show mark lands.
+  const formAnalyticsReads = createFormAnalytics({
+    read: (workspace, formId, range) =>
+      beforeRead(workspace).then(() => call((options) => api.forms.analytics({ workspace, formId, range }, options))),
+  });
   const routingReports = createRoutingReports({
     report: (workspace, surface, days) =>
       beforeRead(workspace).then(() => call((options) => api.routing.report({ workspace, surface, days }, options))),
@@ -6971,6 +6980,12 @@ export function createDataLayer({
       /** The target object and the attributes a question may be filed on (AC-658). */
       attributes: (workspace: string, formId: string) =>
         call((options) => api.forms.attributes({ workspace, formId }, options)),
+      /**
+       * How the form performs over a range (spec 0063, AC-6321): held while the Analytics tab shows it, and read
+       * again whenever the person comes back to the page, since a visitor's view sends no change event here.
+       */
+      analytics: (workspace: string, formId: string, range: FormAnalyticsRange): FormAnalyticsHeld =>
+        formAnalyticsReads.view(workspace, formId, range),
       /** The draft as visitors would see it (AC-657); sends nothing. */
       preview: (workspace: string, formId: string) =>
         call((options) => api.forms.preview({ workspace, formId }, options)),

@@ -98,6 +98,7 @@ export const strings = {
   tabSettings: 'Settings',
   tabInstall: 'Install',
   tabSubmissions: 'Submissions',
+  tabAnalytics: 'Analytics',
   published: (version: number) => `Published version ${String(version)}.`,
   madeUnique: (field: string, objectName: string) => `${field} is now unique on ${objectName}: one record per email.`,
   viewField: 'View field',
@@ -594,6 +595,45 @@ export const strings = {
   flowNoLine: 'No line',
   flowEdit: 'Edit',
   flowClose: 'Close',
+  // Analytics (spec 0063, AC-6321, AC-6322). Short on purpose (spec 0058, AC-3).
+  analytics: 'Analytics',
+  analyticsPeriod: 'Period',
+  analyticsDays: (days: number) => `${String(days)} days`,
+  analyticsViews: 'Views',
+  analyticsStarts: 'Starts',
+  analyticsCompletion: 'Completion',
+  analyticsMedian: 'Median time',
+  /** The change against the period before, beside its arrow: "+8 vs 30 days before", so nothing has to be subtracted. */
+  analyticsChange: (change: string, days: number) => `${change} vs ${String(days)}\u00a0days before`,
+  analyticsNoChange: (days: number) => `Same as the ${String(days)}\u00a0days before`,
+  /** The median is the one figure where less is better, so its change says so in words rather than by an arrow. */
+  analyticsFaster: (by: string) => `${by} faster`,
+  analyticsSlower: (by: string) => `${by} slower`,
+  analyticsNoMedian: 'No finishes yet',
+  analyticsDay: 'Day',
+  analyticsChart: (days: number) => `Views per day over the last ${String(days)} days`,
+  analyticsDropOff: 'Where people stop',
+  analyticsDropOffChart: 'People who stopped on each question',
+  analyticsQuestion: 'Question',
+  /** A question's place in the form, as the drop off chart's axis label: "Q4". */
+  analyticsQuestionAt: (at: number) => `Q${String(at)}`,
+  analyticsSummary: 'Headline figures',
+  analyticsLeft: 'Stopped here',
+  analyticsSources: 'Where they come from',
+  analyticsSource: 'Source',
+  analyticsCompletions: 'Finished',
+  analyticsDirect: 'Direct',
+  analyticsEmpty: 'No visits yet',
+  analyticsEmptyText: 'Share the form’s link to see how it performs.',
+  analyticsNoneInRange: 'No visits in this period',
+  analyticsNoneInRangeText: 'Try a longer period.',
+  analyticsNoSources: 'Nothing yet',
+  analyticsFailed: 'Analytics didn’t load',
+  /** A question card's chip (AC-6322): "82% answered", or nothing at all when nobody reached it. */
+  analyticsChip: (answered: string) => `${answered} answered`,
+  /** What the chip's percentage is of, as its tooltip: the denominator, which the card has no room to say. */
+  analyticsReached: (answered: string, reached: string) => `${answered} of the ${reached} who reached this question`,
+
   status: {
     draft: 'Not published',
     live: 'Live',

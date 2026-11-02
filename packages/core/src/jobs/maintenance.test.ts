@@ -415,6 +415,87 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(job.result).toMatchObject({ cleanup: { views: 2 } });
   });
 
+  /** A live form with one published version, for the two spec 0063 retention phases. */
+  async function formFor(workspaceId: string) {
+    const formId = newId();
+    const versionId = newId();
+    await testQuery(
+      ownerUrl,
+      // Inserted as a draft, then made live with its version in one update: `forms_live_version` ties the two.
+      `insert into forms (workspace_id, id, name, public_key, signing_secret, created_by_type, updated_by_type)
+       values ($1, $2, 'Contact us', $3, 'secret', 'system', 'system')`,
+      [workspaceId, formId, `k${newId().replaceAll('-', '')}`],
+    );
+    await testQuery(
+      ownerUrl,
+      `insert into form_versions (workspace_id, id, form_id, number, document, published_at, published_by_type, created_by_type, updated_by_type)
+       values ($1, $2, $3, 1, '{}', now(), 'system', 'system', 'system')`,
+      [workspaceId, versionId, formId],
+    );
+    await testQuery(ownerUrl, `update forms set live_version_id = $1, status = 'live' where id = $2`, [
+      versionId,
+      formId,
+    ]);
+    return { formId, versionId };
+  }
+
+  it('removes part filled forms past their thirty days, and keeps the rest (spec 0063, AC-6319)', async () => {
+    const t = await team([]);
+    const { formId, versionId } = await formFor(t.workspaceId);
+    // Two expired and two still live: the phase goes by `expires_at`, not by age.
+    for (const [minutes, mark] of [
+      [-120, 'a'],
+      [-1, 'b'],
+      [60, 'c'],
+      [43_200, 'd'],
+    ] as const) {
+      await testQuery(
+        ownerUrl,
+        `insert into form_partials (workspace_id, form_id, version_id, token_hash, answers, step_id, expires_at)
+         values ($1, $2, $3, $4, '{}', $5, now() + make_interval(mins => $6::integer))`,
+        [t.workspaceId, formId, versionId, mark.repeat(64), mark, minutes],
+      );
+    }
+    const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    const left = await testQuery<{ step_id: string }>(
+      ownerUrl,
+      'select step_id from form_partials where form_id = $1 order by 1',
+      [formId],
+    );
+    expect(left.map((row) => row.step_id)).toEqual(['c', 'd']);
+    const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
+    expect(job.result).toMatchObject({ cleanup: { partials: 2 } });
+  });
+
+  it('removes form visit rows older than thirteen months, and keeps the rest (spec 0063, AC-6320)', async () => {
+    const t = await team([]);
+    const { formId, versionId } = await formFor(t.workspaceId);
+    for (const [age, visitor] of [
+      [500, 'a'],
+      [400, 'b'],
+      [395, 'c'],
+      [0, 'd'],
+    ] as const) {
+      await testQuery(
+        ownerUrl,
+        `insert into form_visits (workspace_id, form_id, day, visitor, version_id, source)
+         values ($1, $2, (now() at time zone 'UTC')::date - $3::integer, $4, $5, 'direct')`,
+        [t.workspaceId, formId, age, visitor.repeat(32), versionId],
+      );
+    }
+    const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    const left = await testQuery<{ visitor: string }>(
+      ownerUrl,
+      'select left(visitor, 1) as visitor from form_visits where form_id = $1 order by 1',
+      [formId],
+    );
+    expect(left.map((row) => row.visitor)).toEqual(['c', 'd']);
+    const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
+    expect(job.result).toMatchObject({ cleanup: { formVisits: 2 } });
+  });
+
   it('makes the link page a membership’s own transaction didn’t make, once (26 Oct 2026)', async () => {
     const t = await team([]);
     const userId = randomUUID();

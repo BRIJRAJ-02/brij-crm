@@ -32,6 +32,9 @@ const QUESTIONS: readonly QuestionListItem[] = [
     isRequired: false,
     choiceCount: 3,
     filed: 'Person › Budget band',
+    // Spec 0063, AC-6322: how the question performs, where it is edited.
+    stat: '72% answered',
+    statTitle: '72% of the 88 who reached this question',
   },
   {
     id: 'new',

@@ -205,6 +205,15 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // write already opened, and the path builder is pure.
   'copyFiledFile',
   'recordFilePath',
+  // Save and resume, and the confirmation (spec 0063): the token hash and the minting are pure, deleting a
+  // partial and completing a visit run inside the submit's own transaction (they take its `tx`), and the
+  // confirmation and its rows run inside the processing job's, under the scope that job already opened.
+  'partialTokenHash',
+  'mintResumeToken',
+  'dropPartial',
+  'completeFormVisit',
+  'tellVisitor',
+  'confirmationRows',
   // The visitor a form hands to a booking page, read from its answers: a pure helper, no scope.
   'visitorOf',
   // A workspace's public key for a snippet's tagging: a one way digest of its id, no scope.
@@ -255,6 +264,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'queueEmails',
   'queueFormSubmissionNotice',
   'queueFormConfirmation',
+  // The visitor's resume link (spec 0063, AC-6319): queued inside the caller's own transaction, like every other
+  // queue function, after the public form scope's own check.
+  'queueFormResume',
   'queueCalendarDisconnected',
   // The calendar health sweep's hold (spec 0037, AC-1311): pure, two counts in.
   'isMassOutage',

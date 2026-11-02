@@ -91,12 +91,13 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
  */
 function FormPending() {
   const { tab } = Route.useSearch();
-  const published = tab === 'install' || tab === 'submissions';
+  const published = tab === 'install' || tab === 'submissions' || tab === 'analytics';
   const label: Readonly<Record<FormTab, string>> = {
     form: strings.tabForm,
     settings: strings.tabSettings,
     install: strings.tabInstall,
     submissions: strings.tabSubmissions,
+    analytics: strings.tabAnalytics,
   };
   return (
     <LoadingNow>

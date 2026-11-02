@@ -50,7 +50,7 @@ import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
 import { pruneNavRows } from '../../navigation/navigation.ts';
 import { notifyTasksDue } from '../../notifications/notify.ts';
-import { SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS, WEBHOOK_LOG_DAYS } from '@crm/contracts';
+import { FORM_VISITS_KEPT_DAYS, SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS, WEBHOOK_LOG_DAYS } from '@crm/contracts';
 import { ensureLinkPage, publicProfilesOf } from '../../booking/handles.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
@@ -83,6 +83,8 @@ const PHASES = [
   'notifications',
   'task_due',
   'views',
+  'partials',
+  'form_visits',
   'profile_counts',
   'link_pages',
   'released_handles',
@@ -136,6 +138,10 @@ const Totals = z.object({
   tasksDue: Count.default(0),
   // Added by spec 0047: booking page view rows past a year.
   views: Count.default(0),
+  // Added by spec 0063 (AC-6319): part filled forms past their 30 days, which nobody came back to.
+  partials: Count.default(0),
+  // Added by spec 0063 (AC-6320): form visit rows past their thirteen months.
+  formVisits: Count.default(0),
   // Added by spec 0051: link page view and press rows past a year.
   profileCounts: Count.default(0),
   // Added 26 Oct 2026: the link pages a membership's own transaction didn't make.
@@ -174,6 +180,8 @@ const NO_TOTALS: Totals = {
   notifications: 0,
   tasksDue: 0,
   views: 0,
+  partials: 0,
+  formVisits: 0,
   profileCounts: 0,
   linkPages: 0,
   linkPagesMissed: 0,
@@ -241,6 +249,8 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   notifications: totals.notifications + (more.notifications ?? 0),
   tasksDue: totals.tasksDue + (more.tasksDue ?? 0),
   views: totals.views + (more.views ?? 0),
+  partials: totals.partials + (more.partials ?? 0),
+  formVisits: totals.formVisits + (more.formVisits ?? 0),
   profileCounts: totals.profileCounts + (more.profileCounts ?? 0),
   linkPages: totals.linkPages + (more.linkPages ?? 0),
   linkPagesMissed: totals.linkPagesMissed + (more.linkPagesMissed ?? 0),
@@ -395,6 +405,46 @@ async function oldPageViews(context: WriteContext, at: Checkpoint, limit: number
   const totals = plus(at.totals, { views: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
+
+/**
+ * Phase 1g (spec 0063, AC-6319): part filled forms past their thirty days,
+ * `limit` a batch, soonest expiry first. A partial is never a submission, so
+ * nothing but the row goes: no record, no event, nobody told. The expiry is
+ * checked on every resume read too, so a row this phase hasn't reached yet
+ * already opens nothing.
+ */
+async function expiredPartials(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const removed = await context.tx.execute(sql`
+    delete from form_partials where (workspace_id, id) in (
+      select workspace_id, id from form_partials
+      where workspace_id = ${context.scope.workspaceId} and expires_at <= now()
+      order by expires_at limit ${limit}
+    )
+  `);
+  const count = removed.rowCount ?? 0;
+  const totals = plus(at.totals, { partials: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1h (spec 0063, AC-6320): form visit rows older than thirteen months,
+ * `limit` a batch, oldest days first. Counts only, and each row held nothing
+ * but a daily hash that stopped meaning anything the day after it was made.
+ */
+async function oldFormVisits(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const removed = await context.tx.execute(sql`
+    delete from form_visits where (workspace_id, form_id, day, visitor) in (
+      select workspace_id, form_id, day, visitor from form_visits
+      where workspace_id = ${context.scope.workspaceId}
+        and day < (now() at time zone 'UTC')::date - ${FORM_VISITS_KEPT_DAYS}::integer
+      order by day limit ${limit}
+    )
+  `);
+  const count = removed.rowCount ?? 0;
+  const totals = plus(at.totals, { formVisits: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
 
 /**
  * Phase 1g (spec 0051, AC-5128): link page view and press rows older than a year, `limit` of each a batch, through
@@ -853,6 +903,10 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return tasksDue(context, at, job.params.day, limit);
         case 'views':
           return oldPageViews(context, at, limit);
+        case 'partials':
+          return expiredPartials(context, at, limit);
+        case 'form_visits':
+          return oldFormVisits(context, at, limit);
         case 'profile_counts':
           return oldProfileCounts(context, at, limit);
         case 'link_pages':

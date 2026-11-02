@@ -3,6 +3,7 @@ import {
   createFormFromTemplate,
   deleteForm,
   duplicateForm,
+  formAnalytics,
   formAttributes,
   getForm,
   isSlugAvailable,
@@ -30,6 +31,10 @@ export const formsRouter = member.forms.router({
   get: member.forms.get.handler(({ context, input }) => getForm(context.scope, { formId: input.formId })),
   attributes: member.forms.attributes.handler(({ context, input }) =>
     formAttributes(context.scope, { formId: input.formId }),
+  ),
+  // A form's analytics (spec 0063, AC-6321): read only, and only for a form this member may see.
+  analytics: member.forms.analytics.handler(({ context, input }) =>
+    formAnalytics(context.scope, { formId: input.formId, range: input.range }),
   ),
   preview: member.forms.preview.handler(({ context, input }) => previewForm(context.scope, { formId: input.formId })),
   slugAvailable: member.forms.slugAvailable.handler(({ context, input }) =>
