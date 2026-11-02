@@ -144,7 +144,9 @@ async function hostPage() {
 
 /** A guest who connected Google as `email` on the page at `key`: the browser's guest cookie. */
 async function connectGuest(key: string, email: string): Promise<string> {
-  const start = await browse(`/api/public/booking/${key}/connect?return=${encodeURIComponent(`/b/${key}?d=30`)}`);
+  const start = await browse(
+    `/api/public/booking/${key}/connect?via=app&return=${encodeURIComponent(`/b/${key}?d=30`)}`,
+  );
   const state = new URL(start.headers.get('location') ?? '').searchParams.get('state') ?? '';
   const back = await browse(
     `${GUEST_CALLBACK_PATH}?code=${encodeURIComponent(`code:${email}`)}&state=${encodeURIComponent(state)}`,
@@ -162,7 +164,9 @@ const slotsOf = async (response: Response) =>
 describe('a guest connecting Google for the visit (AC-721, AC-722)', () => {
   it('sends the guest to consent with a signed state, and back to the same page connected', async () => {
     const { key } = await hostPage();
-    const start = await browse(`/api/public/booking/${key}/connect?return=${encodeURIComponent(`/b/${key}?d=30`)}`);
+    const start = await browse(
+      `/api/public/booking/${key}/connect?via=app&return=${encodeURIComponent(`/b/${key}?d=30`)}`,
+    );
     expect(start.status).toBe(302);
     const location = new URL(start.headers.get('location') ?? '');
     expect(location.origin).toBe('https://guest.fake');
@@ -200,14 +204,29 @@ describe('a guest connecting Google for the visit (AC-721, AC-722)', () => {
     });
   });
 
+  it('hops a start through the app’s own address first, once, so the callback can read its cookie', async () => {
+    const { key } = await hostPage();
+    const start = await browse(`/api/public/booking/${key}/connect?return=${encodeURIComponent(`/b/${key}`)}`);
+    expect(start.status).toBe(302);
+    const hop = new URL(start.headers.get('location') ?? '');
+    expect(hop.origin).toBe(APP_URL);
+    expect(hop.pathname).toBe(`/api/public/booking/${key}/connect`);
+    expect(hop.searchParams.get('via')).toBe('app');
+    expect(hop.searchParams.get('return')).toBe(`/b/${key}`);
+    expect(cookieOf(start, GUEST_STATE_COOKIE)).toBe('');
+    const onward = await browse(`${hop.pathname}${hop.search}`);
+    expect(new URL(onward.headers.get('location') ?? '').origin).toBe('https://guest.fake');
+    expect(cookieOf(onward, GUEST_STATE_COOKIE)).not.toBe('');
+  });
+
   it('sends nobody anywhere but this page, and refuses a state without its cookie', async () => {
     const { key } = await hostPage();
     for (const given of ['https://evil.example/b/x', '//evil.example', `/b/${key}/../../x`, '/b/AAAAAAAAAAAAAAAA']) {
-      const start = await browse(`/api/public/booking/${key}/connect?return=${encodeURIComponent(given)}`);
+      const start = await browse(`/api/public/booking/${key}/connect?via=app&return=${encodeURIComponent(given)}`);
       expect(start.headers.get('location')).toBe(`${APP_URL}/`);
       expect(cookieOf(start, GUEST_STATE_COOKIE)).toBe('');
     }
-    const start = await browse(`/api/public/booking/${key}/connect?return=${encodeURIComponent(`/b/${key}`)}`);
+    const start = await browse(`/api/public/booking/${key}/connect?via=app&return=${encodeURIComponent(`/b/${key}`)}`);
     const state = new URL(start.headers.get('location') ?? '').searchParams.get('state') ?? '';
     // Another browser (no nonce cookie) gets nothing.
     const elsewhere = await browse(
@@ -226,7 +245,9 @@ describe('a guest connecting Google for the visit (AC-721, AC-722)', () => {
   it('says when the guest declined or unticked free and busy, and keeps nothing', async () => {
     const { key } = await hostPage();
     const go = async (query: string) => {
-      const start = await browse(`/api/public/booking/${key}/connect?return=${encodeURIComponent(`/b/${key}`)}`);
+      const start = await browse(
+        `/api/public/booking/${key}/connect?via=app&return=${encodeURIComponent(`/b/${key}`)}`,
+      );
       const state = new URL(start.headers.get('location') ?? '').searchParams.get('state') ?? '';
       return browse(
         `${GUEST_CALLBACK_PATH}?${query}&state=${encodeURIComponent(state)}`,

@@ -80,8 +80,8 @@ export const Why: Story = {
   parameters: { crm: { preview: true } },
   play: async () => {
     const dialog = await screen.findByRole('dialog');
-    await expect(dialog).toHaveTextContent('times you’re both free');
-    await expect(dialog).toHaveTextContent('never what’s on your calendar');
+    await expect(dialog).toHaveTextContent('are both free');
+    await expect(dialog).toHaveTextContent('only see free or busy');
   },
 };
 
@@ -100,7 +100,7 @@ export const Matched: Story = {
   args: { step: 'matched', visitor: ADA, result: RESULT, onBook: fn() },
   play: async ({ args }) => {
     const dialog = await screen.findByRole('dialog');
-    await expect(dialog).toHaveTextContent('You’re both free at 9:30 AM on Tue 20 Oct. Shall we book it?');
+    await expect(dialog).toHaveTextContent('You’re both free at 9:30 AM on Tue 20 Oct.');
     await expect(dialog).toHaveTextContent('7 times matched.');
     await expect(dialog).toHaveTextContent('with a gap either side');
     // Every step offers a way to say no, not only the header's close button.
@@ -148,7 +148,7 @@ export const SoonestOnly: Story = {
   parameters: { crm: { screenshot: false } },
   play: async () => {
     const dialog = await screen.findByRole('dialog');
-    await expect(dialog).toHaveTextContent('This is the soonest time you’re both free.');
+    await expect(dialog).toHaveTextContent('The soonest time you’re both free.');
     await expect(dialog).not.toHaveTextContent('with a gap either side');
   },
 };
@@ -172,7 +172,7 @@ export const OneMatch: Story = {
 export const Unmatched: Story = {
   args: { step: 'unmatched', visitor: ADA, onShowAll: fn() },
   play: async ({ args }) => {
-    await expect(await screen.findByRole('dialog')).toHaveTextContent('no open time in common');
+    await expect(await screen.findByRole('dialog')).toHaveTextContent('No shared free time');
     await userEvent.click(await screen.findByRole('button', { name: 'Show all times' }));
     await expect(args.onShowAll).toHaveBeenCalledOnce();
     await expect(args.onOpenChange).toHaveBeenCalledWith(false);
