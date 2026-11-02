@@ -19,6 +19,7 @@ import {
   type ImportFinishedEmail,
   type JobFailedEmail,
   type QueuedEmailKind,
+  type WebhookEndpointOffEmail,
   type WorkspaceWelcomeEmail,
 } from '@crm/contracts/emails';
 import type { WorkspaceTx } from '@crm/db';
@@ -272,6 +273,28 @@ export function queueWorkspaceWelcome(
   return queueEmail(tx, {
     kind: 'workspace_welcome',
     ids: [input.memberId],
+    to: { memberId: input.memberId },
+    params: input.params,
+  });
+}
+
+/**
+ * A webhook endpoint turned off after 3 days of failed deliveries (spec 0064, AC-6423), to one owner or admin. Keyed by
+ * the endpoint and when its failing spell began (milliseconds since 1970), so a retried job makes one email each, and
+ * a later spell tells them again.
+ */
+export function queueWebhookEndpointOff(
+  tx: WorkspaceTx,
+  input: {
+    readonly endpointId: string;
+    readonly spellMillis: string;
+    readonly memberId: string;
+    readonly params: WebhookEndpointOffEmail;
+  },
+): Promise<QueuedEmail> {
+  return queueEmail(tx, {
+    kind: 'webhook_endpoint_off',
+    ids: [input.endpointId, input.spellMillis, input.memberId],
     to: { memberId: input.memberId },
     params: input.params,
   });

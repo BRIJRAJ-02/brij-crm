@@ -34,6 +34,7 @@ import type { Actor, EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { submissionNotices } from '../forms/submissions.ts';
 import { linkedDisplays, readTaskViews } from '../tasks/tasks.ts';
+import { hostOf } from '../webhooks/addresses.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 
 /** What a notification id that isn't the caller's (or doesn't exist) answers. */
@@ -103,6 +104,9 @@ interface NotificationRow extends Record<string, unknown> {
   readonly body: string | null;
   /** A note mention's note title, while the note is live (null when it is in the trash or gone). */
   readonly note_title: string | null;
+  /** A webhook endpoint turned off (spec 0064, AC-6423): the endpoint, and its address while it is still there. */
+  readonly webhook_endpoint_id: string | null;
+  readonly webhook_url: string | null;
   /** The sort moment for the cursor: made (inbox) or done (done), with microseconds. */
   readonly at: string;
 }
@@ -113,7 +117,8 @@ const NOTIFICATION_COLUMNS = sql`n.id::text as id, n.kind, n.actor_type, n.actor
   n.task_id::text as task_id, n.note_id::text as note_id, n.submission_id::text as submission_id,
   n.join_request_id::text as join_request_id, jr.name as join_name, n.automation_id::text as automation_id,
   jsonb_path_query_first(au.actions, '$[*] ? (@.kind == "notify").message') #>> '{}' as automation_message,
-  n.due_task_id::text as due_task_id, dtk.title as due_title, c.body, nt.title as note_title`;
+  n.due_task_id::text as due_task_id, dtk.title as due_title, c.body, nt.title as note_title,
+  n.webhook_endpoint_id::text as webhook_endpoint_id, whe.url as webhook_url`;
 
 /** The comment a notification is about, joined when it is live (a deleted one's notifications are gone already). */
 const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id and c.id = n.comment_id
@@ -122,7 +127,8 @@ const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id
   left join join_requests jr on jr.workspace_id = n.workspace_id and jr.id = n.join_request_id
     and jr.status = 'open'
   left join automations au on au.workspace_id = n.workspace_id and au.id = n.automation_id and au.deleted_at is null
-  left join tasks dtk on dtk.workspace_id = n.workspace_id and dtk.id = n.due_task_id and dtk.deleted_at is null`;
+  left join tasks dtk on dtk.workspace_id = n.workspace_id and dtk.id = n.due_task_id and dtk.deleted_at is null
+  left join webhook_endpoints whe on whe.workspace_id = n.workspace_id and whe.id = n.webhook_endpoint_id`;
 
 /**
  * The rows among `rows` the reader may see, as views, in order (AC-1166): a
@@ -175,6 +181,21 @@ async function visibleViews(
       // Someone asks to join: shown while the request is open and the reader may still approve it.
       if (row.join_name === null || !can(scope.access, 'members.invite')) return [];
       return [{ ...base, joinRequestId: row.join_request_id, excerpt: excerptOf(row.join_name, NOTIFICATION_EXCERPT) }];
+    }
+    if (row.kind === 'webhook_off') {
+      // A webhook endpoint turned off (spec 0064, AC-6423). Shown only while the endpoint is still there and the
+      // reader still holds `webhooks.manage`: hidden means absent, so a demoted admin's copy simply stops showing.
+      if (row.webhook_endpoint_id === null || row.webhook_url === null || !can(scope.access, 'webhooks.manage')) {
+        return [];
+      }
+      return [
+        {
+          ...base,
+          webhookEndpointId: row.webhook_endpoint_id,
+          // The host alone: an endpoint's path can hold a receiver's own token, which no inbox needs to show.
+          excerpt: excerptOf(hostOf(row.webhook_url), NOTIFICATION_EXCERPT),
+        },
+      ];
     }
     if (row.kind === 'scheduling_changed') {
       // Someone changed the reader's own scheduling (spec 0037, AC-1264): about them alone, so always theirs to see.

@@ -27,6 +27,11 @@ describe('isRefusedAddress', () => {
     ['::ffff:127.0.0.1', 'loopback, written as mapped v6'],
     ['64:ff9b::7f00:1', 'loopback, written through NAT64'],
     ['2002:7f00:0001::', 'loopback, written as 6to4'],
+    ['fec0::1', 'site local, v6'],
+    ['64:ff9b:1::a00:5', 'local use NAT64'],
+    ['100::1', 'discard only'],
+    ['2001:db8::1', 'documentation, v6'],
+    ['2001:0:4136:e378::1', 'Teredo'],
     ['not an address', 'anything unreadable'],
     ['', 'nothing at all'],
   ])('refuses %s (%s)', (address) => {

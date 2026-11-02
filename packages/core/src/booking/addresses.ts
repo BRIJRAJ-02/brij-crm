@@ -100,7 +100,16 @@ export function isRefusedAddress(address: string): boolean {
   if (v6.slice(0, 15).every((byte) => byte === 0) && v6[15] === 1) return true;
   if ((first & 0xfe) === 0xfc) return true;
   if (first === 0xfe && (second & 0xc0) === 0x80) return true;
+  // Site local (fec0::/10, deprecated but still routed by some stacks).
+  if (first === 0xfe && (second & 0xc0) === 0xc0) return true;
   if (first === 0xff) return true;
+  const at = (...prefix: readonly number[]) => prefix.every((byte, index) => v6[index] === byte);
+  // Local use NAT64 (64:ff9b:1::/48, RFC 8215), which can reach an inside IPv4 address behind a translator.
+  if (at(0x00, 0x64, 0xff, 0x9b, 0x00, 0x01)) return true;
+  // Discard only (100::/64), documentation (2001:db8::/32) and Teredo (2001::/32, an IPv4 address tunnelled inside).
+  if (at(0x01, 0x00, 0, 0, 0, 0, 0, 0)) return true;
+  if (at(0x20, 0x01, 0x0d, 0xb8)) return true;
+  if (at(0x20, 0x01, 0x00, 0x00)) return true;
   return false;
 }
 

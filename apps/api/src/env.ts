@@ -1,5 +1,5 @@
 import { AppEnvironment } from '@crm/contracts';
-import { decodeTokenKey, type TokenKey } from '@crm/core';
+import { decodeTokenKey, decodeWebhookKey, type TokenKey, type WebhookKey } from '@crm/core';
 import * as z from 'zod';
 
 /** A public origin a browser may send as `Origin`: https, or http on localhost; never one whose origin is `null`. */
@@ -236,6 +236,32 @@ const calendarFields = {
 // buttons simply aren't offered. On, Google needs an approved Wallet API issuer id, a service account's address
 // and its RSA private key (PEM, with real newlines or `\n`), and the class every pass belongs to. Apple's half
 // arrives with its certificate. Nothing here is ever logged or answered.
+/**
+ * Webhooks (spec 0064, slice 3): `WEBHOOK_SECRET_KEY`, 32 bytes in base64 (or 64 hex characters), seals each
+ * endpoint's signing secret at rest. Optional everywhere: unset, Settings › Webhooks says webhooks aren't set up here,
+ * nothing can be added, and the worker sends nothing. A set key that isn't 32 bytes refuses to boot.
+ */
+const webhookFields = {
+  WEBHOOK_SECRET_KEY: optional(z.string()),
+};
+
+/** Refuses a `WEBHOOK_SECRET_KEY` that isn't a key. */
+function checkWebhookKey(
+  env: { readonly WEBHOOK_SECRET_KEY?: string | undefined },
+  missing: (path: string, message: string) => void,
+) {
+  if (env.WEBHOOK_SECRET_KEY === undefined) return;
+  try {
+    decodeWebhookKey(env.WEBHOOK_SECRET_KEY);
+  } catch (error) {
+    missing('WEBHOOK_SECRET_KEY', error instanceof Error ? error.message : 'WEBHOOK_SECRET_KEY is not a key.');
+  }
+}
+
+/** The decoded key as `webhookKey`, or nothing where webhooks are off. */
+const webhookKeyOf = (raw: string | undefined): { readonly webhookKey?: WebhookKey } =>
+  raw === undefined ? {} : { webhookKey: decodeWebhookKey(raw) };
+
 const walletFields = {
   WALLET_PASSES: optional(z.enum(['on', 'off'])),
   GOOGLE_WALLET_ISSUER_ID: optional(
@@ -539,6 +565,7 @@ export const ApiEnv = z
     LOAD_TIMING: optional(z.enum(['on', 'off'])),
     ...calendarFields,
     ...walletFields,
+    ...webhookFields,
     // Forms (spec 0023): reCAPTCHA v3's keys, the site key sent to browsers and the secret the API verifies tokens
     // with. Both or neither, and optional everywhere: unset, the honeypot, the fill time and the rate limits decide
     // alone; set, the score is one more spam signal.
@@ -565,6 +592,7 @@ export const ApiEnv = z
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
     checkCalendar(env, missing);
+    checkWebhookKey(env, missing);
     if ((env.RECAPTCHA_SITE_KEY === undefined) !== (env.RECAPTCHA_SECRET_KEY === undefined)) {
       missing('RECAPTCHA_SECRET_KEY', 'Set RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_KEY together, or neither.');
     }
@@ -631,14 +659,18 @@ export const ApiEnv = z
       missing('BETTER_AUTH_URL', `BETTER_AUTH_URL must have the same origin as APP_URL in ${env.APP_ENV}.`);
     }
   })
-  .transform(({ CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET, ...env }) => ({
-    ...env,
-    MAIL_FROM: namedSender(env.MAIL_FROM ?? DEFAULT_LOCAL_SENDER),
-    // Mailpit is a laptop's inbox; a deployed API never sends there.
-    MAILPIT_URL: env.APP_ENV === 'local' ? env.MAILPIT_URL : undefined,
-    // Calendar sync (spec 0024), when on: the key and the secrets live only in here, the key decoded.
-    calendar: calendarOf({ ...env, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET }),
-  }));
+  .transform(
+    ({ CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET, WEBHOOK_SECRET_KEY, ...env }) => ({
+      ...env,
+      // Webhooks (spec 0064), when the key is set: decoded once, and the raw value kept nowhere else.
+      ...webhookKeyOf(WEBHOOK_SECRET_KEY),
+      MAIL_FROM: namedSender(env.MAIL_FROM ?? DEFAULT_LOCAL_SENDER),
+      // Mailpit is a laptop's inbox; a deployed API never sends there.
+      MAILPIT_URL: env.APP_ENV === 'local' ? env.MAILPIT_URL : undefined,
+      // Calendar sync (spec 0024), when on: the key and the secrets live only in here, the key decoded.
+      calendar: calendarOf({ ...env, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET }),
+    }),
+  );
 export type ApiEnv = z.infer<typeof ApiEnv>;
 
 /**
@@ -737,10 +769,12 @@ export const WorkerEnv = z
     WORKER_IDLE_SLEEP_SECONDS: optional(z.coerce.number().int().min(0).max(86_400)),
     ...calendarFields,
     ...walletFields,
+    ...webhookFields,
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
     checkCalendar(env, missing);
+    checkWebhookKey(env, missing);
     const url = env.CENTRIFUGO_API_URL === undefined;
     const key = env.CENTRIFUGO_API_KEY === undefined;
     // As on the api: `local` relaxes the key, the wake secret and the address checks, so a production build never
@@ -780,9 +814,12 @@ export const WorkerEnv = z
       CALENDAR_TOKEN_KEY,
       GOOGLE_CALENDAR_CLIENT_SECRET,
       MICROSOFT_CLIENT_SECRET,
+      WEBHOOK_SECRET_KEY,
       ...rest
     }) => ({
       ...rest,
+      // Webhooks (spec 0064), when the key is set: the worker opens each endpoint's secret to sign with it.
+      ...webhookKeyOf(WEBHOOK_SECRET_KEY),
       // Calendar sync (spec 0024), when on: the worker refreshes tokens and syncs.
       calendar: calendarOf({ ...rest, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET }),
       WORKER_PORT: WORKER_PORT ?? PORT ?? 3001,

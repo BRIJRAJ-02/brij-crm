@@ -71,3 +71,4 @@ export { routingDecisions } from './routing.ts';
 export { automationRuns, automations } from './automations.ts';
 export { apiKeys } from './developer.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';
+export { webhookDeliveries, webhookEndpoints } from './webhooks.ts';

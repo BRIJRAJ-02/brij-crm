@@ -18,6 +18,7 @@ import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts'
 import { strings as brand } from './brand-strings.ts';
 import { strings as teams } from './teams-nav-strings.ts';
 import { strings as security } from './security-strings.ts';
+import { strings as webhooks } from './webhooks-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
@@ -91,6 +92,7 @@ export type SettingsPageId =
   | 'members'
   | 'teams'
   | 'workspace-security'
+  | 'webhooks'
   | 'objects'
   | 'lists'
   | 'jobs'
@@ -102,6 +104,9 @@ export type SettingsPageId =
   | 'admin-users'
   | 'admin-pages'
   | 'admin-website';
+
+/** Settings › Workspace › Webhooks (spec 0064): where bookings and form submissions are sent, owners and admins. */
+export const webhooksHref = (slug: string) => `/w/${slug}/settings/webhooks`;
 
 /** Settings › Workspace › Security (spec 0033, milestone 4): the workspace's sign in rules, owners only. */
 export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/security`;
@@ -138,6 +143,7 @@ export interface SettingsNavEntry {
     | 'calendar-days'
     | 'calendar-clock'
     | 'globe'
+    | 'plug'
     | 'palette'
     | 'code';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
@@ -212,6 +218,15 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           href: workspaceSecurityHref(slug),
           icon: 'lock',
           requires: 'security.manage',
+        },
+        // Webhooks (spec 0064): `webhooks.manage` only, so nobody else sees the entry at all.
+        {
+          id: 'webhooks',
+          label: webhooks.navLabel,
+          href: webhooksHref(slug),
+          icon: 'plug',
+          requires: 'webhooks.manage',
+          notForGuests: true,
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box', notForGuests: true },
         // Lists (spec 0048, AC-4828): every member may open it; they see the lists they may read.
@@ -321,6 +336,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'members') return 'members';
   if (rest === 'teams') return 'teams';
   if (rest === 'security') return 'workspace-security';
+  if (rest === 'webhooks') return 'webhooks';
   if (rest === 'trash') return 'trash';
   if (rest === 'admin') return 'admin-overview';
   if (rest === 'admin/users' || rest.startsWith('admin/users/')) return 'admin-users';

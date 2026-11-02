@@ -8,6 +8,7 @@ import { connectedCalendar, jobKinds, NO_CALENDAR, type JobRegistry, type QueueR
 import { purgeWorkspace, runDailyCleanup, syncConnection, systemScope } from '@crm/core/system';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
 import type { AppEnvironment } from '@crm/contracts';
+import type { WebhookKey } from '@crm/core';
 import type { Database, QueueConnection } from '@crm/db';
 import { bookingLinkKey } from '../booking-link.ts';
 import { createFreeDomains } from '../calendar/free-domains.ts';
@@ -29,6 +30,7 @@ import { runnerTasks } from './graphile.ts';
 import { runNotificationEmail } from './notification-email.ts';
 import { runSchedulingNoticeTask } from './scheduling-notice.ts';
 import { runCalendarHealthEmailTask } from './calendar-health.ts';
+import { createWebhookSender, runWebhookDelivery } from './webhook-deliver.ts';
 import { raiseIssue } from '../monitoring/sentry.ts';
 import { createJobRunner } from './runner.ts';
 
@@ -48,6 +50,8 @@ export interface JobTasksEnv {
   readonly MAILPIT_URL?: string | undefined;
   readonly BLOB_READ_WRITE_TOKEN?: string | undefined;
   readonly calendar: CalendarSettings | undefined;
+  /** The webhook sealing key (`WEBHOOK_SECRET_KEY`, spec 0064); without it nothing is sent. */
+  readonly webhookKey?: WebhookKey | undefined;
 }
 
 /** What `composeJobTasks` needs: the environment, the tenant pool, and who hears that a job stored a change. */
@@ -58,6 +62,8 @@ export interface JobTasksOptions {
   readonly onStored: () => void;
   /** The queue rows the daily cleanup's requeue phase reads, while the queue is open. */
   readonly queue?: QueueRows;
+  /** A webhook send's limit, when not the sender's 10 seconds: the Vercel drain's turns are short (spec 0064). */
+  readonly webhookTimeoutMs?: number;
 }
 
 /** The runners' work, ready for `startJobRunners`. */
@@ -74,6 +80,8 @@ export interface JobTasks {
   readonly notificationEmail: (payload: unknown) => Promise<void>;
   /** One member's scheduling notice (spec 0037), as the system: it queues a `scheduling_changed` email. */
   readonly schedulingNotice: (payload: unknown) => Promise<void>;
+  /** One webhook delivery's try (spec 0064), where `WEBHOOK_SECRET_KEY` is set; off, its rows wait. */
+  readonly webhookDeliver: ((payload: unknown) => Promise<void>) | undefined;
   /** One workspace's queued automation runs (parity #53), each as the member its automation runs as; told how to queue its next call. */
   readonly automation: (payload: unknown, again: (workspaceId: string, at?: Date) => Promise<void>) => Promise<void>;
   /**
@@ -256,10 +264,36 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
     },
   };
 
+  // Webhooks (spec 0064, AC-6423): each queued delivery sent through the one sender as the system. Without the key
+  // no endpoint can exist, and the task isn't run.
+  const webhookKey = env.webhookKey;
+  const webhookDeliver =
+    webhookKey === undefined
+      ? undefined
+      : (() => {
+          const send = createWebhookSender(
+            options.webhookTimeoutMs === undefined ? {} : { timeoutMs: options.webhookTimeoutMs },
+          );
+          return (payload: unknown) =>
+            runWebhookDelivery(
+              { systemScope: (workspaceId) => systemScope(db, workspaceId), key: webhookKey, send, log },
+              payload,
+            );
+        })();
+  // One line at boot, not one per attempt: with no key nothing is queued and nothing is sent, so there is no
+  // backlog to drain and nothing unsigned ever leaves. Setting the key and restarting is the only step (spec 0064).
+  if (webhookDeliver === undefined) {
+    log.info('webhooks.off', {
+      reason: 'WEBHOOK_SECRET_KEY is not set',
+      effect: 'no webhook is queued or sent; set the key and restart to turn them on',
+    });
+  }
+
   return {
     registry,
     runner,
     calendar,
+    webhookDeliver,
     bookingMail,
     email,
     notificationEmail,
@@ -282,6 +316,10 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
         },
         input,
       ),
-    tasks: runnerTasks({ calendar: calendar !== undefined, email: email !== undefined }),
+    tasks: runnerTasks({
+      calendar: calendar !== undefined,
+      email: email !== undefined,
+      webhooks: webhookDeliver !== undefined,
+    }),
   };
 }

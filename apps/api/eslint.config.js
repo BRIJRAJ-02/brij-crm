@@ -35,6 +35,9 @@ export default server({
   fetchWrappers: [
     // The one outside fetch: an address from a person reaches the network only here.
     'src/public/outside.ts',
+    // The one webhook sender (spec 0064, AC-6424): an address an admin typed, checked at every send and connected to
+    // the address it checked. It uses node:https rather than fetch, and is named here so the list stays the whole story.
+    'src/jobs/webhook-deliver.ts',
     // Our own services, at addresses the environment gives.
     'src/realtime/centrifugo.ts',
     'src/realtime/signed-out.ts',

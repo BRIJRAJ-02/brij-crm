@@ -29,7 +29,8 @@ export const MAX_NOTIFICATION_CURSOR = 256;
  * Why a member was notified (decision 8); `form_submission`, a form they're told about got one (spec 0023, AC-568);
  * `join_request`, someone asks to join (flow pass); `task_due`, a task assigned to them is due today (migration 0135);
  * `automation`, an automation's notify action (parity #53); `scheduling_changed`, someone else changed the member's
- * scheduling (spec 0037, AC-1264), naming only who.
+ * scheduling (spec 0037, AC-1264), naming only who; `webhook_off`, a webhook endpoint turned off after 3 days of
+ * failed deliveries (spec 0064, AC-6423), to owners and admins.
  */
 export const NotificationKind = z.enum([
   'mention',
@@ -40,6 +41,7 @@ export const NotificationKind = z.enum([
   'task_due',
   'automation',
   'scheduling_changed',
+  'webhook_off',
 ]);
 /** Why a member was notified. */
 export type NotificationKind = z.infer<typeof NotificationKind>;
@@ -74,6 +76,8 @@ export const NotificationView = z.object({
   submissionId: Uuid.optional(),
   formId: Uuid.optional(),
   formName: z.string().optional(),
+  /** A webhook endpoint turned off (spec 0064): the endpoint, which Settings › Webhooks opens on; its host is the excerpt. */
+  webhookEndpointId: Uuid.optional(),
   excerpt: z.string(),
 });
 /** One notification as its recipient sees it. */

@@ -48,11 +48,16 @@ export const AUDIT_KINDS = {
     'list.restored',
     'automation.changed',
   ],
-  // Who may see and edit an object's records (spec 0032) is a security setting.
+  // Who may see and edit an object's records (spec 0032) is a security setting, and so are webhooks (spec 0064).
   security: [
     'workspace_security.changed',
     'workspace_security.signed_out_everyone',
     'access.rule_set',
+    'webhook.created',
+    'webhook.updated',
+    'webhook.secret_rotated',
+    'webhook.deleted',
+    'webhook.turned_off',
     // Keys reach the workspace's data from outside (parity #34).
     'api_key.created',
     'api_key.revoked',

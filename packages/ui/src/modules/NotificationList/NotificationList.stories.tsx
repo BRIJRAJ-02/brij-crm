@@ -98,7 +98,18 @@ function SampleInbox({
       isDone: false,
       excerpt: '',
     };
-    return [scheduling, ...sampleItems()];
+    // A webhook endpoint that turned itself off (spec 0064): the row is about the endpoint, so its host is the
+    // name under the system's mark and there is no second line repeating it.
+    const webhookOff: NotificationItem = {
+      id: 'n6',
+      kind: 'webhook_off',
+      actor: { type: 'system', id: null, name: 'hooks.example.com' },
+      createdAt: '2026-10-08T13:10:00.000Z',
+      isRead: false,
+      isDone: false,
+      excerpt: '',
+    };
+    return [scheduling, webhookOff, ...sampleItems()];
   });
   const source = arraySource(items, (item) => item.id);
   return (
@@ -167,6 +178,20 @@ export const SchedulingChanged: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByText('Grace Hopper changed your scheduling'));
     await expect(args.onAction).toHaveBeenCalledWith('n5');
+  },
+};
+
+/**
+ * A webhook endpoint turned off after 3 days of failed deliveries (spec 0064, AC-6423): the endpoint leads, since
+ * nobody turned it off, under the system's mark, with no chip and no second line repeating the host.
+ */
+export const WebhookOff: Story = {
+  args: { withScheduling: true, onAction: fn() },
+  // The row is Default's, with another sentence.
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByText('hooks.example.com stopped answering, so its webhook is off'));
+    await expect(args.onAction).toHaveBeenCalledWith('n6');
   },
 };
 

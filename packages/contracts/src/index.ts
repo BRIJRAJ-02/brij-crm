@@ -2,6 +2,7 @@ import { accessContract, rolesContract } from './access.ts';
 import { accessRulesContract } from './access-rules.ts';
 import { accountContract } from './account.ts';
 import { auditContract } from './audit.ts';
+import { webhooksContract } from './webhooks.ts';
 import { attributesContract } from './attributes.ts';
 import { computedContract } from './computed.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
@@ -60,6 +61,7 @@ export * from './activity.ts';
 export * from './attributes.ts';
 export * from './computed.ts';
 export * from './audit.ts';
+export * from './webhooks.ts';
 export * from './board-model.ts';
 export * from './duplicates.ts';
 export * from './booking/index.ts';
@@ -215,6 +217,8 @@ export const contract = {
   routing: routingContract,
   // Settings › History › Workspace changes (spec 0046): the audit log, `audit.read` only.
   audit: auditContract,
+  // Settings › Webhooks (spec 0064, slice 3): signed outgoing webhooks, `webhooks.manage` only.
+  webhooks: webhooksContract,
   imports: importsContract,
   exports: exportsContract,
 };

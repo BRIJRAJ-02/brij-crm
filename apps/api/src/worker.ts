@@ -240,6 +240,7 @@ async function openWorker(hooks: {
       ...(jobTasks.email === undefined ? {} : { email: jobTasks.email }),
       notificationEmail: jobTasks.notificationEmail,
       schedulingNotice: jobTasks.schedulingNotice,
+      ...(jobTasks.webhookDeliver === undefined ? {} : { webhookDeliver: jobTasks.webhookDeliver }),
       automation: jobTasks.automation,
       calendarHealth: jobTasks.calendarHealth,
       ...(cutOff === undefined ? {} : { cutOff }),

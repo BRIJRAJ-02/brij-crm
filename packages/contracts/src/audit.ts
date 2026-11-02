@@ -246,6 +246,12 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   entry(['workspace.deleted'], workspace, z.strictObject({ purgeAfter: At.optional() })),
   entry(['workspace.restored', 'workspace_security.signed_out_everyone'], workspace, NoParams),
+  /** A webhook endpoint (spec 0064), named by its host only: its path can hold a receiver's own token. */
+  entry(
+    ['webhook.created', 'webhook.updated', 'webhook.secret_rotated', 'webhook.deleted', 'webhook.turned_off'],
+    workspace,
+    z.strictObject({ host: z.string() }),
+  ),
   /** An API key made, revoked or brought back (parity #34): its name then. */
   entry(['api_key.created', 'api_key.revoked', 'api_key.restored'], workspace, z.strictObject({ name: z.string() })),
   /** Only the rules that changed are present; `sessionLengthDays: null` took the limit away. */

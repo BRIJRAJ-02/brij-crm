@@ -1,0 +1,138 @@
+// Settings › Webhooks (spec 0064): every word the screen shows. Short on purpose (spec 0058, AC-3).
+import type { WebhookDeliveryState, WebhookDeliveryType, WebhookEventType } from '@crm/data';
+
+/** Each event as the chips and the log name it. */
+const EVENTS: Readonly<Record<WebhookDeliveryType, string>> = {
+  'booking.created': 'Booking made',
+  'booking.rescheduled': 'Booking moved',
+  'booking.cancelled': 'Booking cancelled',
+  'booking.no_show': 'No show',
+  'form.submitted': 'Form submitted',
+  'link_page.signup': 'Link page signup',
+  ping: 'Test event',
+};
+
+/** Each delivery state as the log names it. */
+const STATES: Readonly<Record<WebhookDeliveryState, string>> = {
+  pending: 'Waiting',
+  sent: 'Delivered',
+  failed: 'Failed',
+  gave_up: 'Gave up',
+};
+
+export const strings = {
+  title: 'Webhooks',
+  navLabel: 'Webhooks',
+  description: 'Send bookings, form submissions and signups to other apps as they happen.',
+  endpoints: 'Endpoints',
+  add: 'Add endpoint',
+  /** The Add dialog's own submit: the title already says what is being added (design review, 1 November). */
+  addAction: 'Add',
+  atLimit: 'You have 10 endpoints, the most a workspace can have.',
+  /** Unticking the last event would leave the endpoint getting nothing, so it is refused with a reason. */
+  oneEventLeft: 'Keep at least one event, or turn the endpoint off.',
+  emptyTitle: 'No endpoints yet',
+  emptyText: 'Add one to send events to Zapier, Make, n8n or your own server.',
+  /**
+   * Where this server has no signing secret (spec 0064): webhooks are off rather than unsigned, so nothing is
+   * queued and nothing is sent. The variable is named, since the person who can fix it is whoever runs the server.
+   */
+  unavailableTitle: 'Webhooks are paused',
+  /**
+   * The code chip ends the line, with no punctuation after it: the chip carries its own inline padding, so a comma
+   * or a full stop behind it floated a space away from the name (shots, 1 November).
+   */
+  unavailableBefore: 'Nothing is queued or sent until this server sets',
+  /** The same, as one line, where it is a Callout over the endpoints rather than an empty state's body. */
+  unavailableLine: 'Webhooks are paused. Nothing is queued or sent until this server sets',
+  unavailableKey: 'WEBHOOK_SECRET_KEY',
+  failedTitle: 'Webhooks didn’t load',
+  failedText: 'Try again in a moment.',
+  columnEndpoint: 'Endpoint',
+  columnEvents: 'Events',
+  columnStatus: 'Status',
+  columnLast: 'Last delivery',
+  active: 'Active',
+  off: 'Off',
+  failing: 'Off, failing',
+  failingHelp: 'Turned off after 3 days of failed deliveries. Fix the server, then turn it back on.',
+  never: 'None yet',
+  event: (type: WebhookDeliveryType | WebhookEventType) => EVENTS[type],
+  state: (state: WebhookDeliveryState) => STATES[state],
+  // Add endpoint
+  addTitle: 'Add endpoint',
+  url: 'Endpoint URL',
+  urlPlaceholder: 'https://example.com/webhooks',
+  descriptionLabel: 'Name',
+  descriptionPlaceholder: 'Zapier',
+  urlHint: 'Starts with https://',
+  events: 'Events',
+  cancel: 'Cancel',
+  adding: 'Adding…',
+  // The secret, shown once
+  secretTitle: 'Copy your signing secret',
+  secretText: 'Copy it now, you won’t see it again. Your developer uses it to check events came from Timefix.',
+  copySecret: 'Copy secret',
+  done: 'Done',
+  // One endpoint
+  endpointTitle: 'Endpoint',
+  on: 'Send events',
+  secret: 'Signing secret',
+  secretHint: (hint: string) => `Ends in ${hint}`,
+  overlap: 'The old secret works until',
+  rotate: 'Rotate',
+  rotateTitle: 'Rotate the signing secret?',
+  rotateText: 'The old secret keeps working for 24 hours.',
+  rotateAction: 'Rotate secret',
+  rotating: 'Rotating…',
+  test: 'Send',
+  /** The row's own words, so it isn't the button's label said twice (UX review, 1 November). */
+  testRow: 'Test event',
+  testRowText: 'Sends a ping to this endpoint now and shows the answer.',
+  testing: 'Sending…',
+  testResult: (delivery: { readonly state: WebhookDeliveryState; readonly responseStatus?: number }) =>
+    delivery.state === 'sent'
+      ? 'Delivered'
+      : delivery.state === 'pending'
+        ? 'Waiting'
+        : `Failed${delivery.responseStatus === undefined ? '' : `, ${String(delivery.responseStatus)}`}`,
+  failure: {
+    address: 'That address isn’t allowed.',
+    timeout: 'No answer within 10 seconds.',
+    network: 'Couldn’t connect.',
+    redirect: 'Redirects aren’t followed.',
+    status: 'The server refused it.',
+    too_large: 'Too large to send.',
+    cancelled: 'Not sent: the endpoint was off or no longer wanted this event.',
+    config: 'Not sent: this server can’t open the signing secret. Rotate it, or ask whoever runs the server.',
+  } as const,
+  log: 'Deliveries',
+  /** Where the panel is holding as many rows as it keeps; the log itself still has 30 days. */
+  logCapped: (count: number) => `Showing the newest ${String(count)}. The log keeps 30 days.`,
+  logEmpty: 'Nothing sent yet',
+  logFailedTitle: 'Deliveries didn’t load',
+  /** A later page failing: what is already shown stays. */
+  logMoreFailed: 'The next page didn’t load. Try again in a moment.',
+  logEmptyText: 'Events show here as they’re sent. The log keeps 30 days.',
+  columnEvent: 'Event',
+  columnAnswer: 'Response',
+  columnStatusCode: 'Code',
+  columnTime: 'Took',
+  columnAttempt: 'Attempt',
+  columnWhen: 'When',
+  ms: (ms: number) => `${String(ms)} ms`,
+  resend: 'Resend',
+  resent: 'Sent again',
+  resendFailed: 'Sent again, but it failed.',
+  /** A send that left and is still waiting for the receiver: neither delivered nor failed. */
+  resentWaiting: 'Sent again. Waiting for an answer.',
+  more: 'Show more',
+  delete: 'Delete endpoint',
+  deleteTitle: 'Delete this endpoint?',
+  deleteText: 'It stops getting events, and its log goes with it.',
+  deleteAction: 'Delete endpoint',
+  deleting: 'Deleting…',
+  deleted: 'Endpoint deleted',
+  close: 'Close',
+  saveFailed: 'That didn’t save. Try again.',
+} as const;

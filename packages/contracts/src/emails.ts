@@ -366,6 +366,20 @@ export const CalendarReconnectAskedEmail = z.strictObject({
 export type CalendarReconnectAskedEmail = z.infer<typeof CalendarReconnectAskedEmail>;
 
 /**
+ * A webhook endpoint turned off (spec 0064, AC-6423): every delivery to it failed for 3 days. Sent to each of the
+ * workspace's owners and admins, once per time it turns off. The address is the endpoint's own host and path, with
+ * no query (a token a receiver put there stays out of the email).
+ */
+export const WebhookEndpointOffEmail = z.strictObject({
+  /** The endpoint's host and path. */
+  endpoint: Line,
+  /** Settings › Webhooks, where it is turned back on. */
+  settingsPath: AppPath,
+});
+/** A webhook endpoint turned off. */
+export type WebhookEndpointOffEmail = z.infer<typeof WebhookEndpointOffEmail>;
+
+/**
  * Scheduling access given (spec 0037, AC-1257): to the delegate ("You can now manage Ada's scheduling", or
  * everyone's) on a grant or a level change, and to the member when someone else granted it ("Priya can now manage
  * your scheduling"). Names and the level only; the path is where the reader sees it.
@@ -429,6 +443,7 @@ export const EMAIL_PARAMS = {
   workspace_welcome: WorkspaceWelcomeEmail,
   scheduling_changed: SchedulingChangedEmail,
   standin_covering: StandinCoveringEmail,
+  webhook_endpoint_off: WebhookEndpointOffEmail,
   scheduling_access_given: SchedulingAccessGivenEmail,
   scheduling_access_removed: SchedulingAccessRemovedEmail,
   editor_added: EditorAddedEmail,
@@ -460,6 +475,7 @@ export const QUEUED_EMAIL_KINDS = [
   'workspace_welcome',
   'scheduling_changed',
   'standin_covering',
+  'webhook_endpoint_off',
   'scheduling_access_given',
   'scheduling_access_removed',
   'editor_added',

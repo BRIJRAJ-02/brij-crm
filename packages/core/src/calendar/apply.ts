@@ -32,6 +32,7 @@ import {
 } from './match.ts';
 import { createsUnknownPeople, fileUnknownAttendees } from './people.ts';
 import type { ProviderEvent } from './provider.ts';
+import { queueBookingWebhooks } from '../webhooks/queue.ts';
 
 /** The calendar a batch syncs for: its connection, member and provider calendar id, and what it may do. */
 export interface SyncedConnection {
@@ -391,6 +392,12 @@ async function cancelRemovedBookings(tx: WorkspaceTx, origins: readonly string[]
   `);
   await tellHostsOfRemoved(
     tx,
+    cancelled.rows.map((row) => row.id),
+  );
+  // A booking cancelled this way is cancelled for subscribed endpoints too (spec 0064, AC-6422).
+  await queueBookingWebhooks(
+    tx,
+    'booking.cancelled',
     cancelled.rows.map((row) => row.id),
   );
 }

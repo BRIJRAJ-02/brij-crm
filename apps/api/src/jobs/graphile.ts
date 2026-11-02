@@ -47,6 +47,7 @@ import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
 import { SCHEDULING_NOTICE_TASK } from './scheduling-notice.ts';
+import { WEBHOOK_TASK } from './webhook-deliver.ts';
 import {
   CALENDAR_HEALTH_CRONTAB,
   CALENDAR_HEALTH_EMAIL_TASK,
@@ -61,6 +62,12 @@ export const LANES = {
   heavy: { task: 'crm_job_heavy', concurrency: 2, pollMs: 500 },
   light: { task: 'crm_job_light', concurrency: 4, pollMs: 2_000 },
 } as const;
+
+/**
+ * Webhook deliveries' own runner (spec 0064): 4 at once, apart from the light lane, so receivers that time out (10
+ * seconds each) never hold the slots a workspace's emails, notices and calendar sync run in.
+ */
+export const WEBHOOK_LANE = { concurrency: 4, pollMs: 2_000 } as const;
 
 /** How often stale locks are released and the backlog is logged, while the runners run. */
 const HOUSEKEEPING_MS = 60_000;
@@ -103,8 +110,17 @@ export const RUNNER_TASKS: readonly string[] = [
  * worker's check awake: a row of a task it doesn't run would keep it awake
  * forever.
  */
-export function runnerTasks(running: { readonly calendar: boolean; readonly email: boolean }): readonly string[] {
-  return [...RUNNER_TASKS, ...(running.calendar ? [CALENDAR_TASK] : []), ...(running.email ? [EMAIL_TASK] : [])];
+export function runnerTasks(running: {
+  readonly calendar: boolean;
+  readonly email: boolean;
+  readonly webhooks?: boolean;
+}): readonly string[] {
+  return [
+    ...RUNNER_TASKS,
+    ...(running.calendar ? [CALENDAR_TASK] : []),
+    ...(running.email ? [EMAIL_TASK] : []),
+    ...(running.webhooks === true ? [WEBHOOK_TASK] : []),
+  ];
 }
 
 /** A calendar sync's payload: the workspace and the connection, ids only (what `crm_enqueue_calendar_sync` writes). */
@@ -205,6 +221,14 @@ export interface JobRunnersOptions {
    * retry.
    */
   readonly schedulingNotice?: (payload: unknown) => Promise<void>;
+  /**
+   * Webhook deliveries (spec 0064, AC-6423): one queued delivery's try (`runWebhookDelivery`), where
+   * `WEBHOOK_SECRET_KEY` is set. With it, the light runner takes `crm_webhook_deliver`; a receiver's failure queues
+   * its own next try, and only the database throws, for Graphile's 3 tries.
+   */
+  readonly webhookDeliver?: (payload: unknown) => Promise<void>;
+  /** How many webhook tries run at once, when not `WEBHOOK_LANE`'s own (the drain runs 1). */
+  readonly webhookConcurrency?: number;
   /**
    * Automations (parity #53): one workspace's queued runs (`runAutomationTask`), told how to queue its own next call.
    * With it, the light runner takes `crm_automation` and holds the hourly `crm_cron_automation_due` line.
@@ -767,6 +791,25 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
             // the pool closes: unbatched, they're sent and not awaited, so a stop right after a slice handed its job
             // over could close the pool first and leave the finished call's row locked (key cleared, so harmless,
             // but kept until the daily cleanup).
+            preset: { worker: { completeJobBatchDelay: 0, failJobBatchDelay: 0 } },
+          }),
+        ),
+      );
+    }
+    // Webhook deliveries on a runner of their own (spec 0064), so a receiver that times out never holds a light slot.
+    const webhookDeliver = options.webhookDeliver;
+    if (webhookDeliver !== undefined) {
+      runners.push(
+        watch(
+          await run({
+            pgPool: queue.pool,
+            concurrency: options.webhookConcurrency ?? WEBHOOK_LANE.concurrency,
+            noHandleSignals: true,
+            logger,
+            pollInterval: options.pollInterval ?? WEBHOOK_LANE.pollMs,
+            taskList: {
+              [WEBHOOK_TASK]: counted((payload) => webhookDeliver(payload), inFlight, options.onActivity),
+            },
             preset: { worker: { completeJobBatchDelay: 0, failJobBatchDelay: 0 } },
           }),
         ),

@@ -26,6 +26,7 @@ describe('settingsNav', () => {
         'Members',
         'Teams',
         'Security',
+        'Webhooks',
         'Objects',
         'Lists',
         'Automations',
@@ -52,6 +53,7 @@ describe('settingsNav', () => {
       members: '/w/acme/settings/members',
       teams: '/w/acme/settings/teams',
       'workspace-security': '/w/acme/settings/security',
+      webhooks: '/w/acme/settings/webhooks',
       objects: '/w/acme/settings/objects',
       lists: '/w/acme/settings/lists',
       automations: '/w/acme/settings/automations',
@@ -95,16 +97,21 @@ describe('visibleSettingsNav', () => {
       workspaceGroups.map((group) => ({
         ...group,
         entries: group.entries.filter(
-          (entry) => entry.id !== 'workspace-security' && entry.id !== 'automations' && entry.id !== 'developer',
+          (entry) =>
+            entry.id !== 'workspace-security' &&
+            entry.id !== 'automations' &&
+            entry.id !== 'webhooks' &&
+            entry.id !== 'developer',
         ),
       })),
     );
-    // Workspace › Security only for those who change sign in rules (spec 0033).
+    // Workspace › Security only for those who change sign in rules (spec 0033); Webhooks for webhooks.manage (0064).
     expect(
       visibleSettingsNav(settingsNav('acme'), [
         'booking.manage',
         'security.manage',
         'automations.manage',
+        'webhooks.manage',
         'api_keys.manage',
       ]),
     ).toEqual(workspaceGroups);
