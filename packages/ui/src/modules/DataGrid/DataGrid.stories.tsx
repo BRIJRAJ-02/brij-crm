@@ -968,7 +968,10 @@ export const FloatingBarShortList: Story = {
  */
 export const FloatingBarScrolled: Story = {
   args: {
-    count: 30,
+    // Enough rows to scroll well past the frame, so the band under the footer is full of them mid scroll.
+    // Kept small: this is the heaviest story file in the library, and a 300 row version of this story ran
+    // WebKit out of memory (run 41477180390), which is the page leak in docs/runbooks/story-page-leak.md.
+    count: 40,
     selected: ['company-1'],
     addRow: { label: 'New company', onAdd: () => undefined },
     floatingBar: (
@@ -979,24 +982,28 @@ export const FloatingBarScrolled: Story = {
       </BulkActionBar>
     ),
   },
-  play: async ({ canvas, canvasElement }) => {
+  play: async ({ args, canvas, canvasElement }) => {
+    const count = args.count ?? 0;
     await settleAnimations();
     await expect(canvas.getByRole('toolbar', { name: 'Selected records' })).toBeVisible();
     const grid = canvasElement.querySelector<HTMLElement>('[role="grid"]');
     await expect(grid).not.toBeNull();
     if (grid === null) return;
-    // Scrolled to the end: the footer is the last thing under the rows, and the bar's room comes after it.
-    grid.scrollTop = grid.scrollHeight;
+    // Stopped MID scroll, not at the end. At the end the rows have run out and the band under a mis-parked
+    // footer is empty, which is why the first version of this story passed against the bug it was written
+    // for. Mid scroll there are always more rows below, which is the state the People table was caught in.
+    grid.scrollTop = Math.round(grid.scrollHeight / 2);
     await waitFor(() => expect(grid.scrollTop).toBeGreaterThan(0));
-    const footer = canvasElement.querySelector<HTMLElement>('[role="row"][aria-rowindex="32"]');
+    const footer = canvasElement.querySelector<HTMLElement>(`[role="row"][aria-rowindex="${String(count + 2)}"]`);
     await expect(footer).not.toBeNull();
     if (footer === null) return;
     const foot = footer.getBoundingClientRect();
-    // No row may be drawn below the footer: that is the bug, the footer stranded among the rows.
-    const below = [...canvasElement.querySelectorAll<HTMLElement>('[role="row"][aria-rowindex]')].filter(
-      (row) => row !== footer && row.getBoundingClientRect().top > foot.bottom + 1,
-    );
-    await expect(below).toHaveLength(0);
+    // Geometry, and measured on the footer itself rather than by counting rows: a sticky footer cannot pass
+    // its containing block's padding edge, so room added as padding on the scroller parks it that far up and
+    // the rows keep being painted into the band below it. Here that was 80px, the floating bar's inset. The
+    // requirement is simply that the footer still reaches the bottom of what the grid shows.
+    const gap = grid.getBoundingClientRect().bottom - foot.bottom;
+    await expect(Math.round(gap)).toBeLessThanOrEqual(1);
   },
 };
 

@@ -29,6 +29,8 @@
     --spacer-width: 0;
     --col-width: var(--size-column);
     --col-offset: 0;
+    /* What a floating bar over the foot covers: its height and space-16 either side, as DataGrid's FLOATING_INSET. */
+    --floating-inset: calc(var(--size-toolbar) + 2 * var(--space-16));
 
     position: relative;
     inline-size: 100%;
@@ -50,7 +52,7 @@
      the scroller's padding, never inside the rows, so the footer stays under the last row. */
   .root[data-floating-bar] {
     box-sizing: border-box;
-    padding-block-end: calc(var(--size-toolbar) + 2 * var(--space-16));
+    padding-block-end: var(--floating-inset);
   }
 
   /* Read by the last pinned header and cells (an inherited custom property): an edge over what scrolls under them. */
@@ -179,6 +181,14 @@
     inline-size: max(100%, var(--grid-width));
     border-block-start: var(--border-width-hairline) solid var(--border);
     background: var(--surface-subtle);
+  }
+  /* A sticky box is held inside the scrollport less the scroller's own padding, so that padding alone parked the
+     footer the bar's height above the bottom and the rows carried on painting into the band under it (a People
+     table with one row ticked, 2 November 2026). Pulling the inset back by the same amount puts the stuck footer
+     on the bottom edge again, while the padding still ends the scrollable content above the bar, so at the end of
+     the scroll the footer comes to rest under the last row with the bar's room below it. */
+  .root[data-floating-bar] .footer {
+    inset-block-end: calc(-1 * var(--floating-inset));
   }
 
   .total {
