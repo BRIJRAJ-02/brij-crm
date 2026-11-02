@@ -4,7 +4,7 @@ A booking page's frame (spec 0025, 0025-experience.md; laid out as the timefix b
 
 ### The foot
 
-`BookingFoot` is how every public page ends, and nothing turns it off. On a wide booking page it is a card at the rail's end: "POWERED BY" over the Timefix wordmark, then "Claim your free page" under a hairline (the owner kept this card on 31 October 2026, over a quiet one-line foot). Everywhere else it is centred under the card, "Powered by" over the wordmark and the claim link. `href` and `newTabLabel` let a page tag the wordmark itself and open it in a new tab (the guest's page).
+`BookingFoot` is how every public page ends, and nothing turns it off. On a wide booking page it is a card at the rail's end: "POWERED BY" over the Timefix wordmark, then "Claim your free page" under a hairline (the owner kept this card on 31 October 2026, over a quiet one-line foot). `placement="card"` draws that same card at every width, for a one column page: the link page ends with it. Everywhere else it is centred under the card, "Powered by" over the wordmark and the claim link. `href` and `newTabLabel` let a page tag the wordmark itself and open it in a new tab (the guest's page).
 
 ## Why it exists
 

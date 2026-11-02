@@ -62,7 +62,13 @@ const meta = {
   component: LinkPage,
   args: {
     person: PERSON,
-    foot: <BookingFoot page="booking_profile" claimHref="https://www.timefix.com/?utm_content=claim_link" />,
+    foot: (
+      <BookingFoot
+        page="booking_profile"
+        placement="card"
+        claimHref="https://www.timefix.com/?utm_content=claim_link"
+      />
+    ),
     onPress: fn(),
   },
   render: (args) => (
