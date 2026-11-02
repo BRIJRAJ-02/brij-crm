@@ -743,7 +743,13 @@ function Blocks({
       // out here: it is for a visitor without a page, not for the person whose page this is, and `claimPageHref`
       // lives on the public pages' own entry, which the app's bundle has no reason to pull in.
       // The phone beside the editor shows the look being picked, so its mark follows that, not the app's theme.
-      foot={<BookingFoot page="booking_profile" {...(theme.mode === 'system' ? {} : { scheme: theme.mode })} />}
+      foot={
+        <BookingFoot
+          page="booking_profile"
+          placement="card"
+          {...(theme.mode === 'system' ? {} : { scheme: theme.mode })}
+        />
+      }
       // A new ground remounts the phone, which fades the page in on it (spec 0060, AC-18).
       // Only a new ground, mode or header: a font or a button shape changes in place, keeping the phone's scroll.
       key={[theme.ground, theme.gradient, theme.pattern, theme.mode, theme.header].join(' ')}

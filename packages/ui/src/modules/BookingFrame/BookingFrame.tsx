@@ -332,9 +332,10 @@ export interface BookingFootProps {
   /**
    * `rail`: a small card at the rail's foot, on wide screens only. `page`:
    * centred at the page's end, on phones only. `always` (the default): centred,
-   * on every screen, for a page with no rail.
+   * on every screen, for a page with no rail. `card`: the rail's card, on every
+   * screen, at the end of a one column page (the link page).
    */
-  readonly placement?: 'rail' | 'page' | 'always';
+  readonly placement?: 'rail' | 'page' | 'always' | 'card';
   /**
    * Which public page this is, which the wordmark's link carries as its `utm_medium`: the booking page (the
    * default, the frame's own), a person's profile, or the guest's page. The claim link comes tagged in `claimHref`.
