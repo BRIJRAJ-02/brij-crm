@@ -46,9 +46,9 @@ afterAll(async () => {
   await db.close();
 });
 
-/** Sunday 1 November 2026, midnight UTC: the clock every booking here reads. */
-const NOW = new Date('2026-11-01T00:00:00.000Z');
-const MONDAY = '2026-11-02';
+/** Sunday 31 October 2027, midnight UTC, a year out: the database checks a reminder against its own clock. */
+const NOW = new Date('2027-10-31T00:00:00.000Z');
+const MONDAY = '2027-11-01';
 const at = (time: string) => `${MONDAY}T${time}:00.000Z`;
 
 let made = 0;
@@ -204,7 +204,7 @@ async function refusalOf(call: Promise<unknown>) {
 const mondaySlots = (entry: Awaited<ReturnType<typeof enterBookingPage>>, calendar?: BookingCalendar) =>
   readPublicSlots(entry, deps(calendar), {
     from: `${MONDAY}T00:00:00.000Z`,
-    to: '2026-11-03T00:00:00.000Z',
+    to: '2027-11-02T00:00:00.000Z',
     duration: 30,
     tz: 'UTC',
   });
@@ -568,8 +568,8 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
           duration: 30,
           candidates: [candidates],
           busy: new Map(),
-          from: new Date('2026-11-01T09:00:00Z'),
-          to: new Date('2026-11-03T09:00:00Z'),
+          from: new Date('2027-10-31T09:00:00Z'),
+          to: new Date('2027-11-02T09:00:00Z'),
           now: NOW,
         });
       });
@@ -652,7 +652,7 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
     const target = hostTarget(w.owner, booked.bookingId);
     const offered = await readMoveSlots(target, deps(), {
       from: new Date(`${MONDAY}T00:00:00.000Z`),
-      to: new Date('2026-11-03T00:00:00.000Z'),
+      to: new Date('2027-11-02T00:00:00.000Z'),
     });
     // Every time someone can take it: the booking's own 08:00 is free for it, and Late Owl's afternoon too.
     expect(offered.slots.map((slot) => slot.start.slice(11, 16))).toContain('15:00');
@@ -1100,15 +1100,15 @@ describe('the race with stand ins (AC-1431)', () => {
     const first = await teamPage(w, [], [one.id]);
     const second = await teamPage(w, [], [two.id]);
     // Guests who met A last: on Tuesday B and C are away, so One gives each of them to A.
-    await offOn(1, '2026-11-03');
-    await offOn(2, '2026-11-03');
+    await offOn(1, '2027-11-02');
+    await offOn(2, '2027-11-02');
     const guests: { readonly email: string; readonly name: string }[] = [];
     for (const index of [0, 1, 2]) {
       const guest = { email: `known-${String(index)}@client.example`, name: `Known ${String(index)}` };
       const met = await bookPublicSlot(
         first.entry,
         deps(),
-        bookInput(`2026-11-03T${String(9 + index).padStart(2, '0')}:00:00.000Z`, guest),
+        bookInput(`2027-11-02T${String(9 + index).padStart(2, '0')}:00:00.000Z`, guest),
       );
       expect((await hostsOf(w, [met.bookingId])).get(met.bookingId)).toBe(a);
       guests.push(guest);

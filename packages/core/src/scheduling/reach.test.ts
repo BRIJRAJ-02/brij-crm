@@ -34,8 +34,8 @@ afterAll(async () => {
   await db.close();
 });
 
-const NOW = new Date('2026-11-01T00:00:00.000Z');
-const MONDAY_9 = '2026-11-02T09:00:00.000Z';
+const NOW = new Date('2027-10-31T00:00:00.000Z');
+const MONDAY_9 = '2027-11-01T09:00:00.000Z';
 const LINK_KEY = Buffer.alloc(32, 4);
 const calendar: BookingCalendar = {
   busy: () => Promise.resolve({ status: 'none' }),
