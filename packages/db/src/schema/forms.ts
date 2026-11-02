@@ -10,6 +10,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  date,
   foreignKey,
   index,
   integer,
@@ -363,5 +364,107 @@ export const formUploads = pgTable(
     index('form_uploads_by_form').on(t.workspaceId, t.formId, t.createdAt),
     index('form_uploads_by_submission').on(t.workspaceId, t.submissionId),
     check('form_uploads_size', sql`${t.size} >= 0 and ${t.size} <= 10485760`),
+  ],
+);
+
+/**
+ * A visitor's part filled form, so they can finish it later (spec 0063,
+ * AC-6319): the answers so far and the step they were on, found only by the
+ * SHA-256 of a 32 byte token the visitor's link carries. A partial is never a
+ * submission: it is never filed, never notified, never counted and never
+ * shown in Submissions. It goes on submit, with its form (cascade), and
+ * thirty days after it was made, in the daily cleanup. Nothing identifying is
+ * kept but the answers the visitor typed themselves and `ip_hash`, which is a
+ * salted hash for rate limits alone.
+ */
+export const formPartials = pgTable(
+  'form_partials',
+  {
+    workspaceId: workspaceId(),
+    id: uuid('id')
+      .notNull()
+      .default(sql`uuidv7()`),
+    formId: uuid('form_id').notNull(),
+    /** The version the page was drawn from; a resume on a newer one keeps the answers whose questions still exist. */
+    versionId: uuid('version_id').notNull(),
+    /** SHA-256 of the visitor's token, in hex. The token itself is never stored, logged or sent anywhere but the link. */
+    tokenHash: text('token_hash').notNull(),
+    /** The answers so far, each checked against its question exactly as a submit's are. */
+    answers: jsonb('answers').notNull(),
+    /** Which step the visitor was on, so the link reopens where they left off. */
+    stepId: text('step_id'),
+    /** The saver's address, hashed with a salt: rate limits and abuse review only. */
+    ipHash: text('ip_hash'),
+    /** Created plus `PARTIAL_KEPT_DAYS`; the cleanup's pick, and checked again on every read. */
+    expiresAt: timestamptz('expires_at').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'form_partials_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'form_partials_form',
+      columns: [t.workspaceId, t.formId],
+      foreignColumns: [forms.workspaceId, forms.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'form_partials_version',
+      columns: [t.workspaceId, t.versionId],
+      foreignColumns: [formVersions.workspaceId, formVersions.id],
+    }).onDelete('cascade'),
+    // The resume read: one partial by its token's hash, inside the workspace the public key already named.
+    uniqueIndex('form_partials_token').on(t.workspaceId, t.tokenHash),
+    // The daily cleanup's pick, oldest first, and a form's own partials when it is deleted.
+    index('form_partials_expiry').on(t.workspaceId, t.expiresAt),
+    index('form_partials_by_form').on(t.workspaceId, t.formId, t.createdAt),
+    check('form_partials_token_hash', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
+  ],
+);
+
+/**
+ * A form's daily visit counts (spec 0063, AC-6320): one row per form, UTC day
+ * and visitor, where the visitor is the daily keyed hash spec 0047 mints from
+ * the address and the user agent, neither of which is kept. The same browser
+ * tomorrow is someone new, on purpose: there is no cookie and no lasting
+ * visitor id here, and `source` holds a UTM word or a referring host, never a
+ * whole address. Gone with the form (cascade), and after thirteen months in
+ * the daily cleanup.
+ */
+export const formVisits = pgTable(
+  'form_visits',
+  {
+    workspaceId: workspaceId(),
+    formId: uuid('form_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    /** The daily keyed hash (spec 0047, AC-1626): 32 lowercase hex digits, and never an address. */
+    visitor: text('visitor').notNull(),
+    versionId: uuid('version_id').notNull(),
+    /** Normalised on the server: `utm:<source>`, `ref:<host>` or `direct`. */
+    source: text('source').notNull().default('direct'),
+    /** When this visitor first gave an answer; null means they only looked. */
+    startedAt: timestamptz('started_at'),
+    /** When their submission was accepted; null means they never finished. */
+    completedAt: timestamptz('completed_at'),
+    /** The furthest question they reached, for the drop off bars. */
+    furthestQuestionId: text('furthest_question_id'),
+    /** First answer to accepted submit, in milliseconds: the median time to complete. */
+    durationMs: integer('duration_ms'),
+    firstAt: timestamptz('first_at').notNull().defaultNow(),
+    lastAt: timestamptz('last_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'form_visits_pkey', columns: [t.workspaceId, t.formId, t.day, t.visitor] }),
+    foreignKey({
+      name: 'form_visits_form',
+      columns: [t.workspaceId, t.formId],
+      foreignColumns: [forms.workspaceId, forms.id],
+    }).onDelete('cascade'),
+    // The Analytics tab's range read, and the daily cleanup's oldest days first.
+    index('form_visits_by_form_day').on(t.workspaceId, t.formId, t.day),
+    index('form_visits_day').on(t.workspaceId, t.day),
+    // AC-6320's line, in the database: a visitor is a daily hash and can be nothing else.
+    check('form_visits_visitor', sql`${t.visitor} ~ '^[0-9a-f]{32}$'`),
+    check('form_visits_source', sql`char_length(${t.source}) between 1 and 60`),
+    check('form_visits_duration', sql`${t.durationMs} is null or ${t.durationMs} >= 0`),
   ],
 );

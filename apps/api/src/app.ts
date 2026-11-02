@@ -37,6 +37,7 @@ import { createEdgeGuard, type Geo } from './edge.ts';
 import { NO_EDGE_CACHE, type EdgeCache } from './edge-cache.ts';
 import { mountExports } from './forms/exports.ts';
 import { handoffKey } from './forms/handoff.ts';
+import { mountFormProgress } from './forms/progress.ts';
 import { hashAddress, mountPublicForms } from './forms/public.ts';
 import { mountFormFiles } from './forms/uploads.ts';
 import { createFileStore, type FileStore } from './storage/blob.ts';
@@ -629,7 +630,24 @@ export function createApp({
     ipSalt,
     answersKey: createHmac('sha256', ipSalt).update('crm-answers-hash-v1').digest('hex'),
     handoffKey: formsHandoffKey,
+    // An accepted submit marks today's visit complete (spec 0063, AC-6320), on the same daily hash the beacon uses.
+    visitorKey: visitors,
+    ...(services.now === undefined ? {} : { now: services.now }),
     ...(env.RECAPTCHA_SITE_KEY === undefined ? {} : { recaptchaSiteKey: env.RECAPTCHA_SITE_KEY }),
+  });
+  // Save and resume, and the analytics beacon (spec 0063, AC-6319, AC-6320): the same tickets, salt and limiter
+  // the submit uses, so each one passes the same bot checks (AC-6330), and the visitor key of spec 0047, so a
+  // visit is a daily hash and nothing lasting.
+  mountFormProgress(app, {
+    db,
+    jobs,
+    wakeRelay,
+    limiter: formLimiter,
+    tickets,
+    publicOrigin: formsOrigin,
+    ipSalt,
+    visitorKey: visitors,
+    ...(services.now === undefined ? {} : { now: services.now }),
   });
 
   // Better Auth's own routes: only the ones sign in uses (`AUTH_ROUTES`), matched on the path as sent, so

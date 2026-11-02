@@ -2,7 +2,7 @@
 // submission (AC-1047), and the visitor's copy of what they sent, when the
 // form turns it on (AC-1048). The answers come as the form's questions and
 // the replies, already cut to what the reader may see.
-import type { EmailRow, FormConfirmationEmail, FormSubmissionEmail } from '@crm/contracts/emails';
+import type { EmailRow, FormConfirmationEmail, FormResumeEmail, FormSubmissionEmail } from '@crm/contracts/emails';
 import type { DocumentRow, EmailBlock } from '../document.ts';
 import { formatMoment } from '../format.ts';
 import { clip, workspaceOf, type Template, type TemplateContext } from '../template.ts';
@@ -94,5 +94,30 @@ export const formConfirmation: Template<FormConfirmationEmail> = (params, contex
     heading: title,
     blocks,
     why: `You got this email because this address was entered on ${params.formName}, a form by ${workspaceOf(context)}. If that wasn’t you, you can ignore it.`,
+  };
+};
+
+/** The subject a resume link email takes. */
+export const RESUME_SUBJECT = 'Finish your form when you’re ready';
+
+/**
+ * The resume link a visitor asked for (spec 0063, AC-6319). One button and
+ * one line: the email names the form and when the link stops working, and
+ * carries not one answer, so forwarding it gives away nothing but the chance
+ * to finish the form.
+ */
+export const formResume: Template<FormResumeEmail> = (params, context) => {
+  const until = formatMoment(params.expiresAt, params.timeZone);
+  const opening = `Pick up ${params.formName} where you left off. This link works until ${until}.`;
+  return {
+    subject: RESUME_SUBJECT,
+    preheader: clip(opening, 140),
+    eyebrow: workspaceOf(context),
+    heading: RESUME_SUBJECT,
+    blocks: [
+      { type: 'paragraph', text: opening },
+      { type: 'button', label: 'Finish the form', url: params.resumeUrl },
+    ],
+    why: `You got this email because this address was entered on ${params.formName}, a form by ${workspaceOf(context)}, and the link was asked for. If that wasn’t you, you can ignore it.`,
   };
 };

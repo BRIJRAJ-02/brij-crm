@@ -535,6 +535,16 @@ export const ACCESS_TABLE = {
   getPublicForm: { publicForm: true },
   submitForm: { publicForm: true },
   postingRules: { publicForm: true },
+  // A form's analytics (spec 0063, AC-6321): any member who can read the form, exactly as Submissions is read.
+  formAnalytics: { data: 'read' },
+  // Save and resume, and the visit beacon (spec 0063, AC-6319, AC-6320, AC-6330): the same public form scope a
+  // submission has, so each one reaches only that form's own rows and never a record. The bot checks the route
+  // applies are the same ones a submit passes.
+  savePartial: { publicForm: true },
+  resumePartial: { publicForm: true },
+  resumeLinkTarget: { publicForm: true },
+  sendResumeLink: { publicForm: true },
+  countFormEvent: { publicForm: true },
   // A visitor's file for a form question (spec 0023's uploads): the same public form scope as the submission it
   // belongs to, and each one refuses outright unless the scope is that very form's (`ownForm`).
   prepareUpload: { publicForm: true },

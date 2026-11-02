@@ -125,6 +125,23 @@ export const FormConfirmationEmail = z.strictObject({
 export type FormConfirmationEmail = z.infer<typeof FormConfirmationEmail>;
 
 /**
+ * The resume link a visitor asked for (spec 0063, AC-6319), to the address
+ * they already typed into the form. It carries one opaque token and nothing
+ * else: no answer, no name, and no word of what they have filled in so far,
+ * so a forwarded or logged email gives nothing away.
+ */
+export const FormResumeEmail = z.strictObject({
+  formName: Line,
+  /** The hosted form's own address with the resume token on it; nothing else rides in the link. */
+  resumeUrl: z.url(),
+  /** When the link stops working, so the email can say so. */
+  expiresAt: Instant,
+  timeZone: EmailTimeZone.optional(),
+});
+/** The resume link a visitor asked for. */
+export type FormResumeEmail = z.infer<typeof FormResumeEmail>;
+
+/**
  * A member's calendar stopped syncing (spec 0024, AC-619 and AC-620):
  * `expired` when the provider withdrew access, `failed` when syncing kept
  * failing for 6 hours. Sent to the member who connected it.
@@ -433,6 +450,7 @@ export type EditorAddedEmail = z.infer<typeof EditorAddedEmail>;
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
   form_confirmation: FormConfirmationEmail,
+  form_resume: FormResumeEmail,
   calendar_disconnected: CalendarDisconnectedEmail,
   calendar_reconnect_asked: CalendarReconnectAskedEmail,
   booking_calendar_removed: BookingCalendarRemovedEmail,
@@ -467,6 +485,7 @@ export type EmailParams = { readonly [K in EmailKind]: z.infer<(typeof EMAIL_PAR
 export const QUEUED_EMAIL_KINDS = [
   'form_submission',
   'form_confirmation',
+  'form_resume',
   'calendar_disconnected',
   'calendar_reconnect_asked',
   'booking_calendar_removed',

@@ -54,6 +54,8 @@ import {
   type TicketVerdict,
 } from './spam.ts';
 import { queueFormWebhooks } from '../webhooks/queue.ts';
+import { dropPartial } from './partials.ts';
+import { completeFormVisit } from './visits.ts';
 
 const { bookingPages, formSubmissions } = schema;
 
@@ -414,6 +416,17 @@ export interface SubmitInput {
   readonly signHandoff?: SignHandoff;
   /** Our own public origins: a redirect to another workspace's page is never followed (spec 0056, AC-5612). */
   readonly publicOrigins?: readonly string[];
+  /**
+   * The resume token the visitor's page was holding (spec 0063, AC-6319): the partial it names is deleted in this
+   * same transaction once the submission is stored, so a sent form leaves nothing saved behind. An unknown token
+   * deletes nothing and is never an error.
+   */
+  readonly resumeToken?: string;
+  /**
+   * The visitor's daily keyed hash (spec 0047), so today's visit is marked complete (AC-6320). Only an accepted
+   * submission counts: spam and held ones leave the visit as it was.
+   */
+  readonly visitor?: string;
 }
 
 /** What storing a submission answered: the visitor's next step, and how the spam checks judged it. */
@@ -658,6 +671,11 @@ export async function submitForm(
       }
       await attachUploads(tx, { submissionId: row.id, ids: claimedIds });
       if (state === 'received') {
+        // The form is sent, so nothing stays saved for later (AC-6319), and today's visit is a completion
+        // (AC-6320). Both ride in this transaction: a submission that doesn't commit changes neither. A spam or
+        // held submission does neither, so a bot can't clear someone's partial or inflate a completion count.
+        await dropPartial(tx, form.id, input.resumeToken);
+        await completeFormVisit(tx, { workspaceId: scope.workspaceId, formId: form.id, visitor: input.visitor });
         await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
         // Subscribed endpoints hear of a submission taken as received, in its own transaction (spec 0064, AC-6422).
         await queueFormWebhooks(tx, { submissionId: row.id, formId: form.id, referrer: cameFrom.referrer });

@@ -39,6 +39,7 @@ import { pickLeadOwner, recordLeadOwner, type LeadOwner } from '../rotation/owne
 import { copyFiledFile, type RecordFileStore } from '../records/files.ts';
 import { newId } from '../engine/ids.ts';
 import { tellTeam } from './notify.ts';
+import { tellVisitor } from './confirm.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -998,6 +999,7 @@ export async function processSubmission(
   if (target === undefined) {
     await keep(tx, submission.id);
     await tellTeam(context, rules, submission.id);
+    await tellVisitor(context, submission.id);
     return;
   }
   const attributes = await loadAttributes(tx, target.objectId);
@@ -1032,6 +1034,7 @@ export async function processSubmission(
   });
   await settle(tx, submission.id, filed);
   await tellTeam(context, rules, submission.id);
+  await tellVisitor(context, submission.id);
 }
 
 /** A stored assignment as filing's `previous`, when there is one. */
@@ -1118,6 +1121,7 @@ export function formsProcess(files?: RecordFileStore, rules?: RuleSource): KindD
         .where(sql`${formSubmissions.id} = ${job.params.submissionId} and ${formSubmissions.state} = 'received'`);
       // The visitor's submission still came in: the team hears of it, failure and all.
       await tellTeam(context, rules, job.params.submissionId);
+      await tellVisitor(context, job.params.submissionId);
     },
   });
 }

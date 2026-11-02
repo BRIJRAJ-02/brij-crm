@@ -9,6 +9,7 @@ import {
   formStrings,
   FormDocument,
   recalledKeys,
+  savesProgress,
   SCORE_FACT,
   stepsOf,
   type FormQuestion,
@@ -412,6 +413,9 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
       : { endings: endingsOf(document, { bookButton: formStrings(document.language).endingButton }) }),
     ...(document.after.kind === 'message' && document.after.message !== '' ? { thanks: document.after.message } : {}),
     offersMeeting: false,
+    // Whether the page offers Finish later at all (spec 0063, AC-6319). The server decides, never the page, and
+    // only a form that saves progress says so: a Classic form of three questions never offers it.
+    ...(savesProgress(document) ? { savesProgress: true } : {}),
     ...(context.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: context.recaptchaSiteKey }),
   };
 }

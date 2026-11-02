@@ -40,6 +40,12 @@ export interface QuestionListItem {
   readonly filed?: string;
   /** Its Show when, last on the second line (spec 0043): "Shows when Budget is Large". Left out when it always shows. */
   readonly condition?: string;
+  /**
+   * How the question performs, last on the second line (spec 0063, AC-6322): "82% answered", so a weak question
+   * is visible where it is edited. Left out when the form has no analytics, or when nobody reached this question:
+   * a figure for a question no one has seen would say nothing about the question.
+   */
+  readonly stat?: string;
   /** The question a publish refused: marked, and the caller keeps it open until it is fixed. */
   readonly hasProblem?: boolean;
 }
@@ -188,6 +194,7 @@ export function QuestionList({
                             : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
                           ...(item.filed === undefined ? [] : [item.filed]),
                           ...(item.condition === undefined ? [] : [item.condition]),
+                          ...(item.stat === undefined ? [] : [item.stat]),
                         ].map((part, at) => (
                           // The separator stays outside the part, so its spaces are where a line may break.
                           <Fragment key={at}>

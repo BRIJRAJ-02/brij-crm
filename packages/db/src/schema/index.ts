@@ -49,7 +49,16 @@ export {
   meetingSources,
   meetingStatus,
 } from './calendar.ts';
-export { formPublicKeys, formSubmissionRecords, formSubmissions, formUploads, formVersions, forms } from './forms.ts';
+export {
+  formPartials,
+  formPublicKeys,
+  formSubmissionRecords,
+  formSubmissions,
+  formUploads,
+  formVersions,
+  formVisits,
+  forms,
+} from './forms.ts';
 export {
   availabilitySchedules,
   bookingHosts,

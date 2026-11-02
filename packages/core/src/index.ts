@@ -747,6 +747,26 @@ export {
   type SubmitInput,
   type SubmitOutcome,
 } from './forms/public.ts';
+export {
+  dropPartial,
+  mintResumeToken,
+  partialTokenHash,
+  resumeLinkTarget,
+  resumePartial,
+  savePartial,
+  sendResumeLink,
+  type ResumeLinkSent,
+  type ResumeLinkTarget,
+  type SavePartialInput,
+} from './forms/partials.ts';
+export {
+  completeFormVisit,
+  countFormEvent,
+  formAnalytics,
+  type FormAnalyticsInputs,
+  type FormEventInput,
+} from './forms/visits.ts';
+export { confirmationRows, SIGNED_WORD, tellVisitor } from './forms/confirm.ts';
 export type { CaptchaVerdict, SpamJudgement, TicketVerdict } from './forms/spam.ts';
 export { addToCrm, FORMS_FILE, FORMS_SYNC, previewSync, startSync } from './forms/filing.ts';
 export {
@@ -799,6 +819,7 @@ export {
   queueEmail,
   queueEmails,
   queueFormConfirmation,
+  queueFormResume,
   queueFormSubmissionNotice,
   queueImportFinished,
   type EmailReader,

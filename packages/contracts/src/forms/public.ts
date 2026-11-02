@@ -10,6 +10,10 @@ import { CONDITION_OPS } from './show-when.ts';
 import { Uuid } from '../values/ids.ts';
 import { SubmitContext } from './context.ts';
 import { PublicBrand } from '../workspace-brand.ts';
+import { ResumedFill } from './partials.ts';
+import { FILL_TICKET_MAX } from './ticket.ts';
+
+export { FILL_TICKET_MAX };
 
 /** The languages a hosted form speaks (spec 0023, value sourcing); English for anything missing. */
 export const FORM_LANGUAGES = ['en', 'es', 'fr', 'de', 'pt', 'it', 'nl', 'hi'] as const;
@@ -136,6 +140,16 @@ export const PublicForm = z.object({
    * `brandLogoPath('forms', …)` take. Absent when the form wears the product's own accent and no logo.
    */
   brand: PublicBrand.optional(),
+  /**
+   * Whether this form saves a visitor's progress (spec 0063, AC-6319), so the page knows whether to offer
+   * Finish later at all. The server decides it (`savesProgress`), never the page.
+   */
+  savesProgress: z.boolean().optional(),
+  /**
+   * The answers and step a valid `?resume=` token opened (AC-6319). Absent when no token came, or when the one
+   * that came was unknown, expired or another form's: a bad token is never an error, the form simply opens empty.
+   */
+  resumed: ResumedFill.optional(),
 });
 /** A form as its hosted page renders it. */
 export type PublicForm = z.infer<typeof PublicForm>;
@@ -158,8 +172,6 @@ export const SubmitHidden = z
 /** UTM tags, the page and the referrer. */
 export type SubmitHidden = z.infer<typeof SubmitHidden>;
 
-/** The longest fill ticket the endpoints read. */
-export const FILL_TICKET_MAX = 200;
 
 /**
  * `GET /api/public/forms/:address/ticket` (and the booking page's
@@ -194,6 +206,11 @@ export const SubmitBody = z.object({
   fillMs: z.number().int().min(0).max(86_400_000).optional(),
   /** Where it came from (the embed script or the hosted page): checked field by field, a bad one dropped, never the lead. */
   context: SubmitContext.optional(),
+  /**
+   * The resume token the page was holding (spec 0063, AC-6319), so the partial it names goes with the submit. An
+   * unknown one deletes nothing and is never an error; it is never stored on the submission.
+   */
+  resumeToken: z.string().max(64).optional(),
 });
 /** The submit body. */
 export type SubmitBody = z.input<typeof SubmitBody>;

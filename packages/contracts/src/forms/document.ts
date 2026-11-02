@@ -276,6 +276,36 @@ export const FormSpam = z.strictObject({
 /** The bot checks' settings. */
 export type FormSpam = z.infer<typeof FormSpam>;
 
+/** How long a confirmation's own subject and line may be. */
+export const CONFIRMATION_SUBJECT_MAX = 120;
+/** How long a confirmation's own line may be. */
+export const CONFIRMATION_LINE_MAX = 500;
+
+/**
+ * The visitor's confirmation email (spec 0063, AC-6318): off by default. When
+ * on, one goes per accepted submission to the form's email answer, with this
+ * subject and line, or the template's defaults when they are left out. It
+ * never goes for a spam or held submission.
+ */
+export const FormConfirmation = z.strictObject({
+  on: z.boolean().default(false),
+  subject: z
+    .string()
+    .trim()
+    .max(CONFIRMATION_SUBJECT_MAX, { error: `Keep the subject to ${String(CONFIRMATION_SUBJECT_MAX)} characters.` })
+    .optional(),
+  line: z
+    .string()
+    .trim()
+    .max(CONFIRMATION_LINE_MAX, { error: `Keep the line to ${String(CONFIRMATION_LINE_MAX)} characters.` })
+    .optional(),
+});
+/** The visitor's confirmation email. */
+export type FormConfirmation = z.infer<typeof FormConfirmation>;
+
+/** Below this many questions a Classic form saves no progress unless its owner asks (AC-6319). */
+export const SAVE_PROGRESS_CLASSIC_MIN = 10;
+
 /** The default headline. */
 export const DEFAULT_HEADLINE = 'Fill this in and we will come back to you';
 
@@ -324,6 +354,18 @@ export const FormDocument = z
     /** Routing rules (spec 0043, AC-1604): tried in order at submit; none matching means `after`. */
     routing: RoutingRules.default({ rules: [] }),
     spam: FormSpam.default({ minFillMs: 2_000, scoreThreshold: 0.3 }),
+    /**
+     * The visitor's copy of what they sent (spec 0063, AC-6318): off until someone turns it on. Absent on every
+     * document written before this spec, and read through `sendsConfirmation`, so no stored document and no
+     * fixture has to carry it.
+     */
+    confirmation: FormConfirmation.optional(),
+    /**
+     * Whether a part filled form is saved so the visitor can finish it later (AC-6319). Absent on every document
+     * written before this spec, which `savesProgress` reads as the layout's own default: on for Steps and One at a
+     * time, off for Classic until it grows past `SAVE_PROGRESS_CLASSIC_MIN` questions.
+     */
+    saveProgress: z.boolean().optional(),
   })
   .superRefine((document, context) => {
     const seen = { ids: new Set<string>(), keys: new Set<string>(), attributes: new Set<string>() };
@@ -525,4 +567,21 @@ export function defaultQuestions(filing: {
       ...filed(filing.phoneAttributeId),
     },
   ];
+}
+
+/**
+ * Whether a form saves a visitor's progress as they go (AC-6319): what its
+ * owner set, else the layout's own default — Steps and One at a time always
+ * do, since each Continue is a natural moment to save, and Classic does only
+ * once it is long enough to be worth coming back to.
+ */
+/** Whether a form emails the visitor their own copy (AC-6318): absent reads as off, as every older document is. */
+export function sendsConfirmation(document: Pick<FormDocument, 'confirmation'>): boolean {
+  return document.confirmation?.on === true;
+}
+
+export function savesProgress(document: Pick<FormDocument, 'layout' | 'questions' | 'saveProgress'>): boolean {
+  if (document.saveProgress !== undefined) return document.saveProgress;
+  if (document.layout !== 'classic') return true;
+  return document.questions.length > SAVE_PROGRESS_CLASSIC_MIN;
 }

@@ -77,6 +77,35 @@ export const FORM_LIMITS = {
 } as const satisfies Record<string, LimitRule>;
 
 /**
+ * Save and resume (spec 0063, AC-6330): a save is cheap but frequent (one per
+ * Continue), so the per address window is wider than a submit's, and a form's
+ * own ceiling stops one form's traffic reaching another's. Emailing the
+ * resume link is rarer and costs a message, so it is tight: three a day per
+ * address, and a daily cap per form.
+ */
+export const PARTIAL_LIMITS = {
+  perAddress: { max: 60, windowMs: 60_000 },
+  perAddressInWorkspace: { max: 300, windowMs: 3_600_000 },
+  perForm: { max: 600, windowMs: 3_600_000 },
+  perInstance: { max: 50, windowMs: 1_000 },
+  emailPerAddress: { max: 3, windowMs: 86_400_000 },
+  emailPerForm: { max: 200, windowMs: 86_400_000 },
+} as const satisfies Record<string, LimitRule>;
+
+/**
+ * The analytics beacon (spec 0063, AC-6320, AC-6330): the chattiest public
+ * endpoint, since a One at a time form reports every question reached, so its
+ * windows are the widest here — but it still has them, and it still passes
+ * the honeypot and the fill ticket, so a flood costs nothing and counts
+ * nothing. Every answer is 204, so a spent limit is invisible to a visitor.
+ */
+export const FORM_EVENT_LIMITS = {
+  perAddress: { max: 120, windowMs: 60_000 },
+  perForm: { max: 2_000, windowMs: 3_600_000 },
+  perInstance: { max: 200, windowMs: 1_000 },
+} as const satisfies Record<string, LimitRule>;
+
+/**
  * Public form file uploads (#32): few and small by address (each is up to 4 MiB through a function), a bounded number
  * in a workspace and per form, and the instance's own ceiling.
  */
