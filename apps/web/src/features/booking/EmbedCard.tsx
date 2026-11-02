@@ -47,7 +47,12 @@ export interface EmbedCardProps {
 
 const MODE_TILES = [
   { id: 'inline', name: strings.modes.inline.name, icon: 'monitor', description: strings.modes.inline.description },
-  { id: 'popup', name: strings.modes.popup.name, icon: 'square', description: strings.modes.popup.description },
+  {
+    id: 'popup',
+    name: strings.modes.popup.name,
+    icon: 'mouse-pointer-2',
+    description: strings.modes.popup.description,
+  },
   {
     id: 'floating',
     name: strings.modes.floating.name,
@@ -66,7 +71,7 @@ const SETUPS = [
   // panel-left-open rather than a right facing one: the registry ships to every page under UiProvider, so a
   // new mark costs about 90 bytes of the first load, and this one already says "a panel at one side".
   { id: 'side', mode: 'floating', panel: 'side', icon: 'panel-left-open', ...strings.setups.side },
-  { id: 'own', mode: 'popup', panel: 'centre', icon: 'square', ...strings.setups.own },
+  { id: 'own', mode: 'popup', panel: 'centre', icon: 'mouse-pointer-2', ...strings.setups.own },
   { id: 'inline', mode: 'inline', panel: 'centre', icon: 'monitor', ...strings.setups.inline },
 ] as const satisfies readonly {
   readonly id: string;
@@ -117,7 +122,6 @@ export function EmbedCard({ script, publicKey, title, isLive, quickPicks }: Embe
       <TileGrid
         variant="choice"
         label={strings.setup}
-        showsDescription
         tiles={SETUPS.map(({ id, name, icon: tileIcon, description }) => ({
           id,
           name,
@@ -167,7 +171,6 @@ export function EmbedCard({ script, publicKey, title, isLive, quickPicks }: Embe
         <TileGrid
           variant="choice"
           label={strings.mode}
-          showsDescription
           tiles={MODE_TILES}
           value={mode}
           onChange={(id) => {
