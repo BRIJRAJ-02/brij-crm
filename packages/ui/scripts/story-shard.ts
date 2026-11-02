@@ -10,11 +10,13 @@
 // `sort()` leaves that order alone, so which files land first is effectively a coin
 // toss, and that run of 5 drew four of the heaviest in the library.
 //
-// So we choose the split and the order ourselves: deal the files heaviest first into
-// the shards, which balances what each shard carries, then within a shard alternate a
-// heavy file and a light one, so no shard ever runs a stretch of heavy files. File
-// isolation stays on, and the shard count is a reading of the symptom, not a knob: if a
-// shard dies again, what a story leaves in the page has grown.
+// So we choose the split ourselves: deal the files heaviest first into the shards, which
+// balances what each shard carries and keeps the heaviest files apart. That got shard 1
+// through all 91 of its files on run 41461134131. It is membership we control, not
+// order: the files are passed to vitest as filters, so vitest still runs them in its own
+// order, and the alternating output below is the list rather than the running order.
+// File isolation stays on, and the shard count is a reading of the symptom, not a knob:
+// if a shard dies again, what a story leaves in the page has grown.
 import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
