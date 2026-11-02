@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BookingChat, type BookingChatLine } from './BookingChat.tsx';
 
@@ -61,9 +62,13 @@ export const Greeting: Story = {
     await expect(args.onSend).toHaveBeenCalledWith('tuesday afternoon');
     await expect(field).toHaveValue('');
     await expect(field).toHaveFocus();
-    // A pressed time sends, and focus goes to the field for the next answer.
+    // The answered offers stay as the record: the picked time marked, the rest no longer take a press.
+    await expect(canvas.getByRole('button', { name: '9:30 AM, Fri 9 Oct, 30 minutes, picked' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
     await userEvent.click(canvas.getByRole('button', { name: '9:00 AM, Mon 12 Oct, 30 minutes' }));
-    await waitFor(() => expect(field).toHaveFocus());
+    await expect(args.onPickTime).toHaveBeenCalledTimes(1);
   },
 };
 
@@ -80,6 +85,15 @@ export const ReadBack: Story = {
         role: 'assistant',
         text: 'Tomorrow at 3:00 PM, 30 minutes, for Ada Lovelace (ada@example.com). Shall I book it?',
         suggestions: ['Yes, book it', 'Something else'],
+        confirm: 'Yes, book it',
+        card: {
+          weekday: 'Fri',
+          day: '9',
+          month: 'Oct',
+          title: 'Intro call with Ada Lovelace',
+          when: 'Friday, 9 October 2026 · 3:00 – 3:30 PM',
+          who: 'Ada Lovelace · ada@example.com',
+        },
       },
     ]);
     return (
@@ -140,6 +154,8 @@ export const Paused: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
+    // The notice drops in with its height, held at its first frame while stories pause animations.
+    await settleAnimations();
     await expect(canvas.getByRole('button', { name: 'Try again' })).toBeVisible();
   },
 };

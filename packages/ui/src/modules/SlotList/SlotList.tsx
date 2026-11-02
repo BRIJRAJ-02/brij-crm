@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
@@ -42,6 +43,11 @@ export interface SlotListProps {
   readonly empty?: ReactNode;
   /** A key that changes with the day, the zone or the view, so the times stagger in again. */
   readonly drawKey?: string;
+  /**
+   * Offers only: the time already picked from these, kept as the record of the answer (the booking chat). It keeps a
+   * fill and a check, the rest go quiet, and none can be pressed again. Nothing is removed, so nothing below moves.
+   */
+  readonly answered?: string;
 }
 
 /**
@@ -73,9 +79,15 @@ export function SlotList({
   isLoading = false,
   empty,
   drawKey,
+  answered,
 }: SlotListProps) {
   return (
-    <div className={styles.root} data-layout={layout} data-variant={variant}>
+    <div
+      className={styles.root}
+      data-layout={layout}
+      data-variant={variant}
+      data-answered={variant === 'offers' && answered !== undefined ? '' : undefined}
+    >
       {variant === 'offers' ? (
         <p className={styles.day} aria-hidden="true">
           {heading}
@@ -84,7 +96,11 @@ export function SlotList({
         <div className={styles.head}>
           {/* Only once there is a day: a heading with nothing in it is an empty heading, and `.head` holds the
               row's height either way. */}
-          {heading !== '' && <h2 className={styles.heading}>{heading}</h2>}
+          {heading !== '' && (
+            <h2 key={heading} className={styles.heading}>
+              {heading}
+            </h2>
+          )}
           {onHour12Change !== undefined && (
             <SegmentedControl
               label={strings.clock}
@@ -117,11 +133,14 @@ export function SlotList({
         <ul key={drawKey} className={styles.list} aria-label={strings.times(heading)}>
           {slots.map((slot, index) => {
             const isPicked = variant === 'picker' && slot.id === value;
+            const isAnswer = variant === 'offers' && answered !== undefined && slot.id === answered;
             return (
               <li
                 key={slot.id}
                 className={styles.item}
                 data-picked={isPicked ? '' : undefined}
+                data-answer={isAnswer ? '' : undefined}
+                data-quiet={variant === 'offers' && answered !== undefined && !isAnswer ? '' : undefined}
                 style={{ '--slot-index': String(Math.min(index, 12)) }}
               >
                 <button
@@ -129,16 +148,27 @@ export function SlotList({
                   className={styles.slot}
                   data-busy={slot.isBusy === true ? '' : undefined}
                   {...(variant === 'picker' ? { 'aria-pressed': isPicked } : {})}
+                  {...(variant === 'offers' && answered !== undefined
+                    ? { 'aria-disabled': true, ...(isAnswer ? { 'aria-current': true } : {}) }
+                    : {})}
                   aria-label={[
                     slot.name,
                     slot.isBest === true ? strings.best : undefined,
                     slot.isBusy === true ? strings.busy : undefined,
+                    isAnswer ? strings.picked : undefined,
                   ]
                     .filter((part) => part !== undefined)
                     .join(', ')}
-                  onClick={() => onChange(slot.id)}
+                  onClick={() => {
+                    if (variant === 'offers' && answered !== undefined) return;
+                    onChange(slot.id);
+                  }}
                 >
-                  <span className={styles.time}>{slot.label}</span>
+                  {isAnswer && <Icon name="check" size="sm" />}
+                  {/* Keyed by its words, so 12h to 24h fades the new label in where the old one was. */}
+                  <span key={slot.label} className={styles.time}>
+                    {slot.label}
+                  </span>
                   {slot.isBest === true && (
                     <span className={styles.best} aria-hidden="true">
                       {strings.bestTag}

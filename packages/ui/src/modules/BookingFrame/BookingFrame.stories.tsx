@@ -209,8 +209,8 @@ export const StepToDetailsAndBack: Story = {
     const atMonth = card();
     await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
     await userEvent.click(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' }));
-    // Focus is on the step's heading at once, while it slides in.
-    await expect(canvas.getByRole('heading', { name: 'Your details' })).toHaveFocus();
+    // Focus is in the first field at once, while it slides in, and the card keeps its size.
+    await expect(canvas.getByRole('textbox', { name: /Your name/ })).toHaveFocus();
     await expect(card()?.height).toBe(atMonth?.height);
     await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(document.getAnimations().filter((each) => each.playState === 'running')).toEqual([]));
@@ -237,10 +237,10 @@ export const FromTheKeyboard: Story = {
     await userEvent.keyboard('{ArrowRight}');
     await expect(canvas.getByRole('radio', { name: 'List' })).toBeChecked();
     await expect(running()).toEqual([]);
-    // Book by key: the details show at once, focus on their heading.
+    // Book by key: the details show at once, focus in their first field.
     canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' }).focus();
     await userEvent.keyboard('{Enter}');
-    await expect(canvas.getByRole('heading', { name: 'Your details' })).toHaveFocus();
+    await expect(canvas.getByRole('textbox', { name: /Your name/ })).toHaveFocus();
     await expect(running()).toEqual([]);
     await userEvent.tab();
     await expect(running()).toEqual([]);

@@ -2,6 +2,37 @@
    the heading), then one card: the summary (what, when, who) with its actions, the details, and the changes. */
 @layer components {
   .root {
+    /* The booking page answers a press (the owner, 1 November 2026, public booking page only): any Button in here
+       eases to this scale while held. Set here, not in tokens.css (generated from the artifact, where it stays 1 for
+       the app), because this module only ever mounts on the public pages. */
+    --scale-press: 0.97;
+    /* The booking page's calmer pace, here too (the owner, 2 November 2026): the motion tokens run about half as long
+       again, and a changed Button label (Guests (2), Adding) resolves in. Literals until the artifact carries them. */
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-hover: 180ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-press: 220ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-exit: 200ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-popover: 280ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-move: 340ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-modal: 380ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --label-swap: 260ms;
+    /* The blur the heading rises out of (transitions.dev's texts reveal, 3px), a literal because the token set has no
+       blur yet: the artifact owes a motion blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --reveal-blur: 3px;
+    /* transitions.dev's timings (the owner, 2 November 2026): a text reveal and the success check 500ms, a panel
+       opening 400ms. Literals until the artifact carries them as tokens. */
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --reveal-duration: 600ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
+    --panel-duration: 480ms;
+
     box-sizing: border-box;
     display: flex;
     justify-content: center;
@@ -36,7 +67,11 @@
 
   /* The state's mark sits on the avatar's corner, outside its initials: a 16px dot hung past the circle's edge, so
      "AL" never reads as "AI" under it. */
+  /* The blur the check pops out of (transitions.dev's success check, its large 8px), a literal
+     because the token set has no blur yet: the artifact owes a motion blur token. */
   .mark {
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --check-blur: 8px;
     position: absolute;
     inset-block-end: calc(-1 * var(--space-6));
     inset-inline-end: calc(-1 * var(--space-6));
@@ -48,7 +83,32 @@
     border-radius: var(--radius-full);
     background: var(--tag-green-bg);
     color: var(--tag-green-text);
-    animation: mark-pop var(--duration-modal) var(--ease-out) var(--duration-hover) both;
+    animation: mark-pop var(--reveal-duration) var(--ease-out) var(--duration-hover) both;
+  }
+
+  /* Right after booking, the tick sends two soft rings out across the avatar as it lands, one after the other: the
+     page's one moment of celebration (the owner, 2 November 2026: magical moments), quiet enough to read as a pulse,
+     never confetti. */
+  .mark[data-welcome] {
+    /* How far a ring travels, in the mark's own sizes: out past the avatar's edge. No scale token reaches past 1. */
+    --ring-reach: 3;
+  }
+
+  .mark[data-welcome]::before,
+  .mark[data-welcome]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: var(--border-width-thick) solid var(--tag-green-text);
+    border-radius: var(--radius-full);
+    opacity: 0;
+    animation: mark-ring calc(var(--reveal-duration) * 2) var(--ease-out)
+      calc(var(--reveal-duration) + var(--duration-hover));
+    pointer-events: none;
+  }
+
+  .mark[data-welcome]::after {
+    animation-delay: calc(var(--reveal-duration) * 1.5 + var(--duration-hover));
   }
 
   .mark[data-state='cancelled'] {
@@ -61,10 +121,13 @@
     color: var(--tag-gray-text);
   }
 
+  /* The heading and its warm line rise out of a soft blur one after the other, then the card (transitions.dev's texts
+     reveal), so the page reads top down once as it arrives. */
   .title {
     margin: 0;
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
+    animation: text-rise var(--reveal-duration) var(--ease-in-out) backwards;
   }
 
   .title:focus {
@@ -74,6 +137,7 @@
   .lead {
     margin: 0;
     color: var(--text-secondary);
+    animation: text-rise var(--reveal-duration) var(--ease-in-out) calc(var(--duration-hover) / 2) backwards;
   }
 
   .card {
@@ -85,7 +149,7 @@
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
     container-type: inline-size;
-    animation: receipt-rise var(--duration-modal) var(--ease-out) var(--duration-hover) both;
+    animation: receipt-rise var(--panel-duration) var(--ease-out) var(--duration-hover) both;
   }
 
   .band {
@@ -122,6 +186,30 @@
   }
 
   .chipWeekday,
+  /* Right after booking, the page arrives as one moment rather than all at once (the owner, 2 November 2026: magical
+     moments, as a new workspace opens in Twenty): the host's picture lands, the tick pops on it and sends its rings
+     out, "You're booked" and its warm line rise, then the card, and last the date tile flips into place, so the eye
+     ends on when. A page opened later (Your booking) simply shows. */
+  .root[data-welcome] .avatar {
+    animation: avatar-land var(--reveal-duration) var(--ease-out) backwards;
+  }
+
+  .root[data-welcome] .title {
+    animation-delay: calc(var(--duration-hover) * 2);
+  }
+
+  .root[data-welcome] .lead {
+    animation-delay: calc(var(--duration-hover) * 2.5);
+  }
+
+  .root[data-welcome] .card {
+    animation-delay: calc(var(--duration-hover) * 3);
+  }
+
+  .root[data-welcome] .chip {
+    animation: chip-land var(--reveal-duration) var(--ease-out) calc(var(--duration-hover) * 4.5) backwards;
+  }
+
   .chipMonth {
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);
@@ -224,6 +312,38 @@
     gap: var(--space-8);
   }
 
+  /* Share sits at the row's end, apart from the calendars it isn't one of. */
+  .shareAt {
+    margin-inline-start: auto;
+  }
+
+  /* The share popover: the meeting in two lines as it will be sent, then its actions. */
+  .sharePanel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-inline-size: var(--size-column-wide);
+    padding: var(--space-4);
+  }
+
+  .shareTitle {
+    margin: 0;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .shareLines {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  .shareActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    padding-block-start: var(--space-8);
+  }
+
   .again {
     display: flex;
     flex-wrap: wrap;
@@ -239,8 +359,46 @@
       animation-name: receipt-fade;
     }
 
-    .mark {
+    .mark,
+    .mark[data-welcome]::before,
+    .mark[data-welcome]::after {
       animation: none;
+    }
+
+    .title,
+    .lead {
+      animation-name: receipt-fade;
+    }
+
+    .root[data-welcome] .avatar,
+    .root[data-welcome] .chip {
+      animation-name: receipt-fade;
+    }
+  }
+
+  @keyframes text-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-12);
+      filter: blur(var(--reveal-blur));
+    }
+  }
+
+  @keyframes avatar-land {
+    from {
+      opacity: 0;
+      scale: var(--scale-enter);
+      filter: blur(var(--reveal-blur));
+    }
+  }
+
+  /* The date tile turns up into place, like a calendar's page, out of the large blur. */
+  @keyframes chip-land {
+    from {
+      opacity: 0;
+      scale: var(--scale-shrunk);
+      rotate: x 90deg;
+      filter: blur(var(--check-blur));
     }
   }
 
@@ -257,10 +415,23 @@
     }
   }
 
+  @keyframes mark-ring {
+    from {
+      opacity: var(--opacity-pulse);
+    }
+
+    to {
+      opacity: 0;
+      scale: var(--ring-reach);
+    }
+  }
+
+  /* The check pops out of a soft blur (transitions.dev's success check), so it lands rather than appears. */
   @keyframes mark-pop {
     from {
       scale: var(--scale-shrunk);
       opacity: 0;
+      filter: blur(var(--check-blur));
     }
   }
 }

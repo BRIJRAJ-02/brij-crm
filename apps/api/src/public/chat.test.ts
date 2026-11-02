@@ -15,9 +15,27 @@ import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace } from '../../test/workspace.ts';
 import { createMemoryLimiter } from './limits.ts';
 
-/** Sunday 1 November 2026, midnight UTC. */
-const NOW = new Date('2026-11-01T00:00:00.000Z');
-const MONDAY_9 = '2026-11-02T09:00:00.000Z';
+/** Whole days, in milliseconds. */
+const DAY_MS = 86_400_000;
+/**
+ * The coming Monday at least two days out, read in UTC. A booking fixture has to stay ahead of the database's own
+ * clock (it files reminders and upcoming lists against it), so a fixed date turns this suite red the day it arrives,
+ * as 2 November 2026 did. The rest of the week hangs off it.
+ */
+const MONDAY = ((): string => {
+  const soon = Date.now() + 2 * DAY_MS;
+  const hop = (8 - new Date(soon).getUTCDay()) % 7;
+  return new Date(soon + hop * DAY_MS).toISOString().slice(0, 10);
+})();
+/** A day either side of the Monday, as `YYYY-MM-DD`. */
+const dayFrom = (offset: number): string =>
+  new Date(Date.parse(`${MONDAY}T00:00:00.000Z`) + offset * DAY_MS).toISOString().slice(0, 10);
+const SUNDAY = dayFrom(-1);
+/** The Sunday before, midnight UTC: the clock every booking here reads. */
+const NOW = new Date(`${SUNDAY}T00:00:00.000Z`);
+const MONDAY_9 = `${MONDAY}T09:00:00.000Z`;
+/** The Monday as the chat says it back ("Monday 2 Nov"). */
+const MONDAY_SAID = `Monday ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(MONDAY_9))}`;
 
 let db: Database;
 let identity: IdentityStore;
@@ -119,14 +137,14 @@ describe('booking by chat (AC-1513 to AC-1522)', () => {
       first.conversationId,
     );
     expect(readBack.reply.text).toBe(
-      'Monday 2 Nov at 9:00 AM, 30 minutes, for Grace Hopper (grace@navy.example). Shall I book it?',
+      `${MONDAY_SAID} at 9:00 AM, 30 minutes, for Grace Hopper (grace@navy.example). Shall I book it?`,
     );
     expect(readBack.reply.booked).toBeUndefined();
 
     const said = ['monday at 9am', "I'm Grace Hopper, grace@navy.example", 'Yes, book it'];
     const done = await chat(page.publicKey, said, first.conversationId);
     expect(done.reply.text).toBe(
-      'Done. You’re booked for Monday 2 Nov at 9:00 AM. The details are on their way to grace@navy.example.',
+      `Done. You’re booked for ${MONDAY_SAID} at 9:00 AM. The details are on their way to grace@navy.example.`,
     );
     expect(done.reply.booked?.booking.start).toBe(MONDAY_9);
     const token = done.reply.booked?.manageToken ?? '';

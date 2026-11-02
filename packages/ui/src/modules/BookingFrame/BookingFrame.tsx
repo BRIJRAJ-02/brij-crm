@@ -38,6 +38,9 @@ export interface BookingTeam {
   readonly label: string;
 }
 
+/** A fact's identity: its id, and its words when it is words, so a fact that says something new is a new line. */
+const factKey = (fact: BookingFact) => (typeof fact.children === 'string' ? `${fact.id}:${fact.children}` : fact.id);
+
 /** The most faces a team page's rail shows before "+N". */
 const TEAM_FACES = 4;
 
@@ -158,6 +161,13 @@ export function BookingFrame({
   const { isFocusVisible } = useFocusVisible();
   const [shown, setShown] = useState({ view, isMoved: false, isInstant: false });
   if (shown.view !== view) setShown({ view, isMoved: true, isInstant: isFocusVisible });
+  // The facts the page first drew are simply there; one that arrives or changes after (the chosen time, on the
+  // details step) is drawn anew and resolves in.
+  const [firstFacts] = useState(() => new Set(facts.map(factKey)));
+  const [firstHeading] = useState(heading);
+  // A page that opened on its skeleton: when the host arrives, their block resolves in top down rather than
+  // swapping in at once (loading to content). A page that opened with its facts is simply there.
+  const [openedLoading] = useState(isLoading);
   const isCovered = cover !== undefined;
   const isCardCovered = isCovered && coverPlace === 'card';
   const claim = claimHref === undefined ? {} : { claimHref };
@@ -212,7 +222,7 @@ export function BookingFrame({
               </ul>
             </div>
           ) : (
-            <div className={styles.identity}>
+            <div className={styles.identity} data-arrived={openedLoading || undefined}>
               {host.team === undefined ? (
                 <Avatar
                   name={host.name}
@@ -238,7 +248,11 @@ export function BookingFrame({
               {facts.length > 0 && (
                 <ul className={styles.facts}>
                   {facts.map((fact) => (
-                    <li key={fact.id} className={styles.fact}>
+                    <li
+                      key={factKey(fact)}
+                      className={styles.fact}
+                      {...(firstFacts.has(factKey(fact)) ? {} : { 'data-reveal': true })}
+                    >
                       <span className={styles.factIcon}>
                         <Icon name={fact.icon} size="sm" tone="muted" />
                       </span>
@@ -268,7 +282,16 @@ export function BookingFrame({
           >
             {(heading !== undefined || toolbar !== undefined) && (
               <div className={styles.head} inert={isCardCovered}>
-                {heading !== undefined && <h2 className={styles.heading}>{heading}</h2>}
+                {heading !== undefined && (
+                  // Keyed by its words, so a new heading is drawn anew and resolves in with the step.
+                  <h2
+                    key={heading}
+                    className={styles.heading}
+                    {...(heading === firstHeading ? {} : { 'data-reveal': true })}
+                  >
+                    {heading}
+                  </h2>
+                )}
                 {toolbar !== undefined && <div className={styles.toolbar}>{toolbar}</div>}
               </div>
             )}

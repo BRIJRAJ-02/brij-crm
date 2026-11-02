@@ -25,6 +25,10 @@ A page with its own questions (spec 0057) passes `questions` (the hosted form's 
 
 Empty, prefilled, with guests, a phone page, with questions (one shown by an earlier answer), invalid, sending (Confirm pending, Back off), failed.
 
+## Motion
+
+Guests are chips (the owner, 1 November 2026, from stageshow's share example): Add guests opens one Guests field; an address becomes a removable chip on Enter, a comma, a semicolon or a space, and on leaving the field (just after the blur, so a press on Confirm lands before anything moves). A pasted list splits into chips, duplicates once. Whatever is still typed is taken on Confirm, so a guest is never dropped. Something that isn't an address stays in the field with the reason, to fix or remove. Backspace in the empty field takes the last chip off, each chip's remove button is in the Tab order, and each change is said in a status line. The values sent are unchanged (`guests: string[]`), and a server's `guest-n` marks the n-th chip. A chip resolves in out of a 2px blur. A refused Confirm shakes each field it found wrong once, small and side to side (transitions.dev's error state shake), and the next refusal shakes it again; reduced motion keeps them still. The line above the buttons fades in when it has something to say. Inside the public booking page `--scale-press` is 0.97 here, so its buttons answer a press.
+
 ## Keyboard
 
 Tab through the fields, Add guests, each guest's Remove, the note, the page's questions, Back and Confirm. Enter in a field sends.
@@ -32,3 +36,7 @@ Tab through the fields, Add guests, each guest's Remove, the note, the page's qu
 ## Differences from the artifact
 
 Not in the artifact.
+
+Booked: a `done` outcome may carry `next`. Confirm then reads Booked with a tick for one `--duration-move` before `next` runs (the page opens the receipt there), so the visitor sees the booking land (the owner, 1 November 2026). Without `next`, the page has already moved on.
+
+The chips are GuestChips (2 November 2026), shared with the manage page's guests.

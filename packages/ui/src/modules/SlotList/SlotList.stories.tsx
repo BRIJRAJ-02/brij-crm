@@ -45,6 +45,53 @@ export const Default: Story = {
   },
 };
 
+/** A fast second tap: the time tapped last is the one picked, and only it. */
+export const FastSecondTap: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /^10:00 AM/ }));
+    await userEvent.click(canvas.getByRole('button', { name: /^11:00 AM/ }));
+    await expect(canvas.getByRole('button', { name: /^11:00 AM/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(canvas.getAllByRole('button', { pressed: true })).toHaveLength(1);
+  },
+};
+
+/** The day's times are read again just after a pick (the list refreshing): the pick stays on the time tapped. */
+export const PickDuringRefresh: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Refreshing {...args} />,
+  play: async ({ canvas }) => {
+    const tapped = canvas.getByRole('button', { name: /^10:30 AM/ });
+    await userEvent.click(tapped);
+    await expect(await canvas.findByRole('button', { name: /^10:30 AM/, pressed: true })).toBe(tapped);
+    await expect(canvas.getAllByRole('button', { pressed: true })).toHaveLength(1);
+  },
+};
+
+/** The picked time is gone from the refreshed list (someone else booked it): nothing shows as picked, and no other time takes its place. */
+export const PickedTimeGone: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Vanishing {...args} />,
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /^10:00 AM/ }));
+    await expect(await canvas.findByRole('list')).not.toHaveTextContent('10:00 AM');
+    await expect(canvas.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+  },
+};
+
+/** 12h to 24h: every time keeps its box and only its words change, so nothing redraws under the visitor. */
+export const ClockSwitchInPlace: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Clocked {...args} />,
+  play: async ({ canvas }) => {
+    const before = canvas.getByRole('button', { name: /^2:00 PM/ });
+    await userEvent.click(canvas.getByRole('radio', { name: '24h' }));
+    const after = canvas.getByRole('button', { name: /^14:00/ });
+    await expect(after).toBe(before);
+  },
+};
+
 /** One time in a tall column (the owner's Thu Oct 22): a long list's height at the top, the space below left empty. */
 export const OneSlot: Story = {
   args: { slots: slots(1) },
@@ -135,6 +182,60 @@ function Interactive(args: ComponentProps<typeof SlotList>) {
   return (
     <Stage width="narrow" height="page">
       <SlotList {...args} value={value} onChange={setValue} />
+    </Stage>
+  );
+}
+
+/** Picks as Interactive does, then hands the list the same times as new objects, as a refresh would. */
+function Refreshing(args: ComponentProps<typeof SlotList>) {
+  const [value, setValue] = useState(args.value);
+  const [list, setList] = useState(args.slots);
+  return (
+    <Stage width="narrow" height="page">
+      <SlotList
+        {...args}
+        slots={list}
+        value={value}
+        onChange={(id) => {
+          setValue(id);
+          // The read that was already out lands with the pick: the same times, as new objects.
+          setList((current) => current.map((slot) => ({ ...slot })));
+        }}
+      />
+    </Stage>
+  );
+}
+
+/** The clock switch wired up: the same times, labelled for 12h or 24h. */
+function Clocked(args: ComponentProps<typeof SlotList>) {
+  const [hour12, setHour12] = useState(true);
+  const list = slots(12).map((slot) => {
+    if (hour12) return slot;
+    const [, time = ''] = slot.id.split('T');
+    return { ...slot, label: time, name: slot.name.replace(slot.label, time) };
+  });
+  return (
+    <Stage width="narrow" height="page">
+      <SlotList {...args} slots={list} hour12={hour12} onHour12Change={setHour12} />
+    </Stage>
+  );
+}
+
+/** Picks, then the refresh that was already out lands without the picked time: it was taken meanwhile. */
+function Vanishing(args: ComponentProps<typeof SlotList>) {
+  const [value, setValue] = useState(args.value);
+  const [list, setList] = useState(args.slots);
+  return (
+    <Stage width="narrow" height="page">
+      <SlotList
+        {...args}
+        slots={list}
+        value={value}
+        onChange={(id) => {
+          setValue(id);
+          setList((current) => current.filter((slot) => slot.id !== id));
+        }}
+      />
     </Stage>
   );
 }

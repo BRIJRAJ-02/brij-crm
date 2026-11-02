@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
+import { GuestChips } from '../../molecules/GuestChips/GuestChips.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
@@ -115,6 +115,8 @@ export function BookingChanges({
       </div>
       {mode !== 'idle' && (
         <div
+          // A change switched to another (Move to Guests) opens anew, so the band grows to its new content.
+          key={mode}
           ref={panel}
           id={panelId}
           role="region"
@@ -217,29 +219,28 @@ function GuestsPanel({
         <h3 id={titleId} ref={title} tabIndex={-1} className={styles.title}>
           {strings.guests}
         </h3>
-        <span className={styles.count}>{strings.count(guests.length, maxGuests)}</span>
+        <span className={styles.count}>
+          {/* Keyed by its words, so a new count swaps in place. */}
+          <span key={guests.length} className={styles.swap}>
+            {strings.count(guests.length, maxGuests)}
+          </span>
+        </span>
       </div>
-      {guests.length > 0 && (
-        <ul className={styles.list} aria-labelledby={titleId}>
-          {guests.map((guest) => (
-            <li key={guest} className={styles.guest}>
-              <Avatar name={guest} size="sm" isDecorative />
-              <span className={styles.email}>{guest}</span>
-              <Button
-                variant="ghost"
-                icon="x"
-                label={strings.remove(guest)}
-                onPress={() => {
-                  setStatus('');
-                  setError('');
-                  setFailure('');
-                  setConfirming(guest);
-                }}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* The same chips the booking form adds guests with (the owner, 2 November 2026): one look for adding and
+          removing guests everywhere. Remove still asks first. */}
+      <GuestChips
+        guests={guests}
+        label={strings.guests}
+        removeLabel={strings.remove}
+        onRemove={(index) => {
+          const guest = guests[index];
+          if (guest === undefined) return;
+          setStatus('');
+          setError('');
+          setFailure('');
+          setConfirming(guest);
+        }}
+      />
       {isFull ? (
         <p className={styles.text}>{strings.full(maxGuests)}</p>
       ) : (
@@ -274,7 +275,10 @@ function GuestsPanel({
         </Callout>
       )}
       <p className={styles.status} role="status">
-        {status}
+        {/* The region stays put for screen readers; what it says fades in each time it changes. */}
+        <span key={status} className={styles.swap}>
+          {status}
+        </span>
       </p>
       <p className={styles.note}>{strings.guestsNote}</p>
       {confirming !== undefined && (
