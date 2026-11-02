@@ -21,15 +21,20 @@
     align-items: center;
   }
 
+  /* The mark is a quiet tick, not a saturated disc: at full --success it was the one strong green in the product
+     and the loudest thing on the dialog (owner, 1 November 2026). It takes the green tag's own ground, line and
+     text, so it sits in the same family as every other green the app draws, at a control's size. */
   .check {
     display: grid;
     flex: none;
     place-content: center;
-    inline-size: var(--size-input);
-    block-size: var(--size-input);
+    box-sizing: border-box;
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
+    border: var(--border-width-hairline) solid var(--tag-green-border);
     border-radius: var(--radius-full);
-    background: var(--success);
-    color: var(--on-accent);
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
     animation: pop var(--duration-modal) var(--ease-out) backwards;
     animation-delay: var(--duration-hover);
   }
@@ -117,6 +122,12 @@
     flex: none;
   }
 
+  /* With no preview the code is the whole band, so it is centred in it rather than left at one edge with four
+     fifths of the row empty (1 November 2026). It is the one block that isn't text, so it keeps no left edge. */
+  .visual[data-alone] {
+    justify-content: center;
+  }
+
   /* The preview is a glimpse, capped at size-column tall: a taller picture (a whole phone) is cut at the cap, its
      top kept in view (safe centring falls back to the start when the content overflows). */
   .preview {
@@ -158,17 +169,6 @@
     inset-inline-start: auto;
     inset-inline-end: 0;
     transform-origin: top right;
-  }
-
-  /* With no preview, a quiet line sits beside the QR, centred on it, so the code doesn't stand alone in an empty
-     row; it takes the rest of the width. */
-  .scan {
-    flex: 1 1 var(--size-column-narrow);
-    align-self: center;
-    min-inline-size: 0;
-    margin: 0;
-    color: var(--text-secondary);
-    text-wrap: pretty;
   }
 
   .more {

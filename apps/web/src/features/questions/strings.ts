@@ -49,6 +49,48 @@ export const strings = {
   undo: 'Undo',
   filedLine: (objectName: string, title: string) => `${objectName} › ${title}`,
   goneAttribute: 'An attribute that no longer exists',
+  // The new answer types' options (spec 0063)
+  dateRange: 'Days offered',
+  dateRangeHint: 'Leave either empty for no limit.',
+  earliest: 'Earliest day',
+  latest: 'Latest day',
+  scaleRange: 'From and to',
+  scaleFrom: 'Scale starts at',
+  scaleTo: 'Scale ends at',
+  lowLabel: 'Low end',
+  lowLabelPlaceholder: 'Not likely',
+  highLabel: 'High end',
+  highLabelPlaceholder: 'Very likely',
+  picks: 'Picks',
+  picksHint: 'The least and the most a visitor may pick.',
+  leastPicks: 'Least picks',
+  mostPicks: 'Most picks',
+  anyPicks: 'Any',
+  offerOther: 'Offer Other, with a box to type in',
+  hiddenDefault: 'Value when the link has none',
+  hiddenDefaultHint: (key: string) => `Visitors never see it. Add ?${key}=… to the link to set it.`,
+  // A form's New step dividers (spec 0063)
+  addStep: 'Add a step',
+  /** A divider's name: its step's place ("New step" while empty), then its title when it has one ("Step 2 · Your company"). */
+  stepName: (number: number, title?: string) => {
+    // A divider with nothing under it yet is no step a visitor counts.
+    const place = number === 0 ? 'New step' : `Step ${String(number)}`;
+    return title === undefined || title.trim() === '' ? place : `${place} · ${title.trim()}`;
+  },
+  stepHolds: (count: number) =>
+    count === 0 ? 'No questions yet' : count === 1 ? '1 question' : `${String(count)} questions`,
+  /** On a divider outside the Steps layout: it is kept, and only Steps draws it. */
+  stepsOnly: 'Shows with Steps',
+  /** Add a step's line in the menu outside the Steps layout. */
+  stepsOnlyMenu: 'Visitors see it with Steps',
+  separator: ' · ',
+  stepTitle: 'Step title',
+  stepTitlePlaceholder: 'About your company',
+  stepShowWhenHint: 'Show this step only when earlier answers match. Its answers are not kept when it is skipped.',
+  stepNoEarlier: 'Add a question before this step to show it by an answer.',
+  stepReadsLater: 'A condition reads a question that is no longer before this step. Pick another, or remove it.',
+  removeStep: 'Remove step',
+  stepRemoved: (name: string) => `Removed ${name}. Its questions joined the step above.`,
   answerTypes: {
     short_text: 'Short text',
     long_text: 'Long text',
@@ -62,6 +104,16 @@ export const strings = {
     yes_no: 'Yes or no',
     country: 'Country',
     file: 'File',
+    date: 'Date',
+    time: 'Time',
+    datetime: 'Date and time',
+    rating: 'Rating',
+    scale: 'Scale',
+    multi_select: 'Multi select',
+    address: 'Address',
+    hidden: 'Hidden',
+    signature: 'Signature',
+    ranking: 'Ranking',
   } satisfies Record<AnswerType, string>,
 
   // An answer as a panel shows it

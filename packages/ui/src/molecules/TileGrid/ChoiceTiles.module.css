@@ -148,12 +148,56 @@
     white-space: nowrap;
   }
 
-  /* A disabled tile's reason ("At the limit"), a quiet line under the name, so it never needs a tooltip. */
+  /* A described tile (showsDescription): a small mark beside the name, the sentence under both, and no tall
+     picture slot. Three near empty boxes with a mark and a word read as placeholders and said nothing about what
+     each one does, because the only words were in a tooltip (owner, 1 November 2026). */
+  .tile[data-described] {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--space-2) var(--space-8);
+    /* The rows share one height, so the sentences share a foot: a name that wraps to two lines would otherwise
+       start its sentence a line below the tiles beside it. */
+    align-content: space-between;
+  }
+
+  .tile[data-described] .picture {
+    grid-row: 1;
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
+  }
+
+  /* A described tile's name wraps rather than truncating: "Corner button" beside a mark, past the tick's corner,
+     has about 90px, and an ellipsis on a two word label tells the person nothing. The rows share one height
+     (grid-auto-rows), so a tile that takes two lines doesn't make the row ragged. */
+  .tile[data-described] .name {
+    grid-row: 1;
+    align-self: center;
+    overflow-wrap: break-word;
+    white-space: normal;
+  }
+
+  /* The tick sits in the top end corner, so the name stops short of it rather than running under it. */
+  .tile[data-described][data-mode='select'] .name {
+    padding-inline-end: calc(var(--size-icon) + var(--space-8));
+  }
+
+  .tile[data-described] :is(.describe, .reason) {
+    grid-column: 1 / -1;
+  }
+
+  /* The two quiet lines under a name, as one rule so they can't drift: what the choice does (`describe`, the
+     thing a person reads to pick between them) and why a disabled tile can't be picked (`reason`, "At the
+     limit", so it never needs a tooltip). */
+  .describe,
   .reason {
     min-inline-size: 0;
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+  }
+
+  .describe {
+    text-wrap: pretty;
   }
 
   .tick {
@@ -210,7 +254,7 @@
   }
 
   /* A disabled tile fades its picture and name, never its reason: that is the one line the person has to read. */
-  .tile[data-disabled] :is(.picture, .name) {
+  .tile[data-disabled] :is(.picture, .name, .describe) {
     opacity: var(--opacity-disabled);
   }
 

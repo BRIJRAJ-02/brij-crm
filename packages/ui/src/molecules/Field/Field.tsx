@@ -108,6 +108,16 @@ export interface FieldProps {
   readonly descriptionId?: string;
   readonly isRequired?: boolean;
   readonly type?: 'text' | 'email' | 'url' | 'tel' | 'search' | 'password';
+  /**
+   * A day, a time or both, typed in the platform's own control (a hosted form's Date, Time and Date and time
+   * questions, spec 0063): the browser's picker, its keyboard and its phone wheel, in the field's own frame, with
+   * the earliest and latest it offers. The value stays the input's text (`YYYY-MM-DD`, `HH:MM`, both with a `T`).
+   */
+  readonly temporal?: {
+    readonly type: 'date' | 'time' | 'datetime-local';
+    readonly min?: string | undefined;
+    readonly max?: string | undefined;
+  };
   readonly inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel' | 'url' | 'search';
   readonly autoComplete?: string;
   /**
@@ -207,6 +217,7 @@ export function Field({
   isRequired = false,
   type = 'text',
   inputMode,
+  temporal,
   autoComplete,
   isVerbatim = false,
   name,
@@ -259,6 +270,13 @@ export function Field({
     showCounter && maxLength !== undefined && length >= maxLength * COUNTER_FROM ? maxLength : undefined;
   const inputProps = {
     className: styles.input,
+    ...(temporal === undefined
+      ? {}
+      : {
+          type: temporal.type,
+          ...(temporal.min === undefined ? {} : { min: temporal.min }),
+          ...(temporal.max === undefined ? {} : { max: temporal.max }),
+        }),
     // A multiline value to copy is code: it takes the Code atom's face.
     ...(isCopy && isMultiline ? { 'data-code': true } : {}),
     // Autofill off (a contact's phone, a search): password managers leave the field alone too, as browsers do.

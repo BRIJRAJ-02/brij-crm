@@ -94,7 +94,8 @@ function FormPending() {
       <EditorPending
         title={strings.forms}
         icon="clipboard-list"
-        cards={[strings.name]}
+        // The Form tab opens with the draft's name, then Layout (spec 0063), above the questions.
+        cards={tab === 'form' ? [strings.name, strings.layoutTitle] : [strings.name]}
         tabs={{
           label: strings.tabs,
           items: FORM_TABS.filter((id) => published || id === 'form' || id === 'settings').map((id) => ({

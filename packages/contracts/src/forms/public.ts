@@ -5,6 +5,7 @@
 // the app), so its bundle carries no schema library.
 import * as z from 'zod';
 import { ANSWER_TYPES } from './answer-types.ts';
+import { FORM_LAYOUTS } from './path.ts';
 import { CONDITION_OPS } from './show-when.ts';
 import { Uuid } from '../values/ids.ts';
 import { SubmitContext } from './context.ts';
@@ -14,6 +15,28 @@ import { PublicBrand } from '../workspace-brand.ts';
 export const FORM_LANGUAGES = ['en', 'es', 'fr', 'de', 'pt', 'it', 'nl', 'hi'] as const;
 /** A hosted form's language. */
 export type FormLanguage = (typeof FORM_LANGUAGES)[number];
+
+/** A Show when as the visitor's page reads it. */
+const PublicShowWhen = z.object({
+  join: z.enum(['all', 'any']),
+  rules: z.array(
+    z.object({
+      key: z.string(),
+      op: z.enum(CONDITION_OPS),
+      value: z.union([z.string(), z.array(z.string())]).optional(),
+    }),
+  ),
+});
+
+/** One step as the visitor's page draws it (spec 0063): its questions by key, its title and its Show when. */
+export const PublicStep = z.object({
+  id: z.string().optional(),
+  title: z.string().optional(),
+  keys: z.array(z.string()),
+  showWhen: PublicShowWhen.optional(),
+});
+/** One step as the visitor's page draws it. */
+export type PublicStep = z.infer<typeof PublicStep>;
 
 /** One question as the visitor's page renders it: its key (the input's name), label, type and choices. */
 export const PublicQuestion = z.object({
@@ -25,20 +48,24 @@ export const PublicQuestion = z.object({
   /** Each choice's stable key, in the choices' order: the option value a site's own form posts. */
   choiceKeys: z.array(z.string()).optional(),
   /** Shown only when earlier answers match (spec 0043, AC-1614): `visibleQuestions` decides, here and on the server. */
-  showWhen: z
-    .object({
-      join: z.enum(['all', 'any']),
-      rules: z.array(
-        z.object({
-          key: z.string(),
-          op: z.enum(CONDITION_OPS),
-          value: z.union([z.string(), z.array(z.string())]).optional(),
-        }),
-      ),
-    })
-    .optional(),
+  showWhen: PublicShowWhen.optional(),
   placeholder: z.string().optional(),
   required: z.boolean(),
+  /** What its type sets (spec 0063): a date's range, a scale's ends and words, a multi select's picks and Other. */
+  options: z
+    .object({
+      earliest: z.string().optional(),
+      latest: z.string().optional(),
+      from: z.number().optional(),
+      to: z.number().optional(),
+      lowLabel: z.string().optional(),
+      highLabel: z.string().optional(),
+      min: z.number().optional(),
+      max: z.number().optional(),
+      other: z.boolean().optional(),
+      default: z.string().optional(),
+    })
+    .optional(),
 });
 /** One question as the visitor's page renders it. */
 export type PublicQuestion = z.infer<typeof PublicQuestion>;
@@ -58,6 +85,10 @@ export const PublicForm = z.object({
   language: z.enum(FORM_LANGUAGES),
   look: z.object({ colour: z.enum(['light', 'dark']), corners: z.enum(['rounded', 'square']) }),
   questions: z.array(PublicQuestion),
+  /** Classic when absent (spec 0063, AC-6302): Steps and One at a time load their own code on the page. */
+  layout: z.enum(FORM_LAYOUTS).optional(),
+  /** With Steps, the steps over `questions` (`stepsOf`); absent otherwise, since no other layout draws them. */
+  steps: z.array(PublicStep).optional(),
   /** What the thank you says, when the form has its own words for it. */
   thanks: z.string().optional(),
   /** Whether the thank you offers a meeting (#59): false until booking pages exist. */

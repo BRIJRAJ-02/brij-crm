@@ -116,6 +116,10 @@ export function ownFormHtml(form: OwnForm, script: string): string {
         ? ''
         : ` placeholder="${escapeHtml(question.placeholder)}"`;
     if (question.answerType === 'file') return [`  <!-- ${escapeHtml(strings.ownFormNoFiles(question.label))} -->`];
+    // A signature is drawn and a ranking dragged (spec 0063): neither has a plain HTML control.
+    if (question.answerType === 'signature' || question.answerType === 'ranking') {
+      return [`  <!-- ${escapeHtml(strings.ownFormHostedOnly(question.label))} -->`];
+    }
     if (question.answerType === 'checkbox' || question.answerType === 'yes_no') {
       return [
         '  <div>',

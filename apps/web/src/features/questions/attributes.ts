@@ -31,6 +31,7 @@ export async function createPlannedAttributes(
           title,
           type: plan.type,
           ...(plan.isUnique === true ? { isUnique: true } : {}),
+          ...(plan.isMulti === true ? { isMulti: true } : {}),
           ...(plan.type === 'select'
             ? {
                 options: plan.choices.map((label) => ({

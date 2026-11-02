@@ -20,7 +20,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { createHmac } from 'node:crypto';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { isRefusal, refuse, refuseAll } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -32,7 +32,7 @@ import { FORMS_PROCESS } from './process.ts';
 import { attachUploads, claimSpamUploads, claimUploads } from './uploads.ts';
 import { routeSubmission, storedRoute, submissionDecision } from '../routing/forms.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
-import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow } from './shared.ts';
+import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow, type VersionRow } from './shared.ts';
 import {
   judgeSubmission,
   REPEAT_WINDOW_HOURS,
@@ -374,6 +374,22 @@ async function repeatsOf(tx: WorkspaceTx, workspaceId: string, formId: string, h
   return result.rows[0]?.repeats ?? 0;
 }
 
+/** A version of `formId` that was published, by its number; undefined for a draft or a number it never had. */
+async function publishedVersion(tx: WorkspaceTx, formId: string, number: number): Promise<VersionRow | undefined> {
+  const [row] = await tx
+    .select({ id: schema.formVersions.id })
+    .from(schema.formVersions)
+    .where(
+      and(
+        eq(schema.formVersions.formId, formId),
+        eq(schema.formVersions.number, number),
+        isNotNull(schema.formVersions.publishedAt),
+      ),
+    )
+    .limit(1);
+  return row === undefined ? undefined : (await loadVersions(tx, [row.id])).get(row.id);
+}
+
 /**
  * Stores one submission (AC-553 to AC-556). The form must be live (a paused
  * one is 410 `FORM_CLOSED`, AC-662), and its answers are checked against the
@@ -410,8 +426,16 @@ export async function submitForm(
       const { tx } = context;
       const form = publicRow(await loadForm(tx, input.formId));
       if (form.status !== 'live') throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
-      const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
-      if (live === undefined) throw new Error('A live form names a version that is gone.');
+      const current = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+      if (current === undefined) throw new Error('A live form names a version that is gone.');
+      // The version the visitor filled in (AC-6302): a form published again while they filled it in is checked,
+      // filed and routed as the version they saw, as long as that version was published on this form. An unknown
+      // number, or none (a site's own form), is checked against the live one.
+      const filled =
+        body.versionNumber === undefined || body.versionNumber === current.number
+          ? undefined
+          : await publishedVersion(tx, form.id, body.versionNumber);
+      const live = filled ?? current;
       const rendered = publicFormOf(live.document, {
         publicKey: form.publicKey,
         status: 'live',

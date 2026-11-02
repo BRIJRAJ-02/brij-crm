@@ -1,7 +1,7 @@
 // Brief
 // Purpose: one form's editor (spec 0023, 0023-experience.md, Builder): its questions beside a live preview, and Settings (what happens after sending, routing, the owner) from the start; Install and Submissions once published.
 // Main task: shape the draft (saved quietly as you go), publish it, and share it.
-// Leaves out: steps and routing, round robin (#58), booking (#59), file questions (#32), analytics.
+// Leaves out: jumps and endings (spec 0063 slice 5), round robin (#58), booking (#59), analytics.
 import {
   isDataError,
   type FormDocument,
@@ -13,7 +13,7 @@ import {
   type SubmissionState,
   type SubmissionView,
 } from '@crm/data';
-import { FORM_QUESTIONS_MAX, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
+import { FORM_QUESTIONS_MAX, pathOf, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
 import { useCaptureList } from '@crm/data/react';
 import {
   Button,
@@ -47,8 +47,10 @@ import {
   sameDocument,
   savableDraft,
   statusOf,
+  withFlow,
   withQuestions,
 } from './draft.ts';
+import { LayoutCard } from './LayoutCard.tsx';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { PublishDialog } from './PublishDialog.tsx';
@@ -197,7 +199,9 @@ export function FormEditor(props: FormEditorProps) {
       document: draft,
       attributes: publishAttributesOf(target),
     });
-    return still?.code === problem.code && still.questionId === problem.questionId ? problem : undefined;
+    return still?.code === problem.code && still.questionId === problem.questionId && still.stepId === problem.stepId
+      ? problem
+      : undefined;
   }, [draft, problem, form.name, form.publicKey, target]);
 
   const apply = (view: FormView) => {
@@ -224,6 +228,47 @@ export function FormEditor(props: FormEditorProps) {
   const status = statusOf(form, isChanged);
   const liveIds = useMemo(() => new Set(form.live?.questions.map((question) => question.id) ?? []), [form.live]);
   const preview = useMemo(() => previewOf(draft, { key: form.publicKey }), [draft, form.publicKey]);
+  // The question or divider last opened: Steps and One at a time preview the step it is in (spec 0063).
+  const [previewRow, setPreviewRow] = useState<string | undefined>(undefined);
+  // The edited question's or divider's step, shown even when its Show when hides it from a visitor who has answered
+  // nothing yet: its conditions (the step's, and its questions') are lifted in the preview only.
+  const shownPreview = useMemo(() => {
+    if (previewRow === undefined || preview.layout === undefined) return { form: preview, step: undefined };
+    const stepId = previewRow.startsWith('step:') ? previewRow.slice('step:'.length) : undefined;
+    const key = draft.questions.find((question) => question.id === previewRow)?.key;
+    const steps = preview.steps ?? [];
+    const target =
+      preview.layout === 'steps'
+        ? steps.find((step) =>
+            stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId,
+          )
+        : undefined;
+    const lifted = new Set(target?.keys ?? (key === undefined ? [] : [key]));
+    const form = {
+      ...preview,
+      questions: preview.questions.map((question) => {
+        if (!lifted.has(question.key)) return question;
+        const { showWhen: _lifted, ...rest } = question;
+        return rest;
+      }),
+      ...(preview.steps === undefined
+        ? {}
+        : {
+            steps: preview.steps.map((step) => {
+              if (step !== target) return step;
+              const { showWhen: _lifted, ...rest } = step;
+              return rest;
+            }),
+          }),
+    };
+    const path = pathOf(form, {}).steps;
+    const at = path.findIndex((step) =>
+      target !== undefined
+        ? step.keys.some((each) => target.keys.includes(each))
+        : key !== undefined && step.keys.includes(key),
+    );
+    return { form, step: at === -1 ? undefined : at };
+  }, [previewRow, preview, draft.questions]);
 
   // Gives each unfiled, labelled question an attribute on the target object, with no prompt: files the question
   // onto it, and offers Undo (unfile, archive). Answers the draft to publish; a failure leaves the question unfiled.
@@ -630,8 +675,25 @@ export function FormEditor(props: FormEditorProps) {
                 }}
               />
             )}
+            <LayoutCard
+              layout={draft.layout}
+              hasSteps={draft.steps.length > 0}
+              isReadOnly={!canManage}
+              onChange={(layout) => {
+                setDraft((before) => ({ ...before, layout }));
+              }}
+            />
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
+              onOpened={setPreviewRow}
+              steps={{
+                steps: draft.steps,
+                layout: draft.layout,
+                onChange: (update) => {
+                  setDraft((before) => withFlow(before, update({ questions: before.questions, steps: before.steps })));
+                },
+                ...(shown?.stepId === undefined ? {} : { problem: { stepId: shown.stepId, message: shown.message } }),
+              }}
               questions={draft.questions}
               onChange={(update) => {
                 setDraft((before) => withQuestions(before, update(before.questions)));
@@ -670,7 +732,12 @@ export function FormEditor(props: FormEditorProps) {
       footer={settings.footer}
       {...(current === 'form'
         ? {
-            preview: <HostedFormPreview form={preview} />,
+            preview: (
+              <HostedFormPreview
+                form={shownPreview.form}
+                {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
+              />
+            ),
             previewControls: (
               <>
                 <Select

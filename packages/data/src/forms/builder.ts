@@ -2,15 +2,27 @@
 // server (spec 0023, 0023-experience.md), so a screen checks a draft the way
 // a publish will and never imports `@crm/contracts` itself. Plain TypeScript
 // with no Zod: the builder's route loads it.
-import type { FormDocument, FormLanguage, PublicForm } from '@crm/contracts/forms';
+import {
+  stepsOfBreaks as breaksToSteps,
+  type FormDocument,
+  type FormLanguage,
+  type PublicForm,
+} from '@crm/contracts/forms';
 
 export {
   ANSWER_TYPES,
+  answerWords,
+  BOOKING_ANSWER_TYPES,
   CHOICE_TYPES,
   choiceKeysOf,
   FILES_ONTO,
   FORM_CHOICES_MAX,
+  FORM_LAYOUTS,
   FORM_QUESTIONS_MAX,
+  FORM_STEP_TITLE_MAX,
+  pathOf,
+  stepsOfBreaks,
+  type FormLayout,
   FORM_SLUG,
   fitsAttribute,
   freeKey,
@@ -41,7 +53,7 @@ export {
   type HiddenField,
   type ShowWhen,
 } from '@crm/contracts/forms';
-export type { FormAfter, FormLanguage, FormLook, PublicQuestion } from '@crm/contracts/forms';
+export type { FormAfter, FormLanguage, FormLook, FormStep, PublicQuestion } from '@crm/contracts/forms';
 
 /**
  * A draft as its visitor would get it, for the builder's preview: what the
@@ -73,7 +85,11 @@ export function previewOf(
         : { placeholder: question.placeholder }),
       required: question.required,
       ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
+      ...(question.options === undefined ? {} : { options: question.options }),
     })),
+    // As the server's `layoutOf`: nothing for Classic, the steps only with Steps.
+    ...(document.layout === 'classic' ? {} : { layout: document.layout }),
+    ...(document.layout === 'steps' ? { steps: breaksToSteps(document.questions, document.steps) } : {}),
     ...(document.after.kind === 'message' && document.after.message !== '' ? { thanks: document.after.message } : {}),
     offersMeeting: false,
   };

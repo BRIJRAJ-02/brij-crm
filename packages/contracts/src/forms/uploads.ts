@@ -43,6 +43,15 @@ export const FORM_UPLOAD_TYPES: readonly UploadType[] = [
   },
 ];
 
+/**
+ * A signature's upload (spec 0063, AC-6307, Security model): a PNG the page drew, at most 300 kB. The server holds a
+ * signature answer to it, so a signature never brings any other file in.
+ */
+export const SIGNATURE_UPLOAD = { contentType: 'image/png', maxBytes: 300 * 1024 } as const;
+
+/** The answer types whose answer is an upload: a file, and a signature (spec 0063). */
+export const UPLOAD_ANSWER_TYPES: readonly string[] = ['file', 'signature'];
+
 /** The `accept` list a file picker is given: every extension a form takes, with its dot. */
 export const FORM_UPLOAD_ACCEPT: readonly string[] = FORM_UPLOAD_TYPES.flatMap((type) =>
   type.extensions.map((extension) => `.${extension}`),

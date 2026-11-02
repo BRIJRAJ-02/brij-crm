@@ -7,6 +7,7 @@ import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   choiceKeysOf,
   FormDocument,
+  stepsOf,
   type FormQuestion,
   type PublicForm,
   type PublicQuestion,
@@ -295,7 +296,18 @@ export function publicQuestionOf(question: FormQuestion): PublicQuestion {
     ...(question.placeholder === undefined || question.placeholder === '' ? {} : { placeholder: question.placeholder }),
     required: question.required,
     ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
+    ...(question.options === undefined ? {} : { options: question.options }),
   };
+}
+
+/**
+ * A version's layout as its page draws it (spec 0063, AC-6302): nothing for Classic, so a Classic form reads as it
+ * always has; the layout for One at a time; with Steps, its steps over the questions' keys too.
+ */
+export function layoutOf(document: FormDocument): Pick<PublicForm, 'layout' | 'steps'> {
+  if (document.layout === 'classic') return {};
+  if (document.layout === 'conversational') return { layout: 'conversational' };
+  return { layout: 'steps', steps: stepsOf(document) };
 }
 
 /**
@@ -315,6 +327,7 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
     language: document.language,
     look: document.look,
     questions: document.questions.map(publicQuestionOf),
+    ...layoutOf(document),
     ...(document.after.kind === 'message' && document.after.message !== '' ? { thanks: document.after.message } : {}),
     offersMeeting: false,
     ...(context.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: context.recaptchaSiteKey }),

@@ -11,7 +11,9 @@ New. Recently viewed shows the member's last records as chips, the way a record 
 ```tsx
 <RecordChipList
   label="Recently viewed"
-  records={[{ display: { objectId, recordId, name: 'Northwind Traders', kind: 'company' }, href: '/w/acme/companies/…' }]}
+  records={[
+    { display: { objectId, recordId, name: 'Northwind Traders', kind: 'company' }, href: '/w/acme/companies/…' },
+  ]}
   emptyTitle="Nothing viewed yet"
   emptyText="Records you open show here."
 />

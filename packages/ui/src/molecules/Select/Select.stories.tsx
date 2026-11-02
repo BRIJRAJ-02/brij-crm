@@ -451,6 +451,40 @@ export const WithInfoReadOnly: Story = {
   },
 };
 
+/**
+ * Locked in a row (`isReadOnly` with `isLabelHidden`): the same outlined box as the selects above and below it,
+ * quieted, and the reason on the lock rather than a hint line, so every row keeps one height (the form's publish
+ * dialog, owner, 1 November 2026).
+ */
+export const ReadOnlyInARow: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Select label="Your name, saved as" isLabelHidden size="sm" items={STAGES} value="lead" />
+      <Select
+        label="Work email, saved as"
+        isLabelHidden
+        size="sm"
+        items={STAGES}
+        value="qualified"
+        isReadOnly
+        readOnlyReason="The form matches records by this email."
+      />
+      <Select label="Phone, saved as" isLabelHidden size="sm" items={STAGES} value="proposal" />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    // The state and the why reach a screen reader together, and nothing is added under the row.
+    await expect(canvas.getByRole('img', { name: 'Read only: The form matches records by this email.' })).toBeVisible();
+    await expect(canvas.queryByText('The form matches records by this email.')).toBeNull();
+    // All three rows are one height: that is what the quieting is for.
+    const heights = [...canvasElement.querySelectorAll('.ws-select-root')].map((each) =>
+      Math.round(each.getBoundingClientRect().height),
+    );
+    await expect(heights).toHaveLength(3);
+    await expect(new Set(heights).size).toBe(1);
+  },
+};
+
 /** Options grouped under headings (`group`): a booking page's calendars by account, after the default. */
 export const Grouped: Story = {
   parameters: { crm: { screenshot: false } },

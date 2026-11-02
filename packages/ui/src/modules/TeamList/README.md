@@ -12,7 +12,13 @@ New. Team today shows every member with a presence ("Free now", "In a meeting") 
 <TeamList
   label="Team today"
   rows={[
-    { id, name: 'Grace Hopper', presence: 'busy', status: 'In a meeting', detail: 'Until 3:30 PM · Next: Intro call, 4:00 PM' },
+    {
+      id,
+      name: 'Grace Hopper',
+      presence: 'busy',
+      status: 'In a meeting',
+      detail: 'Until 3:30 PM · Next: Intro call, 4:00 PM',
+    },
     { id, name: 'Linus', presence: 'free', status: 'Free now', detail: 'Next: Busy, 2:00 PM' },
   ]}
 />

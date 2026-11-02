@@ -82,3 +82,25 @@ export function hiddenOf(context: SubmitContext): Record<string, string> {
   }
   return hidden;
 }
+
+/** The address's parameters the embed script and the page use themselves: never a question's prefill. */
+const RESERVED: ReadonlySet<string> = new Set(['embed', 'mode', 'fid', 'host', 'ctx', 'page', 'referrer', 'from']);
+
+/**
+ * The address's answers to start with, by question key (spec 0063, AC-6309): `?email=ada@acme.com`, a key repeated
+ * for a multi select's several picks. UTM tags stay in, since a hidden question may be keyed `utm_campaign`; a key
+ * no question has is simply never read. Every value is untrusted and checked as an answer is.
+ */
+export function prefillOf(params: URLSearchParams): Readonly<Record<string, string | readonly string[]>> {
+  const found = new Map<string, string[]>();
+  for (const [key, value] of params) {
+    if (RESERVED.has(key) || key.length > 40) continue;
+    found.set(key, [...(found.get(key) ?? []), value].slice(0, 40));
+  }
+  return Object.fromEntries(
+    [...found].map(([key, values]): [string, string | readonly string[]] => [
+      key,
+      values.length === 1 ? (values[0] ?? '') : values,
+    ]),
+  );
+}

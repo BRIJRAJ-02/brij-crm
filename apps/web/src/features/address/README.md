@@ -6,4 +6,5 @@ A workspace's web address (spec 0036), shared by first run's Your workspace (`fe
 - `useAddress(check, candidates, typed)`: the address to use, where it stands (invalid, checking, free, taken, unknown) and up to three free suggestions. `check` is `data.workspaces.slugAvailable`; each address is asked about once, 300 ms after the last key, at most six checks a change. Feed `suggestions` to Field's `suggestions`.
 
 On a settings page, pass the typed address (or undefined for the default) and leave out the workspace's own current address from what counts as taken. Settings › Workspace › General does: its `check` answers free for the saved address, and its suggestions come from the typed one.
+
 - `atAddress(href, from, to)`: the same page at a workspace's new address. The `/w/$slug` frame uses it when the address in the URL is one the workspace held before (the door still finds it, migration 0082), so old links and bookmarks move to the new address.

@@ -6,6 +6,7 @@
 import type { FormAttributeChoice, FormDocument, FormQuestion, FormTargetChoices, FormView } from '@crm/data';
 import { FORM_SLUG, type PublishAttribute, type QuestionPreset, slugFromName } from '@crm/data/forms';
 import * as list from '../questions/questions.ts';
+import { keepBreaks, renameStepKeys, type Flow } from '../questions/steps.ts';
 import type { PlannedAttribute, QuestionChange } from '../questions/questions.ts';
 import { strings } from './strings.ts';
 
@@ -62,7 +63,22 @@ export function changeQuestion(
  */
 export function withQuestions(document: FormDocument, questions: readonly FormQuestion[]): FormDocument {
   const renames = list.renamedKeys(document.questions, questions);
-  const next: FormDocument = { ...document, questions: [...questions] };
+  // The New step dividers follow the questions (spec 0063): a deleted question's break moves to the next one.
+  const next: FormDocument = {
+    ...document,
+    questions: [...questions],
+    steps: keepBreaks(document.questions, questions, document.steps),
+  };
+  return renames.reduce((each, [from, to]) => renameRouting(each, from, to), next);
+}
+
+/**
+ * The draft with new questions and breaks together (spec 0063, AC-6303): a move among questions and dividers, or a
+ * divider's own change. Keys a question changed are followed by the routing rules and the steps' Show when.
+ */
+export function withFlow(document: FormDocument, flow: Flow): FormDocument {
+  const renames = list.renamedKeys(document.questions, flow.questions);
+  const next: FormDocument = { ...document, questions: [...flow.questions], steps: [...flow.steps] };
   return renames.reduce((each, [from, to]) => renameRouting(each, from, to), next);
 }
 
@@ -71,10 +87,11 @@ export function renameKey(document: FormDocument, from: string, to: string): For
   return renameRouting({ ...document, questions: list.renameShowWhen(document.questions, from, to) }, from, to);
 }
 
-/** The document with every routing rule's condition reading `from` reading `to` instead. */
+/** The document with every routing rule's and step's condition reading `from` reading `to` instead. */
 function renameRouting(document: FormDocument, from: string, to: string): FormDocument {
   return {
     ...document,
+    steps: renameStepKeys(document.steps, from, to),
     routing: {
       rules: document.routing.rules.map((rule) => ({
         ...rule,

@@ -1,5 +1,5 @@
 import type { PublicQuestion } from '@crm/contracts/forms';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { ProgressBar } from '../atoms/ProgressBar/ProgressBar.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -17,58 +17,42 @@ import {
 } from './FormParts.tsx';
 import type { HostedFormProps } from './HostedForm.tsx';
 import styles from './HostedFormSteps.module.css';
-import { FormBooking } from './FormBooking.tsx';
+import { BookingView, useLoadedBooking } from './BookingView.tsx';
 import { asideOf, labelOf, Question } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
 import { useHostedForm } from './use-hosted-form.ts';
 
-/** One step: a run of question keys, in order, with an optional title ("About your company"). */
-export interface FormStep {
-  readonly title?: string;
-  readonly keys: readonly string[];
-}
-
-/** `steps` groups questions into steps; `conversational` asks one question at a time. */
-export type HostedFormStepsLayout = 'steps' | 'conversational';
-
-/** Props for HostedFormSteps. */
+/** Props for HostedFormSteps: Classic's; the layout and the steps come with the form. */
 export interface HostedFormStepsProps extends HostedFormProps {
-  readonly layout: HostedFormStepsLayout;
-  /** For `steps`: the groups, in order. Questions no step names join the last; none at all is one step. */
-  readonly steps?: readonly FormStep[];
+  /**
+   * In the builder's preview, which step (or question, one at a time) shows: the one being edited beside it, since
+   * the inert preview can't be stepped through. Clamped to the steps there are; ignored outside the preview.
+   */
+  readonly previewStep?: number;
 }
 
-/** True for a question whose control goes on with Enter (one line of text, or a choice), so OK shows its keycap. */
+/** The step layouts this component draws. */
+type StepsLayout = 'steps' | 'conversational';
+
+/** True for a question whose control goes on with Enter (one line of text, a choice, or one at a time a long answer). */
 function takesEnter(question: PublicQuestion | undefined): boolean {
   return (
     question !== undefined &&
-    ['short_text', 'email', 'phone', 'website', 'number', 'choice'].includes(question.answerType)
+    ['short_text', 'long_text', 'email', 'phone', 'website', 'number', 'choice', 'rating', 'scale'].includes(
+      question.answerType,
+    )
   );
 }
 
-interface ResolvedStep {
-  readonly title?: string | undefined;
-  readonly questions: readonly PublicQuestion[];
-}
+/**
+ * How long a one at a time choice stays on screen once picked before the next question comes (AC-6305): long
+ * enough to see the pick land, short enough not to wait on. None under reduced motion.
+ */
+const ADVANCE_PAUSE_MS = 400;
 
-/** The steps to draw: one per question one at a time, else the given groups over the form's own questions. */
-function resolve(
-  questions: readonly PublicQuestion[],
-  layout: HostedFormStepsLayout,
-  steps: readonly FormStep[] | undefined,
-): readonly ResolvedStep[] {
-  if (layout === 'conversational') return questions.map((question) => ({ questions: [question] }));
-  const placed = new Set<string>();
-  const groups = (steps ?? []).flatMap((step) => {
-    const own = questions.filter((question) => step.keys.includes(question.key) && !placed.has(question.key));
-    own.forEach((question) => placed.add(question.key));
-    return own.length === 0 ? [] : [{ title: step.title, questions: own }];
-  });
-  const rest = questions.filter((question) => !placed.has(question.key));
-  if (groups.length === 0) return [{ questions }];
-  if (rest.length === 0) return groups;
-  const last = groups[groups.length - 1];
-  return [...groups.slice(0, -1), { title: last?.title, questions: [...(last?.questions ?? []), ...rest] }];
+/** True when the visitor asked for less motion. */
+function prefersStill(): boolean {
+  return globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /**
@@ -76,14 +60,13 @@ function resolve(
  * 0023-form-design.md, Form types): `steps` groups questions with a progress
  * line, Back and Continue, and checks each step before moving on;
  * `conversational` asks one question at a time, large, with Enter to go on.
- * Both share Classic's state, checker, thank you and foot. Drawn as library
- * stories only until the owner confirms the form's `layout` and `steps`.
+ * Both share Classic's state, checker, thank you and foot. The steps are the
+ * visitor's path (`pathOf`, spec 0063): a step its Show when hides, or one
+ * with nothing showing, is skipped and not counted.
  */
 export function HostedFormSteps({
   form,
   mode,
-  layout,
-  steps,
   countryGuess,
   prefill,
   onSubmit,
@@ -93,13 +76,19 @@ export function HostedFormSteps({
   onStale,
   now = Date.now,
   logo = TIMEFIX_LOGO,
+  previewStep = 0,
   brand,
 }: HostedFormStepsProps) {
-  const [index, setIndex] = useState(0);
-  const [hasMoved, setMoved] = useState(false);
+  const [shownIndex, setIndex] = useState(0);
+  // How the visitor last moved: a pointer's move eases the next question in, a key's shows it at once.
+  const [moved, setMoved] = useState<'pointer' | 'key' | undefined>(undefined);
+  const hasMoved = moved !== undefined;
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
   const [focusesStep, setFocusesStep] = useState(false);
   const [round, setRound] = useState(0);
+  // One at a time, the pointer picks on the question showing (each restarts the pause before going on).
+  const [picks, setPicks] = useState(0);
+  const loadedBooking = useLoadedBooking();
   const { state, refs } = useHostedForm({
     form,
     mode,
@@ -121,20 +110,28 @@ export function HostedFormSteps({
     },
   });
   const { words, preview } = state;
-  // Only the questions that show (spec 0043, AC-1614): a step whose questions are all hidden is skipped and not counted.
-  const groups = resolve(
-    form.questions.filter((question) => state.shown.has(question.key)),
-    layout,
-    steps,
-  );
+  const layout: StepsLayout = form.layout === 'conversational' ? 'conversational' : 'steps';
+  const byKey = new Map(form.questions.map((question) => [question.key, question]));
+  // A hidden question has nothing to draw (spec 0063), so a step of hidden questions alone is no step to show.
+  const groups = state.path.steps.flatMap((shown) => {
+    const questions = shown.keys.flatMap((key) => {
+      const question = byKey.get(key);
+      return question === undefined || question.answerType === 'hidden' ? [] : [question];
+    });
+    return questions.length === 0 ? [] : [{ title: shown.title, questions }];
+  });
   // Send another starts again from the first step.
   if (state.round !== round) {
     setRound(state.round);
     setIndex(0);
-    setMoved(false);
+    setMoved(undefined);
     setFocusesStep(false);
+    setPicks(0);
   }
-  const step = groups[Math.min(index, groups.length - 1)] ?? { questions: [] };
+  // The step on screen: the one reached, kept within the steps the path has now (an answer can take some away), or
+  // in the builder's preview the one being edited.
+  const index = Math.max(0, Math.min(mode === 'preview' ? previewStep : shownIndex, groups.length - 1));
+  const step = groups[index] ?? { title: undefined, questions: [] };
   const isLast = index >= groups.length - 1;
   const first = step.questions[0];
 
@@ -146,10 +143,32 @@ export function HostedFormSteps({
   }, [index]);
 
   const go = (next: number) => {
-    setMoved(true);
+    setPicks(0);
+    setMoved(byPointer.current ? 'pointer' : 'key');
     setFocusesStep(true);
     setIndex(next);
   };
+  // A one at a time choice goes on by itself once picked (AC-6305), through the form's own submit so the same check
+  // runs; a change of mind before the pause ends starts it again, and leaving the question drops it. Only a pick by
+  // pointer: the arrow keys move through a radio group's choices, so a keyboard goes on with Enter instead.
+  const formRef = useRef<HTMLFormElement>(null);
+  const byPointer = useRef(false);
+  // Picks by pointer on the question showing: each one starts the pause again, and moving on clears it. The last
+  // question never sends by itself: sending is the visitor's own press.
+  useEffect(() => {
+    // Read after the pick has redrawn the path: a choice that leaves nothing after it makes this the last question.
+    if (picks === 0 || isLast) return undefined;
+    const timer = window.setTimeout(
+      () => {
+        formRef.current?.requestSubmit();
+      },
+      prefersStill() ? 0 : ADVANCE_PAUSE_MS,
+    );
+    return () => {
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new pick starts the pause; nothing else does
+  }, [picks]);
   const place =
     layout === 'conversational' ? words.questionOf(index + 1, groups.length) : words.stepOf(index + 1, groups.length);
   const isOpen = layout === 'conversational';
@@ -160,7 +179,8 @@ export function HostedFormSteps({
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
   else if (state.view.kind === 'booking') {
     body = (
-      <FormBooking
+      <BookingView
+        loaded={loadedBooking}
         state={state}
         mode={mode}
         heading={refs.heading}
@@ -175,7 +195,7 @@ export function HostedFormSteps({
   else {
     body = (
       <>
-        {isOpen ? (
+        {isOpen && groups.length > 0 ? (
           <div className={styles.line}>
             <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} isLabelHidden />
           </div>
@@ -188,9 +208,12 @@ export function HostedFormSteps({
             <FormHeader form={form} mode={mode} heading={refs.heading} isSubheadingShown={false} />
           </VisuallyHidden>
         )}
-        {!isOpen && (
+        {/* One step is no progress to show: only its title, when it has one. */}
+        {!isOpen && (groups.length > 1 || step.title !== undefined) && (
           <div className={styles.progress}>
-            <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} />
+            {groups.length > 1 && (
+              <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} />
+            )}
             {step.title !== undefined && <StepTitle className={styles.title}>{step.title}</StepTitle>}
           </div>
         )}
@@ -204,14 +227,22 @@ export function HostedFormSteps({
           className={styles.form}
           data-layout={layout}
           noValidate
-          // One at a time, Enter on a choice goes on too (AC-1034); a browser submits only from a text field.
+          ref={formRef}
+          data-moved={moved === 'pointer' || undefined}
+          // Capture: a control's press handling keeps these from bubbling.
+          onPointerDownCapture={() => {
+            byPointer.current = true;
+          }}
+          onKeyDownCapture={() => {
+            byPointer.current = false;
+          }}
           onKeyDown={(event) => {
-            if (
-              isOpen &&
-              event.key === 'Enter' &&
-              event.target instanceof HTMLInputElement &&
-              event.target.type === 'radio'
-            ) {
+            if (!isOpen || event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+            // One at a time, Enter goes on from a choice too (AC-1034), and from a long answer, where Shift and Enter
+            // breaks the line (AC-6305); a browser submits only from a one line field.
+            const onRadio = event.target instanceof HTMLInputElement && event.target.type === 'radio';
+            const inLongText = event.target instanceof HTMLTextAreaElement && !event.shiftKey;
+            if (onRadio || inLongText) {
               event.preventDefault();
               event.currentTarget.requestSubmit();
             }
@@ -250,9 +281,21 @@ export function HostedFormSteps({
                   error={state.errors[question.key]}
                   countryGuess={countryGuess}
                   countryNames={state.countryNames}
-                  onChange={(value) => state.change(question, value)}
+                  onChange={(value) => {
+                    state.change(question, value);
+                    if (
+                      isOpen &&
+                      !preview &&
+                      ['choice', 'rating', 'scale'].includes(question.answerType) &&
+                      byPointer.current &&
+                      !isLast
+                    ) {
+                      setPicks((count) => count + 1);
+                    }
+                  }}
                   files={state.files}
                   isLabelHidden={isOpen}
+                  hint={isOpen && question.answerType === 'long_text' ? words.newLine : undefined}
                 />
               </QuestionSlot>
             );

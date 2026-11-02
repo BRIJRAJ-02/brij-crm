@@ -13,7 +13,19 @@ import {
   type ObjectSummary,
 } from '@crm/data';
 import { FORM_SLUG, publishProblem, slugFromName } from '@crm/data/forms';
-import { Button, Callout, Field, iconOf, Modal, ReadyPanel, Select, Table, TileGrid, type SelectItem } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  Field,
+  FieldGroup,
+  iconOf,
+  Modal,
+  ReadyPanel,
+  Select,
+  Table,
+  TileGrid,
+  type SelectItem,
+} from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import {
@@ -26,7 +38,7 @@ import {
 } from './draft.ts';
 import { createPlannedAttributes } from '../questions/attributes.ts';
 import { emailToMakeUnique, readyMatch, type ReadyMatch } from './match.ts';
-import { planNewAttributes } from '../questions/questions.ts';
+import { plannedType, planNewAttributes } from '../questions/questions.ts';
 import { EMBED_TILES } from './InstallTab.tsx';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet, type EmbedMode } from './snippets.ts';
@@ -50,24 +62,11 @@ export interface PublishDialogProps {
   readonly onClose: () => void;
 }
 
-/** The attribute type a question becomes when an object is built from the form. */
-const BUILT_TYPE: Readonly<Record<AnswerType, 'text' | 'email' | 'phone' | 'url' | 'number' | 'select' | 'checkbox'>> =
-  {
-    short_text: 'text',
-    long_text: 'text',
-    email: 'email',
-    phone: 'phone',
-    website: 'url',
-    number: 'number',
-    dropdown: 'select',
-    choice: 'select',
-    checkbox: 'checkbox',
-    yes_no: 'checkbox',
-    country: 'text',
-    // A file answer only files onto a file attribute, and the picker makes none, so a file question is left out of
-    // a built object entirely rather than given a text attribute it can never be filed on (27 October 2026).
-    file: 'text',
-  };
+/**
+ * The attribute type a question becomes when an object is built from the form: its planned type (`plannedType`), or
+ * none for an answer no field we make can hold (a file, a date and time), which stays with the submission.
+ */
+const builtType = (answerType: AnswerType) => plannedType(answerType);
 
 /** Save to's choice that builds an object out of the form as Publish starts, and its last: keep submissions only. */
 const BUILD = 'build';
@@ -91,6 +90,7 @@ export function PublishDialog(props: PublishDialogProps) {
   const [typedName, setTypedName] = useState<string | undefined>(undefined);
   const [chosenAddress, setChosenAddress] = useState<string | undefined>(undefined);
   const [isAddressTyped, setAddressTyped] = useState(false);
+  const [isNameTouched, setNameTouched] = useState(false);
   const name = typedName ?? start.name;
   const address = chosenAddress ?? start.address;
   const [taken, setTaken] = useState<string | undefined>(undefined);
@@ -200,14 +200,16 @@ export function PublishDialog(props: PublishDialogProps) {
     });
     const made = new Map<string, string>();
     for (const question of draft.questions) {
-      if (question.answerType === 'file') continue;
+      const type = builtType(question.answerType);
+      if (type === undefined) continue;
       const attribute = await data.attributes.create(slug, {
         id: data.attributes.newId(),
         objectId: object.id,
         title: question.label === '' ? question.key : question.label,
-        type: BUILT_TYPE[question.answerType],
+        type,
         ...(question.answerType === 'email' ? { isUnique: true } : {}),
-        ...(BUILT_TYPE[question.answerType] === 'select'
+        ...(question.answerType === 'multi_select' ? { isMulti: true } : {}),
+        ...(type === 'select'
           ? {
               options: (question.choices ?? [])
                 .filter((choice) => choice.trim() !== '')
@@ -355,8 +357,10 @@ export function PublishDialog(props: PublishDialogProps) {
         }
       >
         <ReadyPanel
-          title={live.name}
-          message={strings.liveText}
+          /* The Modal's own title says it is live, so the panel's lead is the form's name and nothing else: the
+             title, the name and "Share the link, or put it on your site." were three goes at one sentence
+             (owner, 1 November 2026). */
+          message={live.name}
           link={data.forms.hostedUrl(live.publicKey)}
           shareTitle={live.name}
           // Done is the dialog's one primary; Copy steps down beside the link.
@@ -365,6 +369,8 @@ export function PublishDialog(props: PublishDialogProps) {
           <TileGrid
             variant="choice"
             label={strings.embedTiles}
+            // The three placements are read, not recognised: each says what it does on the tile itself.
+            showsDescription
             tiles={EMBED_TILES}
             value={embed}
             onChange={(id) => {
@@ -415,7 +421,7 @@ export function PublishDialog(props: PublishDialogProps) {
             icon: 'plus' as const,
             // What it will really make: a file question gets no attribute, so it is not counted.
             description: strings.buildObjectText(
-              draft.questions.filter((question) => question.answerType !== 'file').length,
+              draft.questions.filter((question) => builtType(question.answerType) !== undefined).length,
             ),
           },
         ]
@@ -459,16 +465,24 @@ export function PublishDialog(props: PublishDialogProps) {
           {error}
         </Callout>
       )}
+      {/* Publish refuses a blank name (its button stays off), so the field says so rather than showing
+          "Untitled form" in grey, which read as a default a form could really go live under. The placeholder is
+          an example; the error comes once the field has been left empty, not while it is still being typed. */}
       <Field
         label={strings.name}
-        placeholder={strings.untitledForm}
+        placeholder={strings.namePlaceholder}
         value={name}
         maxLength={80}
+        isRequired
         // The dialog opens on its first question.
         // eslint-disable-next-line jsx-a11y-x/no-autofocus
         autoFocus
         onChange={rename}
+        onBlur={() => {
+          setNameTouched(true);
+        }}
         onSubmit={() => void goLive()}
+        {...(isNameTouched && name.trim() === '' ? { error: strings.nameRequired } : {})}
       />
       <Field
         label={strings.address}
@@ -497,32 +511,38 @@ export function PublishDialog(props: PublishDialogProps) {
       />
       {/* New object gives every question its own field, so there is nothing to match until it exists. */}
       {!isKeptOnly && !isBuildChosen && draft.questions.length > 0 && (
-        <Table
-          label={strings.mappingLabel}
-          columns={[
-            { id: 'question', label: strings.mappingQuestion, isRowHeader: true },
-            { id: 'savedAs', label: strings.mappingSavedAs },
-          ]}
-          rows={draft.questions}
-          getRowId={(question) => question.id}
-          renderCell={(question, column) =>
-            column === 'question' ? (
-              labelOf(question)
-            ) : (
-              <SavedAs
-                question={question}
-                target={target}
-                plannedTitle={planned.get(question.id)}
-                creatableTitle={creatable.get(question.id)}
-                isLocked={isMatchQuestion(draft, question)}
-                isDisabled={busy !== undefined}
-                onChange={(change) => {
-                  onDraftChange(changeQuestion(draft, question.id, change));
-                }}
-              />
-            )
-          }
-        />
+        /* A section of its own, under a heading: three labelled fields and then an unnamed table all read at one
+           weight, so nothing said where the dialog's questions ended and its filing began (owner, 1 November
+           2026). */
+        <FieldGroup label={strings.mappingLabel} tone="heading" headingLevel={3}>
+          <Table
+            // Named apart from its section's heading, so a reader doesn't hear the same words twice over.
+            label={strings.mappingTable}
+            columns={[
+              { id: 'question', label: strings.mappingQuestion, isRowHeader: true },
+              { id: 'savedAs', label: strings.mappingSavedAs },
+            ]}
+            rows={draft.questions}
+            getRowId={(question) => question.id}
+            renderCell={(question, column) =>
+              column === 'question' ? (
+                labelOf(question)
+              ) : (
+                <SavedAs
+                  question={question}
+                  target={target}
+                  plannedTitle={planned.get(question.id)}
+                  creatableTitle={creatable.get(question.id)}
+                  isLocked={isMatchQuestion(draft, question)}
+                  isDisabled={busy !== undefined}
+                  onChange={(change) => {
+                    onDraftChange(changeQuestion(draft, question.id, change));
+                  }}
+                />
+              )
+            }
+          />
+        </FieldGroup>
       )}
     </Modal>
   );
@@ -563,7 +583,7 @@ function SavedAs({
           {
             id: CREATE,
             label: plannedTitle ?? creatableTitle,
-            icon: iconOf({ type: BUILT_TYPE[question.answerType] }),
+            icon: iconOf({ type: builtType(question.answerType) ?? 'text' }),
             badge: strings.newField,
           },
         ]),

@@ -1,5 +1,8 @@
 import { LONG_ANSWER_MAX, SHORT_ANSWER_MAX, toE164, type FormStrings, type PublicQuestion } from '@crm/contracts/forms';
 import { Checkbox } from '../atoms/Checkbox/Checkbox.tsx';
+import { Rating } from '../atoms/Rating/Rating.tsx';
+import { ChoiceChips } from '../molecules/ChoiceChips/ChoiceChips.tsx';
+import { AddressQuestion, type AddressDraft } from './AddressQuestion.tsx';
 import { Radio, RadioGroup } from '../atoms/Radio/Radio.tsx';
 import { Switch } from '../atoms/Switch/Switch.tsx';
 import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
@@ -15,6 +18,14 @@ import { isUploadedFile, type HostedFileHandlers } from './files.ts';
 // when it arrived (26 October 2026). Until it lands a Skeleton of the same height stands in, so the form draws at
 // once and keeps its shape.
 const LazyFileQuestion = lazy(() => import('./FileQuestion.tsx').then((module) => ({ default: module.FileQuestion })));
+// Signature and Ranking (spec 0063, AC-6331) load the same way, together in one chunk with its own budget line
+// (BatchTwoQuestions.ts says why one): a form without either never carries the pad or the ranked list.
+const LazySignatureQuestion = lazy(() =>
+  import('./BatchTwoQuestions.ts').then((module) => ({ default: module.SignatureQuestion })),
+);
+const LazyRankingQuestion = lazy(() =>
+  import('./BatchTwoQuestions.ts').then((module) => ({ default: module.RankingQuestion })),
+);
 
 /** The control of a question to type in, or else its first control (a dropdown's trigger): a phone's number before its code. */
 export function focusQuestion(container: HTMLElement | null, key: string): void {
@@ -39,15 +50,40 @@ export function asideOf(question: PublicQuestion, words: FormStrings): string | 
 
 /** What a drawn answer sends: a phone as E.164 with its country, a file as the id of its upload, the rest as held. */
 export function answerOf(question: PublicQuestion, value: unknown): unknown {
-  if (question.answerType === 'file') return isUploadedFile(value) ? { fileId: value.fileId } : undefined;
+  if (question.answerType === 'file' || question.answerType === 'signature') {
+    return isUploadedFile(value) ? { fileId: value.fileId } : undefined;
+  }
+  // A ranking is the visitor's order once they have moved anything; untouched, it is no answer.
+  if (question.answerType === 'ranking') return Array.isArray(value) ? value : undefined;
   if (question.answerType === 'phone') {
     const phone = value as PhoneFieldValue | undefined;
     if (phone === undefined || phone.national.trim() === '') return undefined;
     return { number: toE164(phone.country, phone.national), country: phone.country };
   }
   if (question.answerType === 'checkbox' || question.answerType === 'yes_no') return value === true;
+  // A date and time is the moment the visitor's own clock reads it as, with their zone (spec 0063).
+  if (question.answerType === 'datetime') {
+    if (typeof value !== 'string' || value === '') return undefined;
+    const moment = new Date(value);
+    return Number.isNaN(moment.getTime())
+      ? undefined
+      : { at: moment.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  }
+  if (question.answerType === 'rating' || question.answerType === 'scale' || question.answerType === 'multi_select') {
+    return value;
+  }
+  if (question.answerType === 'address') return value;
   return value ?? '';
 }
+
+/** A multi select as the page holds it: the choices picked, and Other's words while Other is ticked. */
+export interface MultiDraft {
+  readonly picked: readonly string[];
+  readonly other?: string;
+}
+
+/** The chip that stands for Other: never a choice's own words, which an id this shape can't be. */
+const OTHER = '\u0000other';
 
 /** What the browser may fill a short text question with, guessed from its key: a name, a company, a job title. */
 function autoCompleteOf(key: string): string | undefined {
@@ -74,6 +110,8 @@ export interface QuestionProps {
   readonly files?: HostedFileHandlers | undefined;
   /** Keeps the label for screen readers only, when a larger heading above already shows it (one at a time). */
   readonly isLabelHidden?: boolean;
+  /** A line under a long text answer: how to break a line where Enter goes on (one at a time, spec 0063). */
+  readonly hint?: string | undefined;
 }
 
 /** One question, drawn with the library's control for its answer type. */
@@ -87,6 +125,7 @@ export function Question({
   onChange,
   files,
   isLabelHidden = false,
+  hint,
 }: QuestionProps) {
   const label = labelOf(question, words);
   const aside = asideOf(question, words);
@@ -109,6 +148,7 @@ export function Question({
           maxLength={LONG_ANSWER_MAX}
           showCounter
           {...(placeholder === undefined ? {} : { placeholder })}
+          {...(hint === undefined ? {} : { hint })}
           {...errorProps}
         />
       );
@@ -187,6 +227,109 @@ export function Question({
         />
       );
     }
+    case 'date':
+    case 'time':
+    case 'datetime':
+      return (
+        <Field
+          {...labelProps}
+          name={question.key}
+          value={text}
+          onChange={onChange}
+          temporal={{
+            type: question.answerType === 'datetime' ? 'datetime-local' : question.answerType,
+            min: question.answerType === 'date' ? question.options?.earliest : undefined,
+            max: question.answerType === 'date' ? question.options?.latest : undefined,
+          }}
+          {...errorProps}
+        />
+      );
+    case 'rating':
+      return (
+        <Rating
+          // Hidden behind a larger heading, the name still says it is optional.
+          label={isLabelHidden && aside !== undefined ? `${label} ${aside}` : label}
+          value={typeof value === 'number' ? value : null}
+          onChange={(next) => onChange(next ?? undefined)}
+          field={{ aside, error, isLabelHidden }}
+        />
+      );
+    case 'scale': {
+      const from = question.options?.from ?? 0;
+      const to = question.options?.to ?? 10;
+      return (
+        <ChoiceChips
+          label={label}
+          labelAside={aside}
+          tone="strong"
+          isLabelHidden={isLabelHidden}
+          isSingle
+          choices={Array.from({ length: to - from + 1 }, (_, index) => ({
+            id: String(from + index),
+            label: String(from + index),
+          }))}
+          selected={typeof value === 'number' ? [String(value)] : []}
+          onChange={(picked) => onChange(picked[0] === undefined ? undefined : Number(picked[0]))}
+          ends={{ start: question.options?.lowLabel, end: question.options?.highLabel }}
+          {...errorProps}
+        />
+      );
+    }
+    case 'multi_select': {
+      const draft = (value as MultiDraft | undefined) ?? { picked: [] };
+      const allowsOther = question.options?.other === true;
+      return (
+        <>
+          <ChoiceChips
+            label={label}
+            labelAside={aside}
+            tone="strong"
+            isLabelHidden={isLabelHidden}
+            choices={[
+              ...(question.choices ?? []).map((choice) => ({ id: choice, label: choice })),
+              ...(allowsOther ? [{ id: OTHER, label: words.other }] : []),
+            ]}
+            selected={[...draft.picked, ...(draft.other === undefined ? [] : [OTHER])]}
+            onChange={(picked) => {
+              const choices = picked.filter((each) => each !== OTHER);
+              const other = picked.includes(OTHER) ? (draft.other ?? '') : undefined;
+              onChange({ picked: choices, ...(other === undefined ? {} : { other }) });
+            }}
+            // The problem shows once: under Other's box when it is about the box, else under the chips.
+            {...(draft.other !== undefined && error === words.otherMissing ? {} : errorProps)}
+          />
+          {draft.other !== undefined && (
+            <Field
+              label={words.otherLabel}
+              name={`${question.key}.other`}
+              value={draft.other}
+              maxLength={SHORT_ANSWER_MAX}
+              onChange={(other) => onChange({ picked: draft.picked, other })}
+              // Ticking Other opens its box with focus in it, so a keyboard or screen reader finds it at once.
+              autoFocus={draft.other === ''}
+              {...(error === words.otherMissing ? errorProps : {})}
+            />
+          )}
+        </>
+      );
+    }
+    case 'address':
+      return (
+        <AddressQuestion
+          questionKey={question.key}
+          label={label}
+          aside={aside}
+          isLabelHidden={isLabelHidden}
+          words={words}
+          value={value as AddressDraft | undefined}
+          error={error}
+          countryGuess={countryGuess}
+          onChange={onChange}
+        />
+      );
+    // A hidden question has no control (AC-6307): the link, or its default, answers it.
+    case 'hidden':
+      return null;
     case 'file':
       return (
         <Suspense fallback={<Skeleton shape="block" />}>
@@ -197,6 +340,34 @@ export function Question({
             value={value}
             error={error}
             files={files}
+            onChange={onChange}
+          />
+        </Suspense>
+      );
+    case 'signature':
+      return (
+        <Suspense fallback={<Skeleton shape="block" />}>
+          <LazySignatureQuestion
+            questionKey={question.key}
+            label={isLabelHidden ? labelProps.label : aside === undefined ? label : `${label} ${aside}`}
+            words={words}
+            value={value}
+            error={error}
+            files={files}
+            onChange={onChange}
+          />
+        </Suspense>
+      );
+    case 'ranking':
+      return (
+        <Suspense fallback={<Skeleton shape="block" />}>
+          <LazyRankingQuestion
+            questionKey={question.key}
+            label={isLabelHidden ? labelProps.label : aside === undefined ? label : `${label} ${aside}`}
+            words={words}
+            choices={question.choices ?? []}
+            value={value}
+            error={error}
             onChange={onChange}
           />
         </Suspense>

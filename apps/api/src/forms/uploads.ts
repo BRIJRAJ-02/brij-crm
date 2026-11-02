@@ -36,6 +36,7 @@ import {
   opensInline,
   RECORD_FILE_MAX_BYTES,
   sanitiseFileName,
+  SIGNATURE_UPLOAD,
   storedNameOf,
   UPLOAD_NAME_HEADER,
   uploadTypeOf,
@@ -197,8 +198,14 @@ export function mountFormFiles(app: Hono<{ Variables: Variables }>, deps: FormFi
       const fileId = randomUUID();
       const pathname = `forms/${scope.workspaceId}/${formId}/${storedNameOf(fileId, type)}`;
       try {
-        if ((await prepareUpload(scope, { formId })) === 'busy') {
-          return fail('RATE_LIMITED', words.tooMany, { 'retry-after': '60' });
+        const ready = await prepareUpload(scope, { formId });
+        if (ready === 'busy') return fail('RATE_LIMITED', words.tooMany, { 'retry-after': '60' });
+        // A form that asks only for a signature takes only the PNG its pad draws (spec 0063, Security model).
+        if (
+          ready === 'signature' &&
+          (type.contentType !== SIGNATURE_UPLOAD.contentType || body.byteLength > SIGNATURE_UPLOAD.maxBytes)
+        ) {
+          return fail('INPUT_INVALID', 'This form takes only a signature drawn on its page.');
         }
         await files.put(pathname, body, type.contentType);
         try {

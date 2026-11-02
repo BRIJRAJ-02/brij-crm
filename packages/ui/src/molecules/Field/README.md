@@ -46,6 +46,8 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 - `isVerbatim` is for a value typed exactly as shown, a backup code or a key: `autocapitalize`, `autocorrect` and `spellcheck` go off, so a phone's keyboard never capitalises the first letter of a code that checks its case (QA Q84, 23 October 2026).
 - `onPaste` sees text before it lands: a personal name's First splits "Ada Lovelace" into both fields, a location's first line fills its parts from a whole address, and a list's add field adds each value of a pasted list.
 
+- `temporal` (`date`, `time` or `datetime-local`, with an optional `min` and `max`) makes the input the platform's own day or time control, in the field's frame: for a hosted form's Date, Time and Date and time questions only (spec 0063), where a visitor on a phone gets the phone's own wheel and the page carries no date library. Inside the app, DatePicker stays the date type's one editor. Why a variant: the field, its label, its error and its states are the same; only the input's kind differs.
+
 ## States
 
 Empty (placeholder), filled, near its limit (the count shows), focus (a 1px `accent-line` border and the faint halo; inside a Popover the border alone, see below), invalid (danger border and message, in place of the hint), read only (filled, lock, reason), disabled (faded, reason), copy (read only, drawn live, with its Copy button, on one line or many). The `cell` variant has none of these looks of its own: its grid cell draws focus and the refusal, and the message floats under the cell on a raised surface. The `title` variant has no box in any state: empty shows its placeholder, read only is plain text.

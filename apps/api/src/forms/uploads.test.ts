@@ -86,7 +86,14 @@ const upload = (key: string, body: Uint8Array, type = 'application/pdf', name = 
     headers: { 'content-type': type, 'x-file-name': encodeURIComponent(name) },
   });
 
-async function formWithFile() {
+async function formWithFile(
+  asked: { id: string; key: string; label: string; answerType: 'file' | 'signature' } = {
+    id: 'cv',
+    key: 'cv',
+    label: 'Your CV',
+    answerType: 'file',
+  },
+) {
   const m = await memberWithWorkspace(app);
   const created = await m.client.forms.create({
     workspace: m.slug,
@@ -102,10 +109,7 @@ async function formWithFile() {
     mutationId: newId(),
     document: {
       ...created.draft,
-      questions: [
-        ...created.draft.questions,
-        { id: 'cv', key: 'cv', label: 'Your CV', answerType: 'file', required: false, update: 'fill' },
-      ],
+      questions: [...created.draft.questions, { ...asked, required: false, update: 'fill' }],
     },
   });
   const live = await m.client.forms.publish({
@@ -245,5 +249,25 @@ describe('form uploads', () => {
     expect(removed.status).toBe(204);
     const rows = await testQuery(ownerUrl, `select 1 from form_uploads where id = $1`, [file.fileId]);
     expect(rows).toHaveLength(0);
+  });
+
+  // Spec 0063, batch two: a signature is an upload too, but only the PNG a page draws, under 300 kB.
+  it('takes a signature as a drawn PNG, and refuses any other upload or id as one', async () => {
+    const { live } = await formWithFile({ id: 'sign', key: 'sign', label: 'Sign here', answerType: 'signature' });
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+    const drawn = (await (await upload(live.publicKey, png, 'image/png', 'signature.png')).json()) as {
+      fileId: string;
+    };
+    // The door takes nothing else from a form that asks only for a signature.
+    expect((await upload(live.publicKey, PDF)).status).toBe(400);
+    const signed = (fileId: string) => ({
+      idempotencyKey: newId(),
+      versionNumber: 1,
+      answers: { name: 'Ada Lovelace', email: 'ada@example.com', sign: { fileId } },
+      hidden: {},
+      fillMs: 8_000,
+    });
+    expect((await submit(live.publicKey, signed(newId()))).status).toBe(422);
+    expect((await submit(live.publicKey, signed(drawn.fileId))).status).toBe(200);
   });
 });

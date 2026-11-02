@@ -9,7 +9,15 @@ New (22 October 2026), for the booking page editor's Hours tab. It shows a sched
 ## Use
 
 ```tsx
-<FieldGroup label="Weekly hours" action={<Button variant="ghost" size="sm">Edit</Button>} hint="Kolkata time (GMT+5:30)">
+<FieldGroup
+  label="Weekly hours"
+  action={
+    <Button variant="ghost" size="sm">
+      Edit
+    </Button>
+  }
+  hint="Kolkata time (GMT+5:30)"
+>
   <DescriptionList items={[{ term: 'Mon to Fri', description: '9:00 AM to 5:00 PM' }]} />
 </FieldGroup>
 ```

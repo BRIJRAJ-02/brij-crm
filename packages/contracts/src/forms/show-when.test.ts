@@ -5,16 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { checkAnswers } from './check.ts';
 import { publishProblem, recordFactProblem } from './publish.ts';
 import { RoutingRules, type RoutingRule } from './routing.ts';
-import {
-  hiddenFacts,
-  isHiddenFact,
-  isRecordFact,
-  matchesCondition,
-  matchesShowWhen,
-  RECORD_FACT,
-  summarizeShowWhen,
-  visibleQuestions,
-} from './show-when.ts';
+import { hiddenFacts, isHiddenFact, isRecordFact, RECORD_FACT, summarizeShowWhen } from './conditions.ts';
+import { visibleQuestions } from './path.ts';
+import { matchesCondition, matchesShowWhen } from './show-when.ts';
 
 describe('a condition', () => {
   it('compares text without case or spaces, and yes or no answers as yes and no', () => {

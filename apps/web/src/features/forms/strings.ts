@@ -100,6 +100,25 @@ export const strings = {
   /** Publish refused while a Settings field is incomplete: which card, then what it needs. */
   publishGap: (what: string) => `After sending needs a web address. ${what}`,
   publishGapButton: (what: string) => `Text needs the button’s words. ${what}`,
+  // Prefill (spec 0063, AC-6309)
+  prefillTitle: 'Prefill link',
+  prefillTip:
+    'Add ?key=value to the link to fill a question before the visitor opens it, or to set a hidden one. Repeat a key for several picks.',
+  prefillExample: 'Example',
+  copyPrefill: 'Copy prefill link',
+  prefillKeys: 'Question keys',
+  prefillQuestion: 'Question',
+  prefillKey: 'Key',
+  // Layout (spec 0063)
+  layoutTitle: 'Layout',
+  layoutClassic: 'Classic',
+  layoutClassicHint: 'Every question on one page.',
+  layoutSteps: 'Steps',
+  layoutStepsHint: 'Questions in groups, with Back and Continue.',
+  layoutOneAtATime: 'One at a time',
+  layoutOneAtATimeHint: 'One question per screen. Enter goes on.',
+  /** Under the tiles when Steps has no divider yet. */
+  layoutAddStep: 'Add a step under Questions to split the form.',
   colour: 'Colour',
   light: 'Light form',
   dark: 'Dark form',
@@ -116,8 +135,9 @@ export const strings = {
   // First publish (spec 0058, AC-13): one step, then the Ready panel (AC-6)
   publishTitle: 'Publish your form',
   liveTitle: 'Your form is live',
-  liveText: 'Share the link, or put it on your site.',
   name: 'Name',
+  /** An example of a name, never the name an unnamed form gets: Publish refuses a blank one. */
+  namePlaceholder: 'Contact us',
   address: 'Link',
   addressTaken: 'That link is taken',
   addressInvalid: 'The link needs 2 to 40 lowercase letters, numbers or hyphens.',
@@ -188,6 +208,8 @@ export const strings = {
     match === undefined ? `Adds a ${object}.` : `Adds or updates a ${object}, matched by ${match}.`,
   whichObject: 'Save to',
   mappingLabel: 'Where each answer is saved',
+  /** The table's own name for screen readers: its section's heading already says what the section is for. */
+  mappingTable: 'Questions and their fields',
   mappingQuestion: 'Question',
   mappingSavedAs: 'Saved as',
   retargetFailed: 'That didn’t change where submissions go.',
@@ -288,6 +310,7 @@ export const strings = {
   ownFormTrapNote: 'Leave this hidden field in place: it keeps bots out.',
   ownFormTrapLabel: 'Leave this empty',
   ownFormNoFiles: (label: string) => `${label}: file questions work on the hosted form only.`,
+  ownFormHostedOnly: (label: string) => `${label}: this question works on the hosted form only.`,
   copied: 'Copied.',
   sitesTitle: 'Allowed sites',
   sitesTip: 'Your own HTML only posts from these addresses. Embeds and the hosted page work on any site.',

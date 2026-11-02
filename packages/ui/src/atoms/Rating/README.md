@@ -19,9 +19,11 @@ Ported from the artifact's Rating card. It is the rating type's one display (rea
 - A hovered star lights up (pointer only).
 - `variant="cell"` is the rating a grid cell edits: the stars keep the cell's padding, where the display had them, and the chosen star draws no ring when focused, since the cell draws the one ring and the lit stars show the draft; with nothing chosen yet, the focused star keeps its ring, so the arrows' starting point shows.
 
+- `field` makes it a form's question (a hosted form's Rating, spec 0063): the label shows over the stars as a radio group's question does, with its `aside` ("(optional)"), the stars a size up (`md`) for a visitor's finger, and `error` under them, which the group is described by; `isLabelHidden` keeps the name for screen readers where a larger heading shows it (one at a time). Why a variant: it is the rating's one editor, and a form asks for the same five stars with the frame every other question has.
+
 ## States
 
-No rating, rated, hover, focus, pressed, read only, disabled.
+No rating, rated, hover, focus, pressed, read only, disabled; as a form's question, with an error.
 
 ## Keyboard
 

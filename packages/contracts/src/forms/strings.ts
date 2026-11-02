@@ -96,6 +96,55 @@ export interface FormStrings {
   readonly next: string;
   /** On to the next question, in a one at a time form. */
   readonly ok: string;
+  /** Under a long answer one at a time, where Enter goes on (spec 0063, AC-6305). */
+  readonly newLine: string;
+  // The new answer types (spec 0063, AC-6307).
+  readonly date: string;
+  readonly dateFrom: (day: string) => string;
+  readonly dateUntil: (day: string) => string;
+  readonly time: string;
+  readonly datetime: string;
+  readonly pickAtLeast: (count: number) => string;
+  readonly pickAtMost: (count: number) => string;
+  /** The Other choice of a multi select, and its box. */
+  readonly other: string;
+  readonly otherLabel: string;
+  readonly otherMissing: string;
+  readonly addressLine1: string;
+  readonly addressLine2: string;
+  readonly addressCity: string;
+  readonly addressRegion: string;
+  readonly addressPostcode: string;
+  readonly addressCountry: string;
+  readonly address: string;
+  /** A rating's or scale's choice, read with its number: "4 out of 5". */
+  readonly outOf: (value: number, top: number) => string;
+  // Batch two (spec 0063, AC-6307, AC-6308).
+  /** A ranking that isn't every choice once, in an order. */
+  readonly rankAll: string;
+  /** A ranking item's grip: "Move Notion". */
+  readonly moveItem: (name: string) => string;
+  /** How a ranking's grip moves, read with it; then what each step of a move says aloud. */
+  readonly moveHelp: string;
+  readonly moveLifted: (name: string, place: number, count: number) => string;
+  readonly movePlace: (name: string, place: number, count: number) => string;
+  readonly moveDropped: (name: string, place: number, count: number) => string;
+  readonly moveCancelled: (name: string, place: number, count: number) => string;
+  /** The signature pad's name, for a screen reader. */
+  readonly signHere: string;
+  readonly signatureMissing: string;
+  /** Switches a signature from drawing to typing, and back. */
+  readonly typeInstead: string;
+  readonly drawInstead: string;
+  /** The typed signature's box. */
+  readonly typedName: string;
+  readonly clearSignature: string;
+  /** Inside the empty pad, where to sign. */
+  readonly signPlaceholder: string;
+  /** Under the pad where nothing can be sent (the builder's preview). */
+  readonly signaturePreview: string;
+  /** A signature as words, where an answer is read back. */
+  readonly signed: string;
 }
 
 const EN: FormStrings = {
@@ -135,7 +184,7 @@ const EN: FormStrings = {
   filePreview: 'Visitors choose their file here once the form is published. The preview doesn’t take one.',
   fileUploaded: (name) => `${name} uploaded.`,
   fileRemoved: (name) => `${name} removed.`,
-  fileBusy: 'Wait for the file to finish uploading, then send.',
+  fileBusy: 'Wait a moment while your answer saves.',
   fileFailed: 'That file did not upload. Try again, or choose another file.',
   previewNote: 'A preview of the form. It can’t be filled in here.',
   recaptchaNotice: 'This form is protected by reCAPTCHA. Google’s Privacy Policy and Terms of Service apply.',
@@ -160,6 +209,41 @@ const EN: FormStrings = {
   back: 'Back',
   next: 'Continue',
   ok: 'OK',
+  newLine: 'Shift + Enter for a new line',
+  date: 'Enter a date.',
+  dateFrom: (day) => `Pick ${day} or later.`,
+  dateUntil: (day) => `Pick ${day} or earlier.`,
+  time: 'Enter a time, such as 14:30.',
+  datetime: 'Enter a date and a time.',
+  pickAtLeast: (count) => (count === 1 ? 'Pick at least one.' : `Pick at least ${String(count)}.`),
+  pickAtMost: (count) => (count === 1 ? 'Pick one only.' : `Pick at most ${String(count)}.`),
+  other: 'Other',
+  otherLabel: 'Other, in your words',
+  otherMissing: 'Say what Other is, or untick it.',
+  addressLine1: 'Street',
+  addressLine2: 'Apartment, suite or floor',
+  addressCity: 'City',
+  addressRegion: 'State or region',
+  addressPostcode: 'Postcode',
+  addressCountry: 'Country',
+  address: 'Enter the address: at least the street or the city.',
+  outOf: (value, top) => `${String(value)} out of ${String(top)}`,
+  rankAll: 'Put every choice in your order.',
+  moveItem: (name) => `Move ${name}`,
+  moveHelp: 'Space to pick up, arrows to move, Space to drop, Escape to cancel.',
+  moveLifted: (name, place, count) => `${name} picked up, at ${String(place)} of ${String(count)}.`,
+  movePlace: (name, place, count) => `${name}, ${String(place)} of ${String(count)}.`,
+  moveDropped: (name, place, count) => `${name}, dropped at ${String(place)} of ${String(count)}.`,
+  moveCancelled: (name, place, count) => `${name}, put back at ${String(place)} of ${String(count)}.`,
+  signHere: 'Signature pad',
+  signatureMissing: 'Sign here, or type your name instead.',
+  typeInstead: 'Type your name instead',
+  drawInstead: 'Draw instead',
+  typedName: 'Your full name',
+  clearSignature: 'Clear',
+  signPlaceholder: 'Sign here',
+  signaturePreview: 'Visitors sign here once the form is published.',
+  signed: 'Signed',
 };
 
 const CATALOGUE: Readonly<Record<FormLanguage, Partial<FormStrings>>> = {

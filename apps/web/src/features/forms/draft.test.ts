@@ -47,6 +47,8 @@ const base: FormDocument = {
     },
   ],
   targets: { main: { objectId: PEOPLE, matchAttributeId: EMAIL } },
+  layout: 'classic',
+  steps: [],
   look: { colour: 'light', corners: 'rounded' },
   headline: 'Fill this in and we will come back to you',
   buttonText: 'Send',

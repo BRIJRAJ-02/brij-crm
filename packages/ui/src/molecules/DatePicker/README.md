@@ -24,6 +24,7 @@ Ported from the artifact's DatePicker card. It is the date attribute's editor (c
 ### MonthCalendar
 
 `<MonthCalendar label="Go to date" value={day} onChange={setDay} />` is the same calendar inline and compact: no field and no popover, shorter days (`size-control`), as wide as its column up to a menu's width, with the same month jump and Today. Why a variant: Bookings' calendars panel keeps a small month for jumping to a date, as Google Calendar does; it is DatePicker's month, so it reuses its grid, keys and look rather than adding a calendar. `shown={{ start, end }}` tints the days the view beside it shows (Bookings' week) as one band in `surface-selected` filling its columns, its ends round (at the month's edge too), the chosen day still accent and no hover inside it (the hover surface is lighter than the band, so a hovered day would seem to leave the week), as Google Calendar's small month marks its week. `autoFocus` puts focus on the chosen day as it mounts, for a month opened in a popover (Bookings' Go to date), so the arrows work at once; inline beside a view it stays off.
+
 - **Paste**: a day pasted into the box ("8 Oct 2026", "tomorrow", "2026-10-08T09:00Z") fills it whole, read as Type a date reads text (`parseDateInput`), since a segment takes digits only. `startText` opens Type a date with the key that opened a grid cell's editor.
 
 ## States

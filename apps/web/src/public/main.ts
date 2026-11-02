@@ -1,8 +1,10 @@
 // The hosted form page's own entry (spec 0023, 0023-experience.md, The
 // visitor): a second build entry beside the app, sharing nothing with its
-// shell and loading no React. It reads the address from the path
-// (/f/<address>), loads the live form, draws it with the plain renderer and
-// sends the answers through the public client. With `?embed=1` it is the
+// shell. It reads the address from the path (/f/<address>), loads the live
+// form, draws it with `@crm/ui/public-form` (React and the library's own
+// controls, under the hosted form budget in `.size-limit.js`: 223 kB of
+// JavaScript and 17 kB of CSS gzipped; Steps and One at a time load as their
+// own chunk, spec 0063) and sends the answers through the public client. With `?embed=1` it is the
 // iframe a site's embed script (`embed/v1.js`) made: an h2, no page height,
 // the frame's height posted to the host page as it changes, and Escape
 // closing the script's dialog (frame.ts). Every submit carries where it came
@@ -11,7 +13,7 @@ import '@crm/ui/styles.css';
 import { createPublicFormClient, loadCaptcha } from '@crm/data/public-form';
 import { mountFormLoading, mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
 import { guessCountry } from './country.ts';
-import { contextFromFrame, contextOfPage, hiddenOf } from './context.ts';
+import { contextFromFrame, contextOfPage, hiddenOf, prefillOf } from './context.ts';
 import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
 import { brandHref, brandLogoHref, preloadImage, wearStylesheet } from './stylesheet.ts';
 import { guardPreloadErrors, hasFilledField, sessionStore } from '../preload-guard.ts';
@@ -46,9 +48,7 @@ const postToHost: PostToHost = (message, targetOrigin) => {
 };
 // Escape closes the script's dialog from the first moment, even before the form has loaded.
 if (embed !== undefined) closeOnEscape(embed, postToHost, window);
-/** The address's parameters the embed script and the page use themselves: never a question's prefill. */
-const RESERVED = new Set(['embed', 'mode', 'fid', 'host', 'ctx', 'page', 'referrer', 'from']);
-const prefill = Object.fromEntries([...params].filter(([key]) => !RESERVED.has(key) && !key.startsWith('utm_')));
+const prefill = prefillOf(params);
 const address = decodeURIComponent(window.location.pathname.replace(/^\/f\//, '').split('/')[0] ?? '');
 // Inside a site's frame the form is not a page of ours: it has no ground, so the tinted one its shell names
 // comes off before anything paints into it.
@@ -58,7 +58,9 @@ const client = createPublicFormClient();
 // and the button's. A visitor's first paint is then the page rather than a blank window, and the words land in
 // the places already set out for them. It is taken down in the same frame the real view goes up, so the page
 // never shows both and never shows neither.
-const loading = mountFormLoading(root, mode);
+// Its layout and look are not known until the read answers, so the shape is the neutral one (no card, the visitor's
+// own light or dark): nothing it draws is taken away when a One at a time or a dark form arrives (spec 0063, AC-6306).
+const loading = mountFormLoading(root, mode, 'unknown');
 // The loading card has a height of its own, so a site's frame is sized to it at once rather than clipping it
 // until the form arrives.
 let stopHeight = postHeight(root.lastElementChild);

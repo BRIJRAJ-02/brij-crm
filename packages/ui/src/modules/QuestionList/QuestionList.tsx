@@ -11,6 +11,11 @@ import { strings } from './strings.ts';
 /** One question as its closed card shows it. */
 export interface QuestionListItem {
   readonly id: string;
+  /**
+   * `step` draws a break between steps rather than a question (spec 0063, AC-6303): on the ground, with a dashed
+   * edge, so the list reads as groups of question cards. It opens, moves and is announced as a question is.
+   */
+  readonly kind?: 'question' | 'step';
   /** The question; empty shows "Untitled question", muted. */
   readonly label: string;
   /**
@@ -45,6 +50,12 @@ export interface QuestionListProps {
   readonly label: string;
   /** The section header's end: Add a question and its menu. */
   readonly actions?: ReactNode;
+  /**
+   * Actions shown before `actions` only where the list is wide enough (480px and up): a secondary button whose
+   * action the caller's menu in `actions` also holds (a form's Add a step), so a phone keeps one primary and the
+   * menu, and nothing is pushed off the row.
+   */
+  readonly wideActions?: ReactNode;
   /** An open card's footer, at its end: Duplicate and Delete. */
   readonly renderFooter?: (id: string) => ReactNode;
   /** An open card's footer, at its start, on the same row: a choice that closes the editor, such as Required. */
@@ -77,6 +88,7 @@ export function QuestionList({
   renderOpen,
   onMove,
   actions,
+  wideActions,
   renderFooter,
   renderFooterStart,
 }: QuestionListProps) {
@@ -93,8 +105,14 @@ export function QuestionList({
         <h2 className={styles.heading} id={headingId}>
           {label}
         </h2>
-        <Badge count={items.length} label={label} />
-        {actions !== undefined && <span className={styles.actions}>{actions}</span>}
+        {/* Questions only: a step break is not one more question. */}
+        <Badge count={items.filter((item) => item.kind !== 'step').length} label={label} />
+        {(actions !== undefined || wideActions !== undefined) && (
+          <span className={styles.actions}>
+            {wideActions !== undefined && <span className={styles.wide}>{wideActions}</span>}
+            {actions}
+          </span>
+        )}
       </header>
       <SortableList
         ids={items.map((item) => item.id)}
@@ -125,6 +143,7 @@ export function QuestionList({
                 id={item.id}
                 textValue={name}
                 className={styles.row}
+                data-kind={item.kind === 'step' ? 'step' : undefined}
                 data-open={isOpen || undefined}
                 data-problem={item.hasProblem === true || undefined}
               >

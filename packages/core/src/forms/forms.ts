@@ -115,6 +115,8 @@ function firstDraft(
       target === undefined
         ? {}
         : { main: { objectId: target.objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
+    layout: 'classic',
+    steps: [],
     look: { colour: 'light', corners: 'rounded' },
     headline: 'Fill this in and we will come back to you',
     buttonText: 'Send',
@@ -744,7 +746,14 @@ export async function publishForm(
           code,
           problem.message,
           problem.questionId ??
-            (problem.ruleId !== undefined ? 'routing' : problem.code === 'ADDRESS_INVALID' ? 'slug' : 'name'),
+            // A step's refusal names its step (spec 0063), never the form's name.
+            (problem.stepId !== undefined
+              ? `steps.${problem.stepId}`
+              : problem.ruleId !== undefined
+                ? 'routing'
+                : problem.code === 'ADDRESS_INVALID'
+                  ? 'slug'
+                  : 'name'),
         );
       }
       // A change to the rules is audited when it goes live (spec 0043, AC-1616).

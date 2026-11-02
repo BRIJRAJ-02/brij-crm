@@ -85,6 +85,7 @@ describe('@crm/ui', () => {
       'FilterChip',
       'FloatingBar',
       'Form',
+      'FormLayoutThumbnail',
       'FormatScope',
       'FormulaEditor',
       'GRID_SHORTCUTS',

@@ -1,6 +1,8 @@
 import { useId, type ReactNode } from 'react';
 import { ToggleButtonGroup, type Key } from 'react-aria-components';
 import { ToggleButton } from '../../atoms/Button/Button.tsx';
+import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import styles from './ChoiceChips.module.css';
 
 /** One choice. */
@@ -26,6 +28,17 @@ export interface ChoiceChipsProps {
    * which opens a Popover): it adds a choice rather than being one.
    */
   readonly end?: ReactNode;
+  /**
+   * What the first and last chips mean, under the row at its two ends ("Not likely", "Very likely"): a hosted form's
+   * Scale (spec 0063). The group is described by them, so a screen reader hears them with the choices.
+   */
+  readonly ends?: { readonly start?: string | undefined; readonly end?: string | undefined };
+  /** Keeps the label for screen readers only, where a larger heading above shows it (one at a time). */
+  readonly isLabelHidden?: boolean;
+  /** After the label, quieter: a hosted form's "(optional)". Part of the group's name. */
+  readonly labelAside?: string | undefined;
+  /** `strong` for a form's question, as a radio group's question reads (a hosted form's Scale and Multi select). */
+  readonly tone?: 'label' | 'strong';
 }
 
 /**
@@ -42,19 +55,42 @@ export function ChoiceChips({
   error,
   isDisabled = false,
   end,
+  ends,
+  isLabelHidden = false,
+  labelAside,
+  tone = 'label',
 }: ChoiceChipsProps) {
   const labelId = useId();
   const errorId = useId();
+  const endsId = useId();
+  const hasEnds = ends !== undefined && (ends.start !== undefined || ends.end !== undefined);
+  const describedBy = [...(hasEnds ? [endsId] : []), ...(error === undefined ? [] : [errorId])].join(' ');
   return (
-    <div className={styles.root} data-disabled={isDisabled || undefined}>
-      <span id={labelId} className={styles.label}>
-        {label}
-      </span>
+    <div
+      className={styles.root}
+      data-disabled={isDisabled || undefined}
+      // A scale is any run with `ends`, its words given or not; past 7 points it may fold into two rows.
+      data-scale={ends === undefined ? undefined : 'scale'}
+      data-columns={ends !== undefined && choices.length > 7 ? Math.ceil(choices.length / 2) : undefined}
+    >
+      {isLabelHidden ? (
+        <VisuallyHidden>
+          <span id={labelId}>{labelAside === undefined ? label : `${label} ${labelAside}`}</span>
+        </VisuallyHidden>
+      ) : tone === 'strong' ? (
+        // A form's question: the label row every question has, with its aside.
+        <FieldLabel as="text" id={labelId} label={label} aside={labelAside} tone="strong" />
+      ) : (
+        <span id={labelId} className={styles.label}>
+          {label}
+          {labelAside === undefined ? null : ` ${labelAside}`}
+        </span>
+      )}
       <div className={styles.row}>
         <ToggleButtonGroup
           className={styles.chips}
           aria-labelledby={labelId}
-          {...(error === undefined ? {} : { 'aria-describedby': errorId })}
+          {...(describedBy === '' ? {} : { 'aria-describedby': describedBy })}
           selectionMode={isSingle ? 'single' : 'multiple'}
           selectedKeys={selected}
           isDisabled={isDisabled}
@@ -71,6 +107,12 @@ export function ChoiceChips({
         </ToggleButtonGroup>
         {end}
       </div>
+      {hasEnds && (
+        <p id={endsId} className={styles.ends}>
+          <span>{ends.start}</span>
+          <span>{ends.end}</span>
+        </p>
+      )}
       {error !== undefined && (
         <p id={errorId} className={styles.error}>
           {error}

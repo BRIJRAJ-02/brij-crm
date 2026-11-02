@@ -15,6 +15,8 @@ import {
   OPTION_KEY,
   QUESTION_KEY,
 } from './answer-types.ts';
+import { stepsOfBreaks, type ResolvedStep } from './breaks.ts';
+import { FORM_LAYOUTS, FORM_STEP_TITLE_MAX } from './path.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
@@ -36,6 +38,31 @@ export const OptionKey = z
 export const FiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: Uuid });
 /** Where an answer is filed. */
 export type FiledOn = z.infer<typeof FiledOn>;
+
+/** A scale's ends: 0 or 1 to 5, 7 or 10 (spec 0063, AC-6307; 0 to 10 is NPS). */
+export const SCALE_FROM = [0, 1] as const;
+/** A scale's top. */
+export const SCALE_TO = [5, 7, 10] as const;
+
+/**
+ * What a question's type may set beyond its choices (spec 0063, AC-6307), each read only by its type: a date's
+ * earliest and latest day; a scale's ends and their words; a multi select's least and most picks and its Other box;
+ * a hidden question's value when the link brings none.
+ */
+export const FormQuestionOptions = z.strictObject({
+  earliest: z.iso.date({ error: 'Give the earliest day as a date.' }).optional(),
+  latest: z.iso.date({ error: 'Give the latest day as a date.' }).optional(),
+  from: z.union([z.literal(0), z.literal(1)]).optional(),
+  to: z.union([z.literal(5), z.literal(7), z.literal(10)]).optional(),
+  lowLabel: z.string().trim().max(40, { error: 'Keep an end’s words to 40 characters.' }).optional(),
+  highLabel: z.string().trim().max(40, { error: 'Keep an end’s words to 40 characters.' }).optional(),
+  min: z.number().int().min(1).max(FORM_CHOICES_MAX).optional(),
+  max: z.number().int().min(1).max(FORM_CHOICES_MAX).optional(),
+  other: z.boolean().optional(),
+  default: z.string().trim().max(200, { error: 'Keep the value to 200 characters.' }).optional(),
+});
+/** What a question's type may set beyond its choices. */
+export type FormQuestionOptions = z.infer<typeof FormQuestionOptions>;
 
 /** One question. A draft may hold an empty label; publishing refuses it (`publishProblem`). */
 export const FormQuestion = z.strictObject({
@@ -70,9 +97,35 @@ export const FormQuestion = z.strictObject({
   update: z.enum(['fill', 'always']).default('fill'),
   /** Shown only when earlier answers match (spec 0043, AC-1614); absent, it always shows. */
   showWhen: ShowWhenSchema.optional(),
+  /** What its type sets beyond its choices (spec 0063): a date's range, a scale's ends, a hidden value's default. */
+  options: FormQuestionOptions.optional(),
 });
 /** One question. */
 export type FormQuestion = z.infer<typeof FormQuestion>;
+
+/** A step's id inside its document: stable across versions, never shown. */
+export const StepId = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, { error: 'A step id is 1 to 40 lower case letters, digits, - or _.' });
+
+/**
+ * A break in the questions (spec 0063, AC-6303): a new step starts at `startsAt`, the id of its first question, with
+ * an optional title and Show when. Absent `startsAt` puts it after the last question, which leaves it empty until a
+ * question follows it. Breaks are kept with every layout and drawn only by Steps.
+ */
+export const FormStep = z.strictObject({
+  id: StepId,
+  title: z
+    .string()
+    .trim()
+    .max(FORM_STEP_TITLE_MAX, { error: `Keep a step’s title to ${String(FORM_STEP_TITLE_MAX)} characters.` })
+    .optional(),
+  startsAt: QuestionId.optional(),
+  /** Shown only when earlier answers match (AC-6312); absent, it always shows. */
+  showWhen: ShowWhenSchema.optional(),
+});
+/** A break in the questions. */
+export type FormStep = z.infer<typeof FormStep>;
 
 /** How the page looks: two axes and nothing else, each mapped onto tokens, so no unreadable pair exists. */
 export const FormLook = z.strictObject({
@@ -156,6 +209,13 @@ export const FormDocument = z
     targets: z.strictObject({
       main: z.strictObject({ objectId: Uuid, matchAttributeId: Uuid.optional() }).optional(),
     }),
+    /** Classic, Steps or One at a time (spec 0063, AC-6302): in the version, so a visitor mid fill never sees it change. */
+    layout: z.enum(FORM_LAYOUTS).default('classic'),
+    /** The breaks between steps, in the questions' order. Drawn only by Steps. */
+    steps: z
+      .array(FormStep)
+      .max(FORM_QUESTIONS_MAX, { error: `A form holds at most ${String(FORM_QUESTIONS_MAX)} steps.` })
+      .default([]),
     look: FormLook.default({ colour: 'light', corners: 'rounded' }),
     headline: z.string().trim().max(120, { error: 'Keep the headline to 120 characters.' }).default(DEFAULT_HEADLINE),
     subheading: z.string().trim().max(240, { error: 'Keep the subheading to 240 characters.' }).optional(),
@@ -174,6 +234,7 @@ export const FormDocument = z
   .superRefine((document, context) => {
     const seen = { ids: new Set<string>(), keys: new Set<string>(), attributes: new Set<string>() };
     let files = 0;
+    let signatures = 0;
     document.questions.forEach((question, index) => {
       const at = ['questions', index];
       if (seen.ids.has(question.id))
@@ -212,9 +273,47 @@ export const FormDocument = z
         });
       }
       if (question.answerType === 'file') files += 1;
+      if (question.answerType === 'signature') signatures += 1;
       seen.ids.add(question.id);
       seen.keys.add(question.key);
       if (attributeId !== undefined) seen.attributes.add(attributeId);
+    });
+    const at = new Map(document.questions.map((question, index) => [question.id, index]));
+    const stepIds = new Set<string>();
+    let last = 0;
+    document.steps.forEach((step, index) => {
+      const path = ['steps', index];
+      if (stepIds.has(step.id))
+        context.addIssue({ code: 'custom', path: [...path, 'id'], message: 'Two steps share one id.' });
+      stepIds.add(step.id);
+      const place = step.startsAt === undefined ? document.questions.length : at.get(step.startsAt);
+      if (place === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: [...path, 'startsAt'],
+          message: 'A step starts at a question that is no longer on the form.',
+        });
+        return;
+      }
+      if (place < last) {
+        context.addIssue({ code: 'custom', path: [...path, 'startsAt'], message: 'The steps are out of order.' });
+      }
+      last = Math.max(last, place);
+    });
+    document.questions.forEach((question, index) => {
+      const { options } = question;
+      if (options === undefined) return;
+      const at = ['questions', index, 'options'];
+      if (options.earliest !== undefined && options.latest !== undefined && options.earliest > options.latest) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'latest'],
+          message: 'The latest day comes before the earliest.',
+        });
+      }
+      if (options.min !== undefined && options.max !== undefined && options.min > options.max) {
+        context.addIssue({ code: 'custom', path: [...at, 'max'], message: 'The most picks is fewer than the least.' });
+      }
     });
     if (files > 1) {
       context.addIssue({
@@ -223,11 +322,23 @@ export const FormDocument = z
         message: 'A form can ask for one file. Remove the other file question first.',
       });
     }
+    if (signatures > 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['questions'],
+        message: 'A form can ask for one signature. Remove the other signature question first.',
+      });
+    }
   });
 /** One form version's whole document. */
 export type FormDocument = z.infer<typeof FormDocument>;
 /** A document as written, before defaults fill in. */
 export type FormDocumentInput = z.input<typeof FormDocument>;
+
+/** A document's steps over its questions (`stepsOfBreaks`), keyed by question key: what the hosted page groups. */
+export function stepsOf(document: Pick<FormDocument, 'questions' | 'steps'>): ResolvedStep<FormStep['showWhen']>[] {
+  return stepsOfBreaks(document.questions, document.steps);
+}
 
 /** True when a question's answer is picked from its own choices. */
 export function isChoiceQuestion(question: Pick<FormQuestion, 'answerType'>): boolean {

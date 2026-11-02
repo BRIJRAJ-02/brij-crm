@@ -31,9 +31,57 @@
     gap: var(--space-6);
   }
 
+  /* A scale (ends): its points share the row's width evenly, from end word to end word. A long one (0 to 10) too
+     narrow for one line of whole numbers takes two even rows (0 to 5 over 6 to 10), never a clipped 10. */
+  .root[data-scale] {
+    container-type: inline-size;
+  }
+
+  .root[data-scale] .row {
+    flex-wrap: nowrap;
+  }
+
+  .root[data-scale] .chips {
+    display: grid;
+    flex: 1;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: var(--space-4);
+  }
+
+  /* Two even rows on a narrow form: half the points (rounded up) in each, the first row the longer. */
+  @container (inline-size < 480px) {
+    .root[data-columns] .chips {
+      grid-auto-flow: row;
+    }
+
+    .root[data-columns='4'] .chips {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .root[data-columns='5'] .chips {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .root[data-columns='6'] .chips {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+  }
+
   .error {
     margin: 0;
     color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* A scale's end words under the row, at its two ends (ends). */
+  .ends {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-8);
+    margin: 0;
+    color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }

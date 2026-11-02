@@ -63,17 +63,20 @@
     min-inline-size: 0;
   }
 
-  /* In a dark app the white tile glared (owner, 31 October 2026, Home item 11): there the ground steps down to the
-     light theme's sunken grey, still far lighter than the modules, so it scans. A root selector, not a token: the
-     code's own data-theme="light" resets every token inside it, so only the page's theme can say it is dark. A saved
-     PNG is drawn on the light surface whatever the theme (the link page's qr-png.ts). */
+  /* In a dark app the white tile glared (owner, 31 October 2026, Home item 11, and again 1 November on the form's
+     live dialog): there the ground steps down to the light theme's strong border grey, a soft light ground that
+     still keeps about 10 to 1 against the modules, well past the 4.5 the code itself holds a colour to, so it
+     scans. The sunken surface was tried first and was still near white at this size. It is a border token because
+     the light palette has no surface this far down, and the code's ground is not a page surface. A root selector,
+     not a token: the code's own data-theme="light" resets every token inside it, so only the page's theme can say
+     it is dark. A saved PNG is drawn on the light surface whatever the theme (the link page's qr-png.ts). */
   :root[data-theme='dark'] .ground {
-    fill: var(--surface-sunken);
+    fill: var(--border-strong);
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme='light']) .ground {
-      fill: var(--surface-sunken);
+      fill: var(--border-strong);
     }
   }
 }

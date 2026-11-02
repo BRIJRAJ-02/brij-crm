@@ -5,7 +5,8 @@
 // the page. The evaluator is `matchesShowWhen` (`show-when.ts`, no Zod).
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { CONDITION_OPS, CONDITIONS_MAX, isHiddenFact, NUMBER_OPS, RECORD_FACT, VALUELESS_OPS } from './show-when.ts';
+import { isHiddenFact, RECORD_FACT } from './conditions.ts';
+import { CONDITION_OPS, CONDITIONS_MAX, NUMBER_OPS, VALUELESS_OPS } from './show-when.ts';
 import { QUESTION_KEY } from './answer-types.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 import { WorkspaceScoped } from '../workspaces.ts';

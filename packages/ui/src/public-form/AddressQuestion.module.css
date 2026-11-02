@@ -1,0 +1,23 @@
+/* A hosted form's Address question: its fields in one column, the city beside the region and the postcode beside
+   the country where the form is wide enough, each pair stacking on a phone. The fields bring their own look. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    min-inline-size: 0;
+    container-type: inline-size;
+  }
+
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-12);
+  }
+
+  @container (width >= 320px) {
+    .pair {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+}

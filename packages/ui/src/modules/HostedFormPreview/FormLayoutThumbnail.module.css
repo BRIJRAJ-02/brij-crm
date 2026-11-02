@@ -1,0 +1,94 @@
+/* A form's layout in miniature (FormLayoutThumbnail), sized to TileGrid's picture slot (size-column-min tall):
+   Classic and Steps as a small card, One at a time on the slot's own ground with its question drawn larger. Shapes
+   only, in the form's tokens; nothing moves. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    box-sizing: border-box;
+    inline-size: var(--size-column-min);
+    padding: var(--space-6);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+  }
+
+  .root[data-layout='conversational'] {
+    gap: var(--space-6);
+    border-color: transparent;
+    background: transparent;
+  }
+
+  /* The progress line: a third done. */
+  .track {
+    display: flex;
+    block-size: var(--space-2);
+    overflow: hidden;
+    border-radius: var(--radius-full);
+    background: var(--border-subtle);
+  }
+
+  .fill {
+    inline-size: 33%;
+    background: var(--accent);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .label {
+    inline-size: 45%;
+    block-size: var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--text-tertiary);
+  }
+
+  .input {
+    block-size: var(--space-6);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xs);
+    background: var(--surface);
+  }
+
+  /* One at a time: the question at heading size, so its line is longer and thicker. */
+  .root[data-layout='conversational'] .label {
+    inline-size: 80%;
+    block-size: var(--space-4);
+    background: var(--text-secondary);
+  }
+
+  .buttons {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .back {
+    inline-size: 30%;
+    block-size: var(--space-6);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xs);
+  }
+
+  .button {
+    flex: 1;
+    block-size: var(--space-6);
+    border-radius: var(--radius-xs);
+    background: var(--accent);
+  }
+
+  .root[data-layout='conversational'] .button {
+    flex: none;
+    inline-size: 30%;
+  }
+
+  @media (forced-colors: active) {
+    .fill,
+    .button {
+      background: CanvasText;
+    }
+  }
+}

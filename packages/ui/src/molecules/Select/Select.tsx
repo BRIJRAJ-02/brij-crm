@@ -361,6 +361,8 @@ export function SelectBase({
     );
   }, [order, typed]);
 
+  // The reason has no line of its own here, so it rides on the lock instead.
+  const hasOwnReason = isLabelHidden && readOnlyReason !== undefined;
   if (isReadOnly) {
     return (
       <span className={styles.root} data-size={size} data-readonly="">
@@ -375,9 +377,22 @@ export function SelectBase({
               <span className={styles.placeholder}>{placeholder ?? strings.none}</span>
             )}
           </span>
-          <Icon name="lock" size="xs" tone="muted" label={strings.readOnly} />
+          {/* With no visible label (a Select in a table row) the reason rides on the lock rather than a hint
+              line under the box: that line made the row taller than its neighbours, so the rows stopped lining
+              up (owner, 1 November 2026). A screen reader hears the state and the reason together; a pointer
+              gets the reason from the lock's title. Not a LockReason: its Button pulls about 2 kB of script and
+              0.6 kB of CSS into the hosted form's bundles, which have a few hundred bytes to spare (measured,
+              1 November 2026). */}
+          <span {...(hasOwnReason ? { title: readOnlyReason } : {})}>
+            <Icon
+              name="lock"
+              size="xs"
+              tone="muted"
+              label={hasOwnReason ? strings.readOnlyBecause(readOnlyReason) : strings.readOnly}
+            />
+          </span>
         </span>
-        {description !== undefined && <span className={styles.hint}>{description}</span>}
+        {description !== undefined && !hasOwnReason && <span className={styles.hint}>{description}</span>}
       </span>
     );
   }
