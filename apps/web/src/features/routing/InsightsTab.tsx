@@ -55,7 +55,7 @@ function columnsFor(objective: RoutingObjective): readonly TableColumn[] {
  * Which way the comparison went (AC-1389). `isCertain` only says the two intervals are apart, so on its own it
  * would state a page where the ranking is **hurting** as confidently, and as greenly, as one where it helps.
  */
-function verdictOf(page: InsightsPage): 'ahead' | 'behind' | 'unsure' {
+export function verdictOf(page: InsightsPage): 'ahead' | 'behind' | 'unsure' {
   if (!page.isCertain) return 'unsure';
   return page.changed.rate >= page.holdout.rate ? 'ahead' : 'behind';
 }

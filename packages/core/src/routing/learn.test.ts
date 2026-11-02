@@ -496,7 +496,8 @@ describe('Routing › Insights (AC-1376, AC-1389)', () => {
     expect(all?.isWarm).toBe(false);
     // Cold, so it says when it could be ready rather than showing a lift.
     expect(all?.readyFrom === undefined || /^\d{4}-\d{2}-\d{2}$/.test(all.readyFrom)).toBe(true);
-    expect(every(all?.members ?? [], (member) => member.lift === 0)).toBe(true);
+    // A cold cell reports no lift at all, rather than 0: on screen that is "—", not a judgement on the rep.
+    expect(every(all?.members ?? [], (member) => member.lift === undefined)).toBe(true);
     // One meeting cannot be certain either way.
     expect(page?.isCertain).toBe(false);
 
