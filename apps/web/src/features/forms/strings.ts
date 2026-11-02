@@ -313,6 +313,10 @@ export const strings = {
   embedFloatingWords: 'Change its words in data-timefix-text.',
   /** The words on the popup's and the corner's button, until the site changes them. */
   embedButtonText: 'Contact us',
+  /** Spec 0063 s5 / 0062 L3 (the owner, 2 November 2026): a form that books afterwards needs no second snippet. */
+  embedBooks: 'After it’s sent, this form opens your booking page. One snippet covers both steps.',
+  embedCouldBook: 'A form can open a booking page once it’s sent, so one snippet asks and books.',
+  embedCouldBookLink: 'Set what happens after it’s sent',
   embedSnippet: 'Embed snippet',
   advancedTitle: 'For developers',
   ownFormTitle: 'Your own HTML',

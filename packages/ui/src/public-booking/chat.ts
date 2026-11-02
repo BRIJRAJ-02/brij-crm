@@ -2,6 +2,7 @@
 // 0041), so the page loads it only when the visitor first chooses Chat.
 export {
   BookingChat,
+  type BookingChatCard,
   type BookingChatDay,
   type BookingChatError,
   type BookingChatLine,

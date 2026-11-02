@@ -8,6 +8,7 @@ import type {
   PublicAddress,
   PublicHandleOffer,
   PublicProfile,
+  PublicProfileTimes,
   PublicBooked,
   PublicBookInput,
   PublicBookingPage,
@@ -29,6 +30,8 @@ export type {
   PublicHandleOffer,
   PublicProfile,
   PublicProfileItem,
+  PublicProfileTimes,
+  PublicPicture,
   PublicBooked,
   PublicChanged,
   PublicGuestsAnswer,
@@ -183,7 +186,24 @@ export interface HandleClient {
    * The profile at `/<handle>` and its first (or `after`'s next) page of blocks, only those holding `q`. Read with
    * neither, it is a view of the page (AC-5124); `q: ''` (a search cleared) reads the first page without being one.
    */
-  profile(handle: string, query?: { readonly after?: string; readonly q?: string }): Promise<PublicProfile>;
+  profile(
+    handle: string,
+    query?: {
+      readonly after?: string;
+      readonly q?: string;
+      /**
+       * The two facts a view carries from the page (spec 0061, AC-6116): the referring site's host and the
+       * `utm_source`, sent only with the view read and checked again on the server, which keeps neither raw.
+       */
+      readonly ref?: string;
+      readonly src?: string;
+    },
+  ): Promise<PublicProfile>;
+  /**
+   * A next times block's next open times (spec 0061, AC-6110), in `tz`: read when the block nears the screen, and
+   * answered with a minute of cache, so a page of three blocks is three light reads at most.
+   */
+  times(handle: string, itemId: string, tz: string, signal?: AbortSignal): Promise<PublicProfileTimes>;
   /** The page `/<handle>/<slug>` names, by its public key, and the owner's current handle. */
   address(handle: string, slug: string): Promise<PublicAddress>;
   /**
@@ -211,17 +231,25 @@ export function createHandleClient(options: PublicClientOptions & { readonly bea
   return {
     profile: (handle, query = {}) => {
       // An empty `q` is still a search (a cleared one), so it is sent, and never counts as a view.
+      // The first page's read is a view (AC-5124): it goes with this site's cookies, so the owner's own isn't one.
+      const isView = query.after === undefined && query.q === undefined;
       const search = new URLSearchParams({
         ...(query.after === undefined ? {} : { after: query.after }),
         ...(query.q === undefined ? {} : { q: query.q }),
+        // The view's facts ride on the view read alone (AC-6116): a search and a further page carry none.
+        ...(isView && query.ref !== undefined ? { ref: query.ref } : {}),
+        ...(isView && query.src !== undefined ? { src: query.src } : {}),
       }).toString();
-      // The first page's read is a view (AC-5124): it goes with this site's cookies, so the owner's own isn't one.
-      const isView = search === '';
       return call<PublicProfile>(
-        `${encodeURIComponent(handle)}${isView ? '' : `?${search}`}`,
+        `${encodeURIComponent(handle)}${search === '' ? '' : `?${search}`}`,
         isView ? { credentials: 'same-origin' } : {},
       );
     },
+    times: (handle, itemId, tz, signal) =>
+      profiles.call<PublicProfileTimes>(
+        `${encodeURIComponent(handle)}/items/${encodeURIComponent(itemId)}/times?${new URLSearchParams({ tz }).toString()}`,
+        signal === undefined ? {} : { signal },
+      ),
     press: (handle, itemId) => {
       try {
         beacon(`${base}/${encodeURIComponent(handle)}/press`, itemId);

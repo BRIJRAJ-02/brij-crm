@@ -39,7 +39,7 @@ The four the flow has, as `step`:
 
 - `why`: what it does, and what it reads (free or busy only, never what is on the calendar, and only for this booking). Not now, then Continue with Google.
 - `waiting`: the host and the visitor side by side with three dots travelling between them and the two of them leaning in, under "Matching your calendars". The visitor's side is still a held circle until Google answers. Close is the way out: the page behind stays usable.
-- `matched`: "You're both free at 9:30 AM on Tue 20 Oct. Shall we book it?", how many matched, and why this one is first. Not now, See the other times, and Book this time. Every step has a dismiss first with its ESC keycap, so the one question the dialog asks always has a visible no.
+- `matched`: "You're both free at 9:30 AM on Tue 20 Oct.", how many matched, and why this one is first. Not now, See the other times, and Book this time. Every step has a dismiss first with its ESC keycap, so the one question the dialog asks always has a visible no.
 - `unmatched`: no open time in common, with Show all times, which closes the dialog and shows every time the host is open.
 - `failed`: the calendar couldn't be read, with Try again (back to Google) and Close.
 
@@ -55,7 +55,7 @@ The call to action is a button: Tab reaches it, Enter or Space opens the dialog.
 
 ## Motion
 
-The dots cross the gap in `duration-pulse`, a third of a cycle apart, and the two pictures lean a few degrees towards each other on the same beat (the pictures only: tilting the names under them read as jitter). The lean's four degrees is the one value with no token behind it; there is no rotation token, and Stylelint's token rules don't reach `rotate`. The mark that replaces them (a tick, a slash, a warning) grows in from `scale-enter` in `duration-popover`. Reduced motion keeps the fades and the dots' turns and drops every movement and the lean. The two faces and the message block keep their size in every step, so the answer landing moves nothing.
+The dots cross the gap in `duration-pulse`, a third of a cycle apart, and the two pictures lean a few degrees towards each other on the same beat (the pictures only: tilting the names under them read as jitter). The lean's four degrees is the one value with no token behind it; there is no rotation token, and Stylelint's token rules don't reach `rotate`. The mark that replaces them (a tick, a slash, a warning) grows in from `scale-enter` in `duration-popover`. When the calendars match, the tick opens out of a wide blur and the two faces lean in to meet it once, then settle (2 November 2026). The visitor's face arrives out of a blur in place of the held circle once Google says who they are, and each step's words resolve in where the last ones stood, the note a beat after. Reduced motion keeps the fades and the dots' turns and drops every movement and the lean. The two faces and the message block keep their size in every step, so the answer landing moves nothing.
 
 ## Differences from the artifact
 

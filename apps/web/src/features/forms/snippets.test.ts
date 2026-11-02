@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FormDocument } from '@crm/data';
 import { siteOrigin } from './InstallTab.tsx';
-import { embedSnippet, escapeHtml, ownFormHtml, type EmbedTarget } from './snippets.ts';
+import { EMBED_ACCENT, embedSnippet, escapeHtml, ownFormHtml, type EmbedTarget } from './snippets.ts';
 
 const SCRIPT = 'https://brij-crm-phi.vercel.app/embed/v1.js';
 
@@ -118,5 +118,45 @@ describe('a site’s address', () => {
     expect(siteOrigin('http://acme.com').problem).toBeDefined();
     expect(siteOrigin('acme.com').problem).toBeDefined();
     expect(siteOrigin('https://ada:pw@acme.com').problem).toBeDefined();
+  });
+});
+
+describe('the dialog shape, the colour and the mark (2 November 2026)', () => {
+  const booking: EmbedTarget = { ...target, kind: 'booking', publicKey: 'intro-call', theme: 'light' };
+
+  it('writes the side panel only where a dialog opens, never on an inline holder', () => {
+    const side = { ...booking, panel: 'side' as const };
+    expect(embedSnippet(SCRIPT, side, 'popup')).toContain('data-timefix-panel="side"');
+    expect(embedSnippet(SCRIPT, side, 'floating')).toContain('data-timefix-panel="side"');
+    expect(embedSnippet(SCRIPT, side, 'inline')).not.toContain('data-timefix-panel');
+  });
+
+  it('leaves the middle unwritten, so an older snippet still means what it meant', () => {
+    expect(embedSnippet(SCRIPT, booking, 'popup')).not.toContain('data-timefix-panel');
+    expect(embedSnippet(SCRIPT, { ...booking, panel: 'centre' }, 'popup')).not.toContain('data-timefix-panel');
+  });
+
+  it('carries a chosen colour and falls back to the default for one the script would refuse', () => {
+    expect(embedSnippet(SCRIPT, { ...booking, accent: '#0a7' }, 'floating')).toContain('data-timefix-color="#0a7"');
+    for (const refused of ['red', 'rgb(0,0,0)', '#12', 'javascript:alert(1)', '#1f5fd6" onload="x']) {
+      expect(embedSnippet(SCRIPT, { ...booking, accent: refused }, 'floating')).toContain(
+        `data-timefix-color="${EMBED_ACCENT}"`,
+      );
+    }
+  });
+
+  it('writes a mark only on the corner button, and never the word none', () => {
+    expect(embedSnippet(SCRIPT, { ...booking, icon: 'calendar' }, 'floating')).toContain(
+      'data-timefix-icon="calendar"',
+    );
+    expect(embedSnippet(SCRIPT, { ...booking, icon: 'none' }, 'floating')).not.toContain('data-timefix-icon');
+    expect(embedSnippet(SCRIPT, { ...booking, icon: 'calendar' }, 'popup')).not.toContain('data-timefix-icon');
+  });
+
+  it('points a booking page at the booking attribute, by key or by handle address', () => {
+    expect(embedSnippet(SCRIPT, booking, 'popup')).toContain('data-timefix-booking="intro-call"');
+    expect(embedSnippet(SCRIPT, { ...booking, publicKey: 'ada/intro' }, 'inline')).toContain(
+      'data-timefix-booking="ada/intro"',
+    );
   });
 });

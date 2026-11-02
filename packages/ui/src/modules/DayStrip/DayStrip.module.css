@@ -28,7 +28,9 @@
     cursor: pointer;
     scroll-snap-align: start;
     -webkit-tap-highlight-color: transparent;
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
   }
 
   /* A day's place while the days load: the tile's own size, quiet, and no press. */
@@ -43,6 +45,10 @@
     .day[data-loading] {
       animation: none;
     }
+
+    .day:not([data-loading]):active {
+      scale: none;
+    }
   }
 
   @keyframes day-pulse {
@@ -51,9 +57,13 @@
     }
   }
 
+  /* The chosen day's fill settles in at the movement pace; the day let go of fades at the hover pace. */
   .day[aria-pressed='true'] {
     background: var(--accent);
     color: var(--on-accent);
+    transition:
+      background-color var(--duration-move) var(--ease-out),
+      color var(--duration-move) var(--ease-out);
   }
 
   .day[data-best]::after {
@@ -86,6 +96,11 @@
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* A press eases the day down to --scale-press: 1 in the app, 0.97 where the public booking page sets it. */
+  .day:not([data-loading]):active {
+    scale: var(--scale-press);
   }
 
   @media (hover: hover) and (pointer: fine) {

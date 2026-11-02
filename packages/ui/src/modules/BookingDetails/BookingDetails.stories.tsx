@@ -24,18 +24,28 @@ export const Default: Story = {
     </Stage>
   ),
   play: async ({ canvas, args }) => {
-    await expect(canvas.getByRole('heading', { name: 'Your details' })).toHaveFocus();
+    // At a pointer, the first empty field takes focus as the step arrives.
+    await expect(canvas.getByRole('textbox', { name: /Your name/ })).toHaveFocus();
     await userEvent.click(canvas.getByRole('button', { name: 'Confirm booking' }));
     await expect(canvas.getByText('Give your name.')).toBeInTheDocument();
     await waitFor(() => expect(canvas.getByRole('textbox', { name: /Your name/ })).toHaveFocus());
     await userEvent.type(canvas.getByRole('textbox', { name: /Your name/ }), 'Grace Hopper');
     await userEvent.type(canvas.getByRole('textbox', { name: /Email/ }), 'grace@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Add guests' }));
-    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Guest 1 email' })).toHaveFocus());
-    await userEvent.type(canvas.getByRole('textbox', { name: 'Guest 1 email' }), 'alan@example.com');
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: /^Guests/ })).toHaveFocus());
+    // Enter makes the first a chip; the second is still being typed when Confirm takes it.
+    await userEvent.type(
+      canvas.getByRole('textbox', { name: /^Guests/ }),
+      'alan@example.com{Enter}katherine@example.com',
+    );
+    await expect(canvas.getByRole('list', { name: 'Guests to invite' })).toHaveTextContent('alan@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Confirm booking' }));
     await expect(args.onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Grace Hopper', email: 'grace@example.com', guests: ['alan@example.com'] }),
+      expect.objectContaining({
+        name: 'Grace Hopper',
+        email: 'grace@example.com',
+        guests: ['alan@example.com', 'katherine@example.com'],
+      }),
     );
   },
 };

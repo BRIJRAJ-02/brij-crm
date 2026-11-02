@@ -18,6 +18,10 @@ Default, chosen, Best, hover, focus, pressed, loading.
 
 `isLoading` draws a week of day tiles in their own size while the days are still coming, so the times under them never move when they arrive. They hold still under reduced motion.
 
+## Motion
+
+The chosen day's fill settles in at the movement pace, as MonthTiles' does.
+
 ## Keyboard
 
 One day is in the tab order; the arrows, Home and End move along the days; Enter or Space chooses.

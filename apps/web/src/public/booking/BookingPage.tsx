@@ -39,7 +39,7 @@ import {
   type DeferredSelectItem,
   type SelectItem,
 } from '@crm/ui/public-booking';
-import { createElement, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { createElement, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { railBrand, railHost, railTitle } from './host.ts';
 import { brandHref, preloadImage, wearStylesheet } from '../stylesheet.ts';
 import type { ChatMemory } from './ChatPanel.tsx';
@@ -71,7 +71,8 @@ import {
   zoneDisplay,
   zoneName,
 } from './time.ts';
-import { readReturn, returnPath, tidiedAddress, type Chosen, type ConnectResult } from './visitor.ts';
+import { openingOf } from './at-param.ts';
+import { returnPath, tidiedAddress, type Chosen, type ConnectResult } from './visitor.ts';
 import type { MatchCalendarStep } from '@crm/ui/public-booking/visitor';
 
 // The visitor bar and the details step load beside the first paint, not in it (the page's size budget): both
@@ -210,7 +211,11 @@ export function BookingPage({
   const prefill = given ?? handed;
   const [startedAt] = useState(now);
   // What a return from Google carried (the choices and what happened), read once; the address is then tidied.
-  const [back] = useState(() => readReturn(new URL(globalThis.location.href)));
+  // What this visit opened with: a return from Google (the choices and what happened), and a next times chip's
+  // `at` and `len` (spec 0061, AC-6110). Read once; the Google parts are then tidied out of the address.
+  const [back] = useState(() =>
+    openingOf(new URL(globalThis.location.href), now(), (startMs) => dayKey(startMs, timeZone)),
+  );
   useEffect(() => {
     const tidied = tidiedAddress(new URL(globalThis.location.href));
     if (tidied !== undefined) globalThis.history.replaceState(globalThis.history.state, '', tidied);
@@ -295,6 +300,7 @@ export function BookingPage({
           onBooked={onBooked}
           onEnded={ended}
           chosen={back.chosen}
+          {...(back.at === undefined ? {} : { at: back.at })}
           isPreview={isPreview}
           isEditorPreview={isEditorPreview}
           addressPath={addressPath}
@@ -490,6 +496,7 @@ function Booking({
   onBooked,
   onEnded,
   chosen,
+  at,
   connected,
   isPreview,
   isEditorPreview,
@@ -498,6 +505,11 @@ function Booking({
 }: {
   readonly handoff?: string;
   readonly chosen: Chosen;
+  /**
+   * The time a next times chip asked for (spec 0061, AC-6110), as the instant it names: once the page's times are
+   * in, that time is chosen and the details form opens on it. A time that is gone by then says so over fresh times.
+   */
+  readonly at?: string;
   /** What a guest connect just answered. */
   readonly connected?: ConnectResult;
   /** Inside a frame of any kind: no visitor. */
@@ -591,6 +603,8 @@ function Booking({
     readonly back: boolean;
   }>({ step: 'pick', attempt: '', back: false });
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  // Whether a next times chip's time has been answered (spec 0061, AC-6110): once a visit, whatever happens next.
+  const isAtDone = useRef(at === undefined);
   // "Not you?": no name, no email and no overlay for the rest of the visit.
   const [notYou, setNotYou] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -660,6 +674,35 @@ function Booking({
           setDay((picked) => picked ?? (first === undefined ? undefined : dayKey(Date.parse(first), zone)));
           if (first !== undefined)
             setMonth((shown) => (shown === monthOf(today) ? monthOf(dayKey(Date.parse(first), zone)) : shown));
+          // The time a next times chip asked for (spec 0061, AC-6110), answered by the read that covers it: it is
+          // chosen and the details form opens on it, as Match with your calendar's own times do. A time that went
+          // between the link page drawing the chip and this read says so, over that day's other times.
+          const asked = at === undefined ? undefined : Date.parse(at);
+          if (asked !== undefined && !isAtDone.current) {
+            // The read that covers the asked time answers it; a time no read can ever cover (one in the past, or
+            // past the page's horizon) is answered once the last chunk is in, so the page never waits in silence.
+            const covers = asked >= from && asked < to;
+            const isLast = wanted + 1 >= chunks;
+            if (covers || asked < from || isLast) {
+              isAtDone.current = true;
+              // A time the visitor's own calendar clashes with is no better an answer here than a taken one: the
+              // picker would not have offered it, so it takes the same line rather than opening the form on it.
+              const match = covers
+                ? (next.get(wanted) ?? []).find((start) => Date.parse(start) === asked && !hidden.has(start))
+                : undefined;
+              if (match === undefined) {
+                setNotice(strings.errors.atGone);
+                // Back's own path: focus lands on the chosen day, where the times the line promises are.
+                setStep({ step: 'pick', attempt: '', back: true });
+              } else {
+                const key = dayKey(asked, zone);
+                setDay(key);
+                setMonth(monthOf(key));
+                setTime(match);
+                setStep({ step: 'details', attempt: crypto.randomUUID(), back: false });
+              }
+            }
+          }
         },
         (error: unknown) => {
           if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -693,6 +736,7 @@ function Booking({
     showAll,
     handoff,
     onEnded,
+    at,
   ]);
 
   const loaded = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();
@@ -766,8 +810,13 @@ function Booking({
       })
       .then(
         (booked): BookingDetailsOutcome => {
-          onBooked(booked.manageToken);
-          return { kind: 'done' };
+          // The receipt opens once Confirm has shown Booked for a beat.
+          return {
+            kind: 'done',
+            next: () => {
+              onBooked(booked.manageToken);
+            },
+          };
         },
         (error: unknown): BookingDetailsOutcome | Promise<BookingDetailsOutcome> => {
           if (!isDataError(error)) return { kind: 'failed', message: strings.errors.failed };
@@ -992,8 +1041,14 @@ function Booking({
   const showsBar = viewer !== undefined && !viewer.isHost && (person !== undefined || connectHref !== undefined);
   // Its space is held while the page asks who the visitor is, so the card doesn't jump down under a reaching hand.
   const holdsBar = viewer === undefined && !isPreview;
+  // A connect that went wrong says so only while the page has no calendar to show for the visitor: one already
+  // connected (an earlier connect, or a second try) is the truth, and a stale "couldn't connect" beside it reads as
+  // a lie (owner, 2 November 2026).
+  const isConnected = person?.source === 'google';
   const connectNote =
-    connected === undefined || connected === 'connected' || notYou ? undefined : strings.connectResults[connected];
+    connected === undefined || connected === 'connected' || notYou || isConnected
+      ? undefined
+      : strings.connectResults[connected];
   const banner =
     showsBar || holdsBar || connectNote !== undefined ? (
       <>

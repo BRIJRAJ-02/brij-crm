@@ -57,6 +57,10 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only), or `
 - **Selected** (`ToggleButton`): `accent-soft` with an `accent` edge, which holds 3:1 against the surface (the artifact marks a pressed day with the accent too). It keeps that look while hovered. `aria-pressed` tells screen readers.
 - **Shortcut** (`kbd`): the keycaps are for sight. The button states the shortcut through `aria-keyshortcuts` (`⌘↵` is `Meta+Enter`), so screen readers hear "Add to list", not "Add to list command return". On a touch only device (no hover, a coarse pointer) the keycaps are hidden: there are no keys to press. In a dialog at phone width (under 480px, where the footer stacks its buttons) they are hidden too, through Modal's public `modal-scrim` container (22 October 2026). Inside a Modal's footer the keys come by default (30 October 2026): a `slot="close"` button shows `ESC` (unless it is the commit, a `primary` or `danger-solid` that also closes), a `type="submit"` button shows `↵` (`⌘↵` when the dialog holds a long text or an editor, and always when it submits a library Form by `form`), and a plain confirm's `primary` shows `↵` and takes focus as the dialog opens, so callers stop typing them; a `kbd` of its own wins, and `kbd={[]}` shows none. Why a default: 70 hand typed `kbd="ESC"` drifted, and only a few primaries showed their key, which Attio shows on every one.
 
+## Press
+
+Held, a button eases to `--scale-press`. The token is 1, so nothing in the app shrinks (20 October 2026). A public booking page sets it to 0.97 on its own root (1 November 2026), so its buttons answer a press there and only there. Reduced motion keeps every button still.
+
 ## Keyboard
 
 - `Tab` and `Shift Tab` reach it (not when disabled).
@@ -79,3 +83,5 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only), or `
 - No `disabledReason` tooltip yet: a disabled button gets no hover or focus, so a tooltip on it would reach no one by keyboard. Until a disabled button can stay focusable, write the reason beside it and tie it with `aria-describedby`, or put a `LockReason` beside it.
 - The keycaps no longer read as part of the name, and the primary's keycap is edged instead of filled, so its text holds 4.5:1 (on the `on-accent-kbd` fill it was 3.3:1).
 - The SplitButton divider on the primary uses `on-accent-kbd`, as the artifact does.
+
+A label that changes after the first paint resolves in over `--label-swap` (a 2px blur and a fade, a fade alone under reduced motion). The property is registered at 0s, so nothing moves in the app; the public booking page sets it on BookingFrame's root.

@@ -86,7 +86,12 @@ function Face({
 }) {
   return (
     <span className={styles.face} data-side={side}>
-      <span className={styles.portrait}>
+      {/* Drawn anew when Google says who the visitor is, so their face arrives in place of the held circle. */}
+      <span
+        key={party === undefined ? 'held' : 'known'}
+        className={styles.portrait}
+        data-known={party !== undefined || undefined}
+      >
         {party === undefined ? (
           <Skeleton shape="circle" size="xl" isStill={isStill} />
         ) : (
@@ -249,11 +254,16 @@ export function MatchCalendar({
         <Face party={visitor} side="visitor" isStill={step !== 'waiting'} />
       </div>
       <div className={styles.message} aria-busy={step === 'waiting'}>
-        <p className={styles.lead}>{lead(step, host.name, result)}</p>
+        {/* Keyed by the step, so each answer is said anew: its words resolve in where the last ones stood. */}
+        <p key={`lead-${step}`} className={styles.lead}>
+          {lead(step, host.name, result)}
+        </p>
         {step === 'matched' && result !== undefined && (
           <p className={styles.count}>{strings.matchedCount(result.count)}</p>
         )}
-        <p className={styles.note}>{note(step, result)}</p>
+        <p key={`note-${step}`} className={styles.note}>
+          {note(step, result)}
+        </p>
       </div>
       {showsOthers && hasOthers && (
         <div ref={others} className={styles.others} role="group" aria-label={strings.othersLabel}>

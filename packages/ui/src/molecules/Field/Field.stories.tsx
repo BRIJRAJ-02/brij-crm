@@ -116,6 +116,35 @@ export const ErrorReplacesHint: Story = {
   },
 };
 
+/** One error replaced by another: the error line stays and only its words change, so it doesn't fade in twice. */
+export const ErrorChangesInPlace: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <Rechecked />,
+  play: async ({ canvas, userEvent }) => {
+    const input = canvas.getByRole('textbox', { name: 'Email' });
+    await expect(input).toHaveAccessibleDescription('Give an email address.');
+    const errorLine = () => canvas.getByText(/^Give an email address/).parentElement;
+    const before = errorLine();
+    await userEvent.type(input, 'ada');
+    await expect(input).toHaveAccessibleDescription('Give an email address such as name@example.com.');
+    await expect(errorLine()).toBe(before);
+  },
+};
+
+function Rechecked() {
+  const [value, setValue] = useState('');
+  return (
+    <Stage width="narrow">
+      <Field
+        label="Email"
+        value={value}
+        onChange={setValue}
+        error={value === '' ? 'Give an email address.' : 'Give an email address such as name@example.com.'}
+      />
+    </Stage>
+  );
+}
+
 function Counted({ label, maxLength }: { readonly label: string; readonly maxLength: number }) {
   const [value, setValue] = useState('Met at SaaStr. Interested in the API.');
   return (
