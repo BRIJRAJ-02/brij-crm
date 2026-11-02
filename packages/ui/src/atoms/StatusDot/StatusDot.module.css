@@ -51,6 +51,8 @@
 
   .dot {
     flex: none;
+    /* A status changed under the viewer: the dot turns to its new hue rather than swapping colour. */
+    transition: background-color var(--duration-move) var(--ease-hover);
     inline-size: var(--size-dot);
     block-size: var(--size-dot);
     border-radius: var(--radius-full);

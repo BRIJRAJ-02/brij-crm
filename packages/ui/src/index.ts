@@ -49,6 +49,8 @@ export { Radio, RadioGroup, type RadioGroupProps, type RadioProps } from './atom
 export { Rating, type RatingProps } from './atoms/Rating/Rating.tsx';
 export { RecordChip, type RecordChipProps } from './atoms/RecordChip/RecordChip.tsx';
 export { RelativeTime, type RelativeTimeProps } from './atoms/RelativeTime/RelativeTime.tsx';
+/** A count that rolls only the digits that changed, a beat after the edit that fed it. */
+export { RollingNumber, type RollingNumberProps } from './atoms/RollingNumber/RollingNumber.tsx';
 export { RemoteCursor, type RemoteCursorProps } from './atoms/RemoteCursor/RemoteCursor.tsx';
 export { Separator, type SeparatorProps } from './atoms/Separator/Separator.tsx';
 export { Skeleton, type SkeletonProps, type SkeletonShape, type SkeletonWidth } from './atoms/Skeleton/Skeleton.tsx';
@@ -90,6 +92,8 @@ export { isRefusal } from './fields/values.ts';
 export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';
 export { focusLater } from './lib/focus-later.ts';
+/** The shared one shot motion every list borrows: a changed row washed, a new line dropped in, a row closed up, a value faded in place. */
+export { collapseAway, useDropIn, useReducedMotion, useRowWash, useValueFade } from './lib/motion/motion.ts';
 /** One Intl formatter per key (kind, language, zone, options), built once and reused: for screens that format many values each render. */
 export { memoIntl } from './lib/intl-memo.ts';
 export { safeHref } from './lib/safe-href.ts';

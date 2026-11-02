@@ -50,7 +50,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -60,6 +59,7 @@ import { createPortal } from 'react-dom';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../focus-later.ts';
+import { useReducedMotion } from '../motion/motion.ts';
 import { durationToken, easingToken, spaceToken } from '../token-values.ts';
 import { strings } from './strings.ts';
 
@@ -92,22 +92,8 @@ export interface DragWords {
   readonly moving: (id: string) => string;
 }
 
-const reducedMotion = '(prefers-reduced-motion: reduce)';
-
-/** Whether the person asked for less motion: drags then drop in place, and items jump rather than slide. */
-export function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const query = globalThis.matchMedia(reducedMotion);
-      query.addEventListener('change', onChange);
-      return () => {
-        query.removeEventListener('change', onChange);
-      };
-    },
-    () => globalThis.matchMedia(reducedMotion).matches,
-    () => false,
-  );
-}
+/** Whether the person asked for less motion, from the one place that answers it (lib/motion). */
+export { useReducedMotion };
 
 /** The two sensors: the pointer after a few pixels (a press still presses), and the keyboard on a grip. */
 function useDragSensors(hasKeyboard: boolean, isReduced: boolean): SensorDescriptor<SensorOptions>[] {

@@ -160,6 +160,7 @@ describe('@crm/ui', () => {
       'RelatedRecords',
       'RelationshipSettings',
       'RelativeTime',
+      'RollingNumber',
       'RemoteCursor',
       'RolePowers',
       'RulesEditor',
@@ -232,6 +233,7 @@ describe('@crm/ui', () => {
       'conditionOn',
       'countFilters',
       'createInviteRow',
+      'collapseAway',
       'createPhoneParser',
       'createToasts',
       'dayIn',
@@ -263,9 +265,13 @@ describe('@crm/ui', () => {
       'typeChangeStep',
       'typeLabelOf',
       'useDelayedLoading',
+      'useDropIn',
       'useFileHref',
       'useFormatSettings',
       'useKeyboardPlatform',
+      'useReducedMotion',
+      'useRowWash',
+      'useValueFade',
     ]);
   });
 });

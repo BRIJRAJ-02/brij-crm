@@ -1,4 +1,5 @@
 import type { Hue } from '../../hue.ts';
+import { useValueFade } from '../../lib/motion/motion.ts';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import { strings } from '../Tag/strings.ts';
 import styles from './StatusDot.module.css';
@@ -26,6 +27,8 @@ export interface StatusDotProps {
 
 /** A status as a dot in its hue and its label: the status attribute's one display. */
 export function StatusDot({ children, hue, isArchived = false, shortLabel, isInherited = false }: StatusDotProps) {
+  // A status changing under the viewer: the dot turns to its new hue and the words fade in where the old ones were.
+  const label = useValueFade<HTMLSpanElement>(children);
   return (
     <span
       className={styles.root}
@@ -38,7 +41,7 @@ export function StatusDot({ children, hue, isArchived = false, shortLabel, isInh
         // The full words are read from the hidden copy at every width; the shown ones are for sight: the label in a
         // wide container, the short word in a narrow one.
         <>
-          <span className={styles.label} data-truncated="" data-width="wide" aria-hidden="true">
+          <span className={styles.label} data-truncated="" data-width="wide" aria-hidden="true" ref={label}>
             {children}
           </span>
           <span className={styles.label} data-width="narrow" aria-hidden="true">
@@ -47,7 +50,7 @@ export function StatusDot({ children, hue, isArchived = false, shortLabel, isInh
           <VisuallyHidden>{children}</VisuallyHidden>
         </>
       ) : (
-        <span className={styles.label} data-truncated="">
+        <span className={styles.label} data-truncated="" ref={label}>
           {children}
         </span>
       )}

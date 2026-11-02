@@ -1,5 +1,6 @@
 import { Button as AriaButton, DialogTrigger } from 'react-aria-components';
 import type { Hue } from '../../hue.ts';
+import { useValueFade } from '../../lib/motion/motion.ts';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import { strings } from './strings.ts';
@@ -17,9 +18,11 @@ export interface TagProps {
 
 /** One select option as a coloured tag, the same in a cell, a panel, a card and a filter. */
 export function Tag({ children, hue = 'gray', isArchived = false }: TagProps) {
+  // A changed value is a change of mind, not a new tag: the colour turns and the words fade in where the old ones were.
+  const label = useValueFade<HTMLSpanElement>(children);
   return (
     <span className={styles.root} data-hue={isArchived ? 'gray' : hue} data-archived={isArchived || undefined}>
-      <span className={styles.label} data-truncated="">
+      <span className={styles.label} data-truncated="" ref={label}>
         {children}
       </span>
       {isArchived && <VisuallyHidden> {strings.archived}</VisuallyHidden>}

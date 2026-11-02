@@ -1,0 +1,34 @@
+/* RollingNumber: a count in tabular figures, so its width never shifts as
+   digits change. While a roll is in flight the characters are drawn one by
+   one, and only the ones that changed rise into place; between rolls the count
+   is one piece of text again, as any other count is. Reduced motion never
+   reaches here: the component changes the text instead. */
+@layer components {
+  .root {
+    display: inline-flex;
+    align-items: baseline;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .char {
+    display: inline-block;
+    overflow: clip;
+  }
+
+  .char[data-rolled] {
+    animation: roll var(--duration-move) var(--ease-out) backwards;
+  }
+
+  @keyframes roll {
+    from {
+      opacity: 0;
+      translate: 0 100%;
+    }
+
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+}

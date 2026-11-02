@@ -3,6 +3,7 @@ import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { Icon } from '../Icon/Icon.tsx';
 import type { IconName } from '../Icon/icons.ts';
+import { RollingNumber } from '../RollingNumber/RollingNumber.tsx';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Badge.module.css';
 import { strings } from './strings.ts';
@@ -79,7 +80,8 @@ export function Badge(props: BadgeProps) {
     >
       {props.dot !== undefined && <span className={styles.dot} data-hue={props.dot} aria-hidden="true" />}
       {props.icon !== undefined && <Icon name={props.icon} size="xs" />}
-      {props.text === undefined ? shown : <span className={styles.text}>{shown}</span>}
+      {/* A count rolls the digits that changed, a beat after the edit that fed it; a label just changes. */}
+      {props.text === undefined ? <RollingNumber>{shown}</RollingNumber> : <span className={styles.text}>{shown}</span>}
       {label !== undefined && <VisuallyHidden> {label}</VisuallyHidden>}
     </span>
   );
