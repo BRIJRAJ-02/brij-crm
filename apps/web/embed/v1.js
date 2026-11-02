@@ -11,6 +11,11 @@
 //        data-timefix-text="Talk to us" data-timefix-color="#2563eb"></div>  a corner button
 //   <form data-timefix-form="KEY" data-timefix-workspace="ws_…">  the site's own form, posted by us
 //
+// `data-timefix-panel="side"` on a popup or floating holder opens a column
+// against the inline end instead of the middle of the screen, and a sheet from
+// the bottom on a phone (2 Nov 2026). A panel opened from a button grows out of
+// that button.
+//
 // Inline frames fill their container's width and take their content's height,
 // which the frame posts as it changes, so they never scroll inside or spill
 // sideways. Everything we draw lives in a shadow root with its own styles, so
@@ -158,6 +163,15 @@
     return out;
   }
 
+  // The corner button's marks, drawn from Lucide's calendar-days, message-circle and mail, at 18px to sit on the
+  // words' line. They are inert pictures: the button's words are its name.
+  var MARKS = {
+    calendar:
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 10h18"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>',
+    chat: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>',
+    mail: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>',
+  };
+
   var STYLE =
     ':host{all:initial;display:block;inline-size:100%;max-inline-size:100%;min-inline-size:0}' +
     '.box{position:relative;inline-size:100%;min-block-size:var(--tfx-min,360px)}' +
@@ -176,8 +190,20 @@
     '.veil[hidden]{display:none}.veil[data-open]{opacity:1}' +
     '.panel{position:relative;box-sizing:border-box;inline-size:min(560px,calc(100% - 32px));max-block-size:calc(100% - 64px);' +
     'overflow:hidden;border-radius:12px;background:var(--tfx-bg);box-shadow:0 24px 64px rgba(0,0,0,.28);' +
+    'transform-origin:var(--tfx-ox,50%) var(--tfx-oy,50%);' +
     'transform:scale(.98);transition:transform 240ms ease-out}' +
     '.veil[data-open] .panel{transform:none}' +
+    // A panel opened from a button grows out of that button: the origin is the button's middle, so the corner
+    // the eye was on is the corner that expands. Opened from anywhere else the origin stays the middle.
+    '.veil[data-grow] .panel{transform:scale(.88)}' +
+    // Side: a column against the inline end, full height, its outer corners square against the edge. It keeps the
+    // same veil, focus trap and close button as the middle panel; only where it sits and how it arrives differ.
+    '.veil[data-side]{align-items:stretch;justify-content:flex-end}' +
+    '.veil[data-side] .panel{inline-size:min(440px,100%);max-block-size:none;block-size:100%;' +
+    'border-start-end-radius:0;border-end-end-radius:0;border-start-start-radius:16px;border-end-start-radius:16px;' +
+    'transform:translateX(16px) scale(.99)}' +
+    '.veil[data-side][data-open] .panel{transform:none}' +
+    '.veil[data-side] .panel iframe{block-size:100%;max-block-size:none}' +
     '.panel iframe{opacity:1;max-block-size:calc(100vh - 64px);block-size:var(--tfx-h,480px)}' +
     '.x{position:absolute;inset-block-start:8px;inset-inline-end:8px;z-index:1;display:grid;place-items:center;inline-size:32px;block-size:32px;' +
     'padding:0;border:0;border-radius:8px;background:var(--tfx-bg);color:var(--tfx-fg);cursor:pointer}' +
@@ -188,9 +214,18 @@
     'max-inline-size:calc(100vw - 32px);padding:0 20px;border:0;border-radius:22px;background:var(--tfx-accent);color:var(--tfx-on);' +
     'font:600 15px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.2);cursor:pointer;' +
     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.fab:has(.mark){display:inline-flex;align-items:center;gap:8px}' +
+    '.mark{display:grid;place-items:center;flex:none}' +
     '@media (max-width:640px){.panel{inline-size:100%;block-size:100%;max-block-size:none;border-radius:0}' +
-    '.panel iframe{block-size:100%;max-block-size:none}}' +
-    '@media (prefers-reduced-motion:reduce){.veil,.panel,iframe{transition:opacity 160ms ease-out}.panel{transform:none}.sk i{animation:none}}';
+    '.panel iframe{block-size:100%;max-block-size:none}' +
+    // A 390px wide "side" panel is the whole screen pretending to be a panel, so on a phone it is a sheet that
+    // rises from the bottom instead, which is where a thumb is and which no longer claims to be beside anything.
+    '.veil[data-side]{align-items:flex-end;justify-content:center}' +
+    '.veil[data-side] .panel{inline-size:100%;block-size:92%;border-radius:16px 16px 0 0;transform:translateY(16px)}' +
+    '.veil[data-side][data-open] .panel{transform:none}' +
+    '.veil[data-grow] .panel{transform:translateY(16px)}}' +
+    '@media (prefers-reduced-motion:reduce){.veil,.panel,iframe{transition:opacity 160ms ease-out}' +
+    '.veil .panel,.veil[data-side] .panel,.veil[data-grow] .panel{transform:none}.sk i{animation:none}}';
 
   // A themed shadow root inside a fresh element the site's CSS can't size or pad.
   function shell(dark) {
@@ -303,13 +338,14 @@
 
   var dialogs = {};
 
-  function dialogFor(kind, key, element) {
-    var name = kind + ':' + key;
+  function dialogFor(kind, key, element, side) {
+    var name = kind + ':' + key + (side ? ':side' : '');
     if (dialogs[name]) return dialogs[name];
     var dark = element.getAttribute('data-timefix-theme') === 'dark';
     var parts = shell(dark);
     var veil = document.createElement('div');
     veil.className = 'veil';
+    if (side) veil.setAttribute('data-side', '');
     veil.hidden = true;
     var panel = document.createElement('div');
     panel.className = 'panel';
@@ -358,7 +394,13 @@
       if (back && back.focus) back.focus();
     };
     var dialog = {
-      open: function () {
+      /**
+       * `from` is the button that asked for it, when there was one: the panel then grows out of that button
+       * rather than out of the middle of the screen, so what you pressed becomes what you are looking at. A
+       * panel opened from anywhere else (a link, a script) has nothing to grow from, and a grow from nowhere
+       * reads as a glitch, so it keeps the plain rise.
+       */
+      open: function (from) {
         if (!veil.hidden) return;
         back = document.activeElement;
         var root = document.documentElement;
@@ -368,6 +410,18 @@
         root.style.overflow = 'hidden';
         if (gap > 0) root.style.paddingRight = gap + 'px';
         veil.hidden = false;
+        panel.style.removeProperty('--tfx-ox');
+        panel.style.removeProperty('--tfx-oy');
+        veil.removeAttribute('data-grow');
+        if (from && from.getBoundingClientRect) {
+          var button = from.getBoundingClientRect();
+          var box = panel.getBoundingClientRect();
+          if (box.width > 0 && box.height > 0) {
+            panel.style.setProperty('--tfx-ox', button.left + button.width / 2 - box.left + 'px');
+            panel.style.setProperty('--tfx-oy', button.top + button.height / 2 - box.top + 'px');
+            veil.setAttribute('data-grow', '');
+          }
+        }
         requestAnimationFrame(function () {
           veil.setAttribute('data-open', '');
         });
@@ -416,7 +470,7 @@
     return light > 0.179 ? '#111318' : '#ffffff';
   }
 
-  function floating(holder, kind, key) {
+  function floating(holder, kind, key, side) {
     var parts = shell(holder.getAttribute('data-timefix-theme') === 'dark');
     var colour = holder.getAttribute('data-timefix-color') || '';
     if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(colour)) colour = '#2563eb';
@@ -425,20 +479,30 @@
     button.className = 'fab';
     button.setAttribute('aria-haspopup', 'dialog');
     button.textContent = cut(holder.getAttribute('data-timefix-text') || 'Contact us', 40);
+    // The mark goes before the words and is hidden from screen readers: the words already name the button, and
+    // a mark that named it too would be read twice. Only the marks we draw are allowed; anything else is words only.
+    var mark = MARKS[holder.getAttribute('data-timefix-icon')];
+    if (mark) {
+      var glyph = document.createElement('span');
+      glyph.className = 'mark';
+      glyph.setAttribute('aria-hidden', 'true');
+      glyph.innerHTML = mark;
+      button.insertBefore(glyph, button.firstChild);
+    }
     button.style.setProperty('--tfx-accent', colour);
     button.style.setProperty('--tfx-on', onColour(colour));
     button.addEventListener('click', function () {
-      dialogFor(kind, key, holder).open();
+      dialogFor(kind, key, holder, side).open(button);
     });
     parts.root.appendChild(button);
     document.body.appendChild(parts.host);
   }
 
-  function popup(trigger, kind, key) {
+  function popup(trigger, kind, key, side) {
     trigger.setAttribute('aria-haspopup', 'dialog');
     trigger.addEventListener('click', function (event) {
       event.preventDefault();
-      dialogFor(kind, key, trigger).open();
+      dialogFor(kind, key, trigger, side).open(trigger);
     });
   }
 
@@ -564,8 +628,12 @@
     if (!key || !/^[A-Za-z0-9_-]{1,64}$/.test(key)) return;
     seen.add(element);
     var mode = element.getAttribute('data-timefix-mode') || 'inline';
-    if (mode === 'popup') popup(element, kind, key);
-    else if (mode === 'floating') floating(element, kind, key);
+    // Two separate choices, so they compose: `mode` is what the visitor presses (their own button, or the
+    // corner bubble we draw), and `data-timefix-panel` is what opens (the middle of the screen, or a column
+    // against the edge). Anything but `side` is the middle, so an older snippet keeps its behaviour.
+    var side = element.getAttribute('data-timefix-panel') === 'side';
+    if (mode === 'popup') popup(element, kind, key, side);
+    else if (mode === 'floating') floating(element, kind, key, side);
     else inline(element, kind, key);
   }
 
