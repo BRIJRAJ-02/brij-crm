@@ -60,6 +60,10 @@ export const ClampedOnPanel: Story = {
     const more = await canvas.findByRole('button', { name: 'Show more' });
     await expect(more).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(more);
-    await expect(canvas.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+    const less = canvas.getByRole('button', { name: 'Show less' });
+    await expect(less).toHaveAttribute('aria-expanded', 'true');
+    // The click leaves the pointer on the button, so the screenshot catches it hovered
+    // rather than at rest. Step off it before the shot.
+    await userEvent.unhover(less);
   },
 };
