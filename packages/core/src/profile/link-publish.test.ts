@@ -94,13 +94,13 @@ async function refusalOf(call: Promise<unknown>) {
 describe('a link page’s draft', () => {
   it('keeps every edit from guests until Publish, then shows them all at once', async () => {
     const ada = await person('Ada Lovelace');
-    // A page made after the move has nothing published: guests see the page with nothing on it, never the draft.
+    // Claiming the handle put the page live as it stood, empty, as version 1; every edit since waits for Publish.
     await saveProfileItem(ada.scope, { id: newId(), block: link('Shop') });
     await updateMyMemberProfile(ada.scope, { bio: 'Maker of engines' });
     expect(await guest(ada.handle)).toMatchObject({ bio: '', titles: [] });
     const waiting = await readLinkPagePublication(ada.scope);
     expect(waiting.changes).toEqual(['Bio changed', 'Added “Shop”']);
-    expect(waiting.publishedAt).toBeUndefined();
+    expect(waiting.publishedAt).toBeDefined();
 
     const published = await publishLinkPage(ada.scope);
     expect(published.publication.changes).toEqual([]);
@@ -122,7 +122,7 @@ describe('a link page’s draft', () => {
 
     // Versions, newest first, and one audit row per Publish.
     const versions = await listLinkPageVersions(ada.scope);
-    expect(versions.versions.map((one) => one.version)).toEqual([2, 1]);
+    expect(versions.versions.map((one) => one.version)).toEqual([3, 2, 1]);
     expect(versions.versions[0]).toMatchObject({ isCurrent: true, publishedBy: 'Ada Lovelace' });
     const audit = await db.withWorkspace(ada.workspaceId, (tx) =>
       tx.execute<{ action: string }>(sql`select action from audit_events where action like 'link_page.%' order by at`),
@@ -153,7 +153,8 @@ describe('a link page’s draft', () => {
     await publishLinkPage(ada.scope);
     await saveProfileItem(ada.scope, { id: newId(), block: link('Two') });
     await publishLinkPage(ada.scope);
-    const restored = await restoreLinkPageVersion(ada.scope, 1);
+    // Version 1 is the empty page the claim put live; 2 has One, 3 has One and Two.
+    const restored = await restoreLinkPageVersion(ada.scope, 2);
     expect(restored.publication.changes).toEqual(['Removed “Two”']);
     // Restoring is a draft: guests still see version 2 until Publish.
     expect(await guest(ada.handle)).toMatchObject({ titles: ['One', 'Two'] });
