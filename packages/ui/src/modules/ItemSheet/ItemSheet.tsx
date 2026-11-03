@@ -22,19 +22,13 @@ import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
 import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import styles from './ItemSheet.module.css';
+import { livePicks, pickKey, sizePrice, type GuestPick } from './picks.ts';
 import { strings } from './strings.ts';
+
+export { livePicks, pickKey, type GuestPick };
 
 /** Where a photo of the menu is served, at a width, versioned (the page's own origin). */
 export type MenuPhotoHref = (photoId: string, size: 'large' | 'small', version: string) => string;
-
-/** One dish a guest picked: the item, the size and options they chose, and how many. */
-export interface GuestPick {
-  readonly key: string;
-  readonly itemId: string;
-  readonly size?: number;
-  readonly optionIds: readonly string[];
-  readonly quantity: number;
-}
 
 /** The rule a group's choices follow, in words, with "Required" when the guest must pick. */
 const ruleWords = (group: OptionGroup) => {
@@ -55,10 +49,6 @@ function waitingFor(groups: readonly OptionGroup[], chosen: ReadonlyMap<string, 
   return least === 1 ? strings.chooseFrom(group.name) : strings.chooseAtLeast(least, group.name);
 }
 
-/** A key for a pick: the same dish with the same choices adds to one line. */
-export const pickKey = (pick: Omit<GuestPick, 'key' | 'quantity'>) =>
-  `${pick.itemId}|${String(pick.size ?? '')}|${[...pick.optionIds].sort().join(',')}`;
-
 /** An item's sheet (AC-6529, AC-6533): the body of a `Modal` `sheet-card`. */
 export function ItemSheet({
   item,
@@ -76,7 +66,7 @@ export function ItemSheet({
   const { currency } = menu.menu;
   const { locale } = menu.place;
   const price = (minor: number) => formatPrice(minor, currency, locale);
-  const [size, setSize] = useState<number | undefined>(item.sizes.length > 0 ? 0 : undefined);
+  const [size, setSize] = useState<string | undefined>(item.sizes[0]?.id);
   const groups = item.groupIds
     .map((id) => menu.menu.groups[id])
     .filter((group): group is OptionGroup => group !== undefined);
@@ -89,7 +79,7 @@ export function ItemSheet({
     ),
   );
   const [quantity, setQuantity] = useState(1);
-  const base = size === undefined ? (item.priceMinor ?? 0) : (item.sizes[size]?.priceMinor ?? 0);
+  const base = size === undefined ? (item.priceMinor ?? 0) : (sizePrice(item, size) ?? 0);
   const deltas = groups.flatMap((group) =>
     (chosen.get(group.id) ?? []).map((id) => group.options.find((option) => option.id === id)?.priceDeltaMinor ?? 0),
   );
@@ -154,15 +144,9 @@ export function ItemSheet({
         </ul>
       )}
       {item.sizes.length < 2 ? null : (
-        <RadioGroup
-          label={strings.sizes}
-          variant="cards"
-          value={String(size ?? 0)}
-          onChange={(value) => setSize(Number(value))}
-          isDisabled={isSoldOut}
-        >
-          {item.sizes.map((each, index) => (
-            <Radio key={each.name} value={String(index)} description={price(each.priceMinor)}>
+        <RadioGroup label={strings.sizes} variant="cards" value={size ?? ''} onChange={setSize} isDisabled={isSoldOut}>
+          {item.sizes.map((each) => (
+            <Radio key={each.id} value={each.id} description={price(each.priceMinor)}>
               {each.name}
             </Radio>
           ))}
@@ -253,7 +237,7 @@ export function ItemSheet({
                 onPress={() =>
                   onPick({
                     itemId: item.id,
-                    ...(size === undefined ? {} : { size }),
+                    ...(size === undefined ? {} : { sizeId: size }),
                     optionIds: [...chosen.values()].flat(),
                     quantity,
                   })
@@ -315,7 +299,7 @@ function Stepper({
 function pickTotal(menu: PublicMenu, pick: GuestPick): number {
   const item = menu.menu.items[pick.itemId];
   if (item === undefined) return 0;
-  const base = pick.size === undefined ? (item.priceMinor ?? 0) : (item.sizes[pick.size]?.priceMinor ?? 0);
+  const base = pick.sizeId === undefined ? (item.priceMinor ?? 0) : (sizePrice(item, pick.sizeId) ?? 0);
   const deltas = item.groupIds.flatMap((id) =>
     (menu.menu.groups[id]?.options ?? [])
       .filter((option) => pick.optionIds.includes(option.id))
@@ -445,7 +429,7 @@ export function PicksSheet({
                 .flatMap((id) => menu.menu.groups[id]?.options ?? [])
                 .filter((option) => pick.optionIds.includes(option.id))
                 .map((option) => option.name);
-              const sizeName = pick.size === undefined ? undefined : item.sizes[pick.size]?.name;
+              const sizeName = item.sizes.find((each) => each.id === pick.sizeId)?.name;
               const detail = [sizeName, ...options].filter((part) => part !== undefined).join(', ');
               const photo = item.photo === undefined || photoHref === undefined ? undefined : item.photo;
               return (

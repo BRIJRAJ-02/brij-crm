@@ -276,7 +276,9 @@ export const ACCESS_TABLE = {
   // The Menu app (spec 0065, H1): Run service reads the draft and flips Sold out (AC-6526); everything else is
   // `hospitality.manage`'s. The place ids a purge names are any member's (ids only).
   readMenuDraft: { permission: 'hospitality.service' },
+  readMenuDraftLook: { permission: 'hospitality.service' },
   setItemSoldOut: { permission: 'hospitality.service' },
+  setMenuHidden: { permission: 'hospitality.manage' },
   saveMenu: { permission: 'hospitality.manage' },
   deleteMenu: { permission: 'hospitality.manage' },
   saveSection: { permission: 'hospitality.manage' },

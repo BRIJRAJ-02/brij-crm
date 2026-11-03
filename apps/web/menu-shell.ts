@@ -97,6 +97,9 @@ function sectionHtml(
   ].join('');
 }
 
+/** What a hidden menu's page says (the page's own `strings.hidden`). */
+export const MENU_HIDDEN_LINE = 'This menu isn’t available right now.';
+
 /** The whole menu as plain HTML, for reading before (or without) the script. */
 export function menuHtml(menu: PublicMenu): string {
   const soldOut = new Set(menu.soldOut);
@@ -108,6 +111,8 @@ export function menuHtml(menu: PublicMenu): string {
     [
       tag('h1', escapeHtml(menu.business.name)),
       address === '' ? '' : tag('p', escapeHtml(address)),
+      // Taken down for now (Live or Hidden): the answer holds no menus, and the page says so.
+      menu.hidden === true ? tag('p', MENU_HIDDEN_LINE) : '',
       ...menu.menu.menus.map((each) =>
         tag(
           'section',

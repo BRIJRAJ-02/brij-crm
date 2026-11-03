@@ -358,7 +358,7 @@ export const menuVersions = pgTable(
 
 /**
  * The draft's state, one row a workspace (AC-6525): how many changes wait for Publish, when it last published, and
- * the rows as published (`published`), which Discard puts back.
+ * the rows as published (`published`), which Discard puts back, and whether guests see it (`hidden`).
  */
 export const menuDrafts = pgTable(
   'menu_drafts',
@@ -368,6 +368,8 @@ export const menuDrafts = pgTable(
     published: jsonb('published'),
     publishedAt: timestamptz('published_at'),
     publishedByMemberId: uuid('published_by_member_id'),
+    /** Live or Hidden (spec 0065, H1): hidden, every guest menu answers "not available right now" until shown again. */
+    hidden: boolean('hidden').notNull().default(false),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
   (t) => [

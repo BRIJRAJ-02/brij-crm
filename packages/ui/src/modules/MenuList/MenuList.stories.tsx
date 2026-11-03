@@ -112,8 +112,8 @@ export function sampleMenu(): PublicMenu {
           allergens: [{ code: 'sulphites', level: 'contains' }],
           featured: false,
           sizes: [
-            { name: 'Glass 175ml', priceMinor: 950 },
-            { name: 'Bottle', priceMinor: 3800 },
+            { id: id(301), name: 'Glass 175ml', priceMinor: 950 },
+            { id: id(302), name: 'Bottle', priceMinor: 3800 },
           ],
           groupIds: [],
         },
@@ -195,7 +195,7 @@ function WithPicks({
 /** Two flat whites with oat milk and a bottle of the Etna Rosso. */
 const SOME_PICKS: readonly GuestPick[] = [
   { key: `${id(104)}||${id(202)}`, itemId: id(104), optionIds: [id(202)], quantity: 2 },
-  { key: `${id(103)}|1|`, itemId: id(103), size: 1, optionIds: [], quantity: 1 },
+  { key: `${id(103)}|${id(302)}|`, itemId: id(103), sizeId: id(302), optionIds: [], quantity: 1 },
   { key: `${id(100)}||`, itemId: id(100), optionIds: [], quantity: 1 },
 ];
 

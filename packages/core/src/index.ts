@@ -922,6 +922,7 @@ export {
   saveOptionGroup,
   deleteOptionGroup,
   setItemSoldOut,
+  setMenuHidden,
   attachMenuPhoto,
   removeMenuPhoto,
   publishMenus,

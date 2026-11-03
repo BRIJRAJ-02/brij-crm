@@ -72,7 +72,7 @@ function Sheet({ itemId, menu = sampleMenu() }: { readonly itemId: string; reado
 function Picks() {
   const [picks, setPicks] = useState<readonly GuestPick[]>([
     { key: 'a', itemId: id(104), optionIds: [id(202)], quantity: 2 },
-    { key: 'b', itemId: id(103), size: 1, optionIds: [], quantity: 1 },
+    { key: 'b', itemId: id(103), sizeId: id(302), optionIds: [], quantity: 1 },
   ]);
   return (
     <Modal variant="sheet-side" title="Your picks" isOpen>

@@ -90,7 +90,7 @@ async function readDraft(tx: WorkspaceTx, scope: EngineScope): Promise<MenuDraft
   const workspaceId = scope.workspaceId;
   const rows = await readMenuRows(tx, workspaceId);
   const [state] = await tx
-    .select({ changes: menuDrafts.changes, publishedAt: menuDrafts.publishedAt })
+    .select({ changes: menuDrafts.changes, publishedAt: menuDrafts.publishedAt, hidden: menuDrafts.hidden })
     .from(menuDrafts)
     .where(eq(menuDrafts.workspaceId, workspaceId));
   return draftOf(rows, {
@@ -100,6 +100,7 @@ async function readDraft(tx: WorkspaceTx, scope: EngineScope): Promise<MenuDraft
     ...(state?.publishedAt === null || state?.publishedAt === undefined
       ? {}
       : { publishedAt: new Date(state.publishedAt).toISOString() }),
+    hidden: state?.hidden ?? false,
     soldOut: await soldOutIds(tx, workspaceId),
     photos: await photoVersions(tx, workspaceId),
     canEdit: can(scope.access, 'hospitality.manage'),
@@ -703,6 +704,33 @@ export async function setItemSoldOut(
       .returning({ id: menuItems.id });
     if (changed.length === 0) throw refuse('NOT_FOUND', ITEM_NOT_FOUND);
     await auditSetup(tx, scope, input.soldOut ? 'menu.sold_out' : 'menu.back_on', { itemId: id });
+    return { draft: await readDraft(tx, scope), placeIds: (await placesOf(tx, ws)).map((place) => place.id) };
+  });
+}
+
+/**
+ * Live or Hidden (spec 0065, H1, after checklabs' menu switch): hides every guest menu of the workspace for now, or
+ * shows it again. Live at once and never a draft change, so the count of changes and the published rows stay as they
+ * are. Manage hospitality; refused `CONFLICT` before the first Publish, since there is nothing live to hide. Answers
+ * the draft and the places to purge.
+ */
+export async function setMenuHidden(
+  scope: EngineScope,
+  input: { readonly hidden: boolean },
+): Promise<{ readonly draft: MenuDraft; readonly placeIds: readonly string[] }> {
+  requirePermission(scope, 'hospitality.manage');
+  hospitalityMember(scope);
+  return inWorkspace(scope, async (tx) => {
+    const ws = scope.workspaceId;
+    await requireApp(tx, ws, 'menu');
+    await lockKey(tx, `menu:${ws}`);
+    const changed = await tx
+      .update(menuDrafts)
+      .set({ hidden: input.hidden, updatedAt: sql`now()` })
+      .where(and(eq(menuDrafts.workspaceId, ws), sql`${menuDrafts.publishedAt} is not null`))
+      .returning({ workspaceId: menuDrafts.workspaceId });
+    if (changed.length === 0) throw refuse('CONFLICT', 'Publish the menu first, then you can hide it.');
+    await auditSetup(tx, scope, input.hidden ? 'menu.hidden' : 'menu.shown');
     return { draft: await readDraft(tx, scope), placeIds: (await placesOf(tx, ws)).map((place) => place.id) };
   });
 }

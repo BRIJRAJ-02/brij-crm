@@ -16,12 +16,21 @@ import {
   type PlaceHours,
   type PublicMenu,
 } from '@crm/contracts';
-import { schema, type Database } from '@crm/db';
+import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { readMenuBrandIn, type PageBrand } from '../brand/public.ts';
 import { soldOutIds } from './menu-rows.ts';
 
-const { businessProfiles, menuPhotos, menuVersions, places } = schema;
+const { businessProfiles, menuDrafts, menuPhotos, menuVersions, places } = schema;
+
+/** Whether the workspace's menu is hidden from guests for now (Live or Hidden). */
+async function isHidden(tx: WorkspaceTx, workspaceId: string): Promise<boolean> {
+  const [state] = await tx
+    .select({ hidden: menuDrafts.hidden })
+    .from(menuDrafts)
+    .where(eq(menuDrafts.workspaceId, workspaceId));
+  return state?.hidden === true;
+}
 
 /** The nil uuid: a workspace no row has, for the lookup made before the workspace is known. */
 const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000';
@@ -56,7 +65,8 @@ export interface PublicMenuRead {
 
 /**
  * The guest menu (AC-6528, AC-6529): the place's latest snapshot, the items of it sold out now (AC-6526), the
- * business and place header, and the versions of its look and logo. One transaction on the entry's workspace.
+ * business and place header, and the versions of its look and logo; while it is hidden (Live or Hidden), the header
+ * and look alone, marked `hidden`. One transaction on the entry's workspace.
  */
 export async function readPublicMenu(
   deps: { readonly db: Database },
@@ -94,9 +104,11 @@ export async function readPublicMenu(
       })
       .from(businessProfiles)
       .where(eq(businessProfiles.workspaceId, entry.workspaceId));
-    const soldOut = await soldOutIds(tx, entry.workspaceId);
+    const hidden = await isHidden(tx, entry.workspaceId);
+    const soldOut = hidden ? new Set<string>() : await soldOutIds(tx, entry.workspaceId);
     const brand = await readMenuBrandIn(tx, entry.workspaceId);
-    const snapshot = parsed.data;
+    // Hidden, the answer keeps the header and the look and drops every menu, dish and group.
+    const snapshot = hidden ? { currency: parsed.data.currency, menus: [], items: {}, groups: {} } : parsed.data;
     const menu: PublicMenu = {
       placeId: entry.placeId,
       workspaceId: entry.workspaceId,
@@ -122,6 +134,7 @@ export async function readPublicMenu(
       ...(brand.logo === undefined ? {} : { logo: brand.logo.version }),
       menu: snapshot,
       soldOut: [...soldOut].filter((id) => Object.hasOwn(snapshot.items, id)).sort(),
+      ...(hidden ? { hidden: true as const } : {}),
     };
     return { menu, brand };
   });
@@ -147,7 +160,7 @@ export async function readMenuPhoto(
       .orderBy(desc(menuVersions.version))
       .limit(1);
     const parsed = MenuSnapshot.safeParse(latest?.snapshot);
-    if (!parsed.success) return undefined;
+    if (!parsed.success || (await isHidden(tx, entry.workspaceId))) return undefined;
     const shown = Object.values(parsed.data.items).some(
       (item) => item.photo?.id === photoId && item.photo.version === version,
     );

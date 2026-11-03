@@ -286,6 +286,53 @@ describe('the editor’s preview look', () => {
     const { cookie: stranger } = await signIn(app);
     expect((await send(`/api/menu/look.css?workspace=${m.slug}`, { cookie: stranger })).status).toBe(404);
   });
+
+  it('refuses a member with neither hospitality power, and everyone once Menu is removed (security review)', async () => {
+    const { m } = await menuWorkspace();
+    const { cookie: memberCookie, email } = await signIn(app);
+    const [user] = await testQuery<{ id: string }>(ownerUrl, 'select id from auth."user" where email = $1', [email]);
+    await testQuery(
+      ownerUrl,
+      `insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type)
+       values ($1, $2, $3, 'Bea', $4, 'member', 'system', 'system')`,
+      [m.workspace.id, newId(), user?.id, email],
+    );
+    const plain = await send(`/api/menu/look.css?workspace=${m.slug}`, { cookie: memberCookie });
+    expect(plain.status).toBe(403);
+    expect(await plain.text()).not.toContain('--menu-ground');
+    await m.client.hospitality.remove({ workspace: m.slug, app: 'menu', mutationId: newId() });
+    const off = await send(`/api/menu/look.css?workspace=${m.slug}`, { cookie: m.cookie });
+    expect(off.status).not.toBe(200);
+    expect(await off.text()).not.toContain('--menu-ground');
+  });
+});
+
+describe('Live or Hidden', () => {
+  it('hides every guest menu at once, purged at the edge, keeping only the header, then shows it again', async () => {
+    const { m, place, itemId } = await menuWorkspace();
+    // Nothing live to hide before the first Publish.
+    await expect(m.client.menu.setHidden({ workspace: m.slug, hidden: true, mutationId: newId() })).rejects.toThrow();
+    await m.client.menu.publish({ workspace: m.slug, mutationId: newId() });
+    forgotten.length = 0;
+    const draft = await m.client.menu.setHidden({ workspace: m.slug, hidden: true, mutationId: newId() });
+    expect(draft.hidden).toBe(true);
+    expect(draft.changes).toBe(0);
+    expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
+    const read = await send(`/api/public/menu/${place.menuKey}`);
+    expect(read.status).toBe(200);
+    const hidden = (await read.json()) as PublicMenu;
+    expect(hidden.hidden).toBe(true);
+    expect(hidden.business.name).toBe('Cafe Nowhere');
+    expect(hidden.menu).toEqual({ currency: 'GBP', menus: [], items: {}, groups: {} });
+    expect(JSON.stringify(hidden)).not.toContain('Soup');
+    expect(JSON.stringify(hidden)).not.toContain(itemId);
+    forgotten.length = 0;
+    await m.client.menu.setHidden({ workspace: m.slug, hidden: false, mutationId: newId() });
+    expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
+    const shown = (await (await send(`/api/public/menu/${place.menuKey}`)).json()) as PublicMenu;
+    expect(shown.hidden).toBeUndefined();
+    expect(shown.menu.items[itemId]?.name).toBe('Soup');
+  });
 });
 
 describe('the workspace’s own menu tag (security review)', () => {

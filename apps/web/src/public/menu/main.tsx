@@ -8,7 +8,15 @@
 import '@crm/ui/styles.css';
 import { createMenuClient, isDataError, type PublicMenu } from '@crm/data/menu-guest';
 import { menuLogoPath, menuLookPath, menuPhotoPath } from '@crm/data/menu';
-import { BookingFoot, BookingProvider, EmptyState, MenuList, claimPageHref, type GuestPick } from '@crm/ui/public-menu';
+import {
+  BookingFoot,
+  BookingProvider,
+  EmptyState,
+  MenuList,
+  claimPageHref,
+  livePicks,
+  type GuestPick,
+} from '@crm/ui/public-menu';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { picksStore, readMenuBoot, tableOf } from './boot.ts';
@@ -39,10 +47,21 @@ function wearLook(menu: PublicMenu): void {
   document.head.append(link);
 }
 
+/** The picks the menu still offers, writing the trimmed list back when any went. */
+function keptPicks(menu: PublicMenu, was: readonly GuestPick[]): readonly GuestPick[] {
+  const kept = livePicks(menu, was);
+  if (kept.length === was.length) return was;
+  picks.write(kept);
+  return kept;
+}
+
 function MenuPage() {
   const [menu, setMenu] = useState<PublicMenu | undefined>(boot);
   const [failed, setFailed] = useState<'missing' | 'offline' | undefined>();
-  const [chosen, setChosen] = useState<readonly GuestPick[]>(() => picks.read());
+  // A pick saved against an older menu (a size or option since removed) is dropped once the menu is read.
+  const [chosen, setChosen] = useState<readonly GuestPick[]>(() =>
+    boot === undefined || boot.hidden === true ? picks.read() : keptPicks(boot, picks.read()),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +71,7 @@ function MenuPage() {
           if (cancelled) return;
           wearLook(answer);
           setMenu(answer);
+          if (answer.hidden !== true) setChosen((was) => keptPicks(answer, was));
           setFailed(undefined);
         },
         (error: unknown) => {
@@ -83,6 +103,14 @@ function MenuPage() {
         {...(failed === 'offline' ? { onRetry: () => globalThis.location.reload() } : {})}
       >
         {failed === 'missing' ? strings.missingLine : strings.offlineLine}
+      </EmptyState>
+    );
+  }
+  // Taken down for now (Live or Hidden): the business's name and one plain line, nothing of the menu.
+  if (menu.hidden === true) {
+    return (
+      <EmptyState icon="utensils" title={menu.business.name}>
+        {strings.hidden}
       </EmptyState>
     );
   }

@@ -277,6 +277,8 @@ export interface DraftContext {
   readonly places: readonly MenuPlace[];
   readonly changes: number;
   readonly publishedAt?: string;
+  /** Live or Hidden: whether guests see the published menu for now. */
+  readonly hidden: boolean;
   readonly soldOut: ReadonlySet<string>;
   readonly photos: ReadonlyMap<string, string>;
   readonly canEdit: boolean;
@@ -343,6 +345,7 @@ export function draftOf(rows: MenuRows, context: DraftContext): MenuDraft {
     groups: groupsOf(rows),
     changes: context.changes,
     ...(context.publishedAt === undefined ? {} : { publishedAt: context.publishedAt }),
+    hidden: context.hidden,
     photos: context.photos.size,
     canEdit: context.canEdit,
   };
@@ -421,7 +424,7 @@ export function snapshotFor(
       allergens: allergensOf(item.allergens),
       ...(item.kcal === null ? {} : { kcal: item.kcal }),
       featured: item.featured,
-      sizes: (sizes.get(id) ?? []).map((size) => ({ name: size.name, priceMinor: size.priceMinor })),
+      sizes: (sizes.get(id) ?? []).map((size) => ({ id: size.id, name: size.name, priceMinor: size.priceMinor })),
       groupIds: groups,
     };
   }

@@ -61,7 +61,7 @@ export function previewMenu(
       allergens: item.allergens,
       ...(item.kcal === undefined ? {} : { kcal: item.kcal }),
       featured: item.featured,
-      sizes: item.sizes.map((size) => ({ name: size.name, priceMinor: size.priceMinor })),
+      sizes: item.sizes.map((size) => ({ id: size.id, name: size.name, priceMinor: size.priceMinor })),
       groupIds: item.groupIds,
     };
   }
@@ -129,6 +129,23 @@ export function homelessMenus(draft: MenuDraft): readonly MenuDraft['menus'][num
       menu.placeIds.length === 0 &&
       draft.sections.some((section) => section.menuId === menu.id && section.itemIds.length > 0),
   );
+}
+
+/**
+ * What Publish puts in front of guests, per menu shown at a place, in order: each menu's name and how many dishes it
+ * holds (an item in two of its sections counts once). Menus with no dish or shown nowhere are left out.
+ */
+export function goingLive(draft: MenuDraft): readonly { readonly name: string; readonly dishes: number }[] {
+  return [...draft.menus]
+    .filter((menu) => menu.placeIds.length > 0)
+    .sort((a, b) => a.position - b.position)
+    .map((menu) => ({
+      name: menu.name,
+      dishes: new Set(
+        draft.sections.filter((section) => section.menuId === menu.id).flatMap((section) => section.itemIds),
+      ).size,
+    }))
+    .filter((menu) => menu.dishes > 0);
 }
 
 /** Whether any dish is on a menu that shows at a place: otherwise Publish would give guests nothing. */

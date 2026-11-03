@@ -41,7 +41,7 @@ function isPick(value: unknown): value is GuestPick {
   return (
     typeof pick.key === 'string' &&
     typeof pick.itemId === 'string' &&
-    (pick.size === undefined || typeof pick.size === 'number') &&
+    (pick.sizeId === undefined || typeof pick.sizeId === 'string') &&
     Array.isArray(pick.optionIds) &&
     pick.optionIds.every((id) => typeof id === 'string') &&
     typeof pick.quantity === 'number' &&

@@ -15,6 +15,7 @@ import {
   saveOptionGroup,
   saveSection,
   setItemSoldOut,
+  setMenuHidden,
 } from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
 import { member, type RequestContext } from '../../orpc.ts';
@@ -23,7 +24,7 @@ import { errorFields, log } from '../../log.ts';
 // The Menu app (spec 0065, H1): the editor's draft and its edits, Publish and Discard, and Sold out. Inside a
 // workspace, behind the member door; core checks the permission before anything is read, then the app gate
 // (`APP_NOT_INSTALLED`). None of these change a record, so they store no change event; the Menus screen holds the
-// draft and every write answers it whole. Publish and Sold out purge the guest menus' edge copies (`menu:<placeId>`)
+// draft and every write answers it whole. Publish, Sold out and Live or Hidden purge the guest menus' edge copies (`menu:<placeId>`)
 // once the write committed (Rules settled: Routes); photo files neither the draft nor the published menus name any
 // more are removed from the store after Publish and Discard.
 const m = member.menu;
@@ -124,6 +125,13 @@ export const menuRouter = m.router({
   setSoldOut: m.setSoldOut.handler(async ({ context, input }) => {
     const { draft, placeIds } = await commitWrite(context, { mutationId: input.mutationId }, () =>
       setItemSoldOut(context.scope, { itemId: input.itemId, soldOut: input.soldOut }),
+    );
+    await context.edgeCache.forget(menuCacheTags(...placeIds));
+    return draft;
+  }),
+  setHidden: m.setHidden.handler(async ({ context, input }) => {
+    const { draft, placeIds } = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      setMenuHidden(context.scope, { hidden: input.hidden }),
     );
     await context.edgeCache.forget(menuCacheTags(...placeIds));
     return draft;

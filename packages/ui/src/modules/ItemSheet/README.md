@@ -36,6 +36,9 @@ ChoiceChips can't carry a price beside each choice.
   subtotal (when service is added), "Includes 20% tax" (the tax inside the prices), "Service 12.5%" on top, and the
   total, which pops as it changes; then "Show this to your server. Nothing is sent from this page." No picks: an
   EmptyState.
+- A pick names its size by the size's id (`sizeId`), never its place in the list, and `livePicks` (`picks.ts`, a
+  Node test) drops saved picks whose dish, size or option the menu no longer has, so a republished menu never prices
+  a pick at another size.
 - `picksTotal` adds the picks up from the menu as it stands (a dish gone from the menu counts nothing); `picksBill`
   adds each menu's rates to its own picks (`picksTotal` from `@crm/contracts/menu`, checklabs' rollup) and sums them;
   `pickKey` is the key that folds the same dish with the same choices into one line.

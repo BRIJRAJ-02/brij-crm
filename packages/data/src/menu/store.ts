@@ -67,6 +67,7 @@ export interface MenuProcedures {
   ) => Promise<MenuDraft>;
   readonly deleteGroup: (input: Scoped & { groupId: string }, options: Options) => Promise<MenuDraft>;
   readonly setSoldOut: (input: Scoped & { itemId: string; soldOut: boolean }, options: Options) => Promise<MenuDraft>;
+  readonly setHidden: (input: Scoped & { hidden: boolean }, options: Options) => Promise<MenuDraft>;
   readonly publish: (input: Scoped, options: Options) => Promise<MenuDraft>;
   readonly discard: (input: Scoped, options: Options) => Promise<MenuDraft>;
 }
@@ -473,6 +474,13 @@ export function openMenus(given: {
           items: draft.items.map((each) => (each.id === itemId ? { ...each, soldOut } : each)),
         }),
         (mutationId, options) => api.setSoldOut({ workspace, itemId, soldOut, mutationId }, options),
+      ),
+    /** Live or Hidden: hides every guest menu for now, or shows it again. Never a draft change. */
+    setHidden: (workspace: string, hidden: boolean): Promise<DataError | undefined> =>
+      edit(
+        workspace,
+        (draft) => ({ ...draft, hidden }),
+        (mutationId, options) => api.setHidden({ workspace, hidden, mutationId }, options),
       ),
     /** Publish (AC-6525): guests see the draft from now on. */
     publish: (workspace: string): Promise<DataError | undefined> =>

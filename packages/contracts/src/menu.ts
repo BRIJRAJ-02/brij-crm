@@ -181,6 +181,8 @@ export const MenuDraft = z.object({
   groups: z.array(OptionGroup),
   changes: z.number().int().nonnegative(),
   publishedAt: Timestamp.optional(),
+  /** Live or Hidden: hidden, every guest menu answers "not available right now" until it is shown again. */
+  hidden: z.boolean(),
   photos: z.number().int().nonnegative(),
   /** Whether this reader edits and publishes (`hospitality.manage`); otherwise they only flip Sold out. */
   canEdit: z.boolean(),
@@ -351,6 +353,11 @@ export const SoldOutInput = WorkspaceScoped.extend({ itemId: Uuid, soldOut: z.bo
 /** Sold out on or off. */
 export type SoldOutInput = z.infer<typeof SoldOutInput>;
 
+/** Live or Hidden (spec 0065, H1): hide the published menu from guests for now, or show it again. No Publish. */
+export const MenuHiddenInput = WorkspaceScoped.extend({ hidden: z.boolean(), ...Write });
+/** Live or Hidden. */
+export type MenuHiddenInput = z.infer<typeof MenuHiddenInput>;
+
 /** Publish or Discard (AC-6525). */
 export const MenuDraftWrite = WorkspaceScoped.extend(Write);
 /** Publish or Discard. */
@@ -370,7 +377,8 @@ export const SnapshotItem = z.object({
   allergens: z.array(ItemAllergen),
   kcal: z.number().int().optional(),
   featured: z.boolean(),
-  sizes: z.array(z.object({ name: z.string(), priceMinor: z.number().int() })),
+  /** Each size with its own id, so a guest's saved pick names the size, never its place in the list. */
+  sizes: z.array(z.object({ id: Uuid, name: z.string(), priceMinor: z.number().int() })),
   groupIds: z.array(Uuid),
 });
 /** An item as guests see it. */
@@ -454,6 +462,11 @@ export const PublicMenu = z.object({
   logo: z.string().optional(),
   menu: MenuSnapshot,
   soldOut: z.array(Uuid),
+  /**
+   * The menu is hidden for now (Live or Hidden): the answer then carries the header alone, with no menus, dishes or
+   * photos, and the page says it isn't available right now.
+   */
+  hidden: z.literal(true).optional(),
 });
 /** The guest menu's answer. */
 export type PublicMenu = z.infer<typeof PublicMenu>;
@@ -473,6 +486,7 @@ export const menuContract = {
   saveGroup: oc.input(SaveGroupInput).output(MenuDraft),
   deleteGroup: oc.input(GroupIdInput).output(MenuDraft),
   setSoldOut: oc.input(SoldOutInput).output(MenuDraft),
+  setHidden: oc.input(MenuHiddenInput).output(MenuDraft),
   publish: oc.input(MenuDraftWrite).output(MenuDraft),
   discard: oc.input(MenuDraftWrite).output(MenuDraft),
 };

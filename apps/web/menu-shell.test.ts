@@ -2,7 +2,7 @@
 // with its look linked and the read left as a boot block; a missed read serves the plain shell, a bad key not found.
 import type { PublicMenu } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
-import { menuKeyOf, menuShellFor, MENU_BOOT_ID } from './menu-shell.ts';
+import { menuKeyOf, menuShellFor, MENU_BOOT_ID, MENU_HIDDEN_LINE } from './menu-shell.ts';
 
 const SHELL = `<!doctype html><html><head>\n    <title>Menu · Timefix</title>\n</head><body><div id="root" data-app-root></div></body></html>`;
 const KEY = 'AbCdEfGhIjKlMnOp';
@@ -95,5 +95,18 @@ describe('the guest menu shell', () => {
       outcome: 'unknown',
     });
     expect((await menuShellFor('/m/bad', { shell: SHELL, readMenu: () => Promise.resolve(MENU) })).status).toBe(404);
+  });
+
+  it('says a hidden menu isn’t available, under the business’s name, with no dish in the page', async () => {
+    const hidden: PublicMenu = {
+      ...MENU,
+      menu: { currency: 'GBP', menus: [], items: {}, groups: {} },
+      hidden: true,
+    };
+    const answer = await menuShellFor(`/m/${KEY}`, { shell: SHELL, readMenu: () => Promise.resolve(hidden) });
+    expect(answer.status).toBe(200);
+    expect(answer.body).toContain('<h1>Somewhere &lt;Nowhere&gt;</h1>');
+    expect(answer.body).toContain(MENU_HIDDEN_LINE);
+    expect(answer.body).not.toContain('Burrata');
   });
 });

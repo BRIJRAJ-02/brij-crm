@@ -4,8 +4,9 @@
 -- * Twelve tenant tables: menus and the places they show at, sections (one level of sub sections), items placed in
 --   sections (an item is one thing, however many sections hold it), sizes, option groups shared between items and
 --   their options, photos, the published snapshot per place (`menu_versions`) and the draft's state (`menu_drafts`:
---   the count of changes waiting for Publish and the rows as published, which Discard puts back). Each has forced row
---   level security and the plain workspace policy, and every index leads with workspace_id.
+--   the count of changes waiting for Publish, the rows as published, which Discard puts back, and Live or Hidden:
+--   whether guests see the published menu for now). Each has forced row level security and the plain workspace
+--   policy, and every index leads with workspace_id.
 -- * `crm_menu_lookup`, a new lookup role, and its one definer `crm_menu_by_key(key)`: the workspace and place a guest
 --   menu's key names, only while the workspace is live, has Hospitality early access, and has Menu installed (AC-6504:
 --   a removed app's public page answers nothing). Ids only; the guest page's read then runs inside withWorkspace()
@@ -232,6 +233,7 @@ CREATE TABLE "menu_drafts" (
 	"published" jsonb,
 	"published_at" timestamp (6) with time zone,
 	"published_by_member_id" uuid,
+	"hidden" boolean DEFAULT false NOT NULL,
 	"updated_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "menu_drafts_pkey" PRIMARY KEY("workspace_id"),
 	CONSTRAINT "menu_drafts_changes" CHECK ("menu_drafts"."changes" >= 0),

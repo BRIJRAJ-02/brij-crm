@@ -28,6 +28,7 @@ const DRAFT: MenuDraft = {
   groups: [],
   changes: 0,
   photos: 0,
+  hidden: false,
   canEdit: true,
 };
 

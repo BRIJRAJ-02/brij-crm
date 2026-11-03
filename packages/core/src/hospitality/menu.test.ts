@@ -24,6 +24,7 @@ import {
   saveOptionGroup,
   saveSection,
   setItemSoldOut,
+  setMenuHidden,
 } from './menu.ts';
 import { enterMenuPage, readPublicMenu } from './public-menu.ts';
 
@@ -174,6 +175,31 @@ describe('Sold out is live (AC-6526)', () => {
   });
 });
 
+describe('Live or Hidden', () => {
+  it('hides the guest menu without a draft change, refused before Publish and to anyone without Manage', async () => {
+    const w = await menuWorkspace();
+    const { sectionId } = await dinner(w);
+    const itemId = newId();
+    await saveItem(w.owner, { id: itemId, sectionId, item: dish('Soup', 650) });
+    expect(await refusalOf(setMenuHidden(w.owner, { hidden: true }))).toBe('CONFLICT');
+    await publishMenus(w.owner);
+    expect(await refusalOf(setMenuHidden(w.member, { hidden: true }))).toBe('FORBIDDEN');
+    const { draft, placeIds } = await setMenuHidden(w.owner, { hidden: true });
+    expect(draft).toMatchObject({ hidden: true, changes: 0 });
+    expect(placeIds).toEqual([w.place.id]);
+    const hidden = await guestMenu(w.place.menuKey);
+    expect(hidden?.menu.hidden).toBe(true);
+    expect(hidden?.menu.business.name).toBe(CARD.name);
+    expect(Object.keys(hidden?.menu.menu.items ?? {})).toEqual([]);
+    // A Publish while hidden keeps it hidden: only the switch shows it again.
+    await saveItem(w.owner, { id: itemId, item: dish('Broth', 700) });
+    await publishMenus(w.owner);
+    expect((await guestMenu(w.place.menuKey))?.menu.hidden).toBe(true);
+    expect((await setMenuHidden(w.owner, { hidden: false })).draft.hidden).toBe(false);
+    expect((await guestMenu(w.place.menuKey))?.menu.menu.items[itemId]?.name).toBe('Broth');
+  });
+});
+
 describe('items placed, not copied (AC-6524), sizes and shared groups (AC-6523)', () => {
   it('one item in Dinner and Drinks: a rename shows in both, and one entry in the snapshot', async () => {
     const w = await menuWorkspace();
@@ -228,10 +254,13 @@ describe('items placed, not copied (AC-6524), sizes and shared groups (AC-6523)'
     await saveItem(w.owner, { id: flat, sectionId, item: dish('Flat white', 380, { groupIds: [milk] }) });
     await publishMenus(w.owner);
     const read = await guestMenu(w.place.menuKey);
+    // Each size carries its stable id, the one a guest's saved pick names (UX review must-fix 5).
+    const sizeIds = (await readMenuDraft(w.owner)).items.find((item) => item.id === latte)?.sizes.map((s) => s.id);
     expect(read?.menu.menu.items[latte]?.sizes).toEqual([
-      { name: 'Small', priceMinor: 350 },
-      { name: 'Large', priceMinor: 420 },
+      { id: sizeIds?.[0], name: 'Small', priceMinor: 350 },
+      { id: sizeIds?.[1], name: 'Large', priceMinor: 420 },
     ]);
+    expect(sizeIds?.every((id) => typeof id === 'string')).toBe(true);
     expect(read?.menu.menu.items[latte]?.priceMinor).toBeUndefined();
     expect(Object.keys(read?.menu.menu.groups ?? {})).toEqual([milk]);
     expect(read?.menu.menu.groups[milk]?.options.map((option) => option.priceDeltaMinor)).toEqual([0, 50]);
