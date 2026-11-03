@@ -152,7 +152,7 @@ export function diffLinkPage(published: LinkSnapshot, draft: LinkSnapshot): read
   const after = draft.fields;
   const lines: string[] = [];
   if (!same(before.bio ?? '', after.bio ?? ''))
-    lines.push(String(after.bio ?? '').trim() === '' ? 'Bio removed' : 'Bio changed');
+    lines.push(typeof after.bio !== 'string' || after.bio.trim() === '' ? 'Bio removed' : 'Bio changed');
   lines.push(...lookSentences(before.theme, after.theme));
   if (!same(before.accent, after.accent) || !same(before.accent_dark, after.accent_dark)) {
     lines.push(after.accent === null && after.accent_dark === null ? 'Colour follows the workspace' : 'Colour changed');
