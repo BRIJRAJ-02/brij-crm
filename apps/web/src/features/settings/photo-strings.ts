@@ -4,7 +4,7 @@
 export const strings = {
   title: 'Show my photo on booking pages',
   /** The account has a photo: which one, and what turning it off does. */
-  hint: 'Your Google photo. When off, your booking pages and profile show your initials.',
+  hint: 'When off, your booking pages and profile show your initials.',
   /** No photo yet (an email code account has none): the choice still holds for when one comes. */
   noPhoto: 'You have no photo yet, so your pages show your initials.',
   /** A member with no sign in of their own, which the app never shows today: nothing to hide. */

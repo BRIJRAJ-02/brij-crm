@@ -4,6 +4,8 @@ export const strings = {
   /** One file at a time (an import's CSV): the words say so. */
   dragOneOr: 'Drag a file here, or',
   browse: 'browse',
+  /** Crops the picture there now again (`onAdjust`). */
+  adjust: 'Adjust crop',
   /** While what was picked is on its way (`isPending` on the zone). */
   sending: 'uploading…',
   upTo: (size: string) => `up to ${size}`,

@@ -197,6 +197,7 @@ export const strings = {
   photoTypes: 'PNG, JPG or WebP',
   /** The types a share picture takes, as people name them, in the picker's hint. */
   shareImageTypes: 'PNG or JPG',
+  shareImageUnreadable: 'That picture couldn’t be read. Try a PNG or JPG.',
   photoRemove: 'Remove photo',
   photoRemoving: 'Remove this photo?',
   photoRemoveText: 'Your page goes back to its plain background.',

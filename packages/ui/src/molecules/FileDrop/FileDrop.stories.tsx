@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, userEvent } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FileDrop } from './FileDrop.tsx';
 
@@ -45,6 +45,26 @@ export const WithPreview: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByAltText('Your page’s share picture')).toBeInTheDocument();
+  },
+};
+
+/** A picture there already that can be cropped again (spec 0068, AC-6809): Adjust crop opens the screen's PhotoCrop. */
+export const WithAdjust: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Cover photo',
+    acceptedTypes: ['image/png', 'image/jpeg'],
+    preview: { src: PIXEL, alt: 'Your cover photo' },
+    onAdjust: fn(),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ args, canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Adjust crop' }));
+    await expect(args.onAdjust).toHaveBeenCalledTimes(1);
   },
 };
 

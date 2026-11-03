@@ -17,7 +17,7 @@ import { page, userEvent } from 'vitest/browser';
 import { PhotoSwitch } from './PhotoSwitch.tsx';
 
 const TITLE = 'Show my photo on booking pages';
-const HINT = 'Your Google photo. When off, your booking pages and profile show your initials.';
+const HINT = 'When off, your booking pages and profile show your initials.';
 const SHOWN: PictureChoiceState = { status: 'ready', isHidden: false, isSaving: false, canChange: true };
 
 beforeAll(async () => {

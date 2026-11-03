@@ -21,11 +21,13 @@ import {
   SegmentedControl,
   SettingsRow,
   Skeleton,
+  usePhotoCrop,
   type PageBrand,
   type Toasts,
 } from '@crm/ui';
+import { preparePhoto } from '@crm/ui/photo';
 import { useMemo, useState } from 'react';
-import { BRAND_LOGO_PICK_MAX_BYTES, BRAND_PHOTO_TYPES, preparePhoto } from '../link-page/photo-prep.ts';
+import { BRAND_LOGO_PICK_MAX_BYTES, BRAND_PHOTO_TYPES } from '../link-page/photo-prep.ts';
 import { strings } from './brand-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -95,23 +97,30 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
       if (refused !== undefined) setRefusal(refused.message);
     });
   };
-  const sendLogo = (file: File) => {
+  // The logo picked, or the one there, through the cropper (spec 0068, AC-6809). Its frame is free and opens on the
+  // logo's own shape, so a wide wordmark keeps every letter (the tab's icon draws it whole on a plate, favicon.ts);
+  // Square is one press away for a mark.
+  const cropping = usePhotoCrop();
+  const sendLogo = (source: File | string) => {
     setRefusal(undefined);
-    setSending(true);
-    void preparePhoto(file, 'logo')
-      .then(
-        (image) => brand.uploadLogo(slug, image),
-        () => {
-          toasts.toast({ tone: 'danger', message: strings.logoUnreadable });
-          return undefined;
-        },
-      )
-      .then((refused) => {
-        if (refused !== undefined) setRefusal(refused.message);
-      })
-      .finally(() => {
-        setSending(false);
-      });
+    void cropping.crop(source, 'free').then((crop) => {
+      if (crop === undefined) return;
+      setSending(true);
+      void preparePhoto(source, 'logo', crop)
+        .then(
+          (image) => brand.uploadLogo(slug, image.blob),
+          () => {
+            toasts.toast({ tone: 'danger', message: strings.logoUnreadable });
+            return undefined;
+          },
+        )
+        .then((refused) => {
+          if (refused !== undefined) setRefusal(refused.message);
+        })
+        .finally(() => {
+          setSending(false);
+        });
+    });
   };
   const preview =
     shown === 'booking' ? (
@@ -183,12 +192,20 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
                     typesText={strings.logoTypes}
                     maxSize={BRAND_LOGO_PICK_MAX_BYTES}
                     isDisabled={isSending}
-                    {...(logoSrc === undefined ? {} : { preview: { src: logoSrc, alt: strings.logoAlt } })}
+                    {...(logoSrc === undefined
+                      ? {}
+                      : {
+                          preview: { src: logoSrc, alt: strings.logoAlt },
+                          onAdjust: () => {
+                            sendLogo(logoSrc);
+                          },
+                        })}
                     onFiles={(files) => {
                       const [file] = files;
                       if (file !== undefined) sendLogo(file);
                     }}
                   />
+                  {cropping.cropper}
                   {kit.logo !== undefined && (
                     <Button variant="ghost" icon="trash" label={strings.logoRemove} onPress={() => setRemoving(true)} />
                   )}

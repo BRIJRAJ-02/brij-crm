@@ -40,17 +40,18 @@ import {
   SocialLinks,
   SpotIllustration,
   TopBar,
+  usePhotoCrop,
   VisuallyHidden,
   type LinkPageBlock,
   type LinkRow,
 } from '@crm/ui';
+import { preparePhoto } from '@crm/ui/photo';
 import { useBrand, useLinkPage } from '@crm/data/react';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { AppearanceCard, type PhotoSlot } from './AppearanceCard.tsx';
 import { DraftLook } from './draft-look.tsx';
-import { preparePhoto } from './photo-prep.ts';
 import { ClaimLink } from './ClaimLink.tsx';
 import { BlockEditorFrame } from './editors.tsx';
 import { IdentityCard, identityOf, type PageIdentity } from './IdentityCard.tsx';
@@ -492,23 +493,29 @@ function Blocks({
       if (refused !== undefined) setLookRefusal(refused);
     });
   };
-  const choosePhoto = (slot: PhotoSlot, file: File) => {
+  // A photo picked, or the one there cropped again (spec 0068, AC-6809): the cover in its 3:1 frame, the
+  // background free, then drawn again for its kind and sent.
+  const cropping = usePhotoCrop();
+  const choosePhoto = (slot: PhotoSlot, source: File | string) => {
     setLookRefusal(undefined);
-    setSending(slot);
-    void preparePhoto(file, slot)
-      .then(
-        (image) => brand.uploadPhoto(slug, slot, image),
-        () => {
-          toasts.toast({ tone: 'danger', message: strings.photoUnreadable });
-          return undefined;
-        },
-      )
-      .then((refused) => {
-        if (refused !== undefined) setLookRefusal(refused);
-      })
-      .finally(() => {
-        setSending(undefined);
-      });
+    void cropping.crop(source, slot === 'cover' ? 'cover' : 'free').then((crop) => {
+      if (crop === undefined) return;
+      setSending(slot);
+      void preparePhoto(source, slot, crop)
+        .then(
+          (image) => brand.uploadPhoto(slug, slot, image.blob),
+          () => {
+            toasts.toast({ tone: 'danger', message: strings.photoUnreadable });
+            return undefined;
+          },
+        )
+        .then((refused) => {
+          if (refused !== undefined) setLookRefusal(refused);
+        })
+        .finally(() => {
+          setSending(undefined);
+        });
+    });
   };
   const removePhoto = (slot: PhotoSlot) => {
     setLookRefusal(undefined);
@@ -1092,6 +1099,7 @@ function Blocks({
           October 2026): a link page always shows them, so this card has no switch. */}
       <SocialsCardSlot data={data} slug={slug} onPreviewLinks={setSocialPreview} isTeam={false} isOwner />
       {/* Only where there is a page to dress: the screen already sends a person with no handle to Profile. */}
+      {cropping.cropper}
       <AppearanceCard
         theme={theme}
         onChange={chooseTheme}

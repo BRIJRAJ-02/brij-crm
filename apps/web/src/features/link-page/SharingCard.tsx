@@ -3,8 +3,10 @@
 // Main task: let the owner say whether search engines may show their page, and choose the picture a pasted link
 // shows instead of the card we draw.
 // Leaves out: the drawn card itself, which the server makes from the name, bio and picture already on this screen.
-import { Button, Card, FileDrop, Modal, Switch } from '@crm/ui';
+import { Button, Card, FileDrop, Modal, Switch, usePhotoCrop } from '@crm/ui';
+import { preparePhoto } from '@crm/ui/photo';
 import type { DataError } from '@crm/data';
+import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { asBase64, SHARE_IMAGE_MAX_BYTES, SHARE_IMAGE_TYPES } from './share-image.ts';
 import { strings } from './strings.ts';
@@ -39,7 +41,22 @@ export interface SharingCardProps {
  * asks first, as every ending action here does, because the picture itself is gone afterwards.
  */
 export function SharingCard({ indexable, onChange, shareImage, onShareImage, refusal }: SharingCardProps) {
+  const { toasts } = useRouteContext({ from: '__root__' });
   const [isAsking, setAsking] = useState(false);
+  // The picture goes through the cropper at the 1.91:1 a pasted link shows (spec 0068, AC-6809), then is drawn
+  // again as a JPEG under 500 kB, leaving a photo's location behind; the one there may be cropped again.
+  const cropping = usePhotoCrop();
+  const take = (source: File | string) => {
+    void cropping.crop(source, 'card').then(async (crop) => {
+      if (crop === undefined) return;
+      const prepared = await preparePhoto(source, 'share', crop).catch(() => undefined);
+      if (prepared === undefined) {
+        toasts.toast({ tone: 'danger', message: strings.shareImageUnreadable });
+        return;
+      }
+      onShareImage({ type: prepared.blob.type, base64: await asBase64(prepared.blob) });
+    });
+  };
   return (
     <Card
       title={strings.sharing}
@@ -52,15 +69,20 @@ export function SharingCard({ indexable, onChange, shareImage, onShareImage, ref
         acceptedTypes={SHARE_IMAGE_TYPES}
         typesText={strings.shareImageTypes}
         maxSize={SHARE_IMAGE_MAX_BYTES}
-        {...(shareImage === undefined ? {} : { preview: { src: shareImage, alt: strings.shareImageAlt } })}
+        {...(shareImage === undefined
+          ? {}
+          : {
+              preview: { src: shareImage, alt: strings.shareImageAlt },
+              onAdjust: () => {
+                take(shareImage);
+              },
+            })}
         onFiles={(files) => {
           const [file] = files;
-          if (file === undefined) return;
-          void asBase64(file).then((base64) => {
-            onShareImage({ type: file.type, base64 });
-          });
+          if (file !== undefined) take(file);
         }}
       />
+      {cropping.cropper}
       {shareImage !== undefined && (
         <Button
           variant="ghost"

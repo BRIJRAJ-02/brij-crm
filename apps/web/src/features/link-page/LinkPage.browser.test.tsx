@@ -361,6 +361,31 @@ describe('Design’s Customise rows (spec 0060, AC-6, AC-9)', () => {
   });
 });
 
+describe('Crop again (spec 0068, AC-6809)', () => {
+  it('offers Adjust crop on a photo that is there, handing the screen its address for the cropper', async () => {
+    const onPhoto = vi.fn();
+    const cover =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const extras = {
+      look: { cover: 'v1', workspaceAccent: '#1f5fd6' },
+      colours: () => undefined,
+      variables: [],
+      quickPicks: [],
+      photoSrc: () => cover,
+      onAccent: () => undefined,
+      onPreviewAccent: () => undefined,
+      onPhoto,
+      onRemovePhoto: () => undefined,
+    } as const;
+    await render({}, () => (
+      <AppearanceCard theme={{ ...DEFAULT_PAGE_THEME, header: 'cover' }} onChange={() => undefined} extras={extras} />
+    ));
+    await userEvent.click(page.getByRole('button', { name: 'Customise' }));
+    await userEvent.click(page.getByRole('button', { name: 'Adjust crop' }).first());
+    expect(onPhoto).toHaveBeenCalledWith('cover', cover);
+  });
+});
+
 describe('Bring a page across (AC-16)', () => {
   it('names the seven services in one hint line, then shows a count and the list of what came across', async () => {
     const archived = [

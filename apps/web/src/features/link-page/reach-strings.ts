@@ -51,6 +51,8 @@ export const reachStrings = {
   imageUrlHint: 'Optional. Pressing the picture opens it.',
   pictureAlt: 'Your picture',
   pictureUnreadable: 'That picture can’t be read. Choose a JPEG, PNG or WebP.',
+  /** The cropper's heading while several pictures picked at once pass through it (spec 0068, AC-6809). */
+  cropStep: (at: number, of: number) => `Crop photo ${String(at)} of ${String(of)}`,
   pictureFailed: 'The picture didn’t upload. Try again.',
   pictureTypes: 'JPG, PNG or WebP',
   newGallery: 'Add a gallery',
@@ -60,6 +62,8 @@ export const reachStrings = {
   galleryCount: (count: number) => `${figure(count)} ${count === 1 ? 'picture' : 'pictures'}`,
   galleryAlt: (at: number) => `Description of picture ${String(at)}`,
   galleryRemove: (at: number) => `Remove picture ${String(at)}`,
+  /** Crops a picture already in the gallery again (spec 0068, AC-6809). */
+  galleryAdjust: (at: number) => `Adjust crop of picture ${String(at)}`,
   galleryMoveUp: (at: number) => `Move picture ${String(at)} up`,
   galleryMoveDown: (at: number) => `Move picture ${String(at)} down`,
   galleryAddFirst: 'Add 2 to 12 pictures',

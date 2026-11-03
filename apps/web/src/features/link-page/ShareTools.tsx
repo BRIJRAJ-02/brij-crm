@@ -390,6 +390,7 @@ export function QrStyleModal({
               label={draft.upload === undefined ? words.imagePick : words.imageReplace}
               linkPage={linkPage}
               slug={slug}
+              shape="square"
               {...(draft.upload === undefined ? {} : { value: draft.upload })}
               onChange={(next) => {
                 if (next !== undefined) change({ upload: next });

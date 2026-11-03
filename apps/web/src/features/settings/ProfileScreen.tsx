@@ -5,7 +5,9 @@
 // line bio, the person's own in every workspace; a new handle keeps the old one working. And Sync Google photo beside
 // the picture where Google sign in is on (23 Oct 2026): their Google account's current photo, linking Google first. Under it, a row
 // that opens their link page's editor (spec 0051, Settings › Account › Link page).
-// Leaves out: the picture upload (#32: Google's picture or initials until then), editing the email (the account's), the time zone (Preferences, right above in the nav). Deleting the account sits last, in its Danger zone (moved here from Account › Security, 22 October 2026).
+// And their own photo beside it (spec 0068, AC-6809, 4 Nov 2026): uploaded from the device through the round
+// cropper, or the one there cropped again; it replaces Google's, as Sync Google photo replaces it.
+// Leaves out: editing the email (the account's), the time zone (Preferences, right above in the nav). Deleting the account sits last, in its Danger zone (moved here from Account › Security, 22 October 2026).
 import { isDataError, type DataLayer, type MyProfile } from '@crm/data';
 import { useAccountSecurity } from '@crm/data/react';
 import {
@@ -15,13 +17,17 @@ import {
   Callout,
   Card,
   Field,
+  FileDrop,
   SaveBar,
   type SaveBarStatus,
   SettingsRow,
   SettingsSection,
   sharedStrings,
   Skeleton,
+  usePhotoCrop,
 } from '@crm/ui';
+import { preparePhoto } from '@crm/ui/photo';
+import { PHOTO_PICK_MAX_BYTES, PHOTO_TYPES } from '../welcome/photo.ts';
 import { useRouteContext } from '@tanstack/react-router';
 import { handleProblem } from '@crm/contracts/handles';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -123,6 +129,30 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
       toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
     });
   };
+  // Their own photo (spec 0068, AC-6809): placed in the round cropper, drawn again as the avatar (which leaves a
+  // phone photo's location behind) and sent; the route reads the profile again so every picture of them follows.
+  const cropping = usePhotoCrop();
+  const [isUploading, setUploading] = useState(false);
+  const [photoFailure, setPhotoFailure] = useState<string | undefined>(undefined);
+  const uploadPhoto = async (source: File | string) => {
+    if (isUploading) return;
+    const crop = await cropping.crop(source, 'circle');
+    if (crop === undefined) return;
+    setUploading(true);
+    setPhotoFailure(undefined);
+    try {
+      const prepared = await preparePhoto(source, 'avatar', crop).catch(() => {
+        throw new Error(strings.photoUnreadable);
+      });
+      await data.profile.uploadPicture(prepared.blob);
+      await onChanged();
+      toasts.toast({ tone: 'success', message: strings.photoSaved });
+    } catch (failure) {
+      setPhotoFailure(isDataError(failure) || failure instanceof Error ? failure.message : sharedStrings.couldntDoThat);
+    } finally {
+      setUploading(false);
+    }
+  };
   const [name, setName] = useState(profile.name);
   // The handle starts from the saved one, else a free one made from their name, which they claim by saving.
   const [handle, setHandle] = useState(profile.handle ?? profile.suggestedHandle ?? '');
@@ -156,7 +186,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
       : profile.google === 'unlinked'
         ? strings.googleUnlinked(profile.email)
         : profile.image !== undefined
-          ? strings.fromGoogle
+          ? strings.photoShown
           : profile.google === 'linked'
             ? strings.googleNoPhoto
             : undefined;
@@ -277,6 +307,26 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
             }
             {...(pictureNote === undefined ? {} : { description: pictureNote })}
           >
+            <FileDrop
+              variant="button"
+              label={profile.image === undefined ? strings.uploadPhoto : strings.changePhoto}
+              acceptedTypes={PHOTO_TYPES}
+              maxSize={PHOTO_PICK_MAX_BYTES}
+              isPending={isUploading}
+              {...(photoFailure === undefined ? {} : { error: photoFailure })}
+              {...(profile.image === undefined
+                ? {}
+                : {
+                    onAdjust: () => {
+                      if (profile.image !== undefined) void uploadPhoto(profile.image);
+                    },
+                  })}
+              onFiles={(files) => {
+                const [file] = files;
+                if (file !== undefined) void uploadPhoto(file);
+              }}
+            />
+            {cropping.cropper}
             {profile.google === undefined ? undefined : (
               <Button
                 variant="secondary"

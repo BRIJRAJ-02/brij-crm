@@ -317,7 +317,7 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
   const [problems, setProblems] = useState<BlockProblems>({});
   const extras = useBlockExtras(editing, true);
   const { toasts } = useRouteContext({ from: '__root__' });
-  const { upload, isSending } = usePictureUpload(linkPage, slug);
+  const { upload, isSending, cropper } = usePictureUpload(linkPage, slug);
   const draft: BlockDraft = {
     kind: 'gallery',
     images: pictures.map((each) => ({ image: each.image, alt: each.alt })),
@@ -335,6 +335,13 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
     onSubmit(draft);
   };
   const room = rules.galleryMax - pictures.length;
+  /** Crops a picture already in the gallery again (spec 0068, AC-6809): the new one takes its place and keeps its words. */
+  const recrop = (held: HeldPicture & { readonly alt: string }) => {
+    void upload([held.src]).then(([again]) => {
+      if (again === undefined) return;
+      setPictures((now) => now.map((one) => (one.image === held.image ? { ...again, alt: one.alt } : one)));
+    });
+  };
   const change = (next: readonly (HeldPicture & { readonly alt: string })[]) => {
     setPictures(next);
     // A picture's reason is by its place, so a move or a removal clears them all rather than leave one on another.
@@ -413,6 +420,7 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
             });
           }}
         />
+        {cropper}
         {room <= 0 && <Callout tone="info">{words.galleryFull}</Callout>}
         {pictures.map((each, at) => (
           <Field
@@ -446,6 +454,15 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
                     onPress={() => move(at, 1)}
                   />
                 )}
+                <Button
+                  variant="ghost"
+                  icon="pencil"
+                  label={words.galleryAdjust(at + 1)}
+                  isDisabled={isSending}
+                  onPress={() => {
+                    recrop(each);
+                  }}
+                />
                 <Button variant="ghost" icon="trash" label={words.galleryRemove(at + 1)} onPress={() => remove(at)} />
               </>
             }

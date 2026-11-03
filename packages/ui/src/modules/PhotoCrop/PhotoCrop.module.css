@@ -1,0 +1,152 @@
+/* PhotoCrop: in a window Modal, a 4:3 stage (2:1 for a 3:1 cover) in the dark theme whatever the page's, on
+   surface-sunken, holding the photo, with the scrim over all of it but the frame, the frame's edge in the accent, and
+   thirds that show while the photo moves. Under
+   it, the zoom's minus, Slider and plus, and a small preview of the crop as it will sit (round for a face). The
+   photo is placed by the cropper's arithmetic through four custom properties; keys and Reset ease it there over
+   duration-move, a pointer moves it at once, and reduced motion drops the easing. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    min-inline-size: 0;
+  }
+
+  .stage {
+    position: relative;
+    inline-size: 100%;
+    max-block-size: 55dvh;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: var(--surface-sunken);
+    outline: none;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .stage[data-shape='cover'] {
+    aspect-ratio: 2 / 1;
+  }
+
+  /* The ring is drawn inside the stage, on its own dark ground: outside it, the dark theme's accent line would sit on
+     the light modal at under 3.5:1. */
+  .stage:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: calc(-1 * var(--border-width-thick));
+  }
+
+  .photo,
+  .previewPhoto {
+    --photo-crop-x: 0;
+    --photo-crop-y: 0;
+    --photo-crop-w: 100%;
+    --photo-crop-h: auto;
+
+    position: absolute;
+    top: var(--photo-crop-y);
+    left: var(--photo-crop-x);
+    inline-size: var(--photo-crop-w);
+    max-inline-size: none;
+    block-size: var(--photo-crop-h);
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  .photo[data-placed],
+  .previewPhoto[data-placed] {
+    opacity: 1;
+  }
+
+  .waiting {
+    position: absolute;
+    inset: 0;
+    display: flex;
+  }
+
+  .problem {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: var(--space-24);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-align: center;
+  }
+
+  .veil {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    pointer-events: none;
+  }
+
+  /* The stage carries the dark theme, so this is the dark scrim (as a modal's overlay) on either page. */
+  .shade {
+    fill: var(--scrim);
+  }
+
+  .edge {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: var(--border-width-thick);
+  }
+
+  .thirds {
+    fill: none;
+    stroke: var(--on-accent);
+    stroke-width: var(--border-width-hairline);
+    opacity: 0;
+    transition: opacity var(--duration-hover) var(--ease-out);
+  }
+
+  .stage[data-moving] .thirds {
+    opacity: var(--opacity-pulse);
+  }
+
+  .controls {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  /* The preview: a bar's height, the frame's shape, at the row's end. */
+  .preview {
+    --photo-crop-ratio: 1;
+
+    position: relative;
+    flex: none;
+    block-size: var(--size-bar);
+    aspect-ratio: var(--photo-crop-ratio);
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-sunken);
+  }
+
+  .preview[data-round] {
+    border-radius: var(--radius-full);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .stage[data-easing] .photo {
+      transition-property: top, left, inline-size, block-size;
+      transition-duration: var(--duration-move);
+      transition-timing-function: var(--ease-out);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .edge {
+      stroke: Highlight;
+    }
+
+    .stage:focus-visible {
+      outline-color: Highlight;
+    }
+  }
+}

@@ -3,7 +3,9 @@
 // Main task: type your name (Google's is there already) and Continue. There is no Skip (the owner, 27 October
 // 2026): a name is one field, and every page this run makes carries it.
 // Also, optional: a photo, uploaded straight from their device (27 Oct 2026); without one the initials stand in.
-// Leaves out: cropping by hand (the middle square is taken), and anything about the workspace.
+// The photo goes through the round cropper before it is sent, and the one there can be cropped again (spec 0068,
+// AC-6809).
+// Leaves out: anything about the workspace.
 import { Avatar, Callout, Field, FieldGroup, FileDrop, Form } from '@crm/ui';
 import { PHOTO_PICK_MAX_BYTES, PHOTO_TYPES } from './photo.ts';
 import { useState } from 'react';
@@ -30,8 +32,8 @@ export interface AboutStepProps {
   readonly onContinue: () => void;
   /** Their photo, when they have one: it shows in place of the initials. */
   readonly image?: string;
-  /** A photo was picked: it is drawn again and sent. */
-  readonly onPhoto: (file: File) => void;
+  /** A photo was picked, or the one there is to be cropped again (its address): it is cropped, drawn again and sent. */
+  readonly onPhoto: (source: File | string) => void;
   /** The photo is on its way. */
   readonly isUploading?: boolean;
   /** Why the last photo didn't land, said under the button. */
@@ -75,6 +77,13 @@ export function AboutStep({
           acceptedTypes={PHOTO_TYPES}
           maxSize={PHOTO_PICK_MAX_BYTES}
           isPending={isUploading}
+          {...(image === undefined
+            ? {}
+            : {
+                onAdjust: () => {
+                  onPhoto(image);
+                },
+              })}
           onFiles={(files) => {
             const [file] = files;
             if (file !== undefined) onPhoto(file);
