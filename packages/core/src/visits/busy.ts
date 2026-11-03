@@ -23,13 +23,15 @@ export async function appointmentSpans(
   memberIds: readonly string[],
   from: Date,
   to: Date,
+  /** A visit being moved or re-held: its own holds never block it. */
+  exceptAppointment?: string,
 ): Promise<readonly AppointmentSpan[]> {
   if (memberIds.length === 0) return [];
   const rows = await tx.execute<{ member_id: string; starts_at: string; ends_at: string }>(sql`
     select s.member_id::text as member_id, h.starts_at, h.ends_at
     from staff s
     join appointment_holds h on h.workspace_id = s.workspace_id and h.staff_id = s.id and h.live
-    where s.member_id = any(${uuidList([...new Set(memberIds)])})
+    where ${exceptAppointment === undefined ? sql`true` : sql`h.appointment_id <> ${exceptAppointment}::uuid`} and s.member_id = any(${uuidList([...new Set(memberIds)])})
       and h.starts_at < ${to.toISOString()}::timestamptz and h.ends_at > ${from.toISOString()}::timestamptz
     order by h.starts_at
   `);

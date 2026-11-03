@@ -24,7 +24,7 @@ import { matchVisitor } from '../booking/visitor.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, isRefusal, postgresError, refuse, type RefusalError } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
-import { installedHospitalityApps } from '../hospitality/gate.ts';
+import { auditSetup, installedHospitalityApps } from '../hospitality/gate.ts';
 import { addDays, placeDateOf, wallToInstant } from '../hospitality/hours.ts';
 import { calendarBusy, loadVisitInputs, withCalendarBusy, type AskedItem, type VisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
@@ -122,6 +122,14 @@ function checkItems(items: readonly AskedItem[]): readonly AskedItem[] {
   }));
 }
 
+/** The party, checked: a whole number in the engine's range. */
+function checkParty(party: number): number {
+  if (!Number.isInteger(party) || party < VISIT_LIMITS.partyMin || party > VISIT_LIMITS.partyMax) {
+    throw inputInvalid('party', 'Choose a party of 1 to 100.');
+  }
+  return party;
+}
+
 /** The planner's input from loaded inputs. */
 function planInputOf(
   inputs: VisitInputs,
@@ -207,14 +215,37 @@ export async function visitTimes(
   },
 ): Promise<readonly OfferedVisit[]> {
   requirePermission(scope, 'services.calendar');
+  return offerVisitTimes(scope, deps, { ...query, online: false });
+}
+
+/**
+ * The offered starts with no permission check: `visitTimes` (the desk) after its check, and the public door's guest
+ * read (`online`: notice, window, online services and the online party range only). Never exported from the package.
+ */
+export async function offerVisitTimes(
+  scope: EngineScope,
+  deps: VisitDeps,
+  query: {
+    readonly placeId: string;
+    readonly items: readonly AskedItem[];
+    readonly party: number;
+    readonly date: string;
+    readonly online: boolean;
+  },
+): Promise<readonly OfferedVisit[]> {
   const placeId = checkId(query.placeId, 'That place doesn’t exist.');
   const items = checkItems(query.items);
+  const party = checkParty(query.party);
+  const onlineOnly = query.online;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(query.date)) throw inputInvalid('date', 'Pick a day.');
+  // The app is checked before the cache, so an answer cached before a removal is never served after it.
+  await inWorkspace(scope, (tx) => requireVisitApp(tx, scope.workspaceId));
   const key = [
     scope.workspaceId,
     placeId,
     query.date,
-    String(query.party),
+    String(party),
+    onlineOnly ? 'online' : 'desk',
     ...items.map((item) => `${item.serviceId}/${item.variantId}/${item.staffId ?? '*'}`),
   ].join('|');
   const hit = deps.slotCache?.get(key);
@@ -233,7 +264,7 @@ export async function visitTimes(
         workspaceId: scope.workspaceId,
         placeId,
         items,
-        party: query.party,
+        party,
         ...range,
       }),
     };
@@ -247,7 +278,11 @@ export async function visitTimes(
     new Date(range.to.getTime() + DAY),
   );
   const inputs = withCalendarBusy(loaded.inputs, busy);
-  const plan = planVisit(planInputOf(inputs, { party: query.party, now, ...range, onlineOnly: false }));
+  if (onlineOnly && (!inputs.online || party < inputs.rules.partyMin || party > inputs.rules.partyMax)) {
+    deps.slotCache?.set(key, placeId, []);
+    return [];
+  }
+  const plan = planVisit(planInputOf(inputs, { party, now, ...range, onlineOnly }));
   logCaps(deps.log, placeId, items, plan.stats);
   deps.slotCache?.set(key, placeId, plan.starts);
   return plan.starts.map(offered);
@@ -422,15 +457,26 @@ export async function bookVisit(
   hooks: readonly AfterWrite[] = [],
 ): Promise<BookedVisit> {
   requirePermission(scope, 'services.calendar');
+  return placeVisit(scope, deps, input, hooks);
+}
+
+/**
+ * Books a visit with no permission check: `bookVisit` (the desk) after its check, and the public door's guest
+ * reservation (source `online`). Never exported from the package.
+ */
+export async function placeVisit(
+  scope: EngineScope,
+  deps: VisitDeps,
+  input: VisitBookInput,
+  hooks: readonly AfterWrite[] = [],
+): Promise<BookedVisit> {
   const placeId = checkId(input.placeId, 'That place doesn’t exist.');
   const items = checkItems(input.items);
   const key = checkId(input.idempotencyKey, 'Try booking again.');
   const client = checkClient(input.client);
   const start = new Date(input.start);
   if (Number.isNaN(start.getTime())) throw inputInvalid('start', 'Pick a time.');
-  if (!Number.isInteger(input.party) || input.party < VISIT_LIMITS.partyMin || input.party > VISIT_LIMITS.partyMax) {
-    throw inputInvalid('party', 'Choose a party of 1 to 100.');
-  }
+  checkParty(input.party);
   const now = deps.now?.() ?? new Date();
   const from = new Date(start.getTime() - DAY);
   const to = new Date(start.getTime() + DAY);
@@ -499,6 +545,10 @@ export async function bookVisit(
           from,
           to,
         });
+        // A staff member linked or unlinked since the plan: the person locks taken were the wrong ones.
+        if (people.some((person) => now2.links.get(person.id) !== person.memberId)) {
+          throw refuse('SLOT_TAKEN', VISIT_TAKEN_MESSAGE);
+        }
         const recheck = planVisit({
           ...planInputOf(withCalendarBusy(now2, calendars), options),
           at: start,
@@ -577,6 +627,7 @@ export async function bookVisit(
           if (postgresError(error)?.code === '23P01') throw refuse('SLOT_TAKEN', VISIT_TAKEN_MESSAGE);
           throw error;
         }
+        await auditSetup(tx, scope, 'visit.created', { appointmentId, placeId, source: input.source });
         // 4. The client's Person, by email only, in a savepoint: a refusal keeps the visit.
         let personRecordId: string | undefined;
         if (client.email !== undefined) {

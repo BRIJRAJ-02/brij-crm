@@ -239,6 +239,8 @@ export async function memberBookings(
   to: Date,
   /** A booking being moved: its own time never blocks it. */
   except?: string,
+  /** A visit being moved or re-held (spec 0066): its own holds never block it. */
+  exceptAppointment?: string,
 ): Promise<ReadonlyMap<string, readonly BookedSpan[]>> {
   const found = new Map<string, BookedSpan[]>(memberIds.map((memberId) => [memberId, []]));
   if (memberIds.length === 0) return found;
@@ -278,7 +280,7 @@ export async function memberBookings(
   // One person, two engines (spec 0066, AC-6606): a staff profile linked to the member holds their time with each live
   // appointment hold, so every reader of member busy (slots, rechecks, moves, round robin, routing) sees it. It
   // blocks only, and never counts toward a page's daily limit.
-  for (const span of await appointmentSpans(tx, memberIds, from, to)) {
+  for (const span of await appointmentSpans(tx, memberIds, from, to, exceptAppointment)) {
     found.get(span.memberId)?.push({ start: span.start, end: span.end, countsToLimit: false });
   }
   return found;

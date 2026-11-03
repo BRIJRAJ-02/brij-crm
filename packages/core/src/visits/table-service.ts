@@ -21,13 +21,15 @@ import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
+import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkId, newId } from '../engine/ids.ts';
 import { inputInvalid, postgresError, refuse } from '../engine/refusals.ts';
 import { runWrite } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import { addDays, wallToInstant } from '../hospitality/hours.ts';
-import type { SlotCache } from './book.ts';
+import { requireVisitApp, type SlotCache } from './book.ts';
+import { loadVisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
 import { partyGroups, type PlannerResource } from './planner.ts';
 
@@ -335,6 +337,21 @@ export async function saveTableSetup(
   return result;
 }
 
+/**
+ * Whether the appointment `a` is a table reservation: every item a party service with no staff (the Table preset).
+ * Run service (`hospitality.service`) reaches only these; a salon or clinic visit at the same place needs
+ * `services.calendar`, so a waiter never sees a client's haircut or consultation.
+ */
+const TABLE_ONLY = sql`not exists (
+  select 1 from appointment_items ti
+  join services ts on ts.workspace_id = ti.workspace_id and ts.id = ti.service_id
+  where ti.workspace_id = a.workspace_id and ti.appointment_id = a.id
+    and not (ts.capacity_mode = 'party' and ts.staff_rule = 'none')
+)`;
+
+/** The most reservations one day lists; more is said (`truncated`), never cut silently. */
+export const SERVICE_DAY_CAP = 500;
+
 /** One reservation as the Service list and floor show it. */
 export interface DayVisit {
   readonly id: string;
@@ -358,6 +375,8 @@ export interface ServiceDay {
   readonly zone: string;
   readonly visits: readonly DayVisit[];
   readonly covers: { readonly booked: number; readonly seated: number; readonly toCome: number };
+  /** True when the day holds more than `SERVICE_DAY_CAP` reservations and only the first are listed. */
+  readonly truncated: boolean;
 }
 
 /** The day's reservations at a place (AC-6560), by time, every status, and the day's covers. Run service. */
@@ -395,12 +414,13 @@ export async function listServiceDay(
             where h.workspace_id = a.workspace_id and h.appointment_id = a.id and h.resource_id is not null) as resource_ids
         from appointments a
         where a.place_id = ${placeId}::uuid and a.starts_at >= ${from.toISOString()}::timestamptz
-          and a.starts_at < ${to.toISOString()}::timestamptz
+          and a.starts_at < ${to.toISOString()}::timestamptz and ${TABLE_ONLY}
         order by a.starts_at, a.id
-        limit 500
+        limit ${SERVICE_DAY_CAP + 1}
       `)
     ).rows;
-    const visits = rows.map((row): DayVisit => ({
+    const truncated = rows.length > SERVICE_DAY_CAP;
+    const visits = rows.slice(0, SERVICE_DAY_CAP).map((row): DayVisit => ({
       id: row.id,
       start: new Date(row.starts_at).toISOString(),
       end: new Date(row.ends_at).toISOString(),
@@ -426,6 +446,7 @@ export async function listServiceDay(
         seated: sum(['started']),
         toCome: sum(['booked', 'confirmed', 'arrived']),
       },
+      truncated,
     };
   });
 }
@@ -445,28 +466,107 @@ const MOVES: Readonly<Record<AppointmentStatus, readonly AppointmentStatus[]>> =
 const isStatus = (value: string): value is AppointmentStatus =>
   (APPOINTMENT_STATUSES as readonly string[]).includes(value);
 
+/** The statuses whose holds are live: a move into one from a freed status holds the table (and staff) again. */
+const HOLDING: readonly AppointmentStatus[] = ['booked', 'confirmed', 'arrived', 'started'];
+
+/**
+ * Before a freed visit holds again (an Undo of No show or Cancel), under the place lock and every involved person's
+ * lock: its staff must still be free (their meetings, time off and blocks, `loadVisitInputs`' busy) and the place's
+ * pacing must still take the party. The exclusion constraints guard the tables and staff holds themselves.
+ */
+async function stillFree(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  appointmentId: string,
+  placeId: string,
+): Promise<boolean> {
+  const [visit] = (
+    await tx.execute<{ starts_at: string; ends_at: string; party_size: number }>(sql`
+      select starts_at, ends_at, party_size from appointments where id = ${appointmentId}::uuid
+    `)
+  ).rows;
+  if (visit === undefined) return false;
+  const items = (
+    await tx.execute<{ service_id: string; variant_id: string; staff_id: string | null }>(sql`
+      select service_id::text, variant_id::text, staff_id::text from appointment_items
+      where appointment_id = ${appointmentId}::uuid order by position
+    `)
+  ).rows;
+  const holds = (
+    await tx.execute<{ staff_id: string | null; starts_at: string; ends_at: string }>(sql`
+      select staff_id::text, starts_at, ends_at from appointment_holds
+      where appointment_id = ${appointmentId}::uuid and staff_id is not null
+    `)
+  ).rows;
+  const start = new Date(visit.starts_at);
+  const end = new Date(visit.ends_at);
+  const inputs = await loadVisitInputs(tx, {
+    workspaceId,
+    placeId,
+    items: items.map((item) => ({
+      serviceId: item.service_id,
+      variantId: item.variant_id,
+      ...(item.staff_id === null ? {} : { staffId: item.staff_id }),
+    })),
+    party: visit.party_size,
+    from: start,
+    to: end,
+    except: appointmentId,
+  });
+  for (const hold of holds) {
+    const from = new Date(hold.starts_at).getTime();
+    const to = new Date(hold.ends_at).getTime();
+    const staff = inputs.staff.find((each) => each.id === hold.staff_id);
+    if (staff === undefined) return false;
+    if (staff.busy.some((busy) => busy.start < to && from < busy.end)) return false;
+  }
+  if (inputs.pacing !== undefined) {
+    const covers = inputs.pacing.booked.reduce(
+      (sum, booked) => (booked.start < end.getTime() && start.getTime() < booked.end ? sum + booked.party : sum),
+      0,
+    );
+    if (covers + visit.party_size > inputs.pacing.coversCap) return false;
+  }
+  return true;
+}
+
 /**
  * Moves a reservation to `status` (AC-6561), under the place lock: Seated starts the table's clock; Finished frees
- * what is left of its hold at once; No show and Cancelled free it; a move back (Undo) holds it again, refused
- * SLOT_TAKEN when the table was given away meanwhile. Run service. Refuses CONFLICT for a move the status can't make.
+ * what is left of its hold at once; No show and Cancelled free it; a move back (Undo) holds it again under every
+ * involved person's lock too, refused SLOT_TAKEN when the table, a staff member's time or the pacing went meanwhile.
+ * Run service reaches table reservations only; any other visit needs `services.calendar` and is NOT_FOUND without it.
+ * Refuses CONFLICT for a move the status can't make. Every move (Undo too) writes one audit row.
  */
 export async function setVisitStatus(
   scope: EngineScope,
   input: { readonly appointmentId: string; readonly status: string },
   deps: { readonly now?: () => Date; readonly slotCache?: SlotCache } = {},
 ): Promise<{ readonly id: string; readonly status: AppointmentStatus }> {
-  requirePermission(scope, 'hospitality.service');
+  const calendar = can(scope.access, 'services.calendar');
+  if (!calendar) requirePermission(scope, 'hospitality.service');
   const id = checkId(input.appointmentId, 'That reservation doesn’t exist.');
   if (!isStatus(input.status)) throw inputInvalid('status', 'Pick a status.');
   const status = input.status;
   const now = (deps.now?.() ?? new Date()).toISOString();
   const { result } = await runWrite(scope, async ({ tx }) => {
-    await requireApp(tx, scope.workspaceId, 'table_seating');
     const [found] = (
-      await tx.execute<{ place_id: string }>(sql`select place_id::text from appointments where id = ${id}::uuid`)
+      await tx.execute<{ place_id: string; table_only: boolean }>(sql`
+        select a.place_id::text, ${TABLE_ONLY} as table_only from appointments a where a.id = ${id}::uuid
+      `)
     ).rows;
-    if (found === undefined) throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
-    await lockVisit(tx, scope.workspaceId, found.place_id, []);
+    if (found === undefined || (!found.table_only && !calendar)) {
+      throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
+    }
+    if (found.table_only) await requireApp(tx, scope.workspaceId, 'table_seating');
+    else await requireVisitApp(tx, scope.workspaceId);
+    const people = (
+      await tx.execute<{ id: string; member_id: string | null }>(sql`
+        select distinct s.id::text, s.member_id::text from appointment_holds h
+        join staff s on s.workspace_id = h.workspace_id and s.id = h.staff_id
+        where h.appointment_id = ${id}::uuid
+      `)
+    ).rows.map((row) => ({ id: row.id, memberId: row.member_id ?? undefined }));
+    await lockVisit(tx, scope.workspaceId, found.place_id, people);
     const [row] = (
       await tx.execute<{ status: AppointmentStatus; place_id: string }>(sql`
         select status, place_id::text from appointments where id = ${id}::uuid for update
@@ -476,6 +576,10 @@ export async function setVisitStatus(
     if (row.status === status) return { id, status, placeId: row.place_id };
     if (!MOVES[row.status].includes(status)) throw refuse('CONFLICT', 'That reservation can’t move to that status.');
     const live = status !== 'no_show' && status !== 'cancelled';
+    const rehold = live && !HOLDING.includes(row.status) && row.status !== 'completed';
+    if (rehold && !(await stillFree(tx, scope.workspaceId, id, row.place_id))) {
+      throw refuse('SLOT_TAKEN', 'That time was given to someone else meanwhile.');
+    }
     try {
       if (status === 'completed') {
         // Finishing frees what is left of the hold at once (a table back online).
@@ -500,6 +604,7 @@ export async function setVisitStatus(
         cancelled_at = case when ${status} = 'cancelled' then ${now}::timestamptz when ${live} then null else cancelled_at end
       where id = ${id}::uuid
     `);
+    await auditSetup(tx, scope, 'visit.status', { appointmentId: id, from: row.status, to: status });
     return { id, status, placeId: row.place_id };
   });
   deps.slotCache?.purge(result.placeId);

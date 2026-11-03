@@ -319,7 +319,7 @@ export async function loadVisitInputs(
     wantedStaff.flatMap((row) => (row.member_id === null ? [] : [[row.id, row.member_id] as const])),
   );
   const memberIds = [...links.values()];
-  const meetings = await memberBookings(tx, memberIds, '', busyFrom, busyTo);
+  const meetings = await memberBookings(tx, memberIds, '', busyFrom, busyTo, undefined, input.except);
   const closed = await blockedTimes(tx, memberIds, busyFrom, busyTo, { id: '', isPrivate: false });
   const unlinked = staffIds.filter((id) => !links.has(id));
   const away =

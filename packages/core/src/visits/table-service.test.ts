@@ -10,7 +10,7 @@ import { NO_CALENDAR } from '../booking/calendar.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { rescope } from '../testing.ts';
 import { rollingWeek } from '../../test/dates-kit.ts';
-import { addResource, visitWorkspace } from '../../test/visits-kit.ts';
+import { addResource, addService, addStaff, visitWorkspace, waiterScope } from '../../test/visits-kit.ts';
 import { bookVisit, visitTimes } from './book.ts';
 import {
   getTableSetup,
@@ -149,6 +149,7 @@ describe('the Service list and status moves (AC-6560, AC-6561)', () => {
     ]);
     expect(day.visits[0]?.resourceIds).toEqual([t1]);
     expect(day.covers).toEqual({ booked: 5, seated: 0, toCome: 5 });
+    expect(day.truncated).toBe(false);
     const now = () => new Date(at('18:40'));
     expect(
       await refusal(setVisitStatus(w.owner, { appointmentId: first.appointmentId, status: 'completed' }, { now })),
@@ -176,5 +177,77 @@ describe('the Service list and status moves (AC-6560, AC-6561)', () => {
     expect(await refusal(listServiceDay(rescope(w.owner, { role: 'member' }), { placeId: w.placeId, date: DAY }))).toBe(
       'FORBIDDEN',
     );
+  });
+
+  it('lets a waiter (Run service only) see and move table reservations, never a salon visit at the same place', async () => {
+    const { w, book } = await evening();
+    const table = await book(at('18:00'));
+    // A salon visit at the same place: a stylist, a service with staff and no table.
+    await w.sql(
+      sql`update places set hours = ${JSON.stringify({ weekly: { mon: [{ from: '09:00', to: '23:00' }] }, exceptions: [] })}::jsonb`,
+    );
+    const asha = await addStaff(w, 'Asha');
+    const cut = await addService(w, { name: 'Cut', minutes: 60, capacityMode: 'one', staffRule: 'all', needs: [] });
+    const salon = await bookVisit(
+      w.owner,
+      { busy: NO_CALENDAR.busy, now: () => new Date(`${week.sunday}T09:00:00Z`) },
+      {
+        placeId: w.placeId,
+        items: [{ ...cut, staffId: asha }],
+        party: 1,
+        start: at('10:00'),
+        client: { name: 'Private Client', email: `p-${randomUUID().slice(0, 8)}@example.com` },
+        source: 'desk',
+        idempotencyKey: randomUUID(),
+      },
+    );
+    const waiter = await waiterScope(db, w);
+    const day = await listServiceDay(waiter, { placeId: w.placeId, date: DAY });
+    expect(day.visits.map((visit) => visit.id)).toEqual([table.appointmentId]);
+    expect(await refusal(setVisitStatus(waiter, { appointmentId: salon.appointmentId, status: 'cancelled' }))).toBe(
+      'NOT_FOUND',
+    );
+    const [still] = (
+      await w.sql<{ status: string }>(sql`select status from appointments where id = ${salon.appointmentId}::uuid`)
+    ).rows;
+    expect(still?.status).toBe('booked');
+    await setVisitStatus(waiter, { appointmentId: table.appointmentId, status: 'started' });
+    // The owner (who holds the calendar) may move the salon visit.
+    await setVisitStatus(w.owner, { appointmentId: salon.appointmentId, status: 'arrived' });
+  });
+
+  it('audits a visit made and every status move, the undo too', async () => {
+    const { w, book } = await evening();
+    const first = await book(at('18:00'));
+    await setVisitStatus(w.owner, { appointmentId: first.appointmentId, status: 'cancelled' });
+    await setVisitStatus(w.owner, { appointmentId: first.appointmentId, status: 'booked' });
+    const rows = (
+      await w.sql<{ what: string; to: string | null }>(sql`
+        select after->>'hospitality' as what, after->>'to' as to from audit_events
+        where after->>'appointmentId' = ${first.appointmentId} order by at, id
+      `)
+    ).rows;
+    expect(rows).toEqual([
+      { what: 'visit.created', to: null },
+      { what: 'visit.status', to: 'cancelled' },
+      { what: 'visit.status', to: 'booked' },
+    ]);
+  });
+
+  it('refuses a guest party outside the engine range on visitTimes, and a member without the calendar', async () => {
+    const { w, table, deps } = await evening();
+    expect(await refusal(visitTimes(w.owner, deps, { placeId: w.placeId, items: [table], party: 0, date: DAY }))).toBe(
+      'INPUT:party',
+    );
+    expect(
+      await refusal(
+        visitTimes(rescope(w.owner, { role: 'member' }), deps, {
+          placeId: w.placeId,
+          items: [table],
+          party: 2,
+          date: DAY,
+        }),
+      ),
+    ).toBe('FORBIDDEN');
   });
 });

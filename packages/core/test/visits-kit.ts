@@ -5,6 +5,8 @@ import { randomBytes } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { PlaceHoursShape } from '@crm/contracts';
 import type { Database } from '@crm/db';
+import { mintScope, type EngineScope } from '../src/access/mint.ts';
+import { NO_RULES, roleAccess } from '../src/access/policy.ts';
 import { newId } from '../src/engine/ids.ts';
 import { createWorkspace } from '../src/engine/workspaces.ts';
 import { installApp } from '../src/hospitality/apps.ts';
@@ -157,4 +159,21 @@ export async function addMember(w: VisitWorkspace, name: string): Promise<string
     values (${w.workspaceId}::uuid, ${id}::uuid, ${name}, ${`${name.toLowerCase()}-${id.slice(-6)}@example.com`}, 'member', 'system', 'system')
   `);
   return id;
+}
+
+/**
+ * A waiter: a member holding the seeded "Floor staff" custom role's one permission, Run service
+ * (`hospitality.service`), and no calendar or setup permission.
+ */
+export async function waiterScope(db: Database, w: VisitWorkspace): Promise<EngineScope> {
+  const memberId = await addMember(w, 'Wes');
+  return mintScope({
+    db,
+    workspaceId: w.workspaceId,
+    actor: { type: 'member', id: memberId },
+    access: roleAccess({ kind: 'member', memberId, role: 'member', customRoleId: newId(), teamIds: [] }, NO_RULES, {
+      permissions: ['hospitality.service'],
+      defaultObjectLevel: 'read',
+    }),
+  });
 }

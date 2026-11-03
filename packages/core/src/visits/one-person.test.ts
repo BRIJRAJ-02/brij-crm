@@ -21,7 +21,10 @@ import { isRefusal } from '../engine/refusals.ts';
 import { rollingWeek } from '../../test/dates-kit.ts';
 import { addService, addStaff, allWeek, visitWorkspace, type VisitWorkspace } from '../../test/visits-kit.ts';
 import { bookVisit, visitTimes, type VisitBookInput } from './book.ts';
+import { loadVisitInputs } from './load.ts';
 import { linkStaffMember } from './staff-link.ts';
+import { setVisitStatus } from './table-service.ts';
+import { rescope } from '../testing.ts';
 
 const { appUrl } = inject('testDatabase');
 const LINK_KEY = Buffer.alloc(32, 7);
@@ -249,5 +252,66 @@ describe('linking a staff profile to a member (Rules settled: No cross table gua
       staffId: ben,
       memberId: w.memberId,
     });
+  });
+});
+
+describe('the security review (4 Nov 2026)', () => {
+  it('refuses an Undo of a cancel once a meeting took the gap, under the person lock', async () => {
+    const { w, cut, entry } = await salon();
+    const booked = await bookVisit(w.owner, visitDeps, visit(w, cut, at('10:00')));
+    await setVisitStatus(w.owner, { appointmentId: booked.appointmentId, status: 'cancelled' });
+    await bookPublicSlot(entry, meetingDeps, meeting(at('10:00')));
+    expect(await code(setVisitStatus(w.owner, { appointmentId: booked.appointmentId, status: 'booked' }))).toBe(
+      'SLOT_TAKEN',
+    );
+    const [row] = (
+      await w.sql<{ status: string; live: boolean }>(sql`
+        select a.status, bool_or(h.live) as live from appointments a join appointment_holds h on h.appointment_id = a.id
+        where a.id = ${booked.appointmentId}::uuid group by a.status
+      `)
+    ).rows;
+    expect(row).toEqual({ status: 'cancelled', live: false });
+  });
+
+  it('never lets a visit block itself: its own holds are left out of its staff’s busy (except)', async () => {
+    const { w, ada, cut } = await salon();
+    const booked = await bookVisit(w.owner, visitDeps, visit(w, cut, at('10:00')));
+    const read = (except?: string) =>
+      db.withWorkspace(w.workspaceId, (tx) =>
+        loadVisitInputs(tx, {
+          workspaceId: w.workspaceId,
+          placeId: w.placeId,
+          items: [{ ...cut, staffId: ada }],
+          party: 1,
+          from: new Date(at('00:00')),
+          to: new Date(`${week.tuesday}T00:00:00.000Z`),
+          except,
+        }),
+      );
+    const busyAt10 = (inputs: Awaited<ReturnType<typeof read>>) =>
+      inputs.staff[0]?.busy.some((span) => span.start === new Date(at('10:00')).getTime()) ?? false;
+    expect(busyAt10(await read())).toBe(true);
+    expect(busyAt10(await read(booked.appointmentId))).toBe(false);
+  });
+
+  it('refuses a member without the right permission: linking, and the desk’s times', async () => {
+    const { w, ada, cut } = await salon();
+    const member = rescope(w.owner, { role: 'member' });
+    expect(await code(linkStaffMember(member, { staffId: ada, memberId: null }))).toBe('FORBIDDEN');
+    expect(await code(visitTimes(member, visitDeps, { placeId: w.placeId, items: [cut], party: 1, date: DAY }))).toBe(
+      'FORBIDDEN',
+    );
+    expect(await code(bookVisit(member, visitDeps, visit(w, cut, at('10:00'))))).toBe('FORBIDDEN');
+  });
+
+  it('answers NOT_FOUND for another workspace’s service or staff id, and books nothing', async () => {
+    const mine = await salon();
+    const theirs = await salon();
+    expect(await code(bookVisit(mine.w.owner, visitDeps, visit(mine.w, theirs.cut, at('10:00'))))).toBe('NOT_FOUND');
+    expect(await code(bookVisit(mine.w.owner, visitDeps, visit(mine.w, mine.cut, at('10:00'), theirs.ada)))).toBe(
+      'NOT_FOUND',
+    );
+    const count = (await mine.w.sql<{ n: number }>(sql`select count(*)::int as n from appointments`)).rows[0]?.n;
+    expect(count).toBe(0);
   });
 });

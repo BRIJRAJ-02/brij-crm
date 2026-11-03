@@ -44,20 +44,28 @@ export async function linkStaffMember(
   const now = (deps.now?.() ?? new Date()).toISOString();
   const { result } = await runWrite(scope, async ({ tx }) => {
     await requireVisitApp(tx, scope.workspaceId);
-    const [row] = (
-      await tx.execute<{ member_id: string | null }>(sql`
-        select member_id::text as member_id from staff where id = ${staffId}::uuid and archived_at is null for update
-      `)
-    ).rows;
-    if (row === undefined) throw refuse('NOT_FOUND', 'That staff member doesn’t exist.');
-    if (row.member_id === memberId) return { staffId, memberId };
+    // The person locks come BEFORE the staff row's lock, in the order a booking takes them (a booking holds a person
+    // lock while its holds take a key share on this row), so a link and a booking never wait on each other in a ring.
+    const read = async (lock: boolean) =>
+      (
+        await tx.execute<{ member_id: string | null }>(sql`
+          select member_id::text as member_id from staff where id = ${staffId}::uuid and archived_at is null
+          ${lock ? sql`for no key update` : sql``}
+        `)
+      ).rows[0];
+    const seen = await read(false);
+    if (seen === undefined) throw refuse('NOT_FOUND', 'That staff member doesn’t exist.');
+    if (seen.member_id === memberId) return { staffId, memberId };
     // Every person lock either side of the change, in the global order (no place lock: nothing at one place changes).
     const keys = personLockKeys(scope.workspaceId, [
-      { id: staffId, memberId: row.member_id },
+      { id: staffId, memberId: seen.member_id },
       { id: staffId, memberId },
       { id: staffId },
     ]);
     for (const key of keys) await lockKey(tx, key);
+    const row = await read(true);
+    if (row === undefined) throw refuse('NOT_FOUND', 'That staff member doesn’t exist.');
+    if (row.member_id !== seen.member_id) throw refuse('CONFLICT', 'That staff member changed meanwhile. Try again.');
     if (memberId !== null) {
       const [member] = (
         await tx.execute<{ id: string }>(
