@@ -4,7 +4,7 @@
 // headers that matter (the policy, nosniff, the referrer rule) come from vercel.json's block for `/m/`, as they would
 // for the static shell.
 import { registerHooks } from 'node:module';
-import { addCacheTag } from '@vercel/functions';
+import { addCacheTag, ipAddress } from '@vercel/functions';
 
 // Vercel's Node builder compiles each imported TypeScript file to a .js beside it but keeps the `.ts` in every
 // import; the same hook `api/handle.mjs` registers, for the same reason.
@@ -26,13 +26,15 @@ registerHooks({
 const { menuCacheControlFor, menuShellFor } = await import('../menu-shell.ts');
 // The built shell, written beside this file by the build (`crm:booking-shell` in vite.config.ts).
 const { MENU_SHELL } = await import('./menu-shell.generated.mjs');
+// @boundaries-ignore the Vercel Function entry runs on the server, not in the client bundle
+const { menuReadHeaders } = await import('../menu-read.ts');
 
-/** Reads one place's published menu from this deployment's own api, through the same edge every guest uses. */
-const readMenu = (origin) => async (key, signal) => {
-  const answer = await fetch(`${origin}/api/public/menu/${encodeURIComponent(key)}`, {
-    signal,
-    headers: { accept: 'application/json' },
-  });
+/**
+ * Reads one place's published menu from this deployment's own api, through the same edge every guest uses, vouching
+ * for the guest (`menu-read.ts`) so the read counts against their address, not this function's.
+ */
+const readMenu = (origin, headers) => async (key, signal) => {
+  const answer = await fetch(`${origin}/api/public/menu/${encodeURIComponent(key)}`, { signal, headers });
   if (answer.status === 404) return undefined;
   if (!answer.ok) throw new Error(`menu read answered ${String(answer.status)}`);
   return await answer.json();
@@ -42,7 +44,7 @@ export async function GET(request) {
   const url = new URL(request.url);
   const { body, status, outcome, tags } = await menuShellFor(url.pathname, {
     shell: MENU_SHELL,
-    readMenu: readMenu(url.origin),
+    readMenu: readMenu(url.origin, menuReadHeaders({ secret: process.env.EDGE_SECRET, guestIp: ipAddress(request) })),
   });
   if (outcome === 'missed') console.warn(JSON.stringify({ event: 'menu.shell.missed' }));
   // Filed under the place's and the workspace's tags, so Publish, Sold out and removing the app clear this HTML too.

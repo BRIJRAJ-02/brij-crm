@@ -51,6 +51,18 @@ export const BOOKING_LIMITS = {
   iconsPerHandle: { max: 60, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 
+/**
+ * The guest menu's reads (spec 0065, H1; security review, should-fix 4). A guest's own read counts against their
+ * address, as a booking page's does. The `/m/<key>` server render reads on a guest's behalf from one function
+ * address, so a read it vouches for (`EdgeGuard.rendered`) counts against the guest's forwarded address instead, and
+ * against the key it names: 600 a minute per key, so a spray of made up keys spends only those keys' windows, never
+ * the budget a real menu's renders draw on. The edge keeps the answer a day, so a real menu's renders rarely get here.
+ */
+export const MENU_LIMITS = {
+  readsPerAddress: BOOKING_LIMITS.readsPerAddress,
+  rendersPerKey: { max: 600, windowMs: 60_000 },
+} as const satisfies Record<string, LimitRule>;
+
 /** The least time a person takes from opening the page to booking. */
 export const MIN_FILL_MS = 2_000;
 

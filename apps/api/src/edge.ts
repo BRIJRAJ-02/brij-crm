@@ -3,6 +3,7 @@
 // the API refuses anything without it. Only then are the forwarded headers the
 // middleware set (the client IP above all) worth believing.
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { AppEnvironment } from '@crm/contracts';
 
 /** The header Vercel's middleware puts the shared secret in. */
@@ -10,6 +11,16 @@ export const EDGE_HEADER = 'x-crm-edge';
 
 /** The header Vercel's middleware copies the browser's Origin into (its rewrite doesn't keep `origin` intact). */
 export const ORIGIN_HEADER = 'x-crm-origin';
+
+/**
+ * The header the guest menu's server render (`apps/web/api/menu.mjs`) puts the edge secret in when it reads the
+ * menu for a guest (security review, should-fix 4). The middleware overwrites `x-crm-edge` and `x-forwarded-for` with
+ * its own on that read, so the render vouches for the guest's address in these two headers of its own. Equal to
+ * `RENDER_HEADER` and `GUEST_IP_HEADER` in apps/web/menu-read.ts.
+ */
+export const RENDER_HEADER = 'x-crm-render';
+/** The guest's own address, as the render's request saw it; believed only beside a valid `RENDER_HEADER`. */
+export const GUEST_IP_HEADER = 'x-crm-guest-ip';
 
 /** The edge's geo headers (Vercel's), which the middleware forwards set by the edge itself (spec 0033). */
 export const GEO_COUNTRY_HEADER = 'x-vercel-ip-country';
@@ -93,6 +104,12 @@ export interface EdgeGuard {
    * request carries, since nothing sets them there but a test.
    */
   readonly geo: (request: Request) => Geo | undefined;
+  /**
+   * A server render's read on a guest's behalf: undefined unless the request was admitted and carries the edge
+   * secret in `RENDER_HEADER` (locally too: a render read needs the secret wherever it runs, so without one set none
+   * is ever believed). `guestIp` is the forwarded guest's address when it is an IP, else undefined.
+   */
+  readonly rendered: (request: Request) => { readonly guestIp: string | undefined } | undefined;
 }
 
 /** Whether the guard refuses requests without the secret: everywhere but local. */
@@ -112,8 +129,8 @@ export function createEdgeGuard(options: EdgeGuardOptions): EdgeGuard {
   const expected = options.secret === undefined ? undefined : digest(options.secret);
   const trusted = new WeakSet<Request>();
 
-  const carriesSecret = (request: Request): boolean => {
-    const presented = request.headers.get(EDGE_HEADER);
+  const carriesSecret = (request: Request, header = EDGE_HEADER): boolean => {
+    const presented = request.headers.get(header);
     // No secret outside local (ApiEnv refuses to boot so) admits nobody.
     if (expected === undefined || presented === null) return false;
     return timingSafeEqual(digest(presented), expected);
@@ -140,6 +157,11 @@ export function createEdgeGuard(options: EdgeGuardOptions): EdgeGuard {
     geo(request) {
       if (!trusted.has(request)) return undefined;
       return readGeo(request.headers.get(GEO_COUNTRY_HEADER), request.headers.get(GEO_CITY_HEADER));
+    },
+    rendered(request) {
+      if (!trusted.has(request) || !carriesSecret(request, RENDER_HEADER)) return undefined;
+      const guestIp = request.headers.get(GUEST_IP_HEADER)?.trim();
+      return { guestIp: guestIp !== undefined && isIP(guestIp) !== 0 ? guestIp : undefined };
     },
     clientIp(request) {
       if (!trusted.has(request)) return undefined;

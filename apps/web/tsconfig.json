@@ -32,6 +32,8 @@
     "handle-shell.test.ts",
     "menu-shell.ts",
     "menu-shell.test.ts",
+    "menu-read.ts",
+    "menu-read.test.ts",
     "handle-entry.test.ts",
     "card-image.ts",
     "card-image.test.ts",

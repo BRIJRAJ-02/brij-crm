@@ -9,7 +9,8 @@
 // 404 `no-store`. Answers are kept at the edge under the place's tag (`menu:<placeId>`) and the workspace's brand tag,
 // so Publish, Sold out, a profile change, a brand change and removing the app purge them at once (Rules settled:
 // Routes); the browser always asks again (max-age 0), so a guest on the page sees Sold out on the next read. 60 reads a
-// minute per address, as the booking pages' reads.
+// minute per address, as the booking pages' reads; the `/m/<key>` render's reads count per guest and per key
+// (`MENU_LIMITS`).
 import { brandCacheTags, menuCacheTags, menuWorkspaceTags, MENU_KEY_PATTERN, type MenuPhotoSize } from '@crm/contracts';
 import { enterMenuPage, menuLookStylesheet, readMenuPhoto, readPublicMenu, type MenuEntry } from '@crm/core/public';
 import type { Database } from '@crm/db';
@@ -19,7 +20,7 @@ import type { EdgeCache } from '../edge-cache.ts';
 import { log } from '../log.ts';
 import type { FileStore } from '../storage/blob.ts';
 import { addressKey, asksFor, nothingHere, stylesheetResponse, uncached } from './brand-css.ts';
-import { BOOKING_LIMITS, type PublicLimiter } from './limits.ts';
+import { BOOKING_LIMITS, MENU_LIMITS, type LimitRule, type PublicLimiter } from './limits.ts';
 import { pictureResponse } from './picture.ts';
 
 /**
@@ -37,6 +38,11 @@ export interface PublicMenuDeps {
   readonly files: FileStore | undefined;
   readonly limiter: PublicLimiter;
   readonly edgeCache?: EdgeCache;
+  /**
+   * Whether a request is the `/m/<key>` server render reading for a guest, and that guest's address
+   * (`EdgeGuard.rendered`): only a request carrying the edge secret in the render's header is one.
+   */
+  readonly rendered?: (request: Request) => { readonly guestIp: string | undefined } | undefined;
 }
 
 interface Variables {
@@ -50,6 +56,29 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Mounts the guest menu's routes. */
 export function mountPublicMenu(app: Hono<{ Variables: Variables }>, deps: PublicMenuDeps): void {
+  /**
+   * A read's windows. A guest's own read counts against their address. The render's read (its secret checked) counts
+   * against the guest it forwards, never the function's own shared address, and against its key, so one guest's
+   * reads, or a spray of made up keys, never spend a real menu's renders; with no guest address, the key alone.
+   */
+  const readRules = (c: Context<{ Variables: Variables }>, key: string): readonly (readonly [string, LimitRule])[] => {
+    const render = deps.rendered?.(c.req.raw);
+    if (render === undefined) return [[`menu:read:${addressKey(c.get('clientIp'))}`, MENU_LIMITS.readsPerAddress]];
+    return [
+      ...(render.guestIp === undefined
+        ? []
+        : ([[`menu:read:${addressKey(render.guestIp)}`, MENU_LIMITS.readsPerAddress]] as const)),
+      [`menu:render-key:${key}`, MENU_LIMITS.rendersPerKey],
+    ];
+  };
+  const pictureRules = (
+    c: Context<{ Variables: Variables }>,
+    key: string,
+  ): readonly (readonly [string, LimitRule])[] => [
+    [`menu:picture:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.picturesPerAddress],
+    [`menu:picture-key:${key}`, BOOKING_LIMITS.picturesPerTarget],
+  ];
+
   /** The place a key names, or the answer to send instead: a bad key, a spent limit, or nothing there. */
   const entryOf = async (
     c: Context<{ Variables: Variables }>,
@@ -58,13 +87,7 @@ export function mountPublicMenu(app: Hono<{ Variables: Variables }>, deps: Publi
     const key = c.req.param('key') ?? '';
     // A key that can't be one never reaches the limiter's keys or the database.
     if (!MENU_KEY_PATTERN.test(key)) return nothingHere();
-    const rules =
-      kind === 'read'
-        ? ([[`menu:read:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]] as const)
-        : ([
-            [`menu:picture:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.picturesPerAddress],
-            [`menu:picture-key:${key}`, BOOKING_LIMITS.picturesPerTarget],
-          ] as const);
+    const rules = kind === 'read' ? readRules(c, key) : pictureRules(c, key);
     for (const [name, rule] of rules) {
       const decision = deps.limiter(name, rule);
       if (!decision.allowed) return uncached('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');

@@ -220,6 +220,8 @@ export interface AppServices {
   readonly bookingCalendar?: BookingCalendar;
   /** The public booking routes' limiter (spec 0025, AC-643): this process's memory unless a test passes its own. */
   readonly bookingLimiter?: PublicLimiter;
+  /** The guest menu's limiter (spec 0065, H1): this process's memory unless a test passes its own. */
+  readonly menuLimiter?: PublicLimiter;
   /** The email preferences routes' limiter (the emails lane): this process's memory unless a test passes its own. */
   readonly emailPreferenceLimiter?: PublicLimiter;
   /** Fetches a host's account picture from Google's picture hosts (23 Oct 2026): the real one unless a test passes its own. */
@@ -690,7 +692,13 @@ export function createApp({
   mountBrandCss(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountLook(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), auth, edgeCache });
   // The guest menu (spec 0065, H1): a place's published snapshot, its look, logo and photos, edge cached by place.
-  mountPublicMenu(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
+  mountPublicMenu(app, {
+    db,
+    files: pictureFiles,
+    limiter: services.menuLimiter ?? createMemoryLimiter(),
+    edgeCache,
+    rendered: edge.rendered,
+  });
   mountPublicBooking(app, {
     db,
     handoffKey: formsHandoffKey,
