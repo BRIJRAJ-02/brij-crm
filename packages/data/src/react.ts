@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { BrandHeld, BrandHeldState } from './brand/store.ts';
+import type { HospitalityHeld, HospitalityHeldState } from './hospitality/store.ts';
 import type { InsightsHeld, InsightsState, QrStyleHeld, QrStyleState } from './link-page/reach.ts';
 import type { DataError } from './errors.ts';
 import type { FilesState, RecordFilesSource } from './files/store.ts';
@@ -564,6 +565,11 @@ export function useLinkPageQrStyle(held: QrStyleHeld): QrStyleState {
 
 /** The brand kit or a link page's own colour and photos (spec 0060), held while the screen shows it. */
 export function useBrand<Value>(held: BrandHeld<BrandHeldState<Value>>): BrandHeldState<Value> {
+  return useRetained(held);
+}
+
+/** A Hospitality copy (spec 0065): the Apps page, the business, or a place's floor, read when first held. */
+export function useHospitality<Value>(held: HospitalityHeld<Value>): HospitalityHeldState<Value> {
   return useRetained(held);
 }
 

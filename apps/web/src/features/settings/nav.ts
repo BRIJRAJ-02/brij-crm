@@ -24,6 +24,7 @@ import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
 import { navStrings as admin } from '../admin/nav-strings.ts';
+import { strings as hospitality } from '../hospitality/strings.ts';
 import type { ObjectTab } from './object-tabs.ts';
 
 export { OBJECT_TABS, isObjectTab, type ObjectTab } from './object-tabs.ts';
@@ -60,6 +61,15 @@ export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/genera
 
 /** Settings › Workspace › Brand (spec 0060, AC-1): the logo and colour its booking pages and forms wear. */
 export const brandSettingsHref = (slug: string) => `/w/${slug}/settings/brand`;
+/** Settings › Workspace › Apps (spec 0065, AC-6501): the apps a workspace installs (the Hospitality suite today). */
+export const appsSettingsHref = (slug: string) => `/w/${slug}/settings/apps`;
+
+/** Settings › Workspace › Business (spec 0065, AC-6507): the business profile and its places. */
+export const businessSettingsHref = (slug: string) => `/w/${slug}/settings/business`;
+
+/** One place's tables and areas (spec 0065, AC-6509), under Settings › Business. */
+export const placeTablesHref = (slug: string, placeId: string) => `/w/${slug}/settings/business/places/${placeId}`;
+
 /** Settings › Workspace › Automations (parity #53): what the workspace does for itself. */
 export const automationsHref = (slug: string) => `/w/${slug}/settings/automations`;
 
@@ -96,6 +106,8 @@ export type SettingsPageId =
   | 'scheduling-access'
   | 'general'
   | 'brand'
+  | 'apps'
+  | 'business'
   | 'members'
   | 'teams'
   | 'roles'
@@ -154,6 +166,8 @@ export interface SettingsNavEntry {
     | 'globe'
     | 'plug'
     | 'palette'
+    | 'blocks'
+    | 'store'
     | 'code';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
@@ -217,6 +231,22 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         // Brand (spec 0060): every member but a guest reads it (it dresses booking pages and forms, which guests
         // have none of, spec 0031); owners and admins change it.
         { id: 'brand', label: brand.navLabel, href: brandSettingsHref(slug), icon: 'palette', notForGuests: true },
+        // Apps (spec 0065, AC-6501): owners and admins install them, so nobody else sees the entry at all.
+        {
+          id: 'apps',
+          label: hospitality.appsTitle,
+          href: appsSettingsHref(slug),
+          icon: 'blocks',
+          requires: 'workspace.manage',
+        },
+        // Business (spec 0065, AC-6507): its places, hours and tables, for those who set the apps up.
+        {
+          id: 'business',
+          label: hospitality.businessTitle,
+          href: businessSettingsHref(slug),
+          icon: 'store',
+          requires: 'hospitality.manage',
+        },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
         // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
         { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round', notForGuests: true },
@@ -335,6 +365,8 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'general') return 'general';
   if (rest === 'brand') return 'brand';
+  if (rest === 'apps') return 'apps';
+  if (rest === 'business' || rest.startsWith('business/')) return 'business';
   if (rest === 'account/notifications') return 'notifications';
   if (rest === 'account/scheduling') return 'scheduling-access';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';

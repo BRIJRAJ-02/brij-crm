@@ -721,6 +721,26 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       pages: os.operator.pages.handler(notServed),
       page: os.operator.page.handler(notServed),
       site: os.operator.site.handler(notServed),
+      setEarlyAccess: os.operator.setEarlyAccess.handler(notServed),
+    },
+    // The Hospitality setup (spec 0065) is driven against its own fake in `hospitality/store.test.ts`.
+    hospitality: {
+      apps: os.hospitality.apps.handler(notServed),
+      install: os.hospitality.install.handler(notServed),
+      remove: os.hospitality.remove.handler(notServed),
+      business: os.hospitality.business.handler(notServed),
+      saveBusiness: os.hospitality.saveBusiness.handler(notServed),
+      createPlace: os.hospitality.createPlace.handler(notServed),
+      updatePlace: os.hospitality.updatePlace.handler(notServed),
+      floor: os.hospitality.floor.handler(notServed),
+      saveArea: os.hospitality.saveArea.handler(notServed),
+      deleteArea: os.hospitality.deleteArea.handler(notServed),
+      addTables: os.hospitality.addTables.handler(notServed),
+      updateTable: os.hospitality.updateTable.handler(notServed),
+      moveTable: os.hospitality.moveTable.handler(notServed),
+      archiveTable: os.hospitality.archiveTable.handler(notServed),
+      restoreTable: os.hospitality.restoreTable.handler(notServed),
+      deleteTable: os.hospitality.deleteTable.handler(notServed),
     },
     // Account sessions (spec 0033) are driven against their own fake in `account/sessions.test.ts`.
     account: {

@@ -62,6 +62,7 @@ export const strings = {
   moreFailed: 'The next users didn’t load.',
   noUsers: 'No users yet',
   noMatches: 'Nobody matches',
+  hospitalityFor: (workspace: string) => `Hospitality apps in ${workspace}`,
   columns: {
     person: 'Person',
     signedUp: 'Signed up',
@@ -75,6 +76,8 @@ export const strings = {
     role: 'Role',
     members: 'Members',
     recordsAll: 'All records',
+    // Early access (spec 0065, AC-6502): the console's one switch.
+    hospitality: 'Hospitality apps',
     notes: 'Notes',
     tasks: 'Tasks',
     page: 'Page',

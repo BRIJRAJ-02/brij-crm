@@ -8,6 +8,8 @@ export const strings = {
   setHours: 'Set hours',
   setHoursFor: (day: string) => `Set hours for ${day}`,
   midnight: 'Midnight',
+  /** An end past Midnight, in the next morning (spec 0065): "2:00 AM next day". */
+  nextDay: (time: string) => `${time} next day`,
   mixed: 'Mixed',
   setAll: 'Set all days',
   setAllTitle: 'Every day that’s on',

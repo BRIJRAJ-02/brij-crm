@@ -23,6 +23,8 @@ describe('settingsNav', () => {
       [
         'General',
         'Brand',
+        'Apps',
+        'Business',
         'Members',
         'Teams',
         'Roles',
@@ -50,6 +52,9 @@ describe('settingsNav', () => {
       general: '/w/acme/settings/general',
       // The brand kit (spec 0060): every member reads it, owners and admins change it.
       brand: '/w/acme/settings/brand',
+      // The Hospitality apps and the business they share (spec 0065).
+      apps: '/w/acme/settings/apps',
+      business: '/w/acme/settings/business',
       security: '/w/acme/settings/account/sign-in',
       members: '/w/acme/settings/members',
       teams: '/w/acme/settings/teams',
@@ -103,7 +108,9 @@ describe('visibleSettingsNav', () => {
             entry.id !== 'workspace-security' &&
             entry.id !== 'automations' &&
             entry.id !== 'webhooks' &&
-            entry.id !== 'developer',
+            entry.id !== 'developer' &&
+            entry.id !== 'apps' &&
+            entry.id !== 'business',
         ),
       })),
     );
@@ -115,6 +122,8 @@ describe('visibleSettingsNav', () => {
         'automations.manage',
         'webhooks.manage',
         'api_keys.manage',
+        'workspace.manage',
+        'hospitality.manage',
       ]),
     ).toEqual(workspaceGroups);
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.

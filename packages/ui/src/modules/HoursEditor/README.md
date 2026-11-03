@@ -36,12 +36,13 @@ New. A booking page needs several windows a day (split shifts), a day turned off
 - The days part by their rhythm (each row a control's height with `space-4` above and below), with no rules between them, so no line competes with the fields.
 - In a narrow card (under 480px) the day and Copy share a line and the windows sit under them at the card's start, and a day off says Unavailable on its own line in the times' column, right after the day, as on a wide card.
 - `isSingleDay` edits one date's hours, not a week (the Team week's cell, spec 0037): a Working switch on its own line, then each window on a line of its own (start, "to", end, then + on the first and − on the others), with no Copy times to and no Set all days, since there is no other day. An end is offered only after its start, and a start moved past its end takes the end an hour on. Its `isLoading` still draws the week's shape (no caller loads a single day: the Roster opens its editor on a day it already holds). It sizes itself by its content, not as a container, so it opens whole in a Popover (it collapsed to a sliver in one and cut its end time off, 31 October 2026). Why a variant: the cell's Popover needs exactly a row's switch, windows, + and −, and a second copy of that row would have duplicated its Selects, steps and labels.
+- `pastMidnightUntil` (`HH:MM`, spec 0065) lets a window run into the next morning, for a restaurant's or a bar's late hours: the end times go on past Midnight to that time, each read "2:00 AM next day", and are stored past `24:00` (`26:00`), so a range stays one window of the day it starts on. The caller checks that only the day's last window does so. Why a variant: the late hours are this editor's rows with a longer list of ends; a second editor would repeat every row, Select and label.
 - `isReadOnly` shows the week as text, each day's windows or "Unavailable", with no controls: hours that come from elsewhere, such as a page that follows its member's hours.
 - `error` on a row shows under its windows, at their start and no wider than them, as an alert (overlapping windows, an end before its start: the caller checks).
 
 ## States
 
-On, off, several windows, a row's error, disabled, read only, loading (`isLoading`: each day's row and Set all days in place, a skeleton where the times go); the controls' own hover, focus and pressed states.
+On, off, several windows, a window past midnight (`PastMidnight`), a row's error, disabled, read only, loading (`isLoading`: each day's row and Set all days in place, a skeleton where the times go); the controls' own hover, focus and pressed states.
 
 ## Keyboard
 

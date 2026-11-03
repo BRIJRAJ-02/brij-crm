@@ -14,7 +14,10 @@ import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './HoursEditor.module.css';
 import { strings } from './strings.ts';
 
-/** One window of a day, local `HH:MM` times (`24:00` is midnight at its end), the end after the start. */
+/**
+ * One window of a day, local `HH:MM` times (`24:00` is midnight at its end), the end after the start. With
+ * `pastMidnightUntil`, an end may run into the next morning, written past `24:00` (`26:00` is 2:00 AM the next day).
+ */
 export type HoursRange = readonly [start: string, end: string];
 
 /** One weekday's row. */
@@ -56,6 +59,12 @@ export interface HoursEditorProps {
    * content, not as a container, so it opens whole in a popover. Give it the one row.
    */
   readonly isSingleDay?: boolean;
+  /**
+   * How late a window may run into the next morning, `HH:MM` (a restaurant's or a bar's late hours, spec 0065): the
+   * end times go on past Midnight to this time, each read with "next day" ("2:00 AM next day"), and stored past
+   * `24:00` (`26:00`). Absent, a window ends by Midnight.
+   */
+  readonly pastMidnightUntil?: string;
 }
 
 /** `HH:MM` for minutes from midnight. */
@@ -92,6 +101,8 @@ function timeLabel(time: string, locale: string, hourClock: HoursClock): string 
     return cycle === 'h23' || cycle === 'h24' ? '24:00' : strings.midnight;
   }
   const minutes = minutesOf(time);
+  // Past Midnight: the next morning's time, said as the next day's.
+  if (minutes > 1440) return strings.nextDay(timeLabel(clock(minutes - 1440), locale, hourClock));
   return format.format(new Date(Date.UTC(2000, 0, 1, Math.floor(minutes / 60), minutes % 60)));
 }
 
@@ -284,6 +295,7 @@ export function HoursEditor({
   isReadOnly = false,
   isLoading = false,
   isSingleDay = false,
+  pastMidnightUntil,
 }: HoursEditorProps) {
   const { locale } = useFormatSettings();
   const showSkeleton = useDelayedLoading(isLoading);
@@ -310,7 +322,8 @@ export function HoursEditor({
   const step = stepMinutes > 0 ? stepMinutes : 30;
   const starts: SelectItem[] = [];
   const ends: SelectItem[] = [];
-  for (let minutes = 0; minutes <= 1440; minutes += step) {
+  const lastEnd = 1440 + (pastMidnightUntil === undefined ? 0 : Math.min(minutesOf(pastMidnightUntil), 720));
+  for (let minutes = 0; minutes <= lastEnd; minutes += step) {
     if (minutes < 1440) starts.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale, hourClock) });
     if (minutes > 0) ends.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale, hourClock) });
   }

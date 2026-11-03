@@ -5,11 +5,31 @@
 import type { NavEntry, NavPage, NavPrefs, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
 import { navKey, sectionItems, sectionOrder } from '@crm/data/navigation';
 import type { IconName } from '@crm/ui';
-import { bookingsHref, capturesHref, inboxHref, linkPageHref, navObjects, notesHref, tasksHref } from './objects.ts';
+import {
+  bookingsHref,
+  capturesHref,
+  hospitalityHref,
+  inboxHref,
+  linkPageHref,
+  navObjects,
+  notesHref,
+  tasksHref,
+} from './objects.ts';
 import { strings } from './strings.ts';
 
 /** A page the sidebar marks current that isn't an object's: Tasks, Bookings and Captures (the trash is in Settings). */
-export type SidebarPage = 'home' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'captures';
+export type SidebarPage =
+  | 'home'
+  | 'linkPage'
+  | 'inbox'
+  | 'tasks'
+  | 'notes'
+  | 'bookings'
+  | 'captures'
+  | 'menus'
+  | 'qr'
+  | 'reservations'
+  | 'service';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {
@@ -33,6 +53,15 @@ export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
   notes: { label: strings.notes, icon: 'notebook', href: notesHref },
   bookings: { label: strings.bookings, icon: 'calendar-days', href: bookingsHref },
   captures: { label: strings.captures, icon: 'link', href: capturesHref },
+  // The Hospitality apps' pages (spec 0065, AC-6510): the server offers each only while its app is installed.
+  menus: { label: strings.menus, icon: 'utensils', href: (slug) => hospitalityHref(slug, 'menus') },
+  qr: { label: strings.qrCodes, icon: 'qr-code', href: (slug) => hospitalityHref(slug, 'qr') },
+  reservations: {
+    label: strings.reservations,
+    icon: 'calendar-check',
+    href: (slug) => hospitalityHref(slug, 'reservations'),
+  },
+  service: { label: strings.service, icon: 'table', href: (slug) => hospitalityHref(slug, 'service') },
 };
 
 /** Each section's title. */
@@ -41,6 +70,7 @@ export const SECTION_TITLES: Readonly<Record<NavSectionKey, string>> = {
   records: strings.records,
   lists: strings.lists,
   scheduling: strings.scheduling,
+  hospitality: strings.hospitality,
 };
 
 /** The member's stored choices out of their sidebar state, for the pure rule. */
@@ -65,6 +95,7 @@ export function universeOf(
     // The live lists the member may read (spec 0048, AC-4804), oldest first.
     lists: lists.filter((list) => !list.isArchived).map((list) => list.id),
     scheduling: nav.scheduling,
+    hospitality: nav.hospitality,
     favourites: new Set(nav.favourites.map(navKey)),
   };
 }

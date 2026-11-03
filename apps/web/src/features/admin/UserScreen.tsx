@@ -20,11 +20,12 @@ import {
   RelativeTime,
   SettingsSection,
   Stats,
+  Switch,
   Table,
   useFormatSettings,
   type TableColumn,
 } from '@crm/ui';
-import { useParams } from '@tanstack/react-router';
+import { useParams, useRouteContext } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { AdminFailed, useAdminRetry, DayChart, PeriodSwitch, useIsOperator } from './AdminParts.tsx';
@@ -47,6 +48,12 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'pages', label: strings.columns.pages, align: 'end' },
 ];
 
+/** With the early access switch (spec 0065, AC-6502): one more column, the Hospitality apps on or off. */
+const COLUMNS_WITH_ACCESS: readonly TableColumn[] = [
+  ...COLUMNS,
+  { id: 'hospitality', label: strings.columns.hospitality, size: 'fit' },
+];
+
 /** One user's page for a period, its read held in the data layer. */
 export function UserScreen({
   data,
@@ -61,6 +68,7 @@ export function UserScreen({
   const state = useOperator(held);
   const retry = useAdminRetry(held.retry);
   const isOperator = useIsOperator();
+  const { toasts } = useRouteContext({ from: '__root__' });
   if (state.status === 'error') {
     // No such account: its own page for a super admin, and Settings' "nothing here" for anyone else.
     if (isDataError(state.error) && (state.error.code === 'NOT_FOUND' || state.error.code === 'INPUT_INVALID')) {
@@ -68,16 +76,29 @@ export function UserScreen({
     }
     return <AdminFailed title={strings.users} error={state.error} data={data} onRetry={retry} />;
   }
-  return <UserBody period={period} detail={state.status === 'ready' ? state.value : undefined} />;
+  return (
+    <UserBody
+      period={period}
+      detail={state.status === 'ready' ? state.value : undefined}
+      onEarlyAccess={(workspaceId, on) => {
+        void data.operator.setEarlyAccess(workspaceId, 'hospitality', on).then((refused) => {
+          if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
+        });
+      }}
+    />
+  );
 }
 
 /** A user's page: their facts, activity and workspaces, or their loading shapes while `detail` is undefined. */
 export function UserBody({
   period,
   detail,
+  onEarlyAccess,
 }: {
   readonly period: OperatorPeriod;
   readonly detail: OperatorUserDetail | undefined;
+  /** Turns a workspace's Hospitality apps on or off (spec 0065, AC-6502); absent, no switch is shown. */
+  readonly onEarlyAccess?: (workspaceId: string, on: boolean) => void;
 }) {
   const { locale } = useFormatSettings();
   const format = formatters(locale);
@@ -105,6 +126,15 @@ export function UserBody({
         return format.count(workspace.bookingsHosted);
       case 'pages':
         return format.count(workspace.pagesOwned);
+      case 'hospitality':
+        return (
+          <Switch
+            label={strings.hospitalityFor(workspace.name)}
+            isLabelHidden
+            isSelected={workspace.earlyAccess.includes('hospitality')}
+            onChange={(on) => onEarlyAccess?.(workspace.workspaceId, on)}
+          />
+        );
       default:
         return null;
     }
@@ -189,7 +219,7 @@ export function UserBody({
       <SettingsSection title={strings.workspacesSection}>
         <Table
           label={strings.workspacesTable}
-          columns={COLUMNS}
+          columns={onEarlyAccess === undefined ? COLUMNS : COLUMNS_WITH_ACCESS}
           rows={detail?.workspaces ?? []}
           getRowId={(workspace) => workspace.workspaceId}
           renderCell={cell}

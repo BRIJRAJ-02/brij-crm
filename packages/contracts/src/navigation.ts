@@ -122,9 +122,9 @@ export const NavState = z.object({
   scheduling: z.array(NavPageKey),
   /**
    * The Hospitality pages (spec 0065, AC-6510): only the installed apps', and only for a member holding Manage
-   * hospitality or Run service. Absent from an answer that predates the section, read as none.
+   * hospitality or Run service. Empty when no app is installed.
    */
-  hospitality: z.array(NavPageKey).default([]),
+  hospitality: z.array(NavPageKey),
 });
 /** The member's sidebar, resolved. */
 export type NavState = z.infer<typeof NavState>;
