@@ -378,7 +378,7 @@ describe('Crop again (spec 0068, AC-6809)', () => {
     await render({}, () => (
       <AppearanceCard theme={{ ...DEFAULT_PAGE_THEME, header: 'cover' }} onChange={() => undefined} extras={extras} />
     ));
-    await userEvent.click(page.getByRole('button', { name: 'Customise' }));
+    // The cover picker sits on the Design card itself since the templates (spec 0068, AC-6802).
     await userEvent.click(page.getByRole('button', { name: 'Adjust crop' }).first());
     expect(onPhoto).toHaveBeenCalledWith('cover', cover);
   });
