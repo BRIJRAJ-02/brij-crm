@@ -18,6 +18,7 @@ import {
   SettingsStack,
   TileGrid,
   type AccentQuickPick,
+  type LinkPageThumbnailProfile,
   type PageTemplate,
 } from '@crm/ui';
 import { useRef, useState } from 'react';
@@ -72,6 +73,11 @@ export interface AppearanceCardProps {
   readonly refusal?: DataError;
   /** The colour and the photos (spec 0060). */
   readonly extras?: DesignExtras;
+  /**
+   * The owner's page as the template pictures draw it (spec 0068, AC-6804): their name, picture or initials, logo and
+   * first rows' titles. The cover comes from `extras`. Left out, the pictures draw a sample.
+   */
+  readonly profile?: LinkPageThumbnailProfile;
 }
 
 /**
@@ -80,7 +86,7 @@ export interface AppearanceCardProps {
  * workspace's, and the picker says so. A page moved to a template by the move says so once, with a way to pick
  * another and a way to keep it.
  */
-export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceCardProps) {
+export function AppearanceCard({ theme, onChange, refusal, extras, profile }: AppearanceCardProps) {
   const [removing, setRemoving] = useState<PhotoSlot | undefined>(undefined);
   const pickerRef = useRef<HTMLDivElement>(null);
   const variables = extras?.variables ?? [];
@@ -139,7 +145,14 @@ export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceC
                 name: template.name,
                 description: template.text,
                 thumbnail: (
-                  <LinkPageThumbnail theme={themeForTemplate(template.id, theme)} variables={variables} size="large" />
+                  <LinkPageThumbnail
+                    theme={themeForTemplate(template.id, theme)}
+                    variables={variables}
+                    size="large"
+                    {...(profile === undefined
+                      ? {}
+                      : { profile: { ...profile, ...(coverSrc === undefined ? {} : { cover: coverSrc }) } })}
+                  />
                 ),
               }))}
               onChange={(picked) => {

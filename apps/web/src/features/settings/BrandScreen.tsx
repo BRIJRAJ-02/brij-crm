@@ -28,7 +28,16 @@ import {
 } from '@crm/ui';
 import { useMemo, useState } from 'react';
 import { BRAND_LOGO_PICK_MAX_BYTES, BRAND_PHOTO_TYPES, preparePhoto } from '../link-page/photo-prep.ts';
+import { strings as pageStrings } from '../link-page/strings.ts';
 import { strings } from './brand-strings.ts';
+
+/** Each template's one line, as the link page's picker says it (spec 0068, AC-6804). */
+const TEMPLATE_TEXT: Readonly<Record<PageTemplate, string>> = {
+  classic: pageStrings.templateClassicText,
+  studio: pageStrings.templateStudioText,
+  night: pageStrings.templateNightText,
+  split: pageStrings.templateSplitText,
+};
 import { SettingsPage } from './SettingsPage.tsx';
 
 /** Props for the Brand page. */
@@ -198,12 +207,29 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
                 <TileGrid
                   variant="choice"
                   label={strings.template}
+                  showsDescription
+                  keepsPicture
+                  pictureSize="large"
                   value={kit.template}
                   tiles={TEMPLATES.map((template) => ({
                     id: template.id,
                     name: template.name,
+                    description: TEMPLATE_TEXT[template.id],
                     isDisabled: !canEdit,
-                    thumbnail: <LinkPageThumbnail theme={themeForTemplate(template.id, DEFAULT_PAGE_THEME)} />,
+                    // The template as a page in the kit's own colour and logo, the same large picture the link page's
+                    // picker draws (spec 0068, AC-6804).
+                    thumbnail: (
+                      <LinkPageThumbnail
+                        theme={themeForTemplate(template.id, DEFAULT_PAGE_THEME)}
+                        size="large"
+                        {...(colours === undefined ? {} : { variables: colours.variables })}
+                        profile={{
+                          name: strings.sampleHost,
+                          ...(logoSrc === undefined ? {} : { logo: logoSrc }),
+                          rows: [strings.sampleMeeting, strings.sampleHeadline],
+                        }}
+                      />
+                    ),
                   }))}
                   onChange={(picked) => {
                     const found = TEMPLATES.find((template) => template.id === picked);
