@@ -104,6 +104,12 @@ export interface FormStrings {
   readonly bookATime: string;
   /** A step form's place: "Step 2 of 3". */
   readonly stepOf: (step: number, steps: number) => string;
+  /**
+   * Where the visitor is on a form whose answers can change how many steps are left (spec 0063, AC-6304):
+   * the step they are on, and no total, because no honest total exists yet.
+   */
+  readonly stepNumber: (step: number) => string;
+  readonly questionNumber: (question: number) => string;
   /** A one at a time form's place, for screen readers: "2 of 7" (AC-1034). */
   readonly questionOf: (question: number, questions: number) => string;
   /** Back to the previous step. */
@@ -238,6 +244,8 @@ const EN: FormStrings = {
   stayHere: 'Stay here',
   bookATime: 'Book a time',
   stepOf: (step, steps) => `Step ${String(step)} of ${String(steps)}`,
+  stepNumber: (step) => `Step ${String(step)}`,
+  questionNumber: (question) => `Question ${String(question)}`,
   questionOf: (question, questions) => `${String(question)} of ${String(questions)}`,
   back: 'Back',
   next: 'Continue',

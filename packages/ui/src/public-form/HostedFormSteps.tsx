@@ -195,8 +195,27 @@ export function HostedFormSteps({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a new pick starts the pause; nothing else does
   }, [picks]);
-  const place =
-    layout === 'conversational' ? words.questionOf(index + 1, groups.length) : words.stepOf(index + 1, groups.length);
+  // A jump still ahead changes how many steps are left, so there is no total to promise yet (AC-6304). Saying
+  // "Step 1 of 3" and then giving them two is worse than saying "Step 1" and counting up: a total that moves
+  // under someone is a promise broken, where a number without one was never a promise made.
+  //
+  // Steps *after* this one, not this one: a jump on the step they are reading has already been decided by the
+  // answers they have given, which is what the path shown is. Once nothing ahead can jump, the count is certain
+  // and the total comes back — which is why the last step always carries one.
+  const ahead = new Set(groups.slice(index + 1).flatMap((group) => (group.id === undefined ? [] : [group.id])));
+  const isCertain =
+    layout === 'conversational'
+      ? !groups
+          .slice(index + 1)
+          .some((group) => group.questions.some((question) => (question.jumps?.length ?? 0) > 0))
+      : !(form.steps ?? []).some((step) => step.id !== undefined && ahead.has(step.id) && (step.jumps?.length ?? 0) > 0);
+  const place = isCertain
+    ? layout === 'conversational'
+      ? words.questionOf(index + 1, groups.length)
+      : words.stepOf(index + 1, groups.length)
+    : layout === 'conversational'
+      ? words.questionNumber(index + 1)
+      : words.stepNumber(index + 1);
   const isOpen = layout === 'conversational';
   // A step's title names its questions: a heading a level under the form's.
   const StepTitle = mode === 'page' ? 'h2' : 'h3';

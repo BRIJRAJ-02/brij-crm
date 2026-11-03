@@ -80,8 +80,11 @@ describe('jumps, recall and endings on the page (spec 0063, AC-6313, AC-6315, AC
       },
     });
 
-    // Three steps to start with.
-    await expect.element(page.getByText('Step 1 of 3').first()).toBeVisible();
+    // No total here, and this case is why (AC-6304): step 2 can jump to an ending, so the three steps the form
+    // holds are not three steps this visitor will be given. The old line promised "Step 1 of 3" and then handed
+    // them two, which is the promise this form cannot keep. Counting up keeps none.
+    await expect.element(page.getByText('Step 1').first()).toBeVisible();
+    expect(host.textContent).not.toContain('Step 1 of 3');
     await userEvent.fill(page.getByLabelText('Your name'), '<b>Ada</b>');
     await userEvent.click(page.getByRole('button', { name: 'Continue' }));
 
