@@ -809,6 +809,7 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     // The owner's own page, rewritten by its template. No params: what matters is that it happened and to which
     // page, and the parts are in the row for anyone reading it closely.
     case 'managed_page.propagated':
+      return { ...base, action, target: thing('booking_page', names.bookingPages), params: {}, changes: [] };
     // A one-time link made or revoked (spec 0062, AC-6204): the page only; the link's id and uses stay in the row.
     case 'booking_page.link_created':
     case 'booking_page.link_revoked':

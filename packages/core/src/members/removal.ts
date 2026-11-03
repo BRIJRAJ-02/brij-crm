@@ -182,6 +182,7 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   booking_hosts_member:
     'their bookings stay for admins to hand on; round robin ones are reseated by the worker (AC-749)',
   bookings_no_show_by: 'history: who marked a booking a no show',
+  bookings_decided_by: 'history: who confirmed or declined a booking request (spec 0062, AC-6203)',
   automations_deleted_by: 'history: who deleted an automation',
   reports_creator: 'a report is shared: it stays for everyone who can read it, and views.manage holders change it',
   member_onboarding_member: 'their first run answers (spec 0036): nobody reads them, in the app or after',
