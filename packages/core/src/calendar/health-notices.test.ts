@@ -234,6 +234,7 @@ describe('what a colleague’s calendar reads carry (AC-1425)', () => {
     );
     const health = await readCalendarHealth(t.as(t.owner, 'owner'), { memberIds: [t.bea] });
     expect(health).toEqual([{ memberId: t.bea, status: 'reconnect', since: expect.any(String) as string }]);
-    expect(JSON.stringify(health)).not.toMatch(/gmail|secret|503|primary/i);
+    // `503` as a word: a random id may hold those digits (it failed once on `…3ba225035ef4`).
+    expect(JSON.stringify(health)).not.toMatch(/gmail|secret|\b503\b|primary/i);
   });
 });
