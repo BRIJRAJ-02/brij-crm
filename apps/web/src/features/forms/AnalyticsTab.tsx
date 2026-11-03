@@ -15,16 +15,7 @@ import type {
   FormView,
 } from '@crm/data';
 import { useFormAnalytics } from '@crm/data/react';
-import {
-  EmptyState,
-  FieldGroup,
-  SegmentedControl,
-  Separator,
-  Skeleton,
-  Stats,
-  Table,
-  type StatItem,
-} from '@crm/ui';
+import { EmptyState, FieldGroup, SegmentedControl, Separator, Skeleton, Stats, Table, type StatItem } from '@crm/ui';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -337,7 +328,10 @@ export function useQuestionStats(view: FormAnalyticsHeld | undefined): ReadonlyM
       if (row.reached === 0) return [];
       const answered = percent(row.answered, row.reached);
       // The card has room for the percentage only, so the tooltip carries what it is a percentage of.
-      const stat = { stat: strings.analyticsChip(answered), statTitle: strings.analyticsReached(answered, figure(row.reached)) };
+      const stat = {
+        stat: strings.analyticsChip(answered),
+        statTitle: strings.analyticsReached(answered, figure(row.reached)),
+      };
       return [[row.questionId, stat]] as const;
     });
     return entries.length === 0 ? undefined : new Map(entries);
