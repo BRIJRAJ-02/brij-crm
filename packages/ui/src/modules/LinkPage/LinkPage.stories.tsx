@@ -1084,6 +1084,57 @@ export const StudioWithCover: Story = {
 };
 
 /**
+ * Classic and Night with a cover photo (spec 0068, AC-6802): their cover is optional, so each draws the cover header
+ * once the page has one, Classic as a modest band and Night as the usual one, and its own centred header without.
+ */
+function withCoverIn(template: 'classic' | 'night'): Story {
+  return {
+    parameters: { crm: { screenshot: false } },
+    args: { person: PERSON, theme: { ...PLAIN, template }, photos: { cover: true }, variables: ORANGE_BRAND },
+    render: (args) => (
+      <Stage width="fill" height="page">
+        <div ref={withCover}>
+          <LinkPage {...args} blocks={anishBlocks()} />
+        </div>
+      </Stage>
+    ),
+    play: async ({ canvasElement }) => {
+      settleEntrance(canvasElement);
+      const root = canvasElement.querySelector('[data-template]');
+      await expect(root).toHaveAttribute('data-page-header', 'cover');
+      const band = root?.querySelector('header > [class*="-cover"]');
+      await expect(band).not.toBeNull();
+      // A band the width of the column and shorter than it is wide: Classic's 4:1, Night's 3:1.
+      const box = band?.getBoundingClientRect();
+      const ratio = (box?.width ?? 0) / Math.max(1, box?.height ?? 0);
+      await expect(Math.round(ratio)).toBe(template === 'classic' ? 4 : 3);
+    },
+  };
+}
+
+/** Classic with a cover photo: a modest band above the centred face. */
+export const ClassicWithCover: Story = withCoverIn('classic');
+/** Night with a cover photo: the cover header on the ink ground. */
+export const NightWithCover: Story = withCoverIn('night');
+
+/** Classic with no cover photo keeps its own centred header, with no band. */
+export const ClassicWithoutCover: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { person: PERSON, theme: { ...PLAIN, template: 'classic' }, photos: {}, variables: ORANGE_BRAND },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={anishBlocks().slice(0, 2)} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    settleEntrance(canvasElement);
+    const root = canvasElement.querySelector('[data-template]');
+    await expect(root).toHaveAttribute('data-page-header', 'centred');
+    await expect(root?.querySelector('header > [class*="-cover"]')).toBeNull();
+  },
+};
+
+/**
  * Split with everything its panel holds (spec 0068): the logo, the name, whether the place is open and Book, on the
  * page's own ground with no card around them; the blocks beside it on a wide page, under it on a phone.
  */

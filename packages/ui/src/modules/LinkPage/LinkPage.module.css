@@ -1627,6 +1627,11 @@
     aspect-ratio: 5 / 2;
   }
 
+  /* Classic's cover, when the page has one (AC-6802): a modest band, so the clean column stays the page's lead. */
+  .root[data-template='classic'] .cover {
+    aspect-ratio: 4 / 1;
+  }
+
   /* Every template: rows press in and lift a touch under the pointer (AC-6803). */
   .root[data-template] .block {
     transition:

@@ -428,16 +428,26 @@ export function drawnLook(look: PageLook): PageLook {
 }
 
 /**
+ * The header a drawn look wears (spec 0068, AC-6802): a cover the page has no photo for draws `centred`, and Classic
+ * and Night, whose cover is optional, wear the cover header exactly when the page has one (Classic's band a modest
+ * one, Night's the usual), their own centred header otherwise.
+ */
+function headerOf(look: PageLook, hasCover: boolean): PageLook['header'] {
+  if (look.template === 'classic' || look.template === 'night') return hasCover ? 'cover' : look.header;
+  return look.header === 'cover' && !hasCover ? 'centred' : look.header;
+}
+
+/**
  * The attributes a look becomes, and `data-theme`, which pins light or dark for everything inside this root: the
  * token layer only follows the system where no `data-theme` is set, so a visitor's own phone or app choice never
  * decides somebody else's page (AC-5406). `system` (spec 0060, AC-15) is the one mode that sets none, so the page
- * takes the visitor's own. A photo ground or cover the page has no photo for draws as `plain` or `centred`.
+ * takes the visitor's own. A photo ground the page has no photo for draws as `plain`, and the header is `headerOf`.
  */
 function lookAttributes(stored: PageLook | undefined, photos: LinkPagePhotos | undefined) {
   if (stored === undefined) return {};
   const look = drawnLook(stored);
   const ground = look.ground === 'image' && photos?.ground !== true ? 'plain' : look.ground;
-  const header = look.header === 'cover' && photos?.cover !== true ? 'centred' : look.header;
+  const header = headerOf(look, photos?.cover === true);
   return {
     ...(look.mode === 'system' ? {} : { 'data-theme': look.mode }),
     'data-page-ground': ground,
@@ -454,8 +464,14 @@ function lookAttributes(stored: PageLook | undefined, photos: LinkPagePhotos | u
   };
 }
 
-/** Every photo, for a thumbnail: a gallery tile shows what its look draws once the photos are there. */
-const ALL_PHOTOS: LinkPagePhotos = { cover: true, ground: true };
+/**
+ * The photos a thumbnail draws: a gallery tile shows what its look draws once the photos are there, except a cover
+ * where it is optional (Classic, Night), which the miniature draws only when the owner's own page has one.
+ */
+function thumbnailPhotos(look: PageLook, cover: string | undefined): LinkPagePhotos {
+  const isOptional = look.template === 'classic' || look.template === 'night';
+  return { cover: !isOptional || cover !== undefined, ground: true };
+}
 
 /** How many skeleton blocks stand in while the page loads. */
 const LOADING_BLOCKS = 5;
@@ -1762,13 +1778,14 @@ function ThumbnailLook({ theme, variables, detail, size, profile }: LinkPageThum
   const picture = safeImageSrc(profile?.picture);
   const logo = safeImageSrc(profile?.logo);
   const cover = safeImageSrc(profile?.cover);
+  const photos = thumbnailPhotos(look, cover);
   const rows = profile?.rows?.slice(0, THUMBNAIL_ROWS) ?? [];
   return (
     <div
       className={styles.root}
       data-thumbnail
       data-size={size}
-      {...lookAttributes(theme, ALL_PHOTOS)}
+      {...lookAttributes(theme, photos)}
       ref={usePageVariables(variables)}
       aria-hidden="true"
       inert
@@ -1783,7 +1800,7 @@ function ThumbnailLook({ theme, variables, detail, size, profile }: LinkPageThum
         </div>
       ) : (
         <div className={styles.thumb} data-profile={profile === undefined ? undefined : ''}>
-          {look.header === 'cover' && (
+          {headerOf(look, photos.cover === true) === 'cover' && (
             <span className={styles.thumbCover}>
               {cover !== undefined && <img className={styles.thumbPhoto} src={cover} alt={strings.thumbAlt} />}
             </span>
@@ -2033,7 +2050,7 @@ export function LinkPage({
               ) : (
                 <>
                   {/* The cover photo (spec 0060, AC-13): a band the face overlaps, drawn from the page's own stylesheet. */}
-                  {drawn?.header === 'cover' && photos?.cover === true && (
+                  {drawn !== undefined && headerOf(drawn, photos?.cover === true) === 'cover' && (
                     <span className={styles.cover} aria-hidden="true" />
                   )}
                   {drawn?.avatar !== 'none' && (
