@@ -1112,6 +1112,14 @@ function Blocks({
       <AppearanceCard
         theme={theme}
         onChange={chooseTheme}
+        // The template pictures draw this page: its owner's name and face, and its first rows (spec 0068, AC-6804).
+        profile={{
+          name: profile.name.trim() || handle,
+          ...(profile.image === undefined || profile.pictureHidden === true ? {} : { picture: profile.image }),
+          rows: previewBlocks
+            .flatMap((block) => ('title' in block && typeof block.title === 'string' ? [block.title] : []))
+            .slice(0, 3),
+        }}
         {...(themeRefusal === undefined
           ? lookRefusal === undefined
             ? {}

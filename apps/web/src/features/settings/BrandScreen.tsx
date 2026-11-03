@@ -203,7 +203,25 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
       <PreviewLayout
         bodyWidth="form"
         previewShare="wide"
-        {...(kit !== undefined && !canEdit ? { notices: <Callout tone="info">{strings.readOnly}</Callout> } : {})}
+        {...(kit !== undefined && !canEdit
+          ? { notices: <Callout tone="info">{strings.readOnly}</Callout> }
+          : kit?.templateDraft !== undefined
+            ? {
+                // A template waits for Publish (owner, 4 Nov 2026): every public page changes at once when it goes,
+                // so the bar heads the page, where the editors' bars sit.
+                notices: (
+                  <>
+                    <PublishBar
+                      status="draft"
+                      changes={[strings.templateChange(nameOf(kit.template), nameOf(kit.templateDraft))]}
+                      onPublish={publishTemplate}
+                      onDiscard={discardTemplate}
+                    />
+                    <Callout tone="info">{strings.templatePublishNote}</Callout>
+                  </>
+                ),
+              }
+            : {})}
         preview={preview}
         previewControls={
           <SegmentedControl
@@ -268,18 +286,7 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
                 />
               )}
             </SettingsRow>
-            {/* A template waits for Publish (owner, 4 Nov 2026): every public page changes at once when it goes. */}
-            {kit?.templateDraft !== undefined && canEdit && (
-              <>
-                <Callout tone="info">{strings.templatePublishNote}</Callout>
-                <PublishBar
-                  status="draft"
-                  changes={[strings.templateChange(nameOf(kit.template), nameOf(kit.templateDraft))]}
-                  onPublish={publishTemplate}
-                  onDiscard={discardTemplate}
-                />
-              </>
-            )}
+
             <SettingsRow title={strings.logo} description={strings.logoText} control="field">
               {kit === undefined ? (
                 <Skeleton shape="field" />
