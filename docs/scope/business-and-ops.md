@@ -93,3 +93,10 @@ Salons, spas, barbers, clinics, studios and restaurants take visits through one 
   - [ ] B7 Table seating preset
 Spec [0066](../specs/0066-business-booking/index.md)
 
+### 70. Professional pages and Publish · planned
+Every public page uses one of four finished templates (Classic, Studio, Night, Split), and every change to link, booking, business, event and menu pages waits for Publish, with versions.
+**Done when:** an owner picks a template and accent and every public page follows; a booking page edit is invisible to guests until Publish; any of the last 20 versions can be restored; existing pages moved to the nearest template with a note.
+- [x] Design it (spec): `/architect professional pages`
+- [ ] Build it: `/develop professional pages`
+Spec [0068](../specs/0068-professional-pages-publish/index.md)
+

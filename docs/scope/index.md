@@ -31,7 +31,7 @@ The phased plan from 23 October 2026 (Phases 0 to 6, and what waits on you) is i
 - [Team and security](team-and-security.md): sign in and first run, workspaces, members, teams, access rules, account security, history and privacy · 2 done, 2 in progress, 1 planned
 - [Collaboration](collaboration.md): presence, shared notes, notifications, comments · 2 in progress, 2 planned
 - [Data in and out](data-in-out.md): import, export, merge, files, search, API, webhooks, backups · 2 in progress, 5 planned
-- [Business and operations](business-and-ops.md): monitoring, scale, plans, operator console, onboarding, billing, the Hospitality apps, business booking · 2 done, 2 in progress, 5 planned
+- [Business and operations](business-and-ops.md): monitoring, scale, plans, operator console, onboarding, billing, the Hospitality apps, business booking, professional pages · 2 done, 2 in progress, 6 planned
 - [Integrations](integrations.md): calendar, booking, round robin, availability, lead routing, team calendar, forms, Slack, Zapier, other CRMs, and last email and sequences · 4 done, 2 in progress, 6 planned, 1 dropped
 - [Intelligence](intelligence.md): automations (the AI features were dropped) · 1 planned, 2 dropped
 
@@ -99,6 +99,7 @@ Build order is the order of the rows below (a feature added later takes the next
 | 67 | Company logos and company from email domain | Slice 14 | [Integrations](integrations.md) | in-progress |
 | 68 | Hospitality suite | Slice 19 | [Business and operations](business-and-ops.md) | planned |
 | 69 | Business booking | Slice 19 | [Business and operations](business-and-ops.md) | planned |
+| 70 | Professional pages and Publish | Slice 19 | [Business and operations](business-and-ops.md) | planned |
 | 48 | Forms | Slice 15 | [Integrations](integrations.md) | in-progress |
 | 49 | Slack and Zapier | Slice 15 | [Integrations](integrations.md) | planned |
 | 50 | CRM connectors | Slice 16 | [Integrations](integrations.md) | planned |
