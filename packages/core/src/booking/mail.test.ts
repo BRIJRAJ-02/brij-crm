@@ -167,10 +167,17 @@ describe('changes (AC-638 to AC-640)', () => {
     const target = guestTarget(await enterBookingByToken({ db }, b.manageToken));
     await addGuests(target, b.deps, { emails: ['bob@navy.example'] });
     const invited = await b.prepare('guests');
+    // The host hears who the guest invited, with no calendar file: their own event is unchanged.
     expect(invited.messages.map((mail) => [mail.to, mail.subject])).toEqual([
       ['bob@navy.example', 'Invitation: Intro call with Ada Host'],
+      ['ada@example.com', 'Guests added: Intro call with Grace Hopper'],
     ]);
     expect(invited.messages[0]?.ics?.method).toBe('REQUEST');
+    expect(invited.messages[1]?.intro).toBe(
+      'Grace Hopper invited bob@navy.example to Intro call. They have the calendar file.',
+    );
+    expect(invited.messages[1]?.ics).toBeUndefined();
+    expect(JSON.stringify(invited.messages[1])).not.toContain(b.manageToken);
     // Not on the calendar event, so a move reaches their calendar through our file.
     await moveBooking(target, b.deps, { start: new Date('2026-11-02T10:00:00.000Z') });
     const moved = await b.prepare('moved');
@@ -220,6 +227,7 @@ describe('a guest taken off (QA Q81)', () => {
     const again = await b.prepare('guests');
     expect(again.messages.map((mail) => [mail.to, mail.subject])).toEqual([
       ['ann@navy.example', 'Invitation: Intro call with Ada Host'],
+      ['ada@example.com', 'Guests added: Intro call with Grace Hopper'],
     ]);
     await markGuestsTold(b.system, b.bookingId, again);
     // Taken off a second time, nothing more goes: removing and adding back can't be used to mail them again and again.
@@ -238,6 +246,13 @@ describe('a guest taken off (QA Q81)', () => {
       preview: 'Ada Host took you off Intro call.',
       intro: 'Ada Host took you off Intro call. Nothing else to do.',
     });
+  });
+
+  it('sends the host nothing when a host invited the guest', async () => {
+    const b = await booked(NO_CALENDAR);
+    await markGuestsTold(b.system, b.bookingId, await b.prepare('confirmed'));
+    await addGuests(hostTarget(b.host, b.bookingId), b.deps, { emails: ['bob@navy.example'] });
+    expect((await b.prepare('guests')).messages.map((mail) => mail.to)).toEqual(['bob@navy.example']);
   });
 
   it('says nothing to someone taken off before their invitation went', async () => {
