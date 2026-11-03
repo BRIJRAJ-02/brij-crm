@@ -18,7 +18,7 @@
 //   GET  /api/public/booking/:publicKey/viewer   who the visitor is (spec 0028)
 //   GET  /api/public/booking/:publicKey/connect  ?return: a guest connects Google for this visit
 //   GET  /api/public/booking/connect/callback    Google's answer: the guest's sealed cookie (or on to the landing)
-//   GET  /api/public/booking/connect/land        ?code&t: on the public host, the guest's cookie set there
+//   GET  /api/public/booking/connect/land        ?t&s: on the public host, the kept grant's cookie set there
 //   POST /api/public/booking/connect/forget      drops the guest's calendar
 //   GET  /api/public/handles/:handle             ?after&q: a link page and a page of its blocks (spec 0051)
 //   POST /api/public/handles/:handle/press       a press on a block, the id as text (a beacon), always 204
@@ -109,6 +109,9 @@ import {
   managedBookingIcs,
   readManagedBooking,
   readPublicSlots,
+  putGuestHandoff,
+  takeGuestHandoff,
+  type GuestHandoff,
   type IcsOrigin,
 } from '@crm/core/public';
 import type { ManageLinkKey } from '@crm/core';
@@ -920,35 +923,42 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   const crossHost = publicOrigin !== connectAppOrigin;
   const guestHome = new URL('/', publicOrigin).toString();
 
-  /** Exchanges a guest's code, sets the guest cookie on this host, and sends them back to their page. */
-  const finishConnect = async (
+  /** Exchanges a guest's code and seals the grant, or says why not. */
+  const exchangeGuest = async (
     c: Context<{ Variables: Variables }>,
-    visitor: NonNullable<PublicBookingServices['visitor']>,
     guest: NonNullable<VisitorDeps['guest']>,
     code: string,
-    path: string,
-  ): Promise<Response> => {
-    const back = (result: GuestConnectResult) => backTo(publicOrigin, path, result);
+  ): Promise<{ readonly sealed: GuestHandoff } | { readonly result: GuestConnectResult }> => {
     try {
       const grant = await guest.calendar.exchange(code, guestRedirectUri(connectAppOrigin));
       const sealed = sealGuest(guest.keys, grant, services.now?.() ?? new Date());
       if (sealed === undefined) {
         log.warn('booking.guest_connect.failed', { requestId: c.get('requestId'), code: 'COOKIE_TOO_LARGE' });
-        return c.redirect(back('failed'));
+        return { result: 'failed' };
       }
-      setCookie(c, cookieName(GUEST_COOKIE, visitor.secure), sealed.value, {
-        path: GUEST_COOKIE_PATH,
-        httpOnly: true,
-        sameSite: 'Lax',
-        secure: visitor.secure,
-        maxAge: sealed.maxAge,
-      });
-      return c.redirect(back('connected'));
+      return { sealed: { sealed: sealed.value, maxAge: sealed.maxAge } };
     } catch (error) {
       if (!isProviderError(error)) throw error;
       log.warn('booking.guest_connect.failed', { requestId: c.get('requestId'), code: error.code });
-      return c.redirect(back(error.code === 'CALENDAR_SCOPE_DECLINED' ? 'scope' : 'failed'));
+      return { result: error.code === 'CALENDAR_SCOPE_DECLINED' ? 'scope' : 'failed' };
     }
+  };
+
+  /** Sets the guest cookie on the host this request reached. */
+  const setGuestCookie = (c: Context<{ Variables: Variables }>, secure: boolean, handoff: GuestHandoff): void => {
+    setCookie(c, cookieName(GUEST_COOKIE, secure), handoff.sealed, {
+      path: GUEST_COOKIE_PATH,
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure,
+      maxAge: handoff.maxAge,
+    });
+  };
+
+  /** Neither kept by a cache nor named to the next site: the connect's hops carry one use ids and tickets. */
+  const unkept = (c: Context<{ Variables: Variables }>): void => {
+    c.header('cache-control', 'no-store');
+    c.header('referrer-policy', 'no-referrer');
   };
 
   // The guest connect's fixed addresses (before the page routes, so `connect` is never read as a public key).
@@ -988,30 +998,41 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (code === undefined || code.length > 2048 || visitor.stateKey === undefined) {
       return c.redirect(back('failed'));
     }
-    if (!crossHost) return finishConnect(c, visitor, guest, code, path);
-    // The page is on the public host and the guest cookie has to be set there, so the code goes on to that host's
-    // landing (4 Nov 2026), tied to the browser that started (the landing nonce's digest) and to this code.
+    // On a public host the landing there needs the starting browser's nonce digest: without one, nothing is exchanged.
     const land = typeof payload.l === 'string' && LAND_DIGEST.test(payload.l) ? payload.l : undefined;
-    if (land === undefined) {
+    if (crossHost && land === undefined) {
       log.warn('booking.guest_connect.refused', { requestId: c.get('requestId'), reason: 'land' });
       return c.redirect(back('failed'));
     }
+    const exchanged = await exchangeGuest(c, guest, code);
+    if ('result' in exchanged) return c.redirect(back(exchanged.result));
+    if (!crossHost || land === undefined) {
+      setGuestCookie(c, visitor.secure, exchanged.sealed);
+      return c.redirect(back('connected'));
+    }
+    // The page is on the public host and the guest cookie has to be set there (4 Nov 2026). The code never leaves this
+    // host: the sealed grant is kept here once, for two minutes, under a random id's digest, and the hop carries only
+    // the id and a signed ticket tying it to the starting browser's nonce and the page's address.
+    const id = randomBytes(32).toString('base64url');
+    await putGuestHandoff({ db }, digestOf(id), exchanged.sealed, GUEST_LAND_SECONDS);
     const ticket = signValue(
       visitor.stateKey,
       GUEST_LAND_VERSION,
-      { r: path, l: land, c: digestOf(code) },
+      { r: path, l: land, h: digestOf(id) },
       GUEST_LAND_SECONDS,
       services.now?.() ?? new Date(),
     );
     const landing = new URL(GUEST_LAND_PATH, publicOrigin);
-    landing.searchParams.set('code', code);
-    landing.searchParams.set('t', ticket);
+    landing.searchParams.set('t', id);
+    landing.searchParams.set('s', ticket);
+    unkept(c);
     return c.redirect(landing.toString());
   });
 
-  // The landing on the public host: the browser that started (its landing nonce), the code the callback read, then
-  // the guest cookie set on this host and the page's own address with `?calendar=`.
+  // The landing on the public host: the signed ticket, the browser that started (its landing nonce), then the kept
+  // grant taken once, the guest cookie set on this host and the page's own address with `?calendar=`.
   app.get('/public/booking/connect/land', async (c) => {
+    unkept(c);
     const visitor = services.visitor;
     if (limited([[`booking:connect:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]) !== undefined) {
       return c.redirect(guestHome);
@@ -1023,24 +1044,27 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     const ticket =
       visitor?.stateKey === undefined
         ? undefined
-        : verifyValue(visitor.stateKey, GUEST_LAND_VERSION, c.req.query('t'), services.now?.() ?? new Date());
+        : verifyValue(visitor.stateKey, GUEST_LAND_VERSION, c.req.query('s'), services.now?.() ?? new Date());
     const path = typeof ticket?.r === 'string' && returnShape(ticket.r) !== undefined ? ticket.r : undefined;
     if (path === undefined) return c.redirect(guestHome);
     const back = (result: GuestConnectResult) => backTo(publicOrigin, path, result);
-    const guest = visitor?.guest;
-    if (visitor === undefined || guest === undefined) return c.redirect(back('off'));
-    const code = c.req.query('code');
+    if (visitor === undefined) return c.redirect(back('off'));
+    const id = c.req.query('t');
     const sameBrowser = nonce !== undefined && typeof ticket?.l === 'string' && sameDigest(digestOf(nonce), ticket.l);
-    const sameCode =
-      code !== undefined &&
-      code.length <= 2048 &&
-      typeof ticket?.c === 'string' &&
-      sameDigest(digestOf(code), ticket.c);
-    if (!sameBrowser || !sameCode) {
+    const sameId =
+      id !== undefined && id.length <= 64 && typeof ticket?.h === 'string' && sameDigest(digestOf(id), ticket.h);
+    if (!sameBrowser || !sameId) {
       log.warn('booking.guest_connect.refused', { requestId: c.get('requestId'), reason: 'land' });
       return c.redirect(back('failed'));
     }
-    return finishConnect(c, visitor, guest, code, path);
+    // Once only: a second landing, or one after the two minutes, finds nothing.
+    const handoff = await takeGuestHandoff({ db }, digestOf(id));
+    if (handoff === undefined) {
+      log.warn('booking.guest_connect.refused', { requestId: c.get('requestId'), reason: 'taken' });
+      return c.redirect(back('failed'));
+    }
+    setGuestCookie(c, visitor.secure, handoff);
+    return c.redirect(back('connected'));
   });
 
   app.post('/public/booking/connect/forget', async (c) => {
@@ -1202,10 +1226,42 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   app.get('/public/booking/:publicKey/connect', async (c) => {
     const key = c.req.param('publicKey');
     const given = c.req.query('return');
-    // Nothing is read for a return that can't be one of our pages.
-    if (returnShape(given) === undefined) return c.redirect(guestHome);
+    unkept(c);
+    // Nothing is read for a return that can't be one of our pages, and the hops below read nothing at all.
+    if (given === undefined || returnShape(given) === undefined) return c.redirect(guestHome);
+    const visitor = services.visitor;
+    const via = c.req.query('via');
+    // Google sends the visitor back to the app's host, so the state cookie has to be set there. A page opened on
+    // another of our hosts (a booking page on timefix.com) set it on that host instead, the callback couldn't read
+    // it, and every first connect failed (owner, 2 November 2026). So the start always hops through the app's own
+    // address, marked, before it sets anything there: behind the edge the function can't trust which host it was
+    // asked on, and the marks mean the hops can never loop. With a public host (4 Nov 2026) the first leg hops to it
+    // first (`via=pub`), wherever it was asked, and that leg leaves a landing nonce there, which the callback's
+    // landing on the same host checks before it sets the guest cookie on the visitor's own host.
+    if (via !== 'app') {
+      const here = new URL(c.req.url);
+      here.searchParams.delete('land');
+      if (crossHost && via !== 'pub') {
+        here.searchParams.set('via', 'pub');
+        return c.redirect(new URL(`${here.pathname}${here.search}`, publicOrigin).toString());
+      }
+      here.searchParams.set('via', 'app');
+      if (crossHost && visitor !== undefined) {
+        const landNonce = randomBytes(18).toString('base64url');
+        setCookie(c, cookieName(GUEST_LAND_COOKIE, visitor.secure), landNonce, {
+          path: GUEST_CONNECT_PATH,
+          httpOnly: true,
+          sameSite: 'Lax',
+          secure: visitor.secure,
+          maxAge: GUEST_STATE_SECONDS,
+        });
+        here.searchParams.set('land', digestOf(landNonce));
+      }
+      return c.redirect(new URL(`${here.pathname}${here.search}`, connectAppOrigin).toString());
+    }
+    // Only the last leg reads anything, so only it counts; refused, the visitor goes back to their own page.
     if (limited([[`booking:connect:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]) !== undefined) {
-      return c.redirect(guestHome);
+      return c.redirect(backTo(publicOrigin, given, 'failed'));
     }
     // The return is the address the visitor is on: `/b/<key>`, or a handle address only when it names this page.
     const back = await returnPath(key, given, async (handle, slug) => {
@@ -1221,30 +1277,6 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       }
     });
     if (back === undefined) return c.redirect(guestHome);
-    const visitor = services.visitor;
-    // Google sends the visitor back to the app's host, so the state cookie has to be set there. A page opened on
-    // another of our hosts (a booking page on timefix.com) set it on that host instead, the callback couldn't read
-    // it, and every first connect failed (owner, 2 November 2026). So the start always hops once through the app's
-    // own address, marked, before it sets anything there: behind the edge the function can't trust which host it was
-    // asked on, and the mark means the hop can never loop. On a public host this first leg leaves a landing nonce,
-    // which the callback's landing there checks before it sets the guest cookie on the visitor's own host.
-    if (c.req.query('via') !== 'app') {
-      const here = new URL(c.req.url);
-      here.searchParams.set('via', 'app');
-      here.searchParams.delete('land');
-      if (crossHost && visitor !== undefined) {
-        const landNonce = randomBytes(18).toString('base64url');
-        setCookie(c, cookieName(GUEST_LAND_COOKIE, visitor.secure), landNonce, {
-          path: GUEST_CONNECT_PATH,
-          httpOnly: true,
-          sameSite: 'Lax',
-          secure: visitor.secure,
-          maxAge: GUEST_STATE_SECONDS,
-        });
-        here.searchParams.set('land', digestOf(landNonce));
-      }
-      return c.redirect(new URL(`${here.pathname}${here.search}`, connectAppOrigin).toString());
-    }
     const guest = visitor?.guest;
     if (visitor === undefined || guest === undefined || visitor.stateKey === undefined) {
       return c.redirect(backTo(publicOrigin, back, 'off'));

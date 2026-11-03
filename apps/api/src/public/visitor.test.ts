@@ -3,6 +3,7 @@
 // Google for the visit (the signed state, the single use cookie, the return
 // path, a partial grant, forgetting), a signed in visitor's own calendar, the
 // host on their own page, and the overlay on slots, failing open.
+import { createHash } from 'node:crypto';
 import { decodeTokenKey, newId, providerError, type BookingCalendar, type BusyInterval } from '@crm/core';
 import { createFakeCalendarProvider } from '@crm/core/testing';
 import type { Database, IdentityStore } from '@crm/db';
@@ -36,6 +37,8 @@ let app: ReturnType<typeof createApp>;
 /** The same app with the public pages on their own origin, as Timefix serves them (timefix.com beside app.). */
 let pagesApp: ReturnType<typeof createApp>;
 const PAGES = 'https://pages.test';
+/** The public host app's clock, which a test moves on to let a ticket run out. */
+let pagesClock: Date;
 
 /** Busy times by workspace: the host's at noon, and a signed in visitor's where a test puts them. */
 const memberBusy = new Map<string, readonly BusyInterval[] | 'blocked' | 'broken'>();
@@ -82,11 +85,12 @@ const guest: GuestCalendar = {
 beforeAll(() => {
   ({ db, identity } = testConnections());
   app = buildApp(testEnv());
-  pagesApp = buildApp(testEnv({ BOOKING_PUBLIC_ORIGIN: PAGES }));
+  pagesClock = NOW;
+  pagesApp = buildApp(testEnv({ BOOKING_PUBLIC_ORIGIN: PAGES }), () => pagesClock);
 });
 
 /** The app on `env`, with the fake calendars. */
-function buildApp(env: ReturnType<typeof testEnv>): ReturnType<typeof createApp> {
+function buildApp(env: ReturnType<typeof testEnv>, now: () => Date = () => NOW): ReturnType<typeof createApp> {
   const fake = createFakeCalendarProvider({ now: () => NOW });
   const services = createCalendarServices(
     {
@@ -110,7 +114,7 @@ function buildApp(env: ReturnType<typeof testEnv>): ReturnType<typeof createApp>
       }),
       bookingCalendar: calendar,
       bookingLimiter: createMemoryLimiter(),
-      now: () => NOW,
+      now,
     },
     env,
   });
@@ -351,7 +355,17 @@ describe('the return address of a guest connect (4 Nov 2026)', () => {
     return { key, handle, path: `/${handle}/intro-call` };
   }
 
-  /** A connect started on the public host at `path`: the landing cookie, then Google's address and the state cookie. */
+  /** Whether a response is kept by no cache and names nothing to the next site. */
+  const unkept = (response: Response) => ({
+    cache: response.headers.get('cache-control'),
+    referrer: response.headers.get('referrer-policy'),
+  });
+  const UNKEPT = { cache: 'no-store', referrer: 'no-referrer' };
+
+  /**
+   * A connect started at `path`, wherever the browser asked first: the hop to the public host, its landing nonce, the
+   * hop to the app's host, then Google's address and the state cookie.
+   */
   async function startOnPages(key: string, path: string) {
     const first = await browse(
       `/api/public/booking/${key}/connect?return=${encodeURIComponent(path)}`,
@@ -359,46 +373,122 @@ describe('the return address of a guest connect (4 Nov 2026)', () => {
       'GET',
       pagesApp,
     );
-    const hop = new URL(first.headers.get('location') ?? '');
+    const toPages = new URL(first.headers.get('location') ?? '');
+    expect(toPages.origin).toBe(PAGES);
+    expect(toPages.searchParams.get('via')).toBe('pub');
+    // Nothing is set until the browser is on the public host.
+    expect(cookieOf(first, GUEST_LAND_COOKIE)).toBe('');
+    const onPages = await browse(`${toPages.pathname}${toPages.search}`, '', 'GET', pagesApp);
+    expect(unkept(onPages)).toEqual(UNKEPT);
+    const hop = new URL(onPages.headers.get('location') ?? '');
     expect(hop.origin).toBe(APP_URL);
+    expect(hop.searchParams.get('via')).toBe('app');
     expect(hop.searchParams.get('land')).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    const land = cookieOf(first, GUEST_LAND_COOKIE);
+    const land = cookieOf(onPages, GUEST_LAND_COOKIE);
     expect(land).not.toBe('');
     const onward = await browse(`${hop.pathname}${hop.search}`, '', 'GET', pagesApp);
+    expect(new URL(onward.headers.get('location') ?? '').origin).toBe('https://guest.fake');
     const state = new URL(onward.headers.get('location') ?? '').searchParams.get('state') ?? '';
     return { land, state, stateCookie: cookieOf(onward, GUEST_STATE_COOKIE) };
   }
 
-  it('brings a visitor on the public host back to the same handle address there, connected', async () => {
-    const { key, path } = await handlePage();
-    const { land, state, stateCookie } = await startOnPages(key, `${path}?d=30`);
-    const back = await browse(
-      `${GUEST_CALLBACK_PATH}?code=${encodeURIComponent('code:lin@navy.example')}&state=${encodeURIComponent(state)}`,
+  /** Google's answer for `email` to a start's state, on the app's host. */
+  const callback = (state: string, stateCookie: string, email: string) =>
+    browse(
+      `${GUEST_CALLBACK_PATH}?code=${encodeURIComponent(`code:${email}`)}&state=${encodeURIComponent(state)}`,
       stateCookie,
       'GET',
       pagesApp,
     );
-    // The callback is on the app's host: the code goes on to the public host's landing, and no cookie is set here.
+
+  it('brings a visitor back to the same handle address on the public host, connected, from either host', async () => {
+    const { key, path } = await handlePage();
+    const { land, state, stateCookie } = await startOnPages(key, `${path}?d=30`);
+    const back = await callback(state, stateCookie, 'lin@navy.example');
+    // The callback exchanged the code itself and keeps the grant; the hop carries only an id and a signed ticket.
     const landing = new URL(back.headers.get('location') ?? '');
     expect(`${landing.origin}${landing.pathname}`).toBe(`${PAGES}${GUEST_LAND_PATH}`);
+    expect([...landing.searchParams.keys()].toSorted()).toEqual(['s', 't']);
+    expect(landing.search).not.toContain('code');
+    expect(unkept(back)).toEqual(UNKEPT);
     expect(cookieOf(back, GUEST_COOKIE)).toBe('');
 
-    // Another browser (no landing nonce) or another code gets nothing.
+    // Another browser (no landing nonce), or the ticket with another id, gets nothing and takes nothing.
     const stranger = await browse(`${landing.pathname}${landing.search}`, '', 'GET', pagesApp);
     expect(stranger.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=failed`);
+    expect(unkept(stranger)).toEqual(UNKEPT);
     expect(cookieOf(stranger, GUEST_COOKIE)).toBe('');
     const swapped = new URL(landing);
-    swapped.searchParams.set('code', 'code:mallory@evil.example');
-    const otherCode = await browse(`${swapped.pathname}${swapped.search}`, land, 'GET', pagesApp);
-    expect(otherCode.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=failed`);
+    swapped.searchParams.set('t', 'A'.repeat(43));
+    const otherId = await browse(`${swapped.pathname}${swapped.search}`, land, 'GET', pagesApp);
+    expect(otherId.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=failed`);
 
     const landed = await browse(`${landing.pathname}${landing.search}`, land, 'GET', pagesApp);
     expect(landed.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=connected`);
+    expect(unkept(landed)).toEqual(UNKEPT);
     const guest = cookieOf(landed, GUEST_COOKIE);
     expect(guest).not.toBe('');
     expect(landed.headers.getSetCookie().some((each) => each.startsWith(`${GUEST_LAND_COOKIE}=;`))).toBe(true);
     const viewer = await browse(`/api/public/booking/${key}/viewer`, guest, 'GET', pagesApp);
     expect(await viewer.json()).toMatchObject({ viewer: { email: 'lin@navy.example', calendar: 'on' } });
+
+    // Once only: the same landing again, nonce and all, finds nothing.
+    const again = await browse(`${landing.pathname}${landing.search}`, land, 'GET', pagesApp);
+    expect(again.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=failed`);
+    expect(cookieOf(again, GUEST_COOKIE)).toBe('');
+  });
+
+  it('refuses an expired ticket, and a state passed as one', async () => {
+    const { key, path } = await handlePage();
+    const { land, state, stateCookie } = await startOnPages(key, path);
+    const landing = new URL((await callback(state, stateCookie, 'late@navy.example')).headers.get('location') ?? '');
+    pagesClock = new Date(NOW.getTime() + 3 * 60 * 1000);
+    try {
+      const late = await browse(`${landing.pathname}${landing.search}`, land, 'GET', pagesApp);
+      expect(late.headers.get('location')).toBe(`${PAGES}/`);
+      expect(cookieOf(late, GUEST_COOKIE)).toBe('');
+    } finally {
+      pagesClock = NOW;
+    }
+    const other = await startOnPages(key, path);
+    const asTicket = new URL(landing);
+    asTicket.searchParams.set('s', other.state);
+    const stateTicket = await browse(`${asTicket.pathname}${asTicket.search}`, other.land, 'GET', pagesApp);
+    expect(stateTicket.headers.get('location')).toBe(`${PAGES}/`);
+    const forged = await browse(`${GUEST_LAND_PATH}?t=x&s=gl1.e30.AAAA`, '', 'GET', pagesApp);
+    expect(forged.headers.get('location')).toBe(`${PAGES}/`);
+  });
+
+  it('fails a callback with no landing nonce, and one whose nonce the browser never held', async () => {
+    const { key, path } = await handlePage();
+    // A start straight to the app's leg, no `land`: nothing is exchanged and the visitor is told it failed.
+    const bare = await browse(
+      `/api/public/booking/${key}/connect?via=app&return=${encodeURIComponent(path)}`,
+      '',
+      'GET',
+      pagesApp,
+    );
+    const bareState = new URL(bare.headers.get('location') ?? '').searchParams.get('state') ?? '';
+    const noLand = await callback(bareState, cookieOf(bare, GUEST_STATE_COOKIE), 'bare@navy.example');
+    expect(noLand.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
+    expect(cookieOf(noLand, GUEST_COOKIE)).toBe('');
+
+    // An attacker's own `land=` on a link to the app's leg: the victim's browser never held that nonce.
+    const attackerNonce = 'attacker-nonce-attacker';
+    const chosen = createHash('sha256').update(attackerNonce).digest('base64url');
+    const lured = await browse(
+      `/api/public/booking/${key}/connect?via=app&land=${chosen}&return=${encodeURIComponent(path)}`,
+      '',
+      'GET',
+      pagesApp,
+    );
+    const luredState = new URL(lured.headers.get('location') ?? '').searchParams.get('state') ?? '';
+    const victim = await callback(luredState, cookieOf(lured, GUEST_STATE_COOKIE), 'victim@navy.example');
+    const landing = new URL(victim.headers.get('location') ?? '');
+    expect(`${landing.origin}${landing.pathname}`).toBe(`${PAGES}${GUEST_LAND_PATH}`);
+    const victimLands = await browse(`${landing.pathname}${landing.search}`, '', 'GET', pagesApp);
+    expect(victimLands.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
+    expect(cookieOf(victimLands, GUEST_COOKIE)).toBe('');
   });
 
   it('sends every other ending, and every refusal, to the public host too', async () => {
@@ -411,8 +501,8 @@ describe('the return address of a guest connect (4 Nov 2026)', () => {
       pagesApp,
     );
     expect(denied.headers.get('location')).toBe(`${PAGES}${path}?calendar=denied`);
-    const other = await handlePage();
-    for (const given of [other.path, '//evil.example/x', `https://evil.example${path}`]) {
+    // A malformed return is refused at the first leg; another page's handle address at the leg that reads.
+    for (const given of ['//evil.example/x', `https://evil.example${path}`, `/\\evil.example${path}`]) {
       const start = await browse(
         `/api/public/booking/${key}/connect?return=${encodeURIComponent(given)}`,
         '',
@@ -422,8 +512,15 @@ describe('the return address of a guest connect (4 Nov 2026)', () => {
       expect(start.headers.get('location')).toBe(`${PAGES}/`);
       expect(cookieOf(start, GUEST_LAND_COOKIE)).toBe('');
     }
-    const forged = await browse(`${GUEST_LAND_PATH}?code=x&t=gl1.e30.AAAA`, '', 'GET', pagesApp);
-    expect(forged.headers.get('location')).toBe(`${PAGES}/`);
+    const other = await handlePage();
+    const foreign = await browse(
+      `/api/public/booking/${key}/connect?via=app&return=${encodeURIComponent(other.path)}`,
+      '',
+      'GET',
+      pagesApp,
+    );
+    expect(foreign.headers.get('location')).toBe(`${PAGES}/`);
+    expect(cookieOf(foreign, GUEST_STATE_COOKIE)).toBe('');
   });
 });
 
