@@ -167,18 +167,36 @@ describe('the gallery it offers (AC-6323)', () => {
     }
   });
 
-  // This fails the moment someone adds `lead_qualification` or `booking_intake` to the offered list, which is the
-  // point: they are written in code but held back until slice 5 gives them their score (AC-6316) and their Book a
-  // meeting ending (AC-6315). Releasing them means giving them those, not deleting this assertion.
-  it('does not offer the two templates slice 5 has to finish', () => {
+  // This fails the moment someone adds `booking_intake` to the offered list, which is the point: it is written in
+  // code but held back until its Book a meeting ending (AC-6315) can name a booking page the workspace actually
+  // has. Releasing it means giving it that, not deleting this assertion. `lead_qualification` was released with
+  // slice 5, which gave it the points the next case checks.
+  it('does not offer the template whose ending has no booking page to name', () => {
     const offered = new Set<string>(listFormTemplates().items.map((each) => each.id));
     for (const held of HELD_FORM_TEMPLATE_IDS) expect(offered.has(held)).toBe(false);
-    expect(HELD_FORM_TEMPLATE_IDS).toEqual(['lead_qualification', 'booking_intake']);
+    expect(HELD_FORM_TEMPLATE_IDS).toEqual(['booking_intake']);
+    // The released one is offered, in the place AC-6323 puts it: straight after Demo request.
+    const ids = listFormTemplates().items.map((each) => each.id);
+    expect(ids[ids.indexOf('demo_request') + 1]).toBe('lead_qualification');
+  });
+
+  it('scores a Lead qualification form, which is what its tile is named after (AC-6316)', async () => {
+    const w = await workspace();
+    const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'lead_qualification' });
+    const points = new Map(created.draft.questions.map((each) => [each.key, each.points]));
+    // One number per choice, in the choices' order: the sum is the lead's score.
+    expect(points.get('budget')).toEqual([0, 10, 25, 40]);
+    expect(points.get('timeline')).toEqual([30, 20, 5, 0]);
+    expect(points.get('team_size')).toEqual([0, 5, 15, 30]);
+    // Name and email carry none: a short text answer cannot be worth points.
+    expect(points.get('name')).toBeUndefined();
+    // Where the score is filed is the member's own call, so the template guesses no attribute for it.
+    expect(created.draft.scoreFiledOn).toBeUndefined();
   });
 
   it('refuses a held template, and anything that isn’t a template at all', async () => {
     const w = await workspace();
-    for (const id of ['lead_qualification', 'booking_intake', 'nonsense', '', '../blank']) {
+    for (const id of ['booking_intake', 'nonsense', '', '../blank']) {
       expect(await refusalOf(createFormFromTemplate(w.scope, { id: newId(), templateId: id }))).toMatchObject([
         { code: 'CONFIG_INVALID', field: 'templateId' },
       ]);

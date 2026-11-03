@@ -285,6 +285,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     z.strictObject({ seats: z.number().int().min(0), from: AuditPerson.optional(), to: AuditPerson.optional() }),
   ),
   entry(['routing.changed'], z.discriminatedUnion('type', [form, bookingPage]), NoParams),
+  /** A form was made (spec 0023), from a template or empty: `after` says which, so the gallery can be read. */
+  entry(['form.created'], form, NoParams),
   entry(['form.owner_changed'], form, NoParams),
   /** How many people the form emailed before and after: who they are stays in the row. */
   entry(['form.notify_changed'], form, NoParams),

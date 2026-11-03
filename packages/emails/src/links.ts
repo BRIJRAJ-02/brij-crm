@@ -69,15 +69,20 @@ export function appUrl(origin: string, path: string): string {
  * origin, so a button, a row or the preferences link can never point at
  * another site, whatever a template passes. Answers the parsed address.
  */
-export function onAppOrigin(link: string, origin: string): string {
-  const base = appOrigin(origin);
+export function onAppOrigin(link: string, origin: string, alsoOn: readonly string[] = []): string {
+  // The app's own origin, and any public origin of ours the sender declared (`BOOKING_PUBLIC_ORIGIN`,
+  // `FORMS_PUBLIC_ORIGIN`): a booking email's manage button is served from one of those, not from the app.
+  // Each goes through `appOrigin` too, so a declared origin still has to be https (or localhost) and is
+  // compared as parsed. This is not a wider guard, it is the same guard over a named list: an origin nobody
+  // configured is refused exactly as before.
+  const allowed = new Set([appOrigin(origin), ...alsoOn.map((each) => appOrigin(each))]);
   let url: URL;
   try {
     url = new URL(link);
   } catch {
     throw new Error('An email link must be an address on the app origin.');
   }
-  if (url.origin !== base || url.username !== '' || url.password !== '' || url.pathname.startsWith('//')) {
+  if (!allowed.has(url.origin) || url.username !== '' || url.password !== '' || url.pathname.startsWith('//')) {
     throw new Error('An email link must be an address on the app origin.');
   }
   return url.href;

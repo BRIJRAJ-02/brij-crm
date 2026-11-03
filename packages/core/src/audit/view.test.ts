@@ -232,6 +232,11 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     row('routing.changed', 'form', form, { before: { rules: 1 }, after: { rules: 2, version: 3, changed: [] } }),
     row('routing.changed', 'booking_page', page, { before: { rules: 2 }, after: { rules: 1, changed: [] } }),
   ],
+  'form.created': [
+    row('form.created', 'form', form, { after: { name: 'Contact us' } }),
+    // Made from a tile in the gallery: the line can say which one.
+    row('form.created', 'form', form, { after: { name: 'Lead qualification', templateId: 'lead_qualification' } }),
+  ],
   'form.owner_changed': [
     row('form.owner_changed', 'form', form, {
       before: { ownerMemberId: ada, ownerRotationId: null },

@@ -473,6 +473,8 @@ async function insertForm(
     readonly name: string;
     readonly objectId: string | null;
     readonly document: FormDocument;
+    /** The template it was made from, where it was: the history line says which tile, not only that a form appeared. */
+    readonly templateId?: string;
   },
 ): Promise<FormRow> {
   await tx.insert(forms).values({
@@ -496,6 +498,15 @@ async function insertForm(
   await tx.update(forms).set({ draftVersionId: version.id }).where(eq(forms.id, input.id));
   const form = await loadForm(tx, input.id);
   if (form === undefined) throw new Error('The form was not stored.');
+  // Every form is made here, empty or from a template, so one entry covers both paths. Settings › History showed
+  // a form's owner and its notify list changing but never the form appearing, which read as though it had always
+  // been there.
+  await writeAudit(tx, scope.workspaceId, scope.actor, {
+    action: 'form.created',
+    targetType: 'form',
+    targetId: input.id,
+    after: { name: input.name, ...(input.templateId === undefined ? {} : { templateId: input.templateId }) },
+  });
   return form;
 }
 
@@ -719,6 +730,7 @@ export async function createFormFromTemplate(
           name,
           objectId: null,
           document: templateDocument(template, undefined),
+          templateId: template.id,
         });
         return viewOf(tx, scope, kept);
       }
@@ -749,6 +761,7 @@ export async function createFormFromTemplate(
           })),
           ...(match === undefined ? {} : { matchAttributeId: match.id }),
         }),
+        templateId: template.id,
       });
       return viewOf(tx, scope, form);
     },

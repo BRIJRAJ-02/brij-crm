@@ -19,6 +19,7 @@ import type {
   AnswerType,
   FormLayout,
   FormQuestionOptions,
+  FormQuestionPoints,
   FormTemplateId,
   FormTemplatePreviewRow,
 } from '@crm/contracts';
@@ -42,6 +43,12 @@ export interface FormTemplateQuestion {
    * nothing, means the answer is kept with the submission and files nowhere.
    */
   readonly filesOnto?: string;
+  /**
+   * What each answer is worth, for a template that scores (spec 0063, AC-6316): one whole number per choice, in
+   * the order of `choices`. The form's score is the sum; where it is filed is the member's own call, since no
+   * workspace is guaranteed a number attribute to file it on.
+   */
+  readonly points?: FormQuestionPoints;
   /** Starts a new step here (`FormStep`), for a template whose layout is Steps. */
   readonly step?: { readonly id: string; readonly title: string };
 }
@@ -401,6 +408,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
         answerType: 'choice',
         required: true,
         choices: ['Under $1k', '$1k to $10k', '$10k to $50k', 'Over $50k'],
+        points: [0, 10, 25, 40],
       },
       {
         id: 'timeline',
@@ -409,6 +417,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
         answerType: 'choice',
         required: true,
         choices: ['This month', 'This quarter', 'This year', 'Just looking'],
+        points: [30, 20, 5, 0],
       },
       {
         id: 'team_size',
@@ -417,6 +426,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
         answerType: 'choice',
         required: false,
         choices: ['Just me', '2 to 10', '11 to 50', 'More than 50'],
+        points: [0, 5, 15, 30],
       },
     ],
   },

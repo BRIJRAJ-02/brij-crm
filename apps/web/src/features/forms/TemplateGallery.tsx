@@ -1,7 +1,7 @@
 // Brief
 // Purpose: New form opens a gallery of ready forms (spec 0063, AC-6323), so nobody starts from an empty page they then have to understand.
 // Main task: see what each template makes, press one, and land in its editor with the questions already filed into the CRM.
-// Leaves out: editing the template (that is the builder), making templates of your own, and the two templates slice 5 still has to finish (`OFFERED_FORM_TEMPLATE_IDS`).
+// Leaves out: editing the template (that is the builder), making templates of your own, and the one template still held back, whose ending has no booking page to name (`HELD_FORM_TEMPLATE_IDS`).
 import {
   isDataError,
   type DataLayer,

@@ -49,6 +49,9 @@ const postToHost: PostToHost = (message, targetOrigin) => {
 // Escape closes the script's dialog from the first moment, even before the form has loaded.
 if (embed !== undefined) closeOnEscape(embed, postToHost, window);
 const prefill = prefillOf(params);
+// The fill this visitor is coming back to (spec 0063, AC-6319). An unknown or expired token is not an error:
+// the form is drawn empty, which is what somebody following an old link should get.
+const resumeAsked = params.get('resume') ?? undefined;
 const address = decodeURIComponent(window.location.pathname.replace(/^\/f\//, '').split('/')[0] ?? '');
 // Inside a site's frame the form is not a page of ours: it has no ground, so the tinted one its shell names
 // comes off before anything paints into it.
@@ -64,6 +67,20 @@ const loading = mountFormLoading(root, mode, 'unknown');
 // The loading card has a height of its own, so a site's frame is sized to it at once rather than clipping it
 // until the form arrives.
 let stopHeight = postHeight(root.lastElementChild);
+
+/**
+ * The answers a resumed fill brings, in the shape `prefill` takes: text and lists of text. Anything else the
+ * server kept (a number, a date) is given as its own text, which every question reads back the way it wrote it.
+ */
+function resumedPrefill(answers: Readonly<Record<string, unknown>>): Record<string, string | readonly string[]> {
+  const out: Record<string, string | readonly string[]> = {};
+  for (const [key, value] of Object.entries(answers)) {
+    if (typeof value === 'string') out[key] = value;
+    else if (Array.isArray(value)) out[key] = value.filter((each): each is string => typeof each === 'string');
+    else if (typeof value === 'number' || typeof value === 'boolean') out[key] = String(value);
+  }
+  return out;
+}
 
 /**
  * Where the visit came from, for the by source table (AC-6321): the UTM source the address carries, else the
@@ -104,7 +121,7 @@ function postHeight(drawn: Element | null): () => void {
  * which split the app's first load into 65 files and cost it 42 kB gzipped (21 October 2026).
  */
 async function start(): Promise<void> {
-  const loaded = await client.load(address);
+  const loaded = await client.load(address, resumeAsked);
   if (loaded.kind !== 'form') {
     const message = mountFormMessage(root, { mode, kind: loaded.kind });
     stopHeight();
@@ -151,10 +168,26 @@ async function start(): Promise<void> {
       });
     };
     countIt({ kind: 'view' });
+    // Save and resume. The token belongs here rather than in the form's state: which partial this is, is
+    // between the page and the server. The first save has none and the server answers one; every save after
+    // carries it, so one visitor leaves one partial however many times they are saved.
+    // Only a token the server actually resumed is kept: an unknown or expired one names no partial, so a save
+    // carrying it would be asking to update something that is not there. Without it the first save makes a new one.
+    let resumeToken = form.resumed === undefined ? undefined : resumeAsked;
+    const resumeUrlOf = (token: string) => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('resume', token);
+      // The link carries the token and nothing else of the visit (AC-6330): no answers, no email, no name.
+      for (const key of [...url.searchParams.keys()]) if (key !== 'resume') url.searchParams.delete(key);
+      return url.toString();
+    };
     const drawn = mountHostedForm(root, form, {
       mode,
       countryGuess: guessCountry(),
-      prefill,
+      // The answers that came back take the link's own prefill: a visitor coming back wants what they typed,
+      // not what the address suggested the first time.
+      prefill: form.resumed === undefined ? prefill : { ...prefill, ...resumedPrefill(form.resumed.answers) },
+      ...(form.resumed?.stepId === undefined ? {} : { resumedStepId: form.resumed.stepId }),
       onRedirect: (url) => {
         // A booking page of ours carries on inside the same frame, still sized to its content; any other address
         // takes the whole window, out of the site's frame.
@@ -174,6 +207,36 @@ async function start(): Promise<void> {
         drawn.update(form);
         return true;
       },
+      // Never inside a site's frame: the visitor's address bar is the site's, so a link built from it would
+      // bring them back to the site's page and not to this form (and `window.location` is the frame's own).
+      ...(embedded
+        ? {}
+        : {
+            onSave: async (fill) => {
+              const ticket = await firstTicket;
+              const saved = await client.savePartial(address, {
+                answers: fill.answers,
+                versionNumber: form.versionNumber,
+                ...(fill.stepId === undefined ? {} : { stepId: fill.stepId }),
+                ...(resumeToken === undefined ? {} : { resumeToken }),
+                ...(ticket === undefined ? {} : { ticket }),
+              });
+              if (saved === undefined) return undefined;
+              resumeToken = saved.resumeToken;
+              return {
+                resumeToken: saved.resumeToken,
+                resumeUrl: resumeUrlOf(saved.resumeToken),
+                expiresAt: saved.expiresAt,
+              };
+            },
+            onEmailResume: async (token) => {
+              const ticket = await firstTicket;
+              return client.emailResumeLink(address, {
+                resumeToken: token,
+                ...(ticket === undefined ? {} : { ticket }),
+              });
+            },
+          }),
       onCount: (count) => {
         countIt(count.kind === 'start' ? { kind: 'start' } : { kind: 'reach', questionId: count.questionId });
       },

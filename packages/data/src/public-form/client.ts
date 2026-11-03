@@ -5,11 +5,20 @@
 // small. With reCAPTCHA on (optional everywhere), it also loads Google's
 // script and asks it for a token. Every answer is a plain union a screen
 // switches on; nothing throws for an answer the endpoint gives on purpose.
-import type { FillTicket, FormEventBody, PublicForm, SubmitBody, SubmitNext } from '@crm/contracts/forms';
+import type {
+  FillTicket,
+  FormEventBody,
+  PartialBody,
+  PartialEmailBody,
+  PartialSaved,
+  PublicForm,
+  SubmitBody,
+  SubmitNext,
+} from '@crm/contracts/forms';
 import type { FetchLike } from '../fetch.ts';
 
 /** Where a submission came from, as the hosted page sends it beside the answers (`SubmitBody.context`). */
-export type { FormEventBody, SubmitContext } from '@crm/contracts/forms';
+export type { FormEventBody, PartialBody, PartialSaved, SubmitContext } from '@crm/contracts/forms';
 
 /** What reading a form answered. */
 export type FormLoad =
@@ -58,7 +67,12 @@ export interface PublicFormClient {
   upload(address: string, file: File, onProgress: (percent: number) => void): Promise<UploadOutcome>;
   /** Removes a file the visitor sent and no longer wants; the answer never says whether it was there. */
   removeUpload(address: string, fileId: string): Promise<void>;
-  load(address: string): Promise<FormLoad>;
+  /**
+   * The live form. With `resumeToken` the read also brings back the fill that token names (spec 0063,
+   * AC-6319); a token the server does not know is simply not resumed, never an error, since a visitor
+   * following an expired link should still see the form.
+   */
+  load(address: string, resumeToken?: string): Promise<FormLoad>;
   submit(address: string, body: SubmitBody): Promise<SubmitOutcome>;
   /**
    * A fill ticket for the address (the spam checks: the server's note of when
@@ -73,6 +87,17 @@ export interface PublicFormClient {
    * for no preflight, exactly as `sendBeacon` sends it; the server reads the text and checks the origin.
    */
   event(address: string, body: FormEventBody): void;
+  /**
+   * Keeps what the visitor has typed so far (spec 0063, AC-6319) and answers the token their link carries,
+   * or undefined where it could not be kept — a save is never a reason to stop filling a form in, so the page
+   * says nothing and tries again on the next change.
+   */
+  savePartial(address: string, body: PartialBody): Promise<PartialSaved | undefined>;
+  /**
+   * Emails the resume link to the address the visitor already gave this form (AC-6319). True when it was sent;
+   * false when there is no email answer to send it to, which is the one case worth telling them about.
+   */
+  emailResumeLink(address: string, body: PartialEmailBody): Promise<boolean>;
 }
 
 const path = (address: string) => `/api/public/forms/${encodeURIComponent(address)}`;
@@ -118,9 +143,10 @@ export function createPublicFormClient(
   const call: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
   const base = options.base ?? '';
   return {
-    async load(address) {
+    async load(address, resumeToken) {
       try {
-        const response = await call(`${base}${path(address)}`, { headers: { accept: 'application/json' } });
+        const query = resumeToken === undefined ? '' : `?resume=${encodeURIComponent(resumeToken)}`;
+        const response = await call(`${base}${path(address)}${query}`, { headers: { accept: 'application/json' } });
         if (response.status === 404 || response.status === 410) return { kind: 'missing' };
         if (!response.ok) return { kind: 'failed' };
         const body: unknown = await response.json();
@@ -206,6 +232,34 @@ export function createPublicFormClient(
         }).catch(() => undefined);
       } catch {
         // A count is never worth an error on a visitor's page.
+      }
+    },
+    async savePartial(address, body) {
+      try {
+        // `text/plain` asks for no preflight, and the server reads the text and checks the origin, exactly as
+        // it does for a submit from a site that lists this form.
+        const response = await call(`${base}${path(address)}/partials`, {
+          method: 'PUT',
+          headers: { 'content-type': 'text/plain', accept: 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) return undefined;
+        const saved: unknown = await response.json();
+        return isObject(saved) && typeof saved.resumeToken === 'string' ? (saved as PartialSaved) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    async emailResumeLink(address, body) {
+      try {
+        const response = await call(`${base}${path(address)}/partials/email`, {
+          method: 'POST',
+          headers: { 'content-type': 'text/plain' },
+          body: JSON.stringify(body),
+        });
+        return response.status === 202;
+      } catch {
+        return false;
       }
     },
     async submit(address, body) {

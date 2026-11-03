@@ -15,6 +15,7 @@ import { createToasts } from '../provider/toasts.tsx';
 import { FormLoading, FormMessage, HostedForm, type HostedFormMode, type HostedFormProps } from './HostedForm.tsx';
 
 export type { HostedFormMode, HostedSubmission, HostedSubmitOutcome } from './HostedForm.tsx';
+export type { HostedFill, HostedFormCount, HostedFormKept } from './use-hosted-form.ts';
 
 /**
  * Steps and One at a time (spec 0063, AC-6306, AC-6331): their own chunk, loaded only when a form uses them, so a

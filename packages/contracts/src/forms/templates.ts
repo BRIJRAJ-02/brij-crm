@@ -12,23 +12,27 @@ import { FORM_LAYOUTS } from './path.ts';
  * The templates the gallery offers, in the order AC-6323 names them: Blank
  * first, then one per kind of form.
  *
- * Two of AC-6323's twelve are missing on purpose. **Lead qualification (with
- * score)** needs points and a score (**AC-6316**) and **Booking intake (ends
- * with Book a meeting)** needs a custom ending (**AC-6315**), and both land
- * with slice 5 of this spec. Both templates are already written in
- * `packages/core/src/forms/templates/catalog.ts`, and both are covered by the
- * AC-6324 test; they are only held out of what a person can pick, because a
- * tile that quietly drops the thing it is named after is worse than one not
- * offered yet. To release them once slice 5 lands: give each template its
- * `points`/`scoreFiledOn` or its ending, then move its id out of
- * `HELD_FORM_TEMPLATE_IDS` into this list, `lead_qualification` after
- * `demo_request` and `booking_intake` after `job_application`, where AC-6323
- * puts them.
+ * One of AC-6323's twelve is still missing on purpose. **Booking intake (ends
+ * with Book a meeting)** needs a custom ending whose button names a booking
+ * page (**AC-6315**), and a template cannot know one: every workspace's pages
+ * are its own, and a new workspace has none. Releasing it means resolving a
+ * page at draft time the way `filesOnto` resolves an attribute, and leaving
+ * the button off where there is no page to send anyone to. Until then the tile
+ * is held, because one that quietly drops the thing it is named after is worse
+ * than one not offered yet. It is written in
+ * `packages/core/src/forms/templates/catalog.ts` and covered by the AC-6324
+ * test; it goes after `job_application` in this list, where AC-6323 puts it.
+ *
+ * **Lead qualification (with score)** was released with slice 5: its three
+ * choice questions carry points, so the form scores. Where that score is filed
+ * is left to the member, since no workspace is guaranteed a number attribute
+ * to file it on (`scoreFiledOn` is theirs to set, not the template's to guess).
  */
 export const OFFERED_FORM_TEMPLATE_IDS = [
   'blank',
   'contact_us',
   'demo_request',
+  'lead_qualification',
   'event_signup',
   'feedback',
   'nps',
@@ -39,7 +43,7 @@ export const OFFERED_FORM_TEMPLATE_IDS = [
 ] as const;
 
 /** The templates written in code but not offered yet; see `OFFERED_FORM_TEMPLATE_IDS` for what each one is waiting for. */
-export const HELD_FORM_TEMPLATE_IDS = ['lead_qualification', 'booking_intake'] as const;
+export const HELD_FORM_TEMPLATE_IDS = ['booking_intake'] as const;
 
 /** Every template that exists in code, offered or not: what the AC-6324 test covers. */
 export const FORM_TEMPLATE_IDS = [...OFFERED_FORM_TEMPLATE_IDS, ...HELD_FORM_TEMPLATE_IDS] as const;

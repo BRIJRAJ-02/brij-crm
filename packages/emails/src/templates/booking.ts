@@ -24,27 +24,40 @@ export interface BookingWords {
   readonly host?: { readonly label: string; readonly name: string };
 }
 
-/** Whether a link is on the app's origin; a link that doesn't parse isn't (and the layout refuses it). */
-function sameOrigin(link: string, appOrigin: string): boolean {
+/** Whether a link is on one of ours; a link that doesn't parse isn't (and the layout refuses it). */
+function sameOrigin(link: string, origins: readonly string[]): boolean {
   try {
-    return new URL(link).origin === new URL(appOrigin).origin;
+    const { origin } = new URL(link);
+    return origins.some((each) => {
+      try {
+        return new URL(each).origin === origin;
+      } catch {
+        return false;
+      }
+    });
   } catch {
     return false;
   }
 }
 
 /**
- * A booking email as the shared layout draws it, word for word. A button off
- * the app's origin can only be the meeting's video call, so it is drawn as
- * the call button (https only); anything else is a button on the app's origin.
+ * A booking email as the shared layout draws it, word for word. A button on
+ * one of our own origins is a button; anything else can only be the meeting's
+ * video call, so it is drawn as the call button (https only).
+ *
+ * `ours` matters more than it looks. The manage button and Book again are
+ * built on `BOOKING_PUBLIC_ORIGIN` where that is set (`mail.ts`), and without
+ * it here they are not recognised as ours — so "View your booking" would be
+ * drawn and labelled as the join-the-call button, silently, with no error
+ * anywhere (3 November 2026).
  */
-export function bookingDocument(words: BookingWords, appOrigin: string): EmailDocument {
+export function bookingDocument(words: BookingWords, appOrigin: string, ours: readonly string[] = []): EmailDocument {
   const blocks: EmailBlock[] = [{ type: 'paragraph', text: words.intro }];
   if (words.host !== undefined) blocks.push({ type: 'person', label: words.host.label, name: words.host.name });
   if (words.rows.length > 0) blocks.push({ type: 'rows', layout: 'compact', rows: words.rows });
   if (words.button !== undefined) {
     blocks.push({
-      type: sameOrigin(words.button.url, appOrigin) ? 'button' : 'callButton',
+      type: sameOrigin(words.button.url, [appOrigin, ...ours]) ? 'button' : 'callButton',
       label: words.button.label,
       url: words.button.url,
     });

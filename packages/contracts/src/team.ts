@@ -64,6 +64,9 @@ export const AUDIT_ACTIONS = [
   'booking.reassigned',
   // Lead routing (spec 0043, AC-1616): a form's or a team page's rules changed, and a booking marked or unmarked no show.
   'routing.changed',
+  // A form was made (spec 0023), empty or from one of the gallery's templates: without this, History showed a
+  // form's owner changing but never the form itself appearing.
+  'form.created',
   // Spec 0029 milestone 3: who a form's new records go to changed (a member, a round robin rotation, or nobody).
   'form.owner_changed',
   // Who a form emails each new submission changed (spec 0023, AC-568): the list decides who reads visitors' answers.

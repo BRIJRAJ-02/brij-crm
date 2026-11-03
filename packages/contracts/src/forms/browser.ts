@@ -52,3 +52,6 @@ export type { RouteHosts } from './routing.ts';
 // The beacon's body (spec 0063, AC-6320), as a type only: the hosted page builds the object and the
 // server parses it, so the schema itself stays out of the page's bundle.
 export type { FormEventBody, FormEventKind } from './visits.ts';
+// Save and resume (spec 0063, AC-6319), as types only: the page builds these objects and the server parses
+// them, so the schemas and their messages stay out of the page's bundle.
+export type { PartialBody, PartialEmailBody, PartialSaved, ResumedFill } from './partials.ts';

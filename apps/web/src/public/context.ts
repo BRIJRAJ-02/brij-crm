@@ -84,7 +84,19 @@ export function hiddenOf(context: SubmitContext): Record<string, string> {
 }
 
 /** The address's parameters the embed script and the page use themselves: never a question's prefill. */
-const RESERVED: ReadonlySet<string> = new Set(['embed', 'mode', 'fid', 'host', 'ctx', 'page', 'referrer', 'from']);
+// `resume` is the page's own (spec 0063, AC-6319), not a question's: without it here, a resume link would
+// try to prefill a question keyed `resume` with the token.
+const RESERVED: ReadonlySet<string> = new Set([
+  'embed',
+  'mode',
+  'fid',
+  'host',
+  'ctx',
+  'page',
+  'referrer',
+  'from',
+  'resume',
+]);
 
 /**
  * The address's answers to start with, by question key (spec 0063, AC-6309): `?email=ada@acme.com`, a key repeated

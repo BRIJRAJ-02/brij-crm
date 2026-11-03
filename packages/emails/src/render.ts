@@ -33,6 +33,13 @@ export interface RenderOptions {
   readonly medium: EmailMedium;
   /** The reader's email preferences page: set for an optional email only. */
   readonly preferencesUrl?: string;
+  /**
+   * Other origins of ours this email may link to: the public booking pages (`BOOKING_PUBLIC_ORIGIN`) and the
+   * hosted forms (`FORMS_PUBLIC_ORIGIN`), where those are served from their own host. A button on one of them
+   * is still ours; a button anywhere else is refused, as it always was. The preferences and unsubscribe links
+   * are not covered: those are the app's own pages and stay on the app's own origin.
+   */
+  readonly publicOrigins?: readonly string[];
 }
 
 /** An email ready for a mailer: its subject, HTML and plain text. */
@@ -93,13 +100,13 @@ function layoutTable(style: EmailStyle, ...rows: ReactNode[]): ReactNode {
 }
 
 /** A row's value: plain, or a link on the app's origin. */
-function rowValue(row: DocumentRow, origin: string): ReactNode {
+function rowValue(row: DocumentRow, origin: string, alsoOn: readonly string[]): ReactNode {
   if (row.url === undefined) return lines(row.value);
   const link = role('link');
   return h(
     Link,
     {
-      href: onAppOrigin(row.url, origin),
+      href: onAppOrigin(row.url, origin, alsoOn),
       className: link.className,
       style: { ...link.style, textDecoration: 'underline' },
     },
@@ -108,7 +115,7 @@ function rowValue(row: DocumentRow, origin: string): ReactNode {
 }
 
 /** Label and value rows, side by side (compact) or the label over its value (stacked). */
-function rows(block: Extract<EmailBlock, { type: 'rows' }>, origin: string): ReactNode {
+function rows(block: Extract<EmailBlock, { type: 'rows' }>, origin: string, alsoOn: readonly string[]): ReactNode {
   const label = role('secondary');
   const value = role('text');
   const valueStyle: EmailStyle = { ...type(TYPE.body), ...value.style, wordBreak: 'break-word' };
@@ -139,7 +146,7 @@ function rows(block: Extract<EmailBlock, { type: 'rows' }>, origin: string): Rea
           h(
             'td',
             { className: value.className, valign: 'top', style: { ...valueStyle, padding: `${SPACE[4]} 0` } },
-            rowValue(row, origin),
+            rowValue(row, origin, alsoOn),
           ),
         ),
       ),
@@ -162,7 +169,7 @@ function rows(block: Extract<EmailBlock, { type: 'rows' }>, origin: string): Rea
             },
             row.label,
           ),
-          h(Text, { className: value.className, style: { ...valueStyle, margin: '0' } }, rowValue(row, origin)),
+          h(Text, { className: value.className, style: { ...valueStyle, margin: '0' } }, rowValue(row, origin, alsoOn)),
         ),
       ),
     ),
@@ -170,7 +177,7 @@ function rows(block: Extract<EmailBlock, { type: 'rows' }>, origin: string): Rea
 }
 
 /** One block of the body. */
-function block(item: EmailBlock, origin: string): ReactNode {
+function block(item: EmailBlock, origin: string, alsoOn: readonly string[] = []): ReactNode {
   switch (item.type) {
     case 'paragraph': {
       const text = role('text');
@@ -189,7 +196,7 @@ function block(item: EmailBlock, origin: string): ReactNode {
       );
     }
     case 'rows':
-      return rows(item, origin);
+      return rows(item, origin, alsoOn);
     case 'code': {
       const code = role('code');
       return h(
@@ -221,7 +228,7 @@ function block(item: EmailBlock, origin: string): ReactNode {
     }
     case 'button':
     case 'callButton': {
-      const href = item.type === 'button' ? onAppOrigin(item.url, origin) : callUrl(item.url);
+      const href = item.type === 'button' ? onAppOrigin(item.url, origin, alsoOn) : callUrl(item.url);
       const button = role('button');
       return h(
         Button,
@@ -522,7 +529,7 @@ function EmailLayout({ document, options }: { readonly document: EmailDocument; 
                         h(
                           'td',
                           { style: { paddingTop: index === 0 ? '0' : SPACE[16] } },
-                          block(item, options.appOrigin),
+                          block(item, options.appOrigin, options.publicOrigins ?? []),
                         ),
                       ),
                     ),
@@ -573,14 +580,17 @@ export function documentText(document: EmailDocument, options: RenderOptions): s
         out.push(`${item.label}: ${item.code}`, '');
         break;
       case 'button':
-        out.push(`${item.label}: ${onAppOrigin(item.url, options.appOrigin)}`, '');
+        out.push(`${item.label}: ${onAppOrigin(item.url, options.appOrigin, options.publicOrigins)}`, '');
         break;
       case 'callButton':
         out.push(`${item.label}: ${callUrl(item.url)}`, '');
         break;
       case 'rows':
         for (const row of item.rows) {
-          const value = row.url === undefined ? row.value : `${row.value} (${onAppOrigin(row.url, options.appOrigin)})`;
+          const value =
+            row.url === undefined
+              ? row.value
+              : `${row.value} (${onAppOrigin(row.url, options.appOrigin, options.publicOrigins)})`;
           if (item.layout === 'compact') out.push(`${row.label}: ${value}`);
           else out.push(row.label, value, '');
         }
@@ -620,7 +630,7 @@ export function headerText(text: string, max = 200): string {
 export async function renderDocument(document: EmailDocument, options: RenderOptions): Promise<RenderedEmail> {
   // Every link the email carries is checked here, so a template can't send one to another site.
   for (const item of document.blocks) {
-    if (item.type === 'button') onAppOrigin(item.url, options.appOrigin);
+    if (item.type === 'button') onAppOrigin(item.url, options.appOrigin, options.publicOrigins);
     if (item.type === 'callButton') callUrl(item.url);
     if (item.type === 'rows')
       for (const row of item.rows) if (row.url !== undefined) onAppOrigin(row.url, options.appOrigin);

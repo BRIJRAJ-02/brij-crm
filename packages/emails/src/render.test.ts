@@ -223,3 +223,36 @@ describe('the account deleted email (spec 0033, AC-906)', () => {
     expect(email.text).not.toContain('Email preferences');
   });
 });
+
+describe('a link on one of our own public origins (the booking emails’ manage button)', () => {
+  // The booking emails build their manage button and Book again on `BOOKING_PUBLIC_ORIGIN`, which may be a
+  // different host from the app's. Rendering guards every button with `onAppOrigin`, so before this was
+  // declared the whole email threw the moment anyone set that variable — not a broken link, no email at all.
+  // The same shape already bit the resume email (3 November 2026), where nothing drove it and nobody saw.
+  const BOOKING = 'https://book.example.com';
+  const document: EmailDocument = {
+    subject: 'Your booking',
+    preheader: 'The line an inbox shows',
+    heading: 'You are booked',
+    why: 'You booked a time.',
+    blocks: [{ type: 'button', label: 'View your booking', url: `${BOOKING}/b/abc?manage=xyz` }],
+  };
+
+  it('renders when the page’s origin is one this email was told about', async () => {
+    const options: RenderOptions = { appOrigin: ORIGIN, medium: 'email_booking', publicOrigins: [BOOKING] };
+    const { html, text } = await renderDocument(document, options);
+    expect(html).toContain(`${BOOKING}/b/abc?manage=xyz`);
+    expect(text).toContain(`${BOOKING}/b/abc?manage=xyz`);
+  });
+
+  it('still refuses an origin nobody declared, which is the guard this keeps', async () => {
+    const options: RenderOptions = { appOrigin: ORIGIN, medium: 'email_booking' };
+    await expect(renderDocument(document, options)).rejects.toThrow('must be an address on the app origin');
+    const elsewhere: RenderOptions = { appOrigin: ORIGIN, medium: 'email_booking', publicOrigins: [BOOKING] };
+    const evil: EmailDocument = {
+      ...document,
+      blocks: [{ type: 'button', label: 'View your booking', url: 'https://not-ours.example.com/b/abc' }],
+    };
+    await expect(renderDocument(evil, elsewhere)).rejects.toThrow('must be an address on the app origin');
+  });
+});
