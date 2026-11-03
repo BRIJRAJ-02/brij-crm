@@ -17,18 +17,22 @@ type Story = StoryObj<typeof meta>;
 /** The first value is simply there. */
 export const Still: Story = {};
 
+/** A count that a button adds one to. */
+function CountingDemo() {
+  const [count, setCount] = useState(10);
+  return (
+    <Stage>
+      <NumberPop value={`${String(count)} going`} />
+      <Button onPress={() => setCount((n) => n + 1)}>Add one</Button>
+    </Stage>
+  );
+}
+
 /** Each press adds one: the shared start holds still and the changed digits pop in. */
 export const Counting: Story = {
   parameters: { crm: { preview: true } },
-  render: function Counting() {
-    const [count, setCount] = useState(10);
-    return (
-      <Stage>
-        <NumberPop value={`${String(count)} going`} />
-        <Button onPress={() => setCount((n) => n + 1)}>Add one</Button>
-      </Stage>
-    );
-  },
+  // A component of its own: the design system artifact's preview calls `render` as a plain function, outside React.
+  render: () => <CountingDemo />,
   play: async ({ canvas, canvasElement }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Add one' }));
     // 10 → 11: the leading 1 holds still, the 1 after it pops, and the words keep their place.
