@@ -58,7 +58,10 @@ export interface BookingDetailsProps {
   readonly needsPhone?: boolean;
   /** Filled in from the visitor's sign in or a form hand off. */
   readonly prefill?: { readonly name?: string; readonly email?: string };
-  /** The most guests a booking takes. */
+  /**
+   * The most guests a booking takes. `0` leaves the invites out altogether: a table reservation (spec 0066 B7)
+   * counts its party instead and invites nobody.
+   */
   readonly maxGuests?: number;
   /**
    * The page's own questions (spec 0057, AC-5709), drawn after the note with the hosted form's controls and checked
@@ -439,7 +442,7 @@ export function BookingDetails({
           {...(errors.email === undefined ? {} : { error: errors.email })}
         />
       </div>
-      {isAddingGuests || guests.length > 0 ? (
+      {maxGuests === 0 ? null : isAddingGuests || guests.length > 0 ? (
         <div
           className={styles.guests}
           data-shake={shakeOf('guests')}

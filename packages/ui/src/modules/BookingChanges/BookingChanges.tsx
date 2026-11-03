@@ -36,7 +36,10 @@ export interface BookingChangesProps {
   readonly moveNote?: string;
   /** Opens this change first: the guest arrived from that link in their email. */
   readonly startsWith?: 'move' | 'cancel';
-  /** The most guests a booking takes. */
+  /**
+   * The most guests a booking takes. `0` leaves the guests change out: a table reservation (spec 0066 B7) changes its
+   * party size in Move instead.
+   */
   readonly maxGuests?: number;
   /** Invites one more person by email. */
   readonly onInvite: (email: string) => Promise<GuestsOutcome>;
@@ -103,9 +106,11 @@ export function BookingChanges({
               {strings.move}
             </Button>
           )}
-          <Button icon="user-plus" isExpanded={mode === 'guests'} controls={panelId} onPress={toggle('guests')}>
-            {guests.length > 0 ? strings.guestsCount(guests.length) : strings.addGuests}
-          </Button>
+          {maxGuests > 0 && (
+            <Button icon="user-plus" isExpanded={mode === 'guests'} controls={panelId} onPress={toggle('guests')}>
+              {guests.length > 0 ? strings.guestsCount(guests.length) : strings.addGuests}
+            </Button>
+          )}
           <span className={styles.end}>
             <Button ref={cancelButton} variant="danger" icon="circle-x" onPress={() => setCancelOpen(true)}>
               {strings.cancelBooking}

@@ -14,6 +14,8 @@ New. BookingReceipt shows a booking; nothing in the library let a guest change o
 
 The page draws the move picker (the booking page's own DayStrip and SlotList, with a commit bar that names the new time) and passes it as `move`. `onInvite`, `onRemove` and `onCancel` answer what the server said; a done cancel is shown by the page (the receipt turns cancelled). `title` is the booking's name, which the cancel confirm asks about. `startsWith="cancel"` (the email's Cancel link) opens the cancel confirm on arrival.
 
+A table reservation (spec 0066 B7) passes `maxGuests={0}`: there are no guests to invite, so only Move (with the party size inside the page's own picker) and Cancel show.
+
 ## States
 
 Idle; Move open; Guests open (the list, Adding…, Invited bob@…, They're already on it., Took ann@… off., a wrong address under the field, the field replaced by a line once the booking has its most guests); the remove confirm (Removing…, a refusal inside); the cancel confirm (Cancelling…, a refusal inside); no Move when it can't move.

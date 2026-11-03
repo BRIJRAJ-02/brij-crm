@@ -344,6 +344,15 @@ export type {
   ResourceKind,
   WeekDay,
 } from '@crm/contracts';
+// Table seating (spec 0066 B7 lite): the setup, the Service day and a reservation's status.
+export type {
+  ServiceDayView,
+  ServiceVisit,
+  TableRules,
+  TableSetupStep,
+  TableSetupView,
+  VisitStatus,
+} from '@crm/contracts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
 export { BRAND_QUICK_PICKS } from './brand/picks.ts';
 export type {

@@ -76,6 +76,37 @@ export const Phone: Story = {
 };
 
 /** The server refused: its message in the line above the buttons. */
+/** A table reservation (spec 0066 B7): a phone to call, no invites, the occasion and news as questions. */
+export const Reservation: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingDetails {...args} />
+    </Stage>
+  ),
+  args: {
+    needsPhone: true,
+    maxGuests: 0,
+    questions: [
+      {
+        id: 'occasion',
+        key: 'occasion',
+        label: 'Occasion',
+        answerType: 'choice',
+        choices: ['Birthday', 'Anniversary', 'Date night', 'Business', 'Other'],
+        required: false,
+      },
+      {
+        id: 'marketing',
+        key: 'marketing',
+        label: 'Send me news and offers from Somewhere Nowhere.',
+        answerType: 'checkbox',
+        required: false,
+      },
+    ],
+  },
+};
+
 export const Failed: Story = {
   args: {
     prefill: { name: 'Ada Lovelace', email: 'ada@example.com' },

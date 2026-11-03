@@ -21,6 +21,8 @@ A page with its own questions (spec 0057) passes `questions` (the hosted form's 
 
 `onSubmit` answers `{ kind: 'done' }`, `{ kind: 'invalid', fields, message }` (errors by `name`, `email`, `phone`, `guest-<n>` or `answers.<key>`) or `{ kind: 'failed', message }`. In `guest-<n>`, n counts the guests sent, blanks left out, and the form moves the error to that guest's row. When no field in `fields` is one the form draws an error on (a time zone, a phone the page never asked for, the note, the guest list as a whole), `message` goes in the line above the buttons instead (without one, "That did not go through. Try again in a moment."), and everything typed stays. The heading takes focus as the step arrives, so a phone keeps its keyboard down.
 
+A table reservation (spec 0066 B7) passes `maxGuests={0}`: it counts its party on an earlier step, so the invites (Add guests) are left out altogether.
+
 ## States
 
 Empty, prefilled, with guests, a phone page, with questions (one shown by an earlier answer), invalid, sending (Confirm pending, Back off), failed.
