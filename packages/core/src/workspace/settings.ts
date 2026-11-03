@@ -66,6 +66,7 @@ const SETTINGS = {
   currency: workspaces.currency,
   country: workspaces.country,
   logoUrl: workspaces.logoUrl,
+  keepSubmissionsMonths: workspaces.keepSubmissionsMonths,
 } as const;
 
 function toSettings(row: {
@@ -76,7 +77,9 @@ function toSettings(row: {
   readonly currency: string | null;
   readonly country: string | null;
   readonly logoUrl: string | null;
+  readonly keepSubmissionsMonths: number | null;
 }): WorkspaceSettings {
+  const kept = row.keepSubmissionsMonths;
   return {
     id: row.id,
     name: row.name,
@@ -85,6 +88,8 @@ function toSettings(row: {
     ...(row.currency === null ? {} : { currency: row.currency }),
     ...(row.country === null ? {} : { country: row.country }),
     ...(row.logoUrl === null ? {} : { logoUrl: row.logoUrl }),
+    // The column's check holds it to 12 or 24; anything else reads as forever rather than failing the page.
+    ...(kept === 12 || kept === 24 ? { keepSubmissionsMonths: kept } : {}),
   };
 }
 
@@ -113,8 +118,8 @@ export interface UpdatedWorkspace {
 
 /**
  * Renames the workspace (1 to 64 characters), changes its default time
- * zone, and moves it to a new address (`workspace.manage`, AC-822). A change
- * that changes nothing writes nothing; otherwise one audit row with the
+ * zone, sets how long form submissions are kept (AC-1054) and moves it to a new
+ * address (`workspace.manage`, AC-822). A change that changes nothing writes nothing; otherwise one audit row with the
  * changed fields only. A new address follows the new workspace rule
  * (`CONFIG_INVALID` on `slug`) and must be free: one another workspace holds
  * or ever held is refused `SLUG_TAKEN` on `slug`, and a 21st address
@@ -123,7 +128,7 @@ export interface UpdatedWorkspace {
  */
 export async function updateWorkspace(
   scope: EngineScope,
-  input: Pick<UpdateWorkspaceInput, 'name' | 'timeZone' | 'slug' | 'currency' | 'country'>,
+  input: Pick<UpdateWorkspaceInput, 'name' | 'timeZone' | 'slug' | 'currency' | 'country' | 'keepSubmissionsMonths'>,
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
 ): Promise<UpdatedWorkspace> {
@@ -166,6 +171,11 @@ export async function updateWorkspace(
         before.country = now.country;
         after.country = input.country;
       }
+      // How long form submissions are kept (AC-1054): `null` is forever, as the column keeps it.
+      if (input.keepSubmissionsMonths !== undefined && input.keepSubmissionsMonths !== now.keepSubmissionsMonths) {
+        before.keepSubmissionsMonths = now.keepSubmissionsMonths;
+        after.keepSubmissionsMonths = input.keepSubmissionsMonths;
+      }
       if (Object.keys(after).length === 0) return { settings: toSettings(now), renamed: false };
       // The directory first: its claim is the one that sees every address any workspace ever held.
       if (input.slug !== undefined && after.slug !== undefined) await claimAddress(tx, input.slug);
@@ -177,6 +187,9 @@ export async function updateWorkspace(
           ...(after.slug === undefined || input.slug === undefined ? {} : { slug: input.slug }),
           ...(after.currency === undefined || input.currency === undefined ? {} : { currency: input.currency }),
           ...(after.country === undefined || input.country === undefined ? {} : { country: input.country }),
+          ...(after.keepSubmissionsMonths === undefined || input.keepSubmissionsMonths === undefined
+            ? {}
+            : { keepSubmissionsMonths: input.keepSubmissionsMonths }),
           ...touched(scope),
         })
         .where(eq(workspaces.id, scope.workspaceId))

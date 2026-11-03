@@ -21,6 +21,18 @@ export const WorkspaceName = z.string().trim().min(1, 'Name the workspace.').max
 /** A workspace's name. */
 export type WorkspaceName = z.infer<typeof WorkspaceName>;
 
+/** How many months a workspace may keep its form submissions (spec 0023, AC-1054); absent keeps them forever. */
+export const KEEP_SUBMISSIONS_MONTHS = [12, 24] as const;
+/** How many months a workspace keeps its form submissions. */
+export const KeepSubmissionsMonths = z.union([z.literal(12), z.literal(24)], {
+  error: 'Keep submissions forever, 12 months or 24 months.',
+});
+/** How many months a workspace keeps its form submissions. */
+export type KeepSubmissionsMonths = z.infer<typeof KeepSubmissionsMonths>;
+
+/** How long spam submissions are kept whatever the workspace keeps (spec 0023, AC-1054). */
+export const SPAM_SUBMISSIONS_KEPT_DAYS = 30;
+
 /** The open workspace's settings, as Workspace › General shows them to any member. */
 export const WorkspaceSettings = z.object({
   id: Uuid,
@@ -33,12 +45,15 @@ export const WorkspaceSettings = z.object({
   country: z.string().optional(),
   /** A logo on our origin; absent until #32, so the page shows initials. */
   logoUrl: z.string().optional(),
+  /** How many months form submissions are kept (spec 0023, AC-1054); absent keeps them forever. */
+  keepSubmissionsMonths: KeepSubmissionsMonths.optional(),
 });
 /** The open workspace's settings. */
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 
 /**
- * A change to the workspace's name, default time zone, default currency and country or address, in any mix
+ * A change to the workspace's name, default time zone, default currency and country, address or how long it keeps
+ * form submissions, in any mix
  * (`workspace.manage`); `null` for the currency or country takes it back to the language's region's. A new address
  * follows the rule a new workspace's does; the old one keeps finding the workspace and is never anyone else's.
  */
@@ -56,6 +71,8 @@ export const UpdateWorkspaceInput = WorkspaceScoped.extend({
     .nullable()
     .optional(),
   slug: WorkspaceSlug.optional(),
+  /** `null` keeps submissions forever. */
+  keepSubmissionsMonths: KeepSubmissionsMonths.nullable().optional(),
   mutationId: Uuid,
 });
 /** A change to the workspace's settings. */

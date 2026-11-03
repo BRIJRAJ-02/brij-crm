@@ -60,7 +60,12 @@ const PROFILE_FIELDS = {
   site: 'company site',
   footLine: 'closing line',
 } as const;
-const WORKSPACE_FIELDS = { name: 'name', timeZone: 'time zone', address: 'address' } as const;
+const WORKSPACE_FIELDS = {
+  name: 'name',
+  timeZone: 'time zone',
+  address: 'address',
+  keepSubmissions: 'form submission retention',
+} as const;
 const LINK_FIELDS = { role: 'role', expires: 'expiry', uses: 'number of uses' } as const;
 
 const SENTENCES: SentenceTemplates = {

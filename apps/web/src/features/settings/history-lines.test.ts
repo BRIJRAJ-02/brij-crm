@@ -224,6 +224,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed the workspace’s time zone and address',
   ],
   [
+    { ...base, action: 'workspace.updated', target: workspace, params: { fields: ['keepSubmissions'] } },
+    'Ada Lovelace changed the workspace’s form submission retention',
+  ],
+  [
     { ...base, action: 'workspace.deleted', target: workspace, params: { purgeAfter: '2026-11-22T06:52:11.123Z' } },
     'Ada Lovelace deleted the workspace, to be gone for good on day(2026-11-22)',
   ],

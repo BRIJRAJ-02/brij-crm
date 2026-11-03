@@ -387,6 +387,34 @@ describe('saving at once', () => {
   });
 });
 
+describe('keeping submissions (spec 0023, AC-1054)', () => {
+  it('keeps them forever until 12 or 24 months is picked, saved at once with Undo back to forever', async () => {
+    const { update, raised } = await renderGeneral();
+    const keep = page.getByRole('button', { name: new RegExp(strings.keepSubmissions) });
+    await expect.element(keep).toHaveTextContent(strings.keepChoices.forever);
+    await userEvent.click(keep);
+    await userEvent.click(page.getByRole('option', { name: strings.keepChoices['12'] }));
+    await vi.waitFor(() => {
+      expect(update).toHaveBeenCalledWith('acme', { keepSubmissionsMonths: 12 });
+    });
+    await expect.element(keep).toHaveTextContent(strings.keepChoices['12']);
+    const savedToast = raised.find((each) => each.message === strings.keepChanged(12));
+    expect(savedToast).toBeDefined();
+    savedToast?.action?.onAction();
+    await vi.waitFor(() => {
+      expect(update).toHaveBeenLastCalledWith('acme', { keepSubmissionsMonths: null });
+    });
+    await expect.element(keep).toHaveTextContent(strings.keepChoices.forever);
+  });
+
+  it('is locked for a member', async () => {
+    await renderGeneral({ asMember: true });
+    // Read only, the choice is shown as text and nothing opens to change it.
+    await expect.element(page.getByText(strings.keepChoices.forever)).toBeVisible();
+    expect(page.getByRole('button', { name: new RegExp(strings.keepSubmissions) }).elements()).toEqual([]);
+  });
+});
+
 describe('a member', () => {
   it('reads one note, and finds the fields locked with no Change', async () => {
     await renderGeneral({ asMember: true });

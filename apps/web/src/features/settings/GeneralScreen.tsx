@@ -1,8 +1,9 @@
 // Brief
 // Purpose: Settings › Workspace › General (spec 0031, AC-822, AC-823): the workspace's name, web address, time zone,
-// and the currency and country new money and phone fields start in.
+// the currency and country new money and phone fields start in, and how long form submissions are kept (AC-1054).
 // Main task: rename it (saved when the field is left or on Enter, with Undo), change its address (its own dialog), or
-// pick its time zone, currency or country (saved at once, with Undo); owners can delete it.
+// pick its time zone, currency, country or how long submissions are kept (saved at once, with Undo); owners can
+// delete it.
 // Leaves out: a Save bar and a leave check (each change saves on its own), the logo upload (Brand holds it, spec 0060; a row here links there), and members (their own page).
 import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
 import { useWorkspaceLogo } from '@crm/data/react';
@@ -55,9 +56,25 @@ export interface GeneralScreenProps {
   readonly onDeleted: (name: string) => void;
 }
 
+/** How long form submissions are kept, as the Select names it (spec 0023, AC-1054). */
+const KEEP_CHOICES = ['forever', '12', '24'] as const;
+type KeepChoice = (typeof KEEP_CHOICES)[number];
+
+function keepChoiceOf(months: 12 | 24 | null): KeepChoice {
+  return months === null ? 'forever' : months === 12 ? '12' : '24';
+}
+
+/** The months a choice keeps (null is forever), or undefined for a key the Select never offers. */
+function monthsOf(choice: string | null): 12 | 24 | null | undefined {
+  if (choice === 'forever') return null;
+  if (choice === '12') return 12;
+  if (choice === '24') return 24;
+  return undefined;
+}
+
 /** What a saved toast's Undo puts back, and how to tell the workspace still holds the change it undoes. */
 interface SavedUndo {
-  readonly what: 'name' | 'time zone' | 'currency' | 'country';
+  readonly what: 'name' | 'time zone' | 'currency' | 'country' | 'retention';
   readonly run: () => void;
   /** Whether the workspace, as read, still holds this change. */
   readonly isStill: (now: WorkspaceSettings) => boolean;
@@ -97,6 +114,7 @@ export function GeneralScreen({
   const sending = useRef<string | undefined>(undefined);
   const [zoneBusy, setZoneBusy] = useState(false);
   const [regionBusy, setRegionBusy] = useState(false);
+  const [keepBusy, setKeepBusy] = useState(false);
   const [isChanging, setChanging] = useState(false);
   // A fresh address dialog per opening, so its field starts from the address again.
   const [opened, setOpened] = useState(0);
@@ -120,6 +138,8 @@ export function GeneralScreen({
   // The time zone on its way, read by an Undo pressed meanwhile (a ref, as the toast outlives the render it came from).
   const zoneSending = useRef<string | undefined>(undefined);
   const regionSending = useRef<'currency' | 'country' | undefined>(undefined);
+  // How long submissions are kept, on its way (`null` is forever), read by an Undo pressed meanwhile.
+  const keepSending = useRef<KeepChoice | undefined>(undefined);
   const lastSaved = useRef<string | undefined>(undefined);
   /** Closes the open Undo, if any: a newer change is on its way. */
   const closeSaved = () => {
@@ -262,6 +282,36 @@ export function GeneralScreen({
       .finally(() => {
         if (zoneSending.current === zone) zoneSending.current = undefined;
         setZoneBusy(false);
+      });
+  };
+
+  /** Saves how long form submissions are kept (null is forever, AC-1054), with an Undo that saves the one before. */
+  const setKeep = (next: 12 | 24 | null, previous: 12 | 24 | null, withUndo: boolean) => {
+    setKeepBusy(true);
+    keepSending.current = keepChoiceOf(next);
+    closeSaved();
+    data.workspace
+      .update(slug, { keepSubmissionsMonths: next })
+      .then(async () => {
+        await onChanged();
+        saved(
+          strings.keepChanged(next ?? undefined),
+          withUndo
+            ? {
+                what: 'retention',
+                run: () => {
+                  setKeep(previous, next, false);
+                },
+                isStill: (now) => (now.keepSubmissionsMonths ?? null) === next,
+                isBusy: () => keepSending.current !== undefined,
+              }
+            : undefined,
+        );
+      })
+      .catch(fail)
+      .finally(() => {
+        if (keepSending.current === keepChoiceOf(next)) keepSending.current = undefined;
+        setKeepBusy(false);
       });
   };
 
@@ -441,6 +491,26 @@ export function GeneralScreen({
           </SettingsRow>
         </Card>
       </SettingsSection>
+      <SettingsSection title={strings.formsSection}>
+        <Card>
+          <SettingsRow title={strings.keepSubmissions} description={strings.keepSubmissionsText} control="field">
+            <Select
+              savesOnPick
+              label={strings.keepSubmissions}
+              isLabelHidden
+              items={KEEP_CHOICES.map((id) => ({ id, label: strings.keepChoices[id] }))}
+              value={keepChoiceOf(settings.keepSubmissionsMonths ?? null)}
+              isReadOnly={!canEdit}
+              isDisabled={keepBusy}
+              onChange={(choice) => {
+                const next = monthsOf(choice);
+                const was = settings.keepSubmissionsMonths ?? null;
+                if (next !== undefined && next !== was) setKeep(next, was, true);
+              }}
+            />
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
       {mayDelete && (
         <SettingsSection title={strings.danger}>
           <Card>
@@ -527,6 +597,13 @@ export function GeneralPending() {
             <Skeleton shape="field" />
           </SettingsRow>
           <SettingsRow title={strings.country} control="field">
+            <Skeleton shape="field" />
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
+      <SettingsSection title={strings.formsSection}>
+        <Card isBusy>
+          <SettingsRow title={strings.keepSubmissions} description={strings.keepSubmissionsText} control="field">
             <Skeleton shape="field" />
           </SettingsRow>
         </Card>

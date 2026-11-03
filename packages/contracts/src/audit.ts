@@ -140,6 +140,7 @@ export const AUDIT_FIELDS = [
   'rules',
   'leadsTo',
   'people',
+  'keepSubmissions',
 ] as const;
 /** A field a change names. */
 export const AuditField = z.enum(AUDIT_FIELDS);
@@ -254,7 +255,7 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     ['workspace.updated'],
     workspace,
     z.strictObject({
-      fields: z.array(z.enum(['name', 'timeZone', 'address'])),
+      fields: z.array(z.enum(['name', 'timeZone', 'address', 'keepSubmissions'])),
       from: z.string().optional(),
       to: z.string().optional(),
     }),

@@ -22,6 +22,14 @@ export const strings = {
   /** What a cleared currency or country shows: the language's region's, as before it was set. */
   automatic: 'Automatic',
   regionInfo: 'Default for new money and phone fields.',
+  // Forms (spec 0023, AC-1054): how long submissions are kept.
+  formsSection: 'Forms',
+  keepSubmissions: 'Keep submissions',
+  keepSubmissionsText: 'Older ones are deleted nightly. People and companies they made stay. Spam goes after 30 days.',
+  keepChoices: { forever: 'Forever', '12': '12 months', '24': '24 months' },
+  /** The choice saved: undefined is forever. */
+  keepChanged: (months: 12 | 24 | undefined) =>
+    months === undefined ? 'Submissions are kept forever.' : `Submissions are kept for ${String(months)} months.`,
   copyAddress: 'Copy address',
   /** The address row: the whole link, read only; owners and admins change the part after /w/ in its dialog. */
   webAddress: 'Web address',

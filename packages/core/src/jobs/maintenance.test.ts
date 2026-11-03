@@ -496,6 +496,91 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(job.result).toMatchObject({ cleanup: { formVisits: 2 } });
   });
 
+  /** A submission `days` old in `state`, with `mark` as its one answer so the test can tell them apart. */
+  async function submission(
+    workspaceId: string,
+    form: { formId: string; versionId: string },
+    mark: string,
+    days: number,
+    state: string,
+  ) {
+    const [row] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, state, answers, received_at, processed_at)
+       values ($1, $2, $3, $4, $5, jsonb_build_object('mark', $6::text), now() - make_interval(days => $7::integer),
+               case when $5 = 'processed' then now() else null end)
+       returning id`,
+      [workspaceId, form.formId, form.versionId, newId(), state, mark, days],
+    );
+    if (row === undefined) throw new Error('No submission.');
+    return row.id;
+  }
+
+  const marksLeft = (workspaceId: string) =>
+    testQuery<{ mark: string }>(
+      ownerUrl,
+      `select answers ->> 'mark' as mark from form_submissions where workspace_id = $1 order by 1`,
+      [workspaceId],
+    ).then((rows) => rows.map((row) => row.mark));
+
+  it('deletes submissions past the workspace’s retention and spam past 30 days, never the records they made (spec 0023, AC-1054)', async () => {
+    const t = await team([]);
+    const other = await team([]);
+    const form = await formFor(t.workspaceId);
+    const otherForm = await formFor(other.workspaceId);
+    await testQuery(ownerUrl, 'update workspaces set keep_submissions_months = 12 where id = $1', [t.workspaceId]);
+    // 13 months old and filed onto a person: it goes, the person stays.
+    const filed = await submission(t.workspaceId, form, 'a-old', 396, 'processed');
+    const ada = await person(t.owner, 'Ada');
+    const [people] = await testQuery<{ object: string }>(
+      ownerUrl,
+      `select id as object from objects where workspace_id = $1 and api_slug = 'people'`,
+      [t.workspaceId],
+    );
+    await testQuery(
+      ownerUrl,
+      `insert into form_submission_records (workspace_id, submission_id, object_id, record_id, action, role)
+       values ($1, $2, $3, $4, 'created', 'main')`,
+      [t.workspaceId, filed, people?.object, ada],
+    );
+    await submission(t.workspaceId, form, 'b-recent', 330, 'processed');
+    await submission(t.workspaceId, form, 'c-spam-old', 31, 'spam');
+    await submission(t.workspaceId, form, 'd-spam-new', 29, 'spam');
+    // Still being filed: never taken, however old.
+    await submission(t.workspaceId, form, 'e-in-flight', 420, 'received');
+    await submission(t.workspaceId, form, 'f-failed-old', 400, 'failed');
+    // Another workspace, kept forever: only its old spam goes, and never by this workspace's run.
+    await submission(other.workspaceId, otherForm, 'g-forever', 900, 'processed');
+    await submission(other.workspaceId, otherForm, 'h-spam-old', 40, 'spam');
+
+    const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    expect(await marksLeft(t.workspaceId)).toEqual(['b-recent', 'd-spam-new', 'e-in-flight']);
+    // The person the old submission made is still there; only the link to it went with the submission.
+    const [kept] = await testQuery<{ count: number }>(
+      ownerUrl,
+      'select count(*)::int as count from records where workspace_id = $1 and id = $2',
+      [t.workspaceId, ada],
+    );
+    expect(kept?.count).toBe(1);
+    const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
+    expect(job.result).toMatchObject({ cleanup: { submissions: 3 } });
+    // Untouched by another workspace's run.
+    expect(await marksLeft(other.workspaceId)).toEqual(['g-forever', 'h-spam-old']);
+
+    // A second run the next day finds nothing new to take.
+    const again = await cleanUp(t.workspaceId, '2026-10-16');
+    expect(again.outcomes.at(-1)).toBe('succeeded');
+    expect(await marksLeft(t.workspaceId)).toEqual(['b-recent', 'd-spam-new', 'e-in-flight']);
+    const second = await getJob(systemScope(db, t.workspaceId), registry(), again.jobId);
+    expect(second.result).toMatchObject({ cleanup: { submissions: 0 } });
+
+    // Forever keeps everything but spam past its 30 days.
+    const { outcomes: forever } = await cleanUp(other.workspaceId, '2026-10-15');
+    expect(forever.at(-1)).toBe('succeeded');
+    expect(await marksLeft(other.workspaceId)).toEqual(['g-forever']);
+  });
+
   it('makes the link page a membership’s own transaction didn’t make, once (26 Oct 2026)', async () => {
     const t = await team([]);
     const userId = randomUUID();

@@ -253,6 +253,8 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
   };
   const flag = (value: unknown): AuditValue | undefined =>
     typeof value === 'boolean' ? { kind: 'flag', on: value } : undefined;
+  // How long submissions are kept (AC-1054): a number of months, or `null` stored for forever.
+  const keptFor = (value: unknown): AuditValue => count(value) ?? { kind: 'text', text: 'forever' };
   const change = (
     field: AuditChange['field'],
     was: AuditValue | undefined,
@@ -444,6 +446,7 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         ...(has(after, 'name') ? (['name'] as const) : []),
         ...(has(after, 'timeZone') ? (['timeZone'] as const) : []),
         ...(has(after, 'slug') ? (['address'] as const) : []),
+        ...(has(after, 'keepSubmissionsMonths') ? (['keepSubmissions'] as const) : []),
       ];
       const from = text(before.name);
       const to = text(after.name);
@@ -457,6 +460,10 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
           ...change('name', plain(before.name), plain(after.name)),
           ...change('timeZone', zone(before.timeZone), zone(after.timeZone)),
           ...change('address', plain(before.slug), plain(after.slug)),
+          // Months, or none for forever: the change says which, both sides.
+          ...(has(after, 'keepSubmissionsMonths')
+            ? change('keepSubmissions', keptFor(before.keepSubmissionsMonths), keptFor(after.keepSubmissionsMonths))
+            : []),
         ],
       };
     }

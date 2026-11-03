@@ -5755,7 +5755,8 @@ export function createDataLayer({
         call((options) => api.workspace.get({ workspace }, options)),
       /**
        * Renames it, changes its time zone, its default currency or country
-       * (`null` takes one back to the language's region's), or moves it to a
+       * (`null` takes one back to the language's region's), how long it keeps
+       * form submissions (`null` is forever, AC-1054), or moves it to a
        * new address (the answer's `slug`). Refusals: `FORBIDDEN`,
        * `INPUT_INVALID`, `SLUG_TAKEN` (field `slug`). A new address drops what
        * was cached under the old one and reads the person's workspaces again,
@@ -5771,6 +5772,8 @@ export function createDataLayer({
           readonly slug?: string;
           readonly currency?: string | null;
           readonly country?: string | null;
+          /** How many months form submissions are kept (spec 0023, AC-1054); `null` keeps them forever. */
+          readonly keepSubmissionsMonths?: 12 | 24 | null;
         },
       ): Promise<WorkspaceSettings> {
         const updated = await call((options) =>

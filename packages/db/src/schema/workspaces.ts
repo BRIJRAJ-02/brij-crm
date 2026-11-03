@@ -11,6 +11,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   uniqueIndex,
   uuid,
@@ -36,6 +37,8 @@ export const workspaces = pgTable(
     currency: text('currency'),
     /** The default country (ISO 3166 alpha 2) of new phone numbers; none keeps the language's region's. */
     country: text('country'),
+    /** How many months form submissions are kept (spec 0023, AC-1054): 12 or 24; none keeps them forever. */
+    keepSubmissionsMonths: smallint('keep_submissions_months'),
     /** When a deleted workspace's purge may take it; set with `deleted_at`, cleared on restore (AC-823). */
     purgeAfter: timestamptz('purge_after'),
     ...auditColumns(),
@@ -45,6 +48,10 @@ export const workspaces = pgTable(
     check('workspaces_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
     check('workspaces_currency', sql`${t.currency} is null or ${t.currency} ~ '^[A-Z]{3}$'`),
     check('workspaces_country', sql`${t.country} is null or ${t.country} ~ '^[A-Z]{2}$'`),
+    check(
+      'workspaces_keep_submissions',
+      sql`${t.keepSubmissionsMonths} is null or ${t.keepSubmissionsMonths} in (12, 24)`,
+    ),
     uniqueIndex('workspaces_slug')
       .on(t.slug)
       .where(sql`${t.deletedAt} is null`),

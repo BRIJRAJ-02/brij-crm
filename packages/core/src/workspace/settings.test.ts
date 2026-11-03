@@ -189,6 +189,39 @@ describe('Workspace › General (AC-822)', () => {
       },
     ]);
   });
+
+  it('keeps form submissions forever until workspace.manage sets 12 or 24 months, audited (spec 0023, AC-1054)', async () => {
+    const t = await team(['member', 'admin']);
+    const member = t.as(t.ids[0] ?? '', 'member');
+    expect((await getWorkspaceSettings(member)).keepSubmissionsMonths).toBeUndefined();
+    expect(await refusalOf(updateWorkspace(member, { keepSubmissionsMonths: 12 }))).toEqual({
+      code: 'FORBIDDEN',
+      message: PERMISSIONS['workspace.manage'].message,
+    });
+    const admin = t.as(t.ids[1] ?? '', 'admin');
+    expect((await updateWorkspace(admin, { keepSubmissionsMonths: 12 })).settings.keepSubmissionsMonths).toBe(12);
+    // The same again writes nothing; forever is `null`.
+    await updateWorkspace(admin, { keepSubmissionsMonths: 12 });
+    expect(
+      (await updateWorkspace(admin, { keepSubmissionsMonths: null })).settings.keepSubmissionsMonths,
+    ).toBeUndefined();
+    expect(await auditOf(t.workspaceId)).toEqual([
+      {
+        action: 'workspace.updated',
+        target_id: t.workspaceId,
+        before: { keepSubmissionsMonths: null },
+        after: { keepSubmissionsMonths: 12 },
+        actor_member_id: t.ids[1],
+      },
+      {
+        action: 'workspace.updated',
+        target_id: t.workspaceId,
+        before: { keepSubmissionsMonths: 12 },
+        after: { keepSubmissionsMonths: null },
+        actor_member_id: t.ids[1],
+      },
+    ]);
+  });
 });
 
 describe('Workspace › General: the web address', () => {
