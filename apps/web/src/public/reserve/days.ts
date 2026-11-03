@@ -1,5 +1,5 @@
 // The reservation page's pure helpers (spec 0066 B7 lite): which days are open on the place's own calendar, how a
-// time reads on the place's clock, and Lunch and Dinner (0065 AC-6551). Times are always the place's, since a guest
+// time reads on the place's clock, and Lunch and Dinner from the place's service windows (0065 AC-6551). Times are always the place's, since a guest
 // books a table where the table is.
 import type { PublicTablePage } from '@crm/data/tables';
 
@@ -51,25 +51,73 @@ export function longDay(instant: string, zone: string, locale: string): string {
   );
 }
 
-/** The hour (0 to 23) of an instant on the place's clock. */
-function hourOf(instant: string, zone: string): number {
-  const text = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: zone }).format(
-    new Date(instant),
-  );
-  return Number(text);
+/** "HH:MM" of an instant on the place's clock. */
+function clockOf(instant: string, zone: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: zone,
+  }).format(new Date(instant));
 }
 
-/** The day's times as Lunch (before 4 PM) and Dinner, each only when it has a time. */
+/** The opening ranges of `date`: its exception's own, else the weekly pattern's. */
+export function rangesOn(
+  hours: PublicTablePage['hours'],
+  date: string,
+): readonly { readonly from: string; readonly to: string; readonly name?: string | undefined }[] {
+  const exception = hours.exceptions.find((each) => each.date === date);
+  if (exception !== undefined) return exception.closed === true ? [] : (exception.ranges ?? []);
+  const day = WEEK[new Date(`${date}T12:00:00.000Z`).getUTCDay()] ?? 'sun';
+  return hours.weekly[day] ?? [];
+}
+
+/** How a group of times is headed: Lunch, Dinner, plain Times, or the range's own name. */
+export type ServiceHeading =
+  { readonly kind: 'lunch' | 'dinner' | 'times' } | { readonly kind: 'named'; readonly text: string };
+
+/**
+ * The day's times grouped by the place's service windows (its opening ranges that day), never by a fixed hour: a
+ * range's own name heads it ("Brunch"); else two or more ranges read Lunch (the first) and Dinner (the last), with
+ * any between headed by their hours; one range is just Times. A time outside every range joins the range before it.
+ */
 export function services(
   times: readonly string[],
   zone: string,
-): readonly { readonly name: 'lunch' | 'dinner'; readonly times: readonly string[] }[] {
-  const lunch = times.filter((time) => hourOf(time, zone) < 16);
-  const dinner = times.filter((time) => hourOf(time, zone) >= 16);
-  return [
-    ...(lunch.length === 0 ? [] : [{ name: 'lunch' as const, times: lunch }]),
-    ...(dinner.length === 0 ? [] : [{ name: 'dinner' as const, times: dinner }]),
-  ];
+  ranges: readonly { readonly from: string; readonly to: string; readonly name?: string | undefined }[],
+): readonly { readonly key: string; readonly heading: ServiceHeading; readonly times: readonly string[] }[] {
+  const sorted = [...ranges].sort((a, b) => a.from.localeCompare(b.from));
+  if (sorted.length <= 1) {
+    const only = sorted[0];
+    return times.length === 0
+      ? []
+      : [
+          {
+            key: only?.from ?? 'times',
+            heading: only?.name === undefined ? { kind: 'times' } : { kind: 'named', text: only.name },
+            times,
+          },
+        ];
+  }
+  const groups = sorted.map((range) => ({ range, times: [] as string[] }));
+  for (const time of times) {
+    const clock = clockOf(time, zone);
+    const index = groups.findLastIndex((group) => group.range.from <= clock);
+    (groups[Math.max(0, index)] ?? groups[0])?.times.push(time);
+  }
+  return groups.flatMap((group, index): ReturnType<typeof services> => {
+    if (group.times.length === 0) return [];
+    const { range } = group;
+    const heading: ServiceHeading =
+      range.name !== undefined
+        ? { kind: 'named', text: range.name }
+        : index === 0
+          ? { kind: 'lunch' }
+          : index === groups.length - 1
+            ? { kind: 'dinner' }
+            : { kind: 'named', text: `${range.from}–${range.to}` };
+    return [{ key: range.from, heading, times: group.times }];
+  });
 }
 
 /** The place date of an instant. */

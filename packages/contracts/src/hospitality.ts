@@ -265,7 +265,10 @@ export type BusinessView = z.infer<typeof BusinessView>;
 export const FirstBusiness = z.object({
   name: BusinessProfileFields.shape.name,
   kind: BusinessKindName,
-  place: PlaceFields.pick({ addressLine: true, city: true, postcode: true, country: true, timeZone: true }),
+  place: PlaceFields.pick({ addressLine: true, city: true, postcode: true, country: true, timeZone: true }).extend({
+    /** The first place's opening hours; empty when absent. */
+    hours: PlaceHours.optional(),
+  }),
   currency: Currency,
 });
 /** The first install's business card. */

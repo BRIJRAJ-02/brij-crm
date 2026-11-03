@@ -27,8 +27,8 @@ import {
   type TableRefusal,
 } from '@crm/data/tables';
 import { useEffect, useMemo, useState } from 'react';
-import { compact, longDay, openDays, placeDate, shortDay, timeLabel } from './days.ts';
-import { placeFacts } from './ReservePage.tsx';
+import { compact, longDay, openDays, placeDate, rangesOn, services, shortDay, timeLabel } from './days.ts';
+import { frameHead, placeFacts } from './ReservePage.tsx';
 import { strings } from './strings.ts';
 
 type Loaded =
@@ -59,6 +59,28 @@ export function ManageReservation({
   };
   const [now] = useState(() => Date.now());
   const [notice, setNotice] = useState<string | undefined>();
+  const [attempt, setAttempt] = useState(0);
+  // The calendar file, fetched by POST with the link's token (never in an address), held as an object URL.
+  const [ics, setIcs] = useState<string | undefined>();
+  const isLive = read?.key === guestKey && read.loaded.status === 'ready' && read.loaded.visit.status !== 'cancelled';
+
+  useEffect(() => {
+    if (token === undefined || !isLive) return;
+    let current = true;
+    let made: string | undefined;
+    client.ics(page.key, { token }).then(
+      (file) => {
+        if (!current) return;
+        made = URL.createObjectURL(file);
+        setIcs(made);
+      },
+      () => undefined,
+    );
+    return () => {
+      current = false;
+      if (made !== undefined) URL.revokeObjectURL(made);
+    };
+  }, [client, page.key, token, isLive]);
 
   useEffect(() => {
     if (guest === undefined) return;
@@ -76,14 +98,23 @@ export function ManageReservation({
     return () => {
       current = false;
     };
-  }, [client, page.key, guest]);
+  }, [client, page.key, guest, attempt]);
 
   if (guest === undefined) return <FindReservation client={client} page={page} onFound={setGuest} />;
   if (loaded.status === 'loading')
     return <BookingMessage title={strings.yourReservation} isLoading page="booking_manage" />;
   if (loaded.status === 'error') {
+    // Never a dead end: Try again, or find it by the code and email (the manage page without a link).
     return (
-      <BookingMessage title={strings.yourReservation} page="booking_manage">
+      <BookingMessage
+        title={strings.yourReservation}
+        page="booking_manage"
+        onRetry={() => {
+          setRead(undefined);
+          setAttempt((count) => count + 1);
+        }}
+        link={{ label: strings.findTitle, href: `/r/${encodeURIComponent(page.key)}/manage` }}
+      >
         {loaded.message}
       </BookingMessage>
     );
@@ -144,9 +175,7 @@ export function ManageReservation({
         ...(address === '' ? [] : [{ term: strings.where, description: `${page.place.name}, ${address}` }]),
         ...(visit.note === undefined ? [] : [{ term: strings.note, description: visit.note }]),
       ]}
-      {...(state === 'confirmed' && token !== undefined
-        ? { calendars: { google, outlook, ics: client.icsUrl(page.key, token) } }
-        : {})}
+      {...(state === 'confirmed' && token !== undefined ? { calendars: { google, outlook, ics } } : {})}
       again={{ label: strings.reserveAgain, href: `/r/${encodeURIComponent(page.key)}` }}
       brand={{ href: poweredByHref('booking_manage', undefined), label: strings.poweredBy }}
       {...(notice === undefined
@@ -164,6 +193,13 @@ export function ManageReservation({
         ? {
             changes: (
               <BookingChanges
+                labels={{
+                  move: strings.change,
+                  cancel: strings.cancel,
+                  keep: strings.keep,
+                  cancelTitle: strings.cancelTitle(visit.party, page.business.name),
+                  cancelText: strings.cancelBody(when),
+                }}
                 title={summary}
                 hostName={page.business.name}
                 guests={[]}
@@ -212,8 +248,11 @@ function ChangePicker({
   const [party, setParty] = useState(visit.party);
   const [day, setDay] = useState(placeDate(visit.start, zone));
   const [time, setTime] = useState<string | undefined>();
-  const [answer, setAnswer] = useState<{ readonly key: string; readonly times: readonly string[] } | undefined>();
-  const times = answer?.key === `${String(party)}|${day}` ? answer.times : undefined;
+  const [answer, setAnswer] = useState<
+    { readonly key: string; readonly times: readonly string[]; readonly problem?: string } | undefined
+  >();
+  const current = answer?.key === `${String(party)}|${day}` ? answer : undefined;
+  const times = current?.times;
   const [problem, setProblem] = useState<string | undefined>();
   const [isSaving, setSaving] = useState(false);
   useEffect(() => {
@@ -223,8 +262,9 @@ function ChangePicker({
       (read) => {
         setAnswer({ key, times: read.times });
       },
-      () => {
-        if (!controller.signal.aborted) setAnswer({ key, times: [] });
+      (error: unknown) => {
+        if (!controller.signal.aborted)
+          setAnswer({ key, times: [], problem: isDataError(error) ? error.message : strings.offline });
       },
     );
     return () => {
@@ -232,6 +272,13 @@ function ChangePicker({
     };
   }, [client, page.key, party, day]);
   const label = (instant: string) => timeLabel(instant, zone, locale);
+  const groups = services(times ?? [], zone, rangesOn(page.hours, day));
+  const slotsOf = (list: readonly string[]) =>
+    list.map((instant) => ({
+      id: instant,
+      label: label(instant),
+      name: `${label(instant)}, ${shortDay(day, locale)}`,
+    }));
   return (
     <>
       {problem !== undefined && (
@@ -263,20 +310,42 @@ function ChangePicker({
           setTime(undefined);
         }}
       />
-      <SlotList
-        heading={shortDay(day, locale)}
-        layout="grid"
-        slots={(times ?? []).map((instant) => ({
-          id: instant,
-          label: label(instant),
-          name: `${label(instant)}, ${shortDay(day, locale)}`,
-        }))}
-        value={time}
-        onChange={setTime}
-        isLoading={times === undefined}
-        empty={strings.noTimes}
-        drawKey={`${day}|${String(party)}`}
-      />
+      {current?.problem !== undefined ? (
+        // The real reason the times didn't load (offline, too many tries), never "No tables left".
+        <Callout tone="danger" isAnnounced>
+          {current.problem}
+        </Callout>
+      ) : times === undefined || groups.length === 0 ? (
+        <SlotList
+          heading={shortDay(day, locale)}
+          layout="grid"
+          slots={[]}
+          value={undefined}
+          onChange={setTime}
+          isLoading={times === undefined}
+          empty={strings.noTimes}
+        />
+      ) : (
+        groups.map((group) => (
+          <SlotList
+            key={group.key}
+            heading={
+              group.heading.kind === 'named'
+                ? group.heading.text
+                : group.heading.kind === 'lunch'
+                  ? strings.lunch
+                  : group.heading.kind === 'dinner'
+                    ? strings.dinner
+                    : shortDay(day, locale)
+            }
+            layout="grid"
+            slots={slotsOf(group.times)}
+            value={time}
+            onChange={setTime}
+            drawKey={`${day}|${String(party)}|${group.key}`}
+          />
+        ))
+      )}
       <Button
         variant="primary"
         size="lg"
@@ -324,6 +393,7 @@ function FindReservation({
   const [problem, setProblem] = useState<string | undefined>();
   const [isFinding, setFinding] = useState(false);
   const find = () => {
+    if (isFinding) return;
     setFinding(true);
     setProblem(undefined);
     const key = { code: code.trim(), email: email.trim() };
@@ -341,8 +411,7 @@ function FindReservation({
   };
   return (
     <BookingFrame
-      host={{ name: page.business.name }}
-      title={page.place.name}
+      {...frameHead(page)}
       description={strings.findIntro}
       facts={placeFacts(page)}
       heading={strings.findTitle}
@@ -376,8 +445,8 @@ function FindReservation({
           autoComplete="email"
           isRequired
         />
-        <Button type="submit" variant="primary" isFullWidth="center" isDisabled={isFinding}>
-          {strings.find}
+        <Button type="submit" variant="primary" isFullWidth="center" isPending={isFinding}>
+          {isFinding ? strings.finding : strings.find}
         </Button>
       </form>
     </BookingFrame>

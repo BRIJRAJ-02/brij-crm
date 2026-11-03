@@ -199,7 +199,8 @@ export async function installApp(
           createdByMemberId: by,
           updatedByMemberId: by,
         });
-        await insertPlace(tx, scope, newId(), { name: input.business.name, ...input.business.place }, by);
+        const { hours, ...place } = input.business.place;
+        await insertPlace(tx, scope, newId(), { name: input.business.name, ...place }, by, hours);
         // The card's currency becomes the workspace's only while it has none: an existing default is never moved.
         const changed = await tx
           .update(workspaces)

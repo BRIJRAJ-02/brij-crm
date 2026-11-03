@@ -18,8 +18,8 @@ import {
   type BookingFact,
 } from '@crm/ui/public-booking';
 import { isDataError, type PublicTablePage, type TableClient, type TableRefusal } from '@crm/data/tables';
-import { useEffect, useMemo, useState } from 'react';
-import { openDays, services, shortDay, timeLabel } from './days.ts';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { openDays, rangesOn, services, shortDay, timeLabel, type ServiceHeading } from './days.ts';
 import { strings } from './strings.ts';
 
 /** What a reservation made hands the page: the manage link's token and the code. */
@@ -36,6 +36,19 @@ export function placeFacts(page: PublicTablePage): readonly BookingFact[] {
     ...(page.place.phone === undefined ? [] : [{ id: 'phone', icon: 'phone' as const, children: page.place.phone }]),
   ];
 }
+
+/** The rail's head: the business, and the place as the title only when it is a name of its own (never "Somewhere / Somewhere"). */
+export function frameHead(page: PublicTablePage): {
+  readonly host: { readonly name: string };
+  readonly title?: string;
+} {
+  return page.place.name.trim().toLowerCase() === page.business.name.trim().toLowerCase()
+    ? { host: { name: page.business.name } }
+    : { host: { name: page.business.name }, title: page.place.name };
+}
+
+/** The occasions, by key, in the order the chips show them. */
+const OCCASION_KEYS = ['birthday', 'anniversary', 'date', 'business', 'other'] as const;
 
 /** The first of the month of a date. */
 const monthOf = (date: string) => date.slice(0, 7);
@@ -74,7 +87,11 @@ export function ReservePage({
   const timesKey = `${String(party)}|${day ?? ''}`;
   const times: Times = answer?.key === timesKey ? answer.times : { status: 'loading' };
   const [notice, setNotice] = useState<{ readonly text: string; readonly next: readonly string[] } | undefined>();
+  const [occasion, setOccasion] = useState<readonly string[]>([]);
   const [startedAt] = useState(() => Date.now());
+  // Bumped to read the day's times again (a time was just taken and nothing else was offered with the refusal).
+  const [reload, setReload] = useState(0);
+  const timesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (day === undefined) return;
@@ -92,23 +109,22 @@ export function ReservePage({
     return () => {
       controller.abort();
     };
-  }, [client, page.key, party, day]);
+  }, [client, page.key, party, day, reload]);
 
   const frame = {
     // The rail heads with the business, as a booking page heads with its host; the place is the page's title.
-    host: { name: page.business.name },
-    title: page.place.name,
+    ...frameHead(page),
     description: strings.goodToKnow(Math.round(page.cancelCutoffMinutes / 60)),
     facts: placeFacts(page),
     isEmbedded,
   };
 
-  if (!page.taking) {
+  if (!page.taking || days.length === 0) {
+    // Not taking reservations, or no day in the window opens at all: say so with the phone, never a spinner.
+    const why = page.taking ? strings.noOpenDays : strings.closedNow;
     return (
       <BookingMessage title={page.place.name} page="booking_page">
-        {page.place.phone === undefined
-          ? strings.closedNow
-          : `${strings.closedNow} ${strings.callUs(page.place.phone)}`}
+        {page.place.phone === undefined ? why : `${why} ${strings.callUs(page.place.phone)}`}
       </BookingMessage>
     );
   }
@@ -120,9 +136,8 @@ export function ReservePage({
   };
 
   if (isDetails && time !== undefined) {
-    const occasionKeys = ['birthday', 'anniversary', 'date', 'business', 'other'] as const;
     const reserve = async (values: BookingDetailsValues): Promise<BookingDetailsOutcome> => {
-      const picked = strings.occasions.indexOf(values.answers.occasion as (typeof strings.occasions)[number]);
+      const picked = OCCASION_KEYS.find((key) => key === occasion[0]);
       try {
         const made = await client.reserve(page.key, {
           idempotencyKey: attempt,
@@ -132,7 +147,7 @@ export function ReservePage({
           email: values.email,
           phone: values.phone,
           ...(values.note.trim() === '' ? {} : { note: values.note }),
-          ...(picked < 0 ? {} : { occasion: occasionKeys[picked] ?? 'other' }),
+          ...(picked === undefined ? {} : { occasion: picked }),
           marketing: values.answers.marketing === true,
           timeZone: zone,
           company_url: values.trap,
@@ -147,9 +162,14 @@ export function ReservePage({
       } catch (error) {
         if (!isDataError(error)) return { kind: 'failed', message: strings.offline };
         if (error.code === 'SLOT_TAKEN') {
-          // Back to the times, with the next free ones offered at once (checklabs only said it was gone).
+          // Back to the times, with the next free ones offered at once (checklabs only said it was gone); with none
+          // offered, the day's times read again, so the taken one is never offered twice.
           const next = (error as TableRefusal).next ?? [];
           setNotice({ text: next.length === 0 ? strings.takenNone : strings.taken, next });
+          if (next.length === 0) {
+            setAnswer(undefined);
+            setReload((count) => count + 1);
+          }
           setTime(undefined);
           setDetails(false);
           setAttempt(crypto.randomUUID());
@@ -173,15 +193,24 @@ export function ReservePage({
         <BookingDetails
           needsPhone
           maxGuests={0}
+          labels={{
+            confirm: strings.detailsConfirm,
+            confirming: strings.detailsConfirming,
+            done: strings.detailsDone,
+            note: strings.detailsNote,
+          }}
+          extra={
+            <ChoiceChips
+              label={strings.occasion}
+              labelAside={strings.optional}
+              tone="strong"
+              isSingle
+              choices={OCCASION_KEYS.map((key) => ({ id: key, label: strings.occasions[key] }))}
+              selected={occasion}
+              onChange={setOccasion}
+            />
+          }
           questions={[
-            {
-              id: 'occasion',
-              key: 'occasion',
-              label: strings.occasion,
-              answerType: 'choice',
-              choices: [...strings.occasions],
-              required: false,
-            },
             {
               id: 'marketing',
               key: 'marketing',
@@ -205,7 +234,15 @@ export function ReservePage({
   });
   const offered =
     notice !== undefined && notice.next.length > 0 ? notice.next : times.status === 'ready' ? times.times : [];
-  const groups = services(offered, zone);
+  const groups = services(offered, zone, day === undefined ? [] : rangesOn(page.hours, day));
+  const headingOf = (heading: ServiceHeading) =>
+    heading.kind === 'named'
+      ? heading.text
+      : heading.kind === 'lunch'
+        ? strings.lunch
+        : heading.kind === 'dinner'
+          ? strings.dinner
+          : strings.times;
   const slotsOf = (list: readonly string[]) =>
     list.map((instant) => ({
       id: instant,
@@ -217,19 +254,27 @@ export function ReservePage({
       <Callout tone="danger" isAnnounced>
         {times.message}
       </Callout>
-    ) : groups.length === 0 && times.status === 'ready' && notice === undefined ? (
-      <SlotList heading={strings.times} slots={[]} value={undefined} onChange={pickTime} empty={strings.noTimes} />
-    ) : times.status === 'loading' && notice === undefined ? (
-      <SlotList heading={strings.times} slots={[]} value={undefined} onChange={pickTime} isLoading />
+    ) : groups.length === 0 && times.status === 'ready' ? (
+      <SlotList
+        heading={strings.times}
+        layout="grid"
+        slots={[]}
+        value={undefined}
+        onChange={pickTime}
+        empty={strings.noTimes}
+      />
+    ) : times.status === 'loading' && !(notice !== undefined && notice.next.length > 0) ? (
+      <SlotList heading={strings.times} layout="grid" slots={[]} value={undefined} onChange={pickTime} isLoading />
     ) : (
       groups.map((group) => (
         <SlotList
-          key={group.name}
-          heading={group.name === 'lunch' ? strings.lunch : strings.dinner}
+          key={group.key}
+          heading={headingOf(group.heading)}
+          layout="grid"
           slots={slotsOf(group.times)}
           value={time}
           onChange={pickTime}
-          drawKey={`${day ?? ''}|${String(party)}|${group.name}`}
+          drawKey={`${day ?? ''}|${String(party)}|${group.key}`}
         />
       ))
     );
@@ -238,25 +283,30 @@ export function ReservePage({
       {...frame}
       heading={strings.reserveTable}
       view="month"
-      aside={<>{aside}</>}
+      // The times' own wrapper, so Choose a time can move focus to the first one.
+      aside={<div ref={timesRef}>{aside}</div>}
       footer={
         <Button
           variant="primary"
           size="lg"
           isFullWidth="center"
-          isDisabled={time === undefined}
           onPress={() => {
+            // Never a dead button: with no time yet it says so and takes the visitor to the first one.
+            if (time === undefined) {
+              timesRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
+              return;
+            }
             setDetails(true);
           }}
         >
           {time === undefined || day === undefined
-            ? strings.reserve
+            ? strings.chooseTime
             : strings.reserveAt(shortDay(day, locale), label(time), party)}
         </Button>
       }
     >
       {notice !== undefined && (
-        <Callout tone="danger" isAnnounced>
+        <Callout tone="warning" isAnnounced>
           {notice.text}
         </Callout>
       )}
@@ -273,6 +323,7 @@ export function ReservePage({
             setNotice(undefined);
           }
         }}
+        tone="strong"
         labelAside={strings.largerPartyShort(page.partyMax)}
       />
       <MonthTiles
