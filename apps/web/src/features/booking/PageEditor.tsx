@@ -1054,7 +1054,8 @@ export function PageEditor({
                       >
                         {publishStrings.restoreText}
                       </Modal>
-                      {page.status === 'paused' && <Callout tone="info">{strings.pausedNote}</Callout>}
+                      {/* The publish bar says Paused for a page its reader can change; a locked page has no bar. */}
+                      {page.status === 'paused' && isLocked && <Callout tone="info">{strings.pausedNote}</Callout>}
                       {isLocked && (
                         <Callout tone="info" title={strings.readOnlyTitle}>
                           {strings.readOnlyText}
