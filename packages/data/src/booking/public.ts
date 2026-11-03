@@ -55,8 +55,11 @@ export { isDataError, type DataError } from '../errors.ts';
 
 /** What the public page needs: the page's facts, a range of slots, and the booking. */
 export interface BookingClient {
-  /** The page's facts; `handoff`, a form's signed hand off, opens a page that books only through a form (spec 0037). */
-  page(publicKey: string, handoff?: string): Promise<PublicBookingPage>;
+  /**
+   * The page's facts; `handoff`, a form's signed hand off, opens a page that books only through a form (spec 0037);
+   * `linkHash`, a one off link's token hashed (spec 0062, AC-6204), says whether that link has anything left.
+   */
+  page(publicKey: string, handoff?: string, linkHash?: string): Promise<PublicBookingPage>;
   slots(
     publicKey: string,
     query: {
@@ -142,12 +145,13 @@ export function publicCaller(options: PublicClientOptions, area: 'booking' | 'ha
 export function createBookingClient(options: PublicClientOptions): BookingClient {
   const { base, call } = publicCaller(options);
   return {
-    page: (publicKey, handoff) =>
-      call<PublicBookingPage>(
-        handoff === undefined
-          ? encodeURIComponent(publicKey)
-          : `${encodeURIComponent(publicKey)}?${new URLSearchParams({ p: handoff }).toString()}`,
-      ),
+    page: (publicKey, handoff, linkHash) => {
+      const query = new URLSearchParams({
+        ...(handoff === undefined ? {} : { p: handoff }),
+        ...(linkHash === undefined ? {} : { o: linkHash }),
+      }).toString();
+      return call<PublicBookingPage>(`${encodeURIComponent(publicKey)}${query === '' ? '' : `?${query}`}`);
+    },
     slots: (publicKey, query, signal) =>
       call<PublicSlots>(
         `${encodeURIComponent(publicKey)}/slots?${new URLSearchParams({

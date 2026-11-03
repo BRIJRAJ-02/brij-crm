@@ -34,6 +34,16 @@ export interface BookingChangesProps {
   readonly move: ReactNode;
   /** A quiet line under the picker: which clock its times are on ("Times in Dubai time (GMT+4)"). */
   readonly moveNote?: string;
+  /**
+   * Cancel is offered (spec 0062, AC-6202): false inside the page's cancel cutoff, when only the host can cancel it.
+   * Defaults to true, as every page was before.
+   */
+  readonly canCancel?: boolean;
+  /**
+   * One line under the row when a change is the host's now (inside a cutoff): "Too close to the meeting to change it
+   * here. Reply to your confirmation email."
+   */
+  readonly lockedNote?: string;
   /** Opens this change first: the guest arrived from that link in their email. */
   readonly startsWith?: 'move' | 'cancel';
   /** The most guests a booking takes. */
@@ -65,6 +75,8 @@ export function BookingChanges({
   hostName,
   guests,
   canMove,
+  canCancel = true,
+  lockedNote,
   move,
   moveNote,
   startsWith,
@@ -75,7 +87,7 @@ export function BookingChanges({
 }: BookingChangesProps) {
   const [mode, setMode] = useState<Mode>(startsWith === 'move' && canMove ? 'move' : 'idle');
   // Arriving from the email's Cancel link opens the confirm straight away.
-  const [isCancelOpen, setCancelOpen] = useState(startsWith === 'cancel');
+  const [isCancelOpen, setCancelOpen] = useState(startsWith === 'cancel' && canCancel);
   const headingId = useId();
   const panelId = useId();
   const panelTitleId = useId();
@@ -106,12 +118,15 @@ export function BookingChanges({
           <Button icon="user-plus" isExpanded={mode === 'guests'} controls={panelId} onPress={toggle('guests')}>
             {guests.length > 0 ? strings.guestsCount(guests.length) : strings.addGuests}
           </Button>
-          <span className={styles.end}>
-            <Button ref={cancelButton} variant="danger" icon="circle-x" onPress={() => setCancelOpen(true)}>
-              {strings.cancelBooking}
-            </Button>
-          </span>
+          {canCancel && (
+            <span className={styles.end}>
+              <Button ref={cancelButton} variant="danger" icon="circle-x" onPress={() => setCancelOpen(true)}>
+                {strings.cancelBooking}
+              </Button>
+            </span>
+          )}
         </div>
+        {lockedNote !== undefined && <p className={styles.note}>{lockedNote}</p>}
       </div>
       {mode !== 'idle' && (
         <div

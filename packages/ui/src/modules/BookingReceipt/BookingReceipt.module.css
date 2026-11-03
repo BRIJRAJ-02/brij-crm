@@ -111,7 +111,13 @@
     animation-delay: calc(var(--reveal-duration) * 1.5 + var(--duration-hover));
   }
 
-  .mark[data-state='cancelled'] {
+  .mark[data-state='requested'] {
+    background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
+  }
+
+  .mark[data-state='cancelled'],
+  .mark[data-state='declined'] {
     background: var(--tag-red-bg);
     color: var(--tag-red-text);
   }

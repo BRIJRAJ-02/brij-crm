@@ -141,6 +141,49 @@ export const strings = {
   /** The Meeting tab's switch (spec 0057, AC-5708; moved there 27 Oct 2026), in a form's words. */
   afterBooking: 'After someone books',
   addToCrm: 'Add bookers to People',
+  /** Spec 0062, L1: what a visitor sees once they book, and whether the host confirms each booking first. */
+  confirmFirst: 'Confirm each booking first',
+  confirmFirstHint: 'It holds the time. Unanswered, it declines itself after a day.',
+  thenShow: 'Then show',
+  afterChoices: { confirmation: 'Confirmation', redirect: 'Your page' },
+  redirectUrl: 'Send them to',
+  redirectPlaceholder: 'https://acme.com/thanks',
+  redirectRequired: 'Give the address to send them to.',
+  redirectInvalid: 'Use an address that starts with https://',
+  sendDetails: 'Add their booking to the address',
+  sendDetailsHint: 'Name, email, start, time zone and page.',
+  /** The one off links card (AC-6204). */
+  oneOffLinks: 'One-time links',
+  oneOffLinksLine: 'Each books this page a set number of times, then stops.',
+  newLink: 'New link',
+  linkLabel: 'Label',
+  linkLabelPlaceholder: 'For Grace',
+  linkUses: 'Bookings',
+  linkExpires: 'Expires',
+  linkNever: 'Never',
+  makeLink: 'Make link',
+  linkMade: 'Copy it now. It won’t be shown again.',
+  done: 'Done',
+  linkUsesLeft: (left: number, max: number) => `${String(left)} of ${String(max)} left`,
+  linkStates: { used: 'Used', expired: 'Expired', revoked: 'Revoked' },
+  linkUntitled: 'Untitled link',
+  revoke: 'Revoke',
+  revokeTitle: 'Revoke this link?',
+  revokeBody: 'Nobody can book with it after this.',
+  noLinks: 'No links yet.',
+  linksFailed: 'Links didn’t load.',
+  linkFailed: 'That didn’t work. Try again.',
+  /** The requests card (AC-6203). */
+  requests: 'Requests',
+  requestsLine: 'Confirm or decline. Each holds its time until you answer.',
+  noRequests: 'Nothing waiting.',
+  requestsFailed: 'Requests didn’t load.',
+  confirm: 'Confirm',
+  decline: 'Decline',
+  declineTitle: 'Decline this request?',
+  declineReason: 'Reason (optional)',
+  declineReasonHint: 'Sent to them by email.',
+  answerBy: (when: string) => `Declines itself ${when}`,
   targetsFailedTitle: 'Where answers go didn’t load',
   targetsFailed: 'The object’s fields couldn’t be read, so questions can’t be filed onto them right now.',
   /** The Questions tab's object picker (booking answers parity, 27 Oct 2026), in the forms editor's words. */
@@ -217,7 +260,9 @@ export const strings = {
   hostRemoved: 'Host removed',
   noticeSummary: (notice: string) => `${notice} notice`,
   /** The Limits card's groups, and a word of help on each setting (its InfoTip). */
-  limitGroups: { buffers: 'Buffers', window: 'Booking window', pace: 'Pace' },
+  limitGroups: { buffers: 'Buffers', window: 'Booking window', pace: 'Pace', changes: 'Changes by guests' },
+  cancelCutoff: 'Cancel up to',
+  moveCutoff: 'Move up to',
   limitHelp: {
     before: {
       text: 'Free time before each meeting.',
@@ -238,6 +283,14 @@ export const strings = {
     daily: {
       text: 'Meetings from this page in one day.',
       example: 'With 3, a day with three meetings is full.',
+    },
+    cancelCutoff: {
+      text: 'How close to the meeting a guest can still cancel it. You can always cancel it.',
+      example: 'With 24 hours, a guest can’t cancel a 10:00 AM meeting after 10:00 AM the day before.',
+    },
+    moveCutoff: {
+      text: 'How close to the meeting a guest can still move it. You can always move it.',
+      example: 'With 4 hours, a guest can’t move a 2:00 PM meeting after 10:00 AM.',
     },
     step: {
       text: 'How often a start time is offered. Meeting length starts one right after another.',

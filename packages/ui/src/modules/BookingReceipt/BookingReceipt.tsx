@@ -12,8 +12,11 @@ import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
 import styles from './BookingReceipt.module.css';
 import { strings } from './strings.ts';
 
-/** Where a booking stands. */
-export type BookingReceiptState = 'confirmed' | 'cancelled' | 'past';
+/**
+ * Where a booking stands. `requested` waits for its host's Confirm, and `declined` is one the host (or the wait)
+ * turned down (spec 0062, AC-6203).
+ */
+export type BookingReceiptState = 'confirmed' | 'requested' | 'declined' | 'cancelled' | 'past';
 
 /** Props for BookingReceipt. */
 export interface BookingReceiptProps {
@@ -90,14 +93,22 @@ export function BookingReceipt({
   // The heading takes focus as the page arrives, and again when the booking's state changes (cancelled from here).
   useEffect(() => heading.current?.focus(), [state]);
   const isLive = state === 'confirmed';
+  // A request is still ahead and still the guest's to cancel, but has no call or calendar entry until it is confirmed.
+  const isAhead = isLive || state === 'requested';
   const title =
     state === 'cancelled'
       ? strings.cancelled
-      : state === 'past'
-        ? strings.past
-        : isWelcome
-          ? strings.welcome
-          : strings.confirmed;
+      : state === 'declined'
+        ? strings.declined
+        : state === 'past'
+          ? strings.past
+          : state === 'requested'
+            ? isWelcome
+              ? strings.requestSent
+              : strings.requested
+            : isWelcome
+              ? strings.welcome
+              : strings.confirmed;
   return (
     <main className={styles.root} data-welcome={(isLive && isWelcome) || undefined}>
       <div className={styles.column}>
@@ -110,7 +121,10 @@ export function BookingReceipt({
               data-welcome={(isLive && isWelcome) || undefined}
               aria-hidden="true"
             >
-              <Icon name={state === 'confirmed' ? 'check' : state === 'cancelled' ? 'x' : 'clock'} size="xs" />
+              <Icon
+                name={state === 'confirmed' ? 'check' : state === 'cancelled' || state === 'declined' ? 'x' : 'clock'}
+                size="xs"
+              />
             </span>
           </span>
           <h1 ref={heading} tabIndex={-1} className={styles.title}>
@@ -118,6 +132,7 @@ export function BookingReceipt({
           </h1>
           {/* One warm line, right after booking only: the page is a confirmation, not a form (AC-21). */}
           {isLive && isWelcome && <p className={styles.lead}>{strings.welcomeLine(hostName)}</p>}
+          {state === 'requested' && <p className={styles.lead}>{strings.requestedLine(hostName)}</p>}
         </header>
         {notice}
         <article className={styles.card} aria-label={strings.marks[state]}>
@@ -175,10 +190,10 @@ export function BookingReceipt({
               <DescriptionList items={facts} />
             </div>
           )}
-          {isLive && changes}
-          {!isLive && again !== undefined && (
+          {isAhead && changes}
+          {!isAhead && again !== undefined && (
             <p className={styles.again}>
-              <span>{state === 'cancelled' ? strings.cancelledNext : strings.pastNext}</span>
+              <span>{state === 'past' ? strings.pastNext : strings.cancelledNext}</span>
               <Link href={again.href}>{again.label}</Link>
             </p>
           )}

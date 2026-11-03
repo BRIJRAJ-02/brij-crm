@@ -111,6 +111,8 @@ import {
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { EmbedCard } from './EmbedCard.tsx';
+import { OneOffLinksCard } from './OneOffLinksCard.tsx';
+import { RequestsCard } from './RequestsCard.tsx';
 import { SharingPanel } from './SharingPanel.tsx';
 import { sharingStrings } from './sharing-strings.ts';
 import { scheduleChoices } from './schedules.ts';
@@ -187,6 +189,13 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   questions: 'questions',
   answersObjectId: 'questions',
   fileToCrm: 'meeting',
+  // Spec 0062, L1: what happens after a booking on the meeting's tab, the guests' cutoffs with the other limits.
+  afterBooking: 'meeting',
+  redirectUrl: 'meeting',
+  sendBookingDetails: 'meeting',
+  requiresConfirmation: 'meeting',
+  cancelCutoffMinutes: 'limits',
+  moveCutoffMinutes: 'limits',
   title: 'meeting',
   durations: 'meeting',
   location: 'meeting',
@@ -236,7 +245,21 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   fileToCrm: page.fileToCrm,
   answersObjectId: page.answersObjectId,
   formOnly: page.formOnly,
+  afterBooking: page.afterBooking,
+  redirectUrl: page.redirectUrl,
+  sendBookingDetails: page.sendBookingDetails,
+  cancelCutoffMinutes: page.cancelCutoffMinutes,
+  moveCutoffMinutes: page.moveCutoffMinutes,
+  requiresConfirmation: page.requiresConfirmation,
 });
+
+/** Why a redirect address can't be saved (spec 0062, AC-6201), or undefined when it can. */
+function redirectProblem(draft: BookingPageSettings): string | undefined {
+  if (draft.afterBooking !== 'redirect') return undefined;
+  const url = (draft.redirectUrl ?? '').trim();
+  if (url === '') return strings.redirectRequired;
+  return URL.canParse(url) && /^https:\/\//i.test(url) ? undefined : strings.redirectInvalid;
+}
 
 /** Why a slug can't be sent, in plain words, or undefined when it can. */
 function slugProblem(value: string): string | undefined {
@@ -250,7 +273,8 @@ function sendable(draft: BookingPageSettings): boolean {
     draft.title.trim() !== '' &&
     slugProblem(draft.slug) === undefined &&
     draft.durations.length > 0 &&
-    (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '')
+    (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '') &&
+    redirectProblem(draft) === undefined
   );
 }
 
@@ -1086,6 +1110,8 @@ export function PageEditor({
                       </Card>
                       {/* The snippet for someone else's site (spec 0062, L3), under Sharing, since it is one more
                           way to hand the page out rather than a setting of the page. */}
+                      {/* Requests waiting for a Confirm (spec 0062, AC-6203), first, since they need an answer. */}
+                      {page.requiresConfirmation && <RequestsCard data={data} slug={slug} pageId={page.id} />}
                       <EmbedCard
                         script={data.forms.embedUrl()}
                         publicKey={publicBookingPath(page).replace(/^\/(b\/)?/, '')}
@@ -1093,6 +1119,8 @@ export function PageEditor({
                         isLive={page.status === 'live'}
                         quickPicks={BRAND_QUICK_PICKS}
                       />
+                      {/* One-time links (AC-6204): one more way to hand the page out, beside the snippet. */}
+                      <OneOffLinksCard data={data} slug={slug} pageId={page.id} pageUrl={bLink} isReadOnly={isLocked} />
                       {!isWorkspace && (
                         <SocialsCardSlot
                           data={data}
@@ -1260,6 +1288,54 @@ export function PageEditor({
                           isReadOnly={readOnly('on_booking')}
                           onChange={(fileToCrm) => change({ fileToCrm })}
                         />
+                        {/* Spec 0062, L1: the host confirms each booking first (AC-6203), and where the visitor goes
+                            once they have booked (AC-6201). */}
+                        <Switch
+                          label={strings.confirmFirst}
+                          description={strings.confirmFirstHint}
+                          isSelected={draft.requiresConfirmation}
+                          isReadOnly={isLocked}
+                          onChange={(requiresConfirmation) => change({ requiresConfirmation })}
+                        />
+                        <FieldGroup label={strings.thenShow}>
+                          <SegmentedControl
+                            label={strings.thenShow}
+                            segments={[
+                              { value: 'confirmation', label: strings.afterChoices.confirmation },
+                              { value: 'redirect', label: strings.afterChoices.redirect },
+                            ]}
+                            value={draft.afterBooking}
+                            isReadOnly={isLocked}
+                            onChange={(value) =>
+                              change(
+                                value === 'redirect'
+                                  ? { afterBooking: 'redirect' }
+                                  : { afterBooking: 'confirmation', redirectUrl: null, sendBookingDetails: false },
+                              )
+                            }
+                          />
+                        </FieldGroup>
+                        {draft.afterBooking === 'redirect' && (
+                          <>
+                            <Field
+                              label={strings.redirectUrl}
+                              type="url"
+                              inputMode="url"
+                              placeholder={strings.redirectPlaceholder}
+                              value={draft.redirectUrl ?? ''}
+                              isReadOnly={isLocked}
+                              {...(redirectProblem(draft) === undefined ? {} : { error: redirectProblem(draft) })}
+                              onChange={(value) => change({ redirectUrl: value })}
+                            />
+                            <Switch
+                              label={strings.sendDetails}
+                              description={strings.sendDetailsHint}
+                              isSelected={draft.sendBookingDetails}
+                              isReadOnly={isLocked}
+                              onChange={(sendBookingDetails) => change({ sendBookingDetails })}
+                            />
+                          </>
+                        )}
                       </Card>
                     </>
                   )}
@@ -1518,6 +1594,22 @@ export function PageEditor({
                         )}
                         {limitRow(strings.window, strings.limitHelp.ahead, WINDOW, String(draft.windowDays), (id) =>
                           change({ windowDays: Number(id ?? 60) }),
+                        )}
+                      </Card>
+                      <Card title={strings.limitGroups.changes}>
+                        {limitRow(
+                          strings.cancelCutoff,
+                          strings.limitHelp.cancelCutoff,
+                          NOTICE,
+                          String(draft.cancelCutoffMinutes),
+                          (id) => change({ cancelCutoffMinutes: Number(id ?? 0) }),
+                        )}
+                        {limitRow(
+                          strings.moveCutoff,
+                          strings.limitHelp.moveCutoff,
+                          NOTICE,
+                          String(draft.moveCutoffMinutes),
+                          (id) => change({ moveCutoffMinutes: Number(id ?? 0) }),
                         )}
                       </Card>
                       <Card title={strings.limitGroups.pace}>
