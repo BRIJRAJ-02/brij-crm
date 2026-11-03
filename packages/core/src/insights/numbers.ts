@@ -193,8 +193,9 @@ export async function insightNumbers(
         else 'host'
       end as set,
       day::text as day, source, medium, campaign, page_kind, step, referrer_host,
-      sum(visits)::int as visits, sum(finishes)::int as finishes,
-      sum(duration_sum_ms)::bigint as dsum, sum(duration_count)::int as dcount
+      -- The total set is one row even over no visits, where a sum is null: coalesced, as the prior period's are.
+      coalesce(sum(visits), 0)::int as visits, coalesce(sum(finishes), 0)::int as finishes,
+      coalesce(sum(duration_sum_ms), 0)::bigint as dsum, coalesce(sum(duration_count), 0)::int as dcount
     from base
     group by grouping sets ((), (day), (source, medium, campaign), (page_kind, step), (referrer_host))
   `);

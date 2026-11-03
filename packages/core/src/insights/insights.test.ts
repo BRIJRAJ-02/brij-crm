@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import type { FormDocument, FormQuestion } from '@crm/contracts';
+import { Insights, type FormDocument, type FormQuestion } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { enterPublicForm } from '../access/door.ts';
@@ -336,6 +336,14 @@ describe('the Insights numbers (AC-6711 to AC-6714, AC-6730)', () => {
     const other = await workspace();
     await liveForm(other);
     expect((await readInsights(other.scope, { period: { range: '7' }, pages: {} })).heard).toEqual([]);
+  });
+
+  it('answers zeros, never nulls, for pages nobody has visited (the screen’s first look)', async () => {
+    const w = await workspace();
+    const form = await liveForm(w);
+    const read = await readInsights(w.scope, { period: { range: '30' }, pages: { kind: 'form', pageId: form.id } });
+    expect(read.totals).toEqual({ visits: 0, finishes: 0 });
+    expect(Insights.safeParse(read).success).toBe(true);
   });
 
   it('refuses a custom range that runs backwards or past 400 days', async () => {
