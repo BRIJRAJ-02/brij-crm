@@ -75,4 +75,45 @@ describe('the hosted page’s client (spec 0023)', () => {
     const offline = createPublicFormClient({ fetch: () => Promise.reject(new TypeError('Failed to fetch')) });
     expect(await offline.submit(form.key, submission)).toEqual({ kind: 'offline' });
   });
+
+  it('sends a count as a beacon, and falls back to a keepalive post when there is none (AC-6320)', () => {
+    const taken: { url: string; body: Blob }[] = [];
+    const navigatorWas = globalThis.navigator;
+    const fake = (accepts: boolean) => ({
+      sendBeacon: (url: string, body: Blob) => {
+        taken.push({ url, body });
+        return accepts;
+      },
+    });
+
+    // Where the browser takes the beacon, nothing else is sent: it outlives the page, and `fetch` would not.
+    Object.defineProperty(globalThis, 'navigator', { value: fake(true), configurable: true });
+    const ok = endpoint(204, {});
+    createPublicFormClient({ fetch: ok.fetch }).event(form.key, { kind: 'view' });
+    expect(taken.map((one) => one.url)).toEqual(['/api/public/forms/contact-us/events']);
+    expect(ok.sent).toEqual([]);
+
+    // A browser that refuses it (its own queue is full) is not a lost count: the post says the same thing,
+    // as `text/plain`, which asks for no preflight — the same request the beacon would have made.
+    Object.defineProperty(globalThis, 'navigator', { value: fake(false), configurable: true });
+    const after = endpoint(204, {});
+    createPublicFormClient({ fetch: after.fetch }).event(form.key, { kind: 'reach', questionId: 'q-1' });
+    expect(after.sent).toHaveLength(1);
+    expect(after.sent[0]?.init?.method).toBe('POST');
+    expect(after.sent[0]?.init?.keepalive).toBe(true);
+    expect(after.sent[0]?.init?.body).toBe('{"kind":"reach","questionId":"q-1"}');
+
+    // A beacon that throws is swallowed whole: a count is never worth an error on a visitor's page.
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        sendBeacon: () => {
+          throw new Error('blocked');
+        },
+      },
+      configurable: true,
+    });
+    expect(() => createPublicFormClient({ fetch: ok.fetch }).event(form.key, { kind: 'start' })).not.toThrow();
+
+    Object.defineProperty(globalThis, 'navigator', { value: navigatorWas, configurable: true });
+  });
 });

@@ -74,6 +74,7 @@ export function HostedFormSteps({
   onUpload,
   onRemoveUpload,
   onStale,
+  onCount,
   now = Date.now,
   logo = TIMEFIX_LOGO,
   previewStep = 0,
@@ -99,6 +100,7 @@ export function HostedFormSteps({
     onUpload,
     onRemoveUpload,
     onStale,
+    onCount,
     now,
     // A refusal for an earlier step goes back to it, where its errors show.
     onRefused: (keys) => {
@@ -134,6 +136,14 @@ export function HostedFormSteps({
   const step = groups[index] ?? { title: undefined, questions: [] };
   const isLast = index >= groups.length - 1;
   const first = step.questions[0];
+
+  // Only the step on screen is reached (AC-6321): the steps behind it were, the steps ahead have not been, and
+  // that difference is the whole of the drop off bar on a stepped form.
+  useEffect(() => {
+    if (state.view.kind === 'form' && !state.isClosed) {
+      state.reached(step.questions.filter((question) => question.answerType !== 'hidden').map((q) => q.id));
+    }
+  });
 
   // A step reached by Continue or Back puts focus on its first question.
   useEffect(() => {
