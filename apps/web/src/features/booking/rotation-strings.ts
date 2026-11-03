@@ -2,8 +2,8 @@
 // Team card. Plain words, no dashes as punctuation. In code these are rotations; on screen, round robin groups (the
 // owner, 22 October 2026: "if this is round robin, call it that").
 
-/** Who can be in a group (SS-R1), said in the member picker's hint until the picker can mark who can't. */
-const CAN_JOIN = 'Only people with hours or a calendar can join.';
+/** Whose hours a group books on (SS-R1), said in the member picker's hint: someone with none saved isn't refused. */
+const CAN_JOIN = 'Anyone who hasn’t set hours books weekdays, 9 to 5.';
 
 export const strings = {
   title: 'Round robin',

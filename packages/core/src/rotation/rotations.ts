@@ -33,7 +33,6 @@ import { keepRosterRows, rosterCalibration } from './roster.ts';
 import { eligibleMembers, GUESTS_CANT_HOST, ROTATION_ROLES, rulesOf } from './team.ts';
 
 const {
-  availabilitySchedules,
   bookingPageRotations,
   bookingPages,
   calendarConnections,
@@ -214,25 +213,18 @@ export async function listRotations(scope: EngineScope, now: Date = new Date()):
 
 /**
  * Refuses members a rotation can't hold (AC-729): anyone not an active,
- * non guest member of the workspace, and anyone with neither their own hours
- * nor a calendar connected.
+ * non guest member of the workspace. Hours are never missing: a member who
+ * hasn't saved any books on the virtual default (spec 0035, AC-963), exactly
+ * as the slot engine and Everyone on the roster read them, so a team that
+ * just joined can make a group without each person first saving hours.
  */
 async function checkMembers(tx: WorkspaceTx, list: readonly RotationMemberInput[]): Promise<void> {
   const ids = list.map((member) => member.memberId);
   const found = await tx
     .select({
       id: members.id,
-      name: members.name,
       status: members.status,
       role: members.role,
-      // Qualified by hand: inside a select drizzle writes a column unqualified, and `id` would be the subquery's own.
-      hasHours: sql<boolean>`exists (
-        select 1 from ${availabilitySchedules} h where h.workspace_id = "members"."workspace_id" and h.member_id = "members"."id"
-      )`,
-      hasCalendar: sql<boolean>`exists (
-        select 1 from ${calendarConnections} c where c.workspace_id = "members"."workspace_id" and c.member_id = "members"."id"
-          and c.status in ('syncing', 'connected')
-      )`,
     })
     .from(members)
     .where(inArray(members.id, ids));
@@ -247,13 +239,6 @@ async function checkMembers(tx: WorkspaceTx, list: readonly RotationMemberInput[
       throw refuseOn(
         'CONFIG_INVALID',
         'Only active members of this workspace can be in a rotation.',
-        `members.${String(index)}`,
-      );
-    }
-    if (!row.hasHours && !row.hasCalendar) {
-      throw refuseOn(
-        'CONFIG_INVALID',
-        `${row.name} needs to set hours or connect a calendar first.`,
         `members.${String(index)}`,
       );
     }
