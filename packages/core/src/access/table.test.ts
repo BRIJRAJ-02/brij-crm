@@ -235,6 +235,12 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // the system in its workspace.
   'handOnBooking',
   'remakeEvent',
+  // A page's flow rules (spec 0062, L1): Confirm and Decline take the target a door made, as a cancel does; the
+  // request's wait and the worker's Confirm step run as the system in its workspace (flow-rules.test.ts).
+  'confirmBooking',
+  'declineBooking',
+  'expireRequest',
+  'queueConfirmation',
   // Lead routing (spec 0043): the report checks its surface (the form's or page's own access) itself; the route and
   // the record facts it reads are pure. (A no show is marked through the booking's target: in the table.)
   'routingReport',
@@ -654,6 +660,9 @@ describe('the walk: a principal without the access is refused', () => {
           // (change.test.ts: the booking another member's, the record hidden, read only or in another workspace).
           'markNoShow',
           'linkBookingRecord',
+          // A page's requests: a host who may not change the page sees their own, so it answers empty, not absent
+          // (flow-rules.test.ts: a colleague reads none).
+          'listRequests',
           // Rotations aren't pages: a member lists only the ones they're in (rotations.test.ts); a booking's
           // assignments are its host's (assignments are checked on the row, rotations.test.ts); a reassign is checked
           // on the booking and over both hosts (rotation.test.ts).

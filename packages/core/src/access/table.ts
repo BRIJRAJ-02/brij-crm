@@ -637,6 +637,12 @@ export const ACCESS_TABLE = {
   // A no show (spec 0043) and a hand link to a record (polish F2): through the booking's target too.
   markNoShow: { bookingPages: true },
   linkBookingRecord: { bookingPages: true },
+  // A page's flow rules (spec 0062, L1): one-time links and the requests list through the page an editor may change,
+  // a host who may not seeing only their own requests. Confirm and Decline take a target, as a cancel does.
+  createOneOffLink: { bookingPages: true },
+  listOneOffLinks: { bookingPages: true },
+  revokeOneOffLink: { bookingPages: true },
+  listRequests: { bookingPages: true },
   // Round robin (spec 0029): anyone with booking.manage lists the rotations they're in (their own count only);
   // making, changing and deleting them is booking.admin's (AC-751). A booking's assignments: its host or an admin.
   listRotations: { bookingPages: true },

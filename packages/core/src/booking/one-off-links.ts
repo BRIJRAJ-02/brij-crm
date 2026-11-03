@@ -20,6 +20,7 @@ import {
   type OneOffState,
   type RevokeOneOffLinkInput,
 } from '@crm/contracts';
+import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
@@ -123,6 +124,8 @@ export async function createOneOffLink(
   input: Pick<CreateOneOffLinkInput, 'pageId' | 'label' | 'maxUses' | 'expiresAt' | 'mutationId'>,
   now: Date = new Date(),
 ): Promise<CreatedOneOffLink> {
+  // booking.manage first, as every page write: a key without it hears that, not that it isn't a member.
+  requirePermission(scope, 'booking.manage');
   const member = memberOf(scope);
   if (member === undefined) throw refuse('FORBIDDEN', 'Only a member makes a link.');
   const expires = input.expiresAt === undefined ? undefined : new Date(input.expiresAt);
