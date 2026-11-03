@@ -19,7 +19,9 @@ import {
   PageColumn,
   Select,
   SetupChecklist,
+  Modal,
   Skeleton,
+  Switch,
   TopBar,
   type Toasts,
 } from '@crm/ui';
@@ -69,30 +71,66 @@ const draftOf = (rules: TableRules): Draft => {
   };
 };
 
-const whole = (text: string, fallback: number) => {
-  const value = Number(text.trim());
-  return text.trim() === '' || !Number.isFinite(value) ? fallback : Math.round(value);
+/** A number as typed: a whole one (or one with decimals) at least `min`, or the line saying what to give. */
+const numberOf = (
+  text: string,
+  options: { readonly min: number; readonly decimals?: boolean; readonly optional?: boolean },
+): { readonly value?: number; readonly error?: string } => {
+  const typed = text.trim();
+  if (typed === '') return options.optional === true ? {} : { error: strings.numberRequired };
+  const value = Number(typed);
+  if (!Number.isFinite(value)) return { error: strings.numberRequired };
+  if (options.decimals !== true && !Number.isInteger(value)) return { error: strings.wholeNumber };
+  if (value < options.min) return { error: strings.atLeast(options.min) };
+  return { value };
 };
 
-const rulesOf = (draft: Draft, base: TableRules): TableRules => {
+/** The rules from the form, or each field's problem: nothing is ever quietly defaulted. */
+const rulesOf = (
+  draft: Draft,
+  base: TableRules,
+): { readonly rules: TableRules } | { readonly errors: Readonly<Partial<Record<keyof Draft, string>>> } => {
+  const read = {
+    minutes: numberOf(draft.minutes, { min: 15 }),
+    hold3: numberOf(draft.hold3, { min: 15, optional: true }),
+    hold5: numberOf(draft.hold5, { min: 15, optional: true }),
+    hold7: numberOf(draft.hold7, { min: 15, optional: true }),
+    partyMin: numberOf(draft.partyMin, { min: 1 }),
+    partyMax: numberOf(draft.partyMax, { min: 1 }),
+    step: numberOf(draft.step, { min: 5 }),
+    notice: numberOf(draft.notice, { min: 0, decimals: true }),
+    window: numberOf(draft.window, { min: 1 }),
+    covers: numberOf(draft.covers, { min: 1, optional: true }),
+    change: numberOf(draft.change, { min: 0, decimals: true }),
+    cancel: numberOf(draft.cancel, { min: 0, decimals: true }),
+  } satisfies Record<keyof Draft, { readonly value?: number; readonly error?: string }>;
+  const errors: Partial<Record<keyof Draft, string>> = Object.fromEntries(
+    Object.entries(read).flatMap(([key, each]) => (each.error === undefined ? [] : [[key, each.error]])),
+  );
+  const min = read.partyMin.value;
+  const max = read.partyMax.value;
+  if (min !== undefined && max !== undefined && max < min) errors.partyMax = strings.partyMaxBelow;
+  if (Object.keys(errors).length > 0) return { errors };
+  const at = (key: keyof Draft) => read[key].value ?? 0;
   const holds = [
-    { size: 3, minutes: whole(draft.hold3, 0) },
-    { size: 5, minutes: whole(draft.hold5, 0) },
-    { size: 7, minutes: whole(draft.hold7, 0) },
-  ].filter((row) => row.minutes > 0);
-  const covers = whole(draft.covers, 0);
+    { size: 3, minutes: read.hold3.value },
+    { size: 5, minutes: read.hold5.value },
+    { size: 7, minutes: read.hold7.value },
+  ].flatMap((row) => (row.minutes === undefined ? [] : [{ size: row.size, minutes: row.minutes }]));
   return {
-    minutes: whole(draft.minutes, base.minutes),
-    holds,
-    partyMin: whole(draft.partyMin, base.partyMin),
-    partyMax: whole(draft.partyMax, base.partyMax),
-    stepMinutes: whole(draft.step, base.stepMinutes),
-    noticeMinutes: Math.round(Number(draft.notice) * 60) || 0,
-    windowDays: whole(draft.window, base.windowDays),
-    ...(covers > 0 ? { coversCap: covers } : {}),
-    changeCutoffMinutes: Math.round(Number(draft.change) * 60) || 0,
-    cancelCutoffMinutes: Math.round(Number(draft.cancel) * 60) || 0,
-    online: base.online,
+    rules: {
+      minutes: at('minutes'),
+      holds,
+      partyMin: at('partyMin'),
+      partyMax: at('partyMax'),
+      stepMinutes: at('step'),
+      noticeMinutes: Math.round(at('notice') * 60),
+      windowDays: at('window'),
+      ...(read.covers.value === undefined ? {} : { coversCap: read.covers.value }),
+      changeCutoffMinutes: Math.round(at('change') * 60),
+      cancelCutoffMinutes: Math.round(at('cancel') * 60),
+      online: base.online,
+    },
   };
 };
 
@@ -108,7 +146,8 @@ export function ReservationsScreen({
   readonly hospitality: HospitalityStore;
   readonly toasts: Toasts;
 }) {
-  const business = useHospitality(hospitality.business(slug));
+  const held = hospitality.business(slug);
+  const business = useHospitality(held);
   const [placeId, setPlaceId] = useState<string | undefined>();
   const topBar = <TopBar title={strings.reservations} icon="calendar-check" />;
   if (business.status === 'loading')
@@ -117,7 +156,10 @@ export function ReservationsScreen({
     return (
       <WorkspacePage
         currentPage="reservations"
-        page={{ topBar, body: <EmptyState icon="circle-alert" title={business.error.message} /> }}
+        page={{
+          topBar,
+          body: <EmptyState icon="circle-alert" title={business.error.message} onRetry={held.retry} />,
+        }}
       />
     );
   }
@@ -172,7 +214,8 @@ function PlaceSetup({
   readonly onPlace: (placeId: string) => void;
   readonly toasts: Toasts;
 }) {
-  const setup = useHospitality(tables.setup(slug, place.id));
+  const setupHeld = tables.setup(slug, place.id);
+  const setup = useHospitality(setupHeld);
   const placeSwitch =
     business.places.length > 1 ? (
       <Select
@@ -210,7 +253,7 @@ function PlaceSetup({
             setup.status === 'loading' ? (
               <Skeleton shape="block" />
             ) : (
-              <EmptyState icon="circle-alert" title={setup.error.message} />
+              <EmptyState icon="circle-alert" title={setup.error.message} onRetry={setupHeld.retry} />
             ),
         }}
       />
@@ -253,15 +296,30 @@ function SetupBody({
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(setup.rules));
   const [problem, setProblem] = useState<{ readonly message: string; readonly href?: string } | undefined>();
+  const [errors, setErrors] = useState<Readonly<Partial<Record<keyof Draft, string>>>>({});
+  const [isStopping, setStopping] = useState(false);
   const set = (key: keyof Draft) => (value: string) => {
     setDraft((now) => ({ ...now, [key]: value }));
+    if (errors[key] !== undefined) {
+      const { [key]: _fixed, ...rest } = errors;
+      setErrors(rest);
+    }
   };
+  /** A field's error, when it has one. */
+  const errorOf = (key: keyof Draft) => (errors[key] === undefined ? {} : { error: errors[key] });
   const stepOf = (id: 'hours' | 'tables' | 'rules') => setup.steps.find((step) => step.step === id);
   const fixHref = (id: string | undefined) =>
     id === 'hours' || id === 'tables' ? placeTablesHref(slug, place.id) : undefined;
   const save = async (online: boolean) => {
     setProblem(undefined);
-    const refused = await tables.saveSetup(slug, place.id, { ...rulesOf(draft, setup.rules), online });
+    const read = rulesOf(draft, setup.rules);
+    if ('errors' in read) {
+      setErrors(read.errors);
+      setProblem({ message: strings.fixFields });
+      return;
+    }
+    setErrors({});
+    const refused = await tables.saveSetup(slug, place.id, { ...read.rules, online });
     if (refused === undefined) {
       toasts.toast({
         tone: 'success',
@@ -278,16 +336,20 @@ function SetupBody({
   const hours = stepOf('hours');
   const tablesStep = stepOf('tables');
   const problemLine = problem !== undefined && (
-    <Callout tone="danger" isAnnounced>
+    <Callout
+      tone="danger"
+      isAnnounced
+      {...(problem.href === undefined
+        ? {}
+        : {
+            actions: (
+              <ButtonLink href={problem.href} size="sm">
+                {strings.fixIt}
+              </ButtonLink>
+            ),
+          })}
+    >
       {problem.message}
-      {problem.href !== undefined && (
-        <>
-          {' '}
-          <ButtonLink href={problem.href} variant="ghost">
-            {strings.fixIt}
-          </ButtonLink>
-        </>
-      )}
     </Callout>
   );
   const aside = (
@@ -321,14 +383,13 @@ function SetupBody({
             id: 'publish',
             title: strings.stepPublish,
             isDone: live,
+            // Publish lives on the card beside it, one button for one act.
             detail: live ? link : strings.notLive,
-            action: strings.publish,
           },
         ]}
         onAction={(id) => {
           if (id === 'hours' || id === 'tables') globalThis.location.assign(placeTablesHref(slug, place.id));
           else if (id === 'rules') void save(live);
-          else void save(true);
         }}
       />
       <Card
@@ -336,7 +397,7 @@ function SetupBody({
         description={live ? link : strings.publishText}
         actions={
           live ? (
-            <Button variant="danger" isDisabled={isSaving} onPress={() => void save(false)}>
+            <Button variant="danger" isDisabled={isSaving} onPress={() => setStopping(true)}>
               {strings.unpublish}
             </Button>
           ) : (
@@ -348,6 +409,40 @@ function SetupBody({
       >
         {problemLine}
       </Card>
+      <Card title={strings.alertsTitle} description={strings.alertsText}>
+        <Switch
+          label={strings.alertsSwitch}
+          isSelected={setup.notifyMe}
+          onChange={(on) => {
+            void tables.setNotify(slug, place.id, on).then((refused) => {
+              if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
+            });
+          }}
+        />
+      </Card>
+      <Modal
+        isOpen={isStopping}
+        onOpenChange={setStopping}
+        title={strings.stopTitle}
+        variant="confirm"
+        tone="danger"
+        actions={
+          <>
+            <Button slot="close">{strings.keepTaking}</Button>
+            <Button
+              variant="danger"
+              onPress={() => {
+                setStopping(false);
+                void save(false);
+              }}
+            >
+              {strings.unpublish}
+            </Button>
+          </>
+        }
+      >
+        {strings.stopText}
+      </Modal>
     </>
   );
   return (
@@ -362,11 +457,18 @@ function SetupBody({
         }
       >
         <FormRow>
-          <Field label={strings.partyMin} inputMode="numeric" value={draft.partyMin} onChange={set('partyMin')} />
+          <Field
+            label={strings.partyMin}
+            inputMode="numeric"
+            value={draft.partyMin}
+            onChange={set('partyMin')}
+            {...errorOf('partyMin')}
+          />
           <Field
             label={strings.partyMax}
             inputMode="numeric"
             value={draft.partyMax}
+            {...errorOf('partyMax')}
             onChange={set('partyMax')}
             hint={strings.partyMaxHint}
           />
@@ -385,6 +487,7 @@ function SetupBody({
             inputMode="numeric"
             suffix={strings.min}
             value={draft.minutes}
+            {...errorOf('minutes')}
             onChange={set('minutes')}
             hint={strings.holdHint}
           />
@@ -395,6 +498,7 @@ function SetupBody({
             inputMode="numeric"
             suffix={strings.min}
             value={draft.hold3}
+            {...errorOf('hold3')}
             onChange={set('hold3')}
           />
           <Field
@@ -402,6 +506,7 @@ function SetupBody({
             inputMode="numeric"
             suffix={strings.min}
             value={draft.hold5}
+            {...errorOf('hold5')}
             onChange={set('hold5')}
           />
           <Field
@@ -409,6 +514,7 @@ function SetupBody({
             inputMode="numeric"
             suffix={strings.min}
             value={draft.hold7}
+            {...errorOf('hold7')}
             onChange={set('hold7')}
           />
         </FormRow>
@@ -420,6 +526,7 @@ function SetupBody({
             inputMode="decimal"
             suffix={strings.hours}
             value={draft.notice}
+            {...errorOf('notice')}
             onChange={set('notice')}
             hint={strings.noticeHint}
           />
@@ -428,6 +535,7 @@ function SetupBody({
             inputMode="numeric"
             suffix={strings.days}
             value={draft.window}
+            {...errorOf('window')}
             onChange={set('window')}
           />
         </FormRow>
@@ -437,6 +545,7 @@ function SetupBody({
             inputMode="decimal"
             suffix={strings.hours}
             value={draft.change}
+            {...errorOf('change')}
             onChange={set('change')}
           />
           <Field
@@ -444,6 +553,7 @@ function SetupBody({
             inputMode="decimal"
             suffix={strings.hours}
             value={draft.cancel}
+            {...errorOf('cancel')}
             onChange={set('cancel')}
             hint={strings.cutoffHint}
           />
@@ -452,6 +562,7 @@ function SetupBody({
           label={strings.covers}
           inputMode="numeric"
           value={draft.covers}
+          {...errorOf('covers')}
           onChange={set('covers')}
           placeholder={strings.noCap}
           hint={strings.coversHint}
