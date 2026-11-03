@@ -149,6 +149,8 @@ describe('Hide my photo on booking pages (owner ask A124)', () => {
       block: { kind: 'contact', fullName: 'Ada' },
       mutationId: newId(),
     });
+    // A new block is a draft until Publish (spec 0068, AC-6811): guests read the published page.
+    await m.client.profile.publish({ workspace: m.slug, mutationId: newId() });
     const shownCard = (await read(`handles/${handle}/contact.vcf`)).text.replace(/\r\n /g, '');
     expect(shownCard).toContain(`PHOTO;ENCODING=b;TYPE=PNG:${Buffer.from(PNG).toString('base64')}`);
 

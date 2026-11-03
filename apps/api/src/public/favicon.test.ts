@@ -3,7 +3,7 @@
 // site; the route answers it cacheable and nosniff for a link a page owner saved, and 404 for any other address,
 // a stale version, a link that draws a network's mark or a picked icon, and a handle no one holds.
 import { randomUUID } from 'node:crypto';
-import { createWorkspace, newId, saveProfileItem, updateMyMemberProfile } from '@crm/core';
+import { createWorkspace, newId, publishLinkPage, saveProfileItem, updateMyMemberProfile } from '@crm/core';
 import { faviconVersion } from '@crm/core/public';
 import { testScope } from '@crm/core/testing';
 import type { Database, IdentityStore } from '@crm/db';
@@ -184,6 +184,8 @@ describe('GET /api/public/profiles/:handle/items/:id/icon', () => {
       id: newId(),
       block: { kind: 'link', title: 'Notes', url: SITE },
     });
+    // A new block is a draft until Publish (spec 0068, AC-6811): guests read the published page.
+    await publishLinkPage(scope);
     const path = `profiles/${handle}/items/${saved.id}/icon?v=${faviconVersion(saved.id, SITE)}`;
 
     const page = await visit(`handles/${handle}`);

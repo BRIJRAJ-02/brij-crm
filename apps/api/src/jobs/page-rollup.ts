@@ -6,8 +6,6 @@ import { rollUpPageVisits } from '@crm/core';
 import type { systemScope } from '@crm/core/system';
 import type { QueueConnection } from '@crm/db';
 
-type EngineScope = ReturnType<typeof systemScope>;
-
 /** The task's name on Graphile's queue. */
 export const PAGE_ROLLUP_TASK = 'crm_cron_page_rollup';
 
@@ -21,7 +19,7 @@ const RUN_BUDGET_MS = 20_000;
 /** What a run needs. */
 export interface PageRollupDeps {
   readonly sweep: Pick<QueueConnection, 'pageRollupWorkspaces'>;
-  readonly systemScope: (workspaceId: string) => EngineScope;
+  readonly systemScope: (workspaceId: string) => ReturnType<typeof systemScope>;
   readonly log: { info(message: string, fields?: Record<string, unknown>): void };
   readonly now?: () => number;
 }
