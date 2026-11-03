@@ -15,7 +15,7 @@ export const SHARE_IMAGE_TYPES: readonly string[] = ['image/png', 'image/jpeg'];
  * One file as the base64 the procedure carries. Done a chunk at a time: `String.fromCharCode(...bytes)` on half a
  * megabyte is hundreds of thousands of arguments at once, which throws on some engines and is slow on the rest.
  */
-export async function asBase64(file: File): Promise<string> {
+export async function asBase64(file: Blob): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const CHUNK = 8192;
   let binary = '';

@@ -14,7 +14,16 @@ import {
   type SignedInUser,
   type WorkspaceSummary,
 } from '@crm/data';
-import { AuthLayout, Button, ButtonLink, Steps, WorkspacePreview, type WorkspacePreviewFocus } from '@crm/ui';
+import {
+  AuthLayout,
+  Button,
+  ButtonLink,
+  Steps,
+  usePhotoCrop,
+  WorkspacePreview,
+  type WorkspacePreviewFocus,
+} from '@crm/ui';
+import { preparePhoto } from '@crm/ui/photo';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sessionStore } from '../auth/pending.ts';
@@ -26,7 +35,6 @@ import { handleBaseFor } from '@crm/contracts/handles';
 import { AboutStep } from './AboutStep.tsx';
 import { BookingPagePreview } from './BookingPagePreview.tsx';
 import { BookingStep } from './BookingStep.tsx';
-import { squarePhoto } from './photo.ts';
 import { DoneStep, type DoneBookingPage } from './DoneStep.tsx';
 import { HandleStep } from './HandleStep.tsx';
 import { filledLinks, titleFromUrl } from './LinksFields.tsx';
@@ -386,16 +394,20 @@ export function WelcomeScreen({
   };
 
   /**
-   * Your name's photo (27 October 2026), uploaded straight from their device: its middle square drawn again (which
-   * leaves a phone photo's location behind, `photo.ts`), then sent. It replaces any photo they had, everywhere.
+   * Your name's photo (27 October 2026), uploaded straight from their device, or the one there cropped again: placed
+   * in the round cropper first (spec 0068, AC-6809), then drawn again as the avatar (which leaves a phone photo's
+   * location behind, `@crm/ui/photo`) and sent. It replaces any photo they had, everywhere.
    */
-  const uploadPhoto = (file: File) => {
+  const cropping = usePhotoCrop();
+  const uploadPhoto = async (source: File | string) => {
     if (isUploading) return;
+    const crop = await cropping.crop(source, 'circle');
+    if (crop === undefined) return;
     setUploading(true);
     setPhotoFailure(undefined);
-    squarePhoto(file)
+    preparePhoto(source, 'avatar', crop)
       .then(
-        (square) => data.profile.uploadPicture(square),
+        (square) => data.profile.uploadPicture(square.blob),
         () => {
           throw new Error(strings.photoUnreadable);
         },
@@ -515,13 +527,16 @@ export function WelcomeScreen({
           )
         }
       >
+        {cropping.cropper}
         {step === 'about' && (
           <AboutStep
             memberName={memberName}
             onMemberName={setMemberName}
             shownName={shownName}
             userId={user.id}
-            onPhoto={uploadPhoto}
+            onPhoto={(source) => {
+              void uploadPhoto(source);
+            }}
             isUploading={isUploading}
             {...(photoFailure === undefined ? {} : { photoFailure })}
             {...(photo === undefined ? {} : { image: photo })}

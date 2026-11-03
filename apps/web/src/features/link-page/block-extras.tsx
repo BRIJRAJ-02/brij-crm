@@ -3,11 +3,21 @@
 // from the library's own controls: the window is the field set's Date and time, so a schedule reads and types as
 // every other date and time in the CRM does.
 import type { DraftWindow, LinkPageStore, ProfileItem, StoredPicture } from '@crm/data';
-import { AttributeEditor, Button, Disclosure, FileDrop, TileGrid, type IconName } from '@crm/ui';
+import {
+  AttributeEditor,
+  Button,
+  Disclosure,
+  FileDrop,
+  TileGrid,
+  usePhotoCrop,
+  type IconName,
+  type PhotoShape,
+} from '@crm/ui';
+import { preparePhoto } from '@crm/ui/photo';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { usePageLayout } from './draft-look.tsx';
-import { PICTURE_PICK_MAX_BYTES, preparePicture } from './photo-prep.ts';
+import { PICTURE_PICK_MAX_BYTES } from './photo-prep.ts';
 import { reachStrings as strings } from './reach-strings.ts';
 
 /** The picture types a block may pick: what the server takes. SVG is refused (it runs scripts). */
@@ -135,23 +145,35 @@ export function heldPicture(linkPage: LinkPageStore, slug: string, image: string
 }
 
 /**
- * Picks pictures, makes each at most 1,600 pixels and 1.5 MB in the browser (which leaves a photo's location
- * behind), and uploads them one after another. Answers how it stands: what is on its way, and the last refusal.
+ * Takes pictures one after another through the cropper (spec 0068, AC-6809; `shape` the frame, free unless the
+ * block says), makes each at most 1,600 pixels and 1.5 MB in the browser (which leaves a photo's location behind),
+ * and uploads it. A picture cropped away (Cancel) is skipped. A source may be the address of a picture already
+ * there, to crop it again. Answers how it stands: what is on its way, and the cropper to render.
  */
 export function usePictureUpload(linkPage: LinkPageStore, slug: string) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const [sending, setSending] = useState(0);
-  const upload = async (files: readonly File[]): Promise<readonly HeldPicture[]> => {
-    setSending((was) => was + files.length);
+  const cropping = usePhotoCrop();
+  const upload = async (
+    sources: readonly (File | string)[],
+    shape: PhotoShape = 'free',
+  ): Promise<readonly HeldPicture[]> => {
     const stored: HeldPicture[] = [];
-    for (const file of files) {
+    for (const [at, source] of sources.entries()) {
+      const crop = await cropping.crop(
+        source,
+        shape,
+        sources.length > 1 ? { title: strings.cropStep(at + 1, sources.length) } : undefined,
+      );
+      if (crop === undefined) continue;
+      setSending((was) => was + 1);
       try {
-        const prepared = await preparePicture(file).catch(() => undefined);
+        const prepared = await preparePhoto(source, 'picture', crop).catch(() => undefined);
         if (prepared === undefined) {
           toasts.toast({ tone: 'danger', message: strings.pictureUnreadable });
           continue;
         }
-        const saved = await linkPage.reach.uploadPicture(slug, prepared.picture);
+        const saved = await linkPage.reach.uploadPicture(slug, prepared.blob);
         stored.push(heldPicture(linkPage, slug, saved.image, saved));
       } catch (error) {
         toasts.toast({
@@ -164,7 +186,7 @@ export function usePictureUpload(linkPage: LinkPageStore, slug: string) {
     }
     return stored;
   };
-  return { upload, isSending: sending > 0 };
+  return { upload, isSending: sending > 0, cropper: cropping.cropper };
 }
 
 /** Props for PictureField. */
@@ -182,6 +204,8 @@ export interface PictureFieldProps {
   readonly isRemovable?: boolean;
   /** Said as an upload starts and ends, so the editor holds its submit until the picture is there. */
   readonly onSendingChange?: (isSending: boolean) => void;
+  /** The cropper's frame: free (an image block) unless the picture has a shape (a link's square thumbnail). */
+  readonly shape?: PhotoShape;
 }
 
 /**
@@ -198,8 +222,15 @@ export function PictureField({
   extra,
   isRemovable = false,
   onSendingChange,
+  shape = 'free',
 }: PictureFieldProps) {
-  const { upload, isSending } = usePictureUpload(linkPage, slug);
+  const { upload, isSending, cropper } = usePictureUpload(linkPage, slug);
+  const take = (source: File | string) => {
+    void upload([source], shape).then((stored) => {
+      const [first] = stored;
+      if (first !== undefined) onChange(first);
+    });
+  };
   useEffect(() => {
     onSendingChange?.(isSending);
   }, [isSending, onSendingChange]);
@@ -212,16 +243,20 @@ export function PictureField({
         maxSize={PICTURE_PICK_MAX_BYTES}
         isPending={isSending}
         {...(error === undefined ? {} : { error })}
-        {...(value === undefined ? {} : { preview: { src: value.src, alt: strings.pictureAlt } })}
+        {...(value === undefined
+          ? {}
+          : {
+              preview: { src: value.src, alt: strings.pictureAlt },
+              onAdjust: () => {
+                take(value.src);
+              },
+            })}
         onFiles={(files) => {
           const [file] = files;
-          if (file === undefined) return;
-          void upload([file]).then((stored) => {
-            const [first] = stored;
-            if (first !== undefined) onChange(first);
-          });
+          if (file !== undefined) take(file);
         }}
       />
+      {cropper}
       {extra}
       {isRemovable && value !== undefined && (
         <Button variant="ghost" size="sm" icon="trash" onPress={() => onChange(undefined)}>

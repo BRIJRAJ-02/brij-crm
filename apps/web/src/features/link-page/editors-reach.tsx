@@ -317,7 +317,7 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
   const [problems, setProblems] = useState<BlockProblems>({});
   const extras = useBlockExtras(editing, true);
   const { toasts } = useRouteContext({ from: '__root__' });
-  const { upload, isSending } = usePictureUpload(linkPage, slug);
+  const { upload, isSending, cropper } = usePictureUpload(linkPage, slug);
   const draft: BlockDraft = {
     kind: 'gallery',
     images: pictures.map((each) => ({ image: each.image, alt: each.alt })),
@@ -413,6 +413,7 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
             });
           }}
         />
+        {cropper}
         {room <= 0 && <Callout tone="info">{words.galleryFull}</Callout>}
         {pictures.map((each, at) => (
           <Field

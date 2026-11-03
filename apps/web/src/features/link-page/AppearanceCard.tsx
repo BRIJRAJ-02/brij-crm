@@ -171,8 +171,11 @@ export interface DesignExtras {
   readonly onAccent: (accent: string | undefined, accentDark: string | undefined) => void;
   /** The colour under the system picker's pointer, before it settles. */
   readonly onPreviewAccent: (accent: string) => void;
-  /** A photo picked for a slot: the screen draws it again and sends it. */
-  readonly onPhoto: (slot: PhotoSlot, file: File) => void;
+  /**
+   * A photo picked for a slot, or the address of the one there to crop again (spec 0068, AC-6809): the screen opens
+   * the cropper on it, draws it again and sends it.
+   */
+  readonly onPhoto: (slot: PhotoSlot, source: File | string) => void;
   readonly onRemovePhoto: (slot: PhotoSlot) => void;
   /** The slot whose photo is on its way. */
   readonly sending?: PhotoSlot;
@@ -248,7 +251,9 @@ export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceC
           typesText={strings.photoTypes}
           maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
           isDisabled={extras === undefined || look === undefined || extras.sending !== undefined}
-          {...(src === undefined ? {} : { preview: { src, alt: strings.photoAlt } })}
+          {...(src === undefined
+            ? {}
+            : { preview: { src, alt: strings.photoAlt }, onAdjust: () => extras?.onPhoto(slot, src) })}
           onFiles={(files) => {
             const [file] = files;
             if (file !== undefined) extras?.onPhoto(slot, file);

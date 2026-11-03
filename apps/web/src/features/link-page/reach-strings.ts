@@ -51,6 +51,8 @@ export const reachStrings = {
   imageUrlHint: 'Optional. Pressing the picture opens it.',
   pictureAlt: 'Your picture',
   pictureUnreadable: 'That picture can’t be read. Choose a JPEG, PNG or WebP.',
+  /** The cropper's heading while several pictures picked at once pass through it (spec 0068, AC-6809). */
+  cropStep: (at: number, of: number) => `Crop photo ${String(at)} of ${String(of)}`,
   pictureFailed: 'The picture didn’t upload. Try again.',
   pictureTypes: 'JPG, PNG or WebP',
   newGallery: 'Add a gallery',
