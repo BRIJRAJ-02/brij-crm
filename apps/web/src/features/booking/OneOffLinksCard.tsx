@@ -63,14 +63,15 @@ export function OneOffLinksCard({ data, slug, page, pageUrl, isReadOnly, onSaved
   const [isMaking, setMaking] = useState(false);
   const [revoking, setRevoking] = useState<OneOffLinkView | undefined>(undefined);
   const [failure, setFailure] = useState<string | undefined>(undefined);
-  // Books only through these links (AC-6204): saved at once, as Only through a form is, and put back if refused.
+  // Books only through these links (AC-6204): guest facing, so it goes into the page's draft and waits for Publish
+  // (spec 0068, AC-6810), shown at once and put back if refused.
   const [linksOnly, setLinksOnly] = useState<boolean | undefined>(undefined);
   const [isSaving, setSaving] = useState(false);
   const saveLinksOnly = (next: boolean) => {
     setLinksOnly(next);
     setSaving(true);
     setFailure(undefined);
-    data.bookingPages.update(slug, pageId, { linksOnly: next }).then(
+    data.bookingPages.saveDraft(slug, pageId, { linksOnly: next }).then(
       (saved) => {
         setSaving(false);
         setLinksOnly(undefined);

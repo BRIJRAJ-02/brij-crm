@@ -66,6 +66,19 @@ function minutes(value: number): string {
   return rest === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(rest)} min`;
 }
 
+/** A cancel or move cutoff as people say it: "none", "2 h", "3 days". */
+function cutoff(value: number): string {
+  if (value === 0) return 'none';
+  const days = value / (24 * 60);
+  if (Number.isInteger(days)) return days === 1 ? '1 day' : `${String(days)} days`;
+  return minutes(value);
+}
+
+/** What a page does once a booking commits, as the editor names it. */
+function afterWords(value: unknown): string {
+  return value === 'redirect' ? 'Redirect' : 'Confirmation page';
+}
+
 /** A location's kind, as the editor names it. */
 function place(location: BookingLocation | undefined): string {
   switch (location?.type) {
@@ -132,6 +145,20 @@ function bookingSentence(key: BookingDraftKey, before: unknown, after: unknown):
         ? 'Questions changed'
         : `Questions ${String(count(before))} → ${String(count(after))}`;
     }
+    case 'requiresConfirmation':
+      return after === true ? 'Bookings wait for your confirmation' : 'Bookings confirm at once';
+    case 'afterBooking':
+      return `After booking ${afterWords(before)} → ${afterWords(after)}`;
+    case 'redirectUrl':
+      return after === null ? 'Redirect address removed' : 'Redirect address changed';
+    case 'sendBookingDetails':
+      return after === true ? 'Redirect sends the booking’s details' : 'Redirect sends no details';
+    case 'cancelCutoffMinutes':
+      return `Cancel cutoff ${cutoff(Number(before))} → ${cutoff(Number(after))}`;
+    case 'moveCutoffMinutes':
+      return `Move cutoff ${cutoff(Number(before))} → ${cutoff(Number(after))}`;
+    case 'linksOnly':
+      return after === true ? 'Books only through one-time links' : 'Books from its own address again';
   }
 }
 

@@ -10,8 +10,11 @@ import { WorkspaceScoped } from '../workspaces.ts';
 import { BookingPageSettings } from './settings.ts';
 
 /**
- * The booking page settings an edit drafts (AC-6810): everything a guest sees of the page. Anything else is instant
- * (AC-6813): status, the address and the profile placement, privacy, filing, form only and the reschedule rule.
+ * The booking page settings an edit drafts (AC-6810): everything a guest sees of the page, including what happens
+ * once they book (the confirmation or a redirect and what it carries, whether the host confirms first), how late
+ * they may cancel or move (spec 0062), and whether the page books only through one-time links. Anything else is
+ * instant (AC-6813): status, the address and the profile placement, privacy, filing, form only and the reschedule
+ * rule, and the one-time links themselves.
  */
 export const BOOKING_DRAFT_KEYS = [
   'title',
@@ -28,6 +31,13 @@ export const BOOKING_DRAFT_KEYS = [
   'defaultView',
   'showSocials',
   'questions',
+  'requiresConfirmation',
+  'afterBooking',
+  'redirectUrl',
+  'sendBookingDetails',
+  'cancelCutoffMinutes',
+  'moveCutoffMinutes',
+  'linksOnly',
 ] as const;
 /** One drafted setting. */
 export type BookingDraftKey = (typeof BOOKING_DRAFT_KEYS)[number];
@@ -48,6 +58,13 @@ export const BookingPageDraft = BookingPageSettings.pick({
   defaultView: true,
   showSocials: true,
   questions: true,
+  requiresConfirmation: true,
+  afterBooking: true,
+  redirectUrl: true,
+  sendBookingDetails: true,
+  cancelCutoffMinutes: true,
+  moveCutoffMinutes: true,
+  linksOnly: true,
 })
   .partial()
   .strict();

@@ -155,6 +155,57 @@ describe('a booking page’s draft (AC-6810, AC-6811)', () => {
     expect((await listBookingPageVersions(ada.scope, { pageId: made.id })).versions).toHaveLength(1);
   });
 
+  it('drafts what happens after booking, the cutoffs, confirming first and links only, and Publish checks them', async () => {
+    const ada = await person('Ada');
+    const made = await page(ada.scope);
+    const drafted = await saveBookingPageDraft(ada.scope, {
+      pageId: made.id,
+      settings: {
+        requiresConfirmation: true,
+        cancelCutoffMinutes: 120,
+        moveCutoffMinutes: 60,
+        linksOnly: true,
+        afterBooking: 'redirect',
+      },
+    });
+    // The editor shows the draft and names each change; guests (the slot engine, every public read) see none of it.
+    expect(drafted.requiresConfirmation).toBe(true);
+    expect(drafted.publication?.changes).toEqual([
+      'Bookings wait for your confirmation',
+      'After booking Confirmation page → Redirect',
+      'Cancel cutoff none → 2 h',
+      'Move cutoff none → 1 h',
+      'Books only through one-time links',
+    ]);
+    const before = await guestsSee(ada.workspaceId, made.id);
+    expect(before).toMatchObject({
+      requiresConfirmation: false,
+      cancelCutoffMinutes: 0,
+      moveCutoffMinutes: 0,
+      linksOnly: false,
+      afterBooking: 'confirmation',
+    });
+    // A redirect with nowhere to send visitors: Publish runs the save's check, names the setting and publishes nothing.
+    const refused = await refusalOf(publishBookingPage(ada.scope, { pageId: made.id }));
+    expect(refused).toEqual({ code: 'VALUE_REQUIRED', field: 'redirectUrl' });
+    expect((await guestsSee(ada.workspaceId, made.id))?.linksOnly).toBe(false);
+    await saveBookingPageDraft(ada.scope, {
+      pageId: made.id,
+      settings: { redirectUrl: 'https://example.com/thanks', sendBookingDetails: true },
+    });
+    const published = await publishBookingPage(ada.scope, { pageId: made.id });
+    expect(published.publication).toBeUndefined();
+    expect(await guestsSee(ada.workspaceId, made.id)).toMatchObject({
+      requiresConfirmation: true,
+      cancelCutoffMinutes: 120,
+      moveCutoffMinutes: 60,
+      linksOnly: true,
+      afterBooking: 'redirect',
+      redirectUrl: 'https://example.com/thanks',
+      sendBookingDetails: true,
+    });
+  });
+
   it('brings a version back as a draft, and keeps only the last 20 (AC-6812)', async () => {
     const ada = await person('Ada');
     const made = await page(ada.scope);

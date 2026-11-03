@@ -25,6 +25,13 @@ const PUBLISHED: PublishedBooking = {
   defaultView: 'month',
   showSocials: true,
   questions: [],
+  requiresConfirmation: false,
+  afterBooking: 'confirmation',
+  redirectUrl: null,
+  sendBookingDetails: false,
+  cancelCutoffMinutes: 0,
+  moveCutoffMinutes: 0,
+  linksOnly: false,
 };
 
 describe('diffPage (booking)', () => {
@@ -54,6 +61,37 @@ describe('diffPage (booking)', () => {
     expect(diffPage('booking', PUBLISHED, { title: 'Intro', durations: [30] })).toEqual([]);
     const long = 'A very long meeting title that goes on and on and on';
     expect(diffPage('booking', PUBLISHED, { title: long })[0]).toBe(`Title “Intro” → “${long.slice(0, 39)}…”`);
+  });
+
+  it('names what happens after booking, the cutoffs, confirming first and links only (spec 0062’s settings)', () => {
+    expect(
+      diffPage('booking', PUBLISHED, {
+        linksOnly: true,
+        moveCutoffMinutes: 90,
+        cancelCutoffMinutes: 2880,
+        sendBookingDetails: true,
+        redirectUrl: 'https://example.com/thanks',
+        afterBooking: 'redirect',
+        requiresConfirmation: true,
+      }),
+    ).toEqual([
+      'Bookings wait for your confirmation',
+      'After booking Confirmation page → Redirect',
+      'Redirect address changed',
+      'Redirect sends the booking’s details',
+      'Cancel cutoff none → 2 days',
+      'Move cutoff none → 1 h 30 min',
+      'Books only through one-time links',
+    ]);
+    const redirecting = { ...PUBLISHED, afterBooking: 'redirect', redirectUrl: 'https://example.com' } as const;
+    expect(
+      diffPage('booking', redirecting, {
+        afterBooking: 'confirmation',
+        redirectUrl: null,
+        cancelCutoffMinutes: 60,
+        linksOnly: false,
+      }),
+    ).toEqual(['After booking Redirect → Confirmation page', 'Redirect address removed', 'Cancel cutoff none → 1 h']);
   });
 
   it('names a removed limit, a new hours schedule and a count of questions', () => {
@@ -93,7 +131,7 @@ describe('the draft’s arithmetic', () => {
 
   it('keeps a version whole, and makes one a draft of what differs', () => {
     const snapshot = publishedSnapshot({ ...PUBLISHED, title: 'Old' });
-    expect(Object.keys(snapshot)).toHaveLength(14);
+    expect(Object.keys(snapshot)).toHaveLength(21);
     expect(draftFromSnapshot(snapshot, PUBLISHED)).toEqual({ title: 'Old' });
     expect(draftFromSnapshot({ title: 7 }, PUBLISHED)).toEqual({});
   });

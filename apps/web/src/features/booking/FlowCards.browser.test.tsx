@@ -50,8 +50,16 @@ function flow() {
   };
 }
 
-async function show(bookingFlow: ReturnType<typeof flow>) {
-  const data = { bookingFlow } as unknown as DataLayer;
+/** The page writes the links card makes: Book only through these links goes into the page's draft (spec 0068). */
+function pages() {
+  return {
+    saveDraft: vi.fn(() => Promise.resolve({ ...PAGE, linksOnly: true })),
+    update: vi.fn(() => Promise.resolve({ ...PAGE, linksOnly: true })),
+  };
+}
+
+async function show(bookingFlow: ReturnType<typeof flow>, bookingPages = pages()) {
+  const data = { bookingFlow, bookingPages } as unknown as DataLayer;
   shown = await renderInApp(
     () => (
       <PageColumn>
@@ -66,7 +74,11 @@ async function show(bookingFlow: ReturnType<typeof flow>) {
         />
       </PageColumn>
     ),
-    { data: { bookingFlow }, pattern: '/w/$slug/bookings/links/$id', at: '/w/acme/bookings/links/one' },
+    {
+      data: { bookingFlow, bookingPages } as unknown as Partial<DataLayer>,
+      pattern: '/w/$slug/bookings/links/$id',
+      at: '/w/acme/bookings/links/one',
+    },
   );
 }
 
@@ -92,6 +104,17 @@ describe('one-time links', () => {
     expect(bookingFlow.revokeLink).not.toHaveBeenCalled();
     await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Revoke' }));
     expect(bookingFlow.revokeLink).toHaveBeenCalledWith('acme', 'page', LINK.id);
+  });
+});
+
+describe('book only through these links', () => {
+  it('goes into the page’s draft for Publish, never straight to guests (spec 0068, AC-6810)', async () => {
+    const bookingPages = pages();
+    await show(flow(), bookingPages);
+    await userEvent.click(page.getByText('Book only through these links'));
+    await expect.poll(() => bookingPages.saveDraft.mock.calls.length).toBe(1);
+    expect(bookingPages.saveDraft).toHaveBeenCalledWith('acme', 'page', { linksOnly: true });
+    expect(bookingPages.update).not.toHaveBeenCalled();
   });
 });
 
