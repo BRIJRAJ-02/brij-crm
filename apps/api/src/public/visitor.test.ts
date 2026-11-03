@@ -413,16 +413,6 @@ describe('the return address of a guest connect (4 Nov 2026)', () => {
     expect(unkept(back)).toEqual(UNKEPT);
     expect(cookieOf(back, GUEST_COOKIE)).toBe('');
 
-    // Another browser (no landing nonce), or the ticket with another id, gets nothing and takes nothing.
-    const stranger = await browse(`${landing.pathname}${landing.search}`, '', 'GET', pagesApp);
-    expect(stranger.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=failed`);
-    expect(unkept(stranger)).toEqual(UNKEPT);
-    expect(cookieOf(stranger, GUEST_COOKIE)).toBe('');
-    const swapped = new URL(landing);
-    swapped.searchParams.set('t', 'A'.repeat(43));
-    const otherId = await browse(`${swapped.pathname}${swapped.search}`, land, 'GET', pagesApp);
-    expect(otherId.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=failed`);
-
     const landed = await browse(`${landing.pathname}${landing.search}`, land, 'GET', pagesApp);
     expect(landed.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=connected`);
     expect(unkept(landed)).toEqual(UNKEPT);
@@ -436,6 +426,34 @@ describe('the return address of a guest connect (4 Nov 2026)', () => {
     const again = await browse(`${landing.pathname}${landing.search}`, land, 'GET', pagesApp);
     expect(again.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=failed`);
     expect(cookieOf(again, GUEST_COOKIE)).toBe('');
+  });
+
+  it('spends the kept grant on a landing from another browser or with another id, so it never waits', async () => {
+    const { key, path } = await handlePage();
+    const first = await startOnPages(key, path);
+    const landing = new URL(
+      (await callback(first.state, first.stateCookie, 'gone@navy.example')).headers.get('location') ?? '',
+    );
+    // Another browser (no landing nonce) gets nothing, and the grant is gone: the right browser then finds nothing.
+    const stranger = await browse(`${landing.pathname}${landing.search}`, '', 'GET', pagesApp);
+    expect(stranger.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
+    expect(unkept(stranger)).toEqual(UNKEPT);
+    expect(cookieOf(stranger, GUEST_COOKIE)).toBe('');
+    const late = await browse(`${landing.pathname}${landing.search}`, first.land, 'GET', pagesApp);
+    expect(late.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
+    expect(cookieOf(late, GUEST_COOKIE)).toBe('');
+
+    // The ticket with another id, in the right browser: the ticket's own grant goes too.
+    const second = await startOnPages(key, path);
+    const secondLanding = new URL(
+      (await callback(second.state, second.stateCookie, 'swap@navy.example')).headers.get('location') ?? '',
+    );
+    const swapped = new URL(secondLanding);
+    swapped.searchParams.set('t', 'A'.repeat(43));
+    const otherId = await browse(`${swapped.pathname}${swapped.search}`, second.land, 'GET', pagesApp);
+    expect(otherId.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
+    const after = await browse(`${secondLanding.pathname}${secondLanding.search}`, second.land, 'GET', pagesApp);
+    expect(after.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
   });
 
   it('refuses an expired ticket, and a state passed as one', async () => {
@@ -459,19 +477,19 @@ describe('the return address of a guest connect (4 Nov 2026)', () => {
     expect(forged.headers.get('location')).toBe(`${PAGES}/`);
   });
 
-  it('fails a callback with no landing nonce, and one whose nonce the browser never held', async () => {
+  it('never sends to Google a start with no landing nonce, and fails one whose nonce the browser never held', async () => {
     const { key, path } = await handlePage();
-    // A start straight to the app's leg, no `land`: nothing is exchanged and the visitor is told it failed.
-    const bare = await browse(
-      `/api/public/booking/${key}/connect?via=app&return=${encodeURIComponent(path)}`,
-      '',
-      'GET',
-      pagesApp,
-    );
-    const bareState = new URL(bare.headers.get('location') ?? '').searchParams.get('state') ?? '';
-    const noLand = await callback(bareState, cookieOf(bare, GUEST_STATE_COOKIE), 'bare@navy.example');
-    expect(noLand.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
-    expect(cookieOf(noLand, GUEST_COOKIE)).toBe('');
+    // A start straight to the app's leg with no `land`, or a malformed one, could never land: it fails at once.
+    for (const land of ['', '&land=short']) {
+      const bare = await browse(
+        `/api/public/booking/${key}/connect?via=app${land}&return=${encodeURIComponent(path)}`,
+        '',
+        'GET',
+        pagesApp,
+      );
+      expect(bare.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
+      expect(cookieOf(bare, GUEST_STATE_COOKIE)).toBe('');
+    }
 
     // An attacker's own `land=` on a link to the app's leg: the victim's browser never held that nonce.
     const attackerNonce = 'attacker-nonce-attacker';
@@ -489,6 +507,15 @@ describe('the return address of a guest connect (4 Nov 2026)', () => {
     const victimLands = await browse(`${landing.pathname}${landing.search}`, '', 'GET', pagesApp);
     expect(victimLands.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
     expect(cookieOf(victimLands, GUEST_COOKIE)).toBe('');
+    // And that mismatch spent the victim's grant: even the attacker's own nonce, with the URL, finds nothing now.
+    const attacker = await browse(
+      `${landing.pathname}${landing.search}`,
+      `${GUEST_LAND_COOKIE}=${attackerNonce}`,
+      'GET',
+      pagesApp,
+    );
+    expect(attacker.headers.get('location')).toBe(`${PAGES}${path}?calendar=failed`);
+    expect(cookieOf(attacker, GUEST_COOKIE)).toBe('');
   });
 
   it('sends every other ending, and every refusal, to the public host too', async () => {

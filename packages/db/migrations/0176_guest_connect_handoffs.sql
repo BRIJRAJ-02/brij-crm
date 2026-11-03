@@ -5,10 +5,12 @@
 --
 -- Global, not tenant data: no workspace is known yet, so it sits in schema auth. Two ways in, hand written, owned by
 -- crm_guest_handoff (a role that can't log in and holds only this table) and executable by crm_app alone:
--- crm_put_guest_handoff (drops the expired rows, then keeps one) and crm_take_guest_handoff (delete … returning, so
--- a second landing finds nothing). Forced row level security with one policy, for crm_guest_handoff only: the grants
--- are the fence, as on every auth table, and the policy a second one. Any change to the role or the functions goes
--- through security-access-reviewer.
+-- crm_put_guest_handoff (drops the expired rows, then keeps one) and crm_take_guest_handoff (drops the expired rows,
+-- then delete … returning, so a second landing finds nothing). Unlike every other auth table, no login holds a grant
+-- here: the default privileges (migration 0016) that hand each new auth table to crm_identity are revoked, so only
+-- crm_guest_handoff, through the two functions, touches it. Forced row level security with one policy, for
+-- crm_guest_handoff only, is a second fence. Any change to the role or the functions goes through
+-- security-access-reviewer.
 set local lock_timeout = '5s';
 --> statement-breakpoint
 create table "auth"."guest_connect_handoffs" (
@@ -36,6 +38,9 @@ alter role crm_guest_handoff nologin nobypassrls nocreaterole noinherit password
 --> statement-breakpoint
 grant usage on schema auth to crm_guest_handoff;
 --> statement-breakpoint
+-- Whatever the schema's default privileges gave (crm_identity's, from migration 0016), no login holds this table.
+revoke all on "auth"."guest_connect_handoffs" from public, crm_identity, crm_app;
+--> statement-breakpoint
 grant select, insert, delete on "auth"."guest_connect_handoffs" to crm_guest_handoff;
 --> statement-breakpoint
 alter table "auth"."guest_connect_handoffs" enable row level security;
@@ -62,8 +67,8 @@ begin atomic
   );
 end;
 --> statement-breakpoint
--- Takes the hand off kept under `digest`, once: the row goes whether it is still fresh or not, and only a fresh one
--- answers.
+-- Takes the hand off kept under `digest`, once, dropping every expired row first: the row goes whether it is still
+-- fresh or not, and only a fresh one answers.
 create function crm_take_guest_handoff(digest text)
   returns table (sealed text, max_age integer, fresh boolean)
   language sql
@@ -71,6 +76,8 @@ create function crm_take_guest_handoff(digest text)
   set search_path = pg_catalog, pg_temp
   rows 1
 begin atomic
+  delete from auth.guest_connect_handoffs h
+  where h.expires_at <= pg_catalog.now() and h.id_digest <> crm_take_guest_handoff.digest;
   delete from auth.guest_connect_handoffs h
   where h.id_digest = crm_take_guest_handoff.digest
   returning h.sealed, h.max_age, h.expires_at > pg_catalog.now();
@@ -98,7 +105,7 @@ revoke crm_guest_handoff from current_user;
 --> statement-breakpoint
 -- Refuse to finish unless both are as narrow as they read: owned by crm_guest_handoff and executable by crm_app
 -- alone, out of the identity login's reach; crm_guest_handoff a plain role in no role that nothing but the owner can
--- become, holding exactly the table grants above.
+-- become, holding exactly the table grants above; and the table granted to no other role at all (its owner aside).
 do $$
 declare
   fn regprocedure;
@@ -139,6 +146,17 @@ begin
       where a.grantee = 'crm_guest_handoff'::regrole
     ) then
     raise exception 'crm_guest_handoff must be a plain role, out of every login''s reach, holding only the hand off''s grants';
+  end if;
+  if exists (
+      select 1 from pg_class c cross join lateral aclexplode(c.relacl) a
+      where c.oid = 'auth.guest_connect_handoffs'::regclass
+        and a.grantee not in ('crm_guest_handoff'::regrole, c.relowner)
+    )
+    or exists (
+      select 1 from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      where att.attrelid = 'auth.guest_connect_handoffs'::regclass
+    ) then
+    raise exception 'auth.guest_connect_handoffs must be granted to crm_guest_handoff alone';
   end if;
 end
 $$;

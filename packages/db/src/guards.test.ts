@@ -2197,6 +2197,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'workspace_directory',
     'workspace_membership',
   ];
+  /** The identity login's tables: every auth table but the guest connect's hand off, which no login holds (0176). */
+  const IDENTITY_TABLES = AUTH_TABLES.filter((table) => table !== 'guest_connect_handoffs');
 
   it("holds Better Auth's tables and the directory, and only the directory and a link page's blocks carry a workspace id", async () => {
     const tables = await owner.query<{ table: string; workspace: boolean; enabled: boolean }>(`
@@ -2261,7 +2263,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
 
   it('lets only the identity login select, insert, update and delete there', async () => {
     expect(await authGrants('crm_identity')).toEqual(
-      AUTH_TABLES.map((table) => ({ table, privileges: 'DELETE,INSERT,SELECT,UPDATE' })),
+      IDENTITY_TABLES.map((table) => ({ table, privileges: 'DELETE,INSERT,SELECT,UPDATE' })),
     );
     expect(await schemaPrivileges('crm_identity')).toEqual([{ usage: true, create: false }]);
   });
@@ -2316,7 +2318,11 @@ describe('the auth schema: global identity, outside row level security (spec 000
       for (const table of ['members', 'workspaces', 'records', 'values']) {
         await expect(identity.query(`select 1 from "${table}" limit 1`)).rejects.toMatchObject({ code: '42501' });
       }
-      for (const table of AUTH_TABLES) await identity.query(`select 1 from auth."${table}" limit 1`);
+      for (const table of IDENTITY_TABLES) await identity.query(`select 1 from auth."${table}" limit 1`);
+      // The guest connect's hand off is no login's, the identity login's included.
+      await expect(identity.query('select 1 from auth.guest_connect_handoffs limit 1')).rejects.toMatchObject({
+        code: '42501',
+      });
     } finally {
       await app.end();
       await identity.end();

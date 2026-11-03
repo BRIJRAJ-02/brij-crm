@@ -1055,6 +1055,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       id !== undefined && id.length <= 64 && typeof ticket?.h === 'string' && sameDigest(digestOf(id), ticket.h);
     if (!sameBrowser || !sameId) {
       log.warn('booking.guest_connect.refused', { requestId: c.get('requestId'), reason: 'land' });
+      // The ticket is ours, so the grant it names is spent now rather than left waiting out its two minutes.
+      if (typeof ticket?.h === 'string') await takeGuestHandoff({ db }, ticket.h);
       return c.redirect(back('failed'));
     }
     // Once only: a second landing, or one after the two minutes, finds nothing.
@@ -1287,12 +1289,18 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       if (!toApiError(error).expected) throw error;
       return c.redirect(backTo(publicOrigin, back, 'failed'));
     }
-    const land = c.req.query('land');
+    const landParam = c.req.query('land');
+    const land = landParam !== undefined && LAND_DIGEST.test(landParam) ? landParam : undefined;
+    // With a public host, a start that skipped its nonce leg could never land: no one sees Google's consent for it.
+    if (crossHost && land === undefined) {
+      log.warn('booking.guest_connect.refused', { requestId: c.get('requestId'), reason: 'land' });
+      return c.redirect(backTo(publicOrigin, back, 'failed'));
+    }
     const nonce = randomBytes(18).toString('base64url');
     const state = signValue(
       visitor.stateKey,
       GUEST_STATE_VERSION,
-      { r: back, n: nonce, ...(land !== undefined && LAND_DIGEST.test(land) ? { l: land } : {}) },
+      { r: back, n: nonce, ...(land === undefined ? {} : { l: land }) },
       GUEST_STATE_SECONDS,
     );
     setCookie(c, cookieName(GUEST_STATE_COOKIE, visitor.secure), nonce, {
