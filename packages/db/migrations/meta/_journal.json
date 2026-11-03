@@ -1177,6 +1177,13 @@
       "when": 1795505000000,
       "tag": "0167_booking_flow_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 168,
+      "version": "7",
+      "when": 1795506000000,
+      "tag": "0168_guest_connect_handoffs",
+      "breakpoints": true
     }
   ]
 }

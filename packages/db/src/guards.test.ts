@@ -234,6 +234,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
+      // A guest calendar connect's single use hand off to the public host (4 Nov 2026, migration 0168).
+      { name: 'crm_put_guest_handoff', owner: 'crm_guest_handoff' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_profile_accent', owner: 'crm_handle' },
       { name: 'crm_save_profile_identity', owner: 'crm_handle' },
@@ -258,6 +260,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
       // A deleted account's handles freed after their 90 days (late trap #73, migration 0126).
       { name: 'crm_sweep_released_handles', owner: 'crm_handle' },
+      { name: 'crm_take_guest_handoff', owner: 'crm_guest_handoff' },
       // The link pages that carry a form, for a webhook's link_page.signup (spec 0064, slice 3).
       { name: 'crm_webhook_form_handles', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
@@ -349,6 +352,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_put_guest_handoff', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it checks the workspace and the membership, and raises PROFILE_MISSING (spec 0060).
       { name: 'crm_save_profile_accent', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -383,6 +387,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it answers how many held handles it freed.
       { name: 'crm_sweep_released_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_take_guest_handoff', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_webhook_form_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -519,6 +524,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     ['crm_address', ['crm_claim_workspace_address'], ['crm_claim_workspace_address(text)'], ['app']],
     ['crm_calendar_lookup', ['crm_calendar_account_shared'], ['crm_calendar_account_shared(uuid)'], ['app']],
+    [
+      'crm_guest_handoff',
+      ['crm_put_guest_handoff', 'crm_take_guest_handoff'],
+      ['crm_put_guest_handoff(text, text, integer, integer)', 'crm_take_guest_handoff(text)'],
+      ['app', 'app'],
+    ],
     [
       'crm_operator',
       [
@@ -2157,6 +2168,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
   const AUTH_TABLES = [
     'account',
     'activity_day',
+    // A guest calendar connect's single use hand off (4 Nov 2026, migration 0168).
+    'guest_connect_handoffs',
     'known_device',
     'link_imports',
     'operator_event',
@@ -2184,6 +2197,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'workspace_directory',
     'workspace_membership',
   ];
+  /** The identity login's tables: every auth table but the guest connect's hand off, which no login holds (0168). */
+  const IDENTITY_TABLES = AUTH_TABLES.filter((table) => table !== 'guest_connect_handoffs');
 
   it("holds Better Auth's tables and the directory, and only the directory and a link page's blocks carry a workspace id", async () => {
     const tables = await owner.query<{ table: string; workspace: boolean; enabled: boolean }>(`
@@ -2216,6 +2231,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     // The grants below are the fence. Spec 0061's three tables (migration 0147) also force row level security, with
     // one policy each, for crm_handle alone, so the identity login's default grant reads nothing there.
     expect(tables.rows.filter((row) => row.enabled).map((row) => row.table)).toEqual([
+      // And the guest connect's hand off (migration 0168), for crm_guest_handoff alone.
+      'guest_connect_handoffs',
       'profile_booking_days',
       'profile_images',
       'profile_view_source_days',
@@ -2246,7 +2263,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
 
   it('lets only the identity login select, insert, update and delete there', async () => {
     expect(await authGrants('crm_identity')).toEqual(
-      AUTH_TABLES.map((table) => ({ table, privileges: 'DELETE,INSERT,SELECT,UPDATE' })),
+      IDENTITY_TABLES.map((table) => ({ table, privileges: 'DELETE,INSERT,SELECT,UPDATE' })),
     );
     expect(await schemaPrivileges('crm_identity')).toEqual([{ usage: true, create: false }]);
   });
@@ -2301,7 +2318,11 @@ describe('the auth schema: global identity, outside row level security (spec 000
       for (const table of ['members', 'workspaces', 'records', 'values']) {
         await expect(identity.query(`select 1 from "${table}" limit 1`)).rejects.toMatchObject({ code: '42501' });
       }
-      for (const table of AUTH_TABLES) await identity.query(`select 1 from auth."${table}" limit 1`);
+      for (const table of IDENTITY_TABLES) await identity.query(`select 1 from auth."${table}" limit 1`);
+      // The guest connect's hand off is no login's, the identity login's included.
+      await expect(identity.query('select 1 from auth.guest_connect_handoffs limit 1')).rejects.toMatchObject({
+        code: '42501',
+      });
     } finally {
       await app.end();
       await identity.end();
@@ -2326,7 +2347,13 @@ describe('the auth schema: global identity, outside row level security (spec 000
     // But the purge (spec 0031, AC-823), which removes a purged workspace's directory rows through its functions,
     // the address claim (migration 0083), which moves a workspace's address through its one function, and the
     // handles (migration 0086), which claim a person's handle and read it back through theirs.
-    expect(schema.rows.map((row) => row.grantee).sort()).toEqual(['crm_address', 'crm_handle', 'crm_purge']);
+    // And the guest connect's hand off (migration 0168), kept and taken once through its two functions.
+    expect(schema.rows.map((row) => row.grantee).sort()).toEqual([
+      'crm_address',
+      'crm_guest_handoff',
+      'crm_handle',
+      'crm_purge',
+    ]);
     const tables = await owner.query<{ grant: string }>(`
       select table_name || ' ' || privilege_type as grant from information_schema.role_table_grants
       where table_schema = 'auth'
@@ -2336,6 +2363,10 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by (table_name || ' ' || privilege_type) collate "C"
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
+      // A guest connect's hand off (migration 0168): kept, then taken once; never changed.
+      'guest_connect_handoffs DELETE',
+      'guest_connect_handoffs INSERT',
+      'guest_connect_handoffs SELECT',
       // A link in bio page brought across (spec 0055, migration 0109): read to see whether this import was
       // already made, and insert to make one. Never update or delete, so an import once made is what it was.
       'link_imports INSERT',

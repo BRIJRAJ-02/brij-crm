@@ -4,6 +4,8 @@
 // happened), and the address it then tidies to, so a reload never says it
 // again. Pure, for the page and its tests.
 
+import { handleAddressOf } from '@crm/contracts/handles';
+
 /** What a page chose before leaving for Google. */
 export interface Chosen {
   readonly duration?: number;
@@ -20,16 +22,26 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const ZONE = /^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$|^UTC$/;
 
 /**
- * The page's own address with what was chosen, for the connect leg to come back to. A form's hand off never rides
- * along (it would reach Google's sign in): the tab's session storage keeps it (prefill.ts).
+ * The page's own address with what was chosen, for the connect leg to come back to: the path the visitor is on (its
+ * handle address `/<handle>/<slug>`, or `/b/<key>`), never a host, so they come back where they were (4 Nov 2026).
+ * Any other path reads as `/b/<key>`. A form's hand off never rides along (it would reach Google's sign in): the
+ * tab's session storage keeps it (prefill.ts).
  */
-export function returnPath(publicKey: string, chosen: Chosen): string {
+export function returnPath(publicKey: string, chosen: Chosen, pathname?: string): string {
   const query = new URLSearchParams();
   if (chosen.duration !== undefined) query.set('d', String(chosen.duration));
   if (chosen.day !== undefined) query.set('day', chosen.day);
   if (chosen.zone !== undefined) query.set('tz', chosen.zone);
   const text = query.toString();
-  return `/b/${encodeURIComponent(publicKey)}${text === '' ? '' : `?${text}`}`;
+  return `${pageAddress(publicKey, pathname)}${text === '' ? '' : `?${text}`}`;
+}
+
+/** The page's path as the visitor sees it: its handle address when they are on it, else `/b/<key>`. */
+function pageAddress(publicKey: string, pathname: string | undefined): string {
+  const byKey = `/b/${encodeURIComponent(publicKey)}`;
+  const trimmed = pathname?.replace(/\/+$/, '');
+  if (trimmed === undefined || trimmed === byKey) return byKey;
+  return handleAddressOf(trimmed)?.kind === 'page' ? trimmed : byKey;
 }
 
 /** What an address carries back: the choices (each only when well formed) and the connect's result. */

@@ -17,6 +17,16 @@ describe('the return address', () => {
     expect(returnPath(KEY, {})).toBe(`/b/${KEY}`);
   });
 
+  it('comes back to the address the visitor is on: the handle address, else the page’s key', () => {
+    expect(returnPath(KEY, { duration: 30 }, '/anish/meeting')).toBe('/anish/meeting?d=30');
+    expect(returnPath(KEY, {}, '/anish/meeting/')).toBe('/anish/meeting');
+    expect(returnPath(KEY, {}, `/b/${KEY}`)).toBe(`/b/${KEY}`);
+    // A profile, an app page, an embed or anything odd reads as the key.
+    for (const pathname of ['/anish', '/w/acme/settings', `/embed/${KEY}`, '/settings/x', '//evil.example/x']) {
+      expect(returnPath(KEY, {}, pathname)).toBe(`/b/${KEY}`);
+    }
+  });
+
   it('drops anything malformed, and an unknown result', () => {
     const back = new URL(`https://app.test/b/${KEY}?d=abc&day=tomorrow&tz=%3Cscript%3E&calendar=yes`);
     expect(readReturn(back)).toEqual({ chosen: {} });

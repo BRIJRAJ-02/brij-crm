@@ -1548,6 +1548,52 @@ export async function countProfileBooking(
   return found.rows[0]?.counted === true;
 }
 
+/** A guest calendar connect's hand off id, as the hop carries it, and its digest as it is kept: base64url, 32 bytes. */
+const HANDOFF_SHAPE = /^[A-Za-z0-9_-]{43}$/;
+
+/** What a guest connect's hand off holds: the sealed guest cookie and how long the cookie may live. */
+export interface GuestHandoff {
+  readonly sealed: string;
+  readonly maxAge: number;
+}
+
+/**
+ * Keeps a guest connect's sealed grant for at most `seconds` (two minutes at most) under `digest`, the SHA-256 of a
+ * random id only the hop carries (4 Nov 2026, migration 0168: `crm_put_guest_handoff`, which drops expired rows
+ * first). Exported only from `@crm/core/public`.
+ */
+export async function putGuestHandoff(
+  deps: { readonly db: Database },
+  digest: string,
+  handoff: GuestHandoff,
+  seconds: number,
+): Promise<void> {
+  if (!HANDOFF_SHAPE.test(digest)) throw new TypeError('A hand off digest is 43 base64url characters.');
+  await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute(
+      sql`select crm_put_guest_handoff(${digest}, ${handoff.sealed}, ${handoff.maxAge}::integer, ${seconds}::integer)`,
+    ),
+  );
+}
+
+/**
+ * Takes the hand off kept under `digest`, once (`crm_take_guest_handoff`, a delete … returning): undefined for one
+ * never kept, already taken or expired. Exported only from `@crm/core/public`.
+ */
+export async function takeGuestHandoff(
+  deps: { readonly db: Database },
+  digest: string,
+): Promise<GuestHandoff | undefined> {
+  if (!HANDOFF_SHAPE.test(digest)) return undefined;
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ sealed: string; max_age: number; fresh: boolean }>(
+      sql`select sealed, max_age, fresh from crm_take_guest_handoff(${digest})`,
+    ),
+  );
+  const [row] = found.rows;
+  return row?.fresh === true ? { sealed: row.sealed, maxAge: row.max_age } : undefined;
+}
+
 /**
  * A picture a visitor's page loads (spec 0061, AC-6101, AC-6129): the handle's person, as their page shows them, and
  * one of their pictures that a live block of that page uses now (`crm_profile_image_public`). An id from another
