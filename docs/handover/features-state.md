@@ -63,6 +63,10 @@ on main with it.
 - The embed: a `handle/slug` booking frame is heard across the 308 to the apex (`8cb6793f1`); popups open at full
   size under one shared head bar, and `/embed/*` is cached five minutes instead of an hour (`82f2b212e`).
 
+- Link pages say who they are from (job title switch, company lockup with the brand logo, a closing line above
+  Powered by Timefix), migration `0164`. Embedded booking pages take their content's height (the details step
+  no longer keeps the calendar's), and embed dialogs follow the visitor's light or dark setting.
+
 ## Built, pushed, **not landed**
 
 Two branches. Land `car/propagated-audit` first — it is the one that unblocks deploys.
