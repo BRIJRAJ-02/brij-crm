@@ -6,7 +6,6 @@ import type { AppsView, FirstBusiness, HospitalityApp, HospitalityStore, Workspa
 import { useHospitality } from '@crm/data/react';
 import { HOSPITALITY_APPS } from '@crm/data/hospitality';
 import {
-  Badge,
   Button,
   ButtonLink,
   Callout,
@@ -54,6 +53,7 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
     return store.install(slug, app, { withNeeded, ...(business === undefined ? {} : { business }) }).then((refused) => {
       setBusy(undefined);
       if (refused !== undefined) throw refused;
+      toasts.toast({ tone: 'success', message: strings.appInstalled(strings.appNames[app]) });
     });
   };
 
@@ -78,7 +78,26 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
     setBusy(app);
     void store.remove(slug, app, withDependents).then((refused) => {
       setBusy(undefined);
-      if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
+      if (refused !== undefined) {
+        toasts.toast({ tone: 'danger', message: refused.message });
+        return;
+      }
+      // Every row was kept, so Undo installs it again as it was (Menu first when Menu QR went with it).
+      toasts.toast({
+        tone: 'success',
+        message: strings.appRemoved(strings.appNames[app]),
+        action: {
+          label: strings.undo,
+          onAction: () => {
+            void store
+              .install(slug, app)
+              .then(() => (withDependents ? store.install(slug, 'menu_qr') : undefined))
+              .then((refused2) => {
+                if (refused2 !== undefined) toasts.toast({ tone: 'danger', message: refused2.message });
+              });
+          },
+        },
+      });
     });
   };
 
@@ -106,11 +125,10 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
           return (
             <Card
               key={app}
-              eyebrow={<Icon name={strings.appIcons[app]} tile={isOn ? ('green' as const) : ('gray' as const)} />}
+              eyebrow={<Icon name={strings.appIcons[app]} tile="blue" />}
               title={strings.appNames[app]}
               description={strings.appPurposes[app]}
               isBusy={view === undefined}
-              {...(isOn ? { actions: <Badge tone="accent" text={strings.installed} /> } : {})}
               footer={
                 view === undefined ? (
                   <Skeleton width="short" />

@@ -20,7 +20,9 @@ export const Route = createFileRoute('/w/$slug/settings/apps')({
       ]);
       return { store, workspace };
     } catch (error) {
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { store: undefined, workspace: undefined };
+      if (isDataError(error) && (error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN')) {
+        return { store: undefined, workspace: undefined };
+      }
       throw error;
     }
   },

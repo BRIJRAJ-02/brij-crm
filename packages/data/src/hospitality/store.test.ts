@@ -115,3 +115,38 @@ describe('the apps', () => {
     expect(changed).toEqual([]);
   });
 });
+
+describe('the held copies', () => {
+  it('answers NOT_READY to a change asked before the copy is read, sending nothing', async () => {
+    let sent = 0;
+    const { store } = setUp({
+      moveTable: () => {
+        sent += 1;
+        return Promise.resolve(FLOOR);
+      },
+    });
+    expect((await store.moveTable('acme', PLACE, 'a', 1))?.code).toBe('NOT_READY');
+    expect(sent).toBe(0);
+  });
+
+  it('reads the copy again once the queue drains after a refusal that was not the latest', async () => {
+    let reads = 0;
+    const first = deferred<PlaceFloor>();
+    const { store } = setUp({
+      floor: () => {
+        reads += 1;
+        return Promise.resolve(FLOOR);
+      },
+      moveTable: () => first.promise,
+      archiveTable: () => Promise.resolve(FLOOR),
+    });
+    await store.readFloor('acme', PLACE);
+    const moving = store.moveTable('acme', PLACE, 'c', 0);
+    const archiving = store.archiveTable('acme', PLACE, 'a');
+    first.reject(Object.assign(new Error('Nope.'), { code: 'NOT_FOUND' }));
+    expect(await moving).toBeDefined();
+    expect(await archiving).toBeUndefined();
+    await Promise.resolve();
+    expect(reads).toBe(2);
+  });
+});

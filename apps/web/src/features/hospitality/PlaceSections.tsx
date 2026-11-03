@@ -1,109 +1,128 @@
 // Brief
-// Purpose: one place of the business (spec 0065, AC-6508): its week of opening hours, its special days, its details.
-// Main task: set the hours (saved as each changes), add a special day, and get to the place's tables.
-// Leaves out: reservation hours and pacing (Table seating's own rules, H3), and the floor itself (its own page).
+// Purpose: one place's opening hours, special days and details (spec 0065, AC-6508), the top of the place's page.
+// Main task: set the week's hours (saved as each changes, said quietly), add or remove a special day, fix the address.
+// Leaves out: reservation hours and pacing (Table seating's own rules, H3), and the tables (below, on the same page).
 import type { HoursException, HospitalityStore, Place, PlaceFields, PlaceHours, WeekDay } from '@crm/data';
 import { hoursProblem } from '@crm/data/hospitality';
 import {
   Button,
-  ButtonLink,
   Card,
   CountryPicker,
   DatePicker,
-  Disclosure,
   EmptyState,
   Field,
-  FormRow,
   Form,
   formatDate,
+  FormRow,
   HoursEditor,
   Modal,
   SegmentedControl,
   Select,
+  SettingsSection,
   Table,
   useFormatSettings,
   type FormRefusal,
   type TableColumn,
   type Toasts,
 } from '@crm/ui';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
-import { placeTablesHref } from '../settings/nav.ts';
-import { fromEditor, isWeekDay, weekRows, withDay, type EditorRange } from './hours-rows.ts';
+import { clockLabel, fromEditor, isWeekDay, weekRows, withDay, type EditorRange } from './hours-rows.ts';
 import { dayName, strings } from './strings.ts';
 
 /** How late a window may run into the next morning: a bar's 2 AM, with room to spare. */
 const LATE_UNTIL = '06:00';
 
-/** Props for one place's card. */
-export interface PlaceCardProps {
+/** How long "Saved" stays beside the hours once a save lands. */
+const SAVED_FOR_MS = 2_000;
+
+/** Props for a place's sections. */
+export interface PlaceSectionsProps {
   readonly store: HospitalityStore;
   readonly slug: string;
   readonly place: Place;
+  /** Whether a change is on its way (the business copy's own flag). */
+  readonly isSaving: boolean;
   readonly toasts: Toasts;
 }
 
-/** `HH:MM` on the 12 hour clock the hours editor reads in ("6:00 pm"), in the reader's language. */
-function clockLabel(time: string, locale: string): string {
-  const [hours = 0, minutes = 0] = time.split(':').map(Number);
-  return new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
-    minute: '2-digit',
-    hourCycle: 'h12',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
+/** A day's windows as typed while they don't hold together, and why; drawn in place of the stored ones. */
+interface DayDraft {
+  readonly day: WeekDay;
+  readonly ranges: readonly EditorRange[];
+  readonly message: string;
 }
 
-/** A place's address on one line. */
-const addressOf = (place: Place) =>
-  [place.addressLine, place.city, place.postcode].filter((part) => part !== undefined && part !== '').join(', ');
-
-/** One place: the tables it has, its hours, its special days and its details. */
-export function PlaceCard({ store, slug, place, toasts }: PlaceCardProps) {
-  const [dayError, setDayError] = useState<{ readonly day: WeekDay; readonly message: string } | undefined>(undefined);
+/** Opening hours, special days and details, as three sections. */
+export function PlaceSections({ store, slug, place, isSaving, toasts }: PlaceSectionsProps) {
+  const [draft, setDraft] = useState<DayDraft | undefined>(undefined);
   const [isAddingDay, setAddingDay] = useState(false);
-  const saveHours = (hours: PlaceHours) => {
-    void store.updatePlace(slug, place.id, { hours }).then((refused) => {
+  const status = useSavedStatus(isSaving);
+  const saveHours = (hours: PlaceHours) =>
+    store.updatePlace(slug, place.id, { hours }).then((refused) => {
       if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
+      return refused;
     });
-  };
-  const address = addressOf(place);
+  const rows = weekRows(place.hours, dayName).map((row) =>
+    draft?.day === row.id ? { ...row, ranges: draft.ranges, error: draft.message } : row,
+  );
   return (
-    <Card
-      title={place.name}
-      {...(address === '' ? {} : { description: address })}
-      actions={
-        <ButtonLink href={placeTablesHref(slug, place.id)} icon="table" variant="ghost">
-          {strings.tableCount(place.tables)}
-        </ButtonLink>
-      }
-    >
-      <HoursEditor
-        label={strings.hours}
-        rows={weekRows(place.hours, dayName, dayError)}
-        pastMidnightUntil={LATE_UNTIL}
-        onChange={(day, ranges) => {
-          if (!isWeekDay(day)) return;
-          const next = withDay(place.hours, day, ranges);
-          if (next.problem !== undefined) {
-            setDayError({ day, message: next.problem });
-            return;
-          }
-          setDayError(undefined);
-          saveHours(next.hours);
-        }}
-      />
+    <>
+      <SettingsSection
+        title={strings.hours}
+        {...(status === undefined
+          ? {}
+          : { description: status === 'saving' ? strings.savingHours : strings.savedHours })}
+      >
+        <Card>
+          <HoursEditor
+            label={strings.hours}
+            rows={rows}
+            pastMidnightUntil={LATE_UNTIL}
+            onChange={(day, ranges) => {
+              if (!isWeekDay(day)) return;
+              const next = withDay(place.hours, day, ranges);
+              // Hours that don't hold together stay on screen as typed, with why, until they do.
+              if (next.problem !== undefined) {
+                setDraft({ day, ranges, message: next.problem });
+                return;
+              }
+              setDraft(undefined);
+              void saveHours(next.hours);
+            }}
+          />
+        </Card>
+      </SettingsSection>
       <SpecialDays
         place={place}
-        onRemove={(date) => {
-          saveHours({ ...place.hours, exceptions: place.hours.exceptions.filter((each) => each.date !== date) });
-        }}
         onAdd={() => setAddingDay(true)}
+        onRemove={(date) => {
+          const before = place.hours;
+          void saveHours({ ...before, exceptions: before.exceptions.filter((each) => each.date !== date) }).then(
+            (refused) => {
+              if (refused !== undefined) return;
+              toasts.toast({
+                tone: 'success',
+                message: strings.dayRemoved,
+                action: { label: strings.undo, onAction: () => void saveHours(before) },
+              });
+            },
+          );
+        }}
       />
-      <Disclosure title={strings.placeDetails} variant="quiet">
-        <DetailsForm
-          key={place.updatedAt}
+      <SettingsSection title={strings.placeDetails}>
+        <DetailsCard
+          // A new answer for these fields starts the form again; an hours save leaves what is typed here alone.
+          key={JSON.stringify([
+            place.name,
+            place.addressLine,
+            place.city,
+            place.postcode,
+            place.country,
+            place.timeZone,
+            place.phone,
+          ])}
           place={place}
           onSave={async (fields) => {
             const refused = await store.updatePlace(slug, place.id, { place: fields });
@@ -111,8 +130,9 @@ export function PlaceCard({ store, slug, place, toasts }: PlaceCardProps) {
             toasts.toast({ tone: 'success', message: strings.saved });
           }}
         />
-      </Disclosure>
+      </SettingsSection>
       <SpecialDayDialog
+        key={isAddingDay ? 'open' : 'closed'}
         isOpen={isAddingDay}
         onOpenChange={setAddingDay}
         taken={place.hours.exceptions.map((each) => each.date)}
@@ -123,22 +143,39 @@ export function PlaceCard({ store, slug, place, toasts }: PlaceCardProps) {
           };
           const problem = hoursProblem(hours);
           if (problem !== undefined) return problem;
-          saveHours(hours);
+          void saveHours(hours);
           return undefined;
         }}
       />
-    </Card>
+    </>
   );
 }
 
+/** "saving" while a change is out, "saved" for a moment after, else nothing: the hours' quiet line. */
+function useSavedStatus(isSaving: boolean): 'saving' | 'saved' | undefined {
+  const [saved, setSaved] = useState(false);
+  const was = useRef(isSaving);
+  useEffect(() => {
+    if (was.current && !isSaving) {
+      setSaved(true);
+      const timer = setTimeout(() => setSaved(false), SAVED_FOR_MS);
+      was.current = isSaving;
+      return () => clearTimeout(timer);
+    }
+    was.current = isSaving;
+    return undefined;
+  }, [isSaving]);
+  return isSaving ? 'saving' : saved ? 'saved' : undefined;
+}
+
 const DAY_COLUMNS: readonly TableColumn[] = [
-  { id: 'date', label: strings.date, isRowHeader: true },
-  { id: 'hours', label: strings.hours },
+  { id: 'date', label: strings.date, isRowHeader: true, size: 'fit' },
+  { id: 'hours', label: strings.hours, size: 'fit' },
   { id: 'note', label: strings.note, size: 'fill' },
   { id: 'remove', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
 ];
 
-/** The place's special days, under a quiet disclosure, with Add day. */
+/** The place's special days, with Add day. */
 function SpecialDays({
   place,
   onRemove,
@@ -149,7 +186,6 @@ function SpecialDays({
   readonly onAdd: () => void;
 }) {
   const { locale } = useFormatSettings();
-  const days = place.hours.exceptions;
   const hoursText = (exception: HoursException) =>
     exception.closed === true
       ? strings.closed
@@ -157,12 +193,10 @@ function SpecialDays({
           .map((range) => strings.rangeText(clockLabel(range.from, locale), clockLabel(range.to, locale)))
           .join(', ');
   return (
-    <Disclosure
+    <SettingsSection
       title={strings.specialDays}
-      variant="quiet"
-      count={days.length}
       actions={
-        <Button variant="ghost" size="sm" icon="plus" onPress={onAdd}>
+        <Button variant="ghost" icon="plus" onPress={onAdd}>
           {strings.addSpecialDay}
         </Button>
       }
@@ -170,7 +204,7 @@ function SpecialDays({
       <Table
         label={strings.specialDays}
         columns={DAY_COLUMNS}
-        rows={days}
+        rows={place.hours.exceptions}
         getRowId={(exception) => exception.date}
         isHeaderHidden
         renderCell={(exception, column) => {
@@ -195,11 +229,11 @@ function SpecialDays({
         }}
         emptyState={<EmptyState title={strings.noSpecialDays} />}
       />
-    </Disclosure>
+    </SettingsSection>
   );
 }
 
-/** A special day: its date, closed or its own hours, and a note. */
+/** A special day: its date, closed or its own hours, and a note. Mounted afresh with each opening. */
 function SpecialDayDialog({
   isOpen,
   onOpenChange,
@@ -232,14 +266,11 @@ function SpecialDayDialog({
       setRefusals([{ code: 'INPUT_INVALID', message: problem }]);
       return;
     }
-    setRefusals([]);
-    setDate(null);
-    setNote('');
     onOpenChange(false);
   };
   return (
     <Modal
-      title={strings.addSpecialDay}
+      title={strings.specialDay}
       variant="window"
       isOpen={isOpen}
       onOpenChange={onOpenChange}
@@ -257,7 +288,7 @@ function SpecialDayDialog({
         refusals={refusals}
         fieldFor={(refusal) => refusal.attributeId}
         onSubmit={add}
-        label={strings.addSpecialDay}
+        label={strings.specialDay}
         focusesFirstField
       >
         <DatePicker label={strings.date} isRequired value={date} onChange={setDate} />
@@ -294,8 +325,8 @@ function SpecialDayDialog({
 
 const DETAIL_FIELDS = ['name', 'addressLine', 'city', 'postcode', 'country', 'timeZone', 'phone'] as const;
 
-/** The place's address, time zone and phone, saved together. */
-function DetailsForm({
+/** The place's address, time zone and phone, saved together with the card's Save, as the profile is. */
+function DetailsCard({
   place,
   onSave,
 }: {
@@ -338,39 +369,50 @@ function DetailsForm({
     );
   };
   return (
-    <Form
-      id={formId}
-      isBusy={isBusy}
-      refusals={refusals}
-      fieldFor={(refusal) => refusal.attributeId}
-      onSubmit={save}
-      label={strings.placeDetails}
+    <Card
+      footer={
+        <Button variant="primary" type="submit" form={formId} isPending={isBusy} isDisabled={!changed}>
+          {isBusy ? strings.saving : strings.save}
+        </Button>
+      }
     >
-      <FormRow>
-        <Field label={strings.placeName} name="name" maxLength={80} value={name} onChange={setName} />
-        <Field label={strings.phone} name="phone" type="tel" maxLength={40} value={phone} onChange={setPhone} />
-      </FormRow>
-      <Field label={strings.address} name="addressLine" maxLength={200} value={addressLine} onChange={setAddressLine} />
-      <FormRow>
-        <Field label={strings.city} name="city" maxLength={100} value={city} onChange={setCity} />
-        <Field label={strings.postcode} name="postcode" maxLength={20} value={postcode} onChange={setPostcode} />
-      </FormRow>
-      <FormRow>
-        <CountryPicker label={strings.country} list="all" value={country} onChange={setCountry} />
-        <Select
-          label={strings.timeZone}
-          items={zones}
-          filter={zoneMatches}
-          isSearchable
-          value={timeZone}
-          onChange={(zone) => {
-            if (zone !== null) setTimeZone(zone);
-          }}
+      <Form
+        id={formId}
+        isBusy={isBusy}
+        refusals={refusals}
+        fieldFor={(refusal) => refusal.attributeId}
+        onSubmit={save}
+        label={strings.placeDetails}
+      >
+        <FormRow>
+          <Field label={strings.placeName} name="name" maxLength={80} value={name} onChange={setName} />
+          <Field label={strings.phone} name="phone" type="tel" maxLength={40} value={phone} onChange={setPhone} />
+        </FormRow>
+        <Field
+          label={strings.address}
+          name="addressLine"
+          maxLength={200}
+          value={addressLine}
+          onChange={setAddressLine}
         />
-      </FormRow>
-      <Button type="submit" form={formId} isPending={isBusy} isDisabled={!changed}>
-        {isBusy ? strings.saving : strings.save}
-      </Button>
-    </Form>
+        <FormRow>
+          <Field label={strings.city} name="city" maxLength={100} value={city} onChange={setCity} />
+          <Field label={strings.postcode} name="postcode" maxLength={20} value={postcode} onChange={setPostcode} />
+        </FormRow>
+        <FormRow>
+          <CountryPicker label={strings.country} list="all" value={country} onChange={setCountry} />
+          <Select
+            label={strings.timeZone}
+            items={zones}
+            filter={zoneMatches}
+            isSearchable
+            value={timeZone}
+            onChange={(zone) => {
+              if (zone !== null) setTimeZone(zone);
+            }}
+          />
+        </FormRow>
+      </Form>
+    </Card>
   );
 }

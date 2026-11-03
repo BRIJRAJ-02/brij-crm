@@ -63,6 +63,11 @@ export const strings = {
   noUsers: 'No users yet',
   noMatches: 'Nobody matches',
   hospitalityFor: (workspace: string) => `Hospitality apps in ${workspace}`,
+  hospitalityOffTitle: (workspace: string) => `Turn off Hospitality apps for ${workspace}?`,
+  hospitalityOffText: (workspace: string) => `Hospitality apps leave ${workspace}’s sidebar. Nothing is deleted.`,
+  hospitalityOff: 'Turn off',
+  hospitalityOn: (workspace: string) => `Hospitality apps on for ${workspace}`,
+  hospitalityOffDone: (workspace: string) => `Hospitality apps off for ${workspace}`,
   columns: {
     person: 'Person',
     signedUp: 'Signed up',

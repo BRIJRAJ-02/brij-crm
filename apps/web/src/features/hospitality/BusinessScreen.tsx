@@ -1,8 +1,8 @@
 // Brief
 // Purpose: Settings › Business (spec 0065, AC-6507, AC-6508): the business the Hospitality apps share, and its places.
-// Main task: keep the profile right, and set each place's opening hours, special days and tables.
+// Main task: keep the profile right, see each place at a glance, and open one for its hours and tables.
 // Leaves out: menus, codes and reservation rules (each app's page), the logo (Settings › Brand), the cover photo.
-import type { BusinessKind, BusinessProfile, HospitalityStore, PlaceFields } from '@crm/data';
+import type { BusinessKind, BusinessProfile, HospitalityStore, Place, PlaceFields } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import { BUSINESS_KINDS } from '@crm/data/hospitality';
 import {
@@ -18,16 +18,32 @@ import {
   SettingsRow,
   SettingsSection,
   Skeleton,
+  Table,
+  TruncatedText,
+  useFormatSettings,
   type FormRefusal,
+  type TableColumn,
   type Toasts,
 } from '@crm/ui';
+import { useNavigate } from '@tanstack/react-router';
 import { useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
-import { appsSettingsHref } from '../settings/nav.ts';
-import { SettingsPage } from '../settings/SettingsPage.tsx';
-import { PlaceCard } from './PlaceCard.tsx';
+import { appsSettingsHref, placeTablesHref } from '../settings/nav.ts';
+import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
+import { clockLabel, todayRanges } from './hours-rows.ts';
 import { strings } from './strings.ts';
+
+const PLACE_COLUMNS: readonly TableColumn[] = [
+  { id: 'name', label: strings.place, isRowHeader: true },
+  { id: 'address', label: strings.address },
+  { id: 'today', label: strings.today },
+  { id: 'tables', label: strings.tables, align: 'end' },
+];
+
+/** A place's address on one line. */
+const addressOf = (place: Place) =>
+  [place.addressLine, place.city, place.postcode].filter((part) => part !== undefined && part !== '').join(', ');
 
 /** Props for Settings › Business. */
 export interface BusinessScreenProps {
@@ -40,6 +56,11 @@ export interface BusinessScreenProps {
 export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
   const state = useHospitality(store.business(slug));
   const [isAdding, setAdding] = useState(false);
+  const navigate = useNavigate();
+  const { locale } = useFormatSettings();
+  const now = useMemo(() => new Date(), []);
+  // Someone without Manage hospitality meets the page as one that isn't there, never a locked one.
+  if (state.status === 'error' && state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
   if (state.status === 'error') {
     const notInstalled = state.error.code === 'APP_NOT_INSTALLED';
     return (
@@ -106,12 +127,43 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
             }
           />
         ) : (
-          view.places.map((place) => (
-            <PlaceCard key={place.id} store={store} slug={slug} place={place} toasts={toasts} />
-          ))
+          <Table
+            label={strings.places}
+            columns={PLACE_COLUMNS}
+            rows={view.places}
+            getRowId={(place) => place.id}
+            layout="even"
+            isScrollable
+            onRowAction={(id) => void navigate({ href: placeTablesHref(slug, id) })}
+            renderCell={(place, column) => {
+              switch (column) {
+                case 'name':
+                  return place.name;
+                case 'address':
+                  return <TruncatedText>{addressOf(place)}</TruncatedText>;
+                case 'today': {
+                  const ranges = todayRanges(place.hours, place.timeZone, now);
+                  return (
+                    <TruncatedText>
+                      {ranges.length === 0
+                        ? strings.todayClosed
+                        : ranges
+                            .map((range) =>
+                              strings.rangeText(clockLabel(range.from, locale), clockLabel(range.to, locale)),
+                            )
+                            .join(', ')}
+                    </TruncatedText>
+                  );
+                }
+                default:
+                  return strings.tableCount(place.tables);
+              }
+            }}
+          />
         )}
       </SettingsSection>
       <AddPlaceDialog
+        key={isAdding ? 'open' : 'closed'}
         isOpen={isAdding}
         onOpenChange={setAdding}
         timeZone={view?.places[0]?.timeZone ?? 'UTC'}

@@ -72,3 +72,36 @@ export function withDay(
 
 /** Whether `day` is a week day key. */
 export const isWeekDay = (value: string): value is WeekDay => (WEEK_DAYS as readonly string[]).includes(value);
+
+/** `HH:MM` on the 12 hour clock the hours editor reads in ("6:00 pm"), in the reader's language. */
+export function clockLabel(time: string, locale: string): string {
+  const [hours = 0, minutes = 0] = time.split(':').map(Number);
+  return new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hourCycle: 'h12',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
+}
+
+/**
+ * Today's opening times at a place, by its own clock and date, a special day in place of the week's; an empty list
+ * when it is closed today.
+ */
+export function todayRanges(hours: PlaceHours, zone: string, now: Date): readonly HoursRange[] {
+  let date: string;
+  try {
+    date = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now);
+  } catch {
+    return [];
+  }
+  const exception = hours.exceptions.find((each) => each.date === date);
+  if (exception !== undefined) return exception.closed === true ? [] : (exception.ranges ?? []);
+  const weekDay = WEEK_DAYS[(new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7] ?? 'mon';
+  return hours.weekly[weekDay] ?? [];
+}

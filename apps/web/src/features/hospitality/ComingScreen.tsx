@@ -7,7 +7,7 @@ import { ButtonLink, EmptyState, TopBar } from '@crm/ui';
 import { businessSettingsHref } from '../settings/nav.ts';
 import { missingPage } from '../workspace/ObjectScreen.tsx';
 import { strings as workspace } from '../workspace/strings.ts';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import type { HospitalityPage } from './pages.ts';
 import { strings } from './strings.ts';
 
@@ -30,6 +30,8 @@ export function ComingScreen({
   readonly page: HospitalityPage;
   readonly isInstalled: boolean;
 }) {
+  // Only those who set the apps up get the way to Business; floor staff see the page alone.
+  const canSetUp = useCan('hospitality.manage');
   if (!isInstalled) {
     return <WorkspacePage page={missingPage(TITLES[page], strings.notInstalled)} />;
   }
@@ -42,13 +44,17 @@ export function ComingScreen({
           <EmptyState
             icon={ICONS[page]}
             title={strings.comingTitle[page]}
-            actions={
-              <ButtonLink href={businessSettingsHref(slug)} variant="primary" icon="store">
-                {strings.openBusiness}
-              </ButtonLink>
-            }
+            {...(canSetUp
+              ? {
+                  actions: (
+                    <ButtonLink href={businessSettingsHref(slug)} variant="primary" icon="store">
+                      {strings.openBusiness}
+                    </ButtonLink>
+                  ),
+                }
+              : {})}
           >
-            {strings.comingText}
+            {canSetUp ? strings.comingText : undefined}
           </EmptyState>
         ),
       }}

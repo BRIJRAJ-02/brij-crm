@@ -1,6 +1,6 @@
 // The Hospitality setup in Chromium (spec 0065, H0), over a fake store that changes as the real one shows a change:
-// Settings › Apps asks for Menu before Menu QR and installs both; Settings › Business draws a late Friday as running
-// into the next morning; a place's tables add "T7 to T16" in one go and take a table offline at once. axe is clean in
+// Settings › Apps asks for Menu before Menu QR and installs both; Settings › Business lists each place with today's
+// hours; a place's page draws a late Friday as running into the next morning; a place's tables add "T7 to T16" in one go and take a table offline at once. axe is clean in
 // light and dark at a desktop's and a phone's width. With VITE_SHOT_DIR set, each screen is also photographed there.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
@@ -234,7 +234,7 @@ describe('Settings › Apps', () => {
 });
 
 describe('Settings › Business and a place’s tables', () => {
-  it('reads a late Friday as running into the next morning', async () => {
+  it('lists each place as a row that opens its page', async () => {
     await page.viewport(1280, 900);
     const { store } = storeOf();
     shown = await renderInApp(() => <BusinessScreen store={store} slug="acme" toasts={toasts} />, {
@@ -242,7 +242,22 @@ describe('Settings › Business and a place’s tables', () => {
       pattern: '/w/$slug/settings/business',
       at: '/w/acme/settings/business',
     });
-    await expect.element(page.getByRole('heading', { name: 'Soho' })).toBeInTheDocument();
+    await expect.element(page.getByRole('rowheader', { name: 'Soho' })).toBeInTheDocument();
+    await expect.element(page.getByText('6 tables')).toBeInTheDocument();
+  });
+
+  it('reads a late Friday as running into the next morning', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf();
+    shown = await renderInApp(
+      () => <FloorScreen store={store} slug="acme" place={BUSINESS.places[0] as never} toasts={toasts} />,
+      {
+        data: {},
+        pattern: '/w/$slug/settings/business/places/$placeId',
+        at: `/w/acme/settings/business/places/${PLACE}`,
+      },
+    );
+    await expect.element(page.getByRole('heading', { name: 'Opening hours' })).toBeInTheDocument();
     // Friday's end, past midnight, shows the time alone in its field; the list says "next day" beside it.
     await expect.poll(() => document.body.textContent).toMatch(/2:00\s?am/i);
   });
@@ -267,7 +282,7 @@ describe('Settings › Business and a place’s tables', () => {
     await expect.element(page.getByText('Adds 10: T7 to T16')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Add 10 tables' }));
     await expect.poll(() => calls.at(-1)).toBe('add:T7,T8,T9,T10,T11,T12,T13,T14,T15,T16');
-    await expect.element(page.getByRole('rowheader', { name: 'Move T16 T16' })).toBeInTheDocument();
+    await expect.element(page.getByText('T16', { exact: true })).toBeInTheDocument();
   });
 });
 
@@ -295,6 +310,47 @@ describe('axe and the pictures', () => {
           shown.unmount();
           shown = undefined;
         }
+      });
+    }
+  }
+});
+
+// Pictures with something open (only with VITE_SHOT_DIR): Add tables, a table's row menu, and the remove Modal, in a
+// window tall enough to hold the whole page.
+describe.skipIf(SHOT_DIR === undefined || SHOT_DIR === '')('the pictures with something open', () => {
+  for (const theme of THEMES) {
+    for (const width of [1280, 390]) {
+      it(`opens Add tables, a row menu and Remove in ${theme} at ${String(width)}`, async () => {
+        await page.viewport(width, 2000);
+        applyTheme(theme);
+        const { store } = storeOf();
+        shown = await renderInApp(
+          () => <FloorScreen store={store} slug="acme" place={BUSINESS.places[0] as never} toasts={toasts} />,
+          { data: {}, pattern: '/w/$slug/settings/x', at: '/w/acme/settings/x' },
+        );
+        await expect.element(page.getByRole('heading', { name: 'Areas' })).toBeInTheDocument();
+        await shoot('place', theme, width);
+        await userEvent.click(page.getByRole('button', { name: 'Add tables' }).first());
+        await expect.element(page.getByRole('dialog')).toBeVisible();
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await shoot('add-tables', theme, width);
+        await userEvent.keyboard('{Escape}');
+        await expect.element(page.getByRole('dialog')).not.toBeInTheDocument();
+        await userEvent.click(page.getByRole('button', { name: 'T2 actions' }));
+        await expect.element(page.getByRole('menu')).toBeVisible();
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await shoot('row-menu', theme, width);
+        await userEvent.keyboard('{Escape}');
+        shown.unmount();
+        shown = await renderInApp(
+          () => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />,
+          { data: {}, pattern: '/w/$slug/settings/x', at: '/w/acme/settings/x' },
+        );
+        await userEvent.click(page.getByRole('button', { name: 'Remove' }));
+        await expect.element(page.getByRole('alertdialog').or(page.getByRole('dialog'))).toBeVisible();
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await shoot('remove-app', theme, width);
+        await userEvent.keyboard('{Escape}');
       });
     }
   }

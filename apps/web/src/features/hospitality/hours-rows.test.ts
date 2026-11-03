@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromEditor, toEditor, weekRows, withDay } from './hours-rows.ts';
+import { fromEditor, toEditor, todayRanges, weekRows, withDay } from './hours-rows.ts';
 
 describe('a place’s hours in the editor', () => {
   it('draws a range past midnight with its end past 24:00, and stores it back crossing midnight', () => {
@@ -37,5 +37,19 @@ describe('a place’s hours in the editor', () => {
       ['18:00', '27:00'],
     ]);
     expect(changed.problem).toMatch(/next day/);
+  });
+});
+
+describe('today at a place', () => {
+  it('reads the week by the place’s own date, and a special day in its place', () => {
+    const hours = {
+      weekly: { tue: [{ from: '12:00', to: '15:00' }] },
+      exceptions: [{ date: '2026-11-10', closed: true }],
+    };
+    // 23:30 UTC on Monday 2 Nov is already Tuesday in Tokyo.
+    expect(todayRanges(hours, 'Asia/Tokyo', new Date('2026-11-02T23:30:00Z'))).toEqual([
+      { from: '12:00', to: '15:00' },
+    ]);
+    expect(todayRanges(hours, 'Europe/London', new Date('2026-11-10T12:00:00Z'))).toEqual([]);
   });
 });

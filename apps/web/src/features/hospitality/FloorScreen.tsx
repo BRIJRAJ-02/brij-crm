@@ -1,18 +1,20 @@
 // Brief
-// Purpose: one place's tables (spec 0065, AC-6509): its areas and its tables as a plain list, the base for Menu QR's
-// codes and Table seating's online fitting.
+// Purpose: one place's page (spec 0065, AC-6508, AC-6509): its hours, special days and details, then its tables and
+// areas as plain lists, the base for Menu QR's codes and Table seating's online fitting.
 // Main task: add many tables at once ("T1 to T10, seats 2 to 4"), drag them into order, and say which go online.
 // Leaves out: a floor plan canvas (later), reservations and holds (Table seating, H3), and codes (Menu QR, H2).
 import type { Area, DiningTable, HospitalityStore, Place, PlaceFloor } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import { HOSPITALITY_LIMITS, tableLabels } from '@crm/data/hospitality';
 import {
+  BulkActionBar,
   Button,
   Disclosure,
   EmptyState,
   Field,
   FormRow,
   Form,
+  LockReason,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -22,6 +24,7 @@ import {
   SettingsSection,
   Switch,
   Table,
+  VisuallyHidden,
   type FormRefusal,
   type TableColumn,
   type Toasts,
@@ -30,6 +33,7 @@ import { useId, useMemo, useState } from 'react';
 import { businessSettingsHref } from '../settings/nav.ts';
 import { formRefusals } from '../settings/refusals.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
+import { PlaceSections } from './PlaceSections.tsx';
 import { strings } from './strings.ts';
 
 /** Props for a place's tables. */
@@ -44,7 +48,7 @@ const TABLE_COLUMNS: readonly TableColumn[] = [
   { id: 'label', label: strings.label, isRowHeader: true },
   { id: 'area', label: strings.area },
   { id: 'seats', label: strings.seats, align: 'end', size: 'fit' },
-  { id: 'joins', label: strings.joins },
+  { id: 'joins', label: strings.joins, size: 'fill' },
   { id: 'online', label: strings.online, size: 'fit' },
   { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit', showsOnHover: true },
 ];
@@ -66,15 +70,42 @@ type Editing =
 /** One place's areas and tables. */
 export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
   const state = useHospitality(store.floor(slug, place.id));
+  // The place as Business holds it, so its name, hours and details follow every save here at once.
+  const business = useHospitality(store.business(slug));
+  const shown =
+    business.status === 'ready' ? (business.value.places.find((each) => each.id === place.id) ?? place) : place;
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const limitId = useId();
   const floor = state.status === 'ready' ? state.value : undefined;
   // One list per answer, so the tables never see new rows when nothing changed.
   const live = useMemo(() => floor?.tables.filter((table) => !table.archived) ?? [], [floor]);
   const archived = useMemo(() => floor?.tables.filter((table) => table.archived) ?? [], [floor]);
-  const areaName = (id: string | undefined) => floor?.areas.find((area) => area.id === id)?.name;
-  const labelOf = (id: string) => floor?.tables.find((table) => table.id === id)?.label ?? '';
+  const labels = useMemo(() => new Map(floor?.tables.map((table) => [table.id, table.label]) ?? []), [floor]);
+  const areaNames = useMemo(() => new Map(floor?.areas.map((area) => [area.id, area.name]) ?? []), [floor]);
+  const isFull = live.length >= HOSPITALITY_LIMITS.tablesPerPlace;
+  const ticked = live.filter((table) => selected.has(table.id));
   const said = (refused: { readonly message: string } | undefined) => {
     if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
+  };
+  const archive = (table: DiningTable) => {
+    void store.archiveTable(slug, place.id, table.id).then((refused) => {
+      if (refused !== undefined) {
+        said(refused);
+        return;
+      }
+      toasts.toast({
+        tone: 'success',
+        message: strings.archivedToast(table.label),
+        action: { label: strings.undo, onAction: () => void store.restoreTable(slug, place.id, table.id).then(said) },
+      });
+    });
+  };
+  /** One change for every ticked table, one after another (the store keeps them in order). */
+  const forTicked = (run: (table: DiningTable) => Promise<{ readonly message: string } | undefined>) => {
+    const tables = ticked;
+    setSelected(new Set());
+    void Promise.all(tables.map(run)).then((answers) => said(answers.find((each) => each !== undefined)));
   };
 
   const tableCell = (table: DiningTable, column: string) => {
@@ -82,11 +113,11 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
       case 'label':
         return table.label;
       case 'area':
-        return areaName(table.areaId) ?? strings.noArea;
+        return table.areaId === undefined ? '' : (areaNames.get(table.areaId) ?? '');
       case 'seats':
         return strings.seatsRange(table.minGuests, table.maxGuests);
       case 'joins':
-        return table.joins.length === 0 ? strings.noJoins : table.joins.map(labelOf).join(', ');
+        return table.joins.map((id) => labels.get(id) ?? '').join(', ');
       case 'online':
         return (
           <Switch
@@ -106,7 +137,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
               label={strings.tableActions(table.label)}
               onAction={(key) => {
                 if (key === 'edit') setEditing({ kind: 'table', table });
-                if (key === 'archive') void store.archiveTable(slug, place.id, table.id).then(said);
+                if (key === 'archive') archive(table);
                 if (key === 'delete') setEditing({ kind: 'delete', table });
               }}
             >
@@ -128,9 +159,16 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
 
   return (
     <SettingsPage
-      title={place.name}
+      title={shown.name}
       crumbs={[{ id: 'business', label: strings.back, href: businessSettingsHref(slug) }]}
     >
+      <PlaceSections
+        store={store}
+        slug={slug}
+        place={shown}
+        isSaving={business.status === 'ready' && business.isSaving}
+        toasts={toasts}
+      />
       {state.status === 'error' ? (
         <EmptyState
           title={strings.failed}
@@ -142,22 +180,71 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
           <SettingsSection
             title={strings.tables}
             actions={
-              <Button
-                variant="primary"
-                icon="plus"
-                isDisabled={floor === undefined || live.length >= HOSPITALITY_LIMITS.tablesPerPlace}
-                onPress={() => setEditing({ kind: 'add' })}
-              >
-                {strings.addTables}
-              </Button>
+              <>
+                {/* At the limit the button says why beside it, a lock with the reason, read with the button. */}
+                {isFull && (
+                  <>
+                    <VisuallyHidden id={limitId}>
+                      {strings.tablesLimit(HOSPITALITY_LIMITS.tablesPerPlace)}
+                    </VisuallyHidden>
+                    <LockReason reason={strings.tablesLimit(HOSPITALITY_LIMITS.tablesPerPlace)} />
+                  </>
+                )}
+                <Button
+                  variant="primary"
+                  icon="plus"
+                  isDisabled={floor === undefined || isFull}
+                  {...(isFull ? { 'aria-describedby': limitId } : {})}
+                  onPress={() => setEditing({ kind: 'add' })}
+                >
+                  {strings.addTables}
+                </Button>
+              </>
             }
           >
+            {ticked.length > 0 && floor !== undefined && (
+              <BulkActionBar count={ticked.length} total={live.length} onClear={() => setSelected(new Set())}>
+                <Select
+                  savesOnPick
+                  label={strings.bulkArea(ticked.length)}
+                  isLabelHidden
+                  placeholder={strings.area}
+                  items={areaItems(floor)}
+                  value={null}
+                  onChange={(chosen) => {
+                    if (chosen === null) return;
+                    forTicked((table) =>
+                      store.updateTable(slug, place.id, table.id, { areaId: chosen === '' ? null : chosen }),
+                    );
+                  }}
+                />
+                <Button
+                  onPress={() => forTicked((table) => store.updateTable(slug, place.id, table.id, { online: true }))}
+                >
+                  {strings.goOnline}
+                </Button>
+                <Button
+                  onPress={() => forTicked((table) => store.updateTable(slug, place.id, table.id, { online: false }))}
+                >
+                  {strings.goOffline}
+                </Button>
+                <Button
+                  icon="archive"
+                  onPress={() => forTicked((table) => store.archiveTable(slug, place.id, table.id))}
+                >
+                  {strings.archiveSelected}
+                </Button>
+              </BulkActionBar>
+            )}
             <Table
               label={strings.openTables(place.name)}
               columns={TABLE_COLUMNS}
               rows={live}
               getRowId={(table) => table.id}
               getRowLabel={(table) => table.label}
+              selected={selected}
+              onSelectedChange={setSelected}
+              getSelectLabel={(table) => strings.selectTable(table.label)}
               isLoading={floor === undefined}
               isScrollable
               renderCell={tableCell}
@@ -266,6 +353,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
       {floor !== undefined && (
         <>
           <AddTablesDialog
+            key={editing?.kind === 'add' ? 'open' : 'closed'}
             isOpen={editing?.kind === 'add'}
             onOpenChange={(open) => {
               if (!open) setEditing(undefined);
@@ -359,7 +447,8 @@ function AddTablesDialog({
   }) => Promise<void>;
 }) {
   const formId = useId();
-  const next = floor.tables.filter((table) => !table.archived).length + 1;
+  // After the highest number any label ends with, archived ones too, so a run never meets a label already held.
+  const next = Math.max(0, ...floor.tables.map((table) => Number(/(\d+)$/.exec(table.label)?.[1] ?? '0'))) + 1;
   const [prefix, setPrefix] = useState('T');
   const [from, setFrom] = useState(String(next));
   const [to, setTo] = useState(String(next + 9));
@@ -647,7 +736,11 @@ function AreaDialog({
         refusals={refusals}
         fieldFor={(refusal) => refusal.attributeId}
         onSubmit={() => {
-          if (isBusy || name.trim() === '') return;
+          if (isBusy) return;
+          if (name.trim() === '') {
+            setRefusals([{ code: 'INPUT_INVALID', message: strings.areaMissing, attributeId: 'name' }]);
+            return;
+          }
           setBusy(true);
           setRefusals([]);
           onSave(name.trim(), area).then(

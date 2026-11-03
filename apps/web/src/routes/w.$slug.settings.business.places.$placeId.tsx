@@ -20,7 +20,10 @@ export const Route = createFileRoute('/w/$slug/settings/business/places/$placeId
       ]);
       return { store, place: business.places.find((each) => each.id === params.placeId) };
     } catch (error) {
-      if (isDataError(error) && (error.code === 'NOT_FOUND' || error.code === 'APP_NOT_INSTALLED')) {
+      if (
+        isDataError(error) &&
+        (error.code === 'NOT_FOUND' || error.code === 'APP_NOT_INSTALLED' || error.code === 'FORBIDDEN')
+      ) {
         return { store, place: undefined };
       }
       throw error;
