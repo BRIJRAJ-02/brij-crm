@@ -86,3 +86,34 @@ it('says nothing at all in the builder’s preview, which is nobody’s visit', 
   await expect.poll(() => host.querySelectorAll('input').length).toBeGreaterThan(0);
   expect(counted).toEqual([]);
 });
+
+// How many steps a visitor is promised (spec 0063, AC-6304). A form with jumps
+// cannot know its own length: the total it would show is the path the answers
+// have taken so far, and a later answer can take a step away. Saying "Step 1 of
+// 3" and then giving them two is a promise broken; saying "Step 1" is no promise
+// made. Once the steps ahead hold no jump the total is certain, and it returns.
+it('promises a total only while the steps ahead hold no jump', async () => {
+  const plain: PublicForm = {
+    ...FORM,
+    layout: 'steps',
+    steps: [{ id: 'who', keys: ['name', 'email'] }, { id: 'more', keys: ['company'] }],
+  };
+  drawn = mountHostedForm(host, plain, { mode: 'page' });
+  await expect
+    .poll(() => host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
+    .toBe('Step 1 of 2');
+  drawn.destroy();
+
+  const jumping: PublicForm = {
+    ...FORM,
+    layout: 'steps',
+    steps: [
+      { id: 'who', keys: ['name'] },
+      { id: 'more', keys: ['email'], jumps: [{ when: { join: 'all', rules: [] }, to: { ending: 'thanks' } }] },
+      { id: 'last', keys: ['company'] },
+    ],
+  };
+  drawn = mountHostedForm(host, jumping, { mode: 'page' });
+  // No total on step 1: step 2 can jump past step 3, so three is not a number anyone should be promised.
+  await expect.poll(() => host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext')).toBe('Step 1');
+});
