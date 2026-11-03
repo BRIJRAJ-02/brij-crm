@@ -57,6 +57,7 @@ import {
 import { needsRead, pageEnded } from './reads.ts';
 import { refusalLine } from './refusal.ts';
 import { guessCountry } from '../country.ts';
+import { oneOffHash } from './one-off.ts';
 import { strings } from './strings.ts';
 import {
   addDays,
@@ -141,8 +142,12 @@ export interface BookingPageProps {
   readonly prefill?: Prefill;
   /** A form's signed hand off (spec 0023 AC-1058): its name and email come from the API, and it rides on the booking. */
   readonly handoff?: string;
-  /** Opens the guest page once booked. */
-  readonly onBooked: (manageToken: string) => void;
+  /**
+   * Opens the guest page once booked, with where a redirect page sends the visitor next (spec 0062, AC-6201).
+   */
+  readonly onBooked: (manageToken: string, redirectUrl?: string) => void;
+  /** A one off link's token from the address's fragment (spec 0062, AC-6204). */
+  readonly oneOffToken?: string;
   /**
    * The page has a handle address (`/<handle>/<slug>`, 22 Oct 2026): a plain `/b/<key>` visit shows it in the
    * address bar.
@@ -155,7 +160,7 @@ type Client = ReturnType<typeof createBookingClient>;
 type Loaded =
   | { readonly state: 'loading' }
   | { readonly state: 'ready'; readonly page: PublicBookingPage }
-  | { readonly state: 'gone' | 'closed' | 'failed' };
+  | { readonly state: 'gone' | 'closed' | 'failed' | 'used' };
 
 /** One slots read covers 62 days (two months of the month view). */
 const CHUNK_DAYS = 62;
@@ -185,6 +190,7 @@ export function BookingPage({
   now,
   prefill: given,
   handoff,
+  oneOffToken,
   onBooked,
   onAddress,
 }: BookingPageProps) {
@@ -238,30 +244,37 @@ export function BookingPage({
   // The last preview message, kept until the page loads to lay it over.
   const [preview, setPreview] = useState<unknown>(undefined);
   const load = useCallback(() => {
-    client.page(publicKey, handoff).then(
-      (page) => {
-        // A page that books only through a form, reached without one (spec 0037, AC-1388): its closed state. The
-        // host's own editor preview still draws it.
-        if (page.formOnly === true && !isEditorPreview) {
-          setLoaded({ state: 'closed' });
-          return;
-        }
-        if (page.path !== undefined) onAddress?.(page.path);
-        // The brand it wears (spec 0060, AC-4), waited on a moment so the page draws in its colour from the start,
-        // with its logo already decoded, so the logo is there with the header rather than pushing it down later.
-        void Promise.all([
-          wearStylesheet(document, brandHref('booking', page.publicKey, page.brand?.version)),
-          preloadImage(railBrand(page).brand?.logo?.src),
-        ]).then(() => {
-          setLoaded({ state: 'ready', page });
-        });
-      },
-      (error: unknown) => {
-        const code = isDataError(error) ? error.code : undefined;
-        setLoaded({ state: code === 'NOT_FOUND' ? 'gone' : code === 'BOOKING_CLOSED' ? 'closed' : 'failed' });
-      },
-    );
-  }, [client, publicKey, handoff, isEditorPreview, onAddress]);
+    (oneOffToken === undefined ? Promise.resolve(undefined) : oneOffHash(oneOffToken))
+      .then((linkHash) => client.page(publicKey, handoff, linkHash))
+      .then(
+        (page) => {
+          // A one off link with nothing left to book (spec 0062, AC-6204): its own calm state.
+          if (page.linkUsed === true) {
+            setLoaded({ state: 'used' });
+            return;
+          }
+          // A page that books only through a form, reached without one (spec 0037, AC-1388): its closed state. The
+          // host's own editor preview still draws it.
+          if (page.formOnly === true && !isEditorPreview) {
+            setLoaded({ state: 'closed' });
+            return;
+          }
+          if (page.path !== undefined) onAddress?.(page.path);
+          // The brand it wears (spec 0060, AC-4), waited on a moment so the page draws in its colour from the start,
+          // with its logo already decoded, so the logo is there with the header rather than pushing it down later.
+          void Promise.all([
+            wearStylesheet(document, brandHref('booking', page.publicKey, page.brand?.version)),
+            preloadImage(railBrand(page).brand?.logo?.src),
+          ]).then(() => {
+            setLoaded({ state: 'ready', page });
+          });
+        },
+        (error: unknown) => {
+          const code = isDataError(error) ? error.code : undefined;
+          setLoaded({ state: code === 'NOT_FOUND' ? 'gone' : code === 'BOOKING_CLOSED' ? 'closed' : 'failed' });
+        },
+      );
+  }, [client, publicKey, handoff, oneOffToken, isEditorPreview, onAddress]);
   useEffect(load, [load]);
   useEffect(() => {
     if (isPreview) return;
@@ -281,7 +294,7 @@ export function BookingPage({
     };
   }, [client, publicKey, isPreview]);
   // A slot read can find the page deleted or paused after it loaded: then that state shows, not a retry.
-  const ended = useCallback((state: 'gone' | 'closed') => setLoaded({ state }), []);
+  const ended = useCallback((state: 'gone' | 'closed' | 'used') => setLoaded({ state }), []);
   // Inside the editor's preview frame, the editor's unsaved draft shows over the saved page (AC-679):
   // only from the parent window on this same origin.
   useEffect(() => {
@@ -317,8 +330,11 @@ export function BookingPage({
           {...(back.result === undefined ? {} : { connected: back.result })}
           {...(prefill === undefined ? {} : { prefill })}
           {...(handoff === undefined ? {} : { handoff })}
+          {...(oneOffToken === undefined ? {} : { oneOffToken })}
         />
       );
+    case 'used':
+      return <BookingMessage title={strings.linkUsedTitle}>{strings.linkUsedText}</BookingMessage>;
     case 'loading':
       return <LoadingBooking locale={locale} timeZone={timeZone} now={now} />;
     case 'gone':
@@ -503,6 +519,7 @@ function Booking({
   startedAt,
   prefill,
   handoff,
+  oneOffToken,
   onBooked,
   onEnded,
   chosen,
@@ -537,9 +554,11 @@ function Booking({
   readonly now: () => number;
   readonly startedAt: number;
   readonly prefill?: Prefill;
-  readonly onBooked: (manageToken: string) => void;
-  /** The page was deleted or paused since it loaded. */
-  readonly onEnded: (state: 'gone' | 'closed') => void;
+  readonly onBooked: (manageToken: string, redirectUrl?: string) => void;
+  /** A one off link's token (spec 0062, AC-6204): sent with the booking, never in an address. */
+  readonly oneOffToken?: string;
+  /** The page was deleted or paused since it loaded, or its one off link was used meanwhile. */
+  readonly onEnded: (state: 'gone' | 'closed' | 'used') => void;
 }) {
   const [zone, setZone] = useState(chosen.zone ?? detected);
   // The visitor's country, guessed once, for a phone or country question of the page's own (spec 0057).
@@ -817,6 +836,7 @@ function Booking({
         company_url: values.trap,
         startedAt,
         ...(handoff === undefined ? {} : { prefill: handoff }),
+        ...(oneOffToken === undefined ? {} : { oneOffToken }),
       })
       .then(
         (booked): BookingDetailsOutcome => {
@@ -824,12 +844,17 @@ function Booking({
           return {
             kind: 'done',
             next: () => {
-              onBooked(booked.manageToken);
+              onBooked(booked.manageToken, booked.redirectUrl);
             },
           };
         },
         (error: unknown): BookingDetailsOutcome | Promise<BookingDetailsOutcome> => {
           if (!isDataError(error)) return { kind: 'failed', message: strings.errors.failed };
+          // The link's last use went to someone else meanwhile (AC-6204).
+          if (error.code === 'LINK_USED') {
+            onEnded('used');
+            return { kind: 'done' };
+          }
           if (error.code === 'SLOT_TAKEN') {
             // Back to fresh times, with the reason over them.
             setStep({ step: 'pick', attempt: '', back: true });

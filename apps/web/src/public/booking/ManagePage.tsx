@@ -15,6 +15,7 @@ import {
   BookingMessage,
   BookingReceipt,
   Button,
+  ButtonLink,
   Callout,
   DayStrip,
   SlotList,
@@ -25,6 +26,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { saveHour12, savedHour12 } from './prefs.ts';
 import { changeStrings } from './change-strings.ts';
+import { takeRedirect } from './one-off.ts';
 import { strings, tabTitle } from './strings.ts';
 import {
   dayKey,
@@ -80,6 +82,7 @@ function messageOf(error: unknown): string {
   if (error.code === 'API_UNAVAILABLE') return strings.errors.offline;
   if (error.code === 'SLOT_TAKEN') return changeStrings.taken;
   // The server's own sentence says why (already happened, moved 5 times, the page stopped taking bookings).
+  if (error.code === 'TOO_LATE') return changeStrings.tooLate;
   if (['BOOKING_CLOSED', 'LIMIT_REACHED', 'NOT_FOUND'].includes(error.code) && error.message !== '') {
     return error.message;
   }
@@ -94,6 +97,16 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
   // Try again after a failed load reads it once more.
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState<'moved' | 'cancelled' | undefined>(undefined);
+  // A redirect page's address (spec 0062, AC-6201), kept by the booking page in this tab: read once, right after
+  // booking only, never from this page's own address.
+  const [next] = useState(() => (isWelcome ? takeRedirect(sessionStore(), token) : undefined));
+  useEffect(() => {
+    if (next === undefined || loaded.state !== 'ready') return;
+    // "Taking you to …" for two seconds, so the booking reads as done; at once when motion is reduced.
+    const wait = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 2000;
+    const timer = globalThis.setTimeout(() => globalThis.location.assign(next), wait);
+    return () => globalThis.clearTimeout(timer);
+  }, [next, loaded.state]);
   // The page the Timefix link names in its tags: the guest's page just after booking, or when they come back to it.
   const brandPage = isWelcome ? 'booking_confirmation' : 'booking_manage';
   useEffect(() => {
@@ -251,9 +264,23 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
         calendarUrl: forOthers,
       }}
       again={{
-        label: booking.state === 'cancelled' ? strings.bookAnother(booking.hostName) : strings.bookAgain,
+        label:
+          booking.state === 'cancelled' || booking.state === 'declined'
+            ? strings.bookAnother(booking.hostName)
+            : strings.bookAgain,
         href: `/b/${encodeURIComponent(booking.publicKey)}`,
       }}
+      {...(notice === undefined && next !== undefined
+        ? {
+            notice: (
+              <Callout tone="info" isAnnounced title={changeStrings.takingYou(new URL(next).host)}>
+                <ButtonLink variant="ghost" size="sm" href={next}>
+                  {changeStrings.goNow}
+                </ButtonLink>
+              </Callout>
+            ),
+          }
+        : {})}
       {...(notice === undefined
         ? {}
         : {
@@ -277,6 +304,11 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
                 hostName={booking.hostName}
                 guests={booking.guests}
                 canMove={booking.canMove}
+                // Inside the page's cutoffs a change is the host's (spec 0062, AC-6202): one line says so.
+                canCancel={booking.cancelTooLate !== true}
+                {...(booking.cancelTooLate === true || booking.moveTooLate === true
+                  ? { lockedNote: changeStrings.tooLate }
+                  : {})}
                 moveNote={changeStrings.timesIn(zoneDisplay(zone, now()))}
                 move={
                   <MovePicker
@@ -460,4 +492,13 @@ function MovePicker({
       </Button>
     </>
   );
+}
+
+/** The tab's session storage, or undefined where the browser refuses it. */
+function sessionStore(): Storage | undefined {
+  try {
+    return globalThis.sessionStorage;
+  } catch {
+    return undefined;
+  }
 }

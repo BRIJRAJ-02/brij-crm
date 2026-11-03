@@ -90,14 +90,12 @@ export function RequestsCard({ data, slug, pageId }: RequestsCardProps) {
               ) : (
                 <>
                   <Button
-                    size="sm"
                     isDisabled={busy !== undefined && busy !== request.bookingId}
                     onPress={() => setDeclining(request)}
                   >
                     {strings.decline}
                   </Button>
                   <Button
-                    size="sm"
                     variant="primary"
                     isPending={busy === request.bookingId}
                     isDisabled={busy !== undefined && busy !== request.bookingId}

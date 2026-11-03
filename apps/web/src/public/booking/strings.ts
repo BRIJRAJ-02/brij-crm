@@ -87,6 +87,9 @@ export const strings = {
   noTimesText: 'Check back soon.',
   unreachable: 'Times unavailable. Try again shortly.',
   paused: 'Nothing is bookable here right now.',
+  /** A one off link with nothing left to book (spec 0062, AC-6204). */
+  linkUsedTitle: 'This link has been used',
+  linkUsedText: 'Ask whoever sent it for a new one.',
   notFoundTitle: 'Page not found',
   notFoundText: 'There’s nothing at this address.',
   failedTitle: 'This page didn’t load',

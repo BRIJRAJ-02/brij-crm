@@ -84,6 +84,39 @@ export const Cancelled: Story = {
 };
 
 /** Passed. */
+/** A request right after it was made (spec 0062, AC-6203): no call or calendar entry until the host confirms it. */
+export const Requested: Story = {
+  args: { state: 'requested', isWelcome: true },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'Request sent' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('link', { name: 'Join the call' })).toBeNull();
+  },
+};
+
+/** A request the host declined, or that ran out of time: a way to book another time. */
+export const Declined: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    state: 'declined',
+    isWelcome: false,
+    again: { label: 'Book another time with Ada Lovelace', href: '/b/abc' },
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('heading', { name: 'This request was declined' })).toBeInTheDocument();
+  },
+};
+
 export const Past: Story = {
   parameters: { crm: { screenshot: false } },
   args: { state: 'past', isWelcome: false, again: { label: 'Book again', href: '/b/abc' } },

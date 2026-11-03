@@ -207,6 +207,25 @@ export const NoMoveFull: Story = {
   },
 };
 
+/**
+ * Inside the page's cutoffs (spec 0062, AC-6202): Move and Cancel are the host's now, and one line says so; Guests
+ * stays.
+ */
+export const TooLate: Story = {
+  args: {
+    canMove: false,
+    canCancel: false,
+    lockedNote: 'Too close to the meeting to change it here. Reply to your confirmation email.',
+  },
+  render: (args) => <OnReceipt {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: 'Cancel booking' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: 'Move to another time' })).toBeNull();
+    await expect(canvas.getByText(/Too close to the meeting/)).toBeInTheDocument();
+  },
+};
+
 /** On the guest's receipt, where the page puts it, with its guests kept as the page keeps them. */
 function OnReceipt(args: BookingChangesProps & { readonly notice?: string }) {
   const [guests, setGuests] = useState(args.guests);

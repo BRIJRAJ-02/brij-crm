@@ -22,6 +22,7 @@ import { freshProfile, readBoot } from './boot.ts';
 import { BookingPage, LoadingBooking } from './BookingPage.tsx';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
 import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
+import { keepRedirect, oneOffTokenOf, safeRedirect } from './one-off.ts';
 import { strings, tabTitle } from './strings.ts';
 import { guardPreloadErrors, hasFilledField, preloadStrings, sessionStore } from '../../preload-guard.ts';
 
@@ -52,6 +53,8 @@ const storage = ((): HandoffStorage | undefined => {
   }
 })();
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+// A one off link's token (spec 0062, AC-6204), from the fragment, which no server or Referer ever sees.
+const oneOffToken = oneOffTokenOf(globalThis.location.hash);
 // The page's one toast queue, so the preload guard can say a new version is ready over a half filled form.
 const toasts = createToasts();
 // A tab left open across a deploy asks for a chunk the new one no longer has: reload once onto it, or, while the
@@ -169,8 +172,18 @@ function renderBooking(publicKey: string) {
                   },
                 }
               : {})}
-            onBooked={(token) => {
+            {...(oneOffToken === undefined ? {} : { oneOffToken })}
+            onBooked={(token, redirectUrl) => {
               forgetHandoff(publicKey, storage);
+              // A redirect page (spec 0062, AC-6201). Inside a site's embed the site's own window goes there at once:
+              // the embedding page is the host's own site, and the guest page's tab storage isn't shared with a frame.
+              // Otherwise the guest page shows "Taking you to …" first, with the address kept for it in this tab.
+              const next = safeRedirect(redirectUrl);
+              if (next !== undefined && embed !== undefined) {
+                globalThis.open(next, '_top');
+                return;
+              }
+              if (next !== undefined) keepRedirect(storage, token, next);
               const manage = `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`;
               // The guest page arrives with its own rise, so no page crossfade first: it would land on its loading card
               // and then rise again.
