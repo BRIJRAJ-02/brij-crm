@@ -125,7 +125,13 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
   const published =
     row?.published === null || row?.published === undefined ? undefined : businessContentOf(row.published);
   const names = new Map(placeRows.map((place) => [place.id, place.name]));
-  const changes = businessPageChanges(published, draft, (id) => names.get(id) ?? 'A place');
+  // A place Publish didn't see (added since) waits for the next Publish, and says so.
+  const placeIds = (row?.published as { readonly placeIds?: unknown } | null | undefined)?.placeIds;
+  const waiting = Array.isArray(placeIds) ? placeRows.filter((place) => !placeIds.includes(place.id)) : [];
+  const changes = [
+    ...businessPageChanges(published, draft, (id) => names.get(id) ?? 'A place'),
+    ...waiting.map((place) => `${place.name}: added to the page`),
+  ];
   const problem = businessPublishProblem({
     ...(row?.handle === null || row?.handle === undefined ? {} : { handle: row.handle }),
     ...(profile === undefined ? {} : { name: profile.name }),
@@ -143,7 +149,7 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
     ...(row?.publishedAt === null || row?.publishedAt === undefined
       ? {}
       : { published: { at: new Date(row.publishedAt).toISOString(), version: Math.max(1, row.version) } }),
-    hasChanges: published === undefined ? true : !sameContent(published, draft),
+    hasChanges: published === undefined ? true : !sameContent(published, draft) || waiting.length > 0,
     changes: [...changes],
     places: placeRows.map((place) => ({
       id: place.id,
@@ -320,6 +326,7 @@ export async function saveBusinessPage(
         updatedByMemberId: by,
       })
       .where(eq(businessPages.workspaceId, scope.workspaceId));
+    await auditSetup(tx, scope, 'business_page.draft_saved');
     return viewOf(tx, scope.workspaceId);
   });
 }
@@ -366,7 +373,8 @@ export async function publishBusinessPage(scope: EngineScope): Promise<BusinessP
     await tx
       .update(businessPages)
       .set({
-        published: sql`${businessPages.draft}`,
+        // The snapshot names the places it was published with, so a place added later waits for the next Publish.
+        published: sql`${businessPages.draft} || jsonb_build_object('placeIds', (select coalesce(jsonb_agg(pp.place_id), '[]'::jsonb) from place_pages pp where pp.workspace_id = ${scope.workspaceId}::uuid))`,
         publishedAt: sql`now()`,
         publishedByMemberId: by,
         version: sql`${businessPages.version} + 1`,
@@ -381,6 +389,8 @@ export async function publishBusinessPage(scope: EngineScope): Promise<BusinessP
       .where(
         and(
           eq(businessPhotos.workspaceId, scope.workspaceId),
+          // A picture uploaded in the last ten minutes may not be in the draft yet: it stays until a later Publish.
+          sql`${businessPhotos.createdAt} < now() - interval '10 minutes'`,
           ...(used.size === 0 ? [] : [sql`not (${businessPhotos.id} = any(${`{${[...used].join(',')}}`}::uuid[]))`]),
         ),
       )
@@ -405,6 +415,7 @@ export async function discardBusinessPage(scope: EngineScope): Promise<BusinessP
         updatedByMemberId: by,
       })
       .where(eq(businessPages.workspaceId, scope.workspaceId));
+    await auditSetup(tx, scope, 'business_page.discarded');
     return viewOf(tx, scope.workspaceId);
   });
 }
@@ -447,6 +458,7 @@ export async function addBusinessPhoto(
       height: input.height,
       createdByMemberId: by,
     });
+    await auditSetup(tx, scope, 'business_page.photo_added', { photoId: id });
     return { path };
   });
 }

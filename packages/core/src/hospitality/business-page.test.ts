@@ -22,7 +22,7 @@ import {
   saveBusinessPage,
   setPlaceSlug,
 } from './business-page.ts';
-import { getBusiness, updatePlace } from './places.ts';
+import { createPlace, getBusiness, updatePlace } from './places.ts';
 import { enterBusinessPage, listSitemapBusinesses, publicBusinessPhoto } from './public-page.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -209,6 +209,11 @@ describe('the page editor (B4 lite)', () => {
     await saveBusinessPage(w.owner, {
       draft: { gallery: [{ id: kept, width: 10, height: 10 }], amenities: [], hiddenPlaces: [] },
     });
+    // A picture just uploaded may still be on its way into the draft: kept until it is ten minutes old.
+    expect((await publishBusinessPage(w.owner)).unusedPaths).toEqual([]);
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update business_photos set created_at = now() - interval '11 minutes'`),
+    );
     const published = await publishBusinessPage(w.owner);
     expect(published.unusedPaths).toEqual([`business-page/${w.workspaceId}/${dropped}.webp`]);
   });
@@ -225,6 +230,32 @@ describe('the page editor (B4 lite)', () => {
     );
     expect(await refusalOf(enterBusinessPage({ db }, `sn-${run}-slug`, 'reserve'))).toBe('NOT_FOUND');
     expect(await refusalOf(enterBusinessPage({ db }, `sn-${run}-slug`, 'nowhere'))).toBe('NOT_FOUND');
+  });
+
+  it('keeps a place added after Publish off the page until the next Publish', async () => {
+    const w = await business();
+    await claimBusinessHandle(w.owner, { handle: `sn-${run}-later` });
+    await updatePlace(w.owner, { placeId: w.placeId, hours: OPEN_WEEK });
+    await publishBusinessPage(w.owner);
+    const second = newId();
+    await createPlace(w.owner, {
+      id: second,
+      place: {
+        name: 'Koramangala',
+        addressLine: '1 80 Feet Road',
+        city: 'Bengaluru',
+        country: 'IN',
+        timeZone: 'Asia/Kolkata',
+      },
+    });
+    await updatePlace(w.owner, { placeId: second, hours: OPEN_WEEK });
+    const view = (await setPlaceSlug(w.owner, { placeId: second, slug: 'koramangala' })).view;
+    expect(view.hasChanges).toBe(true);
+    expect(view.changes).toContain('Koramangala: added to the page');
+    expect(await refusalOf(enterBusinessPage({ db }, `sn-${run}-later`, 'koramangala'))).toBe('NOT_FOUND');
+    expect((await enterBusinessPage({ db }, `sn-${run}-later`)).page.places).toHaveLength(1);
+    await publishBusinessPage(w.owner);
+    expect((await enterBusinessPage({ db }, `sn-${run}-later`, 'koramangala')).page.placeId).toBe(second);
   });
 
   it('lists a published business for the sitemap, and a hidden place answers noindex', async () => {

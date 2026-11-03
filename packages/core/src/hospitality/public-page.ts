@@ -52,6 +52,19 @@ async function workspaceOfHandle(db: Database, handle: string): Promise<string |
   return id !== undefined && isUuid(id) ? id : undefined;
 }
 
+/**
+ * Whether the business's page may be served at all: its workspace not deleted and some business app installed (its
+ * early access open). Every public read asks it first, so a page, its photos, its brand and the lockup that links it
+ * all go together.
+ */
+async function isLive(tx: WorkspaceTx, workspaceId: string): Promise<boolean> {
+  const [workspace] = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(and(eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt)));
+  return workspace !== undefined && (await installedHospitalityApps(tx, workspaceId)).size > 0;
+}
+
 /** What the public page's entry found: the page, its workspace (for the cache tags and the brand), and its brand. */
 export interface BusinessPageEntry {
   readonly page: PublicBusinessPage;
@@ -79,13 +92,8 @@ export async function enterBusinessPage(
   if (workspaceId === undefined) throw noPage();
   const menus = deps.menus ?? NO_MENUS;
   return deps.db.withWorkspace(workspaceId, async (tx) => {
-    const [workspace] = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(and(eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt)));
-    if (workspace === undefined) throw noPage();
+    if (!(await isLive(tx, workspaceId))) throw noPage();
     const apps = await installedHospitalityApps(tx, workspaceId);
-    if (apps.size === 0) throw noPage();
     const [row] = await tx
       .select({
         handle: businessPages.handle,
@@ -102,7 +110,11 @@ export async function enterBusinessPage(
       .where(eq(businessPages.workspaceId, workspaceId));
     if (row === undefined || row.handle === null || row.published === null || row.publishedAt === null) throw noPage();
     const content = businessContentOf(row.published);
-    const shown = (await pagePlaces(tx, workspaceId)).filter((place) => place.slug !== null);
+    // Only places Publish saw (its snapshot names them): a place added or given an address since waits for Publish.
+    const publishedPlaces = publishedPlaceIds(row.published);
+    const shown = (await pagePlaces(tx, workspaceId)).filter(
+      (place) => place.slug !== null && (publishedPlaces === undefined || publishedPlaces.has(place.id)),
+    );
     if (shown.length === 0) throw noPage();
     let placeId = shown[0]?.id ?? '';
     if (slug !== undefined) {
@@ -180,11 +192,11 @@ export async function publicBusinessPhoto(
   const workspaceId = await workspaceOfHandle(deps.db, handle);
   if (workspaceId === undefined) return undefined;
   return deps.db.withWorkspace(workspaceId, async (tx) => {
+    if (!(await isLive(tx, workspaceId))) return undefined;
     const [row] = await tx
       .select({ published: businessPages.published })
       .from(businessPages)
-      .innerJoin(workspaces, eq(workspaces.id, businessPages.workspaceId))
-      .where(and(eq(businessPages.workspaceId, workspaceId), isNull(workspaces.deletedAt)));
+      .where(eq(businessPages.workspaceId, workspaceId));
     if (row === undefined || row.published === null) return undefined;
     if (!businessContentOf(row.published).gallery.some((photo) => photo.id === photoId)) return undefined;
     const [photo] = await tx
@@ -207,7 +219,7 @@ export async function publicBusinessBrand(
       .select({ published: businessPages.publishedAt })
       .from(businessPages)
       .where(eq(businessPages.workspaceId, workspaceId));
-    if (row === undefined || row.published === null) return undefined;
+    if (row === undefined || row.published === null || !(await isLive(tx, workspaceId))) return undefined;
     return { brand: await businessBrandOf(tx, workspaceId), workspaceId };
   });
 }
@@ -239,5 +251,13 @@ export async function publishedBusinessHandle(tx: WorkspaceTx, workspaceId: stri
     .select({ handle: businessPages.handle })
     .from(businessPages)
     .where(and(eq(businessPages.workspaceId, workspaceId), sql`${businessPages.publishedAt} is not null`));
-  return row?.handle ?? undefined;
+  if (row?.handle === null || row?.handle === undefined) return undefined;
+  return (await isLive(tx, workspaceId)) ? row.handle : undefined;
+}
+
+/** The places a published snapshot names (`placeIds`, written by Publish), or undefined for a snapshot without them. */
+function publishedPlaceIds(published: unknown): ReadonlySet<string> | undefined {
+  if (typeof published !== 'object' || published === null) return undefined;
+  const ids = (published as Record<string, unknown>).placeIds;
+  return Array.isArray(ids) ? new Set(ids.filter((id): id is string => typeof id === 'string')) : undefined;
 }
