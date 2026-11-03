@@ -54,6 +54,8 @@ export const ENGINE_REFUSAL_CODES = [
   // A guest's cancel or move inside the page's cutoff (spec 0062, AC-6202). The host's own cancel and move ignore
   // cutoffs, so this is only ever a guest's refusal.
   'TOO_LATE',
+  // A one off link used up, expired or revoked (spec 0062, AC-6204): the page says "This link has been used".
+  'LINK_USED',
   // Calendar sync (spec 0024, AC-618): the member has no connected calendar to write an event to.
   'CALENDAR_NOT_CONNECTED',
   // Invitations (spec 0031): an expired, revoked, used or unknown invitation (all one answer); an invitation for

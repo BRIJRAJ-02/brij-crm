@@ -110,6 +110,7 @@ import {
   type BookingRouting,
 } from '../routing/booking.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
+import { checkOneOffLink, oneOffStateOf, oneOffTokenHash, useOneOffLink } from './one-off-links.ts';
 import { ensureManageToken, managePath, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { queueBookingWebhook } from '../webhooks/queue.ts';
 
@@ -266,6 +267,8 @@ export async function getPublicBookingPage(
   pictures?: PublicPictureDeps,
   /** A verified form hand off (spec 0037, AC-1388): a page that books only through a form needs one. */
   link?: { readonly submissionId: string },
+  /** A one off link's hash (spec 0062, AC-6204): the page says "This link has been used" when it has nothing left. */
+  oneOff?: { readonly hash: string; readonly now: Date },
 ): Promise<PublicBookingPage> {
   checkEntry(entry);
   const { facts, pictureUser } = await inWorkspace(entry.scope, async (tx) => {
@@ -294,6 +297,11 @@ export async function getPublicBookingPage(
       // The page's own questions (spec 0057, AC-5709); a page with none sends nothing new (AC-5704).
       ...(page.questions.length === 0 ? {} : { questions: [...publicQuestionsOf(page.questions)] }),
       ...(shut ? { formOnly: true as const } : {}),
+      // Spec 0062, L1: a page that asks the host first says Request, and a link with nothing left says so.
+      ...(page.requiresConfirmation ? { requiresConfirmation: true as const } : {}),
+      ...(oneOff !== undefined && (await oneOffStateOf(tx, page.id, oneOff.hash, oneOff.now)) !== 'open'
+        ? { linkUsed: true as const }
+        : {}),
     };
     return { facts, pictureUser: pictures === undefined ? undefined : await shownPictureOwner(tx, page) };
   });
@@ -1030,6 +1038,46 @@ interface Booked {
   readonly booking: PublicBooking;
   /** The guest page's token, derived from the booking's id: a replay answers the same one. */
   readonly manageToken: string;
+  /** It waits for the host's Confirm (spec 0062, AC-6203). */
+  readonly pending?: true;
+  /** Where a redirect page sends the visitor once it has committed (AC-6201). */
+  readonly redirectUrl?: string;
+}
+
+/**
+ * Where a redirect page sends its visitor after the booking (spec 0062, AC-6201): the address the host saved, never
+ * one from the request, with `name`, `email`, `start` (ISO UTC), `tz` and `page` (the slug) only when the host
+ * switched "Send booking details" on. Undefined on a confirmation page.
+ */
+export function redirectAfterBooking(
+  page: Pick<PageRecord, 'afterBooking' | 'redirectUrl' | 'sendBookingDetails' | 'slug'>,
+  booking: { readonly name: string; readonly email: string; readonly start: Date; readonly timeZone: string },
+): string | undefined {
+  if (page.afterBooking !== 'redirect' || page.redirectUrl === null || !URL.canParse(page.redirectUrl)) {
+    return undefined;
+  }
+  const url = new URL(page.redirectUrl);
+  if (page.sendBookingDetails) {
+    url.searchParams.set('name', booking.name);
+    url.searchParams.set('email', booking.email);
+    url.searchParams.set('start', booking.start.toISOString());
+    url.searchParams.set('tz', booking.timeZone);
+    url.searchParams.set('page', page.slug);
+  }
+  return url.href;
+}
+
+/** The parts of a `Booked` a page's flow rules add: whether it waits, and where the visitor goes next. */
+function flowOf(
+  page: PageRecord,
+  approval: string | null,
+  booking: { readonly name: string; readonly email: string; readonly start: Date; readonly timeZone: string },
+): Pick<Booked, 'pending' | 'redirectUrl'> {
+  const redirect = redirectAfterBooking(page, booking);
+  return {
+    ...(approval === 'pending' ? { pending: true as const } : {}),
+    ...(redirect === undefined ? {} : { redirectUrl: redirect }),
+  };
 }
 
 /** The booking this page made under `idempotencyKey`, as its visitor sees it, or undefined. */
@@ -1056,6 +1104,12 @@ async function bookedByKey(
       location: publicLocation(page),
       timeZone: row.visitorTimeZone,
     },
+    ...flowOf(page, row.approval, {
+      name: row.visitorName,
+      email: row.visitorEmail,
+      start: row.startsAt,
+      timeZone: row.visitorTimeZone,
+    }),
   };
 }
 
@@ -1106,6 +1160,8 @@ export async function bookPublicSlot(
 
   const replay = (tx: WorkspaceTx, page: PageRecord): Promise<Booked | undefined> =>
     bookedByKey(tx, deps.linkKey, page, input.idempotencyKey);
+  // A one off link's token (spec 0062, AC-6204), compared by its hash only.
+  const oneOff = input.oneOffToken === undefined ? undefined : oneOffTokenHash(input.oneOffToken);
 
   // 1. The page, the length, a retry, and who it books.
   type First =
@@ -1121,6 +1177,8 @@ export async function bookPublicSlot(
     const again = page === undefined ? undefined : await replay(tx, page);
     if (again !== undefined) return { again };
     const live = liveOf(page);
+    // A used up, expired or revoked link refuses before any calendar is read; its use is counted at the commit.
+    if (oneOff !== undefined) await checkOneOffLink(tx, live.id, oneOff, now);
     checkDuration(live, input.duration);
     if (await formOnlyShut(tx, live, link)) throw refuse('BOOKING_CLOSED', FORM_ONLY_CLOSED);
     if (live.location.type === 'phone' && (input.phone ?? '').trim() === '') {
@@ -1283,6 +1341,9 @@ export async function bookPublicSlot(
             visitorTimeZone: input.timeZone,
             answers: { ...answersOf(input, options.chat), ...(kept.length === 0 ? {} : { questions: kept }) },
             ...(submissionId === undefined ? {} : { submissionId }),
+            // A page that asks the host first books a request (spec 0062, AC-6203): it holds the slot as any booking.
+            ...(page.requiresConfirmation ? { approval: 'pending' } : {}),
+            ...(oneOff === undefined ? {} : { oneOffLinkId: await useOneOffLink(tx, page.id, oneOff, now) }),
             manageTokenHash: tokenHash,
             manageTokenDerived: true,
             idempotencyKey: input.idempotencyKey,
@@ -1307,7 +1368,13 @@ export async function bookPublicSlot(
             .values(others.map((memberId) => ({ workspaceId, bookingId, memberId, during, status: 'confirmed' })));
         }
         // The reminders with the booking; the confirmation after its event, so it knows whether the calendar invited them.
-        await enqueueBookingMail(tx, bookingId, ['reminder_24h', 'reminder_1h']);
+        // A request gets neither yet: its visitor hears "Request received", its host is asked, and it declines
+        // itself if nobody answers (spec 0062, AC-6203); Confirm queues what a booking gets.
+        await enqueueBookingMail(
+          tx,
+          bookingId,
+          page.requiresConfirmation ? ['requested', 'pending_expire'] : ['reminder_24h', 'reminder_1h'],
+        );
         // Subscribed endpoints hear of it with the booking (spec 0064, AC-6422): queued here, sent by the worker.
         await queueBookingWebhook(tx, 'booking.created', bookingId);
       } catch (error) {
@@ -1438,6 +1505,12 @@ export async function bookPublicSlot(
           location: publicLocation(page),
           timeZone: input.timeZone,
         },
+        ...flowOf(page, page.requiresConfirmation ? 'pending' : null, {
+          name: input.name,
+          email: input.email,
+          start,
+          timeZone: input.timeZone,
+        }),
       } satisfies Booked & { readonly hostMemberId: string; readonly hosts: readonly string[] };
     },
     hooks,
@@ -1448,6 +1521,9 @@ export async function bookPublicSlot(
     hosts,
     ...booked
   } = result as Booked & { readonly hostMemberId: string; readonly hosts: readonly string[] };
+
+  // A request stays off the host's calendar until it is confirmed (spec 0062, AC-6203): Confirm writes its event.
+  if (booked.pending === true) return booked;
 
   // 4. The calendar event on the host's calendar, after the commit: three tries, then the booking stands without one.
   // A team booking's other hosts are invited beside the visitor (AC-627, AC-1322).
@@ -1598,12 +1674,41 @@ export async function readManagedBooking(
     const answers = storedAnswers(row.answers);
     const canChange = row.status === 'confirmed' && row.startsAt.getTime() > now.getTime();
     const [workspace] = await tx.select({ slug: workspaces.slug }).from(workspaces).limit(1);
+    // A guest's change inside the page's cutoff is the host's now (spec 0062, AC-6202); the server refuses it too.
+    const left = row.startsAt.getTime() - now.getTime();
+    const cancelTooLate = canChange && left < page.cancelCutoffMinutes * 60_000;
+    const moveTooLate = canChange && left < page.moveCutoffMinutes * 60_000;
+    const isRequest = row.approval === 'pending';
     return {
       workspaceSlug: workspace?.slug ?? '',
       canChange,
-      canMove: canChange && !page.isDeleted && page.status === 'live' && row.reschedules < MAX_RESCHEDULES,
-      ...(row.cancelReason === null ? {} : { cancelReason: row.cancelReason }),
-      state: row.status === 'cancelled' ? 'cancelled' : row.endsAt.getTime() <= now.getTime() ? 'past' : 'confirmed',
+      canMove:
+        canChange &&
+        !isRequest &&
+        !moveTooLate &&
+        !page.isDeleted &&
+        page.status === 'live' &&
+        row.reschedules < MAX_RESCHEDULES,
+      ...(cancelTooLate ? { cancelTooLate: true as const } : {}),
+      ...(moveTooLate && !isRequest ? { moveTooLate: true as const } : {}),
+      // A decline's reason is the host's to the visitor; any other cancel keeps its own.
+      ...(row.approval === 'declined'
+        ? row.declineReason === null
+          ? {}
+          : { cancelReason: row.declineReason }
+        : row.cancelReason === null
+          ? {}
+          : { cancelReason: row.cancelReason }),
+      state:
+        row.approval === 'declined'
+          ? 'declined'
+          : row.status === 'cancelled'
+            ? 'cancelled'
+            : row.endsAt.getTime() <= now.getTime()
+              ? 'past'
+              : isRequest
+                ? 'requested'
+                : 'confirmed',
       publicKey: page.publicKey,
       title: page.title,
       hostName: await bookingHostName(tx, page, row),

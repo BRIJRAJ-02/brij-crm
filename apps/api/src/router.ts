@@ -7,6 +7,7 @@ import { calendarRouter } from './modules/calendar/router.ts';
 import { formsRouter } from './modules/forms/router.ts';
 import { homeRouter } from './modules/home/router.ts';
 import {
+  bookingFlowRouter,
   bookingPagesRouter,
   bookingsRouter,
   rotationsRouter,
@@ -107,6 +108,7 @@ export const router = base.router({
   forms: formsRouter,
   submissions: submissionsRouter,
   bookingPages: bookingPagesRouter,
+  bookingFlow: bookingFlowRouter,
   bookings: bookingsRouter,
   schedules: schedulesRouter,
   timeOff: timeOffRouter,

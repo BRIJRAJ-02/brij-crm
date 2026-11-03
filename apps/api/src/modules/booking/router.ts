@@ -20,6 +20,12 @@ import {
   updateRotation,
   bookingGuestPath,
   cancelBooking,
+  confirmBooking,
+  declineBooking,
+  createOneOffLink,
+  listOneOffLinks,
+  revokeOneOffLink,
+  listRequests,
   linkBookingRecord,
   markNoShow,
   routingDecision,
@@ -500,6 +506,30 @@ export const routingRouter = member.routing.router({
         answers: input.answers,
         ...(input.email === undefined ? {} : { email: input.email }),
       }),
+    ),
+  ),
+});
+
+// A page's flow rules (spec 0062, L1). Its one off links are its editor's (AC-6204), through the same page rule as
+// every page write; Confirm and Decline are its request's host's, or anyone the one booking rule lets change it,
+// with spec 0037's Manage reach (AC-6203, AC-6219). Neither writes a change event: the editor reads its lists again.
+export const bookingFlowRouter = member.bookingFlow.router({
+  links: member.bookingFlow.links.handler(({ context, input }) => listOneOffLinks(context.scope, input)),
+  createLink: member.bookingFlow.createLink.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () => createOneOffLink(context.scope, input)),
+  ),
+  revokeLink: member.bookingFlow.revokeLink.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () => revokeOneOffLink(context.scope, input)),
+  ),
+  requests: member.bookingFlow.requests.handler(({ context, input }) => listRequests(context.scope, input)),
+  confirm: member.bookingFlow.confirm.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      confirmBooking(hostTarget(context.scope, input.bookingId), {}),
+    ),
+  ),
+  decline: member.bookingFlow.decline.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      declineBooking(hostTarget(context.scope, input.bookingId), {}, { reason: input.reason }),
     ),
   ),
 });

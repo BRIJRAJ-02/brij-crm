@@ -56,6 +56,8 @@ export { BOOKING_MAIL_KINDS, type BookingMailKind } from './booking/mail-queue.t
 // A member who left: their round robin bookings handed on through the rotations (spec 0029, AC-749).
 export { handOnBooking, rotationsRemoval } from './rotation/removal.ts';
 export { remakeEvent } from './rotation/reseat.ts';
+// A request left unanswered declines itself (spec 0062, AC-6203): the worker's `pending_expire` step.
+export { expireRequest, queueConfirmation } from './booking/change.ts';
 export type { ReseatDeps } from './rotation/reassign.ts';
 // Sending a queued email (the emails lane): the worker's `crm_email` task reads one and records how sending went, and
 // signs the preferences link it draws into an optional email.

@@ -11,6 +11,8 @@
 // emails the admins only when nobody was free.
 import {
   BOOKING_MAIL_KINDS,
+  expireRequest,
+  queueConfirmation,
   handOnBooking,
   remakeEvent,
   markGuestsTold,
@@ -67,6 +69,28 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
         deps.log,
       );
     }
+    return;
+  }
+  if (kind === 'approved') {
+    // Not an email first (spec 0062, AC-6203): a confirmed request's event goes on its host's calendar, then its
+    // confirmation is queued, after the event so it knows whether the calendar already invited the visitor.
+    const scope = deps.systemScope(workspaceId);
+    const { calendar } = deps.reseat ?? {};
+    if (calendar?.events !== undefined) {
+      await remakeEvent(
+        scope,
+        { events: calendar.events, ...(calendar.existing === undefined ? {} : { existing: calendar.existing }) },
+        bookingId,
+        deps.log,
+      );
+    }
+    await queueConfirmation(scope, bookingId);
+    return;
+  }
+  if (kind === 'pending_expire') {
+    // A request nobody answered in time declines itself and its visitor is told (`declined` is queued with it).
+    const declined = await expireRequest(deps.systemScope(workspaceId), bookingId);
+    deps.log.info('booking.request.expired', { bookingId, declined });
     return;
   }
   if (kind === 'needs_host' && deps.reseat !== undefined) {

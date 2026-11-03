@@ -1527,3 +1527,17 @@ function checkAfterBooking(after: BookingAfter, url: string | null): void {
     throw refuseOn('VALUE_REQUIRED', 'Give the address to send visitors to.', 'redirectUrl');
   }
 }
+
+/**
+ * The page its reader may change, as every page write reads it (spec 0062, L1's one off links and requests): hidden
+ * means absent, NOT_FOUND. Takes the row's lock with `lock`.
+ */
+export async function editablePage(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  pageId: string,
+  lock = false,
+): Promise<PageRecord> {
+  requirePermission(scope, 'booking.manage');
+  return pageToChange(tx, scope, pageId, lock);
+}

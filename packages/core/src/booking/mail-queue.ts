@@ -21,6 +21,12 @@ export const BOOKING_MAIL_KINDS = [
   'host_changed',
   'reminder_24h',
   'reminder_1h',
+  // A page that requires confirmation (spec 0062, AC-6203): the request's emails, the worker's Confirm step that
+  // writes the calendar event before the confirmation, the decline's email, and the wait that declines it.
+  'requested',
+  'approved',
+  'declined',
+  'pending_expire',
 ] as const;
 
 /** One kind of booking email. */

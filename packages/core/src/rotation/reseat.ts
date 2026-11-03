@@ -169,7 +169,8 @@ export async function remakeEvent(
   }
   const facts = await inWorkspace(scope, async (tx) => {
     const [row] = await tx.select().from(bookings).where(eq(bookings.id, bookingId));
-    if (row === undefined || row.status !== 'confirmed') return undefined;
+    // A request waits off the calendar until it is confirmed (spec 0062, AC-6203).
+    if (row === undefined || row.status !== 'confirmed' || row.approval === 'pending') return undefined;
     const page = await loadPage(tx, row.pageId);
     if (page === undefined) return undefined;
     const others = await tx

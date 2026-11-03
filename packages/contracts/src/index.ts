@@ -6,6 +6,7 @@ import { webhooksContract } from './webhooks.ts';
 import { attributesContract } from './attributes.ts';
 import { computedContract } from './computed.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
+import { bookingFlowContract } from './booking/flow.ts';
 import { schedulesContract } from './booking/schedules.ts';
 import { timeOffContract } from './booking/time-off.ts';
 import { limitsContract } from './booking/limits.ts';
@@ -68,6 +69,7 @@ export * from './duplicates.ts';
 export * from './booking/index.ts';
 export * from './booking/blocks.ts';
 export * from './booking/pages.ts';
+export * from './booking/flow.ts';
 export * from './booking/schedules.ts';
 export * from './booking/time-off.ts';
 export * from './booking/limits.ts';
@@ -197,6 +199,8 @@ export const contract = {
   forms: formsContract,
   submissions: submissionsContract,
   bookingPages: bookingPagesContract,
+  // A page's flow rules (spec 0062, L1): one off links, and the Confirm or Decline a request asks of its host.
+  bookingFlow: bookingFlowContract,
   // The Team day (spec 0030, as spec 0037 amends it): Bookings › Calendar's Team view.
   bookings: { ...bookingsContract, teamDay: teamDayProcedure },
   schedules: schedulesContract,

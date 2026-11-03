@@ -67,6 +67,9 @@ import type {
   BookingPageSettings,
   BookingPageView,
   BookingView,
+  BookingRequestView,
+  CreatedOneOffLink,
+  OneOffLinkView,
   AttributeOption,
   PickerAttributeType,
   CreateFormInput,
@@ -497,6 +500,9 @@ export type {
   BookingPageSettings,
   BookingPageView,
   BookingView,
+  BookingRequestView,
+  CreatedOneOffLink,
+  OneOffLinkView,
   BookingAssignment,
   ReassignedBooking,
   RotationAdjustment,
@@ -4208,6 +4214,36 @@ export function createDataLayer({
      * which they reject with for the caller to say; `create` waits for the
      * server (its dialog checks the address), then the page is first in the list.
      */
+    /**
+     * A page's flow rules (spec 0062, L1), read and written by its editor's cards, which hold their own lists (no
+     * live event: the card reads again after each change). One off links (AC-6204): `createLink` answers the only
+     * copy of the token. Requests (AC-6203): Confirm and Decline wait for the server; `false` when the request was
+     * already answered.
+     */
+    bookingFlow: {
+      links: (workspace: string, pageId: string): Promise<OneOffLinkView[]> =>
+        call((options) => api.bookingFlow.links({ workspace, pageId }, options)),
+      createLink: (
+        workspace: string,
+        input: { pageId: string; label?: string; maxUses?: number; expiresAt?: string },
+      ): Promise<CreatedOneOffLink> =>
+        call((options) => api.bookingFlow.createLink({ workspace, ...input, mutationId: mintId() }, options)),
+      revokeLink: (workspace: string, pageId: string, linkId: string): Promise<OneOffLinkView> =>
+        call((options) => api.bookingFlow.revokeLink({ workspace, pageId, linkId, mutationId: mintId() }, options)),
+      requests: (workspace: string, pageId: string): Promise<BookingRequestView[]> =>
+        call((options) => api.bookingFlow.requests({ workspace, pageId }, options)),
+      confirm: (workspace: string, bookingId: string): Promise<boolean> =>
+        call((options) => api.bookingFlow.confirm({ workspace, bookingId, mutationId: mintId() }, options)).then(
+          (answer) => answer.confirmed,
+        ),
+      decline: (workspace: string, bookingId: string, reason?: string): Promise<boolean> =>
+        call((options) =>
+          api.bookingFlow.decline(
+            { workspace, bookingId, ...(reason === undefined ? {} : { reason }), mutationId: mintId() },
+            options,
+          ),
+        ).then((answer) => answer.declined),
+    },
     bookingPages: {
       /** A new page's id: mint it once per New page, and send the same one again on a retry. */
       newId: () => mintId(),

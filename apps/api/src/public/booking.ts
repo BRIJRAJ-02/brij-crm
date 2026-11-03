@@ -951,7 +951,14 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       // A form's hand off (spec 0037, AC-1388): a page that books only through a form opens only with one. The facts
       // and the brand they wear (spec 0060, AC-4) side by side; a brand that won't read is none.
       const [facts, brand] = await Promise.all([
-        getPublicBookingPage(entry, services.pictures, routedLink(entry, c.req.query('p'))),
+        getPublicBookingPage(
+          entry,
+          services.pictures,
+          routedLink(entry, c.req.query('p')),
+          // A one off link's state (spec 0062, AC-6204), asked by the token's hash: the token itself stays in the
+          // address's fragment and the booking's body, never a query a log keeps.
+          oneOffHashOf(c.req.query('o')),
+        ),
         bookingBrandAnswer(entry),
       ]);
       return ok(brand === undefined ? facts : { ...facts, brand });
@@ -1217,7 +1224,13 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
           }),
         );
       }
-      return ok({ booking: booked.booking, manageToken: booked.manageToken });
+      return ok({
+        booking: booked.booking,
+        manageToken: booked.manageToken,
+        // Spec 0062, L1: a request says so, and a redirect page names where to go now that the booking committed.
+        ...(booked.pending === true ? { pending: true as const } : {}),
+        ...(booked.redirectUrl === undefined ? {} : { redirectUrl: booked.redirectUrl }),
+      });
     } catch (error) {
       if (!toApiError(error).expected) {
         log.error('booking.failed', { requestId: c.get('requestId'), ...errorFields(error) });
@@ -1243,4 +1256,9 @@ function withOverlay(
   const { clashes, best } = overlay(slots.slots, busy, zone);
   const viewer: SlotsOverlay = { calendar: 'ok', clashes: [...clashes], best: [...best] };
   return { ...slots, viewer };
+}
+
+/** A one off link's hash from the page's query (spec 0062, AC-6204): 64 hex characters, else none. */
+function oneOffHashOf(value: string | undefined): { readonly hash: string; readonly now: Date } | undefined {
+  return value !== undefined && /^[0-9a-f]{64}$/.test(value) ? { hash: value, now: new Date() } : undefined;
 }

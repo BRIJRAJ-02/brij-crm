@@ -72,6 +72,8 @@ export const ERROR_MAP = {
   // A guest changing a booking inside the page's cancel or move cutoff (spec 0062, AC-6202): the booking is real
   // and the time is still theirs, so it is a conflict with the page's rule rather than a missing thing.
   TOO_LATE: CONFLICT,
+  // A one off link that has nothing left to book (spec 0062, AC-6204): used up, expired or revoked.
+  LINK_USED: { status: 410 },
   CALENDAR_NOT_CONNECTED: CONFLICT,
   // Invitations (spec 0031, AC-805, AC-808, AC-809): every invalid token answers the same 404.
   INVITE_INVALID: { status: 404 },

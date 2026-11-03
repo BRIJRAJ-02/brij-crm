@@ -103,6 +103,10 @@ export const PublicBookingPage = z.object({
    * workspace's, and a team page the workspace's. Absent when it wears the product's own accent and no logo.
    */
   brand: PublicBrand.optional(),
+  /** The host confirms each booking first (spec 0062, AC-6203): the page's button says Request. */
+  requiresConfirmation: z.literal(true).optional(),
+  /** The one off link it was opened with has nothing left to book (AC-6204): "This link has been used". */
+  linkUsed: z.literal(true).optional(),
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;
@@ -346,6 +350,11 @@ export const VISITOR_NAME_MAX = 200;
  * decides the minimum fill time), and `startedAt` when the page loaded
  * (advisory, used only without a ticket).
  */
+/** A one off link's token (spec 0062, AC-6204): 32 random bytes, base64url, 43 characters. */
+export const OneOffToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/, { error: 'That link isn’t right.' });
+/** A one off link's token. */
+export type OneOffToken = z.infer<typeof OneOffToken>;
+
 export const PublicBookInput = z.object({
   idempotencyKey: Uuid,
   start: Timestamp,
@@ -381,6 +390,11 @@ export const PublicBookInput = z.object({
     .object({ handle: z.string().max(40) })
     .optional()
     .catch(undefined),
+  /**
+   * A one off link's token (spec 0062, AC-6204): the 43 characters after `#o=` in the address the host shared. It
+   * travels in the body, never the address, so no server log keeps it; the server compares its SHA-256 only.
+   */
+  oneOffToken: OneOffToken.optional(),
 });
 /** A visitor's booking. */
 export type PublicBookInput = z.infer<typeof PublicBookInput>;
@@ -417,7 +431,21 @@ export const PublicPrefill = z.object({
 export type PublicPrefill = z.infer<typeof PublicPrefill>;
 
 /** The book answer: the booking, and the guest page's token (only this answer ever carries it). */
-export const PublicBooked = z.object({ booking: PublicBooking, manageToken: z.string() });
+export const PublicBooked = z.object({
+  booking: PublicBooking,
+  manageToken: z.string(),
+  /**
+   * A booking that waits for the host's Confirm (spec 0062, AC-6203): the page says "Requested" rather than booked.
+   * Absent for a booking that is confirmed at once, which is every page that doesn't ask.
+   */
+  pending: z.literal(true).optional(),
+  /**
+   * Where a redirect page sends the visitor now that the booking has committed (AC-6201): the host's saved address,
+   * with the booking's name, email, start, tz and page added only when the host switched that on. Never anything
+   * the visitor sent.
+   */
+  redirectUrl: z.string().optional(),
+});
 /** The book answer. */
 export type PublicBooked = z.infer<typeof PublicBooked>;
 
@@ -487,7 +515,11 @@ export type ManageToken = z.infer<typeof ManageToken>;
 
 /** `GET /api/public/booking/manage/:token`: the booking as its guest sees it (AC-674). */
 export const PublicManagedBooking = z.object({
-  state: z.enum(['confirmed', 'cancelled', 'past']),
+  /**
+   * `requested` is a booking waiting for the host's Confirm, and `declined` one the host (or the wait) turned down
+   * (spec 0062, AC-6203); the rest is what every booking was before.
+   */
+  state: z.enum(['confirmed', 'requested', 'declined', 'cancelled', 'past']),
   publicKey: z.string(),
   title: z.string(),
   hostName: z.string(),
@@ -510,6 +542,12 @@ export const PublicManagedBooking = z.object({
   canChange: z.boolean(),
   /** Whether it may still move: it can change, its page takes bookings, and it has moved fewer than 5 times. */
   canMove: z.boolean(),
+  /**
+   * Inside the page's cancel or move cutoff (spec 0062, AC-6202): that change is the host's now, and the page says
+   * so in one line. Absent when it isn't.
+   */
+  cancelTooLate: z.literal(true).optional(),
+  moveTooLate: z.literal(true).optional(),
 });
 /** The booking as its guest sees it. */
 export type PublicManagedBooking = z.infer<typeof PublicManagedBooking>;

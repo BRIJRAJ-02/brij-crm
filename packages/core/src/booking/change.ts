@@ -18,7 +18,7 @@
 // A booking keeps its id through every move (AC-639), and moves at most 5
 // times. Nothing changes once the meeting has started.
 import { and, eq, sql } from 'drizzle-orm';
-import type { PublicSlots } from '@crm/contracts';
+import { BOOKING_TOO_LATE, type PublicSlots } from '@crm/contracts';
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry } from '../access/door.ts';
@@ -188,9 +188,28 @@ function checkChangeable(row: BookingRow, now: Date, doing: 'cancelled' | 'moved
   }
 }
 
+/**
+ * Refuses a guest's change inside the page's cutoff (spec 0062, AC-6202): `TOO_LATE`, with the one line the guest
+ * page shows too. The host's own change ignores it, so a cutoff never locks out the people who own the page.
+ */
+function checkCutoff(by: ChangeTarget['by'], row: BookingRow, minutes: number, now: Date): void {
+  if (by !== 'guest' || minutes <= 0) return;
+  if (row.startsAt.getTime() - now.getTime() < minutes * 60_000) throw refuse('TOO_LATE', BOOKING_TOO_LATE);
+}
+
 /** Refuses a move the booking or its page no longer allows. */
-function checkMovable(row: BookingRow, page: PageRecord, now: Date): void {
+function checkMovable(row: BookingRow, page: PageRecord, now: Date, by: ChangeTarget['by']): void {
   checkChangeable(row, now, 'moved');
+  // A request moves once it is an answer (spec 0062, AC-6203): until then the host decides on the time asked for.
+  if (row.approval === 'pending') {
+    throw refuse(
+      'BOOKING_CLOSED',
+      by === 'guest'
+        ? 'This request is waiting for the host. Cancel it and ask for another time instead.'
+        : 'Confirm or decline this request before moving it.',
+    );
+  }
+  checkCutoff(by, row, page.moveCutoffMinutes, now);
   if (row.reschedules >= MAX_RESCHEDULES) {
     throw refuse(
       'LIMIT_REACHED',
@@ -344,7 +363,7 @@ export async function readMoveSlots(
   const now = deps.now?.() ?? new Date();
   const found = await inWorkspace(target.scope, async (tx) => {
     const read = await readTarget(tx, target, false);
-    checkMovable(read.row, read.page, now);
+    checkMovable(read.row, read.page, now, target.by);
     const team = await roundRobinTeam(tx, read.page);
     checkResizable(team, read.row, range.minutes);
     return { ...read, team, memberIds: team === undefined ? await membersOf(tx, read.page) : [] };
@@ -442,7 +461,7 @@ export async function moveBooking(
   const first = await inWorkspace(target.scope, async (tx) => {
     const found = await readTarget(tx, target, false);
     if (isAsked(found.row)) return undefined;
-    checkMovable(found.row, found.page, now);
+    checkMovable(found.row, found.page, now, target.by);
     const team = await roundRobinTeam(tx, found.page);
     checkResizable(team, found.row, input.minutes);
     return { ...found, team, memberIds: team === undefined ? await membersOf(tx, found.page) : [] };
@@ -467,7 +486,7 @@ export async function moveBooking(
     for (const memberId of [...memberIds].sort()) await lockKey(tx, hostLockKey(target.scope.workspaceId, memberId));
     const { row, page } = await readTarget(tx, target, true);
     if (isAsked(row)) return undefined;
-    checkMovable(row, page, now);
+    checkMovable(row, page, now, target.by);
     const offered = await slotsFor(tx, page, row, memberIds, busy, { from: dayFrom, to: dayTo, now }, input.minutes);
     if (!offered.some((slot) => slot.start.getTime() === start.getTime())) {
       throw refuseOn('SLOT_TAKEN', 'That time has just gone. Pick another.', 'start');
@@ -583,7 +602,7 @@ async function moveTeamBooking(
     });
     const { row, page } = await readTarget(tx, target, true);
     if (row.startsAt.getTime() === start.getTime() && row.status === 'confirmed') return undefined;
-    checkMovable(row, page, now);
+    checkMovable(row, page, now, target.by);
     const end = new Date(start.getTime() + minutesOf(row) * 60_000);
     const blockStart = new Date(start.getTime() - page.bufferBefore * 60_000);
     const blockEnd = new Date(end.getTime() + page.bufferAfter * 60_000);
@@ -655,6 +674,7 @@ export async function cancelBooking(
     const { row, page } = await readTarget(tx, target, true);
     if (row.status === 'cancelled') return undefined;
     checkChangeable(row, now, 'cancelled');
+    checkCutoff(target.by, row, page.cancelCutoffMinutes, now);
     const [updated] = await tx
       .update(bookings)
       .set({
@@ -955,4 +975,96 @@ async function checkLinkableRecord(tx: WorkspaceTx, scope: EngineScope, recordId
   if (!isOpen(scope.access) && objectLevel(scope.access, record.object_id) !== 'write') {
     throw refuseOn('FORBIDDEN', 'You can’t link a booking to a record you can’t change.', 'recordId');
   }
+}
+
+/**
+ * Confirms a request (spec 0062, AC-6203): its host, or anyone the booking rule lets change it. The worker then
+ * writes its calendar event and sends the confirmation (`approved`), and its reminders are queued as any booking's.
+ * Answers whether it was confirmed now: a request already answered, or cancelled, changes nothing.
+ */
+export async function confirmBooking(
+  target: ChangeTarget,
+  deps: Pick<ChangeDeps, 'now'>,
+): Promise<{ readonly confirmed: boolean }> {
+  const now = deps.now?.() ?? new Date();
+  return inWorkspace(target.scope, async (tx) => {
+    const { row, page } = await readTarget(tx, target, true);
+    if (row.approval !== 'pending' || row.status !== 'confirmed') return { confirmed: false };
+    checkChangeable(row, now, 'changed');
+    const actor = actorOf(target, page);
+    await tx
+      .update(bookings)
+      .set({ approval: 'approved', decidedAt: now, decidedByMemberId: actor.memberId, ...updatedBy(actor) })
+      .where(eq(bookings.id, row.id));
+    await enqueueBookingMail(tx, row.id, ['approved', 'reminder_24h', 'reminder_1h']);
+    return { confirmed: true };
+  });
+}
+
+/**
+ * Declines a request (spec 0062, AC-6203): the booking is cancelled, which frees its slot, and the visitor is sent
+ * the reason when one is given.
+ */
+export async function declineBooking(
+  target: ChangeTarget,
+  deps: Pick<ChangeDeps, 'now'>,
+  input: { readonly reason?: string | undefined },
+): Promise<{ readonly declined: boolean }> {
+  const now = deps.now?.() ?? new Date();
+  const reason = input.reason?.trim();
+  return inWorkspace(target.scope, async (tx) => {
+    const { row, page } = await readTarget(tx, target, true);
+    if (row.approval !== 'pending' || row.status !== 'confirmed') return { declined: false };
+    const actor = actorOf(target, page);
+    await declineRow(tx, row.id, now, actor.memberId, reason === undefined || reason === '' ? null : reason, actor);
+    return { declined: true };
+  });
+}
+
+/**
+ * The worker's `pending_expire` step (AC-6203): a request nobody answered by the earlier of 24 hours after it was
+ * made and an hour before it starts declines itself, and its visitor is told. `scope` is the system's. A request
+ * answered meanwhile is left alone. Answers whether it declined it now.
+ */
+export async function expireRequest(scope: EngineScope, bookingId: string, now: Date = new Date()): Promise<boolean> {
+  return inWorkspace(scope, async (tx) => {
+    const [row] = await tx.select().from(bookings).where(eq(bookings.id, bookingId)).for('update');
+    if (row?.approval !== 'pending' || row.status !== 'confirmed') return false;
+    await declineRow(tx, row.id, now, null, null, { type: 'booking', id: row.pageId, memberId: null });
+    return true;
+  });
+}
+
+/** A request turned down: cancelled from the host's side, its decision stamped, its visitor told. */
+async function declineRow(
+  tx: WorkspaceTx,
+  bookingId: string,
+  now: Date,
+  memberId: string | null,
+  reason: string | null,
+  actor: ReturnType<typeof actorOf>,
+): Promise<void> {
+  await tx
+    .update(bookings)
+    .set({
+      status: 'cancelled',
+      cancelledAt: now,
+      cancelledBy: 'host',
+      approval: 'declined',
+      decidedAt: now,
+      decidedByMemberId: memberId,
+      declineReason: reason,
+      ...updatedBy(actor),
+    })
+    .where(eq(bookings.id, bookingId));
+  await enqueueBookingMail(tx, bookingId, ['declined']);
+  await queueBookingWebhook(tx, 'booking.cancelled', bookingId);
+}
+
+/**
+ * The worker's `approved` step, once the confirmed request's calendar event is written (`remakeEvent`): its
+ * confirmation goes as any booking's, after the event so it knows whether the calendar already invited them.
+ */
+export async function queueConfirmation(scope: EngineScope, bookingId: string): Promise<void> {
+  await inWorkspace(scope, (tx) => enqueueBookingMail(tx, bookingId, ['confirmed']));
 }

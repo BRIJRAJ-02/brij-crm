@@ -34,6 +34,11 @@ import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
 
 const { bookingHosts, bookings, members, rotationAssignments, workspaces } = schema;
 
+/** How long a request waits for its host: 24 hours, or until an hour before it starts, whichever is first. */
+export const REQUEST_WAIT_MS = 24 * 3_600_000;
+/** How close to its start a request may still wait. */
+export const REQUEST_LEAD_MS = 3_600_000;
+
 /** One label and value row of an email. */
 export interface MailRow {
   readonly label: string;
@@ -87,6 +92,12 @@ export interface PreparedMail {
    * (a second reschedule) follows a write, so it keys differently and goes.
    */
   readonly stamp?: number;
+}
+
+/** "Monday 2 November 2026, 9:00 AM, London time (GMT)", in `zone`: one moment, as a request's deadline. */
+export function atLine(at: Date, zone: string): string {
+  const local = DateTime.fromJSDate(at, { zone });
+  return `${local.setLocale('en-GB').toFormat('cccc d LLLL yyyy')}, ${local.setLocale('en-US').toFormat('h:mm a')}, ${zoneDisplay(zone, at.getTime())}`;
 }
 
 /** "Monday 2 November 2026, 9:00 AM to 9:30 AM, London time (GMT)", in `zone`. */
@@ -195,7 +206,9 @@ export async function prepareBookingMail(
     const cancelled = row.status === 'cancelled';
     const isTeam = page.kind === 'round_robin';
 
-    if (kind !== 'cancelled' && cancelled) return { messages: [], invited: [], skipped: 'cancelled' };
+    if (kind !== 'cancelled' && kind !== 'declined' && cancelled) {
+      return { messages: [], invited: [], skipped: 'cancelled' };
+    }
     if (kind === 'reminder_24h' || kind === 'reminder_1h') {
       const ahead = row.startsAt.getTime() - now.getTime();
       if (ahead <= 0 || ahead > REMINDER_WINDOW_MS[kind]) return { messages: [], invited: [], skipped: 'stale' };
@@ -503,8 +516,71 @@ export async function prepareBookingMail(
         return { messages: [toVisitor, ...toGuests, ...toHost], invited: [], stamp };
       }
       case 'host_changed':
-        // Not an email: the worker writes the new organiser's calendar event (`remakeEvent`).
+      case 'approved':
+      case 'pending_expire':
+        // Not emails: the worker writes the calendar event (`remakeEvent`), or declines a request left unanswered.
         return { messages: [], invited: [], skipped: 'not an email' };
+      case 'requested': {
+        // A request (spec 0062, AC-6203): the visitor hears it was received, each host is asked to answer it.
+        if (row.approval !== 'pending') return { messages: [], invited: [], skipped: 'answered' };
+        const expires = new Date(
+          Math.min(row.createdAt.getTime() + REQUEST_WAIT_MS, row.startsAt.getTime() - REQUEST_LEAD_MS),
+        );
+        const toVisitor: BookingMail = {
+          to: row.visitorEmail,
+          subject: `Request received: ${name}`,
+          preview: preview(row.visitorTimeZone),
+          heading: 'Request received',
+          intro: `${hostName} will confirm or decline it. You’ll get an email either way.`,
+          rows: [
+            { label: 'What', value: page.title },
+            when(row.visitorTimeZone),
+            ...(isTeam ? [] : [{ label: 'With', value: hostName }]),
+          ],
+          button: { label: 'View your request', url: manageUrl },
+          why: visitorWhy,
+        };
+        const requestsUrl = `${deps.appOrigin}/w/${encodeURIComponent(workspace?.slug ?? '')}/captures/links/${row.pageId}`;
+        const toHost: BookingMail[] = hosts.map((each) => ({
+          to: each.email,
+          subject: `Booking request: ${page.title} with ${row.visitorName}`,
+          preview: preview(hostZone),
+          heading: 'A booking request',
+          intro: `${row.visitorName} asked for ${page.title}. The time is held until you answer.`,
+          rows: [
+            when(hostZone),
+            { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
+            ...(note === undefined ? [] : [{ label: 'Note', value: note }]),
+            ...answerRows,
+            { label: 'Answer by', value: atLine(expires, hostZone) },
+          ],
+          button: { label: 'Confirm or decline', url: requestsUrl },
+          footnote: 'Left unanswered, it declines itself and the visitor is told.',
+          why: hostWhy,
+        }));
+        return { messages: [toVisitor, ...toHost], invited: [], stamp };
+      }
+      case 'declined': {
+        if (!cancelled || row.approval !== 'declined') return { messages: [], invited: [], skipped: 'not declined' };
+        const byNobody = row.decidedByMemberId === null;
+        const toVisitor: BookingMail = {
+          to: row.visitorEmail,
+          subject: `Declined: ${name}`,
+          preview: preview(row.visitorTimeZone),
+          heading: byNobody ? 'Your request wasn’t confirmed' : `${hostName} declined your request`,
+          intro: byNobody
+            ? `${hostName} didn’t answer in time, so the time is free again.`
+            : `${hostName} can’t take this time.`,
+          rows: [
+            { label: 'What', value: page.title },
+            when(row.visitorTimeZone),
+            ...(row.declineReason === null ? [] : [{ label: 'Reason', value: row.declineReason }]),
+          ],
+          button: { label: 'Book another time', url: bookAgainUrl },
+          why: visitorWhy,
+        };
+        return { messages: [toVisitor], invited: [], stamp };
+      }
       case 'needs_host': {
         // A booking whose host left with nobody free to take it (spec 0029, AC-749): the admins are told.
         if (row.needsHostAt === null) return { messages: [], invited: [], skipped: 'has a host' };

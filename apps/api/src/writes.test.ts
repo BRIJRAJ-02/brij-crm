@@ -214,6 +214,9 @@ const READS: ReadonlySet<string> = new Set([
   'bookingPages.get',
   // Where a page's answers may be filed (spec 0057): People and its attributes as this reader may write them.
   'bookingPages.attributes',
+  // A page's one off links and requests (spec 0062, L1).
+  'bookingFlow.links',
+  'bookingFlow.requests',
   // Managed booking pages (spec 0037, AC-1333): the templates the reader may change, and one of them.
   'managedPages.list',
   'managedPages.get',
@@ -1997,6 +2000,44 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookingPages.create({ workspace: m.slug, id: newId(), title: 'Intro', timeZone: 'UTC', mutationId });
     return [];
   },
+  // A page's flow rules (spec 0062, L1): settings and a booking's decision, no outbox row; one poke per write.
+  'bookingFlow.createLink': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingFlow.createLink({ workspace: m.slug, pageId: page.id, mutationId });
+    return [];
+  },
+  'bookingFlow.revokeLink': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    const { link } = await m.client.bookingFlow.createLink({ workspace: m.slug, pageId: page.id, mutationId: newId() });
+    await m.client.bookingFlow.revokeLink({ workspace: m.slug, pageId: page.id, linkId: link.id, mutationId });
+    return [];
+  },
+  'bookingFlow.confirm': async (m, mutationId) => {
+    const bookingId = await hostBooking(m);
+    await testQuery(ownerUrl, `update bookings set approval = 'pending' where id = $1`, [bookingId]);
+    await m.client.bookingFlow.confirm({ workspace: m.slug, bookingId, mutationId });
+    // The booking's person, filed before the case's write (as a cancel's).
+    return [{ kind: 'records', object_id: m.people.id }];
+  },
+  'bookingFlow.decline': async (m, mutationId) => {
+    const bookingId = await hostBooking(m);
+    await testQuery(ownerUrl, `update bookings set approval = 'pending' where id = $1`, [bookingId]);
+    await m.client.bookingFlow.decline({ workspace: m.slug, bookingId, reason: 'Away that day', mutationId });
+    // The booking's person, filed before the case's write (as a cancel's).
+    return [{ kind: 'records', object_id: m.people.id }];
+  },
   'bookingPages.update': async (m, mutationId) => {
     const page = await m.client.bookingPages.create({
       workspace: m.slug,
@@ -3144,6 +3185,10 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'calendar.destination.dismissNotice': 2,
   'calendar.pageDestination.set': 3,
   'bookingPages.update': 2,
+  'bookingFlow.createLink': 2,
+  'bookingFlow.revokeLink': 3,
+  'bookingFlow.confirm': 3,
+  'bookingFlow.decline': 3,
   // A template made first, then the case's own write (spec 0037, AC-1333).
   'managedPages.update': 2,
   'managedPages.setMembers': 2,
