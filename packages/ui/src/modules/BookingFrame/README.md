@@ -41,7 +41,7 @@ A personal page's `host.role` (3 November 2026) is the host's job title, a quiet
 
 `isCompact` (27 October 2026) keeps the stacked layout however wide the window is. The page breakpoint is a media query, so it reads the window rather than the room the page is drawn in: inside a 375px phone on a 1440px screen the rail and the card still sat side by side and the weekday headers ran together. The editors don't need it, because `PreviewFrame` is a real frame with a viewport of its own; first run does, since it previews a page that doesn't exist yet and so can't be framed. It only holds the narrow layout, which the page already has below the breakpoint, so nothing is styled twice and the public page is untouched.
 
-`isEmbedded` (3 November 2026) drops the page's `100dvb` floor inside a site's embed. The embed script sizes its frame to the height the page reports, and a page that is never shorter than its frame can only grow: after the calendar, the details step kept the calendar's height with a screen of empty card above Confirm. Off the embed nothing changes.
+`isEmbedded` (3 November 2026) drops the page's `100dvb` floor inside a site's embed. The embed script sizes its frame to the height the page reports, and a page that is never shorter than its frame can only grow: after the calendar, the details step kept the calendar's height with a screen of empty card above Confirm. In an embed the details step also stops holding the month's height: what it covers leaves the layout instead of only going out of sight, so the card is as tall as the step it shows, and Back brings the month at its own height. Off the embed nothing changes.
 
 ### BookingProfile (22 October 2026)
 

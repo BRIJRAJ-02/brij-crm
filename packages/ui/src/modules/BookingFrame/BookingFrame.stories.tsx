@@ -228,6 +228,26 @@ export const StepToDetailsAndBack: Story = {
   },
 };
 
+/**
+ * In a site's embed (3 November 2026) the card follows its step: the details step is as tall as the details, not
+ * the month, since the frame takes the page's height. Back brings the month, at its own height, again.
+ */
+export const EmbeddedStepToDetails: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Interactive {...args} isEmbedded />,
+  play: async ({ canvas, canvasElement }) => {
+    const card = () => canvasElement.querySelector('section')?.getBoundingClientRect().height ?? 0;
+    const atMonth = card();
+    await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' }));
+    await waitFor(() => expect(document.getAnimations().filter((each) => each.playState === 'running')).toEqual([]));
+    await expect(card()).toBeLessThan(atMonth);
+    await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(document.getAnimations().filter((each) => each.playState === 'running')).toEqual([]));
+    await expect(card()).toBe(atMonth);
+  },
+};
+
 /** From the keyboard (25 October 2026): a view or a step chosen by key shows at once, and nothing replays after. */
 export const FromTheKeyboard: Story = {
   render: (args) => <Interactive {...args} />,

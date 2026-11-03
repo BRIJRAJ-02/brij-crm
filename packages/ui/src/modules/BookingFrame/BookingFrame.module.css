@@ -351,6 +351,14 @@
     transition: none;
   }
 
+  /* In a site's embed the card follows the step it shows (3 November 2026): the frame is sized to the page, so a
+     details step kept at the month's height left a screen of empty card above Confirm. What the step covers leaves
+     the layout instead of only going out of sight; the month keeps its state and comes back with Back. */
+  .card[data-embedded] > .head[inert],
+  .card[data-embedded] .under[inert] {
+    display: none;
+  }
+
   .stage[data-moved] .cover {
     animation: cover-in var(--slide-duration) var(--ease-out);
   }

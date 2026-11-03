@@ -295,6 +295,8 @@ export function BookingFrame({
             {...(isCardCovered ? {} : { 'aria-label': heading ?? title ?? strings.loading })}
             data-instant={shown.isInstant || undefined}
             data-place={isCardCovered ? 'card' : undefined}
+            // In a site's embed the card follows its step rather than holding the month's height (`isEmbedded`).
+            data-embedded={(isEmbedded && isCardCovered) || undefined}
             aria-busy={isLoading || undefined}
           >
             {(heading !== undefined || toolbar !== undefined) && (
