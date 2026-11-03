@@ -3063,8 +3063,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'menu.saveGroup': 2,
   'menu.deleteGroup': 3,
   'menu.setSoldOut': 5,
-  'menu.publish': 2,
-  'menu.discard': 3,
+  'menu.publish': 5,
+  'menu.discard': 6,
   // The Hospitality setup (spec 0065): Table seating installed first (and tables added, an area made, or a table
   // archived before the case's own write).
   'hospitality.remove': 2,
@@ -3649,12 +3649,12 @@ Object.assign(WRITES, {
     return [{ kind: 'nav' }];
   },
   'menu.publish': async (m: Member, mutationId: string) => {
-    await menuOf(m);
+    await menuItemOf(m);
     await m.client.menu.publish({ workspace: m.slug, mutationId });
     return [{ kind: 'nav' }];
   },
   'menu.discard': async (m: Member, mutationId: string) => {
-    await menuOf(m);
+    await menuItemOf(m);
     await m.client.menu.publish({ workspace: m.slug, mutationId: newId() });
     await m.client.menu.discard({ workspace: m.slug, mutationId });
     return [{ kind: 'nav' }];

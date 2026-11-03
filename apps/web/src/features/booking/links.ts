@@ -157,3 +157,9 @@ export function publicBookingHost(): string {
 
 /** A person's public profile, `/<handle>`, on the public booking origin. */
 export const publicProfileUrl = (handle: string) => `${publicBookingOrigin()}/${encodeURIComponent(handle)}`;
+
+/**
+ * A place's guest menu, `/m/<menuKey>` (spec 0065, H1), on the public booking origin, never the app's: the link the
+ * Menus screen shows and copies, and (H2) prints in a QR code.
+ */
+export const publicMenuUrl = (menuKey: string) => `${publicBookingOrigin()}/m/${encodeURIComponent(menuKey)}`;

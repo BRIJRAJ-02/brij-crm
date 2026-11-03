@@ -10,11 +10,12 @@
 // The global Origin check refuses a write from anywhere but the app. Nothing here logs a photo or its path.
 import { createHash, randomUUID } from 'node:crypto';
 import { MENU_LIMITS, matchesContent, pictureTypeOf, UPLOAD_WORKSPACE_HEADER } from '@crm/contracts';
-import { attachMenuPhoto, menuPhotoFolder, requireMenuEditor } from '@crm/core';
+import { attachMenuPhoto, menuPhotoFolder, readMenuPhotoFile, requireMenuEditor } from '@crm/core';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import {
   IMAGE_UPLOAD_LIMIT,
+  loadStoredImage,
   memberScopeOf,
   refusalResponse,
   type ImageRouteDeps,
@@ -22,6 +23,7 @@ import {
 } from './brand-logo.ts';
 import { errorFields, log } from './log.ts';
 import { stripPictureMetadata } from './picture-strip.ts';
+import { PRIVATE_PICTURE_CACHE_CONTROL, pictureResponse } from './public/picture.ts';
 
 const NOT_AN_IMAGE = 'That file isn’t a picture we can use. Choose a JPEG, PNG or WebP.';
 const TOO_LARGE = 'Choose a picture smaller than 4 MB.';
@@ -56,6 +58,30 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Mounts the menu photo upload. */
 export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: ImageRouteDeps): void {
   const { files, limiter, errorResponse } = deps;
+
+  // The editor's own copy of a draft photo (`?workspace=&v=`), any member who reads the Menus screen, kept in their
+  // browser alone; guests get photos through the guest menu's route, only as a published snapshot shows them.
+  app.get('/menu/photos/:photoId/:size', async (c) => {
+    const entered = await memberScopeOf(c, deps, c.req.query('workspace'));
+    if (entered instanceof Response) return entered;
+    const size = c.req.param('size');
+    const photoId = c.req.param('photoId');
+    if ((size !== 'large' && size !== 'small') || !UUID.test(photoId))
+      return errorResponse('NOT_FOUND', 'There’s no photo here.');
+    const decision = limiter(`menu-photo-read:${entered.session.user.id}`, { max: 300, windowMs: 60_000 });
+    if (!decision.allowed) return errorResponse('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
+    let photo: Awaited<ReturnType<typeof readMenuPhotoFile>>;
+    try {
+      photo = await readMenuPhotoFile(entered.scope, { photoId, size });
+    } catch (error) {
+      return refusalResponse(error, errorResponse);
+    }
+    if (photo === undefined || photo.version !== c.req.query('v'))
+      return errorResponse('NOT_FOUND', 'There’s no photo here.');
+    const loaded = await loadStoredImage(files, photo.path, photo.type);
+    if (loaded === undefined) return errorResponse('NOT_FOUND', 'There’s no photo here.');
+    return pictureResponse(loaded, PRIVATE_PICTURE_CACHE_CONTROL);
+  });
   app.post(
     '/menu/items/:itemId/photo',
     // Both widths together, as drawn by the browser: well under the 4 MB a photo may come in at.

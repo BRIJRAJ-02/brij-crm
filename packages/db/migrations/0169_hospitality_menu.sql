@@ -6,6 +6,8 @@
 --   their options, photos, the published snapshot per place (`menu_versions`) and the draft's state (`menu_drafts`:
 --   the count of changes waiting for Publish and the rows as published, which Discard puts back). Each has forced row
 --   level security and the plain workspace policy, and every index leads with workspace_id.
+-- * `import_source` on menus, sections, items and option groups: where an imported row came from (H6), unique per
+--   workspace, so importing again is idempotent.
 -- * `crm_menu_lookup`, a new lookup role, and its one definer `crm_menu_by_key(key)`: the workspace and place a guest
 --   menu's key names, only while the workspace is live, has Hospitality early access, and has Menu installed (AC-6504:
 --   a removed app's public page answers nothing). Ids only; the guest page's read then runs inside withWorkspace()
@@ -25,13 +27,18 @@ CREATE TABLE "menus" (
 	"created_by_member_id" uuid,
 	"updated_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"updated_by_member_id" uuid,
+	"import_source" text,
 	CONSTRAINT "menus_pkey" PRIMARY KEY("workspace_id","id"),
+	CONSTRAINT "menus_import_source" CHECK (char_length("menus"."import_source") between 1 and 200),
 	CONSTRAINT "menus_name" CHECK (char_length("menus"."name") between 1 and 60),
 	CONSTRAINT "menus_note" CHECK (char_length("menus"."note") <= 300),
 	CONSTRAINT "menus_serving" CHECK ("menus"."serving" is null or jsonb_typeof("menus"."serving") = 'object')
 );
 --> statement-breakpoint
 ALTER TABLE "menus" ADD CONSTRAINT "menus_workspace" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+-- Where a row came from (spec 0065, H6 import from checklabs), so importing again updates it rather than adding a copy.
+CREATE UNIQUE INDEX "menus_import_source" ON "menus" USING btree ("workspace_id","import_source") WHERE "menus"."import_source" is not null;
 --> statement-breakpoint
 CREATE INDEX "menus_order" ON "menus" USING btree ("workspace_id","position");
 --> statement-breakpoint
@@ -60,7 +67,9 @@ CREATE TABLE "menu_sections" (
 	"position" smallint NOT NULL,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"import_source" text,
 	CONSTRAINT "menu_sections_pkey" PRIMARY KEY("workspace_id","id"),
+	CONSTRAINT "menu_sections_import_source" CHECK (char_length("menu_sections"."import_source") between 1 and 200),
 	CONSTRAINT "menu_sections_name" CHECK (char_length("menu_sections"."name") between 1 and 60),
 	CONSTRAINT "menu_sections_description" CHECK (char_length("menu_sections"."description") <= 140),
 	CONSTRAINT "menu_sections_layout" CHECK ("menu_sections"."layout" in ('list', 'grid')),
@@ -69,6 +78,9 @@ CREATE TABLE "menu_sections" (
 );
 --> statement-breakpoint
 ALTER TABLE "menu_sections" ADD CONSTRAINT "menu_sections_menu" FOREIGN KEY ("workspace_id","menu_id") REFERENCES "public"."menus"("workspace_id","id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+-- Where a row came from (spec 0065, H6 import from checklabs), so importing again updates it rather than adding a copy.
+CREATE UNIQUE INDEX "menu_sections_import_source" ON "menu_sections" USING btree ("workspace_id","import_source") WHERE "menu_sections"."import_source" is not null;
 --> statement-breakpoint
 -- Deleting a section deletes its sub sections; a sub section never has one of its own (the engine refuses it).
 ALTER TABLE "menu_sections" ADD CONSTRAINT "menu_sections_parent" FOREIGN KEY ("workspace_id","parent_id") REFERENCES "public"."menu_sections"("workspace_id","id") ON DELETE cascade ON UPDATE no action;
@@ -112,7 +124,9 @@ CREATE TABLE "menu_items" (
 	"created_by_member_id" uuid,
 	"updated_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"updated_by_member_id" uuid,
+	"import_source" text,
 	CONSTRAINT "menu_items_pkey" PRIMARY KEY("workspace_id","id"),
+	CONSTRAINT "menu_items_import_source" CHECK (char_length("menu_items"."import_source") between 1 and 200),
 	CONSTRAINT "menu_items_name" CHECK (char_length("menu_items"."name") between 1 and 80),
 	CONSTRAINT "menu_items_description" CHECK (char_length("menu_items"."description") <= 400),
 	CONSTRAINT "menu_items_price" CHECK ("menu_items"."price_minor" between 0 and 99999999),
@@ -123,6 +137,9 @@ CREATE TABLE "menu_items" (
 );
 --> statement-breakpoint
 ALTER TABLE "menu_items" ADD CONSTRAINT "menu_items_workspace" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+-- Where a row came from (spec 0065, H6 import from checklabs), so importing again updates it rather than adding a copy.
+CREATE UNIQUE INDEX "menu_items_import_source" ON "menu_items" USING btree ("workspace_id","import_source") WHERE "menu_items"."import_source" is not null;
 --> statement-breakpoint
 -- A deleted photo leaves its items with none (only photo_id is set null, never the workspace).
 ALTER TABLE "menu_items" ADD CONSTRAINT "menu_items_photo" FOREIGN KEY ("workspace_id","photo_id") REFERENCES "public"."menu_photos"("workspace_id","id") ON DELETE set null ("photo_id") ON UPDATE no action;
@@ -169,12 +186,17 @@ CREATE TABLE "menu_option_groups" (
 	"max" smallint,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"import_source" text,
 	CONSTRAINT "menu_option_groups_pkey" PRIMARY KEY("workspace_id","id"),
+	CONSTRAINT "menu_option_groups_import_source" CHECK (char_length("menu_option_groups"."import_source") between 1 and 200),
 	CONSTRAINT "menu_option_groups_name" CHECK (char_length("menu_option_groups"."name") between 1 and 40),
 	CONSTRAINT "menu_option_groups_rule" CHECK (("menu_option_groups"."rule" in ('one', 'any') and "menu_option_groups"."max" is null) or ("menu_option_groups"."rule" = 'up_to' and "menu_option_groups"."max" between 1 and 20))
 );
 --> statement-breakpoint
 ALTER TABLE "menu_option_groups" ADD CONSTRAINT "menu_option_groups_workspace" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+-- Where a row came from (spec 0065, H6 import from checklabs), so importing again updates it rather than adding a copy.
+CREATE UNIQUE INDEX "menu_option_groups_import_source" ON "menu_option_groups" USING btree ("workspace_id","import_source") WHERE "menu_option_groups"."import_source" is not null;
 --> statement-breakpoint
 CREATE TABLE "menu_options" (
 	"workspace_id" uuid NOT NULL,

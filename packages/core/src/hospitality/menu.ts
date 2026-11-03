@@ -20,7 +20,7 @@ import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
-import { refuse } from '../engine/refusals.ts';
+import { refuse, refuseOn } from '../engine/refusals.ts';
 import { auditSetup, hospitalityMember, requireApp } from './gate.ts';
 import {
   draftOf,
@@ -28,6 +28,7 @@ import {
   photoVersions,
   readMenuRows,
   restoreMenuRows,
+  type MenuRows,
   snapshotFor,
   soldOutIds,
 } from './menu-rows.ts';
@@ -676,6 +677,32 @@ export async function setItemSoldOut(
   });
 }
 
+/**
+ * A draft photo's stored file at one width, for the editor and its preview (the guest page serves only what a
+ * snapshot shows). Manage hospitality or Run service, while Menu is installed; anything else is absent.
+ */
+export async function readMenuPhotoFile(
+  scope: EngineScope,
+  input: { readonly photoId: string; readonly size: 'large' | 'small' },
+): Promise<{ readonly path: string; readonly type: string; readonly version: string } | undefined> {
+  requireMenuReader(scope);
+  const photoId = checkId(input.photoId, 'That photo doesn’t exist.');
+  return inWorkspace(scope, async (tx) => {
+    await requireApp(tx, scope.workspaceId, 'menu');
+    const [row] = await tx
+      .select({
+        largePath: menuPhotos.largePath,
+        smallPath: menuPhotos.smallPath,
+        type: menuPhotos.type,
+        version: menuPhotos.version,
+      })
+      .from(menuPhotos)
+      .where(and(eq(menuPhotos.workspaceId, scope.workspaceId), eq(menuPhotos.id, photoId)));
+    if (row === undefined) return undefined;
+    return { path: input.size === 'large' ? row.largePath : row.smallPath, type: row.type, version: row.version };
+  });
+}
+
 /** Refuses anyone without Manage hospitality before a photo's bytes are read (the upload route asks it first). */
 export function requireMenuEditor(scope: EngineScope): void {
   requirePermission(scope, 'hospitality.manage');
@@ -753,6 +780,26 @@ async function dropUnusedPhotos(tx: WorkspaceTx, workspaceId: string): Promise<r
   return gone.flatMap((row) => [row.largePath, row.smallPath]);
 }
 
+/**
+ * Refuses a menu Publish would show broken (owner rule, 4 Nov 2026): nothing placed in any menu at all, or a placed
+ * dish with no price, no sizes and no price note. The refusal names the dish on `items.<id>`, so the editor links it.
+ */
+export function publishProblem(rows: MenuRows): void {
+  const placed = new Set(rows.placements.map((row) => row.itemId));
+  if (placed.size === 0) throw refuse('CONFIG_INVALID', 'Add a dish to a menu before publishing.');
+  const sized = new Set(rows.sizes.map((row) => row.itemId));
+  const unpriced = rows.items.find(
+    (item) => placed.has(item.id) && item.priceMinor === null && item.priceNote === null && !sized.has(item.id),
+  );
+  if (unpriced !== undefined) {
+    throw refuseOn(
+      'CONFIG_INVALID',
+      `Give ${unpriced.name} a price or a price note, then publish.`,
+      `items.${unpriced.id}`,
+    );
+  }
+}
+
 /** What Publish and Discard answer: the draft, the places whose guest menus changed, and photo files to remove. */
 export interface MenuPublishResult {
   readonly draft: MenuDraft;
@@ -772,6 +819,7 @@ export async function publishMenus(scope: EngineScope): Promise<MenuPublishResul
     await requireApp(tx, ws, 'menu');
     await lockKey(tx, `menu:${ws}`);
     const rows = await readMenuRows(tx, ws);
+    publishProblem(rows);
     const currency = await currencyOf(tx, ws);
     const photos = await photoVersions(tx, ws);
     const placeList = await placesOf(tx, ws);

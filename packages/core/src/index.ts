@@ -929,6 +929,8 @@ export {
   menuPlaceIds,
   requireMenuEditor,
   menuPhotoFolder,
+  publishProblem,
+  readMenuPhotoFile,
   type MenuPhotoFile,
   type MenuPublishResult,
 } from './hospitality/menu.ts';

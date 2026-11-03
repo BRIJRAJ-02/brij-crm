@@ -2,8 +2,8 @@
 // never its /b/ key, and the editor takes a newer read of the page (the handle just claimed in Profile) over the
 // cached one the route shows first.
 import type { BookingPageView } from '@crm/data';
-import { describe, expect, it } from 'vitest';
-import { isNotOlder, publicBookingPath } from './links.ts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { isNotOlder, publicBookingPath, publicMenuUrl } from './links.ts';
 
 /** The fields the address and the read order use; the rest of a page doesn't matter here. */
 const page = (changes: Partial<BookingPageView> = {}): BookingPageView =>
@@ -41,5 +41,16 @@ describe('isNotOlder', () => {
     expect(
       isNotOlder(page({ updatedAt: '2026-10-22T18:45:00.5Z' }), page({ updatedAt: '2026-10-22T18:45:00.400Z' })),
     ).toBe(true);
+  });
+});
+
+describe('the guest menu address (spec 0065, H1)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('is on the public origin, never the app’s, with the key as it is', () => {
+    vi.stubEnv('VITE_BOOKING_PUBLIC_ORIGIN', 'https://timefix.com');
+    expect(publicMenuUrl('AbCdEfGhIjKlMn_-')).toBe('https://timefix.com/m/AbCdEfGhIjKlMn_-');
   });
 });

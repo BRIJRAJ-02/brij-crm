@@ -250,6 +250,7 @@ describe('sections one level deep (AC-6521)', () => {
     const red = newId();
     await saveSection(w.owner, { id: wines, menuId, name: 'Wines', layout: 'list' });
     await saveSection(w.owner, { id: red, menuId, parentId: wines, name: 'Red', layout: 'list' });
+    await saveItem(w.owner, { id: newId(), sectionId: red, item: dish('Rioja', 900) });
     expect(
       await refusalOf(saveSection(w.owner, { id: newId(), menuId, parentId: red, name: 'Rioja', layout: 'list' })),
     ).toBe('CONFIG_INVALID');
@@ -272,7 +273,15 @@ describe('limits and the gate', () => {
 
   it('refuses a plain member, and everything once Menu is removed; the guest page goes too (AC-6504)', async () => {
     const w = await menuWorkspace();
-    await dinner(w);
+    const { sectionId } = await dinner(w);
+    // Publish refuses a menu it would show broken: nothing placed, or a dish with no price or price note.
+    expect(await refusalOf(publishMenus(w.owner))).toBe('CONFIG_INVALID');
+    await saveItem(w.owner, { id: newId(), sectionId, item: dish('Oysters', null) });
+    expect(await refusalOf(publishMenus(w.owner))).toBe('CONFIG_INVALID');
+    const draft = await readMenuDraft(w.owner);
+    const oysters = draft.items.find((item) => item.name === 'Oysters');
+    if (oysters === undefined) throw new Error('No oysters.');
+    await saveItem(w.owner, { id: oysters.id, item: dish('Oysters', null, { priceNote: 'Market price' }) });
     await publishMenus(w.owner);
     expect(await refusalOf(readMenuDraft(w.member))).toBe('FORBIDDEN');
     expect(await refusalOf(saveMenu(w.member, { id: newId(), name: 'X', placeIds: [] }))).toBe('FORBIDDEN');

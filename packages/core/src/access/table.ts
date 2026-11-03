@@ -292,6 +292,7 @@ export const ACCESS_TABLE = {
   publishMenus: { permission: 'hospitality.manage' },
   discardMenuDraft: { permission: 'hospitality.manage' },
   menuPlaceIds: { anyMember: true },
+  readMenuPhotoFile: { permission: 'hospitality.service' },
   requireMenuEditor: { permission: 'hospitality.manage' },
   readBrandLogo: { anyMember: true },
   saveWorkspaceBrand: { permission: 'workspace.manage' },

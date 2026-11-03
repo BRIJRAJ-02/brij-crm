@@ -14,6 +14,7 @@ import {
   primaryKey,
   smallint,
   text,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { id, timestamptz, workspaceId } from './common.ts';
@@ -26,6 +27,8 @@ export const menus = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
+    /** Where an imported row came from (H6), unique per workspace, so a re-import updates it. */
+    importSource: text('import_source'),
     name: text('name').notNull(),
     note: text('note'),
     /** `{ days, from, to }`, checked by `MenuServing` in contracts; null serves whenever the place shows it. */
@@ -38,6 +41,10 @@ export const menus = pgTable(
   },
   (t) => [
     primaryKey({ name: 'menus_pkey', columns: [t.workspaceId, t.id] }),
+    uniqueIndex('menus_import_source')
+      .on(t.workspaceId, t.importSource)
+      .where(sql`${t.importSource} is not null`),
+    check('menus_import_source', sql`char_length(${t.importSource}) between 1 and 200`),
     foreignKey({ name: 'menus_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
@@ -78,6 +85,8 @@ export const menuSections = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
+    /** Where an imported row came from (H6), unique per workspace, so a re-import updates it. */
+    importSource: text('import_source'),
     menuId: uuid('menu_id').notNull(),
     parentId: uuid('parent_id'),
     name: text('name').notNull(),
@@ -90,6 +99,10 @@ export const menuSections = pgTable(
   },
   (t) => [
     primaryKey({ name: 'menu_sections_pkey', columns: [t.workspaceId, t.id] }),
+    uniqueIndex('menu_sections_import_source')
+      .on(t.workspaceId, t.importSource)
+      .where(sql`${t.importSource} is not null`),
+    check('menu_sections_import_source', sql`char_length(${t.importSource}) between 1 and 200`),
     foreignKey({
       name: 'menu_sections_menu',
       columns: [t.workspaceId, t.menuId],
@@ -140,6 +153,8 @@ export const menuItems = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
+    /** Where an imported row came from (H6), unique per workspace, so a re-import updates it. */
+    importSource: text('import_source'),
     name: text('name').notNull(),
     description: text('description'),
     /** Minor units of the workspace currency; null with sizes, or with a price note ("Market price"). */
@@ -166,6 +181,10 @@ export const menuItems = pgTable(
   },
   (t) => [
     primaryKey({ name: 'menu_items_pkey', columns: [t.workspaceId, t.id] }),
+    uniqueIndex('menu_items_import_source')
+      .on(t.workspaceId, t.importSource)
+      .where(sql`${t.importSource} is not null`),
+    check('menu_items_import_source', sql`char_length(${t.importSource}) between 1 and 200`),
     foreignKey({ name: 'menu_items_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
@@ -249,6 +268,8 @@ export const menuOptionGroups = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
+    /** Where an imported row came from (H6), unique per workspace, so a re-import updates it. */
+    importSource: text('import_source'),
     name: text('name').notNull(),
     rule: text('rule').notNull(),
     max: smallint('max'),
@@ -257,6 +278,10 @@ export const menuOptionGroups = pgTable(
   },
   (t) => [
     primaryKey({ name: 'menu_option_groups_pkey', columns: [t.workspaceId, t.id] }),
+    uniqueIndex('menu_option_groups_import_source')
+      .on(t.workspaceId, t.importSource)
+      .where(sql`${t.importSource} is not null`),
+    check('menu_option_groups_import_source', sql`char_length(${t.importSource}) between 1 and 200`),
     foreignKey({
       name: 'menu_option_groups_workspace',
       columns: [t.workspaceId],
