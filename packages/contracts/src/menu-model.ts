@@ -228,3 +228,65 @@ export const menuPhotoPath = (key: string, photoId: string, size: MenuPhotoSize,
 export function pickPrice(base: number, deltas: readonly number[], quantity = 1): number {
   return (base + deltas.reduce((sum, delta) => sum + delta, 0)) * quantity;
 }
+
+/**
+ * The Warm preset (spec 0065, AC-6570; H1 builds it alone, H5 adds Clean and Night): after the checklabs guest look,
+ * a warm off white ground, near black text, soft chips and a glass bar, light and dark. Every pair passes AA (text on
+ * ground and chip at 4.5:1 or more). The look stylesheet writes these as `--menu-*` custom properties; the brand's
+ * accent, when it has one, takes `accent` and `onAccent`.
+ */
+export const WARM_PRESET = {
+  light: {
+    ground: '#f6f1ea',
+    card: '#fffdf9',
+    chip: '#ece4d9',
+    line: '#e2d8cb',
+    glass: '#f6f1eae0',
+    text: '#1c1915',
+    quiet: '#655b50',
+    ink: '#1c1915',
+    onInk: '#fffdf9',
+    accent: '#a8492a',
+    onAccent: '#ffffff',
+    bar: '#1c1915',
+    onBar: '#f6f1ea',
+    onBarQuiet: '#cbbfb1',
+    barAccent: '#f0a37c',
+  },
+  dark: {
+    ground: '#171411',
+    card: '#221e1a',
+    chip: '#2e2823',
+    line: '#3a332c',
+    glass: '#171411e0',
+    text: '#f4eee6',
+    quiet: '#b9ad9f',
+    ink: '#f4eee6',
+    onInk: '#171411',
+    accent: '#e3946b',
+    onAccent: '#171411',
+    bar: '#0e0c0a',
+    onBar: '#f4eee6',
+    onBarQuiet: '#b9ad9f',
+    barAccent: '#f0a37c',
+  },
+} as const;
+
+/** The custom property each preset colour sets. */
+export const MENU_LOOK_PROPERTIES = {
+  ground: '--menu-ground',
+  card: '--menu-card',
+  chip: '--menu-chip',
+  line: '--menu-line',
+  glass: '--menu-glass',
+  text: '--menu-text',
+  quiet: '--menu-quiet',
+  ink: '--menu-ink',
+  onInk: '--menu-on-ink',
+  accent: '--menu-accent',
+  onAccent: '--menu-on-accent',
+  bar: '--menu-bar',
+  onBar: '--menu-on-bar',
+  onBarQuiet: '--menu-on-bar-quiet',
+  barAccent: '--menu-bar-accent',
+} as const;

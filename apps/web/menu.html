@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- The guest menu, /m/<key> (spec 0065, H1). The shell function (api/menu.mjs) writes the menu into #root, its look
+     into the head and the read as a boot block, so it reads before the script runs. -->
+<html lang="en" data-public-page="menu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1c1915" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0c0a" media="(prefers-color-scheme: dark)" />
+    <script src="/theme-boot.js"></script>
+    <title>Menu · Timefix</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/brand/timefix-mark.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div id="root" data-app-root></div>
+    <script type="module" src="/src/public/menu/main.tsx"></script>
+  </body>
+</html>

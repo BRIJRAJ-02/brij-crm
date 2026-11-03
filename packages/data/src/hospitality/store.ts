@@ -132,8 +132,11 @@ const FRESH_MS = 1_000;
 const valueOf = <Value>(state: HospitalityHeldState<Value>, fallback: Value): Value =>
   state.status === 'ready' ? state.value : fallback;
 
-/** One held copy of `Value`, read with `load`, with a change laid over it while it is on its way. */
-function holder<Value>(load: () => Promise<Value>, now: () => number) {
+/**
+ * One held copy of `Value`, read with `load`, with a change laid over it while it is on its way. The Menu app's draft
+ * (spec 0065, H1) is held the same way.
+ */
+export function holder<Value>(load: () => Promise<Value>, now: () => number) {
   let state: HospitalityHeldState<Value> = { status: 'loading' };
   let reading: Promise<Value> | undefined;
   let readAt: number | undefined;

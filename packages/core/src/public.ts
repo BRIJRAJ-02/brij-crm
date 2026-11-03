@@ -129,6 +129,7 @@ export { isShownAt } from './profile/schedule.ts';
 // snapshot with Sold out over it, and its photos, only those the snapshot shows.
 export {
   enterMenuPage,
+  menuLookStylesheet,
   readMenuPhoto,
   readPublicMenu,
   type MenuEntry,

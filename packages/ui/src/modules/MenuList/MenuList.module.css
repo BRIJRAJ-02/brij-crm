@@ -1,0 +1,467 @@
+/* The guest menu (spec 0065, H1), after the owner's references: a dark bar stuck to the top with the venue and the
+   section tabs (the active one in the accent, a short line under it), then the venue's facts, search and dietary
+   chips, then each section under a large title, its dishes as rows with a square photo tile on the left and no
+   dividers. Every colour reads a `--menu-*` property the menu's look stylesheet sets (the Warm preset and the brand),
+   each falling back to a token, so it reads well before that stylesheet lands and in the editor's preview. */
+@layer components {
+  .root {
+    --menu-ground-fallback: var(--surface-subtle);
+    min-block-size: 100%;
+    background: var(--menu-ground, var(--menu-ground-fallback));
+    color: var(--menu-text, var(--text));
+    font-family: var(--menu-face, var(--font-sans));
+    padding-block-end: calc(var(--size-bar) * 2);
+  }
+
+  .barTop,
+  .tabs,
+  .head,
+  .body,
+  .foot {
+    inline-size: 100%;
+    max-inline-size: var(--size-dialog);
+    margin-inline: auto;
+    padding-inline: var(--space-16);
+  }
+
+  /* The dark bar. */
+  .bar {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--z-sticky);
+    background: var(--menu-bar, var(--surface-inverse));
+    color: var(--menu-on-bar, var(--on-inverse));
+  }
+
+  .barTop {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-bar);
+  }
+
+  .logo {
+    flex: none;
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
+    border-radius: var(--radius-full);
+    object-fit: cover;
+  }
+
+  .barName {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    font: var(--text-body-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .table {
+    flex: none;
+    padding: var(--space-2) var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--menu-bar-chip, var(--inverse-hover));
+    font: var(--text-label-strong);
+  }
+
+  .tabs {
+    display: flex;
+    gap: var(--space-20);
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .tab {
+    position: relative;
+    flex: none;
+    padding-block: var(--space-8) var(--space-12);
+    color: var(--menu-on-bar-quiet, var(--on-inverse));
+    font: var(--text-label-strong);
+    text-decoration: none;
+    scroll-snap-align: center;
+    transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  .tab::after {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    block-size: var(--border-width-thick);
+    border-radius: var(--radius-full);
+    background: var(--menu-bar-accent, var(--accent));
+    content: '';
+    transform: scaleX(0);
+    transition: transform var(--duration-move) var(--ease-out);
+  }
+
+  .tab[aria-current='true'] {
+    color: var(--menu-bar-accent, var(--accent));
+  }
+
+  .tab[aria-current='true']::after {
+    transform: scaleX(1);
+  }
+
+  .tab:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* The venue's facts, the menus, search and the dietary chips. */
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding-block: var(--space-24) var(--space-8);
+  }
+
+  .name {
+    margin: 0;
+    font: var(--text-title);
+    font-family: var(--menu-display-face, var(--menu-face, var(--font-sans)));
+    letter-spacing: var(--tracking-title);
+  }
+
+  .about {
+    margin: 0;
+    color: var(--menu-quiet, var(--text-secondary));
+    font: var(--text-body);
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6) var(--space-16);
+    margin: 0;
+    color: var(--menu-quiet, var(--text-secondary));
+    font: var(--text-label);
+  }
+
+  .open {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    color: var(--menu-text, var(--text));
+    font: var(--text-label-strong);
+  }
+
+  .dot {
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--success);
+  }
+
+  .open[data-open='no'] .dot {
+    background: var(--menu-quiet, var(--text-tertiary));
+  }
+
+  .line {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-input);
+    padding-inline: var(--space-12);
+    border: var(--border-width-hairline) solid var(--menu-line, var(--border));
+    border-radius: var(--radius-full);
+    background: var(--menu-card, var(--surface-raised));
+    color: var(--menu-quiet, var(--text-secondary));
+  }
+
+  .search:focus-within {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .searchInput {
+    flex: 1;
+    min-inline-size: 0;
+    border: 0;
+    background: transparent;
+    color: var(--menu-text, var(--text));
+    font: var(--text-body);
+    outline: none;
+  }
+
+  .searchInput::placeholder {
+    color: var(--menu-quiet, var(--text-secondary));
+  }
+
+  .searchInput::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  .clear {
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--menu-quiet, var(--text-secondary));
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-32);
+    padding-block: var(--space-16) var(--space-32);
+  }
+
+  .notice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin: 0;
+    padding: var(--space-12) var(--space-16);
+    border-radius: var(--radius-lg);
+    background: var(--menu-chip, var(--surface-sunken));
+    font: var(--text-body-strong);
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    scroll-margin-block-start: calc(var(--size-bar) * 2);
+  }
+
+  .sub {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding-block-start: var(--space-8);
+  }
+
+  .heading {
+    margin: 0;
+    font: var(--text-title);
+    font-family: var(--menu-display-face, var(--menu-face, var(--font-sans)));
+    letter-spacing: var(--tracking-title);
+  }
+
+  .heading[data-level='3'] {
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .sectionAbout,
+  .sectionNote,
+  .note {
+    margin: 0;
+    color: var(--menu-quiet, var(--text-secondary));
+    font: var(--text-body);
+  }
+
+  .sectionNote {
+    font: var(--text-label-strong);
+  }
+
+  .note {
+    font: var(--text-label);
+  }
+
+  .items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .items[data-layout='grid'] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-16) var(--space-12);
+  }
+
+  /* A dish: no card, no divider; a square tile, then its words. The whole row opens its sheet. */
+  .item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-16);
+    inline-size: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-lg);
+    background: transparent;
+    color: inherit;
+    text-align: start;
+    transition: transform var(--duration-press) var(--ease-out);
+  }
+
+  .item[data-layout='grid'] {
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .item:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  .thumb {
+    flex: none;
+    inline-size: calc(var(--size-tile) * 1.5);
+    block-size: calc(var(--size-tile) * 1.5);
+    border-radius: var(--radius-xl);
+    object-fit: cover;
+    background: var(--menu-chip, var(--surface-sunken));
+  }
+
+  .itemText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .item[data-layout='grid'] .thumb {
+    inline-size: 100%;
+    block-size: auto;
+    aspect-ratio: 1;
+  }
+
+  .item[data-sold-out] .thumb {
+    opacity: var(--opacity-disabled);
+  }
+
+  .itemName {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+    font: var(--text-body-strong);
+  }
+
+  .itemAbout {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    color: var(--menu-quiet, var(--text-secondary));
+    font: var(--text-label);
+  }
+
+  .itemMeta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  .price {
+    font: var(--text-body-strong);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .marks,
+  .quiet {
+    color: var(--menu-quiet, var(--text-secondary));
+    font: var(--text-label);
+  }
+
+  .badge,
+  .soldOut {
+    padding: 0 var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--menu-chip, var(--surface-sunken));
+    color: var(--menu-text, var(--text));
+    font: var(--text-label-strong);
+  }
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-12);
+    padding-block: var(--space-32);
+    color: var(--menu-quiet, var(--text-secondary));
+    text-align: center;
+  }
+
+  .foot {
+    padding-block: var(--space-16);
+  }
+
+  /* Your picks: an accent pill floating above the foot of the screen, rising when the first pick lands. */
+  .picksBar {
+    position: fixed;
+    inset-inline: var(--space-16);
+    inset-block-end: var(--space-16);
+    z-index: var(--z-raised);
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    max-inline-size: calc(var(--size-dialog) - var(--space-32));
+    min-block-size: var(--size-bar);
+    margin-inline: auto;
+    padding-inline: var(--space-8) var(--space-16);
+    border: 0;
+    border-radius: var(--radius-full);
+    background: var(--menu-accent, var(--accent));
+    color: var(--menu-on-accent, var(--on-accent));
+    box-shadow: var(--shadow-lg);
+    font: var(--text-body-strong);
+    transition: transform var(--duration-press) var(--ease-out);
+
+    @starting-style {
+      transform: translateY(calc(var(--size-bar) * 2));
+    }
+  }
+
+  .picksCount {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: var(--size-control);
+    block-size: var(--size-control);
+    border-radius: var(--radius-full);
+    background: var(--menu-on-accent, var(--on-accent));
+    color: var(--menu-accent, var(--accent));
+    font-variant-numeric: tabular-nums;
+  }
+
+  .picksLabel {
+    flex: 1;
+    text-align: start;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .item:active,
+  .picksBar:active {
+    transform: scale(var(--scale-press));
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tab:hover {
+      color: var(--menu-on-bar, var(--on-inverse));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .item,
+    .picksBar,
+    .tab::after {
+      transition: none;
+    }
+
+    .item:active,
+    .picksBar:active {
+      transform: none;
+    }
+  }
+}

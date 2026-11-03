@@ -11,7 +11,7 @@
 // Routes); the browser always asks again (max-age 0), so a guest on the page sees Sold out on the next read. 60 reads a
 // minute per address, as the booking pages' reads.
 import { brandCacheTags, menuCacheTags, MENU_KEY_PATTERN, type MenuPhotoSize } from '@crm/contracts';
-import { brandStylesheet, enterMenuPage, readMenuPhoto, readPublicMenu, type MenuEntry } from '@crm/core/public';
+import { enterMenuPage, menuLookStylesheet, readMenuPhoto, readPublicMenu, type MenuEntry } from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { loadStoredImage } from '../brand-logo.ts';
@@ -96,7 +96,7 @@ export function mountPublicMenu(app: Hono<{ Variables: Variables }>, deps: Publi
     const read = await readPublicMenu({ db: deps.db }, entry);
     if (read === undefined || !asksFor(c, read.menu.look)) return nothingHere();
     tag(entry);
-    return stylesheetResponse(brandStylesheet(read.brand));
+    return stylesheetResponse(menuLookStylesheet(read.brand));
   });
 
   app.get('/public/menu/:key/logo', async (c) => {

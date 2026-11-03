@@ -50,6 +50,8 @@ export const POWERED_BY_PAGES = [
   'booking_confirmation',
   'booking_manage',
   'form',
+  // The guest menu (spec 0065, H1).
+  'menu',
 ] as const;
 /** A public page a Timefix link sits on (`utm_medium`). */
 export type PoweredByPage = (typeof POWERED_BY_PAGES)[number];

@@ -3,10 +3,15 @@
 // one transaction on that workspace, under its row level security, reads the place's latest published snapshot (never
 // the draft), the items sold out now, the header and the brand. Nothing of a member, a guest, a draft or another
 // place is read.
+import { createHash } from 'node:crypto';
 import {
+  BRAND_HEX_PATTERN,
+  brandVariables,
   isMenuKey,
+  MENU_LOOK_PROPERTIES,
   MENU_PHOTO_WIDTHS,
   MenuSnapshot,
+  WARM_PRESET,
   type MenuPhotoSize,
   type PlaceHours,
   type PublicMenu,
@@ -111,7 +116,7 @@ export async function readPublicMenu(
         locale: place.locale,
         hours: place.hours as PlaceHours,
       },
-      ...(brand.answer?.version === undefined ? {} : { look: brand.answer.version }),
+      look: menuLookVersion(brand),
       ...(brand.logo === undefined ? {} : { logo: brand.logo.version }),
       menu: snapshot,
       soldOut: [...soldOut].filter((id) => Object.hasOwn(snapshot.items, id)).sort(),
@@ -154,4 +159,52 @@ export async function readMenuPhoto(
     if (photo === undefined) return undefined;
     return { path: size === 'large' ? photo.largePath : photo.smallPath, type: photo.type };
   });
+}
+
+/** Which look the Warm preset's stylesheet is at: a new preset table or accent is a new path. */
+const WARM_LOOK = 'warm-1';
+
+/** The version the menu's look stylesheet is served at: the preset and the brand's accent pair. */
+export function menuLookVersion(brand: PageBrand): string {
+  return createHash('sha256')
+    .update([WARM_LOOK, brand.accents.accent ?? '', brand.accents.accentDark ?? ''].join('|'))
+    .digest('hex')
+    .slice(0, 12);
+}
+
+/** A colour the stylesheet may write: six or eight hex digits, nothing else. */
+const isHex = (value: string) => /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value);
+
+/**
+ * The guest menu's look (spec 0065, AC-6570, Warm only in H1): the preset's colours as `--menu-*` custom properties,
+ * light by default and dark under the visitor's dark scheme, with the brand's accent pair (contrast adjusted by
+ * `brandVariables`) taking the accent when the workspace has one. Every value is a checked hex.
+ */
+export function menuLookStylesheet(brand: PageBrand): string {
+  const accent = brand.accents.accent;
+  const colours =
+    accent === undefined || !BRAND_HEX_PATTERN.test(accent)
+      ? undefined
+      : brandVariables({
+          accent,
+          ...(brand.accents.accentDark === undefined ? {} : { accentDark: brand.accents.accentDark }),
+        });
+  const block = (mode: 'light' | 'dark') => {
+    const preset = WARM_PRESET[mode];
+    const own = colours === undefined ? undefined : mode === 'light' ? colours.light : colours.dark;
+    const values: Record<keyof typeof MENU_LOOK_PROPERTIES, string> = {
+      ...preset,
+      ...(own === undefined ? {} : { accent: own.accent, onAccent: own.onAccent }),
+    };
+    return (Object.keys(MENU_LOOK_PROPERTIES) as (keyof typeof MENU_LOOK_PROPERTIES)[])
+      .filter((name) => isHex(values[name]))
+      .map((name) => `${MENU_LOOK_PROPERTIES[name]}:${values[name]}`)
+      .join(';');
+  };
+  return [
+    `:root{${block('light')}}`,
+    `@media (prefers-color-scheme: dark){:root:not([data-theme='light']){${block('dark')}}}`,
+    `:root[data-theme='dark']{${block('dark')}}`,
+    '',
+  ].join('\n');
 }

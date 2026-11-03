@@ -18,7 +18,8 @@
     "./public-booking": "./src/public-booking/booking.ts",
     "./public-booking/visitor": "./src/public-booking/visitor.ts",
     "./public-booking/details": "./src/public-booking/details.ts",
-    "./public-booking/chat": "./src/public-booking/chat.ts"
+    "./public-booking/chat": "./src/public-booking/chat.ts",
+    "./public-menu": "./src/public-menu/menu.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

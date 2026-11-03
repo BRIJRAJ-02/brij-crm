@@ -1,0 +1,266 @@
+/* A dish's sheet and Your picks (spec 0065, H1), inside a Modal sheet: the photo first, a big title, the price, its
+   words and allergens, then each size or option as a stacked card with its control at the end behind a dashed line,
+   and the action at the foot. Your picks: one card per pick with a stepper, then the total. */
+@layer components {
+  .price {
+    font: var(--text-body-strong);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .quiet {
+    color: var(--text-secondary);
+    font: var(--text-label);
+  }
+
+  .soldOut {
+    padding: 0 var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--surface-sunken);
+    font: var(--text-label-strong);
+  }
+
+  .itemText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .itemName {
+    font: var(--text-body-strong);
+  }
+
+  .itemAbout {
+    color: var(--text-secondary);
+    font: var(--text-label);
+  }
+
+  /* An item's sheet: the photo first, a big title, the price, its words, then each choice as a stacked card. */
+  .sheet {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    color: var(--text);
+  }
+
+  .sheetPhoto {
+    inline-size: 100%;
+    block-size: auto;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-xl);
+    object-fit: cover;
+    background: var(--surface-sunken);
+  }
+
+  .sheetName {
+    margin: 0;
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .sheetMeta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-8);
+    margin: 0;
+  }
+
+  .sheetAbout {
+    margin: 0;
+    font: var(--text-body);
+  }
+
+  .allergens {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+  }
+
+  .dietList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dietMark {
+    padding: var(--space-2) var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
+    font: var(--text-label-strong);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .groupName {
+    display: flex;
+    justify-content: space-between;
+    inline-size: 100%;
+    margin: 0;
+    padding-block: var(--space-8) var(--space-4);
+    font: var(--text-body-strong);
+  }
+
+  /* One choice: a card with its words, and the control at the end behind a dotted line. */
+  .option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-block-size: var(--size-bar);
+    padding: var(--space-8) var(--space-12);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    transition: border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .option:has(:checked) {
+    border-color: var(--accent);
+  }
+
+  .option:has(:focus-visible) {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .optionText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .optionName {
+    font: var(--text-body-strong);
+  }
+
+  .optionPrice {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .input {
+    order: 2;
+    inline-size: var(--size-check);
+    block-size: var(--size-check);
+    margin: 0;
+    padding-inline-start: var(--space-12);
+    border-inline-start: var(--border-width-hairline) dashed var(--border);
+    box-sizing: content-box;
+    accent-color: var(--accent);
+  }
+
+  .sheetActions {
+    position: sticky;
+    inset-block-end: 0;
+    display: flex;
+    gap: var(--space-8);
+    padding-block: var(--space-12) 0;
+    background: var(--surface-raised);
+  }
+
+  .stepper {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    border-radius: var(--radius-full);
+    background: var(--surface-sunken);
+  }
+
+  .step {
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size-input);
+    block-size: var(--size-input);
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--text);
+    transition: transform var(--duration-press) var(--ease-out);
+  }
+
+  .step:disabled {
+    opacity: var(--opacity-disabled);
+  }
+
+  .stepValue {
+    min-inline-size: var(--space-16);
+    font: var(--text-body-strong);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .add {
+    flex: 1;
+    min-block-size: var(--size-input);
+    border: 0;
+    border-radius: var(--radius-full);
+    background: var(--menu-accent, var(--accent));
+    color: var(--menu-on-accent, var(--on-accent));
+    font: var(--text-body-strong);
+    transition: transform var(--duration-press) var(--ease-out);
+  }
+
+  .picks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pick {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-12);
+    border-radius: var(--radius-lg);
+    background: var(--surface-sunken);
+  }
+
+  .pickEnd {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-6);
+  }
+
+  .total {
+    display: flex;
+    justify-content: space-between;
+    margin: 0;
+    padding-block-start: var(--space-8);
+    font: var(--text-heading);
+  }
+
+  .add:active,
+  .step:active {
+    transform: scale(var(--scale-press));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .add,
+    .step {
+      transition: none;
+    }
+
+    .add:active,
+    .step:active {
+      transform: none;
+    }
+  }
+}

@@ -1,0 +1,31 @@
+// `@crm/data/menu` (spec 0065, H1): the Menu app's closed lists, limits and pure rules for screens (prices in minor
+// units, serving times), kept apart from the layer's entry so they never join the first load. Its types come through
+// `@crm/data`.
+export {
+  ALLERGEN_LEVELS,
+  currencyDigits,
+  DIET_FILTERS,
+  DIET_MARKS,
+  EU_ALLERGENS,
+  formatPrice,
+  formatPriceDelta,
+  isMenuKey,
+  MENU_LIMITS,
+  MENU_PHOTO_WIDTHS,
+  menuLogoPath,
+  menuLookPath,
+  menuPagePath,
+  menuPhotoPath,
+  menuReadPath,
+  minorToDecimal,
+  nextOpening,
+  OPTION_RULES,
+  openAt,
+  parsePrice,
+  pickPrice,
+  SECTION_LAYOUTS,
+  servingAt,
+  WEEK_DAYS,
+  type MenuPhotoSize,
+  type ServingNow,
+} from '@crm/contracts/menu';

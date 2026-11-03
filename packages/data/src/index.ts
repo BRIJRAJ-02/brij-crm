@@ -319,7 +319,10 @@ import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/pict
 import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 import type { HospitalityStore } from './hospitality/store.ts';
+import type { MenuStore } from './menu/store.ts';
+import type { MenuDraft as MenuDraftAnswer } from '@crm/contracts';
 export type { HospitalityHeld, HospitalityHeldState, HospitalityStore, ResourceChange } from './hospitality/store.ts';
+export type { MenuPhotoBlobs, MenuStore } from './menu/store.ts';
 // The Hospitality suite's setup (spec 0065, H0): the shapes Settings › Apps and Business show.
 export type {
   AppsView,
@@ -341,6 +344,30 @@ export type {
   PlaceHours,
   ResourceKind,
   WeekDay,
+} from '@crm/contracts';
+// The Menu app (spec 0065, H1): the editor's draft and the guest menu's answer.
+export type {
+  Allergen,
+  AllergenLevel,
+  DietMark,
+  ItemAllergen,
+  ItemFields,
+  Menu,
+  MenuDraft,
+  MenuItem,
+  MenuOption,
+  MenuPlace,
+  MenuSection,
+  MenuServing,
+  MenuSnapshot,
+  OptionGroup,
+  OptionRule,
+  PublicMenu,
+  SectionLayout,
+  SnapshotItem,
+  SnapshotMenu,
+  SnapshotSection,
+  SnapshotSubsection,
 } from '@crm/contracts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
 export { BRAND_QUICK_PICKS } from './brand/picks.ts';
@@ -1671,6 +1698,9 @@ export function createDataLayer({
     void hospitality?.then((made) => {
       made.clear();
     });
+    void menus?.then((made) => {
+      made.clear();
+    });
     socialLinks?.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
@@ -2809,6 +2839,7 @@ export function createDataLayer({
   let brand: Promise<BrandStore> | undefined;
   // Settings › Apps and Business (spec 0065): the Hospitality setup, loaded with the first screen that asks.
   let hospitality: Promise<HospitalityStore> | undefined;
+  let menus: Promise<MenuStore> | undefined;
   /** An image to or from one of our own upload routes, for the workspace `x-crm-workspace` names (spec 0060). */
   const sendImage = async (
     path: string,
@@ -5909,6 +5940,43 @@ export function createDataLayer({
               void loadNav()
                 .then((store) => store.reload(workspace))
                 .catch(() => undefined);
+            },
+          }),
+        )),
+    },
+    /**
+     * The Menu app's editor (spec 0065, H1): the workspace's whole menu draft, its edits, Publish, Discard, Sold out
+     * and photos. The store loads on first use. A photo goes to `/api/menu/items/<id>/photo` as two widths the screen
+     * drew again, with `x-crm-workspace`, and answers the whole draft.
+     */
+    menu: {
+      load: (): Promise<MenuStore> =>
+        (menus ??= import('./menu/store.ts').then(({ openMenus }) =>
+          openMenus({
+            api: api.menu,
+            call,
+            mintId,
+            sendPhoto: async (workspace, itemId, photo) => {
+              const body = new FormData();
+              body.set('large', photo.large, 'large');
+              body.set('small', photo.small, 'small');
+              const response = await fetch(
+                new URL(`/api/menu/items/${encodeURIComponent(itemId)}/photo`, origin).href,
+                {
+                  method: 'POST',
+                  headers: { 'x-crm-workspace': workspace },
+                  body,
+                  credentials: 'include',
+                },
+              ).catch((error: unknown) => {
+                throw toDataError(error);
+              });
+              const answer: unknown = await response.json().catch(() => undefined);
+              if (!response.ok) {
+                const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+                throw toDataError({ ...fields, status: response.status });
+              }
+              return answer as MenuDraftAnswer;
             },
           }),
         )),
