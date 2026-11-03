@@ -325,7 +325,16 @@ export function HoursEditor({
   const lastEnd = 1440 + (pastMidnightUntil === undefined ? 0 : Math.min(minutesOf(pastMidnightUntil), 720));
   for (let minutes = 0; minutes <= lastEnd; minutes += step) {
     if (minutes < 1440) starts.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale, hourClock) });
-    if (minutes > 0) ends.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale, hourClock) });
+    // Past Midnight, the time alone fits the field; the list says "next day" beside it.
+    if (minutes > 1440) {
+      ends.push({
+        id: clock(minutes),
+        label: timeLabel(clock(minutes - 1440), locale, hourClock),
+        description: strings.nextDayHint,
+      });
+    } else if (minutes > 0) {
+      ends.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale, hourClock) });
+    }
   }
   const on = rows.filter((row) => row.ranges.length > 0);
   const allStart = shared(on.map((row) => row.ranges[0]?.[0] ?? ''));

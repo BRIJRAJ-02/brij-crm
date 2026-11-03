@@ -27,7 +27,7 @@ import {
   type TableColumn,
   type Toasts,
 } from '@crm/ui';
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { businessSettingsHref } from '../settings/nav.ts';
 import { formRefusals } from '../settings/refusals.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
@@ -68,8 +68,9 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
   const state = useHospitality(store.floor(slug, place.id));
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const floor = state.status === 'ready' ? state.value : undefined;
-  const live = floor?.tables.filter((table) => !table.archived) ?? [];
-  const archived = floor?.tables.filter((table) => table.archived) ?? [];
+  // One list per answer, so the tables never see new rows when nothing changed.
+  const live = useMemo(() => floor?.tables.filter((table) => !table.archived) ?? [], [floor]);
+  const archived = useMemo(() => floor?.tables.filter((table) => table.archived) ?? [], [floor]);
   const areaName = (id: string | undefined) => floor?.areas.find((area) => area.id === id)?.name;
   const labelOf = (id: string) => floor?.tables.find((table) => table.id === id)?.label ?? '';
   const said = (refused: { readonly message: string } | undefined) => {
@@ -129,16 +130,6 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
     <SettingsPage
       title={place.name}
       crumbs={[{ id: 'business', label: strings.back, href: businessSettingsHref(slug) }]}
-      actions={
-        <Button
-          variant="primary"
-          icon="plus"
-          isDisabled={floor === undefined || live.length >= HOSPITALITY_LIMITS.tablesPerPlace}
-          onPress={() => setEditing({ kind: 'add' })}
-        >
-          {strings.addTables}
-        </Button>
-      }
     >
       {state.status === 'error' ? (
         <EmptyState
@@ -148,7 +139,19 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
         />
       ) : (
         <>
-          <SettingsSection title={strings.tables}>
+          <SettingsSection
+            title={strings.tables}
+            actions={
+              <Button
+                variant="primary"
+                icon="plus"
+                isDisabled={floor === undefined || live.length >= HOSPITALITY_LIMITS.tablesPerPlace}
+                onPress={() => setEditing({ kind: 'add' })}
+              >
+                {strings.addTables}
+              </Button>
+            }
+          >
             <Table
               label={strings.openTables(place.name)}
               columns={TABLE_COLUMNS}

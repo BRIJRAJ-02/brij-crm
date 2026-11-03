@@ -1,0 +1,301 @@
+// The Hospitality setup in Chromium (spec 0065, H0), over a fake store that changes as the real one shows a change:
+// Settings › Apps asks for Menu before Menu QR and installs both; Settings › Business draws a late Friday as running
+// into the next morning; a place's tables add "T7 to T16" in one go and take a table offline at once. axe is clean in
+// light and dark at a desktop's and a phone's width. With VITE_SHOT_DIR set, each screen is also photographed there.
+// The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
+import '@crm/ui/styles.css';
+import type {
+  AppsView,
+  BusinessView,
+  HospitalityHeld,
+  HospitalityHeldState,
+  HospitalityStore,
+  PlaceFloor,
+} from '@crm/data';
+import { afterEach, describe, expect, it } from 'vitest';
+import { page, userEvent } from 'vitest/browser';
+import { applyTheme, axeViolations, resetTheme, THEMES, type Theme } from '../../testing/axe.ts';
+import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
+import { AppsScreen } from './AppsScreen.tsx';
+import { BusinessScreen } from './BusinessScreen.tsx';
+import { FloorScreen } from './FloorScreen.tsx';
+
+const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
+const PLACE = '01900000-0000-7000-8000-000000000001';
+
+let shown: InApp | undefined;
+
+afterEach(() => {
+  shown?.unmount();
+  shown = undefined;
+  resetTheme();
+});
+
+const APPS: AppsView = {
+  available: true,
+  canManage: true,
+  hasBusiness: true,
+  apps: [
+    { app: 'menu', installed: true, installedAt: '2026-11-01T10:00:00.000Z' },
+    { app: 'menu_qr', installed: false },
+    { app: 'table_seating', installed: false },
+  ],
+};
+
+const BUSINESS: BusinessView = {
+  canEdit: true,
+  profile: {
+    name: 'Somewhere Nowhere',
+    kind: 'restaurant',
+    description: 'Small plates, natural wine, late nights.',
+    phone: '+44 20 7946 0000',
+    links: [],
+    currency: 'GBP',
+  },
+  places: [
+    {
+      id: PLACE,
+      name: 'Soho',
+      addressLine: '12 Greek Street',
+      city: 'London',
+      postcode: 'W1D 4DL',
+      country: 'GB',
+      timeZone: 'Europe/London',
+      locale: 'en-GB',
+      hours: {
+        weekly: {
+          tue: [
+            { from: '12:00', to: '15:00', name: 'Lunch' },
+            { from: '18:00', to: '23:00', name: 'Dinner' },
+          ],
+          wed: [{ from: '18:00', to: '23:00' }],
+          thu: [{ from: '18:00', to: '23:00' }],
+          fri: [{ from: '18:00', to: '02:00' }],
+          sat: [{ from: '18:00', to: '02:00' }],
+        },
+        exceptions: [{ date: '2026-12-25', closed: true, note: 'Christmas' }],
+      },
+      tables: 6,
+      updatedAt: '2026-11-01T10:00:00.000Z',
+    },
+  ],
+};
+
+const table = (index: number, area?: string) => ({
+  id: `0190000${String(index)}-0000-7000-8000-000000000000`,
+  label: `T${String(index)}`,
+  ...(area === undefined ? {} : { areaId: area }),
+  minGuests: 2,
+  maxGuests: index > 4 ? 6 : 4,
+  online: index !== 3,
+  joins: [],
+  position: index - 1,
+  archived: false,
+});
+
+const TERRACE = '01900000-0000-7000-8000-0000000000aa';
+const FLOOR: PlaceFloor = {
+  placeId: PLACE,
+  areas: [
+    { id: TERRACE, name: 'Terrace', position: 0 },
+    { id: '01900000-0000-7000-8000-0000000000bb', name: 'Inside', position: 1 },
+  ],
+  tables: [table(1, TERRACE), table(2, TERRACE), table(3), table(4), table(5), table(6)],
+};
+
+/** A held copy that a test changes by hand, as the real store's holder shows a change. */
+function heldOf<Value>(first: Value) {
+  let state: HospitalityHeldState<Value> = { status: 'ready', value: first, isSaving: false };
+  const listeners = new Set<() => void>();
+  const held: HospitalityHeld<Value> = {
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getSnapshot: () => state,
+    retain: () => () => undefined,
+    retry: () => undefined,
+  };
+  const set = (next: (value: Value) => Value) => {
+    if (state.status !== 'ready') return;
+    state = { status: 'ready', value: next(state.value), isSaving: false };
+    for (const listener of listeners) listener();
+  };
+  return { held, set };
+}
+
+/** A store holding one workspace's apps, business and one floor, recording the writes. */
+function storeOf() {
+  const calls: string[] = [];
+  const apps = heldOf(APPS);
+  const business = heldOf(BUSINESS);
+  const floor = heldOf(FLOOR);
+  const done = () => Promise.resolve(undefined);
+  const store = {
+    newId: () => '01900002-0000-7000-8000-000000000001',
+    apps: () => apps.held,
+    business: () => business.held,
+    floor: () => floor.held,
+    install: (_slug: string, app: string, options: { withNeeded?: boolean } = {}) => {
+      calls.push(`install:${app}:${String(options.withNeeded === true)}`);
+      apps.set((view) => ({
+        ...view,
+        apps: view.apps.map((each) =>
+          each.app === app || (options.withNeeded === true && each.app === 'menu')
+            ? { ...each, installed: true }
+            : each,
+        ),
+      }));
+      return done();
+    },
+    remove: (_slug: string, app: string) => {
+      apps.set((view) => ({
+        ...view,
+        apps: view.apps.map((each) => (each.app === app ? { ...each, installed: false } : each)),
+      }));
+      return done();
+    },
+    addTables: (_slug: string, _place: string, input: { readonly labels: readonly string[] }) => {
+      calls.push(`add:${input.labels.join(',')}`);
+      floor.set((view) => ({
+        ...view,
+        tables: [
+          ...view.tables,
+          ...input.labels.map((label, index) => ({
+            ...table(7 + index),
+            id: `01900009-0000-7000-8000-${String(index).padStart(12, '0')}`,
+            label,
+            position: view.tables.length + index,
+          })),
+        ],
+      }));
+      return done();
+    },
+    updateTable: (_slug: string, _place: string, tableId: string, change: { readonly online?: boolean }) => {
+      calls.push(`online:${String(change.online)}`);
+      floor.set((view) => ({
+        ...view,
+        tables: view.tables.map((each) =>
+          each.id === tableId && change.online !== undefined ? { ...each, online: change.online } : each,
+        ),
+      }));
+      return done();
+    },
+    updatePlace: done,
+    saveBusiness: done,
+    createPlace: done,
+    moveTable: done,
+    archiveTable: done,
+    restoreTable: done,
+    deleteTable: done,
+    saveArea: done,
+    deleteArea: done,
+  } as unknown as HospitalityStore;
+  return { store, calls };
+}
+
+const toasts = { toast: () => undefined } as never;
+
+async function shoot(name: string, theme: Theme, width: number) {
+  if (SHOT_DIR === undefined || SHOT_DIR === '') return;
+  await page.screenshot({ path: `${SHOT_DIR}/${name}-${theme}-${String(width)}.png`, fullPage: true } as never);
+}
+
+describe('Settings › Apps', () => {
+  it('installs Menu QR in one press while Menu is in', async () => {
+    await page.viewport(1280, 900);
+    const { store, calls } = storeOf();
+    shown = await renderInApp(() => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />, {
+      data: {},
+      pattern: '/w/$slug/settings/apps',
+      at: '/w/acme/settings/apps',
+    });
+    await expect.element(page.getByRole('heading', { name: 'Menu QR' })).toBeInTheDocument();
+    // Menu is in already, so Menu QR's Install asks nothing more.
+    await userEvent.click(page.getByRole('button', { name: 'Install' }).first());
+    await expect.poll(() => calls).toEqual(['install:menu_qr:false']);
+  });
+
+  it('asks for Menu when Menu QR is installed alone', async () => {
+    await page.viewport(1280, 900);
+    const { store, calls } = storeOf();
+    await store.remove('acme', 'menu');
+    shown = await renderInApp(() => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />, {
+      data: {},
+      pattern: '/w/$slug/settings/apps',
+      at: '/w/acme/settings/apps',
+    });
+    const installs = page.getByRole('button', { name: 'Install' });
+    await userEvent.click(installs.nth(1));
+    await expect.element(page.getByRole('heading', { name: 'Menu QR needs Menu' })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Install both' }));
+    await expect.poll(() => calls).toEqual(['install:menu_qr:true']);
+  });
+});
+
+describe('Settings › Business and a place’s tables', () => {
+  it('reads a late Friday as running into the next morning', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf();
+    shown = await renderInApp(() => <BusinessScreen store={store} slug="acme" toasts={toasts} />, {
+      data: {},
+      pattern: '/w/$slug/settings/business',
+      at: '/w/acme/settings/business',
+    });
+    await expect.element(page.getByRole('heading', { name: 'Soho' })).toBeInTheDocument();
+    // Friday's end, past midnight, shows the time alone in its field; the list says "next day" beside it.
+    await expect.poll(() => document.body.textContent).toMatch(/2:00\s?am/i);
+  });
+
+  it('adds T7 to T16 in one go, and takes a table offline at once', async () => {
+    await page.viewport(1280, 900);
+    const { store, calls } = storeOf();
+    shown = await renderInApp(
+      () => <FloorScreen store={store} slug="acme" place={BUSINESS.places[0] as never} toasts={toasts} />,
+      {
+        data: {},
+        pattern: '/w/$slug/settings/business/places/$placeId',
+        at: `/w/acme/settings/business/places/${PLACE}`,
+      },
+    );
+    // The switch's label takes the press, as a pointer meets it.
+    const online = page.getByRole('switch', { name: 'T1 takes online bookings' }).element().closest('label');
+    if (online === null) throw new Error('No switch.');
+    await userEvent.click(online);
+    await expect.element(page.getByRole('switch', { name: 'T1 takes online bookings' })).not.toBeChecked();
+    await userEvent.click(page.getByRole('button', { name: 'Add tables' }).first());
+    await expect.element(page.getByText('Adds 10: T7 to T16')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Add 10 tables' }));
+    await expect.poll(() => calls.at(-1)).toBe('add:T7,T8,T9,T10,T11,T12,T13,T14,T15,T16');
+    await expect.element(page.getByRole('rowheader', { name: 'Move T16 T16' })).toBeInTheDocument();
+  });
+});
+
+describe('axe and the pictures', () => {
+  for (const theme of THEMES) {
+    for (const width of [1280, 390]) {
+      it(`is clean in ${theme} at ${String(width)}`, async () => {
+        await page.viewport(width, 900);
+        applyTheme(theme);
+        const { store } = storeOf();
+        const screens = [
+          ['apps', 'Menu QR', () => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />],
+          ['business', 'Places', () => <BusinessScreen store={store} slug="acme" toasts={toasts} />],
+          [
+            'tables',
+            'Areas',
+            () => <FloorScreen store={store} slug="acme" place={BUSINESS.places[0] as never} toasts={toasts} />,
+          ],
+        ] as const;
+        for (const [name, heading, screen] of screens) {
+          shown = await renderInApp(screen, { data: {}, pattern: '/w/$slug/settings/x', at: '/w/acme/settings/x' });
+          await expect.element(page.getByRole('heading', { name: heading })).toBeInTheDocument();
+          await shoot(name, theme, width);
+          expect(await axeViolations(), name).toEqual([]);
+          shown.unmount();
+          shown = undefined;
+        }
+      });
+    }
+  }
+});

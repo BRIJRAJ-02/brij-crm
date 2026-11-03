@@ -10,6 +10,8 @@ export const strings = {
   midnight: 'Midnight',
   /** An end past Midnight, in the next morning (spec 0065): "2:00 AM next day". */
   nextDay: (time: string) => `${time} next day`,
+  /** Beside a time past Midnight in the list of ends. */
+  nextDayHint: 'next day',
   mixed: 'Mixed',
   setAll: 'Set all days',
   setAllTitle: 'Every day that’s on',
