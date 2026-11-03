@@ -253,6 +253,7 @@ export const ACCESS_TABLE = {
   // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
   getWorkspaceSettings: { anyMember: true },
   updateWorkspace: { permission: 'workspace.manage' },
+  countSubmissionsBeyond: { permission: 'workspace.manage' },
   // The brand kit (spec 0060, AC-1, AC-23): every member reads it; owners and admins change it and its logo.
   getWorkspaceBrand: { anyMember: true },
   readBrandLogo: { anyMember: true },
