@@ -39,6 +39,47 @@
     margin: 0;
   }
 
+  /* A pressable card (onPress): the title's button stretches over the whole card, so any press on it opens; the
+     card draws the ring and the hover, and its own buttons sit above the stretch. */
+  .root[data-pressable] {
+    position: relative;
+    transition: border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .press {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .press::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+  }
+
+  .press:focus-visible {
+    outline: none;
+  }
+
+  .root[data-pressable]:has(.press:focus-visible) {
+    border-color: var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-pressable]:hover {
+      border-color: var(--border-strong);
+    }
+  }
+
   .head {
     display: flex;
     align-items: flex-start;
@@ -83,7 +124,9 @@
      what it holds, so a control taller than that line ("View all", "Add a task") sits level with the title
      rather than hanging below it, and the header keeps the title's height. Under a title with a description
      they centre on the two lines instead, as a setting's control does. */
+  /* Positioned, so a pressable card's stretched title never covers its buttons. */
   .actions {
+    position: relative;
     display: inline-flex;
     flex: none;
     align-items: center;

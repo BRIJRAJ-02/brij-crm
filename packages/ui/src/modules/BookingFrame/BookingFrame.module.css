@@ -521,6 +521,13 @@
     letter-spacing: var(--tracking-heading);
   }
 
+  /* Try again and a way on (Find your reservation), side by side, wrapping on a phone. */
+  .messageActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+  }
+
   .messageTitle:focus,
   .offerTitle:focus {
     outline: none;

@@ -36,6 +36,7 @@ export { DeferredSelect, type DeferredSelectItem } from '../molecules/Select/Def
 export type { SelectItem } from '../molecules/Select/Select.tsx';
 export {
   BookingDetails,
+  type BookingDetailsLabels,
   type BookingDetailsOutcome,
   type BookingDetailsValues,
 } from '../modules/BookingDetails/BookingDetails.tsx';
@@ -54,7 +55,12 @@ export {
   type PageBrand,
 } from '../modules/BookingFrame/BookingFrame.tsx';
 export { BookingReceipt, type BookingReceiptState } from '../modules/BookingReceipt/BookingReceipt.tsx';
-export { BookingChanges, type CancelOutcome, type GuestsOutcome } from '../modules/BookingChanges/BookingChanges.tsx';
+export {
+  BookingChanges,
+  type BookingChangesLabels,
+  type CancelOutcome,
+  type GuestsOutcome,
+} from '../modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
 /** A profile's booking links (22 Oct 2026): the rows Captures › Links draws, the whole row opening the page. */
 export { LinkList, LinkListToolbar, type LinkRow } from '../modules/LinkList/LinkList.tsx';

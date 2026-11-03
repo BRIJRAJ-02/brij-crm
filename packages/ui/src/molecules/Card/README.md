@@ -41,3 +41,7 @@ Only its content takes focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Pressable
+
+`onPress` (inline cards with a `title`) makes the whole card one press target that opens something, such as a Service floor's table tile opening that table (spec 0066 B7). The title becomes a button whose hit area stretches over the card, so the card is one tab stop named by its title; the card draws the focus ring and, under a fine pointer, a stronger hairline on hover. Buttons in `actions` stay their own targets above it; a pressable card keeps its other content (the body, the footer note) inside the press. Why a variant rather than a new tile: the floor's tile is a card in every other way (title, a state in the eyebrow, a line, a footer note), and a second card look would split the library. Story: Pressable.

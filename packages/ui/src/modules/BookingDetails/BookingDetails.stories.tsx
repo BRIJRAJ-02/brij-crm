@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { ChoiceChips } from '../../molecules/ChoiceChips/ChoiceChips.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BookingDetails, type BookingDetailsOutcome } from './BookingDetails.tsx';
 
@@ -75,38 +77,66 @@ export const Phone: Story = {
   ),
 };
 
-/** The server refused: its message in the line above the buttons. */
-/** A table reservation (spec 0066 B7): a phone to call, no invites, the occasion and news as questions. */
+/** A table reservation (spec 0066 B7): a phone to call, no invites, its own words, the occasion as chips (the page's). */
 export const Reservation: Story = {
   parameters: { crm: { screenshot: false } },
-  render: (args) => (
-    <Stage width="fill">
-      <BookingDetails {...args} />
-    </Stage>
-  ),
+  render: (args) => <WithOccasion {...args} />,
   args: {
     needsPhone: true,
     maxGuests: 0,
+    labels: {
+      confirm: 'Reserve',
+      confirming: 'Reserving',
+      done: 'Reserved',
+      note: 'Anything the restaurant should know?',
+    },
     questions: [
-      {
-        id: 'occasion',
-        key: 'occasion',
-        label: 'Occasion',
-        answerType: 'choice',
-        choices: ['Birthday', 'Anniversary', 'Date night', 'Business', 'Other'],
-        required: false,
-      },
       {
         id: 'marketing',
         key: 'marketing',
-        label: 'Send me news and offers from Somewhere Nowhere.',
+        label: 'Send me news and offers from Somewhere.',
         answerType: 'checkbox',
         required: false,
       },
     ],
   },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Reserve' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Add guests' })).toBeNull();
+    await expect(canvas.getByText('Birthday')).toBeInTheDocument();
+  },
 };
 
+/** The occasion as the reservation page holds it: chips by key, after the note. */
+function WithOccasion(args: Parameters<typeof BookingDetails>[0]) {
+  const [occasion, setOccasion] = useState<readonly string[]>([]);
+  return (
+    <Stage width="fill">
+      <BookingDetails
+        {...args}
+        extra={
+          <ChoiceChips
+            label="Occasion"
+            labelAside="Optional"
+            tone="strong"
+            isSingle
+            choices={[
+              { id: 'birthday', label: 'Birthday' },
+              { id: 'anniversary', label: 'Anniversary' },
+              { id: 'date', label: 'Date night' },
+              { id: 'business', label: 'Business' },
+              { id: 'other', label: 'Other' },
+            ]}
+            selected={occasion}
+            onChange={setOccasion}
+          />
+        }
+      />
+    </Stage>
+  );
+}
+
+/** The server refused: its message in the line above the buttons. */
 export const Failed: Story = {
   args: {
     prefill: { name: 'Ada Lovelace', email: 'ada@example.com' },

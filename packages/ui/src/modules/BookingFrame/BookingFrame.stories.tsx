@@ -343,6 +343,30 @@ export const Failed: Story = {
   },
 };
 
+/** A reservation's manage link that opens nothing (spec 0066 B7): Try again, and a way on to find it by code. */
+export const FailedWithLink: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingMessage
+        title="Your reservation"
+        onRetry={fn()}
+        link={{ label: 'Find your reservation', href: '/r/somewhere/manage' }}
+        page="booking_manage"
+      >
+        This link doesn’t open a reservation.
+      </BookingMessage>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: 'Find your reservation' })).toHaveAttribute(
+      'href',
+      '/r/somewhere/manage',
+    );
+  },
+};
+
 /** A profile's address that names nobody: the same message, its Timefix link tagged as the profile's. */
 export const ProfileNotFound: Story = {
   parameters: { crm: { screenshot: false } },

@@ -39,8 +39,11 @@ export interface BookingReceiptProps {
   readonly facts: readonly DescriptionItem[];
   /** The call's address, once it has one: Join the call. */
   readonly joinUrl?: string;
-  /** Add to calendar: Google, Outlook, and an .ics file. */
-  readonly calendars?: { readonly google: string; readonly outlook: string; readonly ics: string };
+  /**
+   * Add to calendar: Google, Outlook, and an .ics file. `ics` may be absent while a page fetches its file (a table
+   * reservation's comes by POST, spec 0066 B7, and is handed over as an object URL); the Apple link waits for it.
+   */
+  readonly calendars?: { readonly google: string; readonly outlook: string; readonly ics?: string | undefined };
   /**
    * Share this meeting (the owner, 2 November 2026): the details anyone can be sent (what, when, where, the call's
    * link) and a link that adds it to their own calendar. Never the visitor's note, and never this page's link, which
@@ -157,9 +160,11 @@ export function BookingReceipt({
                     <ButtonLink provider="outlook" href={calendars.outlook} isExternal>
                       {strings.outlook}
                     </ButtonLink>
-                    <ButtonLink provider="apple-calendar" href={calendars.ics} download="booking.ics">
-                      {strings.apple}
-                    </ButtonLink>
+                    {calendars.ics !== undefined && (
+                      <ButtonLink provider="apple-calendar" href={calendars.ics} download="booking.ics">
+                        {strings.apple}
+                      </ButtonLink>
+                    )}
                     {share !== undefined && (
                       <span className={styles.shareAt}>
                         <ShareMeeting share={share} />

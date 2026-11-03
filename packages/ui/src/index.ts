@@ -325,6 +325,7 @@ export {
 } from './modules/MeetingCard/MeetingCard.tsx';
 export {
   BookingDetails,
+  type BookingDetailsLabels,
   type BookingDetailsOutcome,
   type BookingDetailsProps,
   type BookingDetailsValues,
@@ -362,6 +363,7 @@ export {
 } from './modules/BookingChat/BookingChat.tsx';
 export {
   BookingChanges,
+  type BookingChangesLabels,
   type BookingChangesProps,
   type CancelOutcome,
   type GuestsOutcome,

@@ -6,7 +6,7 @@ import {
   visibleQuestions,
   type PublicQuestion,
 } from '@crm/contracts/forms';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -52,8 +52,32 @@ export type BookingDetailsOutcome =
   /** One line above the buttons ("Too many attempts just now."). */
   | { readonly kind: 'failed'; readonly message: string };
 
+/**
+ * The words a page may put in place of the built in ones: a table reservation (spec 0066 B7) confirms with
+ * "Reserve", not "Confirm booking". Anything left out keeps the built in copy.
+ */
+export interface BookingDetailsLabels {
+  /** The step's heading ("Your details"). */
+  readonly heading?: string;
+  /** The send button ("Confirm booking"). */
+  readonly confirm?: string;
+  /** The send button while it sends ("Booking"). */
+  readonly confirming?: string;
+  /** The send button once it went through ("Booked"). */
+  readonly done?: string;
+  /** The note's label ("Anything the host should know?"). */
+  readonly note?: string;
+}
+
 /** Props for BookingDetails. */
 export interface BookingDetailsProps {
+  /** The page's own words for the heading, the send button and the note (see BookingDetailsLabels). */
+  readonly labels?: BookingDetailsLabels;
+  /**
+   * The page's own controls, drawn after the note and before the questions: a table reservation's occasion as
+   * ChoiceChips, held and sent by the page. The form neither reads nor checks them.
+   */
+  readonly extra?: ReactNode;
   /** Asks for a number to call: a phone page. */
   readonly needsPhone?: boolean;
   /** Filled in from the visitor's sign in or a form hand off. */
@@ -134,6 +158,8 @@ function drawnErrors(
  * buttons. A prefilled visitor sees "Booking as Ada. Not you?".
  */
 export function BookingDetails({
+  labels,
+  extra,
   needsPhone = false,
   prefill,
   maxGuests = 10,
@@ -389,7 +415,7 @@ export function BookingDetails({
       }}
     >
       <h2 ref={heading} id={headingId} className={styles.heading} tabIndex={-1}>
-        {strings.heading}
+        {labels?.heading ?? strings.heading}
       </h2>
       {bookingAs !== undefined && (
         <p className={styles.as}>
@@ -541,7 +567,7 @@ export function BookingDetails({
         </div>
       )}
       <Field
-        label={strings.note}
+        label={labels?.note ?? strings.note}
         // Beside the page's own questions, the note says it is optional as they do; alone, it keeps its hint.
         {...(questions.length === 0 ? { hint: strings.optional } : { labelAside: WORDS.optional })}
         name="note"
@@ -550,6 +576,7 @@ export function BookingDetails({
         value={note}
         onChange={setNote}
       />
+      {extra}
       {showing.map((question) => {
         const field = `${ANSWER_FIELD}${question.key}`;
         return (
@@ -595,7 +622,11 @@ export function BookingDetails({
           isPending={isBusy && !isDone}
           {...(isDone ? { icon: 'check' as const } : {})}
         >
-          {isDone ? strings.booked : isBusy ? strings.confirming : strings.confirm}
+          {isDone
+            ? (labels?.done ?? strings.booked)
+            : isBusy
+              ? (labels?.confirming ?? strings.confirming)
+              : (labels?.confirm ?? strings.confirm)}
         </Button>
       </div>
     </form>

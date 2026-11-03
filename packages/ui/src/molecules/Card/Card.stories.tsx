@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, fn, userEvent } from 'storybook/test';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -33,6 +34,28 @@ export const Default: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { name: 'Email digest' })).toBeInTheDocument();
+  },
+};
+
+/** Pressable: the whole card opens something (a Service floor's table tile), one tab stop named by its title. */
+export const Pressable: Story = {
+  args: { title: 'T4', description: '4 seats', onPress: fn() },
+  render: (args) => (
+    <Stage width="narrow">
+      <Card {...args} eyebrow={<Badge dot="green" text="Seated" />} footer={null} footerNote="Next: 8:30 PM for 2">
+        Ada · 4 guests
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    // The title's button covers the card: a press on the body lands on it.
+    const box = canvas.getByText('Ada · 4 guests').getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    await expect(hit).toBe(canvas.getByRole('button', { name: 'T4' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'T4' }));
+    await expect(args.onPress).toHaveBeenCalledTimes(1);
+    // One tab stop, named by the title.
+    await expect(canvas.getAllByRole('button')).toHaveLength(1);
   },
 };
 

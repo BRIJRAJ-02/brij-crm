@@ -23,6 +23,8 @@ A page with its own questions (spec 0057) passes `questions` (the hosted form's 
 
 A table reservation (spec 0066 B7) passes `maxGuests={0}`: it counts its party on an earlier step, so the invites (Add guests) are left out altogether.
 
+`labels` puts the page's own words in place of the built in ones, each optional: `heading`, `confirm`, `confirming`, `done` (the send button's three states) and `note`. A reservation page sends with "Reserve". `extra` draws the page's own controls after the note and before the questions (a reservation's occasion as ChoiceChips by key); the page holds and sends what they pick, and the form neither reads nor checks them. Story: Reservation.
+
 ## States
 
 Empty, prefilled, with guests, a phone page, with questions (one shown by an earlier answer), invalid, sending (Confirm pending, Back off), failed.
