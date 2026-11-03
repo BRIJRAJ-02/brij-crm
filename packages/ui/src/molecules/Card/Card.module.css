@@ -183,9 +183,11 @@
     text-align: start;
   }
 
+  /* Pushed to the card's end, so cards stretched to one row's height (a dense TileGrid) end on one line. */
   .foot {
     display: flex;
     flex-wrap: wrap;
+    margin-block-start: auto;
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-8);

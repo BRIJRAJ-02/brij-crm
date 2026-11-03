@@ -138,6 +138,17 @@ export const WithRole: Story = {
   },
 };
 
+/** A restaurant whose one place carries its name (spec 0066 B7): the name shows once, as the h1. */
+export const SameNameHost: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { host: { name: 'Somewhere' }, title: 'Somewhere' },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Somewhere' })).toBeInTheDocument();
+    await expect(canvas.getAllByText('Somewhere', { exact: true })).toHaveLength(1);
+  },
+};
+
 /**
  * List over the month (25 October 2026): the month stays underneath, hidden and inert, and sets the card's size, so
  * switching views moves nothing; the views crossfade.

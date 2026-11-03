@@ -34,4 +34,4 @@ The heading takes focus on arrival; Tab reaches Join the call, each calendar and
 
 Not in the artifact.
 
-`calendars.ics` is optional: a page that fetches its calendar file (a table reservation's comes by POST with the guest's key, spec 0066 B7) passes it as an object URL once it has it, and the Apple link shows then.
+`calendars.ics` is the file's address, or a function that fetches and saves it when pressed: a table reservation's file comes by POST with the guest's key (spec 0066 B7), so no address ever holds the key. The link's place is the same either way.

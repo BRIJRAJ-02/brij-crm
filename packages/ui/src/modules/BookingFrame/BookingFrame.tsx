@@ -253,9 +253,20 @@ export function BookingFrame({
                   size="lg"
                 />
               )}
-              <div className={styles.names} data-team={host.team === undefined ? undefined : ''}>
+              <div
+                className={styles.names}
+                data-team={host.team === undefined ? undefined : ''}
+                data-alone={
+                  host.team === undefined && host.name.trim().toLowerCase() === title.trim().toLowerCase()
+                    ? ''
+                    : undefined
+                }
+              >
                 {/* A team page's title already names the workspace ("Intro call with Acme"). */}
-                {host.team === undefined && <p className={styles.host}>{host.name}</p>}
+                {/* A place named as its business (a restaurant's one place) says its name once, as the h1. */}
+                {host.team === undefined && host.name.trim().toLowerCase() !== title.trim().toLowerCase() && (
+                  <p className={styles.host}>{host.name}</p>
+                )}
                 {host.team === undefined && host.role !== undefined && host.role !== '' && (
                   <p className={styles.hostRole}>{host.role}</p>
                 )}

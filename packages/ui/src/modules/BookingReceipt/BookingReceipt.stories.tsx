@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, screen, userEvent, within } from 'storybook/test';
+import { expect, fn, screen, userEvent, within } from 'storybook/test';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
@@ -92,6 +92,28 @@ export const Past: Story = {
       <BookingReceipt {...args} />
     </Stage>
   ),
+};
+
+/** A file fetched when pressed (a table reservation's, spec 0066 B7): the Apple button runs it, no address holds it. */
+export const IcsOnPress: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    isWelcome: false,
+    calendars: {
+      google: 'https://calendar.google.com/calendar/render',
+      outlook: 'https://outlook.live.com/calendar/0/deeplink/compose',
+      ics: fn(),
+    },
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Apple/ }));
+    await expect(args.calendars?.ics).toHaveBeenCalledTimes(1);
+  },
 };
 
 /** The guest's own pages tag the wordmark themselves and open it in a new tab, in the same foot as every public page. */
