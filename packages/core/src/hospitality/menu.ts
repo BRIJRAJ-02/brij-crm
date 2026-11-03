@@ -21,7 +21,9 @@ import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
+import { readMenuBrandIn } from '../brand/public.ts';
 import { auditSetup, hospitalityMember, requireApp } from './gate.ts';
+import { menuLookStylesheet } from './public-menu.ts';
 import {
   draftOf,
   parseKeptRows,
@@ -140,6 +142,19 @@ export async function readMenuDraft(scope: EngineScope): Promise<MenuDraft> {
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu');
     return readDraft(tx, scope);
+  });
+}
+
+/**
+ * The editor's preview look (spec 0065, H1): the stylesheet guests' menus wear (the Warm preset with the brand's
+ * accent), for any member who reads the Menus screen, so the phone preview draws what guests will see before the
+ * first Publish. It names nothing of the draft.
+ */
+export async function readMenuDraftLook(scope: EngineScope): Promise<string> {
+  requireMenuReader(scope);
+  return inWorkspace(scope, async (tx) => {
+    await requireApp(tx, scope.workspaceId, 'menu');
+    return menuLookStylesheet(await readMenuBrandIn(tx, scope.workspaceId));
   });
 }
 

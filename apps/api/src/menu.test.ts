@@ -274,6 +274,20 @@ describe('menu photos (AC-6527)', () => {
   });
 });
 
+describe('the editor’s preview look', () => {
+  it('serves the guests’ Warm look to a member before any Publish, and nothing to anyone else', async () => {
+    const { m } = await menuWorkspace();
+    const look = await send(`/api/menu/look.css?workspace=${m.slug}`, { cookie: m.cookie });
+    expect(look.status).toBe(200);
+    expect(look.headers.get('content-type')).toContain('text/css');
+    expect(look.headers.get('cache-control')).toContain('private');
+    expect(await look.text()).toContain('--menu-ground:#f6f1ea');
+    expect((await send(`/api/menu/look.css?workspace=${m.slug}`)).status).toBe(401);
+    const { cookie: stranger } = await signIn(app);
+    expect((await send(`/api/menu/look.css?workspace=${m.slug}`, { cookie: stranger })).status).toBe(404);
+  });
+});
+
 describe('the workspace’s own menu tag (security review)', () => {
   it('is forgotten when the workspace is deleted', async () => {
     const { m } = await menuWorkspace();

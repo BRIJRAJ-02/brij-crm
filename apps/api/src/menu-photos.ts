@@ -10,7 +10,7 @@
 // The global Origin check refuses a write from anywhere but the app. Nothing here logs a photo or its path.
 import { createHash, randomUUID } from 'node:crypto';
 import { MENU_LIMITS, MENU_PHOTO_WIDTHS, matchesContent, pictureTypeOf, UPLOAD_WORKSPACE_HEADER } from '@crm/contracts';
-import { attachMenuPhoto, menuPhotoFolder, readMenuPhotoFile, requireMenuEditor } from '@crm/core';
+import { attachMenuPhoto, menuPhotoFolder, readMenuDraftLook, readMenuPhotoFile, requireMenuEditor } from '@crm/core';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import {
@@ -88,6 +88,25 @@ export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: 
     const loaded = await loadStoredImage(files, photo.path, photo.type);
     if (loaded === undefined) return errorResponse('NOT_FOUND', 'There’s no photo here.');
     return pictureResponse(loaded, PRIVATE_PICTURE_CACHE_CONTROL);
+  });
+  // The editor's preview look (`?workspace=`): the guests' stylesheet, for the member's own browser alone.
+  app.get('/menu/look.css', async (c) => {
+    const entered = await memberScopeOf(c, deps, c.req.query('workspace'));
+    if (entered instanceof Response) return entered;
+    let css: string;
+    try {
+      css = await readMenuDraftLook(entered.scope);
+    } catch (error) {
+      return refusalResponse(error, errorResponse);
+    }
+    return new Response(css, {
+      headers: {
+        'content-type': 'text/css; charset=utf-8',
+        'cache-control': 'private, no-cache',
+        'x-content-type-options': 'nosniff',
+        'cross-origin-resource-policy': 'same-origin',
+      },
+    });
   });
   app.post(
     '/menu/items/:itemId/photo',

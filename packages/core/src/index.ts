@@ -930,6 +930,7 @@ export {
   requireMenuEditor,
   menuPhotoFolder,
   publishProblem,
+  readMenuDraftLook,
   readMenuPhotoFile,
   type MenuPhotoFile,
   type MenuPublishResult,
