@@ -137,6 +137,7 @@ describe('the guest menu read (AC-6528, AC-6531)', () => {
     expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
     tagged.length = 0;
     const read = await send(`/api/public/menu/${place.menuKey}`);
+    expect(tagged.flat()).toContain(`menu-ws:${m.workspace.id}`);
     expect(read.status).toBe(200);
     expect(read.headers.get('cache-control')).toBe('public, max-age=0, s-maxage=86400');
     expect(tagged.flat()).toContain(`menu:${place.id}`);
@@ -165,6 +166,8 @@ describe('the guest menu read (AC-6528, AC-6531)', () => {
     forgotten.length = 0;
     await m.client.hospitality.remove({ workspace: m.slug, app: 'menu', mutationId: newId() });
     expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
+    // Every answer carries the workspace's own tag too, which a deleted workspace or closed early access forgets.
+    expect(tagged.flat()).toContain(`menu-ws:${m.workspace.id}`);
     const gone = await send(`/api/public/menu/${place.menuKey}`);
     expect(gone.status).toBe(404);
     expect(gone.headers.get('cache-control')).toBe('no-store');
@@ -179,12 +182,45 @@ describe('the guest menu read (AC-6528, AC-6531)', () => {
 });
 
 describe('menu photos (AC-6527)', () => {
-  const photoBody = () => {
+  /** A JPEG that says it is `width` by `height` (a start of frame after its first marker). */
+  const sized = (width: number, height: number) => {
+    const plain = jpegWith({ exif: true });
+    const sof = new Uint8Array([
+      0xff,
+      0xc0,
+      0,
+      11,
+      8,
+      height >> 8,
+      height & 255,
+      width >> 8,
+      width & 255,
+      1,
+      1,
+      0x11,
+      0,
+    ]);
+    return new Uint8Array([...plain.subarray(0, 2), ...sof, ...plain.subarray(2)]);
+  };
+  const photoBody = (small: Uint8Array = sized(400, 300)) => {
     const body = new FormData();
-    body.set('large', new Blob([jpegWith({ exif: true })], { type: 'image/jpeg' }), 'large.jpg');
-    body.set('small', new Blob([jpegWith({ exif: true })], { type: 'image/jpeg' }), 'small.jpg');
+    body.set('large', new Blob([sized(1200, 900)], { type: 'image/jpeg' }), 'large.jpg');
+    body.set('small', new Blob([new Uint8Array(small)], { type: 'image/jpeg' }), 'small.jpg');
     return body;
   };
+
+  it('refuses a photo wider than the width it was drawn at, or a header that unpacks enormous', async () => {
+    const { m, itemId } = await menuWorkspace();
+    for (const small of [sized(401, 300), sized(400, 30_000), jpegWith({ exif: true })]) {
+      const refused = await send(`/api/menu/items/${itemId}/photo`, {
+        method: 'POST',
+        cookie: m.cookie,
+        workspace: m.slug,
+        body: photoBody(small),
+      });
+      expect(refused.status).toBe(400);
+    }
+  });
 
   it('takes both widths from Manage hospitality only, cleaned, and serves only what the live snapshot shows', async () => {
     const { m, place, itemId } = await menuWorkspace();
@@ -235,5 +271,14 @@ describe('menu photos (AC-6527)', () => {
     await m.client.menu.publish({ workspace: m.slug, mutationId: newId() });
     expect(kept.size).toBe(before);
     expect((await send(path)).status).toBe(404);
+  });
+});
+
+describe('the workspace’s own menu tag (security review)', () => {
+  it('is forgotten when the workspace is deleted', async () => {
+    const { m } = await menuWorkspace();
+    forgotten.length = 0;
+    await m.client.workspace.delete({ workspace: m.slug, confirmName: m.workspace.name, mutationId: newId() });
+    expect(forgotten).toContainEqual([`menu-ws:${m.workspace.id}`]);
   });
 });

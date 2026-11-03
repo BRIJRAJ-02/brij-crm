@@ -98,6 +98,8 @@ export async function readPublicMenu(
     const brand = await readMenuBrandIn(tx, entry.workspaceId);
     const snapshot = parsed.data;
     const menu: PublicMenu = {
+      placeId: entry.placeId,
+      workspaceId: entry.workspaceId,
       version: latest.version,
       business: {
         name: business?.name ?? place.name,

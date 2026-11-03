@@ -4,6 +4,7 @@
 // headers that matter (the policy, nosniff, the referrer rule) come from vercel.json's block for `/m/`, as they would
 // for the static shell.
 import { registerHooks } from 'node:module';
+import { addCacheTag } from '@vercel/functions';
 
 // Vercel's Node builder compiles each imported TypeScript file to a .js beside it but keeps the `.ts` in every
 // import; the same hook `api/handle.mjs` registers, for the same reason.
@@ -39,11 +40,20 @@ const readMenu = (origin) => async (key, signal) => {
 
 export async function GET(request) {
   const url = new URL(request.url);
-  const { body, status, outcome } = await menuShellFor(url.pathname, {
+  const { body, status, outcome, tags } = await menuShellFor(url.pathname, {
     shell: MENU_SHELL,
     readMenu: readMenu(url.origin),
   });
   if (outcome === 'missed') console.warn(JSON.stringify({ event: 'menu.shell.missed' }));
+  // Filed under the place's and the workspace's tags, so Publish, Sold out and removing the app clear this HTML too.
+  // A failed tag leaves only the answer's short s-maxage. The runtime's addCacheTag may answer no promise or throw.
+  if (tags !== undefined && tags.length > 0) {
+    try {
+      await addCacheTag([...tags]);
+    } catch {
+      // The minute's s-maxage bounds an untagged answer anyway.
+    }
+  }
   return new Response(body, {
     status,
     headers: {

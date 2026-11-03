@@ -2,7 +2,9 @@
 // digits, typed prices parsed without a float, and serving times read on the place's clock.
 import { describe, expect, it } from 'vitest';
 import {
+  choicesAllowed,
   currencyDigits,
+  linePrice,
   formatPrice,
   formatPriceDelta,
   menuCacheTags,
@@ -82,5 +84,23 @@ describe('cache tags', () => {
   it('tags each place once, and nothing that isn’t an id', () => {
     const id = '0199f0a0-0000-7000-8000-000000000001';
     expect(menuCacheTags(id, id, 'menu:evil')).toEqual([`menu:${id}`]);
+  });
+});
+
+describe('a line of picks (ported from checklabs)', () => {
+  it('takes the size’s price, else the item’s, adds the options and multiplies by 1 to 99', () => {
+    expect(linePrice({ basePrice: 900, sizePrices: [], optionDeltas: [50, 100], quantity: 2 })).toBe(2100);
+    expect(linePrice({ basePrice: 900, sizePrices: [950, 3800], size: 1, optionDeltas: [], quantity: 1 })).toBe(3800);
+    expect(linePrice({ basePrice: 900, sizePrices: [], optionDeltas: [], quantity: 99 })).toBe(89_100);
+    expect(linePrice({ basePrice: 900, sizePrices: [], optionDeltas: [], quantity: 100 })).toBeUndefined();
+    expect(linePrice({ basePrice: 900, sizePrices: [], optionDeltas: [], quantity: 0 })).toBeUndefined();
+    expect(linePrice({ sizePrices: [], optionDeltas: [], quantity: 1 })).toBeUndefined();
+  });
+
+  it('allows a group’s choices from its min to its ceiling', () => {
+    expect(choicesAllowed({ rule: 'one', min: 1 }, 0)).toBe(false);
+    expect(choicesAllowed({ rule: 'one', min: 1 }, 1)).toBe(true);
+    expect(choicesAllowed({ rule: 'up_to', max: 2 }, 3)).toBe(false);
+    expect(choicesAllowed({ rule: 'any', min: 2 }, 5)).toBe(true);
   });
 });

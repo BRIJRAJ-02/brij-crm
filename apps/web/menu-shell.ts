@@ -4,7 +4,7 @@
 // allergens in words; React replaces it when the bundle starts), the read as a boot block the page draws from at once,
 // and the menu's look stylesheet linked in the head. A read that fails or is slow (800 ms) serves the plain shell,
 // which reads the menu itself. Pure, run in a Node test; `api/menu.mjs` is the entry.
-import { formatPrice, isMenuKey, menuLookPath } from '@crm/contracts/menu';
+import { formatPrice, isMenuKey, menuCacheTags, menuLookPath, menuWorkspaceTags } from '@crm/contracts/menu';
 import type { PublicMenu, SnapshotItem, SnapshotSubsection } from '@crm/contracts';
 import { escapeHtml } from './handle-meta.ts';
 
@@ -32,6 +32,8 @@ export interface MenuShellAnswer {
   readonly body: string;
   readonly status: number;
   readonly outcome: 'menu' | 'unknown' | 'missed';
+  /** The edge cache tags the answer is filed under: the place's and the workspace's, which every change forgets. */
+  readonly tags?: readonly string[];
 }
 
 export interface MenuShellDeps {
@@ -152,7 +154,12 @@ export async function menuShellFor(pathname: string, deps: MenuShellDeps): Promi
     const menu = await deps.readMenu(key, controller.signal);
     if (menu === undefined) return { body: deps.shell, status: 404, outcome: 'unknown' };
     const now = deps.now ?? Date.now;
-    return { body: withMenu(deps.shell, { key, menu, readAt: now() }), status: 200, outcome: 'menu' };
+    return {
+      body: withMenu(deps.shell, { key, menu, readAt: now() }),
+      status: 200,
+      outcome: 'menu',
+      tags: [...menuCacheTags(menu.placeId), ...menuWorkspaceTags(menu.workspaceId)],
+    };
   } catch {
     return { body: deps.shell, status: 200, outcome: 'missed' };
   } finally {

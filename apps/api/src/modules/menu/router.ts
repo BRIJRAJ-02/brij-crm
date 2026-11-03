@@ -108,6 +108,7 @@ export const menuRouter = m.router({
         id: input.id,
         name: input.name,
         rule: input.rule,
+        min: input.min,
         options: input.options,
         ...(input.max === undefined ? {} : { max: input.max }),
       }),

@@ -51,6 +51,7 @@ export interface MenuProcedures {
       id: string;
       name: string;
       rule: 'one' | 'up_to' | 'any';
+      min?: number;
       max?: number;
       options: { id?: string; name: string; priceDeltaMinor: number }[];
     },
@@ -383,6 +384,7 @@ export function openMenus(given: {
         readonly id: string;
         readonly name: string;
         readonly rule: 'one' | 'up_to' | 'any';
+        readonly min?: number;
         readonly max?: number;
         readonly options: readonly { readonly id?: string; readonly name: string; readonly priceDeltaMinor: number }[];
       },
@@ -394,6 +396,7 @@ export function openMenus(given: {
             id: group.id,
             name: group.name,
             rule: group.rule,
+            ...(group.min === undefined || group.min === 0 ? {} : { min: group.min }),
             ...(group.rule === 'up_to' && group.max !== undefined ? { max: group.max } : {}),
             options: group.options.map((option, index) => ({
               id: option.id ?? `pending-${String(index)}`,
@@ -416,6 +419,7 @@ export function openMenus(given: {
               rule: group.rule,
               options: group.options.map((option) => ({ ...option })),
               ...(group.max === undefined ? {} : { max: group.max }),
+              ...(group.min === undefined ? {} : { min: group.min }),
               mutationId,
             },
             options,

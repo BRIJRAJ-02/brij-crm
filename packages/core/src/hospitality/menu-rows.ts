@@ -86,6 +86,7 @@ export interface MenuRows {
     readonly id: string;
     readonly name: string;
     readonly rule: string;
+    readonly min?: number;
     readonly max: number | null;
   }[];
   readonly options: readonly {
@@ -167,6 +168,7 @@ export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promis
         id: menuOptionGroups.id,
         name: menuOptionGroups.name,
         rule: menuOptionGroups.rule,
+        min: menuOptionGroups.min,
         max: menuOptionGroups.max,
       })
       .from(menuOptionGroups)
@@ -250,6 +252,7 @@ function groupsOf(rows: MenuRows): OptionGroup[] {
     id: group.id,
     name: group.name,
     rule: group.rule as OptionGroup['rule'],
+    ...((group.min ?? 0) === 0 ? {} : { min: group.min }),
     ...(group.max === null ? {} : { max: group.max }),
     options: (options.get(group.id) ?? []).map((option) => ({
       id: option.id,
@@ -522,9 +525,16 @@ export async function restoreMenuRows(
   if (tops.length > 0) await tx.insert(menuSections).values(sectionValues(tops));
   if (subs.length > 0) await tx.insert(menuSections).values(sectionValues(subs));
   if (rows.groups.length > 0) {
-    await tx
-      .insert(menuOptionGroups)
-      .values(rows.groups.map((row) => ({ ...ws, id: row.id, name: row.name, rule: row.rule, max: row.max })));
+    await tx.insert(menuOptionGroups).values(
+      rows.groups.map((row) => ({
+        ...ws,
+        id: row.id,
+        name: row.name,
+        rule: row.rule,
+        min: row.min ?? 0,
+        max: row.max,
+      })),
+    );
   }
   if (rows.options.length > 0) {
     await tx.insert(menuOptions).values(

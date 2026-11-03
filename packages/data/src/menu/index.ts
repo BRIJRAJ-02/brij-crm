@@ -3,6 +3,7 @@
 // `@crm/data`.
 export {
   ALLERGEN_LEVELS,
+  choicesAllowed,
   currencyDigits,
   DIET_FILTERS,
   DIET_MARKS,
@@ -10,6 +11,7 @@ export {
   formatPrice,
   formatPriceDelta,
   isMenuKey,
+  linePrice,
   MENU_LIMITS,
   MENU_LOOK_PROPERTIES,
   MENU_PHOTO_WIDTHS,

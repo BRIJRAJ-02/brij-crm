@@ -596,6 +596,7 @@ export async function saveOptionGroup(
     readonly id: string;
     readonly name: string;
     readonly rule: 'one' | 'up_to' | 'any';
+    readonly min?: number;
     readonly max?: number;
     readonly options: readonly { readonly id?: string; readonly name: string; readonly priceDeltaMinor: number }[];
   },
@@ -604,7 +605,12 @@ export async function saveOptionGroup(
   const id = checkId(input.id, GROUP_NOT_FOUND);
   return edit(scope, 'menu.group_saved', { groupId: id }, async (tx) => {
     const ws = scope.workspaceId;
-    const fields = { name: input.name, rule: input.rule, max: input.rule === 'up_to' ? (input.max ?? 1) : null };
+    const fields = {
+      name: input.name,
+      rule: input.rule,
+      min: input.min ?? 0,
+      max: input.rule === 'up_to' ? (input.max ?? 1) : null,
+    };
     const changed = await tx
       .update(menuOptionGroups)
       .set({ ...fields, updatedAt: sql`now()` })

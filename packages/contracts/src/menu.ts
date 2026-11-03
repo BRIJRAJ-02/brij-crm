@@ -79,6 +79,8 @@ export const OptionGroup = z.object({
   id: Uuid,
   name: z.string(),
   rule: z.enum(OPTION_RULES),
+  /** The fewest a guest must pick: 1 or more makes the group required (from checklabs). */
+  min: z.number().int().optional(),
   max: z.number().int().optional(),
   options: z.array(MenuOption),
 });
@@ -293,16 +295,23 @@ export const SaveGroupInput = WorkspaceScoped.extend({
   id: Uuid,
   name: Name(M.groupNameMax, 'Name the group, such as Milk.'),
   rule: z.enum(OPTION_RULES),
+  min: z.number().int().min(0).max(M.optionsPerGroup).default(0),
   max: z.number().int().min(1).max(M.optionsPerGroup).optional(),
   options: z
     .array(MenuOptionFields)
     .min(1, 'Add at least one option.')
     .max(M.optionsPerGroup, `A group takes up to ${String(M.optionsPerGroup)} options.`),
   ...Write,
-}).refine((group) => group.rule !== 'up_to' || group.max !== undefined, {
-  error: 'Say how many a guest may pick.',
-  path: ['max'],
-});
+})
+  .refine((group) => group.rule !== 'up_to' || group.max !== undefined, {
+    error: 'Say how many a guest may pick.',
+    path: ['max'],
+  })
+  .refine(
+    (group) =>
+      group.min <= (group.rule === 'one' ? 1 : group.rule === 'up_to' ? (group.max ?? 1) : group.options.length),
+    { error: 'A guest can’t be asked to pick more than they may, or than there are.', path: ['min'] },
+  );
 /** Adds or changes an option group. */
 export type SaveGroupInput = z.infer<typeof SaveGroupInput>;
 
@@ -401,6 +410,9 @@ export type PublicMenuPlace = z.infer<typeof PublicMenuPlace>;
  * now, and the header. No member, guest or draft data, and nothing of another place.
  */
 export const PublicMenu = z.object({
+  /** The place and workspace it is, so the HTML shell files its answer under the same cache tags. */
+  placeId: Uuid,
+  workspaceId: Uuid,
   version: z.number().int(),
   business: z.object({
     name: z.string(),

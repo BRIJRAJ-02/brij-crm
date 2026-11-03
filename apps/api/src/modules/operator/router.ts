@@ -1,3 +1,4 @@
+import { menuWorkspaceTags } from '@crm/contracts';
 import {
   operatorOverview,
   operatorPage,
@@ -34,6 +35,8 @@ export const operatorRouter = operator.operator.router({
   // made, its before and after join the log as a row of their own.
   setEarlyAccess: operator.operator.setEarlyAccess.handler(async ({ context, input }) => {
     const change = await setEarlyAccess({ db: context.db }, input);
+    // Closing a workspace's business apps takes its guest menus off the edge at once (spec 0065, H1).
+    if (!input.on) await context.edgeCache.forget(menuWorkspaceTags(input.workspaceId));
     const event = {
       userId: context.user.id,
       action: 'operator.earlyAccessChanged',

@@ -10,6 +10,8 @@ const id = (n: number) => `0199f0a0-0000-7000-8000-${String(n).padStart(12, '0')
 /** A small café menu: two menus (Dinner serving now, Brunch at the weekend), sizes, a shared group, a sold out dish. */
 export function sampleMenu(): PublicMenu {
   return {
+    placeId: id(900),
+    workspaceId: id(901),
     version: 3,
     business: { name: 'Somewhere Nowhere', description: 'Small plates and natural wine in Soho.' },
     place: {

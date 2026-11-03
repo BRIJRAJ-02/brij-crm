@@ -98,6 +98,8 @@ export const MENU_LIMITS = {
   searchMax: 60,
   /** Picks a guest keeps (AC-6530). */
   picks: 60,
+  /** How many of one pick (ported from checklabs: 1 to 99). */
+  quantityMax: 99,
 } as const;
 
 /** The two widths a menu photo is kept at (AC-6527): the item sheet's, and the list's and grid's. */
@@ -208,6 +210,14 @@ export function menuCacheTags(...placeIds: readonly string[]): readonly string[]
   return [...new Set(placeIds.filter((id) => /^[0-9a-f-]{36}$/.test(id)))].map((id) => `menu:${id}`);
 }
 
+/**
+ * The edge cache tag every guest menu answer of a workspace carries (security review, 4 Nov 2026): deleting the
+ * workspace or the operator closing its business apps forgets every place's copies at once.
+ */
+export function menuWorkspaceTags(workspaceId: string): readonly string[] {
+  return /^[0-9a-f-]{36}$/.test(workspaceId) ? [`menu-ws:${workspaceId}`] : [];
+}
+
 /** The guest menu's address on our origin. */
 export const menuPagePath = (key: string): string => `/m/${key}`;
 
@@ -227,6 +237,38 @@ export const menuPhotoPath = (key: string, photoId: string, size: MenuPhotoSize,
 /** An item's price with the options a guest picked, in minor units (AC-6530). */
 export function pickPrice(base: number, deltas: readonly number[], quantity = 1): number {
   return (base + deltas.reduce((sum, delta) => sum + delta, 0)) * quantity;
+}
+
+/**
+ * One line of picks in minor units (ported from checklabs' cart math): the chosen size's price, else the item's
+ * own; plus every chosen option's difference; times the quantity, a whole number from 1 to 99. Undefined for a
+ * quantity outside that, or an item with neither a price nor the size asked for. Never a float.
+ */
+export function linePrice(input: {
+  readonly basePrice?: number;
+  readonly sizePrices: readonly number[];
+  readonly size?: number;
+  readonly optionDeltas: readonly number[];
+  readonly quantity: number;
+}): number | undefined {
+  if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > MENU_LIMITS.quantityMax)
+    return undefined;
+  const unit = input.size === undefined ? input.basePrice : input.sizePrices[input.size];
+  if (unit === undefined) return undefined;
+  return pickPrice(unit, input.optionDeltas, input.quantity);
+}
+
+/**
+ * Whether a guest's choices in one option group are allowed (ported from checklabs' modifier groups, with the min it
+ * lacked): at least `min` and at most the group's own ceiling (one, `max`, or any). The item sheet enables Add only
+ * when every group says yes.
+ */
+export function choicesAllowed(
+  group: { readonly rule: OptionRule; readonly min?: number; readonly max?: number },
+  chosen: number,
+): boolean {
+  const most = group.rule === 'one' ? 1 : group.rule === 'up_to' ? (group.max ?? 1) : Number.POSITIVE_INFINITY;
+  return chosen >= (group.min ?? 0) && chosen <= most;
 }
 
 /**

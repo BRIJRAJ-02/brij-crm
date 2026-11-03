@@ -64,6 +64,9 @@ export function previewMenu(
     };
   }
   return {
+    placeId: place.id,
+    // The preview is never cached, so it names no workspace.
+    workspaceId: '00000000-0000-0000-0000-000000000000',
     version: 0,
     business: { name: header.businessName },
     place: {

@@ -1,3 +1,4 @@
+import { menuWorkspaceTags } from '@crm/contracts';
 import {
   deleteWorkspace,
   getWorkspaceSettings,
@@ -124,6 +125,8 @@ export const workspaceRouter = member.workspace.router({
       deleteWorkspace(context.scope, { confirmName: input.confirmName }, hooks, sourceOf(context)),
     );
     await followInDirectory('delete', () => context.directory.setWorkspaceDeleted(context.scope.workspaceId, true));
+    // Its guest menus leave the edge at once (spec 0065, H1; the security review).
+    await context.edgeCache.forget(menuWorkspaceTags(context.scope.workspaceId));
     // Each member is told (AC-823), after the commit and without holding up the answer; on Vercel the instance stays
     // up until the last one is sent.
     context.keepAlive(tellMembersDeleted(context, deletion));
