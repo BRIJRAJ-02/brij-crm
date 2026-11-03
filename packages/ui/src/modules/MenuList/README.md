@@ -72,3 +72,5 @@ Escape closes a sheet.
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
+
+- `at` reads the menu at another instant than now (the editor's Preview at, after checklabs' `?at=` preview): which menus and sections serve, and the open line, follow it.

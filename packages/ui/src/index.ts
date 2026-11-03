@@ -103,6 +103,8 @@ export { memoIntl } from './lib/intl-memo.ts';
 export { safeHref } from './lib/safe-href.ts';
 export { strings as sharedStrings } from './lib/strings.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
+/** A country's currency (GB is GBP, DE is EUR), so a form can start from the one a place most likely uses. */
+export { currencyOfCountry } from './lib/region-defaults.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
 export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
 export {

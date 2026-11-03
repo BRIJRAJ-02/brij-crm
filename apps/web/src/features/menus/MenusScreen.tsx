@@ -1,33 +1,24 @@
 // Brief
-// Purpose: the Menu app's editor (spec 0065, H1, AC-6520 to AC-6526): menus, their sections and dishes, Publish.
+// Purpose: the Menu app's editor (spec 0065, H1, AC-6520 to AC-6527), laid out after checklabs' menu editor: a header
+// with the status and one Review and publish, the menus, then each menu's Structure (sections, sub sections and their
+// dishes in order), Dishes, Options and Settings, with the guest menu's phone beside it.
 // Main task: build a menu and publish it, watching the guest menu take shape in the phone beside it.
-// Leaves out: the guest look's presets (H5), QR codes (H2, the Menu QR app), import (H6), analytics (spec 0066).
-import {
-  isDataError,
-  type MenuDraft,
-  type MenuItem as Dish,
-  type MenuSection,
-  type MenuStore,
-  type PlaceHours,
-} from '@crm/data';
+// Leaves out: the guest look's presets (H5), QR codes per table (H2, the Menu QR app), import (H6), analytics (0066).
+import { isDataError, type MenuDraft, type MenuItem as Dish, type MenuStore, type PlaceHours } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
-import { formatPrice } from '@crm/data/menu';
 import {
+  Badge,
   Button,
   ButtonLink,
-  Callout,
-  Card,
-  ChoiceChips,
+  EmptyState,
   Menu,
   MenuItem,
   MenuTrigger,
-  CopyButton,
-  EmptyState,
-  Field,
   MenuList,
   Modal,
   PreviewLayout,
   SegmentedControl,
+  Select,
   SetupChecklist,
   Switch,
   TabPanel,
@@ -35,42 +26,93 @@ import {
   TopBar,
   type Toasts,
 } from '@crm/ui';
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import { publicMenuUrl } from '../booking/links.ts';
-import { businessSettingsHref } from '../settings/nav.ts';
+import { businessSettingsHref, placeTablesHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { DishesTab } from './DishesTab.tsx';
+import { GroupDrawer } from './GroupDrawer.tsx';
 import { ItemDialog } from './ItemDialog.tsx';
+import { OptionsTab } from './OptionsTab.tsx';
 import { draftPhotoHref } from './photo.ts';
-import { previewMenu, publishBlocker } from './preview.ts';
+import {
+  formatPreviewAt,
+  parsePreviewAt,
+  previewInstant,
+  PREVIEW_DAYS,
+  PREVIEW_TIMES,
+  type PreviewAt,
+} from './preview-at.ts';
+import { previewMenu, publishBlocker, unpricedDishes } from './preview.ts';
+import { PublishDialog } from './PublishDialog.tsx';
+import { SectionDrawer } from './SectionDrawer.tsx';
+import { SettingsTab } from './SettingsTab.tsx';
+import { StructureTab } from './StructureTab.tsx';
 import { strings } from './strings.ts';
 
-/** What the screen opens over itself: a dish's form, a confirm. */
-type Open =
+/** The tabs of one menu, after checklabs' Structure and Items, its modifier groups and its Settings page. */
+export const MENU_TABS = ['structure', 'dishes', 'options', 'settings'] as const;
+/** One tab of a menu. */
+export type MenuTab = (typeof MENU_TABS)[number];
+
+/** What the screen opens over itself: a dish, a section or an option group in a drawer, or a confirm. */
+export type Open =
   | { readonly kind: 'item'; readonly item?: Dish; readonly sectionId?: string; readonly newName?: string }
+  | { readonly kind: 'section'; readonly menuId: string; readonly sectionId?: string; readonly parentId?: string }
+  | { readonly kind: 'group'; readonly groupId?: string }
   | { readonly kind: 'discard' }
+  | { readonly kind: 'publish' }
   | { readonly kind: 'deleteMenu'; readonly menuId: string; readonly name: string }
   | { readonly kind: 'deleteSection'; readonly sectionId: string; readonly name: string }
+  | { readonly kind: 'deleteItem'; readonly item: Dish }
   | undefined;
+
+/** Where the screen stands, kept in the address (`?menu=&tab=&at=&preview=`), so a reload or a link opens it there. */
+export interface MenusView {
+  readonly menu?: string;
+  readonly tab?: MenuTab;
+  /** `sat-11:00`: the preview read on Saturday at 11:00 at the place (`preview-at.ts`). */
+  readonly at?: string;
+  readonly preview?: 'off';
+}
+
+/** The address's search as the screen reads it: anything unknown is dropped. */
+export function menusSearch(search: Record<string, unknown>): MenusView {
+  const tab = search.tab;
+  return {
+    ...(typeof search.menu === 'string' && /^[0-9a-f-]{36}$/i.test(search.menu) ? { menu: search.menu } : {}),
+    ...(typeof tab === 'string' && (MENU_TABS as readonly string[]).includes(tab) ? { tab: tab as MenuTab } : {}),
+    ...(parsePreviewAt(search.at) === undefined ? {} : { at: search.at as string }),
+    ...(search.preview === 'off' ? { preview: 'off' as const } : {}),
+  };
+}
 
 export interface MenusScreenProps {
   readonly store: MenuStore;
   readonly slug: string;
   readonly toasts: Toasts;
-  /** The business's name and each place's hours, for the preview's header and the checklist. */
+  /** The business's name and each place's hours, for the preview's header, the checklist and serving defaults. */
   readonly business: { readonly name: string; readonly hours: Readonly<Record<string, PlaceHours>> };
+  readonly view: MenusView;
 }
 
 /** The Menus screen (spec 0065, H1). */
-export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps) {
+export function MenusScreen({ store, slug, toasts, business, view }: MenusScreenProps) {
   const state = useHospitality(store.draft(slug));
-  const [menuId, setMenuId] = useState<string | undefined>();
   const [placeId, setPlaceId] = useState<string | undefined>();
   const [open, setOpen] = useState<Open>();
-  const [isPublishing, setPublishing] = useState(false);
   const [justPublished, setJustPublished] = useState(false);
   const router = useRouter();
-  // "Published" stands in the button for two seconds after a publish, then it reads Publish again.
+  const navigate = useNavigate();
+  const go = (next: Partial<MenusView>) =>
+    void navigate({
+      to: '/w/$slug/menus',
+      params: { slug },
+      search: menusSearch({ ...view, ...next }),
+      replace: true,
+    });
+  // "Published" stands in the button for two seconds after a publish, then it reads Review and publish again.
   useEffect(() => {
     if (!justPublished) return undefined;
     const timer = globalThis.setTimeout(() => setJustPublished(false), 2_000);
@@ -108,21 +150,17 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
     if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
   };
   const place = draft.places.find((each) => each.id === placeId) ?? draft.places[0];
+  const placeHours = place === undefined ? undefined : business.hours[place.id];
   const menus = [...draft.menus].sort((a, b) => a.position - b.position);
-  const current = menus.find((each) => each.id === menuId) ?? menus[0];
+  const current = menus.find((each) => each.id === view.menu) ?? menus[0];
+  const tab: MenuTab = view.tab ?? 'structure';
   const blocker = publishBlocker(draft);
   const isLive = draft.publishedAt !== undefined;
+  const unpriced = unpricedDishes(draft);
+  const showsPreview = view.preview !== 'off';
 
-  const publish = async () => {
-    setPublishing(true);
-    const refused = await store.publish(slug);
-    setPublishing(false);
-    if (refused !== undefined) {
-      said(refused);
-      return;
-    }
-    setJustPublished(true);
-  };
+  // The place's own page holds its week, so Set your hours opens there, not on the Business list (walk, 4 Nov).
+  const hoursHref = place === undefined ? businessSettingsHref(slug) : placeTablesHref(slug, place.id);
 
   const copyLink = async (link: string) => {
     try {
@@ -133,20 +171,33 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
     }
   };
 
+  // A first menu comes with a first section, so Add dishes is right there (foolproof from the first click).
   const newMenu = () => {
     const id = store.newId();
-    setMenuId(id);
+    const isFirst = draft.menus.length === 0;
+    go({ menu: id, tab: 'structure' });
     void store
-      .saveMenu(slug, { id, name: strings.newMenuName, placeIds: draft.places.map((each) => each.id) })
-      .then(said);
+      .saveMenu(slug, {
+        id,
+        name: isFirst ? strings.newMenuName : `${strings.newMenu} ${String(draft.menus.length + 1)}`,
+        placeIds: draft.places.map((each) => each.id),
+      })
+      .then((refused) => {
+        said(refused);
+        if (refused !== undefined) return;
+        void store
+          .saveSection(slug, { id: store.newId(), menuId: id, name: strings.newSectionName, layout: 'list' })
+          .then(said);
+      });
   };
 
+  const hasHours = placeHours !== undefined && Object.values(placeHours.weekly).some((ranges) => ranges.length > 0);
   const steps = [
     {
       id: 'hours',
       title: strings.stepPlace,
-      detail: place !== undefined && hasHours(business.hours[place.id]) ? strings.stepPlaceDone : strings.stepPlaceTodo,
-      isDone: place !== undefined && hasHours(business.hours[place.id]),
+      detail: hasHours ? strings.stepPlaceDone : strings.stepPlaceTodo,
+      isDone: hasHours,
       action: strings.open,
     },
     { id: 'menu', title: strings.stepMenu, isDone: draft.menus.length > 0, action: strings.add },
@@ -156,7 +207,6 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
       isDone: draft.sections.some((section) => section.itemIds.length > 0),
       action: strings.add,
     },
-    // Publish has one primary button, the page's own; the step only says where it is.
     { id: 'publish', title: strings.stepPublish, detail: strings.stepPublishDetail, isDone: isLive },
     {
       id: 'share',
@@ -167,41 +217,117 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
     },
   ];
 
-  const actions = (
-    <>
-      {draft.changes > 0 && isLive ? (
-        <Button onPress={() => setOpen({ kind: 'discard' })} isDisabled={!draft.canEdit}>
-          {strings.discard}
-        </Button>
-      ) : null}
-      {place === undefined || !isLive ? null : (
-        <ButtonLink href={publicMenuUrl(place.menuKey)} isExternal icon="external-link">
-          {strings.openGuest}
-        </ButtonLink>
-      )}
-      {draft.canEdit ? (
-        <Button
-          variant="primary"
-          isPending={isPublishing}
-          isDisabled={(draft.changes === 0 && isLive) || blocker !== undefined}
-          onPress={() => void publish()}
-          {...(blocker === undefined ? {} : { 'aria-describedby': 'menu-blocker' })}
-        >
-          {isPublishing ? strings.publishing : justPublished ? strings.published : strings.publish}
-        </Button>
-      ) : null}
-    </>
-  );
+  const actions =
+    draft.menus.length === 0 ? undefined : (
+      <>
+        <Switch
+          label={strings.previewSwitch}
+          isSelected={showsPreview}
+          onChange={(on) => go({ preview: on ? undefined : 'off' })}
+        />
+        <MenuTrigger>
+          <Button variant="ghost" icon="ellipsis" label={strings.more} />
+          <Menu
+            label={strings.more}
+            onAction={(key) => {
+              if (place === undefined) return;
+              if (key === 'open') globalThis.open(publicMenuUrl(place.menuKey), '_blank', 'noopener');
+              else if (key === 'copy') void copyLink(publicMenuUrl(place.menuKey));
+              else if (key === 'qr') setOpen({ kind: 'publish' });
+              else if (key === 'discard') setOpen({ kind: 'discard' });
+            }}
+          >
+            {isLive && place !== undefined ? (
+              <>
+                <MenuItem id="open" icon="external-link">
+                  {strings.openGuest}
+                </MenuItem>
+                <MenuItem id="copy" icon="copy">
+                  {strings.copyLink}
+                </MenuItem>
+                <MenuItem id="qr" icon="qr-code">
+                  {strings.showQr}
+                </MenuItem>
+              </>
+            ) : null}
+            {draft.canEdit && isLive && draft.changes > 0 ? (
+              <MenuItem id="discard" icon="undo-2">
+                {strings.discard}
+              </MenuItem>
+            ) : null}
+          </Menu>
+        </MenuTrigger>
+        {draft.canEdit ? (
+          <Button
+            variant="primary"
+            animateLabel
+            labelReserve={strings.reviewPublish}
+            isDisabled={draft.changes === 0 && isLive}
+            onPress={() => setOpen({ kind: 'publish' })}
+          >
+            {justPublished ? strings.published : strings.reviewPublish}
+          </Button>
+        ) : null}
+      </>
+    );
 
+  const atView = parsePreviewAt(view.at);
+  const at = atView === undefined || place === undefined ? undefined : previewInstant(atView, place.timeZone);
   const preview =
-    place === undefined ? undefined : (
-      <MenuList
-        menu={previewMenu(draft, place, {
-          businessName: business.name,
-          ...(business.hours[place.id] === undefined ? {} : { hours: business.hours[place.id] }),
-        })}
-        photoHref={(photoId, size, version) => draftPhotoHref(slug, photoId, size, version)}
-      />
+    place === undefined || !showsPreview || current === undefined ? undefined : (
+      <>
+        {/* The guests' own look (the Warm preset with the brand's accent), before any Publish. */}
+        <link rel="stylesheet" href={`/api/menu/look.css?workspace=${encodeURIComponent(slug)}`} precedence="menu" />
+        <MenuList
+          menu={previewMenu(draft, place, {
+            businessName: business.name,
+            ...(placeHours === undefined ? {} : { hours: placeHours }),
+          })}
+          photoHref={(photoId, size, version) => draftPhotoHref(slug, photoId, size, version)}
+          {...(at === undefined ? {} : { at: at.getTime() })}
+        />
+      </>
+    );
+
+  const previewControls =
+    place === undefined || !showsPreview || current === undefined ? undefined : (
+      <>
+        {draft.places.length > 1 ? (
+          <SegmentedControl
+            label={strings.previewAt}
+            segments={draft.places.map((each) => ({ value: each.id, label: each.name }))}
+            value={place.id}
+            onChange={setPlaceId}
+          />
+        ) : null}
+        <Select
+          label={strings.previewDay}
+          items={[
+            { id: 'now', label: strings.previewNow },
+            ...PREVIEW_DAYS.map((day) => ({ id: day, label: strings.dayNames[day] })),
+          ]}
+          value={atView?.day ?? 'now'}
+          onChange={(day) =>
+            go({
+              at:
+                day === null || day === 'now' || !PREVIEW_DAYS.includes(day as PreviewAt['day'])
+                  ? undefined
+                  : formatPreviewAt({ day: day as PreviewAt['day'], time: atView?.time ?? '12:00' }),
+            })
+          }
+        />
+        {atView === undefined ? null : (
+          <Select
+            label={strings.previewTime}
+            variant="time"
+            items={PREVIEW_TIMES.map((time) => ({ id: time, label: time }))}
+            value={atView.time}
+            onChange={(time) => {
+              if (time !== null) go({ at: formatPreviewAt({ day: atView.day, time }) });
+            }}
+          />
+        )}
+      </>
     );
 
   return (
@@ -212,7 +338,12 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
           <TopBar
             title={strings.title}
             icon="utensils"
-            meta={draft.changes > 0 ? strings.changes(draft.changes) : isLive ? strings.upToDate : strings.draft}
+            meta={
+              <>
+                <Badge tone={isLive ? 'accent' : 'neutral'} text={isLive ? strings.statusLive : strings.statusDraft} />
+                {draft.changes > 0 ? ` ${strings.changes(draft.changes)}` : null}
+              </>
+            }
           >
             {actions}
           </TopBar>
@@ -220,75 +351,26 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
         body: (
           <>
             <PreviewLayout
-              previewShare="wide"
+              previewShare="third"
               notices={
-                <>
-                  {!isLive ? (
-                    <SetupChecklist
-                      title={strings.setup}
-                      steps={steps}
-                      onAction={(id) => {
-                        if (id === 'hours') router.history.push(businessSettingsHref(slug));
-                        else if (id === 'menu') newMenu();
-                        else if (id === 'share' && place !== undefined) void copyLink(publicMenuUrl(place.menuKey));
-                        else if (id === 'items' && current !== undefined) {
-                          const section = draft.sections.find((each) => each.menuId === current.id);
-                          setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
-                        }
-                      }}
-                    />
-                  ) : null}
-                  {blocker !== undefined && draft.menus.length > 0 ? (
-                    <Callout
-                      tone="warning"
-                      actions={
-                        blocker.reason === 'unpriced' ? (
-                          <Button
-                            onPress={() => {
-                              const dish = draft.items.find((each) => each.id === blocker.itemId);
-                              if (dish !== undefined) setOpen({ kind: 'item', item: dish });
-                            }}
-                          >
-                            {strings.editNamed(blocker.name)}
-                          </Button>
-                        ) : (
-                          <Button
-                            onPress={() => {
-                              const section = draft.sections.find((each) => each.menuId === current?.id);
-                              setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
-                            }}
-                          >
-                            {strings.addADish}
-                          </Button>
-                        )
+                !isLive ? (
+                  <SetupChecklist
+                    title={strings.setup}
+                    steps={steps}
+                    onAction={(id) => {
+                      if (id === 'hours') router.history.push(hoursHref);
+                      else if (id === 'menu') newMenu();
+                      else if (id === 'share' && place !== undefined) void copyLink(publicMenuUrl(place.menuKey));
+                      else if (id === 'items' && current !== undefined) {
+                        const section = draft.sections.find((each) => each.menuId === current.id);
+                        setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
                       }
-                    >
-                      <span id="menu-blocker">
-                        {blocker.reason === 'empty' ? strings.emptyBlocker : strings.unpricedBlocker(blocker.name)}
-                      </span>
-                    </Callout>
-                  ) : null}
-                  {isLive && place !== undefined ? (
-                    <Callout tone="info" title={strings.live}>
-                      {publicMenuUrl(place.menuKey)}{' '}
-                      <CopyButton value={publicMenuUrl(place.menuKey)} label={strings.copyLink} />
-                    </Callout>
-                  ) : null}
-                </>
+                    }}
+                  />
+                ) : undefined
               }
               {...(preview === undefined ? {} : { preview })}
-              {...(draft.places.length > 1
-                ? {
-                    previewControls: (
-                      <SegmentedControl
-                        label={strings.previewAt}
-                        segments={draft.places.map((each) => ({ value: each.id, label: each.name }))}
-                        value={place?.id ?? ''}
-                        onChange={setPlaceId}
-                      />
-                    ),
-                  }
-                : {})}
+              {...(previewControls === undefined ? {} : { previewControls })}
             >
               {current === undefined ? (
                 <EmptyState
@@ -309,7 +391,7 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
                   label={strings.menus}
                   tabs={menus.map((menu) => ({ id: menu.id, label: menu.name }))}
                   selectedKey={current.id}
-                  onSelectionChange={setMenuId}
+                  onSelectionChange={(id) => go({ menu: id })}
                   end={
                     draft.canEdit && draft.menus.length < 30 ? (
                       <Button icon="plus" onPress={newMenu}>
@@ -320,15 +402,64 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
                 >
                   {menus.map((menu) => (
                     <TabPanel key={menu.id} id={menu.id}>
-                      <MenuEditor
-                        store={store}
-                        slug={slug}
-                        draft={draft}
-                        menuId={menu.id}
-                        onOpen={setOpen}
-                        said={said}
-                        toasts={toasts}
-                      />
+                      <Tabs
+                        label={strings.menuSettings}
+                        tabs={[
+                          {
+                            id: 'structure',
+                            label: strings.tabStructure,
+                            icon: 'list',
+                            count: draft.sections.filter((each) => each.menuId === menu.id).length,
+                          },
+                          {
+                            id: 'dishes',
+                            label: strings.tabDishes,
+                            icon: 'utensils',
+                            count: draft.items.length,
+                            ...(unpriced.length === 0 ? {} : { alert: strings.needsPrice(unpriced.length) }),
+                          },
+                          {
+                            id: 'options',
+                            label: strings.tabOptions,
+                            icon: 'sliders-horizontal',
+                            count: draft.groups.length,
+                          },
+                          { id: 'settings', label: strings.tabSettings, icon: 'settings' },
+                        ]}
+                        selectedKey={tab}
+                        onSelectionChange={(id) =>
+                          go({ tab: (MENU_TABS as readonly string[]).includes(id) ? (id as MenuTab) : 'structure' })
+                        }
+                      >
+                        <TabPanel id="structure">
+                          <StructureTab
+                            store={store}
+                            slug={slug}
+                            draft={draft}
+                            menuId={menu.id}
+                            onOpen={setOpen}
+                            said={said}
+                            toasts={toasts}
+                          />
+                        </TabPanel>
+                        <TabPanel id="dishes">
+                          <DishesTab store={store} slug={slug} draft={draft} onOpen={setOpen} said={said} />
+                        </TabPanel>
+                        <TabPanel id="options">
+                          <OptionsTab draft={draft} onOpen={setOpen} />
+                        </TabPanel>
+                        <TabPanel id="settings">
+                          <SettingsTab
+                            store={store}
+                            slug={slug}
+                            draft={draft}
+                            menuId={menu.id}
+                            {...(placeHours === undefined ? {} : { placeHours })}
+                            onOpen={setOpen}
+                            said={said}
+                          />
+                        </TabPanel>
+                      </Tabs>
                     </TabPanel>
                   ))}
                 </Tabs>
@@ -345,6 +476,54 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
                 {...(open.newName === undefined ? {} : { newName: open.newName })}
                 toasts={toasts}
                 onClose={() => setOpen(undefined)}
+                onNewGroup={() => {
+                  setOpen(undefined);
+                  go({ tab: 'options' });
+                }}
+              />
+            ) : null}
+            {open?.kind === 'section' ? (
+              <SectionDrawer
+                store={store}
+                slug={slug}
+                draft={draft}
+                menuId={open.menuId}
+                {...(open.sectionId === undefined ? {} : { sectionId: open.sectionId })}
+                {...(open.parentId === undefined ? {} : { parentId: open.parentId })}
+                {...(placeHours === undefined ? {} : { placeHours })}
+                toasts={toasts}
+                onClose={() => setOpen(undefined)}
+              />
+            ) : null}
+            {open?.kind === 'group' ? (
+              <GroupDrawer
+                store={store}
+                slug={slug}
+                draft={draft}
+                {...(open.groupId === undefined ? {} : { groupId: open.groupId })}
+                toasts={toasts}
+                onClose={() => setOpen(undefined)}
+              />
+            ) : null}
+            {open?.kind === 'publish' ? (
+              <PublishDialog
+                store={store}
+                slug={slug}
+                draft={draft}
+                hasHours={hasHours}
+                {...(place === undefined ? {} : { place })}
+                blocker={blocker}
+                onClose={() => setOpen(undefined)}
+                onPublished={() => setJustPublished(true)}
+                onFix={(fix) => {
+                  setOpen(undefined);
+                  if (fix.kind === 'hours') router.history.push(hoursHref);
+                  else if (fix.kind === 'item') {
+                    const dish = draft.items.find((each) => each.id === fix.itemId);
+                    if (dish !== undefined) setOpen({ kind: 'item', item: dish });
+                  } else if (fix.kind === 'menu') go({ menu: fix.menuId, tab: 'settings' });
+                  else go({ tab: 'structure' });
+                }}
               />
             ) : null}
             <Modal
@@ -386,7 +565,10 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
                   <Button
                     variant="danger-solid"
                     onPress={() => {
-                      if (open?.kind === 'deleteMenu') void store.deleteMenu(slug, open.menuId).then(said);
+                      if (open?.kind === 'deleteMenu') {
+                        go({ menu: undefined, tab: undefined });
+                        void store.deleteMenu(slug, open.menuId).then(said);
+                      }
                       setOpen(undefined);
                     }}
                   >
@@ -422,6 +604,36 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
             >
               {strings.deleteSectionLine}
             </Modal>
+            <Modal
+              variant="confirm"
+              tone="danger"
+              title={open?.kind === 'deleteItem' ? strings.deleteDishQuestion(open.item.name) : strings.deleteDish}
+              isOpen={open?.kind === 'deleteItem'}
+              onOpenChange={(isOpen) => {
+                if (!isOpen) setOpen(undefined);
+              }}
+              actions={
+                <>
+                  <Button slot="close">{strings.cancel}</Button>
+                  <Button
+                    variant="danger-solid"
+                    onPress={() => {
+                      if (open?.kind === 'deleteItem') void store.deleteItem(slug, open.item.id).then(said);
+                      setOpen(undefined);
+                    }}
+                  >
+                    {strings.deleteDish}
+                  </Button>
+                </>
+              }
+            >
+              {strings.deleteDishLine}
+            </Modal>
+            {isLive && place !== undefined && !showsPreview ? (
+              <ButtonLink href={publicMenuUrl(place.menuKey)} isExternal icon="external-link">
+                {strings.openGuest}
+              </ButtonLink>
+            ) : null}
           </>
         ),
       }}
@@ -429,410 +641,9 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
   );
 }
 
-/** A field saved when it loses focus (or Enter), never on every key: one change a field, not one a letter. */
-function SavedField({
-  label,
-  value,
-  hint,
-  isReadOnly,
-  isValid = (next: string) => next.trim() !== '',
-  onSave,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly hint?: string;
-  readonly isReadOnly?: boolean;
-  readonly isValid?: (next: string) => boolean;
-  readonly onSave: (next: string) => void;
-}) {
-  const [text, setText] = useState(value);
-  const commit = () => {
-    if (!isValid(text)) setText(value);
-    else if (text !== value) onSave(text.trim());
-  };
-  return (
-    <Field
-      label={label}
-      value={text}
-      onChange={setText}
-      onBlur={commit}
-      onSubmit={commit}
-      {...(hint === undefined ? {} : { hint })}
-      {...(isReadOnly === undefined ? {} : { isReadOnly })}
-    />
-  );
-}
-
-const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-/** Whether a place has any opening hours in its week. */
-const hasHours = (hours: PlaceHours | undefined): boolean =>
-  hours !== undefined && Object.values(hours.weekly).some((ranges) => ranges.length > 0);
-
-/** One menu's settings and its sections. */
-function MenuEditor({
-  store,
-  slug,
-  draft,
-  menuId,
-  onOpen,
-  said,
-  toasts,
-}: {
-  readonly toasts: Toasts;
-  readonly store: MenuStore;
-  readonly slug: string;
-  readonly draft: MenuDraft;
-  readonly menuId: string;
-  readonly onOpen: (open: Open) => void;
-  readonly said: (refused: { readonly message: string } | undefined) => void;
-}) {
-  const menu = draft.menus.find((each) => each.id === menuId);
-  const sections = useMemo(
-    () => draft.sections.filter((each) => each.menuId === menuId).sort((a, b) => a.position - b.position),
-    [draft.sections, menuId],
-  );
-  if (menu === undefined) return null;
-  const save = (change: Partial<Parameters<MenuStore['saveMenu']>[1]>) =>
-    void store
-      .saveMenu(slug, {
-        id: menu.id,
-        name: menu.name,
-        placeIds: menu.placeIds,
-        ...(menu.note === undefined ? {} : { note: menu.note }),
-        ...change,
-      })
-      .then(said);
-  const top = sections.filter((each) => each.parentId === undefined);
-  return (
-    <>
-      <Card
-        title={strings.menuSettings}
-        actions={
-          draft.canEdit ? (
-            <Button
-              variant="ghost"
-              icon="trash"
-              onPress={() => onOpen({ kind: 'deleteMenu', menuId: menu.id, name: menu.name })}
-            >
-              {strings.deleteMenu}
-            </Button>
-          ) : undefined
-        }
-      >
-        <SavedField
-          label={strings.menuName}
-          value={menu.name}
-          isReadOnly={!draft.canEdit}
-          onSave={(name) => save({ name })}
-        />
-        {draft.places.length > 1 ? (
-          <ChoiceChips
-            label={strings.showsAt}
-            choices={draft.places.map((place) => ({ id: place.id, label: place.name }))}
-            selected={menu.placeIds}
-            onChange={(placeIds) => save({ placeIds: [...placeIds] })}
-            isDisabled={!draft.canEdit}
-          />
-        ) : null}
-        <Switch
-          label={strings.servingTimes}
-          isSelected={menu.serving !== undefined}
-          isReadOnly={!draft.canEdit}
-          onChange={(on) => save({ serving: on ? { days: ['sat', 'sun'], from: '10:00', to: '15:00' } : null })}
-        />
-        {menu.serving === undefined ? null : (
-          <>
-            <ChoiceChips
-              label={strings.servingDays}
-              choices={(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map((day) => ({
-                id: day,
-                label: strings.days[day],
-              }))}
-              selected={menu.serving.days}
-              onChange={(days) => {
-                if (days.length > 0 && menu.serving !== undefined) {
-                  save({ serving: { ...menu.serving, days: days as typeof menu.serving.days } });
-                }
-              }}
-            />
-            <SavedField
-              label={strings.from}
-              value={menu.serving.from}
-              isValid={(next) => TIME.test(next.trim())}
-              onSave={(from) => {
-                if (menu.serving !== undefined) save({ serving: { ...menu.serving, from } });
-              }}
-            />
-            <SavedField
-              label={strings.to}
-              value={menu.serving.to}
-              isValid={(next) => TIME.test(next.trim())}
-              onSave={(to) => {
-                if (menu.serving !== undefined) save({ serving: { ...menu.serving, to } });
-              }}
-            />
-          </>
-        )}
-        <SavedField
-          label={strings.menuNote}
-          hint={strings.menuNoteHint}
-          value={menu.note ?? ''}
-          isReadOnly={!draft.canEdit}
-          isValid={(next) => next.length <= 300}
-          onSave={(note) => save({ note })}
-        />
-      </Card>
-      {top.map((section, index) => (
-        <SectionCard
-          key={section.id}
-          index={index}
-          store={store}
-          slug={slug}
-          draft={draft}
-          section={section}
-          subsections={sections.filter((each) => each.parentId === section.id)}
-          onOpen={onOpen}
-          said={said}
-          toasts={toasts}
-        />
-      ))}
-      {draft.canEdit ? (
-        <Button
-          icon="plus"
-          onPress={() =>
-            void store
-              .saveSection(slug, {
-                id: store.newId(),
-                menuId,
-                name: top.length === 0 ? strings.newSectionName : `${strings.sections} ${String(top.length + 1)}`,
-                layout: 'list',
-              })
-              .then(said)
-          }
-        >
-          {strings.newSection}
-        </Button>
-      ) : null}
-    </>
-  );
-}
-
-/** One section: its name and layout, Add dishes (search what exists first, or make a new one), and its dishes. */
-function SectionCard({
-  index,
-  store,
-  slug,
-  draft,
-  section,
-  subsections,
-  onOpen,
-  said,
-  toasts,
-}: {
-  readonly toasts: Toasts;
-  readonly index: number;
-  readonly store: MenuStore;
-  readonly slug: string;
-  readonly draft: MenuDraft;
-  readonly section: MenuSection;
-  readonly subsections: readonly MenuSection[];
-  readonly onOpen: (open: Open) => void;
-  readonly said: (refused: { readonly message: string } | undefined) => void;
-}) {
-  const [query, setQuery] = useState('');
-  const items = new Map(draft.items.map((item) => [item.id, item]));
-  const matches =
-    query.trim() === ''
-      ? []
-      : draft.items
-          .filter(
-            (item) =>
-              !section.itemIds.includes(item.id) && item.name.toLowerCase().includes(query.trim().toLowerCase()),
-          )
-          .slice(0, 5);
-  const menuNames = (itemId: string) =>
-    draft.sections
-      .filter((each) => each.id !== section.id && each.itemIds.includes(itemId))
-      .map((each) => draft.menus.find((menu) => menu.id === each.menuId)?.name)
-      .filter((name): name is string => name !== undefined);
-  return (
-    <Card
-      title={strings.sectionNumber(index + 1)}
-      {...(section.description === undefined ? {} : { description: section.description })}
-      actions={
-        draft.canEdit ? (
-          <Button
-            variant="ghost"
-            icon="trash"
-            label={strings.deleteSection}
-            onPress={() => onOpen({ kind: 'deleteSection', sectionId: section.id, name: section.name })}
-          />
-        ) : undefined
-      }
-    >
-      {draft.canEdit ? (
-        <>
-          <SavedField
-            label={strings.sectionName}
-            value={section.name}
-            onSave={(name) => void store.saveSection(slug, { ...sectionInput(section), name }).then(said)}
-          />
-          <SegmentedControl
-            label={strings.sectionLayout}
-            segments={[
-              { value: 'list', label: strings.layoutList },
-              { value: 'grid', label: strings.layoutGrid },
-            ]}
-            value={section.layout}
-            onChange={(layout: string) =>
-              void store
-                .saveSection(slug, { ...sectionInput(section), layout: layout === 'grid' ? 'grid' : 'list' })
-                .then(said)
-            }
-          />
-          <Field
-            label={strings.addDish}
-            icon="search"
-            placeholder={strings.addDishPlaceholder}
-            value={query}
-            onChange={setQuery}
-            onSubmit={() => {
-              const name = query.trim();
-              if (name === '') return;
-              const existing = matches[0];
-              setQuery('');
-              if (existing !== undefined && existing.name.toLowerCase() === name.toLowerCase()) {
-                void store.placeItem(slug, existing.id, section.id, true).then(said);
-              } else {
-                onOpen({ kind: 'item', sectionId: section.id, newName: name });
-              }
-            }}
-          />
-          {query.trim() === '' ? null : (
-            <>
-              {matches.map((item) => (
-                <Button
-                  key={item.id}
-                  variant="ghost"
-                  icon="plus"
-                  onPress={() => {
-                    setQuery('');
-                    void store.placeItem(slug, item.id, section.id, true).then(said);
-                  }}
-                >
-                  {item.name}
-                </Button>
-              ))}
-              <Button
-                variant="ghost"
-                icon="plus"
-                onPress={() => {
-                  const name = query.trim();
-                  setQuery('');
-                  onOpen({ kind: 'item', sectionId: section.id, newName: name });
-                }}
-              >
-                {strings.createDish(query.trim())}
-              </Button>
-            </>
-          )}
-        </>
-      ) : null}
-      {section.itemIds.length === 0 ? (
-        <EmptyState title={strings.emptySection} layout="row" />
-      ) : (
-        section.itemIds.map((itemId) => {
-          const item = items.get(itemId);
-          if (item === undefined) return null;
-          const also = menuNames(itemId);
-          return (
-            <Card
-              key={itemId}
-              tone="sunken"
-              title={item.name}
-              description={[
-                item.priceMinor !== undefined
-                  ? formatPrice(item.priceMinor, draft.currency, draft.places[0]?.locale ?? 'en-GB')
-                  : item.sizes.length > 0
-                    ? item.sizes
-                        .map(
-                          (size) =>
-                            `${size.name} ${formatPrice(size.priceMinor, draft.currency, draft.places[0]?.locale ?? 'en-GB')}`,
-                        )
-                        .join(' · ')
-                    : (item.priceNote ?? strings.noPrice),
-                also.length === 0 ? '' : strings.alsoOn(also.join(', ')),
-              ]
-                .filter((part) => part !== '')
-                .join(' · ')}
-              actions={
-                <>
-                  <Switch
-                    label={strings.soldOut}
-                    labelContext={item.name}
-                    isSelected={item.soldOut}
-                    onChange={(soldOut) => void store.setSoldOut(slug, item.id, soldOut).then(said)}
-                  />
-                  {draft.canEdit ? (
-                    <>
-                      <Button onPress={() => onOpen({ kind: 'item', item })}>{strings.editDish}</Button>
-                      <MenuTrigger>
-                        <Button variant="ghost" icon="ellipsis" label={strings.moreFor(item.name)} />
-                        <Menu
-                          label={strings.moreFor(item.name)}
-                          onAction={() => {
-                            void store.placeItem(slug, item.id, section.id, false).then((refused) => {
-                              if (refused !== undefined) {
-                                said(refused);
-                                return;
-                              }
-                              toasts.toast({
-                                tone: 'info',
-                                message: strings.removed(item.name),
-                                action: {
-                                  label: strings.undo,
-                                  onAction: () => void store.placeItem(slug, item.id, section.id, true).then(said),
-                                },
-                              });
-                            });
-                          }}
-                        >
-                          <MenuItem id="remove" icon="x">
-                            {strings.removeFromSection}
-                          </MenuItem>
-                        </Menu>
-                      </MenuTrigger>
-                    </>
-                  ) : null}
-                </>
-              }
-            />
-          );
-        })
-      )}
-      {subsections.map((sub) => (
-        <Callout key={sub.id} tone="info" title={sub.name}>
-          {sub.itemIds
-            .map((id) => items.get(id)?.name)
-            .filter((name) => name !== undefined)
-            .join(', ')}
-        </Callout>
-      ))}
-    </Card>
-  );
-}
-
-/** A section's own fields, as a save sends them back. */
-const sectionInput = (section: MenuSection) => ({
-  id: section.id,
-  menuId: section.menuId,
-  ...(section.parentId === undefined ? {} : { parentId: section.parentId }),
-  name: section.name,
-  ...(section.description === undefined ? {} : { description: section.description }),
-  layout: section.layout,
-});
-
 /** Whether a refusal is the app gate's, for the route. */
 export const isNotInstalled = (error: unknown): boolean =>
   isDataError(error) && (error.code === 'APP_NOT_INSTALLED' || error.code === 'NOT_FOUND');
+
+/** The draft's count of changes, for tests. */
+export const changesOf = (draft: MenuDraft): number => draft.changes;

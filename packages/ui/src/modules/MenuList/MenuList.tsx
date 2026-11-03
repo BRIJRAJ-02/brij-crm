@@ -64,6 +64,11 @@ export interface MenuListProps {
    * draws (spec 0068, AC-6803). Off in a preview, where the menu redraws as the owner types.
    */
   readonly hasEntrance?: boolean;
+  /**
+   * The instant the menu is read at, in place of now: the editor's "Preview at" (spec 0065, AC-6520, after checklabs'
+   * `?at=`), so an owner sees which menus and sections serve on Saturday at 11:00. Left out, the provider's clock.
+   */
+  readonly at?: number;
 }
 
 const lower = (text: string) =>
@@ -111,8 +116,10 @@ export function MenuList({
   openItemId,
   isPicksOpen = false,
   hasEntrance = false,
+  at,
 }: MenuListProps) {
-  const now = new Date(useNow());
+  const clock = useNow();
+  const now = new Date(at ?? clock);
   const { place, business } = menu;
   const { currency } = menu.menu;
   const locale = place.locale;

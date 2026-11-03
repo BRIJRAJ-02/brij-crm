@@ -48,7 +48,15 @@ const DRAFT: MenuDraft = {
   currency: 'GBP',
   places: [{ id: PLACE, name: 'Soho', menuKey: 'AbCdEfGhIjKlMnOp', timeZone: 'Europe/London', locale: 'en-GB' }],
   menus: [
-    { id: MENU, name: 'Dinner', placeIds: [PLACE], position: 0, note: 'Prices include VAT. 12.5% service is added.' },
+    {
+      id: MENU,
+      name: 'Dinner',
+      placeIds: [PLACE],
+      position: 0,
+      taxRate: 0,
+      serviceRate: 1250,
+      note: 'Prices include VAT. 12.5% service is added.',
+    },
   ],
   sections: [
     {
@@ -195,14 +203,43 @@ describe('the Menus editor', () => {
       items: DRAFT.items.map((each) => (each.id === id(12) ? { ...each, priceNote: undefined } : each)),
     };
     const { store } = storeOf(unpriced);
-    shown = await renderInApp(() => <MenusScreen store={store} slug="acme" toasts={toasts} business={BUSINESS} />, {
-      data: {},
-      pattern: '/w/$slug/menus',
-      at: '/w/acme/menus',
-    });
+    shown = await renderInApp(
+      () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      {
+        data: {},
+        pattern: '/w/$slug/menus',
+        at: '/w/acme/menus',
+      },
+    );
     await expect.element(page.getByText('Set up your menu')).toBeInTheDocument();
-    await expect.element(page.getByText('Give Oysters a price or a price note, then publish.')).toBeVisible();
-    await expect.element(page.getByRole('switch', { name: /Sold out/ }).first()).toBeInTheDocument();
+    // The dish Publish would refuse says so on its row, and on the Dishes tab, before Publish is pressed.
+    await expect.element(page.getByText('No price').first()).toBeVisible();
+    await expect.element(page.getByRole('switch', { name: 'Oysters available' }).first()).toBeInTheDocument();
+    await userEvent.click(page.getByRole('button', { name: 'Review and publish' }));
+    const review = page.getByRole('dialog', { name: 'Review and publish' });
+    await expect.element(review.getByText('Give Oysters a price or a price note, then publish.')).toBeVisible();
+    await expect.element(review.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();
+  });
+
+  it('asks before a drawer with changes closes, and keeps what was typed on Keep editing', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf(DRAFT);
+    shown?.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{ tab: 'options' }} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=options' },
+    );
+    await userEvent.click(page.getByRole('button', { name: 'Add option group' }).first());
+    const drawer = page.getByRole('dialog', { name: 'Option group' });
+    await expect.element(drawer).toBeVisible();
+    // Save with nothing named: the problems show inline, nothing is sent.
+    await userEvent.click(drawer.getByRole('button', { name: 'Save group' }));
+    await expect.element(drawer.getByText('Name the group, such as Milk.')).toBeVisible();
+    await userEvent.fill(drawer.getByLabelText('Name', { exact: true }), 'Milk');
+    await userEvent.click(drawer.getByRole('button', { name: 'Cancel' }));
+    await expect.element(page.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Keep editing' }));
+    await expect.element(drawer.getByLabelText('Name', { exact: true })).toHaveValue('Milk');
   });
 
   it('is clean in both themes at a desktop’s and a phone’s width', async () => {
@@ -211,11 +248,14 @@ describe('the Menus editor', () => {
       for (const theme of THEMES) {
         await page.viewport(width, 900);
         shown?.unmount();
-        shown = await renderInApp(() => <MenusScreen store={store} slug="acme" toasts={toasts} business={BUSINESS} />, {
-          data: {},
-          pattern: '/w/$slug/menus',
-          at: '/w/acme/menus',
-        });
+        shown = await renderInApp(
+          () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+          {
+            data: {},
+            pattern: '/w/$slug/menus',
+            at: '/w/acme/menus',
+          },
+        );
         applyTheme(theme);
         await expect.element(page.getByRole('heading', { level: 1, name: 'Menus' })).toBeInTheDocument();
         expect(await axeViolations()).toEqual([]);
@@ -257,7 +297,7 @@ describe('the guest menu', () => {
         await expect.element(page.getByRole('button', { name: /Oysters/ }).getByText('Sold out')).toBeVisible();
         expect(await axeViolations()).toEqual([]);
         await shoot('guest', theme, width);
-        await userEvent.click(page.getByRole('button', { name: /Wood fired bream/ }));
+        await userEvent.click(page.getByRole('button', { name: /^Wood fired bream/ }));
         const sheet = page.getByRole('dialog', { name: 'Wood fired bream' });
         await expect.element(sheet).toBeVisible();
         await expect.element(sheet.getByText(/Allergens: fish/)).toBeVisible();

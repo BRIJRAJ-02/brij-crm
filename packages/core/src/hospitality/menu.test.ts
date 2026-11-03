@@ -263,6 +263,34 @@ describe('sections one level deep (AC-6521)', () => {
 });
 
 describe('limits and the gate', () => {
+  it('refuses to publish a menu shown at no place, naming it, and keeps the rates and per day serving', async () => {
+    const w = await menuWorkspace();
+    const menuId = newId();
+    const sectionId = newId();
+    await saveMenu(w.owner, { id: menuId, name: 'Brunch', placeIds: [] });
+    await saveSection(w.owner, { id: sectionId, menuId, name: 'Eggs', layout: 'list' });
+    await saveItem(w.owner, { id: newId(), sectionId, item: dish('Benedict', 1200) });
+    expect(await refusalOf(publishMenus(w.owner))).toBe('CONFIG_INVALID');
+    const serving = { weekly: { sat: [{ from: '10:00', to: '15:00' }], sun: [] } };
+    await saveMenu(w.owner, {
+      id: menuId,
+      name: 'Brunch',
+      placeIds: [w.place.id],
+      serving,
+      taxRate: 500,
+      serviceRate: 1250,
+    });
+    await publishMenus(w.owner);
+    const live = await guestMenu(w.place.menuKey);
+    const brunch = live?.menu.menu.menus[0];
+    expect(brunch?.serving).toEqual(serving);
+    expect([brunch?.taxRate, brunch?.serviceRate]).toEqual([500, 1250]);
+    // Rates left out of a later save keep what is there.
+    await saveMenu(w.owner, { id: menuId, name: 'Brunch!', placeIds: [w.place.id] });
+    const draft = await readMenuDraft(w.owner);
+    expect(draft.menus[0]?.taxRate).toBe(500);
+  });
+
   it('refuses the 31st menu', async () => {
     const w = await menuWorkspace();
     for (let index = 0; index < 30; index += 1) {

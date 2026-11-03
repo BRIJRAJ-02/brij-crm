@@ -242,6 +242,7 @@ describe('@crm/ui', () => {
       'createInviteRow',
       'createPhoneParser',
       'createToasts',
+      'currencyOfCountry',
       'dayIn',
       'editorRuleOf',
       'fieldTypeOf',

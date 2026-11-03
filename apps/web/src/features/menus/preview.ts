@@ -31,6 +31,8 @@ export function previewMenu(
       name: menu.name,
       ...(menu.note === undefined ? {} : { note: menu.note }),
       ...(menu.serving === undefined ? {} : { serving: menu.serving }),
+      ...(menu.taxRate > 0 ? { taxRate: menu.taxRate } : {}),
+      ...(menu.serviceRate > 0 ? { serviceRate: menu.serviceRate } : {}),
       sections: draft.sections
         .filter((section) => section.menuId === menu.id && section.parentId === undefined)
         .sort((a, b) => a.position - b.position)
@@ -95,13 +97,42 @@ export function publishBlocker(
   draft: MenuDraft,
 ):
   | { readonly reason: 'empty' }
+  | { readonly reason: 'nowhere'; readonly menuId: string; readonly name: string }
   | { readonly reason: 'unpriced'; readonly itemId: string; readonly name: string }
   | undefined {
   const placed = new Set(draft.sections.flatMap((section) => section.itemIds));
   if (placed.size === 0) return { reason: 'empty' };
+  if (!guestsSeeADish(draft)) {
+    const menu = homelessMenus(draft)[0];
+    if (menu !== undefined) return { reason: 'nowhere', menuId: menu.id, name: menu.name };
+  }
   const unpriced = draft.items.find(
     (item) =>
       placed.has(item.id) && item.priceMinor === undefined && item.priceNote === undefined && item.sizes.length === 0,
   );
   return unpriced === undefined ? undefined : { reason: 'unpriced', itemId: unpriced.id, name: unpriced.name };
+}
+
+/** The dishes placed on a menu with no price, sizes or price note: each needs one before Publish. */
+export function unpricedDishes(draft: MenuDraft): readonly MenuDraft['items'][number][] {
+  const placed = new Set(draft.sections.flatMap((section) => section.itemIds));
+  return draft.items.filter(
+    (item) =>
+      placed.has(item.id) && item.priceMinor === undefined && item.priceNote === undefined && item.sizes.length === 0,
+  );
+}
+
+/** Menus holding dishes that show at no place: guests could never see them. */
+export function homelessMenus(draft: MenuDraft): readonly MenuDraft['menus'][number][] {
+  return draft.menus.filter(
+    (menu) =>
+      menu.placeIds.length === 0 &&
+      draft.sections.some((section) => section.menuId === menu.id && section.itemIds.length > 0),
+  );
+}
+
+/** Whether any dish is on a menu that shows at a place: otherwise Publish would give guests nothing. */
+export function guestsSeeADish(draft: MenuDraft): boolean {
+  const shown = new Set(draft.menus.filter((menu) => menu.placeIds.length > 0).map((menu) => menu.id));
+  return draft.sections.some((section) => shown.has(section.menuId) && section.itemIds.length > 0);
 }

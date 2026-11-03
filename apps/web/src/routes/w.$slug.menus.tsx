@@ -3,7 +3,7 @@ import { EmptyState, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { ComingScreen } from '../features/hospitality/ComingScreen.tsx';
 import { isPageInstalled } from '../features/hospitality/pages.ts';
-import { MenusScreen } from '../features/menus/MenusScreen.tsx';
+import { MenusScreen, menusSearch } from '../features/menus/MenusScreen.tsx';
 import { strings } from '../features/menus/strings.ts';
 import { pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -18,6 +18,7 @@ interface MenusData {
 // Menus, the Menu app's editor (spec 0065, H1): shown only while Menu is installed, else not found. The loader reads
 // the draft (and, for those who set the apps up, the business: its name and each place's hours for the preview).
 export const Route = createFileRoute('/w/$slug/menus')({
+  validateSearch: menusSearch,
   loader: async ({ context, params }): Promise<MenusData> => {
     const isInstalled = await isPageInstalled(context.data, params.slug, 'menus');
     const empty = { name: '', hours: {} };
@@ -42,9 +43,10 @@ export const Route = createFileRoute('/w/$slug/menus')({
 function PageRoute() {
   const { isInstalled, store, business } = Route.useLoaderData();
   const { slug } = Route.useParams();
+  const view = Route.useSearch();
   const { toasts } = Route.useRouteContext();
   if (!isInstalled || store === undefined) return <ComingScreen slug={slug} page="menus" isInstalled={false} />;
-  return <MenusScreen store={store} slug={slug} toasts={toasts} business={business} />;
+  return <MenusScreen store={store} slug={slug} toasts={toasts} business={business} view={view} />;
 }
 
 function MenusError({ error }: ErrorComponentProps) {

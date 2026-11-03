@@ -1,12 +1,13 @@
 // Brief
-// Purpose: one dish of the Menu app (spec 0065, AC-6522, AC-6523, AC-6527): its name, price or sizes, words, dietary
-// marks, allergens, calories, option groups and photo, in one form.
+// Purpose: one dish of the Menu app (spec 0065, AC-6522, AC-6523, AC-6527) in a drawer, in checklabs' item sheet's
+// order: name, photo, price, calories, description, sizes, option groups, allergens, dietary marks, Popular.
 // Main task: get a dish right in one go and save it, the way guests will read it.
 // Leaves out: where the dish sits (the section's own Add dishes and Take out), and Sold out (a switch on its row).
 import type { ItemAllergen, ItemFields, MenuDraft, MenuItem, MenuStore } from '@crm/data';
 import { DIET_MARKS, EU_ALLERGENS, MENU_LIMITS, minorToDecimal, parsePrice } from '@crm/data/menu';
-import { Button, ChoiceChips, Field, FileDrop, Form, Modal, Switch, type Toasts } from '@crm/ui';
+import { Button, ChoiceChips, Field, FileDrop, Form, Switch, type Toasts } from '@crm/ui';
 import { useId, useState } from 'react';
+import { DrawerForm } from './drawer.tsx';
 import { draftPhotoHref, prepareMenuPhoto } from './photo.ts';
 import { strings } from './strings.ts';
 
@@ -27,6 +28,7 @@ export function ItemDialog({
   newName,
   toasts,
   onClose,
+  onNewGroup,
 }: {
   readonly store: MenuStore;
   readonly slug: string;
@@ -36,6 +38,8 @@ export function ItemDialog({
   readonly newName?: string;
   readonly toasts: Toasts;
   readonly onClose: () => void;
+  /** Leaves for Options to make a group, when none fits. */
+  readonly onNewGroup?: () => void;
 }) {
   const formId = useId();
   const { currency } = draft;
@@ -64,19 +68,41 @@ export function ItemDialog({
   );
   const [problems, setProblems] = useState<Readonly<Record<string, string>>>({});
   const [isSaving, setSaving] = useState(false);
+  // A new dish's photo waits for the dish, then goes up with it.
+  const [pendingPhoto, setPendingPhoto] = useState<File>();
   const live = draft.items.find((each) => each.id === id);
+  const isDirty =
+    pendingPhoto !== undefined ||
+    name !== (item?.name ?? newName ?? '') ||
+    price !== (item?.priceMinor === undefined ? '' : minorToDecimal(item.priceMinor, currency)) ||
+    priceNote !== (item?.priceNote ?? '') ||
+    description !== (item?.description ?? '') ||
+    JSON.stringify([diet, contains, may, groupIds, featured, kcal]) !==
+      JSON.stringify([
+        item?.diet ?? [],
+        item?.allergens.filter((each) => each.level === 'contains').map((each) => each.code) ?? [],
+        item?.allergens.filter((each) => each.level === 'may').map((each) => each.code) ?? [],
+        item?.groupIds ?? [],
+        item?.featured ?? false,
+        item?.kcal === undefined ? '' : String(item.kcal),
+      ]) ||
+    sizes.length !== (item?.sizes.length ?? 0) ||
+    sizes.some((size, index) => {
+      const was = item?.sizes[index];
+      return was === undefined || size.name !== was.name || size.price !== minorToDecimal(was.priceMinor, currency);
+    });
 
   const save = async () => {
     const found: Record<string, string> = {};
-    if (name.trim() === '') found.name = strings.dishName;
+    if (name.trim() === '') found.name = strings.nameMissing;
     const priceMinor = price.trim() === '' ? null : (parsePrice(price, currency) ?? undefined);
     if (priceMinor === undefined) found.price = strings.priceInvalid;
     const sizeValues = sizes.map((size) => ({ ...size, minor: parsePrice(size.price, currency) }));
     for (const size of sizeValues)
-      if (size.minor === undefined || size.name.trim() === '') found[`size-${size.key}`] = strings.priceInvalid;
+      if (size.minor === undefined || size.name.trim() === '') found[`size-${size.key}`] = strings.sizeInvalid;
     const kcalValue = kcal.trim() === '' ? null : Number(kcal);
     if (kcalValue !== null && (!Number.isInteger(kcalValue) || kcalValue < 0 || kcalValue > MENU_LIMITS.kcalMax)) {
-      found.kcal = strings.kcal;
+      found.kcal = strings.kcalInvalid;
     }
     setProblems(found);
     if (Object.keys(found).length > 0 || priceMinor === undefined) return;
@@ -107,12 +133,17 @@ export function ItemDialog({
       toasts.toast({ tone: 'danger', message: refused.message });
       return;
     }
+    if (pendingPhoto !== undefined) await choosePhoto([pendingPhoto]);
     onClose();
   };
 
   const choosePhoto = async (files: readonly File[]) => {
     const file = files[0];
     if (file === undefined) return;
+    if (live === undefined && item === undefined && !isSaving) {
+      setPendingPhoto(file);
+      return;
+    }
     try {
       const photo = await prepareMenuPhoto(file);
       const refused = await store.uploadPhoto(slug, id, photo);
@@ -122,16 +153,25 @@ export function ItemDialog({
     }
   };
 
+  const photoField = (
+    <FileDrop
+      label={strings.photo}
+      acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
+      typesText={pendingPhoto === undefined ? strings.photoTypes : strings.photoAfterSave}
+      maxSize={MENU_LIMITS.photoMaxBytes}
+      onFiles={(files) => void choosePhoto(files)}
+      {...(live?.photo === undefined
+        ? {}
+        : { preview: { src: draftPhotoHref(slug, live.photo.id, 'small', live.photo.version), alt: '' } })}
+    />
+  );
+
   return (
-    <Modal
-      variant="form"
+    <DrawerForm
       title={item?.name ?? (name === '' ? strings.dish : name)}
-      isOpen
-      isDismissable={false}
+      isDirty={isDirty}
       isBusy={isSaving}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
+      onClose={onClose}
       actions={
         <>
           <Button slot="close" isDisabled={isSaving}>
@@ -144,19 +184,34 @@ export function ItemDialog({
       }
     >
       <Form id={formId} onSubmit={() => void save()}>
-        <Field label={strings.dishName} value={name} onChange={setName} error={problems.name} />
+        <Field
+          label={strings.dishName}
+          value={name}
+          onChange={setName}
+          isRequired
+          maxLength={MENU_LIMITS.itemNameMax}
+          error={problems.name}
+        />
+        {photoField}
         <Field
           label={strings.price}
           value={price}
           onChange={setPrice}
-          hint={strings.priceHint(currency)}
+          hint={sizes.length > 0 ? strings.priceBySize : strings.priceHint(currency)}
           error={problems.price}
           isDisabled={sizes.length > 0}
           inputMode="decimal"
         />
         {price.trim() === '' && sizes.length === 0 ? (
-          <Field label={strings.priceNote} value={priceNote} onChange={setPriceNote} hint={strings.priceNoteHint} />
+          <Field
+            label={strings.priceNote}
+            value={priceNote}
+            onChange={setPriceNote}
+            hint={strings.priceNoteHint}
+            maxLength={MENU_LIMITS.priceNoteMax}
+          />
         ) : null}
+        <Field label={strings.kcal} value={kcal} onChange={setKcal} inputMode="numeric" error={problems.kcal} />
         <Field label={strings.description} value={description} onChange={setDescription} isMultiline maxLength={400} />
         {sizes.map((size, index) => (
           <Field
@@ -189,16 +244,31 @@ export function ItemDialog({
           />
         ))}
         {sizes.length >= MENU_LIMITS.sizesPerItem ? null : (
-          <Button icon="plus" onPress={() => setSizes((was) => [...was, { key: store.newId(), name: '', price: '' }])}>
+          <Button
+            icon="plus"
+            onPress={() => {
+              // The first size takes the dish's price, so nothing typed is lost when sizes take over.
+              setSizes((was) => [...was, { key: store.newId(), name: '', price: was.length === 0 ? price : '' }]);
+              if (sizes.length === 0) setPrice('');
+            }}
+          >
             {strings.addSize}
           </Button>
         )}
-        <ChoiceChips
-          label={strings.diet}
-          choices={DIET_MARKS.map((mark) => ({ id: mark, label: strings.diets[mark] }))}
-          selected={diet}
-          onChange={setDiet}
-        />
+        {draft.groups.length === 0 ? (
+          onNewGroup === undefined ? null : (
+            <Button variant="ghost" icon="plus" onPress={onNewGroup}>
+              {strings.newGroup}
+            </Button>
+          )
+        ) : (
+          <ChoiceChips
+            label={strings.groups}
+            choices={draft.groups.map((group) => ({ id: group.id, label: group.name }))}
+            selected={groupIds}
+            onChange={(next) => setGroupIds(next.slice(0, MENU_LIMITS.groupsPerItem))}
+          />
+        )}
         <ChoiceChips
           label={strings.contains}
           choices={EU_ALLERGENS.map((code) => ({ id: code, label: strings.allergens[code] }))}
@@ -214,29 +284,23 @@ export function ItemDialog({
           selected={may}
           onChange={setMay}
         />
-        {draft.groups.length === 0 ? null : (
-          <ChoiceChips
-            label={strings.groups}
-            choices={draft.groups.map((group) => ({ id: group.id, label: group.name }))}
-            selected={groupIds}
-            onChange={(next) => setGroupIds(next.slice(0, MENU_LIMITS.groupsPerItem))}
-          />
-        )}
-        <Field label={strings.kcal} value={kcal} onChange={setKcal} inputMode="numeric" error={problems.kcal} />
+        <ChoiceChips
+          label={strings.diet}
+          choices={DIET_MARKS.map((mark) => ({ id: mark, label: strings.diets[mark] }))}
+          selected={diet}
+          onChange={(next) => {
+            // One spice level at most, as the server refuses two: the newest wins.
+            const spicy = next.filter((mark) => mark.startsWith('spicy_'));
+            const newest = spicy.find((mark) => !diet.includes(mark));
+            setDiet(
+              spicy.length > 1 && newest !== undefined
+                ? next.filter((mark) => !mark.startsWith('spicy_') || mark === newest)
+                : next,
+            );
+          }}
+        />
         <Switch label={strings.featured} isSelected={featured} onChange={setFeatured} />
-        {item === undefined ? null : (
-          <FileDrop
-            label={strings.photo}
-            acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
-            typesText={strings.photoTypes}
-            maxSize={MENU_LIMITS.photoMaxBytes}
-            onFiles={(files) => void choosePhoto(files)}
-            {...(live?.photo === undefined
-              ? {}
-              : { preview: { src: draftPhotoHref(slug, live.photo.id, 'small', live.photo.version), alt: '' } })}
-          />
-        )}
       </Form>
-    </Modal>
+    </DrawerForm>
   );
 }

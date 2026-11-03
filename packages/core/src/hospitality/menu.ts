@@ -817,6 +817,17 @@ async function dropUnusedPhotos(tx: WorkspaceTx, workspaceId: string): Promise<r
 export function publishProblem(rows: MenuRows): void {
   const placed = new Set(rows.placements.map((row) => row.itemId));
   if (placed.size === 0) throw refuse('CONFIG_INVALID', 'Add a dish to a menu before publishing.');
+  // A menu shown at no place is never seen: at least one dish must sit in a menu a place shows.
+  const shown = new Set(rows.menuPlaces.map((row) => row.menuId));
+  const shownSections = new Set(rows.sections.filter((row) => shown.has(row.menuId)).map((row) => row.id));
+  if (!rows.placements.some((row) => shownSections.has(row.sectionId))) {
+    const menu = rows.menus.find((row) => !shown.has(row.id));
+    throw refuseOn(
+      'CONFIG_INVALID',
+      `${menu?.name ?? 'Your menu'} shows nowhere. Pick where it shows, then publish.`,
+      menu === undefined ? 'menus' : `menus.${menu.id}`,
+    );
+  }
   const sized = new Set(rows.sizes.map((row) => row.itemId));
   const unpriced = rows.items.find(
     (item) => placed.has(item.id) && item.priceMinor === null && item.priceNote === null && !sized.has(item.id),
