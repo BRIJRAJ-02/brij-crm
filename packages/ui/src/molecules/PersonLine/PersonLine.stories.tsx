@@ -32,6 +32,20 @@ export const Default: Story = {
   },
 };
 
+/** A wrapped line (a booking request): its last part goes under the first rather than being cut. */
+export const MetaWrapped: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { name: 'Grace Hopper', meta: ['Mon 9 Nov, 9:00', 'Expires Sun 8 Nov, 9:00'], isMetaWrapped: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <PersonLine {...args} size="sm" />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/Expires Sun 8 Nov/)).toBeInTheDocument();
+  },
+};
+
 /** Away: the first part in the Away colour, with a calendar chip and a view only mark at the end. */
 export const AwayWithEnd: Story = {
   render: (args) => (

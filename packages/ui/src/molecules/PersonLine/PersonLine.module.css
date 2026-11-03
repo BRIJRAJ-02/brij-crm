@@ -39,6 +39,11 @@
     white-space: nowrap;
   }
 
+  /* A line that wraps instead of cutting its last part (isMetaWrapped). */
+  .root[data-wrap] .meta {
+    white-space: normal;
+  }
+
   /* Time off: the Team week's Away colour, strong, the one state that changes what can be done with this person. */
   .lead[data-tone='away'] {
     color: var(--tag-yellow-text);

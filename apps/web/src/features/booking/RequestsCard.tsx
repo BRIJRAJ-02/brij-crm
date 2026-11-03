@@ -100,6 +100,7 @@ export function RequestsCard({ data, slug, pageId, isReadOnly, isAlwaysShown }: 
                   id={request.bookingId}
                   name={request.visitorName}
                   size="sm"
+                  isMetaWrapped
                   meta={[at(request.start), strings.answerBy(at(request.expiresAt))]}
                 />
               ) : (

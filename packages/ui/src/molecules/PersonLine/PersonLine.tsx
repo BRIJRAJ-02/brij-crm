@@ -35,6 +35,11 @@ export interface PersonLineProps {
    * it also stands in for the name's own tooltip when that is cut. Screen readers get it from what the line heads.
    */
   readonly hint?: string;
+  /**
+   * Lets the quiet line wrap rather than cut its last part (a booking request's "Expires …", the one fact the row
+   * exists for): one line where it fits, two on a phone. Off, it stays one line and truncates, as a column head must.
+   */
+  readonly isMetaWrapped?: boolean;
 }
 
 /**
@@ -51,6 +56,7 @@ export function PersonLine({
   end,
   isDecorative = false,
   hint,
+  isMetaWrapped = false,
 }: PersonLineProps) {
   const [first, ...rest] = meta;
   const who = (
@@ -74,7 +80,12 @@ export function PersonLine({
     </span>
   );
   return (
-    <span className={styles.root} data-size={size} {...(isDecorative ? { 'aria-hidden': true } : {})}>
+    <span
+      className={styles.root}
+      data-size={size}
+      {...(isMetaWrapped ? { 'data-wrap': true } : {})}
+      {...(isDecorative ? { 'aria-hidden': true } : {})}
+    >
       <span className={styles.picture}>
         <Avatar name={name} id={id} size={size} isDecorative />
       </span>

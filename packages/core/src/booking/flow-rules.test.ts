@@ -2,7 +2,7 @@
 // (AC-6201), a guest's cancel and move inside the cutoffs (AC-6202), a request that waits for its host's Confirm
 // (AC-6203), and a one off link that books a set number of times, even under a race (AC-6204). Every default is
 // today's behaviour (AC-6220).
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { PublicBookInput } from '@crm/contracts';
@@ -12,6 +12,8 @@ import { rollingWeek } from '../../test/dates-kit.ts';
 import { enterBookingByToken, enterBookingPage, systemScope } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
+import { createWebhook } from '../webhooks/endpoints.ts';
+import { decodeWebhookKey } from '../webhooks/signing.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import type { BookingCalendar } from './calendar.ts';
@@ -23,6 +25,7 @@ import {
   guestTarget,
   hostTarget,
   moveBooking,
+  queueConfirmation,
 } from './change.ts';
 import { createOneOffLink, listOneOffLinks, revokeOneOffLink } from './one-off-links.ts';
 import { createBookingPage, updateBookingPage } from './pages.ts';
@@ -401,5 +404,64 @@ describe('review fixes (spec 0062, L1)', () => {
     const booked = await s.book({ oneOffToken: token });
     await declineBooking(hostTarget(s.host, booked.bookingId), { now: () => NOW }, {});
     expect((await listOneOffLinks(s.host, { pageId: s.page.id }, NOW))[0]).toMatchObject({ uses: 0, state: 'open' });
+  });
+});
+
+describe('a request’s webhooks, wait and race (spec 0062, L1)', () => {
+  const hookDeps = {
+    key: decodeWebhookKey(randomBytes(32).toString('base64')),
+    checkHost: () => Promise.resolve(undefined),
+  };
+  /** The booking webhooks queued in the workspace, by event. */
+  const events = async (workspaceId: string) =>
+    (
+      await testQuery<{ event_type: string }>(
+        ownerUrl,
+        'select event_type from webhook_deliveries where workspace_id = $1 order by created_at, id',
+        [workspaceId],
+      )
+    ).map((row) => row.event_type);
+
+  it('queues booking.created only on Confirm, and nothing for a decline or an expiry', async () => {
+    const s = await setup();
+    await createWebhook(s.host, hookDeps, {
+      url: 'https://hooks.example.com/hook',
+      description: '',
+      events: ['booking.created', 'booking.cancelled'],
+    });
+    await s.set({ requiresConfirmation: true });
+    const declined = await s.book();
+    const expired = await s.book({ start: MONDAY_10, email: 'ann@example.com' });
+    expect(await events(s.workspaceId)).toEqual([]);
+    await declineBooking(hostTarget(s.host, declined.bookingId), { now: () => NOW }, {});
+    await expireRequest(systemScope(db, s.workspaceId), expired.bookingId, NOW);
+    expect(await events(s.workspaceId)).toEqual([]);
+    const confirmed = await s.book({ email: 'cy@example.com' });
+    await confirmBooking(hostTarget(s.host, confirmed.bookingId), { now: () => NOW });
+    expect(await events(s.workspaceId)).toEqual(['booking.created']);
+  });
+
+  it('gives a link its use back when the request it booked runs out of time', async () => {
+    const s = await setup();
+    await s.set({ requiresConfirmation: true });
+    const { token } = await createOneOffLink(s.host, { mutationId: newId(), pageId: s.page.id }, NOW);
+    const booked = await s.book({ oneOffToken: token });
+    expect((await listOneOffLinks(s.host, { pageId: s.page.id }, NOW))[0]?.uses).toBe(1);
+    await expireRequest(systemScope(db, s.workspaceId), booked.bookingId, NOW);
+    expect((await listOneOffLinks(s.host, { pageId: s.page.id }, NOW))[0]).toMatchObject({ uses: 0, state: 'open' });
+  });
+
+  it('sends no confirmation, and names the event to take off, when a cancel raced the Confirm step', async () => {
+    const s = await setup();
+    await s.set({ requiresConfirmation: true });
+    const booked = await s.book();
+    await confirmBooking(hostTarget(s.host, booked.bookingId), { now: () => NOW });
+    // The worker wrote the event, then the guest cancelled before it queued the confirmation.
+    const meetingId = newId();
+    await testQuery(ownerUrl, 'update bookings set meeting_id = $2 where id = $1', [booked.bookingId, meetingId]);
+    await cancelBooking(guestTarget(await enterBookingByToken({ db }, booked.manageToken)), s.deps, {});
+    const step = await queueConfirmation(systemScope(db, s.workspaceId), booked.bookingId);
+    expect(step.orphan).toEqual({ workspaceId: s.workspaceId, meetingId });
+    expect(await queued(booked.bookingId)).not.toContain('confirmed');
   });
 });

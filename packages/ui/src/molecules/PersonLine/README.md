@@ -30,3 +30,6 @@ None of its own: it is a label. What sits in `end` keeps its own keys.
 ## Differences from the artifact
 
 Not in the artifact.
+
+`isMetaWrapped` (3 November 2026, spec 0062's Requests card) lets the quiet line wrap instead of cutting its last part,
+for a row whose last fact is the point (a request's "Expires …"). Column heads keep the default one line.
