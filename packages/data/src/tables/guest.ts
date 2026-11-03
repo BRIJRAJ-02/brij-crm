@@ -2,7 +2,8 @@
 // client, the public bundle never loads the app's data layer, the oRPC client or Zod: plain calls to
 // `/api/public/tables/*` on the page's own origin, each failure a DataError with the API's code (`SLOT_TAKEN` carries
 // the next free times in `next`, `BOOKING_CLOSED`, `NOT_FOUND`, `RATE_LIMITED` with its wait, `INPUT_INVALID` with
-// issues), and being offline `API_UNAVAILABLE`. The guest's key (token, or code and email) is always sent in a body.
+// issues), and being offline `API_UNAVAILABLE`. The guest's key (token, or code and email) is always sent in a body,
+// the calendar file's too.
 import type {
   PublicReserveInput,
   PublicReserved,
@@ -38,8 +39,11 @@ export interface TableClient {
     change: { readonly start: string; readonly party?: number },
   ): Promise<PublicTableVisit>;
   cancel(key: string, guest: GuestKey, reason?: string): Promise<PublicTableVisit>;
-  /** The calendar file's address (Add to calendar), by the link's token. */
-  icsUrl(key: string, token: string): string;
+  /**
+   * The reservation's calendar file (Add to calendar), POSTed with the guest's key in the body so the token never
+   * sits in an address; the page saves the answer as a file.
+   */
+  ics(key: string, guest: GuestKey): Promise<Blob>;
 }
 
 /** The client, on `origin` (the page's own), with `fetch` and the clock passed in for tests. */
@@ -51,7 +55,7 @@ export function createTableClient(options: {
   const send = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const now = options.now ?? Date.now;
   const base = `${options.origin}/api/public/tables`;
-  const call = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+  const call = async <T>(path: string, init: RequestInit = {}, as: 'json' | 'blob' = 'json'): Promise<T> => {
     let response: Response;
     try {
       response = await send(`${base}/${path}`, { credentials: 'omit', ...init });
@@ -61,7 +65,7 @@ export function createTableClient(options: {
         throw dataError('API_UNAVAILABLE', 'You’re offline. Check your connection and try again.');
       throw toDataError(error);
     }
-    if (response.ok) return (await response.json()) as T;
+    if (response.ok) return (as === 'blob' ? await response.blob() : await response.json()) as T;
     let body: unknown;
     try {
       body = await response.json();
@@ -106,6 +110,11 @@ export function createTableClient(options: {
           ...(reason === undefined ? {} : { reason }),
         })
       ).visit,
-    icsUrl: (key, token) => `${base}/${at(key)}/manage/${encodeURIComponent(token)}/ics`,
+    ics: (key, guest) =>
+      call<Blob>(
+        `${at(key)}/ics`,
+        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guest }) },
+        'blob',
+      ),
   };
 }

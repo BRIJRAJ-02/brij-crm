@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto';
 import {
   normalLookupCode,
+  type ConsentPurpose,
   type PlaceHoursShape,
   type PublicReserveInput,
   type PublicTablePage,
@@ -18,7 +19,7 @@ import { sql } from 'drizzle-orm';
 import type { TableEntry } from '../access/table-door.ts';
 import { inWorkspace } from '../access/run.ts';
 import { buildBookingIcs } from '../booking/ics.ts';
-import { inputInvalid, refuse } from '../engine/refusals.ts';
+import { refuse } from '../engine/refusals.ts';
 import type { AfterWrite } from '../engine/write.ts';
 import { placeDateOf } from '../hospitality/hours.ts';
 import { offerVisitTimes, placeVisit, type BookedVisit, type VisitDeps } from './book.ts';
@@ -33,6 +34,12 @@ export const MARKETING_WORDING = (business: string): string => `Send me news and
 
 /** Who the guest is on the manage page: the link's token, or the lookup code with the email. */
 export type GuestKey = { readonly token: string } | { readonly code: string; readonly email: string };
+
+/** The one refusal for a guest over the upcoming limit: it says nothing about which reservations exist. */
+export const UPCOMING_REFUSED = (phone: string | null): string =>
+  phone === null
+    ? 'We couldn’t take this reservation online. Please call the restaurant.'
+    : `We couldn’t take this reservation online. Please call ${phone}.`;
 
 const CLOSED = (): Error => refuse('BOOKING_CLOSED', 'This place isn’t taking reservations online right now.');
 const NO_VISIT = (): Error =>
@@ -226,6 +233,10 @@ export async function guestReserve(
 ): Promise<GuestReserved> {
   const { place, service } = await takingService(entry);
   const now = deps.now?.() ?? new Date();
+  // The upcoming limit refuses as generically as it can (the security review, 4 Nov 2026): the page never says
+  // whether an email already has reservations here, and the refusal sends nothing. It is counted again under the
+  // place lock in `placeVisit`, so parallel attempts can't slip past this first count.
+  const refusal = UPCOMING_REFUSED(place.phone);
   const upcoming = await inWorkspace(entry.scope, (tx) =>
     tx.execute<{ n: number }>(sql`
       select count(*)::int as n from appointments
@@ -234,9 +245,7 @@ export async function guestReserve(
         and idempotency_key <> ${input.idempotencyKey}::uuid
     `),
   );
-  if ((upcoming.rows[0]?.n ?? 0) >= UPCOMING_PER_EMAIL) {
-    throw inputInvalid('email', 'You already have 3 reservations coming up here. Change one of those instead.');
-  }
+  if ((upcoming.rows[0]?.n ?? 0) >= UPCOMING_PER_EMAIL) throw refuse('CONFLICT', refusal);
   const business = place.business ?? place.name;
   const booked = await placeVisit(
     entry.scope,
@@ -254,7 +263,10 @@ export async function guestReserve(
         ...(input.occasion === undefined ? {} : { occasion: input.occasion }),
         ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
       },
-      ...(input.marketing ? { consent: { purpose: 'marketing', wording: MARKETING_WORDING(business) } } : {}),
+      ...(input.marketing
+        ? { consent: { purpose: 'marketing_email' satisfies ConsentPurpose, wording: MARKETING_WORDING(business) } }
+        : {}),
+      perEmail: { max: UPCOMING_PER_EMAIL, message: refusal },
       source: 'online',
       idempotencyKey: input.idempotencyKey,
     },
@@ -281,17 +293,19 @@ async function findVisitById(entry: TableEntry, id: string): Promise<VisitRow> {
   return row;
 }
 
+/** The words for a passed cutoff, with the place's phone. */
+function tooLate(which: 'change' | 'cancel', phone: string | null): string {
+  const call = phone === null ? 'Call the restaurant.' : `Call ${phone}.`;
+  return which === 'change'
+    ? `It’s too late to change this reservation online. ${call}`
+    : `It’s too late to cancel this reservation online. ${call}`;
+}
+
 /** Whether a cutoff has passed for the visit: refused with the place's phone when it has. */
 function checkCutoff(view: PublicTableVisit, which: 'change' | 'cancel', phone: string | null): void {
   const until = which === 'change' ? view.changeUntil : view.cancelUntil;
   if (until !== undefined) return;
-  const call = phone === null ? 'Call the restaurant.' : `Call ${phone}.`;
-  throw refuse(
-    'BOOKING_CLOSED',
-    which === 'change'
-      ? `It’s too late to change this reservation online. ${call}`
-      : `It’s too late to cancel this reservation online. ${call}`,
-  );
+  throw refuse('BOOKING_CLOSED', tooLate(which, phone));
 }
 
 /**
@@ -316,6 +330,8 @@ export async function guestChange(
       start: input.start,
       ...(input.party === undefined ? {} : { party: input.party }),
       online: true,
+      // Checked again against the locked row, so a change racing another can't slip past the cutoff.
+      cutoff: { minutes: service.rules.changeCutoffMinutes, message: tooLate('change', place.phone) },
     },
     hooks,
   );
@@ -344,6 +360,10 @@ export async function guestCancel(
     {
       appointmentId: row.id,
       ...(input.reason === undefined ? {} : { reason: input.reason }),
+      cutoff: {
+        minutes: service?.rules.cancelCutoffMinutes ?? 120,
+        message: tooLate('cancel', place.phone),
+      },
     },
     hooks,
   );

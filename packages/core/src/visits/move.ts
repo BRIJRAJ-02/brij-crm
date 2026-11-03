@@ -109,6 +109,20 @@ async function takenWithNext(
   return Object.assign(refuse('SLOT_TAKEN', VISIT_TAKEN_MESSAGE), { next });
 }
 
+/** A guest's cutoff: how long before the visit changes close, and the refusal's words. */
+export interface Cutoff {
+  readonly minutes: number;
+  readonly message: string;
+}
+
+/** Refuses BOOKING_CLOSED when the locked visit's start is within the cutoff of now. */
+function checkLockedCutoff(cutoff: Cutoff | undefined, startsAt: string, now: Date): void {
+  if (cutoff === undefined) return;
+  if (new Date(startsAt).getTime() - cutoff.minutes * 60_000 <= now.getTime()) {
+    throw refuse('BOOKING_CLOSED', cutoff.message);
+  }
+}
+
 /** A changed visit: its new start and end, and its party. */
 export interface MovedVisit {
   readonly appointmentId: string;
@@ -125,7 +139,14 @@ export interface MovedVisit {
 export async function moveVisit(
   scope: EngineScope,
   deps: VisitDeps & { readonly slotCache?: SlotCache },
-  input: { readonly appointmentId: string; readonly start: string; readonly party?: number; readonly online: boolean },
+  input: {
+    readonly appointmentId: string;
+    readonly start: string;
+    readonly party?: number;
+    readonly online: boolean;
+    /** A guest's change cutoff: refused BOOKING_CLOSED with `message` once the locked visit starts within `minutes`. */
+    readonly cutoff?: Cutoff | undefined;
+  },
   hooks: readonly AfterWrite[] = [],
 ): Promise<MovedVisit> {
   const start = new Date(input.start);
@@ -176,13 +197,14 @@ export async function moveVisit(
         );
         await lockVisit(tx, scope.workspaceId, row.place_id, [...old, ...fresh]);
         const [locked] = (
-          await tx.execute<{ status: AppointmentStatus }>(
-            sql`select status from appointments where id = ${row.id}::uuid for update`,
+          await tx.execute<{ status: AppointmentStatus; starts_at: string }>(
+            sql`select status, starts_at from appointments where id = ${row.id}::uuid for update`,
           )
         ).rows;
         if (locked === undefined || !OPEN.includes(locked.status)) {
           throw refuse('CONFLICT', 'This reservation can’t be changed any more.');
         }
+        checkLockedCutoff(input.cutoff, locked.starts_at, now);
         const again = await loadVisitInputs(tx, { workspaceId: scope.workspaceId, ...asked, from, to });
         const plan = planVisit({
           ...planInput(withCalendarBusy(again, calendars), options),
@@ -249,14 +271,20 @@ export async function moveVisit(
 export async function cancelVisit(
   scope: EngineScope,
   deps: { readonly now?: () => Date; readonly slotCache?: SlotCache },
-  input: { readonly appointmentId: string; readonly reason?: string | undefined },
+  input: {
+    readonly appointmentId: string;
+    readonly reason?: string | undefined;
+    /** A guest's cancel cutoff, checked against the locked visit (see `moveVisit`). */
+    readonly cutoff?: Cutoff | undefined;
+  },
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ readonly appointmentId: string; readonly cancelled: boolean }> {
   const reason = input.reason?.trim();
   if (reason !== undefined && reason.length > VISIT_LIMITS.cancelReasonMax) {
     throw inputInvalid('reason', 'Use 200 characters or fewer.');
   }
-  const now = (deps.now?.() ?? new Date()).toISOString();
+  const at = deps.now?.() ?? new Date();
+  const now = at.toISOString();
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -269,13 +297,14 @@ export async function cancelVisit(
       if (found === undefined) throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
       await lockVisit(tx, scope.workspaceId, found.place_id, []);
       const [row] = (
-        await tx.execute<{ status: AppointmentStatus }>(
-          sql`select status from appointments where id = ${input.appointmentId}::uuid for update`,
+        await tx.execute<{ status: AppointmentStatus; starts_at: string }>(
+          sql`select status, starts_at from appointments where id = ${input.appointmentId}::uuid for update`,
         )
       ).rows;
       if (row === undefined) throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
       if (row.status === 'cancelled')
         return { appointmentId: input.appointmentId, cancelled: false, placeId: found.place_id };
+      checkLockedCutoff(input.cutoff, row.starts_at, at);
       if (!OPEN.includes(row.status) && row.status !== 'arrived') {
         throw refuse('CONFLICT', 'This reservation can’t be cancelled any more.');
       }

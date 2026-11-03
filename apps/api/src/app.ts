@@ -148,10 +148,7 @@ const RUNS_ON = (work: Promise<unknown>): void => {
  * and a company's domain in its logo's path (a workspace's data, spec 0059) as `:domain`.
  */
 export function redactedPath(path: string): string {
-  return path
-    .replace(/(\/public\/booking\/manage\/)[^/]+/, '$1:token')
-    .replace(/(\/public\/tables\/[^/]+\/manage\/)[^/]+/, '$1:token')
-    .replace(/^(\/api\/logos\/)[^/]+/, '$1:domain');
+  return path.replace(/(\/public\/booking\/manage\/)[^/]+/, '$1:token').replace(/^(\/api\/logos\/)[^/]+/, '$1:domain');
 }
 
 /** The route an error report names: a sign in route by its Better Auth path (`auth /sign-in/email-otp`), else the path. */

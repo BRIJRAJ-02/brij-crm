@@ -93,6 +93,11 @@ describe('framing (spec 0023, the embeds)', () => {
   it('lets any site frame a hosted form and a booking page, and nothing else', () => {
     expect(directiveSources(sent('/f/(.*)', 'Content-Security-Policy') ?? '', 'frame-ancestors')).toEqual(['*']);
     expect(directiveSources(sent('/b/:publicKey', 'Content-Security-Policy') ?? '', 'frame-ancestors')).toEqual(['*']);
+    // A reservation page embeds (spec 0066 B7); its manage page holds a guest's reservation and never does.
+    expect(directiveSources(sent('/r/:key', 'Content-Security-Policy') ?? '', 'frame-ancestors')).toEqual(['*']);
+    expect(directiveSources(sent('/r/:key/manage', 'Content-Security-Policy') ?? '', 'frame-ancestors')).toEqual([
+      "'self'",
+    ]);
     const app = rules[0];
     // Every path but the API, the public pages and the embed script; handle addresses are public pages too.
     expect(app?.source).toBe(APP_HEADER_SOURCE);

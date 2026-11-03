@@ -10,11 +10,11 @@
 //   POST /api/public/tables/:key/visit                 { guest }: the reservation, by token or by code with email
 //   POST /api/public/tables/:key/change                { guest, start, party? }: a new time or party size
 //   POST /api/public/tables/:key/cancel                { guest, reason? }
-//   GET  /api/public/tables/:key/manage/:token/ics     the reservation as a calendar file (Add to calendar)
+//   POST /api/public/tables/:key/ics                   { guest }: the reservation as a calendar file (Add to calendar)
 //
-// The guest's key (token, or code and email) travels in a POST body, never a URL, except the calendar file's link,
-// whose path the logs keep as `:token` (`redactedPath`). A lookup by code is limited tighter than a read, per address
-// and per place, so codes can't be swept.
+// The guest's key (token, or code and email) always travels in a POST body, never a URL, so no log or history keeps
+// it. A lookup by code is limited tighter than a read, per address and per place, so codes can't be swept; a change
+// or cancel by code spends its own bucket, so looking a reservation up never uses up the guest's change.
 import { createHash } from 'node:crypto';
 import {
   errorStatus,
@@ -55,18 +55,13 @@ export const TABLE_LIMITS = {
   /** A lookup by code and email: 10 a minute per address, 60 per place, so codes can't be swept. */
   lookupsPerAddress: { max: 10, windowMs: 60_000 },
   lookupsPerPlace: { max: 60, windowMs: 60_000 },
+  /** A change or cancel by code and email: its own bucket, as tight, apart from the lookups. */
+  codeWritesPerAddress: { max: 10, windowMs: 60_000 },
+  codeWritesPerPlace: { max: 60, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 
 const BODY_LIMIT_BYTES = 16 * 1024;
 const BOT_REFUSED = 'We couldn’t take that reservation. Check your details and try again.';
-
-/** What a reservation, change or cancel tells the rest of the api once it committed (mail, live screens). */
-export interface TableChange {
-  readonly kind: 'reserved' | 'changed' | 'cancelled';
-  readonly workspaceId: string;
-  readonly placeId: string;
-  readonly appointmentId: string;
-}
 
 /** What the table routes need. */
 export interface PublicTableServices {
@@ -81,8 +76,6 @@ export interface PublicTableServices {
   readonly ics: { readonly uidDomain: string; readonly publicOrigin: string; readonly organizerEmail: string };
   /** Pokes the relay after a committed write, so open Service lists hear the `visits` event. */
   readonly wakeRelay: () => void;
-  /** Called after a committed change, never awaited by the guest: the mail queue. */
-  readonly changed?: (change: TableChange) => Promise<void>;
 }
 
 interface Variables {
@@ -159,14 +152,6 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
     return undefined;
   };
 
-  /** Tells the rest of the api about a committed change, in the background; a failure is logged, never the guest's. */
-  const tell = (c: Context<{ Variables: Variables }>, change: TableChange) => {
-    if (services.changed === undefined) return;
-    void services.changed(change).catch((error: unknown) => {
-      log.warn('tables.changed.failed', { requestId: c.get('requestId'), kind: change.kind, ...errorFields(error) });
-    });
-  };
-
   const jsonOf = async (c: Context<{ Variables: Variables }>): Promise<{ readonly body: unknown } | undefined> => {
     try {
       return { body: await c.req.json() };
@@ -175,18 +160,28 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
     }
   };
 
-  /** The limits a guest key spends: a code lookup's are tighter, per address and per place. */
-  const guestLimits = (c: Context<{ Variables: Variables }>, key: string, guest: CoreGuestKey) => {
+  /**
+   * The limits a guest key spends: by code, tighter, per address and per place, a read (`lookup`) and a change or
+   * cancel (`write`) each in their own bucket.
+   */
+  const guestLimits = (
+    c: Context<{ Variables: Variables }>,
+    key: string,
+    guest: CoreGuestKey,
+    use: 'lookup' | 'write' = 'lookup',
+  ) => {
     const address = addressKey(c.get('clientIp'));
-    return limited([
-      [`tables:manage:${address}`, TABLE_LIMITS.managePerAddress],
-      ...('code' in guest
+    const byCode =
+      use === 'lookup'
         ? ([
             [`tables:lookup:${address}`, TABLE_LIMITS.lookupsPerAddress],
             [`tables:lookup-place:${key}`, TABLE_LIMITS.lookupsPerPlace],
           ] as const)
-        : []),
-    ]);
+        : ([
+            [`tables:code-write:${address}`, TABLE_LIMITS.codeWritesPerAddress],
+            [`tables:code-write-place:${key}`, TABLE_LIMITS.codeWritesPerPlace],
+          ] as const);
+    return limited([[`tables:manage:${address}`, TABLE_LIMITS.managePerAddress], ...('code' in guest ? byCode : [])]);
   };
 
   app.use(
@@ -253,14 +248,6 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
       const entry = await enterTablePage({ db }, key);
       const made = await guestReserve(entry, deps, input.data, [outboxHook()]);
       if (!made.booked.replayed) services.wakeRelay();
-      if (!made.booked.replayed) {
-        tell(c, {
-          kind: 'reserved',
-          workspaceId: entry.scope.workspaceId,
-          placeId: entry.placeId,
-          appointmentId: made.booked.appointmentId,
-        });
-      }
       return ok({ visit: made.visit, ...(made.manageToken === undefined ? {} : { manageToken: made.manageToken }) });
     } catch (error) {
       if (!toApiError(error).expected) {
@@ -292,18 +279,12 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
     const read = await jsonOf(c);
     const input = PublicTableChangeInput.safeParse(read?.body);
     if (!input.success) return invalid(input.error.issues);
-    const refused = guestLimits(c, key, input.data.guest);
+    const refused = guestLimits(c, key, input.data.guest, 'write');
     if (refused !== undefined) return refused;
     try {
       const entry = await enterTablePage({ db }, key);
       const changed = await guestChange(entry, deps, input.data, [outboxHook()]);
       services.wakeRelay();
-      tell(c, {
-        kind: 'changed',
-        workspaceId: entry.scope.workspaceId,
-        placeId: entry.placeId,
-        appointmentId: changed.appointmentId,
-      });
       return ok({ visit: changed.visit });
     } catch (error) {
       return refusalAnswer(error);
@@ -316,37 +297,31 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
     const read = await jsonOf(c);
     const input = PublicTableCancelInput.safeParse(read?.body);
     if (!input.success) return invalid(input.error.issues);
-    const refused = guestLimits(c, key, input.data.guest);
+    const refused = guestLimits(c, key, input.data.guest, 'write');
     if (refused !== undefined) return refused;
     try {
       const entry = await enterTablePage({ db }, key);
       const done = await guestCancel(entry, deps, input.data, [outboxHook()]);
       if (done.cancelled) services.wakeRelay();
-      if (done.cancelled) {
-        tell(c, {
-          kind: 'cancelled',
-          workspaceId: entry.scope.workspaceId,
-          placeId: entry.placeId,
-          appointmentId: done.appointmentId,
-        });
-      }
       return ok({ visit: done.visit });
     } catch (error) {
       return refusalAnswer(error);
     }
   });
 
-  app.get('/public/tables/:key/manage/:token/ics', async (c) => {
+  app.post('/public/tables/:key/ics', async (c) => {
     const key = c.req.param('key');
-    const token = c.req.param('token');
     if (!TABLE_KEY_PATTERN.test(key)) return missing();
-    const refused = guestLimits(c, key, { token });
+    const read = await jsonOf(c);
+    const parsed = GuestKey.safeParse((read?.body as { guest?: unknown } | undefined)?.guest);
+    if (!parsed.success) return invalid(parsed.error.issues);
+    const refused = guestLimits(c, key, parsed.data);
     if (refused !== undefined) return refused;
     try {
       const entry = await enterTablePage({ db }, key);
       const body = await guestIcs(
         entry,
-        { token },
+        parsed.data,
         {
           uidDomain: services.ics.uidDomain,
           pageUrl: `${services.ics.publicOrigin}/r/${key}/manage`,

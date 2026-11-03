@@ -12,7 +12,13 @@
 // 4. In the same transaction, in a savepoint under a lock on the client's email, the client's Person is matched by
 //    email or made (`matchVisitor`); a phone is stored on the visit, never matched alone.
 import { createHash, randomBytes, randomInt } from 'node:crypto';
-import { LOOKUP_ALPHABET, LOOKUP_LENGTH, VISIT_LIMITS, type AppointmentSource } from '@crm/contracts';
+import {
+  LOOKUP_ALPHABET,
+  LOOKUP_LENGTH,
+  VISIT_LIMITS,
+  type AppointmentSource,
+  type ConsentPurpose,
+} from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
@@ -313,8 +319,17 @@ export interface VisitBookInput {
   };
   readonly source: AppointmentSource;
   readonly idempotencyKey: string;
-  /** A consent the client ticked (news and offers), kept on their Person with the words they were shown. */
-  readonly consent?: { readonly purpose: string; readonly wording: string } | undefined;
+  /**
+   * A consent the client ticked (news and offers), kept on their Person with the words they were shown and this visit
+   * as its source. A grant never overrides a withdrawal the Person already has for the purpose: an email typed on a
+   * public page is unverified, so it can't opt someone back in.
+   */
+  readonly consent?: { readonly purpose: ConsentPurpose; readonly wording: string } | undefined;
+  /**
+   * At most `max` upcoming visits per client email at the place, counted again under the place lock (so two tabs
+   * can't both slip past a count made before it); over it, refused CONFLICT with `message`.
+   */
+  readonly perEmail?: { readonly max: number; readonly message: string } | undefined;
 }
 
 /** A booked visit: its id, whether it was a retry, the keys the client keeps, and its items. */
@@ -547,6 +562,16 @@ export async function placeVisit(
         await lockVisit(tx, scope.workspaceId, placeId, people);
         const again = await replayOf(tx, scope.workspaceId, placeId, key);
         if (again !== undefined) return again;
+        if (input.perEmail !== undefined && client.email !== undefined) {
+          const [upcoming] = (
+            await tx.execute<{ n: number }>(sql`
+              select count(*)::int as n from appointments
+              where place_id = ${placeId}::uuid and lower(client_email) = ${client.email}
+                and status in ('booked', 'confirmed') and starts_at > ${now.toISOString()}::timestamptz
+            `)
+          ).rows;
+          if ((upcoming?.n ?? 0) >= input.perEmail.max) throw refuse('CONFLICT', input.perEmail.message);
+        }
         const now2 = await loadVisitInputs(tx, {
           workspaceId: scope.workspaceId,
           placeId,
@@ -663,13 +688,20 @@ export async function placeVisit(
                 .update(appointments)
                 .set({ personRecordId })
                 .where(and(eq(appointments.workspaceId, scope.workspaceId), eq(appointments.id, appointmentId)));
-              // A ticked consent (spec 0023 records, source `appointment`): ticking is a grant, never a withdrawal.
+              // A ticked consent (spec 0023 records, source `appointment` and this visit): ticking is a grant, never a
+              // withdrawal, and never over a withdrawal already on the Person (the latest row for the purpose says no).
               if (input.consent !== undefined) {
                 await tx.execute(sql`
                   insert into consent_records
                     (workspace_id, record_id, purpose, granted, wording, wording_version, source_type, source_id)
-                  values (${scope.workspaceId}::uuid, ${personRecordId}::uuid, ${input.consent.purpose}, true,
-                    ${input.consent.wording.slice(0, 2000)}, 1, 'appointment', ${appointmentId}::uuid)
+                  select ${scope.workspaceId}::uuid, ${personRecordId}::uuid, ${input.consent.purpose}, true,
+                    ${input.consent.wording.slice(0, 2000)}, 1, 'appointment', ${appointmentId}::uuid
+                  where coalesce((
+                    select c.granted from consent_records c
+                    where c.workspace_id = ${scope.workspaceId}::uuid and c.record_id = ${personRecordId}::uuid
+                      and c.purpose = ${input.consent.purpose}
+                    order by c.at desc, c.id desc limit 1
+                  ), true)
                 `);
               }
             }
