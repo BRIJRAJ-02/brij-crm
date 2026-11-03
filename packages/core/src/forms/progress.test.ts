@@ -543,9 +543,7 @@ describe('analytics (AC-6320, AC-6321)', () => {
     await event(form.publicKey, visitor, 'view');
     await event(form.publicKey, visitor, 'reach', { questionId: 'why' });
     await event(form.publicKey, visitor, 'reach', { questionId: 'budget' });
-    const rows = await w.query<{ furthest_question_id: string }>(
-      sql`select furthest_question_id from form_visits`,
-    );
+    const rows = await w.query<{ furthest_question_id: string }>(sql`select furthest_question_id from form_visits`);
     // Reaching an earlier question again leaves the furthest one where it was.
     expect(rows[0]?.furthest_question_id).toBe('why');
   });
@@ -676,9 +674,7 @@ describe('analytics (AC-6320, AC-6321)', () => {
         records: [],
       },
     });
-    expect(await refusalOf(formAnalytics(blind, { formId: form.id, range: 7 }))).toMatchObject([
-      { code: 'NOT_FOUND' },
-    ]);
+    expect(await refusalOf(formAnalytics(blind, { formId: form.id, range: 7 }))).toMatchObject([{ code: 'NOT_FOUND' }]);
     // And the owner, who may see it, still gets the figure: the refusal above is access, not an empty table.
     expect((await formAnalytics(w.scope, { formId: form.id, range: 7 })).totals.views).toBe(1);
   });

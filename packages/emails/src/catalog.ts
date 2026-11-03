@@ -82,7 +82,7 @@ export const CATALOG: Catalog = {
     medium: 'email_form_confirmation',
     sample: {
       formName: 'Lead qualification',
-      resumeUrl: 'https://example.com/f/contact-us?resume=Zm9ybS1yZXN1bWUtdG9rZW4tc2FtcGxlLTMyLWJ5dGVz',
+      resumePath: '/f/contact-us?resume=Zm9ybS1yZXN1bWUtdG9rZW4tc2FtcGxlLTMyLWJ5dGVz',
       expiresAt: AT,
       timeZone: 'Europe/London',
     },

@@ -90,7 +90,10 @@ const words = formStrings('en');
 
 /** A `{ code, message }` answer at the map's status, with headers when there are some. */
 function answer(code: ErrorCode, message: string, headers?: Record<string, string>): Response {
-  return Response.json({ code, message }, { status: ERROR_MAP[code].status, ...(headers === undefined ? {} : { headers }) });
+  return Response.json(
+    { code, message },
+    { status: ERROR_MAP[code].status, ...(headers === undefined ? {} : { headers }) },
+  );
 }
 
 /** Answers a refusal from the core as its code says, or rethrows anything else to the app's one error handler. */
@@ -266,7 +269,7 @@ export function mountFormProgress(app: Hono<{ Variables: Variables }>, deps: For
         // answer, and the link it builds carries the token and nothing else (AC-6330). The API never holds a
         // transaction of its own.
         const sent = await commitWrite({ wakeRelay: deps.wakeRelay }, { mutationId: randomUUID() }, () =>
-          sendResumeLink(scope, { formId, resumeToken: body.resumeToken, publicOrigin: deps.publicOrigin }),
+          sendResumeLink(scope, { formId, resumeToken: body.resumeToken }),
         );
         if (!sent.sent) {
           return answer('INPUT_INVALID', 'Add your email address to the form first, then ask again.');

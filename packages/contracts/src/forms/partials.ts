@@ -24,9 +24,7 @@ export const PARTIALS_PER_ADDRESS = 20;
  * characters of `A-Za-z0-9_-` and nothing else. Anything else is refused
  * before a database row is ever looked for.
  */
-export const ResumeToken = z
-  .string()
-  .regex(/^[\w-]{43}$/u, { error: 'That resume link isn’t one of ours.' });
+export const ResumeToken = z.string().regex(/^[\w-]{43}$/u, { error: 'That resume link isn’t one of ours.' });
 /** A resume token as it travels. */
 export type ResumeToken = z.infer<typeof ResumeToken>;
 

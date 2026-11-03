@@ -180,7 +180,6 @@ export const SubmitHidden = z
 /** UTM tags, the page and the referrer. */
 export type SubmitHidden = z.infer<typeof SubmitHidden>;
 
-
 /**
  * `GET /api/public/forms/:address/ticket` (and the booking page's
  * `/api/public/booking/:address/ticket`): a fill ticket, the server's signed

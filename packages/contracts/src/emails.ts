@@ -132,8 +132,13 @@ export type FormConfirmationEmail = z.infer<typeof FormConfirmationEmail>;
  */
 export const FormResumeEmail = z.strictObject({
   formName: Line,
-  /** The hosted form's own address with the resume token on it; nothing else rides in the link. */
-  resumeUrl: z.url(),
+  /**
+   * The hosted form's own path with the resume token on it; nothing else
+   * rides in the link. A path, not a full address, as every other email's
+   * link is: the renderer joins it to the app's own origin, which is the only
+   * origin an email may link to (`onAppOrigin`), and which serves `/f/:key`.
+   */
+  resumePath: AppPath,
   /** When the link stops working, so the email can say so. */
   expiresAt: Instant,
   timeZone: EmailTimeZone.optional(),

@@ -445,7 +445,6 @@ async function oldFormVisits(context: WriteContext, at: Checkpoint, limit: numbe
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
-
 /**
  * Phase 1g (spec 0051, AC-5128): link page view and press rows older than a year, `limit` of each a batch, through
  * `crm_profile_counts`' sweep. They are a person's, not a workspace's, so whichever workspace's cleanup runs first

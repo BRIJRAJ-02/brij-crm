@@ -489,6 +489,9 @@ export const ACCESS_TABLE = {
   formAttributes: { data: 'read' },
   previewForm: { data: 'read' },
   createForm: { permission: 'forms.manage' },
+  // From a template (spec 0063, AC-6323): it creates a form, so it is one of the forms.manage writes. The
+  // template itself is code; what needs deciding here is the making of the form.
+  createFormFromTemplate: { permission: 'forms.manage' },
   saveFormDraft: { permission: 'forms.manage' },
   publishForm: { permission: 'forms.manage' },
   setFormStatus: { permission: 'forms.manage' },

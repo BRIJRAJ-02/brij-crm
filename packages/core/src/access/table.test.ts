@@ -303,6 +303,14 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'verifySignature',
   'resolvedProblem',
   'webhookUrlProblem',
+  // The form templates (spec 0063, AC-6323, AC-6324): the catalog is code, the same on every workspace, and holds
+  // no workspace's data. The gallery read, the lookup by id and the draft builder take no scope and touch no
+  // database — the door that let the member into the module is the whole of their access. Making a form from one
+  // does take a scope, and is in the table (`createFormFromTemplate`, forms.manage).
+  'listFormTemplates',
+  'formTemplate',
+  'offeredFormTemplates',
+  'templateDocument',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -1551,6 +1559,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getForm: refused('NOT_FOUND', (scope, world) => core.getForm(scope, { formId: world.formId })),
   formAttributes: refused('NOT_FOUND', (scope, world) => core.formAttributes(scope, { formId: world.formId })),
   previewForm: refused('NOT_FOUND', (scope, world) => core.previewForm(scope, { formId: world.formId })),
+  // The Analytics tab (spec 0063, AC-6321) reads through the same `canSeeForm` Submissions uses, so a form the
+  // principal can't see is absent, not locked.
+  formAnalytics: refused('NOT_FOUND', (scope, world) => core.formAnalytics(scope, { formId: world.formId, range: 7 })),
   isSlugAvailable: refused('NOT_FOUND', (scope, world) =>
     core.isSlugAvailable(scope, { formId: world.formId, slug: 'contact-us' }),
   ),

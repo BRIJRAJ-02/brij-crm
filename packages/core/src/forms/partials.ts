@@ -323,25 +323,28 @@ export type ResumeLinkSent = { readonly sent: true } | { readonly sent: false; r
  * partial and the UTC day, so pressing the button again the same day sends
  * nothing more.
  *
- * `publicOrigin` is where hosted forms are served from, passed in by the API:
- * the core builds no address out of its own environment.
+ * The link is an app path, not a full address: an email may only link to the
+ * app's own origin (`onAppOrigin`), which is what serves `/f/:key`, so the
+ * core builds no origin out of its own environment and none is passed in.
  */
 export async function sendResumeLink(
   scope: EngineScope,
-  input: { readonly formId: string; readonly resumeToken: string; readonly publicOrigin: string },
+  input: { readonly formId: string; readonly resumeToken: string },
 ): Promise<ResumeLinkSent> {
   checkPublicScope(scope, input.formId);
   const target = await resumeLinkTarget(scope, { formId: input.formId, resumeToken: input.resumeToken });
   const { email } = target;
   if (email === undefined) return { sent: false, reason: 'no-email' };
-  const url = new URL(`/f/${target.publicKey}`, input.publicOrigin);
-  url.searchParams.set('resume', input.resumeToken);
+  // A path, not a full address: the renderer joins it to the app's own origin, the only one an email may link to.
+  const path = `/f/${encodeURIComponent(target.publicKey)}?resume=${encodeURIComponent(input.resumeToken)}`;
   const { result } = await runWrite(scope, async ({ tx }) => {
     await queueFormResume(tx, {
+      // Digits only: an email's key takes ids, counts and times, never free text (`emailKey`), so the UTC day
+      // goes in as `YYYYMMDD`. It is still one link a day per saved form.
+      day: new Date().toISOString().slice(0, 10).replaceAll('-', ''),
       partialId: target.id,
-      day: new Date().toISOString().slice(0, 10),
       address: email,
-      params: { formName: target.formName.slice(0, 200), resumeUrl: url.toString(), expiresAt: target.expiresAt },
+      params: { formName: target.formName.slice(0, 200), resumePath: path, expiresAt: target.expiresAt },
     });
     return { sent: true } as const;
   });

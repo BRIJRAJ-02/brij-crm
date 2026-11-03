@@ -198,6 +198,10 @@ const READS: ReadonlySet<string> = new Set([
   'forms.attributes',
   'forms.preview',
   'forms.slugAvailable',
+  // The Analytics tab (spec 0063, AC-6321): grouped counts over `form_visits`, no row changed. The gallery's
+  // tiles (AC-6323) are the code catalog, so that read touches no table at all.
+  'forms.analytics',
+  'forms.templates',
   'submissions.list',
   'submissions.get',
   'submissions.getExport',
@@ -2385,6 +2389,16 @@ async function storedSubmission(m: Member, formId: string, state: string, spam: 
 Object.assign(WRITES, {
   'forms.create': async (m: Member) => {
     await formOn(m);
+    return [];
+  },
+  // From a template (spec 0063, AC-6323): a form write like `forms.create`, so it pokes and stores no outbox row.
+  'forms.createFromTemplate': async (m: Member, mutationId: string) => {
+    await m.client.forms.createFromTemplate({
+      workspace: m.slug,
+      id: newId(),
+      templateId: 'contact_us',
+      mutationId,
+    });
     return [];
   },
   'forms.saveDraft': async (m: Member, mutationId: string) => {

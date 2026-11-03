@@ -216,7 +216,8 @@ export async function formAnalytics(scope: EngineScope, input: FormAnalyticsInpu
     }));
 
     // Drop off needs the questions in the live form's own order, so a visit's furthest question becomes a position.
-    const live = form.liveVersionId === null ? undefined : (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+    const live =
+      form.liveVersionId === null ? undefined : (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
     const questionIds = (live?.document.questions ?? []).map((question) => question.id);
     const byQuestion = questionIds.length === 0 ? [] : await dropOff(tx, inRange, questionIds);
     return { range, totals, previous, byDay, byQuestion, bySource };

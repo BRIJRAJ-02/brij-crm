@@ -116,7 +116,7 @@ export const formResume: Template<FormResumeEmail> = (params, context) => {
     heading: RESUME_SUBJECT,
     blocks: [
       { type: 'paragraph', text: opening },
-      { type: 'button', label: 'Finish the form', url: params.resumeUrl },
+      { type: 'button', label: 'Finish the form', url: context.link(params.resumePath) },
     ],
     why: `You got this email because this address was entered on ${params.formName}, a form by ${workspaceOf(context)}, and the link was asked for. If that wasn’t you, you can ignore it.`,
   };
