@@ -83,6 +83,10 @@ CREATE TABLE "appointments" (
 	"updated_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"cancelled_at" timestamp (6) with time zone,
 	"cancel_reason" text,
+	"occasion" text,
+	"arrived_at" timestamp (6) with time zone,
+	"seated_at" timestamp (6) with time zone,
+	"finished_at" timestamp (6) with time zone,
 	CONSTRAINT "appointments_pkey" PRIMARY KEY("workspace_id","id"),
 	CONSTRAINT "appointments_client_name" CHECK (char_length("appointments"."client_name") between 1 and 120),
 	CONSTRAINT "appointments_client_email" CHECK (char_length("appointments"."client_email") <= 254),
@@ -96,7 +100,8 @@ CREATE TABLE "appointments" (
 	CONSTRAINT "appointments_lookup_shape" CHECK ("appointments"."lookup_code" ~ '^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$'),
 	CONSTRAINT "appointments_total" CHECK ("appointments"."total_minor" >= 0),
 	CONSTRAINT "appointments_currency" CHECK ("appointments"."currency" ~ '^[A-Z]{3}$'),
-	CONSTRAINT "appointments_cancel_reason" CHECK (char_length("appointments"."cancel_reason") <= 200)
+	CONSTRAINT "appointments_cancel_reason" CHECK (char_length("appointments"."cancel_reason") <= 200),
+	CONSTRAINT "appointments_occasion" CHECK ("appointments"."occasion" in ('birthday', 'anniversary', 'business', 'date', 'other'))
 );
 --> statement-breakpoint
 CREATE TABLE "service_categories" (
@@ -195,6 +200,10 @@ CREATE TABLE "services" (
 	"notice_min" integer DEFAULT 0 NOT NULL,
 	"window_days" smallint DEFAULT 60 NOT NULL,
 	"covers_cap" smallint,
+	"party_min" smallint DEFAULT 1 NOT NULL,
+	"party_max" smallint DEFAULT 8 NOT NULL,
+	"change_cutoff_min" integer DEFAULT 120 NOT NULL,
+	"cancel_cutoff_min" integer DEFAULT 120 NOT NULL,
 	"position" integer NOT NULL,
 	"archived_at" timestamp (6) with time zone,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
@@ -211,7 +220,9 @@ CREATE TABLE "services" (
 	CONSTRAINT "services_hold_by_size" CHECK (jsonb_typeof("services"."hold_by_size") = 'array' and jsonb_array_length("services"."hold_by_size") <= 8),
 	CONSTRAINT "services_cancel_note" CHECK (char_length("services"."cancel_note") <= 200),
 	CONSTRAINT "services_booking_rules" CHECK ("services"."step_min" between 5 and 240 and "services"."notice_min" between 0 and 43200
-      and "services"."window_days" between 1 and 730 and ("services"."covers_cap" is null or "services"."covers_cap" between 1 and 1000))
+      and "services"."window_days" between 1 and 730 and ("services"."covers_cap" is null or "services"."covers_cap" between 1 and 1000)),
+	CONSTRAINT "services_party" CHECK ("services"."party_min" between 1 and 100 and "services"."party_max" between "services"."party_min" and 100),
+	CONSTRAINT "services_cutoffs" CHECK ("services"."change_cutoff_min" between 0 and 10080 and "services"."cancel_cutoff_min" between 0 and 10080)
 );
 --> statement-breakpoint
 CREATE TABLE "staff" (

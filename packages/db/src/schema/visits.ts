@@ -83,6 +83,12 @@ export const services = pgTable(
     windowDays: smallint('window_days').notNull().default(60),
     /** Pacing (checklabs' covers per slot): the most guests whose visits overlap, or none. */
     coversCap: smallint('covers_cap'),
+    /** The party sizes taken (online and at the desk; a larger party asks). */
+    partyMin: smallint('party_min').notNull().default(1),
+    partyMax: smallint('party_max').notNull().default(8),
+    /** How long before the start a guest may still change, or cancel, in minutes. */
+    changeCutoffMin: integer('change_cutoff_min').notNull().default(120),
+    cancelCutoffMin: integer('cancel_cutoff_min').notNull().default(120),
     position: integer('position').notNull(),
     archivedAt: timestamptz('archived_at'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
@@ -119,6 +125,11 @@ export const services = pgTable(
       'services_booking_rules',
       sql`${t.stepMin} between 5 and 240 and ${t.noticeMin} between 0 and 43200
       and ${t.windowDays} between 1 and 730 and (${t.coversCap} is null or ${t.coversCap} between 1 and 1000)`,
+    ),
+    check('services_party', sql`${t.partyMin} between 1 and 100 and ${t.partyMax} between ${t.partyMin} and 100`),
+    check(
+      'services_cutoffs',
+      sql`${t.changeCutoffMin} between 0 and 10080 and ${t.cancelCutoffMin} between 0 and 10080`,
     ),
   ],
 );
@@ -460,6 +471,12 @@ export const appointments = pgTable(
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
     cancelledAt: timestamptz('cancelled_at'),
     cancelReason: text('cancel_reason'),
+    /** Birthday, anniversary, business, date or other: an icon on the Service list. */
+    occasion: text('occasion'),
+    /** When the guest arrived, was seated (the table's clock) and finished (the table freed). */
+    arrivedAt: timestamptz('arrived_at'),
+    seatedAt: timestamptz('seated_at'),
+    finishedAt: timestamptz('finished_at'),
   },
   (t) => [
     primaryKey({ name: 'appointments_pkey', columns: [t.workspaceId, t.id] }),
@@ -497,6 +514,7 @@ export const appointments = pgTable(
     check('appointments_total', sql`${t.totalMinor} >= 0`),
     check('appointments_currency', sql`${t.currency} ~ '^[A-Z]{3}$'`),
     check('appointments_cancel_reason', sql`char_length(${t.cancelReason}) <= 200`),
+    check('appointments_occasion', sql`${t.occasion} in ('birthday', 'anniversary', 'business', 'date', 'other')`),
   ],
 );
 

@@ -266,6 +266,8 @@ export interface VisitBookInput {
     readonly phone?: string | undefined;
     readonly note?: string | undefined;
     readonly timeZone?: string | undefined;
+    /** Birthday, anniversary, business, date or other. */
+    readonly occasion?: 'birthday' | 'anniversary' | 'business' | 'date' | 'other' | undefined;
   };
   readonly source: AppointmentSource;
   readonly idempotencyKey: string;
@@ -389,6 +391,12 @@ function checkClient(client: VisitBookInput['client']): VisitBookInput['client']
   const phone = client.phone?.trim();
   if (phone !== undefined && phone.length > VISIT_LIMITS.clientPhoneMax)
     throw inputInvalid('client.phone', 'Use 40 characters or fewer.');
+  if (
+    client.occasion !== undefined &&
+    !['birthday', 'anniversary', 'business', 'date', 'other'].includes(client.occasion)
+  ) {
+    throw inputInvalid('client.occasion', 'Pick an occasion.');
+  }
   const note = client.note?.trim();
   if (note !== undefined && note.length > VISIT_LIMITS.noteMax)
     throw inputInvalid('client.note', 'Use 500 characters or fewer.');
@@ -398,6 +406,7 @@ function checkClient(client: VisitBookInput['client']): VisitBookInput['client']
     ...(phone === undefined || phone === '' ? {} : { phone }),
     ...(note === undefined || note === '' ? {} : { note }),
     ...(client.timeZone === undefined ? {} : { timeZone: client.timeZone }),
+    ...(client.occasion === undefined ? {} : { occasion: client.occasion }),
   };
 }
 
@@ -449,6 +458,12 @@ export async function bookVisit(
   );
   if ('again' in first) return first.again;
   if (onlineOnly && !first.inputs.online) throw refuse('NOT_FOUND', 'That service isn’t offered here.');
+  if (onlineOnly && (input.party < first.inputs.rules.partyMin || input.party > first.inputs.rules.partyMax)) {
+    throw inputInvalid(
+      'party',
+      `Online, we take parties of ${String(first.inputs.rules.partyMin)} to ${String(first.inputs.rules.partyMax)}. Call us for a larger one.`,
+    );
+  }
   const reader = deps.busy.fresh ?? deps.busy;
   const calendars = await calendarBusy(
     reader,
@@ -508,6 +523,7 @@ export async function bookVisit(
               clientEmail: client.email ?? null,
               clientPhone: client.phone ?? null,
               note: client.note ?? null,
+              occasion: client.occasion ?? null,
               partySize: input.party,
               startsAt: plan.start,
               endsAt: plan.end,

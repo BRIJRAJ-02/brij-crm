@@ -426,7 +426,7 @@ describe('bounds and caps (AC-6604; the cross check)', () => {
   });
 
   it('drops a start past its tries cap as not offered, and stops the request at its cap', () => {
-    const capped = planVisit(salon({ caps: { perStart: 1 } }));
+    const capped = planVisit(salon({ caps: { perStart: 0 } }));
     expect(capped.starts).toEqual([]);
     expect(capped.stats.startsCapped).toBeGreaterThan(0);
     const request = planVisit(salon({ caps: { perRequest: 10 } }));

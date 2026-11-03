@@ -118,6 +118,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'earliestStart',
   'createSlotCache',
   'isVisitTaken',
+  // Pure: Table seating's checklist and rules check.
+  'setupSteps',
+  'tableRulesProblem',
   // Pure: a country's likely locale, and a place's hours read at an instant (spec 0065).
   'localeForCountry',
   'openAt',

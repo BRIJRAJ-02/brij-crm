@@ -934,6 +934,20 @@ export {
   type VisitDeps,
 } from './visits/book.ts';
 export { linkStaffMember, type LinkOverlap } from './visits/staff-link.ts';
+export {
+  getTableSetup,
+  saveTableSetup,
+  listServiceDay,
+  setVisitStatus,
+  setupSteps,
+  tableRulesProblem,
+  TABLE_DEFAULTS,
+  type DayVisit,
+  type ServiceDay,
+  type SetupStep,
+  type TableRules,
+  type TableSetup,
+} from './visits/table-service.ts';
 /** The operator console's one write (spec 0065, AC-6502): a workspace's early access flag, behind the operator gate. */
 export { setEarlyAccess } from './operator/early-access.ts';
 // The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.

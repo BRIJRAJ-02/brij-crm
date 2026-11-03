@@ -279,6 +279,11 @@ export const ACCESS_TABLE = {
   bookVisit: { permission: 'services.calendar' },
   // Linking a staff profile to a member, refused while their visits and meetings overlap.
   linkStaffMember: { permission: 'services.manage' },
+  // Table seating on the engine (spec 0066 B7 lite): setup is Manage hospitality's, the Service list Run service's.
+  getTableSetup: { permission: 'hospitality.manage' },
+  saveTableSetup: { permission: 'hospitality.manage' },
+  listServiceDay: { permission: 'hospitality.service' },
+  setVisitStatus: { permission: 'hospitality.service' },
   readBrandLogo: { anyMember: true },
   saveWorkspaceBrand: { permission: 'workspace.manage' },
   requireBrandEditor: { permission: 'workspace.manage' },

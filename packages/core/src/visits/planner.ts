@@ -543,8 +543,6 @@ function allocate(
         if (count > 1) {
           const chosen: number[] = [];
           for (const group of groups) {
-            tries += 1;
-            budget.tries += 1;
             if (freeGroup(group, new Set([...taken, ...chosen]))) chosen.push(...group);
             if (chosen.length === count) break;
           }
@@ -553,19 +551,23 @@ function allocate(
           return;
         }
         for (const group of groups) {
+          if (!freeGroup(group, taken)) continue;
+          for (const rest of meet(from + 1, new Set([...taken, ...group]))) yield [...group, ...rest];
+        }
+      }
+      // Each resource set offered beyond the first is one more try (a free check is a binary search, not a try).
+      let sets = 0;
+      for (const resources of meet(0, new Set())) {
+        sets += 1;
+        if (sets > 1) {
           tries += 1;
           budget.tries += 1;
           if (tries > caps.perStart || budget.tries > caps.perRequest) {
             state.capped = true;
             return;
           }
-          if (!freeGroup(group, taken)) continue;
-          for (const rest of meet(from + 1, new Set([...taken, ...group]))) yield [...group, ...rest];
         }
-      }
-      for (const resources of meet(0, new Set())) {
         yield { start, end, staffId, resources };
-        if (state.capped) return;
       }
     }
   }

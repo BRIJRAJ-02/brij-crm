@@ -64,7 +64,14 @@ export interface VisitInputs {
   readonly resources: readonly PlannerResource[];
   readonly pacing?: { readonly coversCap: number; readonly booked: readonly BookedParty[] } | undefined;
   /** The services' booking rules: the finest step, the most notice, the shortest window. */
-  readonly rules: { readonly stepMinutes: number; readonly noticeMinutes: number; readonly windowDays: number };
+  readonly rules: {
+    readonly stepMinutes: number;
+    readonly noticeMinutes: number;
+    readonly windowDays: number;
+    /** The party sizes every service asked for takes online. */
+    readonly partyMin: number;
+    readonly partyMax: number;
+  };
   /** Whether any service is bookable online (a guest's plan refuses one that isn't). */
   readonly online: boolean;
 }
@@ -128,11 +135,13 @@ export async function loadVisitInputs(
       notice_min: number;
       window_days: number;
       covers_cap: number | null;
+      party_min: number;
+      party_max: number;
     }>(sql`
       select s.id::text as service_id, v.id::text as variant_id, s.name as service_name, v.name as variant_name,
         v.minutes, v.price_minor, v.price_type, v.buffer_before_min, v.processing_after_min, v.processing_min,
         s.buffer_after_min, s.capacity_mode, s.staff_rule, s.hold_by_size, s.online, s.step_min, s.notice_min,
-        s.window_days, s.covers_cap
+        s.window_days, s.covers_cap, s.party_min, s.party_max
       from services s
       join service_variants v on v.workspace_id = s.workspace_id and v.service_id = s.id and v.archived_at is null
       join service_places sp on sp.workspace_id = s.workspace_id and sp.service_id = s.id and sp.place_id = ${placeId}::uuid
@@ -402,6 +411,8 @@ export async function loadVisitInputs(
       stepMinutes: Math.min(...variants.map((row) => row.step_min)),
       noticeMinutes: Math.max(...variants.map((row) => row.notice_min)),
       windowDays: Math.min(...variants.map((row) => row.window_days)),
+      partyMin: Math.max(...variants.map((row) => row.party_min)),
+      partyMax: Math.min(...variants.map((row) => row.party_max)),
     },
     online: input.items.every((item) => variantOf(item)?.online === true),
   };
