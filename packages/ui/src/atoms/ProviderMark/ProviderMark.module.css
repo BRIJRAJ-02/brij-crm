@@ -1,7 +1,9 @@
 /* ProviderMark: a brand's own artwork at icon size (size-icon, or
    size-icon-sm), never recoloured: the same image in light and dark, except
    the black marks (Timefix, X, GitHub, AngelList, TikTok, Threads), whose
-   light and dark files swap by theme the way the wordmark does (a saved choice on the root, else the OS). */
+   light and dark files swap by theme the way the wordmark does (a saved choice on the root, else the OS), and a
+   page that pins its own scheme inside the document (a public page's template: Night dark, Studio light) wins, so
+   X on Night is the white X and on Studio the black one, whatever the document's own. */
 @layer components {
   .mark {
     display: inline-block;
@@ -47,6 +49,24 @@
     :root:not([data-theme='light']) .mark[data-scheme='dark'] {
       display: inline-block;
     }
+  }
+
+  /* A page pinned to a scheme of its own (not the document root): its scheme, over the document's. Written after the
+     document rules at their weight, so it wins over them. */
+  :not(:root)[data-theme='dark'] .mark[data-scheme='light'] {
+    display: none;
+  }
+
+  :not(:root)[data-theme='dark'] .mark[data-scheme='dark'] {
+    display: inline-block;
+  }
+
+  :not(:root)[data-theme='light'] .mark[data-scheme='light'] {
+    display: inline-block;
+  }
+
+  :not(:root)[data-theme='light'] .mark[data-scheme='dark'] {
+    display: none;
   }
 
   /* The mark's shape in the text colour (tone mono): the artwork masks the colour, so every brand reads as one set. */

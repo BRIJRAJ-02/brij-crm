@@ -131,8 +131,79 @@ export const TemplateClassic: Story = templated('classic');
 export const TemplateStudio: Story = templated('studio');
 /** Night: a deep dark ground with the accent as a glow. */
 export const TemplateNight: Story = templated('night');
-/** Split: the rail as a sticky panel of its own beside the card, from the page breakpoint. */
+/** Split: the rail as a sticky panel on the page's own ground (no card around it) beside the card, from the page breakpoint. */
 export const TemplateSplit: Story = templated('split');
+
+/** A navy brand, as `brandProperties(brandVariables({ accent: '#1f2a5a' }))` makes it: dark, lifted for dark pages. */
+const NAVY_BRAND = [
+  ['--brand-accent', '#1f2a5a'],
+  ['--brand-on-accent', '#ffffff'],
+  ['--brand-link', '#1f2a5a'],
+  ['--brand-accent-dark', '#6878af'],
+  ['--brand-on-accent-dark', '#000000'],
+  ['--brand-link-dark', '#8597d0'],
+] as const;
+
+/** A yellow brand, as `brandProperties(brandVariables({ accent: '#f5c518' }))` makes it: darkened for light pages. */
+const YELLOW_BRAND = [
+  ['--brand-accent', '#a38100'],
+  ['--brand-on-accent', '#000000'],
+  ['--brand-link', '#806600'],
+  ['--brand-accent-dark', '#f5c518'],
+  ['--brand-on-accent-dark', '#000000'],
+  ['--brand-link-dark', '#f5c518'],
+] as const;
+
+/**
+ * A template in a hard accent (spec 0068, AC-6802): navy or yellow, the accent adjusted where it carries text (spec
+ * 0060), and axe checks AA in light and dark on every one. A time is chosen, so Book wears the accent.
+ */
+function accented(
+  template: 'classic' | 'studio' | 'night' | 'split',
+  variables: typeof NAVY_BRAND | typeof YELLOW_BRAND,
+): Story {
+  return {
+    parameters: { crm: { screenshot: false } },
+    args: { brand: { logo: { src: LOGO, alt: 'Acme' }, variables, template } },
+    render: (args) => <Interactive {...args} />,
+    play: async ({ canvas }) => {
+      await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
+      await expect(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' })).toBeEnabled();
+    },
+  };
+}
+
+/** Classic in navy. */
+export const ClassicNavy: Story = accented('classic', NAVY_BRAND);
+/** Classic in yellow. */
+export const ClassicYellow: Story = accented('classic', YELLOW_BRAND);
+/** Studio in navy: the paper takes a touch of the navy. */
+export const StudioNavy: Story = accented('studio', NAVY_BRAND);
+/** Studio in yellow. */
+export const StudioYellow: Story = accented('studio', YELLOW_BRAND);
+/** Night in navy: the lifted navy glows. */
+export const NightNavy: Story = accented('night', NAVY_BRAND);
+/** Night in yellow. */
+export const NightYellow: Story = accented('night', YELLOW_BRAND);
+/** Split in navy. */
+export const SplitNavy: Story = accented('split', NAVY_BRAND);
+/** Split in yellow. */
+export const SplitYellow: Story = accented('split', YELLOW_BRAND);
+
+/**
+ * Night's Book before a time is chosen: neutral rather than the accent at half strength, so it reads as waiting
+ * and its words still hold 4.5:1 on the dark card (spec 0068).
+ */
+export const NightBookWaiting: Story = {
+  args: { brand: { logo: { src: LOGO, alt: 'Acme' }, variables: NAVY_BRAND, template: 'night' } },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    const book = canvas.getByRole('button', { name: 'Book' });
+    await expect(book).toBeDisabled();
+    // Neutral: the waiting Book wears no accent.
+    await expect(getComputedStyle(book).backgroundColor).not.toBe('rgb(104, 120, 175)');
+  },
+};
 
 /** The host's social links (booking socials, 25 Oct 2026): the last line of their block, under the facts. */
 const SOCIALS = [

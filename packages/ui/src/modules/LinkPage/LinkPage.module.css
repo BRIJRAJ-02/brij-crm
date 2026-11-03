@@ -491,6 +491,29 @@
     display: none;
   }
 
+  /* Whether the place is open (spec 0068): a small green dot and the caller's words, quiet, under the name. */
+  .openNow {
+    display: inline-flex;
+    align-self: center;
+    align-items: center;
+    gap: var(--space-6);
+    margin: 0;
+    color: var(--page-text-quiet);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .root[data-page-header='left'] .openNow {
+    align-self: flex-start;
+  }
+
+  .openDot {
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--dot-green);
+  }
+
   .actionRow {
     display: flex;
     gap: var(--space-8);
@@ -1027,6 +1050,7 @@
     align-self: stretch;
     block-size: var(--space-12);
     margin-block-end: calc(var(--space-8) * -1);
+    overflow: hidden;
     border-radius: var(--radius-xs);
     background-color: var(--page-card-border);
     background-image: var(--page-cover-image, var(--page-photo-stand-in));
@@ -1035,6 +1059,7 @@
   }
 
   .thumbFace {
+    overflow: hidden;
     inline-size: var(--space-12);
     block-size: var(--space-12);
     border-radius: var(--radius-full);
@@ -1045,11 +1070,62 @@
     border-radius: var(--radius-xs);
   }
 
+  /* The owner's own page (`profile`): their initials on the accent, or their picture filling the face and the cover. */
+  .thumbFace[data-initials] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--page-accent);
+    /* The small slot's face is too small for letters: the accent alone. */
+    color: transparent;
+    font: var(--text-label-strong);
+  }
+
+  .thumbPhoto {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  /* The company's logo in the face's place: whole, on a raised chip, so any mark reads on any ground. */
+  .thumbFace[data-logo] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: var(--space-2);
+    background: var(--surface-raised);
+  }
+
+  .thumbLogo {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: contain;
+  }
+
+  /* A row's leading tile in the accent's soft fill and its title, drawn only at the large size (the small slot's rows
+     are a line high). */
+  .thumbTile,
+  .thumbTitle {
+    display: none;
+  }
+
   .thumbSample {
     color: var(--page-text);
     font: var(--text-label-strong);
     font-family: var(--page-face);
     font-synthesis: none;
+  }
+
+  /* The owner's name in place of the sample: one line, cut with an ellipsis. */
+  .thumbSample[data-name] {
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .thumbRow {
@@ -1094,6 +1170,46 @@
 
   .root[data-size='large'] .thumbRow {
     block-size: var(--size-control);
+  }
+
+  .root[data-size='large'] .thumbFace[data-initials] {
+    color: var(--page-on-accent);
+  }
+
+  .root[data-size='large'] .thumbFace[data-logo] {
+    padding: var(--space-4);
+  }
+
+  .root[data-size='large'] .thumbSample[data-name] {
+    font: var(--text-body-strong);
+    font-family: var(--page-face);
+  }
+
+  .root[data-size='large'] .thumbRow:has(.thumbTitle) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    padding-inline: var(--space-6);
+  }
+
+  .root[data-size='large'] .thumbTile {
+    display: block;
+    flex: none;
+    inline-size: var(--space-12);
+    block-size: var(--space-12);
+    border-radius: var(--radius-xs);
+    background: var(--page-accent);
+  }
+
+  .root[data-size='large'] .thumbTitle {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--page-card-text);
+    font: var(--text-label-strong);
+    font-family: var(--page-face);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* A Customise row's tile, about one detail (`detail`): the typeface's sample large in its own face, or one button
@@ -1531,12 +1647,15 @@
     }
   }
 
-  /* Studio: a warm off white ground, an editorial serif for the name and headings, image led cards with a card's
-     round corners, pill chips. Always light, as a printed menu is. */
+  /* Studio: an off white paper ground warmed by the page's own accent (a touch of it in the paper, a little more in
+     the card edges; with no brand, a warm orange), an editorial serif for the name and headings, image led cards
+     with a card's round corners, pill chips. Always light, as a printed menu is. The touch is small enough that the
+     accent's link colour, fitted to the light surfaces, keeps its 4.5:1 on it. */
   .root[data-template='studio'] {
-    --page-surface: color-mix(in oklab, var(--tag-orange-bg) 45%, var(--surface));
+    --studio-warmth: var(--page-brand-accent, var(--tag-orange-text));
+    --page-surface: color-mix(in oklab, var(--studio-warmth) 6%, var(--surface-subtle));
     --page-card: var(--surface-raised);
-    --page-card-border: color-mix(in oklab, var(--tag-orange-bg) 60%, var(--border));
+    --page-card-border: color-mix(in oklab, var(--studio-warmth) 18%, var(--border));
     --page-card-shadow: var(--shadow-xs);
     --page-radius-card: var(--radius-xl);
     --page-name-text: var(--text-note-title);
@@ -1558,6 +1677,23 @@
     letter-spacing: var(--tracking-heading);
   }
 
+  /* Night's words stay the card's own light text (a title in the accent read as a link and, for a dark brand, sank
+     into the ground); the accent is only the glow and each row's end mark, in its link colour, which holds 4.5:1. */
+  .root[data-template='night'] .title {
+    color: var(--page-card-text);
+  }
+
+  .root[data-template='night'] .end {
+    color: var(--page-link);
+  }
+
+  /* A site's own icon can be dark ink (a black favicon): on Night it sits on a light chip so it stays visible. A
+     network's mark needs none: ProviderMark draws its light artwork on a page pinned dark. */
+  .root[data-template='night'] .tile[data-tile='site'] {
+    border-color: transparent;
+    background: var(--surface-inverse);
+  }
+
   @media (hover: hover) and (pointer: fine) {
     .root[data-template='night'] .block:not([data-loading], [data-inert], [data-ghost]):hover {
       border-color: var(--page-accent-border);
@@ -1576,17 +1712,18 @@
       max-inline-size: calc(var(--size-dialog-wide) + var(--size-column-wide));
     }
 
+    /* The panel is the page's own ground, no card of its own: who the page is (logo, name, open now, Book, Save
+       contact) stays in view at the left while the blocks scroll beside it. */
     .root[data-template='split']:not([data-preview], [data-thumbnail], [data-draft]) .identity {
       position: sticky;
       inset-block-start: var(--space-32);
       display: flex;
       flex-direction: column;
-      gap: var(--space-20);
-      padding: var(--space-24);
-      border: var(--page-card-border-width) solid var(--page-card-border);
-      border-radius: var(--radius-xl);
-      background: var(--page-card);
-      box-shadow: var(--page-card-shadow);
+      gap: var(--space-16);
+    }
+
+    .root[data-template='split']:not([data-preview], [data-thumbnail], [data-draft]) .openNow {
+      align-self: flex-start;
     }
 
     .root[data-template='split']:not([data-preview], [data-thumbnail], [data-draft]) .content {
@@ -1616,6 +1753,7 @@
   /* Split's large miniature shows its two columns: who the page is in a panel, the rows beside it. */
   .root[data-template='split'][data-size='large'] .thumb {
     display: grid;
+    grid-template-rows: repeat(3, min-content) 1fr;
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
     gap: var(--space-8);
     align-items: start;
@@ -1624,11 +1762,8 @@
   .root[data-template='split'][data-size='large'] .thumbHead {
     flex-direction: column;
     align-items: flex-start;
-    grid-row: 1 / span 3;
-    padding: var(--space-8);
-    border: var(--page-card-border-width) solid var(--page-card-border);
-    border-radius: var(--radius-md);
-    background: var(--page-card);
+    grid-row: 1 / span 4;
+    padding-block: var(--space-4);
   }
 
   .root[data-template='split'][data-size='large'] .thumbRow {

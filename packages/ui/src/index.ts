@@ -288,6 +288,7 @@ export {
   type LinkPagePerson,
   type LinkPagePhotos,
   type LinkPageProps,
+  type LinkPageThumbnailProfile,
   type LinkPageThumbnailProps,
   type LinkPageTileSize,
   type LinkPageTimes,

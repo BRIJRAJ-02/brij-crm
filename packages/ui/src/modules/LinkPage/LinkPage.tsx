@@ -280,6 +280,16 @@ export interface LinkPageProps {
   readonly walletHref?: string;
   /** Under the actions: the person's social icons row (their own set, never a block). */
   readonly socials?: ReactNode;
+  /**
+   * Whether the place is open, worded by the caller ("Open now · until 6 PM"), under the name (spec 0068, Split's
+   * identity panel). Left out when the hours aren't known, and then nothing is said.
+   */
+  readonly openNow?: string;
+  /**
+   * The page's Book (spec 0068, Split's identity panel): a primary button under the name, its words and a path on
+   * this site ("/acme/intro-call"). Anything but our own path draws no button.
+   */
+  readonly book?: { readonly label: string; readonly href: string };
   /** Above the blocks: a search, once there are many. */
   readonly toolbar?: ReactNode;
   /** Over the blocks, said once: how many a search matched ("3 matches"). Read out as it changes. */
@@ -1679,6 +1689,26 @@ function Banner({
  * the order they set, each a whole row to press, grouped under the headings they gave, and the foot. One column a
  * thumb reaches, quiet chrome, and nothing loaded from another origin.
  */
+/**
+ * The owner's own page, for a thumbnail that shows it rather than a sample (spec 0068, AC-6804): their name, their
+ * face (their picture, else the company's logo, else their initials on the accent), the cover photo where the template
+ * wears one, and the titles of their first rows. Pictures go through `safeImageSrc`, so only our own origin, `data:` or
+ * `blob:` draw.
+ */
+export interface LinkPageThumbnailProfile {
+  readonly name: string;
+  /** Drawn on the accent when there is no picture; left out, worked out from `name`. */
+  readonly initials?: string;
+  readonly picture?: string;
+  readonly logo?: string;
+  readonly cover?: string;
+  /** The first rows' titles, in order; the miniature draws the first three. */
+  readonly rows?: readonly string[];
+}
+
+/** How many of the owner's rows a thumbnail draws. */
+const THUMBNAIL_ROWS = 3;
+
 /** Props for LinkPageThumbnail. */
 export interface LinkPageThumbnailProps {
   /** The look to draw. */
@@ -1696,6 +1726,8 @@ export interface LinkPageThumbnailProps {
    * size that shows the template's own ground, type, corners and glow. Left out, the small slot's miniature.
    */
   readonly size?: 'large';
+  /** The owner's own page, drawn scaled down in place of the sample face, name and rows. Left out, the sample. */
+  readonly profile?: LinkPageThumbnailProfile;
 }
 
 /**
@@ -1706,9 +1738,13 @@ export interface LinkPageThumbnailProps {
  * the plain look. It fills its slot (TileGrid's choice thumbnail), never moves, takes no focus and is hidden from
  * screen readers: the tile's own name says which look it is.
  */
-export function LinkPageThumbnail({ theme, variables, detail, size }: LinkPageThumbnailProps) {
+export function LinkPageThumbnail({ theme, variables, detail, size, profile }: LinkPageThumbnailProps) {
   // Follow visitor: the page light and dark at once, one over the other, cut corner to corner.
-  const held = { ...(variables === undefined ? {} : { variables }), ...(size === undefined ? {} : { size }) };
+  const held = {
+    ...(variables === undefined ? {} : { variables }),
+    ...(size === undefined ? {} : { size }),
+    ...(profile === undefined ? {} : { profile }),
+  };
   if (detail === 'mode' && theme.mode === 'system') {
     return (
       <div className={styles.thumbSplit} aria-hidden="true">
@@ -1721,7 +1757,12 @@ export function LinkPageThumbnail({ theme, variables, detail, size }: LinkPageTh
 }
 
 /** One look in miniature: the whole page, or only the detail its row is about. */
-function ThumbnailLook({ theme, variables, detail, size }: LinkPageThumbnailProps) {
+function ThumbnailLook({ theme, variables, detail, size, profile }: LinkPageThumbnailProps) {
+  const look = drawnLook(theme);
+  const picture = safeImageSrc(profile?.picture);
+  const logo = safeImageSrc(profile?.logo);
+  const cover = safeImageSrc(profile?.cover);
+  const rows = profile?.rows?.slice(0, THUMBNAIL_ROWS) ?? [];
   return (
     <div
       className={styles.root}
@@ -1741,15 +1782,44 @@ function ThumbnailLook({ theme, variables, detail, size }: LinkPageThumbnailProp
           <span className={styles.thumbButton} />
         </div>
       ) : (
-        <div className={styles.thumb}>
-          {drawnLook(theme).header === 'cover' && <span className={styles.thumbCover} />}
+        <div className={styles.thumb} data-profile={profile === undefined ? undefined : ''}>
+          {look.header === 'cover' && (
+            <span className={styles.thumbCover}>
+              {cover !== undefined && <img className={styles.thumbPhoto} src={cover} alt={strings.thumbAlt} />}
+            </span>
+          )}
           <span className={styles.thumbHead}>
-            {drawnLook(theme).avatar !== 'none' && <span className={styles.thumbFace} />}
-            <span className={styles.thumbSample}>{strings.thumbnailSample}</span>
+            {/* The face: the owner's picture, else the company's logo, else their initials on the accent. */}
+            {look.avatar !== 'none' &&
+              (profile === undefined ? (
+                <span className={styles.thumbFace} />
+              ) : picture !== undefined ? (
+                <span className={styles.thumbFace}>
+                  <img className={styles.thumbPhoto} src={picture} alt={strings.thumbAlt} />
+                </span>
+              ) : logo !== undefined ? (
+                <span className={styles.thumbFace} data-logo="">
+                  <img className={styles.thumbLogo} src={logo} alt={strings.thumbAlt} />
+                </span>
+              ) : (
+                <span className={styles.thumbFace} data-initials="">
+                  {profile.initials ?? initialsOf(profile.name)}
+                </span>
+              ))}
+            <span className={styles.thumbSample} data-name={profile === undefined ? undefined : ''}>
+              {profile === undefined ? strings.thumbnailSample : profile.name}
+            </span>
           </span>
-          <span className={styles.thumbRow} />
-          <span className={styles.thumbRow} />
-          <span className={styles.thumbRow} />
+          {Array.from({ length: THUMBNAIL_ROWS }, (_, index) => (
+            <span key={index} className={styles.thumbRow}>
+              {rows[index] !== undefined && (
+                <>
+                  <span className={styles.thumbTile} />
+                  <span className={styles.thumbTitle}>{rows[index]}</span>
+                </>
+              )}
+            </span>
+          ))}
         </div>
       )}
     </div>
@@ -1789,6 +1859,8 @@ export function LinkPage({
   share,
   walletHref,
   socials,
+  openNow,
+  book,
   toolbar,
   summary,
   empty,
@@ -1879,6 +1951,7 @@ export function LinkPage({
   const look = lookAttributes(theme, photos);
   const drawn = theme === undefined ? undefined : drawnLook(theme);
   const variablesRef = usePageVariables(variables);
+  const bookHref = ownPath(book?.href);
   if (layout === 'blocks') {
     return (
       <PageActionsContext value={actions}>
@@ -2000,6 +2073,24 @@ export function LinkPage({
                 </>
               )}
             </header>
+            {person !== undefined && openNow !== undefined && openNow !== '' && (
+              <p className={styles.openNow}>
+                <span className={styles.openDot} aria-hidden="true" />
+                {openNow}
+              </p>
+            )}
+            {person !== undefined && bookHref !== undefined && book !== undefined && (
+              <ButtonLink
+                variant="primary"
+                size="touch"
+                icon="calendar"
+                href={bookHref}
+                isFullWidth="center"
+                {...(onPress === undefined ? {} : { onPress: () => onPress('book') })}
+              >
+                {book.label}
+              </ButtonLink>
+            )}
             {/* The one action under the person, then the way to pass the page on, then where else to find them.
               Share stands while the page loads: it shares the address the visitor is already on. */}
             <Actions
