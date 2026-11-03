@@ -195,6 +195,15 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   ],
   'webhook.deleted': [row('webhook.deleted', 'workspace', newId(), { after: { host: 'hooks.example.com' } })],
   'webhook.turned_off': [row('webhook.turned_off', 'workspace', newId(), { after: { host: 'hooks.example.com' } })],
+  // An Insights share link made or revoked (spec 0067): its name, never its secret.
+  'insights.share_created': [
+    row('insights.share_created', 'workspace', newId(), { after: { shareId: newId(), label: 'For the client' } }),
+  ],
+  'insights.share_revoked': [
+    row('insights.share_revoked', 'workspace', newId(), {
+      after: { shareId: newId(), label: 'For the client', reason: 'member_removed' },
+    }),
+  ],
   // An API key made, revoked or brought back (parity #34): its name, never its secret.
   'api_key.created': [row('api_key.created', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
   'api_key.revoked': [row('api_key.revoked', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],

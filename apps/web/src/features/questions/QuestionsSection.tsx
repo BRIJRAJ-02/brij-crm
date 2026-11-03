@@ -52,6 +52,8 @@ import {
   duplicateQuestion,
   filedLine,
   fittingAttributes,
+  markSource,
+  SOURCE_ANSWER_TYPES,
   typeChange,
   planNewAttributes,
   moveQuestion,
@@ -548,15 +550,30 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         const question = questions.find((each) => each.id === id);
         // A hidden question has nothing a visitor could answer (spec 0063): it is never one they must.
         if (question === undefined || question.answerType === 'hidden') return null;
+        // How they heard about you (spec 0067, AC-6703): a form's one choice or short text question whose answers
+        // Insights shows beside its sources. Marking one unmarks any other.
+        const canBeSource = props.keptWith === 'submission' && SOURCE_ANSWER_TYPES.has(question.answerType);
         return (
-          <Checkbox
-            label={strings.mustAnswer}
-            isSelected={question.required}
-            isReadOnly={isReadOnly}
-            onChange={(required) => {
-              onChange((before) => changeQuestion(before, id, { required }, liveIds));
-            }}
-          />
+          <>
+            <Checkbox
+              label={strings.mustAnswer}
+              isSelected={question.required}
+              isReadOnly={isReadOnly}
+              onChange={(required) => {
+                onChange((before) => changeQuestion(before, id, { required }, liveIds));
+              }}
+            />
+            {canBeSource && (
+              <Checkbox
+                label={strings.sourceQuestion}
+                isSelected={question.source === true}
+                isReadOnly={isReadOnly}
+                onChange={(isSource) => {
+                  onChange((before) => markSource(before, id, isSource));
+                }}
+              />
+            )}
+          </>
         );
       }}
       renderFooter={(id) => {

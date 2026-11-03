@@ -13,6 +13,7 @@ import {
   INSIGHT_SESSIONS_PAGE,
   PAGE_STEPS,
   VisitLanding,
+  type InsightHeard,
   type InsightPage,
   type InsightPages,
   type InsightPeriod,
@@ -25,7 +26,7 @@ import {
 import { inArray, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
-import { can } from '../access/policy.ts';
+import { can, fieldLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { listBookingPages } from '../booking/pages.ts';
 import { publicProfilesOf } from '../booking/handles.ts';
@@ -114,14 +115,81 @@ export async function readInsights(
   return inWorkspace(scope, async (tx) => {
     const period = await resolvePeriod(tx, scope.workspaceId, covered, input.period, now);
     const numbers = await insightNumbers(tx, scope.workspaceId, covered, period, { previous: period.compare });
+    const heard = await heardAnswers(
+      tx,
+      scope,
+      picked.flatMap((page) => (page.kind === 'form' ? [page.id] : [])),
+      period,
+    );
     return {
       ...numbers,
+      heard,
       sources: [...numbers.sources],
       buckets: [...numbers.buckets],
       others: [...numbers.others],
       pages: visible.map((page) => ({ kind: page.kind, id: page.id, name: page.name })),
     };
   });
+}
+
+/** The most answers the How did you hear list shows. */
+const HEARD_MAX = 30;
+
+/**
+ * The How did you hear about us answers (AC-6703, AC-6714) of the forms in view that mark a source question, over
+ * the period's submissions the spam check let through, most first. A question filed onto a field hidden from the
+ * reader is left out, as Submissions leaves that answer out.
+ */
+async function heardAnswers(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  formIds: readonly string[],
+  period: { readonly from: string; readonly to: string },
+): Promise<InsightHeard[]> {
+  if (formIds.length === 0) return [];
+  const forms = await loadForms(tx, formIds);
+  const live = [...forms.values()].flatMap((form) => (form.liveVersionId === null ? [] : [form]));
+  const versions = await loadVersions(
+    tx,
+    live.map((form) => form.liveVersionId ?? ''),
+  );
+  const asks = live.flatMap((form) => {
+    const document = versions.get(form.liveVersionId ?? '')?.document;
+    const question = document?.questions.find((each) => each.source === true);
+    if (document === undefined || question === undefined) return [];
+    const objectId = document.targets.main?.objectId;
+    const attributeId = question.filedOn?.attributeId;
+    if (
+      attributeId !== undefined &&
+      objectId !== undefined &&
+      fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden'
+    ) {
+      return [];
+    }
+    return [{ formId: form.id, key: question.key }];
+  });
+  if (asks.length === 0) return [];
+  const found = await tx.execute<{ answer: string; submissions: number }>(sql`
+    select answer, count(*)::int as submissions
+    from (
+      ${sql.join(
+        asks.map(
+          (ask) => sql`
+            select left(trim(s.answers ->> ${ask.key}), 80) as answer
+            from form_submissions s
+            where s.form_id = ${ask.formId} and s.state <> 'spam'
+              and s.received_at >= (${period.from}::date)::timestamp at time zone 'UTC'
+              and s.received_at < (${period.to}::date + 1)::timestamp at time zone 'UTC'`,
+        ),
+        sql` union all `,
+      )}
+    ) answered
+    where answer is not null and answer <> ''
+    group by answer
+    order by submissions desc, answer
+    limit ${HEARD_MAX}
+  `);
+  return found.rows.map((row) => ({ answer: row.answer, submissions: row.submissions }));
 }
 
 /** A sessions cursor: the last row's first time (microseconds, as Postgres writes it), kind, page and visitor. */

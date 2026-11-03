@@ -37,6 +37,8 @@ export interface EditorActionsProps {
    * editor open its booking page (a booking page's editor, whose preview beside it is a phone).
    */
   readonly viewHref?: string;
+  /** This page's own Insights (spec 0067, AC-6710): the screen filtered to it. */
+  readonly insightsHref?: string;
   /** The editor's Preview button, where it applies (a form's, which previews its unpublished changes). */
   readonly preview?: ReactNode;
   /** A primary action before the menu: a form's Publish changes, while there are unpublished edits. */
@@ -60,7 +62,15 @@ export interface EditorActionsProps {
 }
 
 /** The editors' header actions, in one order on both: Copy link, View page or Preview, Publish changes, then ⋯. */
-export function EditorActions({ link, linkOffReason, viewHref, preview, publish, menu }: EditorActionsProps) {
+export function EditorActions({
+  link,
+  linkOffReason,
+  viewHref,
+  insightsHref,
+  preview,
+  publish,
+  menu,
+}: EditorActionsProps) {
   // On a phone the words fold to the icon, so the name keeps its room.
   const copy =
     link === undefined ? undefined : (
@@ -78,6 +88,11 @@ export function EditorActions({ link, linkOffReason, viewHref, preview, publish,
       {viewHref !== undefined && (
         <ButtonLink href={viewHref} isExternal icon="external-link" isLabelCollapsible label={strings.viewPage}>
           {strings.viewPage}
+        </ButtonLink>
+      )}
+      {insightsHref !== undefined && (
+        <ButtonLink href={insightsHref} icon="chart-line" isLabelCollapsible label={strings.insights}>
+          {strings.insights}
         </ButtonLink>
       )}
       {preview}

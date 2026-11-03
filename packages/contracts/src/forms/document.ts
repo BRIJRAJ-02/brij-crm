@@ -191,6 +191,11 @@ export const FormQuestion = z.strictObject({
   kept: z.literal(true).optional(),
   /** `fill` writes only an empty value (the default, AC-558); `always` overwrites. */
   update: z.enum(['fill', 'always']).default('fill'),
+  /**
+   * The form's How did you hear about us question (spec 0067, AC-6703): its answers show beside Insights' sources.
+   * A choice, dropdown or short text question, one a form.
+   */
+  source: z.literal(true).optional(),
   /** Shown only when earlier answers match (spec 0043, AC-1614); absent, it always shows. */
   showWhen: ShowWhenSchema.optional(),
   /** What its type sets beyond its choices (spec 0063): a date's range, a scale's ends, a hidden value's default. */
@@ -386,8 +391,26 @@ export const FormDocument = z
     const seen = { ids: new Set<string>(), keys: new Set<string>(), attributes: new Set<string>() };
     let files = 0;
     let signatures = 0;
+    let sources = 0;
     document.questions.forEach((question, index) => {
       const at = ['questions', index];
+      if (question.source === true) {
+        sources += 1;
+        if (!['choice', 'dropdown', 'short_text'].includes(question.answerType)) {
+          context.addIssue({
+            code: 'custom',
+            path: [...at, 'source'],
+            message: 'Only a choice or short answer question can ask how they heard about you.',
+          });
+        }
+        if (sources > 1) {
+          context.addIssue({
+            code: 'custom',
+            path: [...at, 'source'],
+            message: 'One question per form asks how they heard about you.',
+          });
+        }
+      }
       if (seen.ids.has(question.id))
         context.addIssue({ code: 'custom', path: [...at, 'id'], message: 'Two questions share one id.' });
       if (seen.keys.has(question.key)) {

@@ -152,8 +152,10 @@ create policy insight_shares_tenant on insight_shares
   with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
 --> statement-breakpoint
 -- A visit made or moved on marks its day stale, in the visit's own statement and under its own row level security:
--- an invoker trigger, so the mark can only ever be the visit's own workspace's. A day already marked costs one
--- index probe.
+-- an invoker trigger, so the mark can only ever be the visit's own workspace's. A day already marked is still
+-- touched (an update that changes nothing), which locks the mark until the visit commits: the rollup takes marks
+-- `for update skip locked`, so it can never take a day, delete its mark and read the raw rows while a visit to that
+-- day is still uncommitted, and then miss it for good (near midnight, the day's last visit).
 create function crm_page_visit_mark_stale()
   returns trigger
   language plpgsql
@@ -162,7 +164,7 @@ as $$
 begin
   insert into public.page_visit_stale_days (workspace_id, day)
   values (new.workspace_id, new.day)
-  on conflict (workspace_id, day) do nothing;
+  on conflict (workspace_id, day) do update set marked_at = page_visit_stale_days.marked_at;
   return null;
 end;
 $$;

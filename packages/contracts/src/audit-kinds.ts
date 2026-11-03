@@ -67,6 +67,9 @@ export const AUDIT_KINDS = {
     'api_key.created',
     'api_key.revoked',
     'api_key.restored',
+    // Numbers handed to someone outside (spec 0067): a share link made or revoked.
+    'insights.share_created',
+    'insights.share_revoked',
   ],
   scheduling: [
     'rotation.adjusted',
@@ -114,9 +117,6 @@ export const AUDIT_KINDS = {
 export const AUDIT_NOT_LISTED = [
   'member.preferences_changed',
   'booking_page.profile_reordered',
-  // Spec 0067: kept as the record of who shared which numbers; its History sentence is owed (a later slice).
-  'insights.share_created',
-  'insights.share_revoked',
   // An admin looked at an object as someone else would see it (spec 0032, AC-858): stored, a look changes nothing.
   'access.previewed',
   // Spec 0049: kept for the record of who dismissed a pair; its sentence in History is owed (not in this slice).

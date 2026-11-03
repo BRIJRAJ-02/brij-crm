@@ -23,6 +23,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  DateRangePicker,
   DescriptionList,
   EmptyState,
   Modal,
@@ -45,7 +46,7 @@ import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { saveFile } from '../link-page/qr-png.ts';
 import { figure, insightsCsv, sourceWord, stepWord } from './format.ts';
 import { InsightsBody } from './InsightsBody.tsx';
-import type { InsightsSearch } from './search.ts';
+import { CUSTOM_MAX_DAYS, daysOf, type InsightsSearch } from './search.ts';
 import { ShareDialog } from './ShareDialog.tsx';
 import { strings } from './strings.ts';
 
@@ -118,11 +119,18 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
     }),
     [search.kind, search.page],
   );
-  const period: InsightPeriod = useMemo(() => ({ range }), [range]);
+  const { from, to } = search;
+  // A custom period (`?from=&to=`) wins over the range; the share link keeps a rolling range of its own.
+  const period: InsightPeriod = useMemo(
+    () => (from !== undefined && to !== undefined ? { from, to } : { range }),
+    [from, to, range],
+  );
+  const isCustom = 'from' in period;
   const view = useMemo(() => data.insights.numbers(slug, period, pages), [data, slug, period, pages]);
   const state = useInsightRead(view);
   const [filter, setFilter] = useState<InsightSessionFilter>({});
   const [isSharing, setSharing] = useState(false);
+  const [customError, setCustomError] = useState<string | undefined>(undefined);
   const sessionsView = useMemo(
     () => data.insights.sessions(slug, period, pages, filter),
     [data, slug, period, pages, filter],
@@ -172,18 +180,46 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
         value={pickerValue(pages)}
         onChange={(value) => {
           if (value !== null)
-            go({ ...(search.range === undefined ? {} : { range: search.range }), ...pagesOfValue(value) });
+            go({
+              ...(search.range === undefined ? {} : { range: search.range }),
+              ...(from === undefined || to === undefined ? {} : { from, to }),
+              ...pagesOfValue(value),
+            });
         }}
       />
       <SegmentedControl
         label={strings.period}
         size="compact"
-        value={range}
+        value={isCustom ? '' : range}
         onChange={(next) => {
           const found = RANGES.find((each) => each === next);
-          if (found !== undefined) go({ ...search, range: found });
+          if (found === undefined) return;
+          const { from: _from, to: _to, ...rest } = search;
+          go({ ...rest, range: found });
         }}
         segments={RANGES.map((each) => ({ value: each, label: strings.rangeShort[each] }))}
+      />
+      <DateRangePicker
+        label={strings.customPeriod}
+        isLabelHidden
+        size="sm"
+        value={isCustom ? { start: period.from, end: period.to } : null}
+        {...(customError === undefined ? {} : { error: customError })}
+        onChange={(next) => {
+          if (next === null) {
+            setCustomError(undefined);
+            const { from: _from, to: _to, ...rest } = search;
+            go(rest);
+            return;
+          }
+          if (daysOf(next.start, next.end) > CUSTOM_MAX_DAYS) {
+            setCustomError(strings.customTooLong(CUSTOM_MAX_DAYS));
+            return;
+          }
+          setCustomError(undefined);
+          const { range: _range, ...rest } = search;
+          go({ ...rest, from: next.start, to: next.end });
+        }}
       />
     </Toolbar>
   );
@@ -205,7 +241,10 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
               onSessionsRetry={() => sessionsView.reload()}
               onRetry={() => view.reload()}
               slug={slug}
-              onLonger={() => go({ ...search, range: '90' })}
+              onLonger={() => {
+                const { from: _from, to: _to, ...rest } = search;
+                go({ ...rest, range: '90' });
+              }}
               onPickKind={() => go({ ...search, kind: 'form', page: undefined })}
             />
             {isSharing && state.status === 'ready' && (
@@ -319,18 +358,34 @@ function Body({
 /** The hosts under Other (AC-6714): only to a signed in member, never on a share link. */
 function OtherSites({ insights }: { readonly insights: Insights }) {
   const { locale } = useFormatSettings();
-  if (insights.others.length === 0) return null;
   return (
-    <Table
-      label={strings.otherHosts}
-      columns={[
-        { id: 'host', label: strings.otherHosts, isRowHeader: true },
-        { id: 'visits', label: strings.visits, align: 'end', size: 'fit' },
-      ]}
-      rows={insights.others}
-      getRowId={(row) => row.host}
-      renderCell={(row, column) => (column === 'host' ? row.host : figure(row.visits, locale))}
-    />
+    <>
+      {insights.others.length > 0 && (
+        <Table
+          label={strings.otherHosts}
+          columns={[
+            { id: 'host', label: strings.otherHosts, isRowHeader: true },
+            { id: 'visits', label: strings.visits, align: 'end', size: 'fit' },
+          ]}
+          rows={insights.others}
+          getRowId={(row) => row.host}
+          renderCell={(row, column) => (column === 'host' ? row.host : figure(row.visits, locale))}
+        />
+      )}
+      {/* The form's How did you hear answers (AC-6703, AC-6714), beside the sources: a member's view only. */}
+      {insights.heard.length > 0 && (
+        <Table
+          label={strings.heard}
+          columns={[
+            { id: 'answer', label: strings.heard, isRowHeader: true },
+            { id: 'submissions', label: strings.submissions, align: 'end', size: 'fit' },
+          ]}
+          rows={insights.heard}
+          getRowId={(row) => row.answer}
+          renderCell={(row, column) => (column === 'answer' ? row.answer : figure(row.submissions, locale))}
+        />
+      )}
+    </>
   );
 }
 

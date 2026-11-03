@@ -296,8 +296,18 @@ export const InsightNumbers = z.object({
 export type InsightNumbers = z.infer<typeof InsightNumbers>;
 
 /** `insights.read`'s answer: the numbers, Other's hosts, and the pages the picker offers. */
+/**
+ * One answer to a form's How did you hear about us question (AC-6703, AC-6714), counted over the period's accepted
+ * submissions. A member's read only, never a share link: the answers are a visitor's own words.
+ */
+export const InsightHeard = z.object({ answer: z.string(), submissions: Count });
+/** One answer to a form's How did you hear about us question. */
+export type InsightHeard = z.infer<typeof InsightHeard>;
+
 export const Insights = InsightNumbers.extend({
   others: z.array(InsightOtherHost),
+  /** The source questions' answers, most first; empty when no form in view asks one. */
+  heard: z.array(InsightHeard),
   pages: z.array(InsightPage),
 });
 /** `insights.read`'s answer. */

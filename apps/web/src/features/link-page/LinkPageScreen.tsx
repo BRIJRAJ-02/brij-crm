@@ -78,6 +78,7 @@ import { LiveSwitch, useLinkPageLive, type LinkPageLive } from './private-page.t
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 import { drawnQrStyle, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
 import { strings } from './strings.ts';
+import { insightsHref } from '../insights/search.ts';
 
 /** Props for the Link page screen. */
 export interface LinkPageScreenProps {
@@ -314,6 +315,15 @@ export function HeaderActions({
           <Button icon="share" isLabelCollapsible label={strings.share} onPress={() => setSharing(true)}>
             {strings.share}
           </Button>
+          {/* Its views, presses and sources (spec 0067): Insights shows a member their own link page only. */}
+          <ButtonLink
+            icon="chart-line"
+            isLabelCollapsible
+            href={insightsHref(slug, { kind: 'link' })}
+            label={strings.insights}
+          >
+            {strings.insights}
+          </ButtonLink>
         </>
       )}
       {/* Edit page lives on the page's own card; the bar carries only the way back out of the builder. */}

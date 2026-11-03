@@ -12,6 +12,7 @@ export const strings = {
   copyLink: 'Copy link',
   /** Opens the live booking page in a new tab. */
   viewPage: 'View page',
+  insights: 'Insights',
   linkCopied: 'Link copied',
   moreActions: 'More actions',
   pause: 'Pause',

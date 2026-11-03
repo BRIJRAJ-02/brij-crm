@@ -23,6 +23,7 @@ export const insightsRouter = member.insights.router({
     const read = await readInsights(context.scope, { period: input.period, pages: input.pages });
     return {
       ...read,
+      heard: [...read.heard],
       ...(read.funnel === undefined ? {} : { funnel: { ...read.funnel, steps: [...read.funnel.steps] } }),
     };
   }),

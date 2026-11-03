@@ -53,6 +53,8 @@ export const strings = {
   takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,
   cantWrite: 'You can’t write to this',
   mustAnswer: 'Visitors must answer',
+  // Spec 0067: its answers show beside Insights' sources.
+  sourceQuestion: 'How they heard about you',
   duplicateQuestion: 'Duplicate',
   deleteQuestion: 'Delete',
   questionDeleted: (label: string) => `Deleted “${label}”.`,

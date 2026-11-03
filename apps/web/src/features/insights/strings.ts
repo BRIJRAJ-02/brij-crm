@@ -6,6 +6,8 @@ export const strings = {
   insights: 'Insights',
   pages: 'Pages',
   period: 'Period',
+  customPeriod: 'Custom period',
+  customTooLong: (days: number) => `Pick at most ${String(days)} days.`,
   allPages: 'All pages',
   allForms: 'All forms',
   allBookingPages: 'All booking pages',
@@ -68,6 +70,8 @@ export const strings = {
   sortBy: 'Sort by',
   noSources: 'No visits in this period.',
   otherHosts: 'Other sites',
+  heard: 'How they heard about you',
+  submissions: 'Submissions',
   host: 'Site',
   sourceWords: {
     direct: 'Direct',

@@ -177,6 +177,13 @@ const SENTENCES: SentenceTemplates = {
   'webhook.secret_rotated': (entry) => actor(`rotated the signing secret of ${entry.params.host}`),
   'webhook.deleted': (entry) => actor(`deleted the webhook endpoint ${entry.params.host}`),
   'webhook.turned_off': (entry) => actor(`turned off ${entry.params.host} after 3 days of failed deliveries`),
+  'insights.share_created': (entry) => actor(`shared Insights in the link ${entry.params.label}`),
+  'insights.share_revoked': (entry) =>
+    actor(
+      entry.params.withMaker === true
+        ? `revoked the Insights link ${entry.params.label} when its maker left`
+        : `revoked the Insights link ${entry.params.label}`,
+    ),
   'api_key.created': (entry) => actor(`made the API key ${entry.params.name}`),
   'api_key.revoked': (entry) => actor(`revoked the API key ${entry.params.name}`),
   'api_key.restored': (entry) => actor(`brought back the API key ${entry.params.name}`),

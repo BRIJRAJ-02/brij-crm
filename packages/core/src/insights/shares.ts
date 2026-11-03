@@ -16,6 +16,7 @@ import {
   type InsightRange,
   type InsightShare,
   type InsightShareCreated,
+  type InsightSource,
   type PageKind,
   type SharedInsights,
 } from '@crm/contracts';
@@ -25,7 +26,8 @@ import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isUuid } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
-import { writeAudit, type AuditSource } from '../members/audit.ts';
+import { writeAudit, writeAudits, type AuditSource } from '../members/audit.ts';
+import type { RemovalEffect } from '../members/removal-effect.ts';
 import { insightNumbers, resolvePeriod, type CoveredPage } from './numbers.ts';
 import { pickPages, visiblePages } from './read.ts';
 
@@ -80,6 +82,53 @@ function toView(row: Row, memberId: string): InsightShare {
 
 /** Whether the reader sees every link (an admin) or only their own. */
 const seesAll = (scope: EngineScope) => can(scope.access, 'workspace.manage');
+
+/** The fewest visits a source, medium and campaign needs before a share link names it. */
+export const SHARED_SOURCE_MIN = 5;
+
+/**
+ * A share link's sources (AC-6720): a source, medium and campaign only once it has `SHARED_SOURCE_MIN` visits in
+ * the range; the rest fold into one Other row. UTM words are a visitor's own text, so a handful of visits can't
+ * put words of their choosing on a page a workspace hands to a client.
+ */
+export function sharedSources(sources: readonly InsightSource[]): InsightSource[] {
+  const shown = sources.filter((row) => row.visits >= SHARED_SOURCE_MIN);
+  const folded = sources.filter((row) => row.visits < SHARED_SOURCE_MIN);
+  if (folded.length === 0) return shown;
+  const other = folded.reduce(
+    (sum, row) => ({ ...sum, visits: sum.visits + row.visits, finishes: sum.finishes + row.finishes }),
+    { source: 'other', medium: '', campaign: '', visits: 0, finishes: 0 },
+  );
+  return [...shown, other];
+}
+
+/**
+ * A removed member's share links stop at once (spec 0067): each is revoked in the removal's own transaction, with
+ * its `insights.share_revoked` audit row, so nobody holds a live link to numbers they can no longer see.
+ */
+export const insightSharesRemoval: RemovalEffect = {
+  feature: 'insight shares',
+  constraints: ['insight_shares_creator'],
+  run: async ({ tx, scope }, memberId, source) => {
+    const revoked = await tx
+      .update(insightShares)
+      .set({ revokedAt: sql`now()` })
+      .where(and(eq(insightShares.createdByMemberId, memberId), isNull(insightShares.revokedAt)))
+      .returning({ id: insightShares.id, label: insightShares.label });
+    await writeAudits(
+      tx,
+      scope.workspaceId,
+      scope.actor,
+      revoked.map((row) => ({
+        action: 'insights.share_revoked' as const,
+        targetType: 'workspace' as const,
+        targetId: scope.workspaceId,
+        after: { shareId: row.id, label: row.label, reason: 'member_removed' },
+      })),
+      source,
+    );
+  },
+};
 
 /** The share links the reader may see, newest first: their own, or every one for an admin. */
 export async function listInsightShares(scope: EngineScope): Promise<{ readonly shares: readonly InsightShare[] }> {
@@ -264,7 +313,7 @@ export async function readInsightShare(
       workspaceName: workspace.name,
       pageNames: names.rows.map((each) => each.name),
       range,
-      numbers: { ...numbers, buckets: [...numbers.buckets], sources: [...numbers.sources] },
+      numbers: { ...numbers, buckets: [...numbers.buckets], sources: sharedSources(numbers.sources) },
     };
   });
 }

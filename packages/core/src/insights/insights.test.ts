@@ -21,7 +21,14 @@ import { submitForm } from '../forms/public.ts';
 import { countFormEvent } from '../forms/visits.ts';
 import { readInsights, readInsightSessions } from './read.ts';
 import { rollUpPageVisits } from './rollup.ts';
-import { createInsightShare, listInsightShares, readInsightShare, revokeInsightShare } from './shares.ts';
+import {
+  createInsightShare,
+  insightSharesRemoval,
+  listInsightShares,
+  readInsightShare,
+  revokeInsightShare,
+  sharedSources,
+} from './shares.ts';
 import { countPageVisit, finishPageVisit, originOf } from './visits.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -55,13 +62,19 @@ const question = (
   changes: Partial<FormQuestion> & Pick<FormQuestion, 'id' | 'key' | 'label' | 'answerType'>,
 ): FormQuestion => ({ required: false, update: 'fill', ...changes });
 
-async function liveForm(w: Workspace, name = 'Enquiry') {
+async function liveForm(w: Workspace, name = 'Enquiry', asksSource = false) {
   const created = await createForm(w.scope, { id: newId(), name });
   const document: FormDocument = {
     ...created.draft,
     questions: [
       ...created.draft.questions.filter((each) => each.key === 'name' || each.key === 'email'),
-      question({ id: 'why', key: 'why', label: 'Why?', answerType: 'short_text' }),
+      question({
+        id: 'why',
+        key: 'why',
+        label: 'How did you hear about us?',
+        answerType: 'short_text',
+        ...(asksSource ? { source: true as const } : {}),
+      }),
     ],
   };
   const saved = await saveFormDraft(w.scope, { formId: created.id, document, expectedRevision: created.revision });
@@ -225,6 +238,40 @@ describe('the Insights numbers (AC-6711 to AC-6714, AC-6730)', () => {
     await expect(rollUpPageVisits(w.scope)).rejects.toThrow();
   });
 
+  it('never loses a visit still being written while the rollup takes its day (the near midnight race)', async () => {
+    const w = await workspace();
+    const form = await liveForm(w);
+    // The day is marked by a visit already in.
+    await pastVisit(w, form.id, 'first', 2);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let written: () => void = () => undefined;
+    const isWritten = new Promise<void>((resolve) => {
+      written = resolve;
+    });
+    // A second visit to the same day, its transaction left open: it touches the mark, which locks it.
+    const late = db.withWorkspace(w.workspaceId, async (tx) => {
+      await tx.execute(sql`
+        insert into page_visits (workspace_id, page_kind, page_id, day, visitor, first_at)
+        values (${w.workspaceId}, 'form', ${form.id}, (now() at time zone 'UTC')::date - 2, ${visitorHash('late')},
+          now() - interval '2 days')
+      `);
+      written();
+      await held;
+    });
+    await isWritten;
+    // The rollup can't take the day while the visit is uncommitted: it skips it rather than read it without it.
+    expect((await rollUpPageVisits(w.system)).days).toBe(0);
+    release();
+    await late;
+    expect((await rollUpPageVisits(w.system)).days).toBe(1);
+    expect(await w.query(sql`select day from page_visit_stale_days`)).toEqual([]);
+    const read = await readInsights(w.scope, { period: { range: '7' }, pages: {} });
+    expect(read.totals.visits).toBe(2);
+  });
+
   it('shows nothing of a form whose object is hidden from the reader, and NOT_FOUND for that page by name', async () => {
     const w = await workspace();
     const form = await liveForm(w);
@@ -244,6 +291,38 @@ describe('the Insights numbers (AC-6711 to AC-6714, AC-6730)', () => {
     expect(
       await refusalOf(readInsights(blind, { period: { range: '30' }, pages: { kind: 'form', pageId: form.id } })),
     ).toMatchObject([{ code: 'NOT_FOUND' }]);
+  });
+
+  it('counts the How did you hear answers of a form that marks the question, spam left out', async () => {
+    const w = await workspace();
+    const form = await liveForm(w, 'Enquiry', true);
+    const { scope, formId } = await enterPublicForm({ db }, form.publicKey);
+    const send = (why: string, extra: Record<string, unknown> = {}) =>
+      submitForm(scope, registry, {
+        formId,
+        body: {
+          idempotencyKey: newId(),
+          answers: { name: 'A', email: 'a@example.com', why },
+          hidden: {},
+          fillMs: 9_000,
+          ...extra,
+        },
+        captcha: { kind: 'off' },
+        answersKey: 'a-test-key',
+      });
+    await send('Instagram');
+    await send('Instagram');
+    await send('A friend');
+    await send('Spam words', { company_url: 'http://spam' });
+    const read = await readInsights(w.scope, { period: { range: '7' }, pages: {} });
+    expect(read.heard).toEqual([
+      { answer: 'Instagram', submissions: 2 },
+      { answer: 'A friend', submissions: 1 },
+    ]);
+    // A form that marks none answers nothing.
+    const other = await workspace();
+    await liveForm(other);
+    expect((await readInsights(other.scope, { period: { range: '7' }, pages: {} })).heard).toEqual([]);
   });
 
   it('refuses a custom range that runs backwards or past 400 days', async () => {
@@ -443,6 +522,35 @@ describe('share links (AC-6720)', () => {
     );
     await w.query(sql`update members set status = 'removed' where email = 'ada@example.com'`);
     expect(await refusalOf(readInsightShare({ db }, made.token))).toMatchObject([{ code: 'NOT_FOUND' }]);
+  });
+
+  it('names a source only from five visits, folding the rest into Other', () => {
+    expect(
+      sharedSources([
+        { source: 'instagram', medium: 'social', campaign: 'nov', visits: 12, finishes: 3 },
+        { source: 'visit evil example', medium: '', campaign: '', visits: 2, finishes: 0 },
+        { source: 'other', medium: 'referral', campaign: '', visits: 4, finishes: 1 },
+      ]),
+    ).toEqual([
+      { source: 'instagram', medium: 'social', campaign: 'nov', visits: 12, finishes: 3 },
+      { source: 'other', medium: '', campaign: '', visits: 6, finishes: 1 },
+    ]);
+  });
+
+  it('revokes a removed member’s links, each with its audit row', async () => {
+    const w = await workspace();
+    await liveForm(w);
+    const made = await createInsightShare(w.scope, { label: 'Client', pages: {}, range: '30' });
+    const [maker] = await w.query<{ id: string }>(sql`select id::text as id from members limit 1`);
+    await runWrite(w.system, (context) => insightSharesRemoval.run?.(context, maker?.id ?? '') ?? Promise.resolve());
+    const [row] = await w.query<{ revoked: boolean }>(
+      sql`select revoked_at is not null as revoked from insight_shares where id = ${made.share.id}`,
+    );
+    expect(row?.revoked).toBe(true);
+    const audit = await w.query<{ after: { reason?: string } }>(
+      sql`select after from audit_events where action = 'insights.share_revoked'`,
+    );
+    expect(audit.map((each) => each.after.reason)).toEqual(['member_removed']);
   });
 
   it('refuses an expiry in the past, and a page the maker can’t see', async () => {

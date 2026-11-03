@@ -118,6 +118,7 @@ import { strings } from './strings.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
 import { strings as socialsStrings } from './socials-strings.ts';
+import { insightsHref } from '../insights/search.ts';
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
@@ -791,6 +792,8 @@ export function PageEditor({
             <EditorActions
               link={publicBookingUrl(page)}
               viewHref={publicBookingUrl(page)}
+              // Its visits, bookings and where people stop (spec 0067).
+              insightsHref={insightsHref(slug, { kind: 'booking', page: page.id })}
               {...(isLocked
                 ? {}
                 : {

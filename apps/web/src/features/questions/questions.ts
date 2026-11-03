@@ -413,3 +413,17 @@ export function planNewAttributes(
   }
   return plans;
 }
+
+/** The answer types a form's How did you hear question may be (spec 0067): a pick from choices, or a short answer. */
+export const SOURCE_ANSWER_TYPES: ReadonlySet<string> = new Set(['choice', 'dropdown', 'short_text']);
+
+/**
+ * Marks `id` as the form's How did you hear question (spec 0067, AC-6703), or unmarks it: a form has one, so
+ * marking it unmarks any other.
+ */
+export function markSource(questions: Questions, id: string, isSource: boolean): FormQuestion[] {
+  return questions.map((question): FormQuestion => {
+    const { source: _was, ...rest } = question;
+    return question.id === id && isSource ? { ...rest, source: true } : rest;
+  });
+}
