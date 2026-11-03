@@ -66,6 +66,7 @@ export const strings = {
   publishTitle: 'Publish',
   publishText: 'Guests can reserve once the page is published. Publish checks the setup first.',
   pageLive: 'Your page is live',
+  liveText: 'Guests reserve at this address. Share it, or put it on your site.',
   // The Service screen.
   previousDay: 'Previous day',
   nextDay: 'Next day',

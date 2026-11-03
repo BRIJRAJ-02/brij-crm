@@ -42,11 +42,12 @@ import {
   Table,
   TileGrid,
   TopBar,
+  TruncatedText,
   type Hue,
   type TableColumn,
   type Toasts,
 } from '@crm/ui';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { businessSettingsHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { strings } from './strings.ts';
@@ -367,15 +368,24 @@ function PlaceService({
       <Badge dot={LOOK[visit.status].hue} text={strings.status[visit.status]} />
     );
 
-  const columns: readonly TableColumn[] = [
-    { id: 'time', label: strings.time, size: 'fit' },
-    { id: 'guest', label: strings.guest, isRowHeader: true },
-    { id: 'party', label: strings.party, size: 'fit', align: 'end' },
-    { id: 'table', label: strings.table, size: 'fit' },
-    { id: 'note', label: strings.note, size: 'fill' },
-    { id: 'status', label: strings.statusTitle, size: 'fit' },
-    { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
-  ];
+  // A phone keeps what the stand acts on: when, who (with the party), the state and the action; a wider screen adds
+  // Guests, Table and the note (truncated, the guest's column takes the room).
+  const columns: readonly TableColumn[] = isWide
+    ? [
+        { id: 'time', label: strings.time, size: 'fit' },
+        { id: 'guest', label: strings.guest, isRowHeader: true, size: 'fill' },
+        { id: 'party', label: strings.party, size: 'fit', align: 'end' },
+        { id: 'table', label: strings.table, size: 'fit' },
+        { id: 'note', label: strings.note },
+        { id: 'status', label: strings.statusTitle, size: 'fit' },
+        { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
+      ]
+    : [
+        { id: 'time', label: strings.time, size: 'fit' },
+        { id: 'guest', label: strings.guest, isRowHeader: true, size: 'fill' },
+        { id: 'status', label: strings.statusTitle, size: 'fit' },
+        { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
+      ];
 
   /** Still to happen first, by time; then what is over for the night, by time. */
   const ordered = (visits: readonly ServiceVisit[]) =>
@@ -395,13 +405,17 @@ function PlaceService({
           case 'time':
             return time(visit.start);
           case 'guest':
-            return visit.occasion === undefined ? visit.name : `${visit.name} · ${strings.occasion(visit.occasion)}`;
+            return [
+              visit.name,
+              ...(isWide ? [] : [strings.guestsCount(visit.party)]),
+              ...(visit.occasion === undefined ? [] : [strings.occasion(visit.occasion)]),
+            ].join(' · ');
           case 'party':
             return String(visit.party);
           case 'table':
             return labelOf(visit.resourceIds);
           case 'note':
-            return visit.note ?? '';
+            return visit.note === undefined ? '' : <TruncatedText>{visit.note}</TruncatedText>;
           case 'status':
             return statusOf(visit);
           default:
@@ -472,14 +486,12 @@ function PlaceService({
     return groups.map((group) => {
       const free = group.tables.filter((table) => tableState(table, value).state === 'free').length;
       return (
-        <PageColumn key={group.id}>
+        <Fragment key={group.id}>
           {groups.length > 1 || group.id !== 'none' ? (
             <SectionBar title={group.name} isTitleQuiet description={strings.freeOf(free, group.tables.length)} />
           ) : null}
-          <TileGrid columns="auto" fill="fill">
-            {group.tables.map((table) => tile(table, value))}
-          </TileGrid>
-        </PageColumn>
+          <TileGrid columns="dense">{group.tables.map((table) => tile(table, value))}</TileGrid>
+        </Fragment>
       );
     });
   };
@@ -507,15 +519,18 @@ function PlaceService({
         value={view}
         onChange={(next) => setView(next === 'floor' ? 'floor' : 'list')}
         segments={[
-          { value: 'list', label: strings.list, icon: 'list' },
-          { value: 'floor', label: strings.floor, icon: 'layout-grid' },
+          { value: 'list', label: strings.list, icon: 'list', isIconOnly: !isWide },
+          { value: 'floor', label: strings.floor, icon: 'layout-grid', isIconOnly: !isWide },
         ]}
       />
-      {isToday && (
-        <Button size="sm" variant="primary" icon="user-plus" onPress={() => setWalkIn({})}>
-          {strings.walkIn}
-        </Button>
-      )}
+      {isToday &&
+        (isWide ? (
+          <Button size="sm" variant="primary" icon="user-plus" onPress={() => setWalkIn({})}>
+            {strings.walkIn}
+          </Button>
+        ) : (
+          <Button size="sm" variant="primary" icon="user-plus" label={strings.walkIn} onPress={() => setWalkIn({})} />
+        ))}
     </TopBar>
   );
 

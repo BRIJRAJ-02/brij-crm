@@ -37,14 +37,9 @@ export function placeFacts(page: PublicTablePage): readonly BookingFact[] {
   ];
 }
 
-/** The rail's head: the business, and the place as the title only when it is a name of its own (never "Somewhere / Somewhere"). */
-export function frameHead(page: PublicTablePage): {
-  readonly host: { readonly name: string };
-  readonly title?: string;
-} {
-  return page.place.name.trim().toLowerCase() === page.business.name.trim().toLowerCase()
-    ? { host: { name: page.business.name } }
-    : { host: { name: page.business.name }, title: page.place.name };
+/** The rail's head: the business, and the place as the page's title (said once when the two names are the same). */
+export function frameHead(page: PublicTablePage): { readonly host: { readonly name: string }; readonly title: string } {
+  return { host: { name: page.business.name }, title: page.place.name };
 }
 
 /** The occasions, by key, in the order the chips show them. */

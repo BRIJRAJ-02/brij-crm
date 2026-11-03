@@ -59,29 +59,8 @@ export function ManageReservation({
   };
   const [now] = useState(() => Date.now());
   const [notice, setNotice] = useState<string | undefined>();
+  const [problem, setProblem] = useState<string | undefined>();
   const [attempt, setAttempt] = useState(0);
-  // The calendar file, fetched by POST with the link's token (never in an address), held as an object URL.
-  const [ics, setIcs] = useState<string | undefined>();
-  const isLive = read?.key === guestKey && read.loaded.status === 'ready' && read.loaded.visit.status !== 'cancelled';
-
-  useEffect(() => {
-    if (token === undefined || !isLive) return;
-    let current = true;
-    let made: string | undefined;
-    client.ics(page.key, { token }).then(
-      (file) => {
-        if (!current) return;
-        made = URL.createObjectURL(file);
-        setIcs(made);
-      },
-      () => undefined,
-    );
-    return () => {
-      current = false;
-      if (made !== undefined) URL.revokeObjectURL(made);
-    };
-  }, [client, page.key, token, isLive]);
-
   useEffect(() => {
     if (guest === undefined) return;
     let current = true;
@@ -175,20 +154,52 @@ export function ManageReservation({
         ...(address === '' ? [] : [{ term: strings.where, description: `${page.place.name}, ${address}` }]),
         ...(visit.note === undefined ? [] : [{ term: strings.note, description: visit.note }]),
       ]}
-      {...(state === 'confirmed' && token !== undefined ? { calendars: { google, outlook, ics } } : {})}
+      {...(state === 'confirmed' && token !== undefined
+        ? {
+            calendars: {
+              google,
+              outlook,
+              // The file comes by POST with the link's token (never in an address), then saves as a download.
+              ics: () => {
+                client.ics(page.key, { token }).then(
+                  (file) => {
+                    const href = URL.createObjectURL(file);
+                    const link = globalThis.document.createElement('a');
+                    link.href = href;
+                    link.download = 'reservation.ics';
+                    link.click();
+                    globalThis.setTimeout(() => URL.revokeObjectURL(href), 0);
+                  },
+                  () => {
+                    setNotice(undefined);
+                    setProblem(strings.addToCalendarFailed);
+                  },
+                );
+              },
+            },
+          }
+        : {})}
       again={{ label: strings.reserveAgain, href: `/r/${encodeURIComponent(page.key)}` }}
       brand={{ href: poweredByHref('booking_manage', undefined), label: strings.poweredBy }}
-      {...(notice === undefined
-        ? isOpen && visit.cancelUntil === undefined && state === 'confirmed'
-          ? { notice: <Callout tone="info">{strings.tooLate(page.place.phone)}</Callout> }
-          : {}
-        : {
+      {...(problem !== undefined
+        ? {
             notice: (
-              <Callout tone="success" isAnnounced>
-                {notice}
+              <Callout tone="danger" isAnnounced>
+                {problem}
               </Callout>
             ),
-          })}
+          }
+        : notice === undefined
+          ? isOpen && visit.cancelUntil === undefined && state === 'confirmed'
+            ? { notice: <Callout tone="info">{strings.tooLate(page.place.phone)}</Callout> }
+            : {}
+          : {
+              notice: (
+                <Callout tone="success" isAnnounced>
+                  {notice}
+                </Callout>
+              ),
+            })}
       {...(state === 'confirmed' && isOpen && visit.cancelUntil !== undefined
         ? {
             changes: (
@@ -416,39 +427,35 @@ function FindReservation({
       facts={placeFacts(page)}
       heading={strings.findTitle}
     >
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          find();
-        }}
-      >
-        {problem !== undefined && (
-          <Callout tone="danger" isAnnounced>
-            {problem}
-          </Callout>
-        )}
-        <Field
-          label={strings.codeLabel}
-          name="code"
-          value={code}
-          onChange={setCode}
-          autoComplete="off"
-          maxLength={12}
-          isRequired
-        />
-        <Field
-          label={strings.emailLabel}
-          name="email"
-          type="email"
-          value={email}
-          onChange={setEmail}
-          autoComplete="email"
-          isRequired
-        />
-        <Button type="submit" variant="primary" isFullWidth="center" isPending={isFinding}>
-          {isFinding ? strings.finding : strings.find}
-        </Button>
-      </form>
+      {/* The pane lays the fields out in its own rhythm; Enter in either field finds, as a form would. */}
+      {problem !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {problem}
+        </Callout>
+      )}
+      <Field
+        label={strings.codeLabel}
+        name="code"
+        value={code}
+        onChange={setCode}
+        onSubmit={find}
+        autoComplete="off"
+        maxLength={12}
+        isRequired
+      />
+      <Field
+        label={strings.emailLabel}
+        name="email"
+        type="email"
+        value={email}
+        onChange={setEmail}
+        onSubmit={find}
+        autoComplete="email"
+        isRequired
+      />
+      <Button variant="primary" isFullWidth="center" isPending={isFinding} onPress={find}>
+        {isFinding ? strings.finding : strings.find}
+      </Button>
     </BookingFrame>
   );
 }

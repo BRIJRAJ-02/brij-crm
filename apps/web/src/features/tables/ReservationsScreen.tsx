@@ -23,6 +23,7 @@ import {
   Skeleton,
   Switch,
   TopBar,
+  TruncatedText,
   type Toasts,
 } from '@crm/ui';
 import { useState } from 'react';
@@ -52,6 +53,22 @@ type Draft = Readonly<
     string
   >
 >;
+
+/** The form's fields in reading order: the first one with a problem takes focus. */
+const DRAFT_ORDER: Readonly<Record<keyof Draft, true>> = {
+  partyMin: true,
+  partyMax: true,
+  step: true,
+  minutes: true,
+  hold3: true,
+  hold5: true,
+  hold7: true,
+  notice: true,
+  window: true,
+  change: true,
+  cancel: true,
+  covers: true,
+};
 
 const draftOf = (rules: TableRules): Draft => {
   const hold = (size: number) => String(rules.holds.find((row) => row.size === size)?.minutes ?? '');
@@ -315,7 +332,12 @@ function SetupBody({
     const read = rulesOf(draft, setup.rules);
     if ('errors' in read) {
       setErrors(read.errors);
-      setProblem({ message: strings.fixFields });
+      // The first field to fix takes focus, so its message is read where the number is, wherever the page is scrolled.
+      const first = (Object.keys(DRAFT_ORDER) as (keyof Draft)[]).find((key) => read.errors[key] !== undefined);
+      globalThis.requestAnimationFrame(() => {
+        if (first !== undefined) globalThis.document.querySelector<HTMLInputElement>(`input[name="${first}"]`)?.focus();
+      });
+      toasts.toast({ tone: 'danger', message: strings.fixFields });
       return;
     }
     setErrors({});
@@ -335,23 +357,24 @@ function SetupBody({
   const link = reservePageUrl(setup.publicKey);
   const hours = stepOf('hours');
   const tablesStep = stepOf('tables');
-  const problemLine = problem !== undefined && (
-    <Callout
-      tone="danger"
-      isAnnounced
-      {...(problem.href === undefined
-        ? {}
-        : {
-            actions: (
-              <ButtonLink href={problem.href} size="sm">
-                {strings.fixIt}
-              </ButtonLink>
-            ),
-          })}
-    >
-      {problem.message}
-    </Callout>
-  );
+  const problemLine =
+    problem === undefined ? undefined : (
+      <Callout
+        tone="danger"
+        isAnnounced
+        {...(problem.href === undefined
+          ? {}
+          : {
+              actions: (
+                <ButtonLink href={problem.href} size="sm">
+                  {strings.fixIt}
+                </ButtonLink>
+              ),
+            })}
+      >
+        {problem.message}
+      </Callout>
+    );
   const aside = (
     <>
       <SetupChecklist
@@ -394,7 +417,7 @@ function SetupBody({
       />
       <Card
         title={live ? strings.pageLive : strings.publishTitle}
-        description={live ? link : strings.publishText}
+        description={live ? strings.liveText : strings.publishText}
         actions={
           live ? (
             <Button variant="danger" isDisabled={isSaving} onPress={() => setStopping(true)}>
@@ -407,7 +430,13 @@ function SetupBody({
           )
         }
       >
-        {problemLine}
+        {live || problemLine !== undefined ? (
+          <>
+            {/* The address on its own line, cut short with its end kept readable: it never runs under the button. */}
+            {live && <TruncatedText>{link}</TruncatedText>}
+            {problemLine}
+          </>
+        ) : undefined}
       </Card>
       <Card title={strings.alertsTitle} description={strings.alertsText}>
         <Switch
@@ -460,6 +489,7 @@ function SetupBody({
           <Field
             label={strings.partyMin}
             inputMode="numeric"
+            name="partyMin"
             value={draft.partyMin}
             onChange={set('partyMin')}
             {...errorOf('partyMin')}
@@ -467,6 +497,7 @@ function SetupBody({
           <Field
             label={strings.partyMax}
             inputMode="numeric"
+            name="partyMax"
             value={draft.partyMax}
             {...errorOf('partyMax')}
             onChange={set('partyMax')}
@@ -486,6 +517,7 @@ function SetupBody({
             label={strings.holdSmall}
             inputMode="numeric"
             suffix={strings.min}
+            name="minutes"
             value={draft.minutes}
             {...errorOf('minutes')}
             onChange={set('minutes')}
@@ -497,6 +529,7 @@ function SetupBody({
             label={strings.holdFor(3)}
             inputMode="numeric"
             suffix={strings.min}
+            name="hold3"
             value={draft.hold3}
             {...errorOf('hold3')}
             onChange={set('hold3')}
@@ -505,6 +538,7 @@ function SetupBody({
             label={strings.holdFor(5)}
             inputMode="numeric"
             suffix={strings.min}
+            name="hold5"
             value={draft.hold5}
             {...errorOf('hold5')}
             onChange={set('hold5')}
@@ -513,6 +547,7 @@ function SetupBody({
             label={strings.holdFor(7)}
             inputMode="numeric"
             suffix={strings.min}
+            name="hold7"
             value={draft.hold7}
             {...errorOf('hold7')}
             onChange={set('hold7')}
@@ -525,6 +560,7 @@ function SetupBody({
             label={strings.notice}
             inputMode="decimal"
             suffix={strings.hours}
+            name="notice"
             value={draft.notice}
             {...errorOf('notice')}
             onChange={set('notice')}
@@ -534,6 +570,7 @@ function SetupBody({
             label={strings.window}
             inputMode="numeric"
             suffix={strings.days}
+            name="window"
             value={draft.window}
             {...errorOf('window')}
             onChange={set('window')}
@@ -544,6 +581,7 @@ function SetupBody({
             label={strings.changeCutoff}
             inputMode="decimal"
             suffix={strings.hours}
+            name="change"
             value={draft.change}
             {...errorOf('change')}
             onChange={set('change')}
@@ -552,6 +590,7 @@ function SetupBody({
             label={strings.cancelCutoff}
             inputMode="decimal"
             suffix={strings.hours}
+            name="cancel"
             value={draft.cancel}
             {...errorOf('cancel')}
             onChange={set('cancel')}
@@ -561,6 +600,7 @@ function SetupBody({
         <Field
           label={strings.covers}
           inputMode="numeric"
+          name="covers"
           value={draft.covers}
           {...errorOf('covers')}
           onChange={set('covers')}
