@@ -684,10 +684,18 @@ export function PageEditor({
       },
     );
   };
+  /** The page as Discard or Restore left it: the editor shows exactly that, with nothing of its own kept over it. */
+  const resetTo = (next: typeof page) => {
+    setPage(next);
+    setDraft(settingsOf(next));
+    setFailure(undefined);
+    setPublishProblem(undefined);
+    setVersions(undefined);
+  };
   const discardDraft = () => {
     data.bookingPages
       .discard(slug, page.id)
-      .then(takePage, () => toasts.toast({ tone: 'danger', message: publishStrings.discardFailed }));
+      .then(resetTo, () => toasts.toast({ tone: 'danger', message: publishStrings.discardFailed }));
   };
   const readVersions = () => {
     data.bookingPages.versions(slug, page.id).then(
@@ -705,7 +713,7 @@ export function PageEditor({
   const restore = (version: number) => {
     data.bookingPages.restore(slug, page.id, version).then(
       (next) => {
-        takePage(next);
+        resetTo(next);
         toasts.toast({ tone: 'success', message: publishStrings.restored(version) });
       },
       () => toasts.toast({ tone: 'danger', message: publishStrings.restoreFailed }),
