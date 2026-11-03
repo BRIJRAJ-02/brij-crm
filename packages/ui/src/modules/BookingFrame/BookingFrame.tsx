@@ -94,6 +94,12 @@ export interface BookingFrameProps {
    */
   readonly isCompact?: boolean;
   /**
+   * Drawn inside a site's embed (3 November 2026): the page takes its content's height, not the frame's. A page
+   * at least as tall as its viewport, inside a frame sized to what the page reports, can only ever grow: the
+   * booking details step sat in the calendar's height with a screen of empty card above Confirm.
+   */
+  readonly isEmbedded?: boolean;
+  /**
    * Where "Claim your free page" goes: `claimPageHref('booking_page')`, tagged as the wordmark beside it is. Leave
    * it off to show the wordmark alone (a recognised visitor).
    */
@@ -146,6 +152,7 @@ export function BookingFrame({
   view,
   enter,
   isCompact = false,
+  isEmbedded = false,
   claimHref,
   logo = TIMEFIX_LOGO,
   brand,
@@ -172,7 +179,12 @@ export function BookingFrame({
   const isCardCovered = isCovered && coverPlace === 'card';
   const claim = claimHref === undefined ? {} : { claimHref };
   return (
-    <main className={styles.root} ref={variables} {...(isCompact ? { 'data-compact': true } : {})}>
+    <main
+      className={styles.root}
+      ref={variables}
+      {...(isCompact ? { 'data-compact': true } : {})}
+      {...(isEmbedded ? { 'data-embedded': true } : {})}
+    >
       <div className={styles.layout}>
         <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
           {/* The workspace's own logo heads the rail (spec 0060, AC-4): its mark, before the host it books with. */}

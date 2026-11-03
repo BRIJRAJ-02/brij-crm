@@ -174,6 +174,9 @@ const locationLabel = (location: PublicBookingPage['location']) =>
       ? strings.locations.phone
       : location.value;
 
+/** Whether this page is drawn inside a site's embed (`embed=1`, `frame.ts`), so it takes its content's height. */
+const isEmbedded = () => new URLSearchParams(globalThis.location.search).get('embed') === '1';
+
 /** The page: its facts load once, then the steps; each state as the experience note writes it. */
 export function BookingPage({
   publicKey,
@@ -396,6 +399,7 @@ export function LoadingBooking({
   );
   return (
     <BookingFrame
+      isEmbedded={isEmbedded()}
       claimHref={CLAIM_URL}
       heading={strings.chooseTime}
       toolbar={
@@ -1250,7 +1254,7 @@ function Booking({
   if (message !== undefined && detailsStep === undefined) {
     // Nothing to pick in any view: the message alone, the same card whichever view is chosen.
     return (
-      <BookingFrame {...frame} heading={strings.chooseTime} toolbar={controls} view={view}>
+      <BookingFrame {...frame} isEmbedded={isEmbedded()} heading={strings.chooseTime} toolbar={controls} view={view}>
         {noticeLine}
         {message}
       </BookingFrame>
@@ -1300,6 +1304,7 @@ function Booking({
 
   return (
     <BookingFrame
+      isEmbedded={isEmbedded()}
       {...(isDetails ? withoutBar : frame)}
       heading={strings.chooseTime}
       toolbar={controls}

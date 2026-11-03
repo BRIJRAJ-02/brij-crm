@@ -580,3 +580,29 @@ export const Compact: Story = {
     </Stage>
   ),
 };
+
+/**
+ * `isEmbedded`: inside a site's embed the page is as tall as what it holds, never the frame, because the embed
+ * script sizes the frame to what the page reports. Measured, not shot: it looks like any short page.
+ */
+export const Embedded: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingFrame
+        isEmbedded
+        host={{ name: 'Ada Lovelace' }}
+        title="Intro call"
+        facts={[{ id: 'length', icon: 'clock', children: '30 min' }]}
+        heading="Choose a time"
+      >
+        <p>The month goes here.</p>
+      </BookingFrame>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const page = canvasElement.querySelector('main');
+    await expect(page).not.toBeNull();
+    await expect(page?.getBoundingClientRect().height ?? 0).toBeLessThan(globalThis.innerHeight / 2);
+  },
+};

@@ -86,6 +86,11 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* In a site's embed the frame is sized to the page, so the page must not be sized to the frame (isEmbedded). */
+  .root[data-embedded] {
+    min-block-size: 0;
+  }
+
   .layout {
     /* Everything on the page reads the accent through the library's own names (the chosen day, Book, links, focus
        rings), so the brand reaches each of them. One level in, where the names above were worked out. */
