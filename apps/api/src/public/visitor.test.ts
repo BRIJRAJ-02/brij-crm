@@ -16,7 +16,14 @@ import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts'
 import { MAILPIT_URL, newIp, signIn, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace } from '../../test/workspace.ts';
 import { createMemoryLimiter } from './limits.ts';
-import { GUEST_CALLBACK_PATH, GUEST_COOKIE, GUEST_STATE_COOKIE } from './visitor.ts';
+import { returnPath, returnShape } from './booking.ts';
+import {
+  GUEST_CALLBACK_PATH,
+  GUEST_COOKIE,
+  GUEST_LAND_COOKIE,
+  GUEST_LAND_PATH,
+  GUEST_STATE_COOKIE,
+} from './visitor.ts';
 
 /** Sunday 1 November 2026, midnight UTC. */
 const NOW = new Date('2026-11-01T00:00:00.000Z');
@@ -26,6 +33,9 @@ const MONDAY = `from=${at('00:00')}&to=2026-11-03T00:00:00.000Z&duration=30&tz=U
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof createApp>;
+/** The same app with the public pages on their own origin, as Timefix serves them (timefix.com beside app.). */
+let pagesApp: ReturnType<typeof createApp>;
+const PAGES = 'https://pages.test';
 
 /** Busy times by workspace: the host's at noon, and a signed in visitor's where a test puts them. */
 const memberBusy = new Map<string, readonly BusyInterval[] | 'blocked' | 'broken'>();
@@ -71,7 +81,12 @@ const guest: GuestCalendar = {
 
 beforeAll(() => {
   ({ db, identity } = testConnections());
-  const env = testEnv();
+  app = buildApp(testEnv());
+  pagesApp = buildApp(testEnv({ BOOKING_PUBLIC_ORIGIN: PAGES }));
+});
+
+/** The app on `env`, with the fake calendars. */
+function buildApp(env: ReturnType<typeof testEnv>): ReturnType<typeof createApp> {
   const fake = createFakeCalendarProvider({ now: () => NOW });
   const services = createCalendarServices(
     {
@@ -85,7 +100,7 @@ beforeAll(() => {
     fake.provider,
     guest,
   );
-  app = createApp({
+  return createApp({
     services: {
       ...testServices(env, {
         db,
@@ -99,16 +114,16 @@ beforeAll(() => {
     },
     env,
   });
-});
+}
 afterAll(async () => {
   await identity.close();
   await db.close();
 });
 
 /** A browser request through the edge with these cookies, redirects left to the caller. */
-function browse(path: string, cookie = '', method = 'GET'): Promise<Response> {
+function browse(path: string, cookie = '', method = 'GET', on = app): Promise<Response> {
   return Promise.resolve(
-    app.fetch(
+    on.fetch(
       new Request(`${APP_URL}${path}`, {
         method,
         headers: {
@@ -221,7 +236,15 @@ describe('a guest connecting Google for the visit (AC-721, AC-722)', () => {
 
   it('sends nobody anywhere but this page, and refuses a state without its cookie', async () => {
     const { key } = await hostPage();
-    for (const given of ['https://evil.example/b/x', '//evil.example', `/b/${key}/../../x`, '/b/AAAAAAAAAAAAAAAA']) {
+    for (const given of [
+      'https://evil.example/b/x',
+      '//evil.example',
+      `/b/${key}/../../x`,
+      '/b/AAAAAAAAAAAAAAAA',
+      `/\\evil.example/b/${key}`,
+      // A handle address that names no page, or another one.
+      `/nobody-${newId().slice(-8)}/intro-call`,
+    ]) {
       const start = await browse(`/api/public/booking/${key}/connect?via=app&return=${encodeURIComponent(given)}`);
       expect(start.headers.get('location')).toBe(`${APP_URL}/`);
       expect(cookieOf(start, GUEST_STATE_COOKIE)).toBe('');
@@ -277,6 +300,130 @@ describe('a guest connecting Google for the visit (AC-721, AC-722)', () => {
       isHost: false,
       canConnect: true,
     });
+  });
+});
+
+describe('the return address of a guest connect (4 Nov 2026)', () => {
+  const KEY = 'abcdefghijklmnop';
+  const yes = () => Promise.resolve(true);
+  const no = () => Promise.resolve(false);
+
+  it('takes the page’s own /b/<key> or a handle address, with a plain query, and nothing else', () => {
+    expect(returnShape(`/b/${KEY}?d=30&tz=America%2FNew_York`)).toEqual({ kind: 'key', publicKey: KEY });
+    expect(returnShape('/anish/meeting?d=30')).toEqual({ kind: 'handle', handle: 'anish', slug: 'meeting' });
+    for (const given of [
+      undefined,
+      '',
+      'https://evil.example/anish/meeting',
+      '//evil.example/meeting',
+      '///evil.example/meeting',
+      '/\\evil.example/meeting',
+      '\\\\evil.example/anish/meeting',
+      '/anish\\meeting',
+      '/anish%2Fmeeting/x',
+      '/anish/meeting%2F..',
+      '/anish/%2e%2e',
+      `/b/${KEY}%2F`,
+      '/anish/meeting/extra',
+      '/anish/meeting#calendar',
+      '/Anish/meeting',
+      '/settings/meeting',
+      '/anish/meeting?next=/x',
+      `/anish/meeting?${'a'.repeat(512)}`,
+    ]) {
+      expect(returnShape(given)).toBeUndefined();
+    }
+  });
+
+  it('takes a handle address only when it names this page, and /b/ only for this key', async () => {
+    expect(await returnPath(KEY, '/anish/meeting?d=30', yes)).toBe('/anish/meeting?d=30');
+    expect(await returnPath(KEY, '/anish/meeting?d=30', no)).toBeUndefined();
+    expect(await returnPath(KEY, `/b/${KEY}`, no)).toBe(`/b/${KEY}`);
+    expect(await returnPath(KEY, '/b/AAAAAAAAAAAAAAAA', yes)).toBeUndefined();
+    expect(await returnPath('not a key', '/anish/meeting', yes)).toBeUndefined();
+  });
+
+  /** A host's live page at `/<handle>/intro-call`. */
+  async function handlePage() {
+    const { host, key } = await hostPage();
+    const handle = `guest-${newId().slice(-8)}`;
+    await host.client.profile.update({ workspace: host.slug, handle, mutationId: newId() });
+    return { key, handle, path: `/${handle}/intro-call` };
+  }
+
+  /** A connect started on the public host at `path`: the landing cookie, then Google's address and the state cookie. */
+  async function startOnPages(key: string, path: string) {
+    const first = await browse(
+      `/api/public/booking/${key}/connect?return=${encodeURIComponent(path)}`,
+      '',
+      'GET',
+      pagesApp,
+    );
+    const hop = new URL(first.headers.get('location') ?? '');
+    expect(hop.origin).toBe(APP_URL);
+    expect(hop.searchParams.get('land')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const land = cookieOf(first, GUEST_LAND_COOKIE);
+    expect(land).not.toBe('');
+    const onward = await browse(`${hop.pathname}${hop.search}`, '', 'GET', pagesApp);
+    const state = new URL(onward.headers.get('location') ?? '').searchParams.get('state') ?? '';
+    return { land, state, stateCookie: cookieOf(onward, GUEST_STATE_COOKIE) };
+  }
+
+  it('brings a visitor on the public host back to the same handle address there, connected', async () => {
+    const { key, path } = await handlePage();
+    const { land, state, stateCookie } = await startOnPages(key, `${path}?d=30`);
+    const back = await browse(
+      `${GUEST_CALLBACK_PATH}?code=${encodeURIComponent('code:lin@navy.example')}&state=${encodeURIComponent(state)}`,
+      stateCookie,
+      'GET',
+      pagesApp,
+    );
+    // The callback is on the app's host: the code goes on to the public host's landing, and no cookie is set here.
+    const landing = new URL(back.headers.get('location') ?? '');
+    expect(`${landing.origin}${landing.pathname}`).toBe(`${PAGES}${GUEST_LAND_PATH}`);
+    expect(cookieOf(back, GUEST_COOKIE)).toBe('');
+
+    // Another browser (no landing nonce) or another code gets nothing.
+    const stranger = await browse(`${landing.pathname}${landing.search}`, '', 'GET', pagesApp);
+    expect(stranger.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=failed`);
+    expect(cookieOf(stranger, GUEST_COOKIE)).toBe('');
+    const swapped = new URL(landing);
+    swapped.searchParams.set('code', 'code:mallory@evil.example');
+    const otherCode = await browse(`${swapped.pathname}${swapped.search}`, land, 'GET', pagesApp);
+    expect(otherCode.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=failed`);
+
+    const landed = await browse(`${landing.pathname}${landing.search}`, land, 'GET', pagesApp);
+    expect(landed.headers.get('location')).toBe(`${PAGES}${path}?d=30&calendar=connected`);
+    const guest = cookieOf(landed, GUEST_COOKIE);
+    expect(guest).not.toBe('');
+    expect(landed.headers.getSetCookie().some((each) => each.startsWith(`${GUEST_LAND_COOKIE}=;`))).toBe(true);
+    const viewer = await browse(`/api/public/booking/${key}/viewer`, guest, 'GET', pagesApp);
+    expect(await viewer.json()).toMatchObject({ viewer: { email: 'lin@navy.example', calendar: 'on' } });
+  });
+
+  it('sends every other ending, and every refusal, to the public host too', async () => {
+    const { key, path } = await handlePage();
+    const { state, stateCookie } = await startOnPages(key, path);
+    const denied = await browse(
+      `${GUEST_CALLBACK_PATH}?error=access_denied&state=${encodeURIComponent(state)}`,
+      stateCookie,
+      'GET',
+      pagesApp,
+    );
+    expect(denied.headers.get('location')).toBe(`${PAGES}${path}?calendar=denied`);
+    const other = await handlePage();
+    for (const given of [other.path, '//evil.example/x', `https://evil.example${path}`]) {
+      const start = await browse(
+        `/api/public/booking/${key}/connect?return=${encodeURIComponent(given)}`,
+        '',
+        'GET',
+        pagesApp,
+      );
+      expect(start.headers.get('location')).toBe(`${PAGES}/`);
+      expect(cookieOf(start, GUEST_LAND_COOKIE)).toBe('');
+    }
+    const forged = await browse(`${GUEST_LAND_PATH}?code=x&t=gl1.e30.AAAA`, '', 'GET', pagesApp);
+    expect(forged.headers.get('location')).toBe(`${PAGES}/`);
   });
 });
 

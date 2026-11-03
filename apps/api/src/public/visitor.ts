@@ -40,6 +40,13 @@ export const GUEST_STATE_COOKIE = 'crm_guest_state';
 export const GUEST_CONNECT_PATH = '/api/public/booking/connect/';
 /** Where Google sends a guest back. */
 export const GUEST_CALLBACK_PATH = '/api/public/booking/connect/callback';
+/**
+ * The nonce that ties a connect's landing to the browser that started it, set on the public host the page was opened
+ * on (4 Nov 2026): the callback is on the app's host, so the guest cookie is set back on the public host here.
+ */
+export const GUEST_LAND_COOKIE = 'crm_guest_land';
+/** Where a connect lands on the public host, from the callback, to set the guest cookie there. */
+export const GUEST_LAND_PATH = '/api/public/booking/connect/land';
 
 const COOKIE_VERSION = 'gc1';
 /** The most workspaces read for a signed in visitor's calendar. */
