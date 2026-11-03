@@ -56,7 +56,7 @@ describe('the template packs (spec 0068)', () => {
 describe('the brand colour pickers’ quick picks', () => {
   it('are the nine dot colours of the tokens, in light (spec 0060, AC-3)', () => {
     // The data layer may not read this package's CSS, so the nine are written there and held to the tokens here.
-    const store = readFileSync(new URL('../../data/src/brand/store.ts', import.meta.url), 'utf8');
+    const store = readFileSync(new URL('../../data/src/brand/picks.ts', import.meta.url), 'utf8');
     const tokens = readFileSync(new URL('../tokens.css', import.meta.url), 'utf8');
     const picks = [...store.matchAll(/\{ hue: '([a-z]+)', value: '(#[0-9a-f]{6})' \}/g)];
     expect(picks).toHaveLength(9);
