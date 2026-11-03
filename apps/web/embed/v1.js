@@ -248,8 +248,14 @@
     '@media (prefers-reduced-motion:reduce){.veil,.panel,iframe{transition:opacity 160ms ease-out}' +
     '.veil .panel,.veil[data-side] .panel,.veil[data-grow] .panel{transform:none}.sk i{animation:none}}';
 
-  // A themed shadow root inside a fresh element the site's CSS can't size or pad.
-  function shell(dark) {
+  var LIGHT = ':host{--tfx-bg:#ffffff;--tfx-fg:#1f2329;--tfx-sk:#eceef2;--tfx-line:#e6e8ec}';
+  var DARK = ':host{--tfx-bg:#16181d;--tfx-fg:#e7e9ee;--tfx-sk:#2a2e36;--tfx-line:#2a2e36}';
+
+  // A themed shadow root inside a fresh element the site's CSS can't size or pad. `theme` is the holder's
+  // `data-timefix-theme`: `dark` or `light` fixes it; anything else follows the visitor's system, as the page in the
+  // frame does. A dialog themed light around a page drawn dark showed a white bar and white corners round it
+  // (3 November 2026).
+  function shell(theme) {
     var host = document.createElement('div');
     host.setAttribute('data-timefix-embed', '');
     host.style.cssText =
@@ -258,15 +264,11 @@
     var style = document.createElement('style');
     style.textContent =
       STYLE +
-      ':host{--tfx-bg:' +
-      (dark ? '#16181d' : '#ffffff') +
-      ';--tfx-fg:' +
-      (dark ? '#e7e9ee' : '#1f2329') +
-      ';--tfx-sk:' +
-      (dark ? '#2a2e36' : '#eceef2') +
-      ';--tfx-line:' +
-      (dark ? '#2a2e36' : '#e6e8ec') +
-      '}';
+      (theme === 'dark'
+        ? DARK
+        : theme === 'light'
+          ? LIGHT
+          : LIGHT + '@media (prefers-color-scheme:dark){' + DARK + '}');
     root.appendChild(style);
     return { host: host, root: root };
   }
@@ -306,8 +308,7 @@
   }
 
   function inline(holder, kind, key) {
-    var dark = holder.getAttribute('data-timefix-theme') === 'dark';
-    var parts = shell(dark);
+    var parts = shell(holder.getAttribute('data-timefix-theme'));
     var box = document.createElement('div');
     box.className = 'box';
     var made = frameFor(kind, key, 'inline', holder);
@@ -366,8 +367,7 @@
   function dialogFor(kind, key, element, side) {
     var name = kind + ':' + key + (side ? ':side' : '');
     if (dialogs[name]) return dialogs[name];
-    var dark = element.getAttribute('data-timefix-theme') === 'dark';
-    var parts = shell(dark);
+    var parts = shell(element.getAttribute('data-timefix-theme'));
     var veil = document.createElement('div');
     veil.className = 'veil';
     if (side) veil.setAttribute('data-side', '');
@@ -511,7 +511,7 @@
   // How many corner buttons we have drawn, so the next one sits above the last rather than on top of it.
   var fabs = 0;
   function floating(holder, kind, key, side) {
-    var parts = shell(holder.getAttribute('data-timefix-theme') === 'dark');
+    var parts = shell(holder.getAttribute('data-timefix-theme'));
     var colour = holder.getAttribute('data-timefix-color') || '';
     if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(colour)) colour = '#2563eb';
     var button = document.createElement('button');
