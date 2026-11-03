@@ -570,6 +570,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'managed_page.changed', target: managedPage, params: { added: 2, removed: 1 } },
     'Ada Lovelace changed who has the Intro call managed page (2 added, 1 taken off)',
   ],
+  [
+    { ...base, action: 'managed_page.propagated', target: managedPage, params: {} },
+    'Ada Lovelace updated Intro call from its managed page',
+  ],
 ];
 
 describe('every listed action', () => {
