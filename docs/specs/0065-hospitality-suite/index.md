@@ -5,6 +5,12 @@
 
 **Numbering**: this spec owns AC-6501 to AC-6599. Migrations carry placeholder numbers (`0xha` to `0xhf`) and are renumbered after main's last migration when each slice lands. Scope row #68.
 
+**Changed 4 Nov 2026 by spec [0066](../0066-business-booking/index.md)** (owner: table booking must scale to salons, clinics and other services, with Fresha style business pages):
+- Tables are generic **resources** (`resources` with a `kind`: table, room, chair, bed, court, station, equipment, other), built in H0. Business kinds include salon, spa, barber, clinic and fitness. The early access flag is `business_apps`.
+- **H3 and H4 are replaced by 0066 B7**: Table seating is a preset of the visit engine. The `reservations` and `reservation_tables` design below is superseded and not built; the guest flow, rules and Service screen requirements (AC-6550 to AC-6565) still hold, met through 0066.
+- The "no public venue page" call is reversed: every business gets a business page (0066 B4); the menu page links back to it.
+- Analytics is spec 0067 (was 0066 in the text below).
+
 ## Structure
 
 One umbrella, built in six slices. Every slice is a thin thread through every layer (Tracer Bullet), and each lands on its own.
@@ -74,7 +80,7 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
 - **AC-6541**: A code opens `timefix.com/q/<code>` where `<code>` is 12 random characters from a 32 letter alphabet. The address counts a scan and redirects (302) to the place's guest menu with the table's label in the fragment, so the page can say "Table 4" and later features (waitlist, ordering) know the table. Changing menus never changes a printed code.
 - **AC-6542**: A code can be replaced (new code, the old one shows the place's menu without a table, so nothing printed breaks) and switched off (the old code shows "This code is no longer in use" and a link to the place's menu).
 - **AC-6543**: Codes are drawn in the browser as SVG with the brand accent on white and the logo in the middle (high error correction), and downloaded as SVG or PNG one by one or all at once as a zip. A Print page lays out table tents (A6 folded, two per A4) and stickers (6 per A4), each with the logo, "Scan for the menu" and the table label; it prints from the browser with print CSS, no PDF service.
-- **AC-6544**: Scans are counted per code per day (no person, no address kept), and shown as a small number on each code and as a 30 day line on the QR page. The fuller picture belongs to spec 0066 (analytics).
+- **AC-6544**: Scans are counted per code per day (no person, no address kept), and shown as a small number on each code and as a 30 day line on the QR page. The fuller picture belongs to spec 0067 (analytics).
 
 *H3. Table seating*
 - **AC-6550**: A place has one reservation page at `timefix.com/r/<key>` (and embeddable with the existing widget: `data-timefix-reserve="KEY"`, popup and inline, same panel as booking and forms). Reservation rules are set per place: party sizes taken online (1 to 20, default 1 to 8), slot step (15 or 30 minutes), how long a table is held by party size (default 1 to 2: 90 minutes, 3 to 4: 105, 5 to 6: 120, 7+: 150), minimum notice (default 2 hours), how far ahead (default 60 days), when reservations are taken (the opening hours, or narrower reservation hours per day, default last seating 90 minutes before close), and the most guests starting in any 15 minutes (pacing, optional).
@@ -196,7 +202,7 @@ Each step is one lane; review (security, design, UX, state) before landing; migr
 - Floor plan canvas (drag tables on a map) replacing the table list view.
 - Ordering and paying at the table (needs per visit sessions; the 12 character QR code is not a credential).
 - Menu translations (the 0064 visitor language work).
-- Analytics: menu views, item opens, scans per table and the reservation funnel feed spec 0066.
+- Analytics: menu views, item opens, scans per table and the reservation funnel feed spec 0067.
 - `/sync` to add the Hospitality area to AGENTS.md once H0 lands.
 
 ## Rationale

@@ -40,12 +40,12 @@ Checklabs' guest app is the reference the owner likes: phone first 448 pixel col
 
 ## Calls made on the owner's behalf
 
-- Separate reservation storage (above).
+- Separate reservation storage (above), then superseded on 4 Nov by the visit engine of 0066, which serves tables, salons and clinics alike.
 - Operator early access (above).
 - One currency per workspace (the workspace's), as in 0062 L5.
 - Text message reminders, deposits and waitlist wait for 0062 L5 (Twilio and Stripe).
 - No ordering or payment at the table in this spec.
-- No public venue page of its own: the link page gets Menu and Reserve blocks, and the menu header shows hours, address and phone.
+- ~~No public venue page of its own~~ reversed on 4 Nov: business pages are 0066 B4.
 - Floor plan canvas later; tables are a list first.
 - Phone is required for reservations (restaurants call guests); email stays required for the confirmation.
 
