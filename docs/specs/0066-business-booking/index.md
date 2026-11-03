@@ -19,7 +19,7 @@
 | B7 | Table seating as a preset (party size fitting, joined tables, floor grid with timers, walk ins) | B3 |
 | B8 | Events and classes, after Luma: event pages, registration with capacity, approval and waitlist, guest list and check in, a business's events calendar, recurring classes | B2, B4 |
 
-Later, each with its own decision: paid tickets, deposits, card holds and no show fees (Stripe, 0062 L5), text messages (Twilio, 0062 L5), waitlist, packages, memberships and gift cards, a discovery marketplace (search, nearby), staff who never sign in getting their day by email, rebook reminders, POS and tips.
+Later, each with its own decision: paid tickets, deposits, card holds and no show fees (Stripe, 0062 L5), text messages (Twilio, 0062 L5), waitlist, packages, memberships and gift cards, a discovery marketplace (search, nearby), rebook reminders, POS and tips.
 
 ## Summary
 
@@ -56,7 +56,7 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
 - **AC-6613**: Settings screens: Services (categories as groups, drag to order, a service opens a side panel editor), Team (staff cards with photo and services count; a staff member opens their profile with Shifts as a week grid), and Resources (0065's place page). Every list has bulk select and bulk actions.
 
 *B2. Online booking*
-- **AC-6620**: A place's booking flow lives at `timefix.com/<handle>/book` (and `/book/<service-slug>` to start on a service), and embeds with the existing widget (`data-timefix-book="<handle>"`, popup and inline, the same panel and height reporting as booking pages and forms).
+- **AC-6620**: A place's booking flow lives at `timefix.com/<handle>/book` (and `/book/<service-slug>` to start on a service), and embeds with the existing widget (`data-timefix-business="<handle>"`, popup and inline, the same panel and height reporting as booking pages and forms).
 - **AC-6621**: Steps, each one screen with a sticky summary (place, service, staff, time, price) on wide screens and a bottom bar on phones: service (by category, with length and price, search) → professional ("Any professional" first, then staff with photo and title; only those who do the service) → date and time (a week strip and times grouped Morning, Afternoon, Evening; days with nothing crossed out; the earliest free day preselected) → details (name, email, phone, optional note; a returning email fills the name) → intake and consents when the service has them (B5) → review and confirm. Back never loses an earlier choice.
 - **AC-6622**: After booking: a confirmation screen with Add to calendar, Directions, Change and Cancel; a confirmation email with the business brand; reminders 24 hours and 2 hours before (each a place setting); Change and Cancel through a manage page with the token in the fragment, honouring the place's cutoffs (0062 L1 semantics: `TOO_LATE`); confirm first services make a request (0062 L1).
 - **AC-6623**: Every client matches or creates a Person (email, then phone, as the system actor). The Person page gets a Visits panel: upcoming and past visits with service, staff, price, status; total spend; no shows; notes ("Prefers Asha", "Latex allergy") as a "Client notes" attribute. A "Clients" saved view lists People with at least one visit, with last visit and spend columns.
@@ -80,7 +80,7 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
 
 *B5. Several services, intake and sensitive services*
 - **AC-6650**: A client can add up to 5 services to one visit ("Add another service" after the first), each with its own professional or "Any"; the planner places them back to back (with buffers) and offers a start only when the whole sequence fits.
-- **AC-6651**: A service can require an intake form (a form from the Forms app, 0063) filled during booking or sent after booking with a "fill before your visit" link, and consents (0065's consent records, 0165) ticked before confirming. Answers are attached to the visit.
+- **AC-6651**: A service can require an intake form (a form from the Forms app, 0063) filled during booking or sent after booking with a "fill before your visit" link, and consents (spec 0023 consent records, migration 0165) ticked before confirming. Answers are attached to the visit.
 - **AC-6652**: A service can be marked sensitive (health, body). Its intake answers and the visit's notes are visible only to the staff on that visit and to members with `services.manage`; they are never filed onto People attributes, never in webhooks, never in exports by default; the Person page shows "Intake on file" with a link that checks access. Every read of them is audited.
 - **AC-6653**: This spec stores bookings, intake answers and consents only. It is not a medical record system: no clinical notes, prescriptions or diagnoses. The settings page for a clinic says so.
 
@@ -101,6 +101,49 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
 - **AC-6685**: Recurring classes: an event can repeat weekly on chosen days until a date (up to 52 occurrences); each occurrence has its own guest list and capacity; a client can register for one occurrence or the series. Cancelling one occurrence emails its guests.
 - **AC-6686**: The business page gains an Events section (upcoming first) and `timefix.com/<handle>/events` lists them as a calendar page (after Luma's calendar pages): upcoming and past, filterable by category, with "Subscribe" giving an iCal feed of public events.
 - **AC-6687**: Every registered guest matches or creates a Person; the Person page lists events attended (checked in) and missed. Paid tickets wait for Stripe (0062 L5).
+
+## Rules settled by the cross check (4 Nov 2026)
+
+*Matching the repo*
+- **Locks** reuse `lockHosts()` and `hostLockKey()` (`booking:host:<ws>:<member>`). Global lock order everywhere: rotation, then place (`visits:place:<ws>:<place>`), then person locks sorted, where a person lock is the member's host key for a linked staff member and `visits:staff:<ws>:<staff>` for an unlinked one. A guards test asserts no path takes them in another order. A `23P01` from either exclusion constraint maps to `SLOT_TAKEN`.
+- **Meeting side busy.** `computeSlots` stays pure; one loader `appointmentSpans(tx, memberIds, from, to)` is added to every place that loads member busy today (`slots.ts` bookedSpans, `change.ts`, `rotation/assign.ts` chooseHosts, `rotation/reseat.ts`, `routing/free-time.ts`, `managed.ts`, the team day and week reads), each with a test.
+- **No cross table guard**, so linking a staff profile to a member refuses while their future appointments and meetings overlap, listing them. Linked staff use the member's own time off and blocks (one source); `staff_time_off` and `staff_blocks` are for unlinked staff only.
+- **Handles.** `auth.public_handles` gains `owner_kind 'member'|'business'`; `user_id` becomes nullable with a check (`member` needs it, `business` forbids it and carries `workspace_id`); `crm_handle_owner` gains a business branch; business handle history belongs to the workspace and survives any member leaving; business handles never count toward a person's 20. Business second segments reserved: `book`, `reserve`, `visit`, `menu`, `e`, `events`, `team`, `reviews`, `services`. Place slugs have their own uniqueness per business, that reserved list, and slug history.
+- **Consent** (spec 0023, migration 0165) gains `source_type 'appointment'` and `'event_registration'`.
+- **Intake.** Non sensitive services use a normal Forms submission linked to the visit. Sensitive services render the form's questions with `HostedForm` but store answers in `visit_intake` (never `form_submissions`), so no filing, no `form.submitted` webhook, no Forms listing. The visit pins the published form version.
+- **Sensitive access** is one core check `canReadIntake(member, appointment)` (assigned staff's linked member, or `services.manage`), and every read writes an append only `sensitive_reads` row (who, what, when). Security review required.
+- **People matching** by email only (`matchVisitor`); the phone is stored on the Person, never matched alone.
+- **Realtime.** A new channel family per place carrying ids and kinds only; the client re reads through the door. Tokens minted for `services.calendar` holders of an installed app, re checked on refresh.
+- **Client notes** show read only on the visit panel through `services.calendar`, so floor and desk staff see "Latex allergy" without People access.
+- **Email topics** gain `appointments` and `events` in the closed list, `EMAIL_KIND_TOPICS` and the settings screen (Table seating uses `appointments`).
+- **Embed attribute** is `data-timefix-business="<handle>"` (with `data-timefix-service`, `data-timefix-event` modifiers), never `data-timefix-book`.
+- **H0 rework** (resources with a kind, wider business kinds, `business_apps`, Business permission group with `services.manage` and `services.calendar`, apps list gains `appointments` and `events`) lands inside H0 before it ships, not as a later migration.
+
+*Engine performance*
+- Per request: load each needed staff member's and resource's free intervals for the asked days once; allocate greedily per start with a backtrack of at most 3; order items by the fewest qualified staff first; at most 500 tries per start and 20,000 per request; a hit cap is logged with the place and service. The earliest free day search stops at 14 days. Slot answers are cached 30 seconds per (place, services, staff choice, day) and purged by any write at the place.
+- Calendar busy is read only for linked staff, through `createBusyCache`; the chosen staff are read fresh at booking. The recompute under the place lock is narrowed to the chosen allocation.
+
+*Decisions*
+- **Currency** is the workspace's; a place in another currency needs another workspace. Prices show as entered with an optional place note ("Prices include GST").
+- **Time zone.** Times show in the place's zone; when the visitor's zone differs a line says so ("Times in Bengaluru time"). Events do the same.
+- **Reminders** default 24 hours and 2 hours before for visits and tables, 24 hours and 1 hour for events, each a place setting; changing them re queues future reminders (replace mode). Cutoff defaults: services change and cancel until 12 hours before, tables 2 hours, events 2 hours.
+- **Edits with future visits:** services and variants archive only; archiving a staff member or removing a linked member is refused with a count and a Reassign flow; deleting a place is refused `IN_USE`; hours and shift changes warn and link to affected visits; a reschedule keeps the booked price.
+- **Idempotency:** `unique (workspace_id, place_id, idempotency_key)` on appointments; `unique (workspace_id, occurrence_id, lower(email))` on registrations; replays answer the same row.
+- **One business per workspace** (a second brand is a second workspace). `seo_hidden` per place. The sitemap extends `sitemap-handles.xml` with business pages, places and public events.
+- **Privacy:** client name, email, phone and note on visits are blanked 24 months after the client's last visit (counts, prices and times stay); a Person export includes visits, registrations and reviews; erasure anonymises reviews ("Former client", rating kept) and deletes intake answers.
+- **Reviews:** single use link, one per visit, the client may edit within 7 days; a report hides the review until an operator rules (target 5 working days); no word filter.
+- **Events (B8):** recurring occurrences are created 12 weeks ahead by a daily job, holds made with them; a host's time off on an occurrence flags it for the owner, never auto cancels; a waitlist offer lasts 12 hours then moves on, and with nobody left the spot opens; each registration's check in QR is a random 128 bit token stored as a hash; the iCal feed lists public events only; capacity is counted under the occurrence row lock.
+- **Languages** follow 0064's visitor language work; not in this spec.
+
+*Week one needs (salons and clinics)*
+- **Processing time and buffer before:** a variant may have `buffer_before_min` and a `processing` window (staff free, resource still held), e.g. colour developing.
+- **Per staff price and length:** a variant may override price and minutes per staff member (senior versus junior).
+- **Breaks:** shifts allow up to 3 ranges a day (lunch is the gap) plus recurring blocks.
+- **Rescheduling:** Change on the manage page re runs the flow with the same services within the cutoff; the desk can book or change for anyone.
+- **Policy:** a place's cancellation and no show policy shows at booking with a tick box, stored as a consent; it stands in for deposits until Stripe.
+- **Arrivals:** a lateness tolerance (default 15 minutes) after which the desk may mark No show; finishing early frees the rest of the hold; a walk in onto a live hold warns first.
+- **Rebook:** "Book again" on the visit panel with a 2, 4, 6 or 8 week offset; repeating series stay a follow up.
+- **Staff day:** linked staff see their day in the app (B3); unlinked staff with an email get their next day's list at 19:00 place time (B3).
 
 ## Build on what exists
 
