@@ -11,6 +11,7 @@ import {
   EmptyState,
   Field,
   LinkList,
+  LinkListRowOrder,
   Menu,
   MenuItem,
   MenuTrigger,
@@ -308,10 +309,9 @@ function SectionBody({
         }}
         searchLabel={strings.searchDishes}
         isToolbarHidden
-        density="compact"
-        placement="card"
         {...(draft.canEdit
           ? {
+              rowOrder: LinkListRowOrder,
               onMove: (id: string, toIndex: number) =>
                 void store.move(slug, 'placement', id, toIndex, section.id).then(said),
             }

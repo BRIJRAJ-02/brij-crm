@@ -59,6 +59,12 @@ export function PlaceSections({ store, slug, place, isSaving, toasts }: PlaceSec
   const [draft, setDraft] = useState<DayDraft | undefined>(undefined);
   const [isAddingDay, setAddingDay] = useState(false);
   const status = useSavedStatus(isSaving);
+  // Copy times to several days calls onChange once a day, in one go: each builds on the last, not on the hours
+  // this render started from, or only the last day copied would stick (the menu walk, 4 Nov 2026).
+  const latest = useRef(place.hours);
+  useEffect(() => {
+    latest.current = place.hours;
+  }, [place.hours]);
   const saveHours = (hours: PlaceHours) =>
     store.updatePlace(slug, place.id, { hours }).then((refused) => {
       if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
@@ -82,13 +88,14 @@ export function PlaceSections({ store, slug, place, isSaving, toasts }: PlaceSec
             pastMidnightUntil={LATE_UNTIL}
             onChange={(day, ranges) => {
               if (!isWeekDay(day)) return;
-              const next = withDay(place.hours, day, ranges);
+              const next = withDay(latest.current, day, ranges);
               // Hours that don't hold together stay on screen as typed, with why, until they do.
               if (next.problem !== undefined) {
                 setDraft({ day, ranges, message: next.problem });
                 return;
               }
               setDraft(undefined);
+              latest.current = next.hours;
               void saveHours(next.hours);
             }}
           />

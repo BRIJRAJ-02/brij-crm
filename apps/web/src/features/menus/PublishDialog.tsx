@@ -49,32 +49,29 @@ export function PublishDialog({
   const homeless = homelessMenus(draft);
   const link = place === undefined ? undefined : publicMenuUrl(place.menuKey);
 
+  // An open check's title says exactly what to fix (the checklist folds to its title when one step is left).
   const checks = [
     {
       id: 'hours',
-      title: strings.checkHours,
-      ...(hasHours ? {} : { detail: strings.checkHoursTodo }),
+      title: hasHours ? strings.checkHours : strings.checkHoursTodo,
       isDone: hasHours,
       action: strings.fixIt,
     },
     {
       id: 'dishes',
-      title: strings.checkDishes,
-      ...(placed ? {} : { detail: strings.checkDishesTodo }),
+      title: placed ? strings.checkDishes : strings.checkDishesTodo,
       isDone: placed,
       action: strings.fixIt,
     },
     {
       id: 'prices',
-      title: strings.checkPrices,
-      ...(unpriced[0] === undefined ? {} : { detail: strings.unpricedBlocker(unpriced[0].name) }),
+      title: unpriced[0] === undefined ? strings.checkPrices : strings.unpricedBlocker(unpriced[0].name),
       isDone: unpriced.length === 0,
       action: strings.fixIt,
     },
     {
       id: 'places',
-      title: strings.checkPlaces,
-      ...(homeless[0] === undefined ? {} : { detail: strings.checkPlacesTodo(homeless[0].name) }),
+      title: homeless[0] === undefined ? strings.checkPlaces : strings.checkPlacesTodo(homeless[0].name),
       isDone: homeless.length === 0,
       action: strings.fixIt,
     },

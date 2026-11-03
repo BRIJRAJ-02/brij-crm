@@ -200,6 +200,7 @@ describe('the Menus editor', () => {
     await page.viewport(1280, 900);
     const unpriced: MenuDraft = {
       ...DRAFT,
+      changes: 1,
       items: DRAFT.items.map((each) => (each.id === id(12) ? { ...each, priceNote: undefined } : each)),
     };
     const { store } = storeOf(unpriced);
@@ -217,7 +218,7 @@ describe('the Menus editor', () => {
     await expect.element(page.getByRole('switch', { name: 'Oysters available' }).first()).toBeInTheDocument();
     await userEvent.click(page.getByRole('button', { name: 'Review and publish' }));
     const review = page.getByRole('dialog', { name: 'Review and publish' });
-    await expect.element(review.getByText('Give Oysters a price or a price note, then publish.')).toBeVisible();
+    await expect.element(review.getByText(/Give Oysters a price or a price note/)).toBeVisible();
     await expect.element(review.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();
   });
 

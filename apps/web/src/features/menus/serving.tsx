@@ -4,7 +4,7 @@
 import type { MenuServing, PlaceHours } from '@crm/data';
 import { WEEK_DAYS } from '@crm/data/menu';
 import { HoursEditor, Switch } from '@crm/ui';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isWeekDay, weekRows, withDay, type EditorRange } from '../hospitality/hours-rows.ts';
 import { strings } from './strings.ts';
 
@@ -44,6 +44,11 @@ export function ServingEditor({
 }) {
   const [held, setHeld] = useState<{ day: string; ranges: readonly EditorRange[]; message: string }>();
   const hours: PlaceHours | undefined = value === undefined ? undefined : { weekly: value.weekly, exceptions: [] };
+  // Copy times to calls onChange once a day in one go: each builds on the last (see PlaceSections).
+  const latest = useRef(hours);
+  useEffect(() => {
+    latest.current = value === undefined ? undefined : { weekly: value.weekly, exceptions: [] };
+  }, [value]);
   return (
     <>
       <Switch
@@ -63,13 +68,14 @@ export function ServingEditor({
           isReadOnly={isReadOnly}
           onChange={(day, ranges) => {
             if (!isWeekDay(day)) return;
-            const next = withDay(hours, day, ranges);
+            const next = withDay(latest.current ?? hours, day, ranges);
             // A week that doesn't hold together stays on screen as typed, with why, until it does.
             if (next.problem !== undefined) {
               setHeld({ day, ranges, message: next.problem });
               return;
             }
             setHeld(undefined);
+            latest.current = next.hours;
             onChange({ weekly: Object.fromEntries(WEEK_DAYS.map((each) => [each, next.hours.weekly[each] ?? []])) });
           }}
         />

@@ -64,7 +64,7 @@ export function SettingsTab({
           />
         ) : null}
       </Card>
-      <Card title={strings.servingCard} description={strings.servingLine}>
+      <Card title={strings.servingCard}>
         <ServingEditor
           label={strings.servingTimes}
           hint={strings.servingLine}

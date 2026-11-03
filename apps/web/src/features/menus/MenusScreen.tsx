@@ -20,7 +20,6 @@ import {
   SegmentedControl,
   Select,
   SetupChecklist,
-  Switch,
   TabPanel,
   Tabs,
   TopBar,
@@ -218,13 +217,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   ];
 
   const actions =
-    draft.menus.length === 0 ? undefined : (
+    draft.menus.length === 0 && !isLive ? undefined : (
       <>
-        <Switch
-          label={strings.previewSwitch}
-          isSelected={showsPreview}
-          onChange={(on) => go({ preview: on ? undefined : 'off' })}
-        />
         <MenuTrigger>
           <Button variant="ghost" icon="ellipsis" label={strings.more} />
           <Menu
@@ -339,10 +333,10 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
             title={strings.title}
             icon="utensils"
             meta={
-              <>
-                <Badge tone={isLive ? 'accent' : 'neutral'} text={isLive ? strings.statusLive : strings.statusDraft} />
-                {draft.changes > 0 ? ` ${strings.changes(draft.changes)}` : null}
-              </>
+              <Badge
+                tone={isLive ? 'accent' : 'neutral'}
+                text={`${isLive ? strings.statusLive : strings.statusDraft}${draft.changes > 0 && isLive ? ` · ${strings.changesShort(draft.changes)}` : ''}`}
+              />
             }
           >
             {actions}
@@ -351,7 +345,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
         body: (
           <>
             <PreviewLayout
-              previewShare="third"
+              previewShare="wide"
               notices={
                 !isLive ? (
                   <SetupChecklist
@@ -393,11 +387,13 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   selectedKey={current.id}
                   onSelectionChange={(id) => go({ menu: id })}
                   end={
-                    draft.canEdit && draft.menus.length < 30 ? (
-                      <Button icon="plus" onPress={newMenu}>
-                        {strings.newMenu}
-                      </Button>
-                    ) : undefined
+                    <>
+                      {draft.canEdit && draft.menus.length < 30 ? (
+                        <Button icon="plus" onPress={newMenu}>
+                          {strings.newMenu}
+                        </Button>
+                      ) : null}
+                    </>
                   }
                 >
                   {menus.map((menu) => (
@@ -476,10 +472,6 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                 {...(open.newName === undefined ? {} : { newName: open.newName })}
                 toasts={toasts}
                 onClose={() => setOpen(undefined)}
-                onNewGroup={() => {
-                  setOpen(undefined);
-                  go({ tab: 'options' });
-                }}
               />
             ) : null}
             {open?.kind === 'section' ? (

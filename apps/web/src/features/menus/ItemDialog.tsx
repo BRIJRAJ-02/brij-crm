@@ -5,7 +5,7 @@
 // Leaves out: where the dish sits (the section's own Add dishes and Take out), and Sold out (a switch on its row).
 import type { ItemAllergen, ItemFields, MenuDraft, MenuItem, MenuStore } from '@crm/data';
 import { DIET_MARKS, EU_ALLERGENS, MENU_LIMITS, minorToDecimal, parsePrice } from '@crm/data/menu';
-import { Button, ChoiceChips, Field, FileDrop, Form, Switch, type Toasts } from '@crm/ui';
+import { Button, Callout, ChoiceChips, Field, FileDrop, Form, Switch, type Toasts } from '@crm/ui';
 import { useId, useState } from 'react';
 import { DrawerForm } from './drawer.tsx';
 import { draftPhotoHref, prepareMenuPhoto } from './photo.ts';
@@ -28,7 +28,6 @@ export function ItemDialog({
   newName,
   toasts,
   onClose,
-  onNewGroup,
 }: {
   readonly store: MenuStore;
   readonly slug: string;
@@ -38,8 +37,6 @@ export function ItemDialog({
   readonly newName?: string;
   readonly toasts: Toasts;
   readonly onClose: () => void;
-  /** Leaves for Options to make a group, when none fits. */
-  readonly onNewGroup?: () => void;
 }) {
   const formId = useId();
   const { currency } = draft;
@@ -133,17 +130,12 @@ export function ItemDialog({
       toasts.toast({ tone: 'danger', message: refused.message });
       return;
     }
-    if (pendingPhoto !== undefined) await choosePhoto([pendingPhoto]);
+    if (pendingPhoto !== undefined) await upload(pendingPhoto);
     onClose();
   };
 
-  const choosePhoto = async (files: readonly File[]) => {
-    const file = files[0];
-    if (file === undefined) return;
-    if (live === undefined && item === undefined && !isSaving) {
-      setPendingPhoto(file);
-      return;
-    }
+  /** Draws the photo again at both widths and sends it for the dish `id`, which must exist by now. */
+  const upload = async (file: File) => {
     try {
       const photo = await prepareMenuPhoto(file);
       const refused = await store.uploadPhoto(slug, id, photo);
@@ -153,13 +145,21 @@ export function ItemDialog({
     }
   };
 
+  // A dish not saved yet keeps its photo until Save makes the dish (walk, 4 Nov 2026: it was dropped before).
+  const choosePhoto = (files: readonly File[]) => {
+    const file = files[0];
+    if (file === undefined) return;
+    if (live === undefined) setPendingPhoto(file);
+    else void upload(file);
+  };
+
   const photoField = (
     <FileDrop
       label={strings.photo}
       acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
       typesText={pendingPhoto === undefined ? strings.photoTypes : strings.photoAfterSave}
       maxSize={MENU_LIMITS.photoMaxBytes}
-      onFiles={(files) => void choosePhoto(files)}
+      onFiles={choosePhoto}
       {...(live?.photo === undefined
         ? {}
         : { preview: { src: draftPhotoHref(slug, live.photo.id, 'small', live.photo.version), alt: '' } })}
@@ -256,11 +256,8 @@ export function ItemDialog({
           </Button>
         )}
         {draft.groups.length === 0 ? (
-          onNewGroup === undefined ? null : (
-            <Button variant="ghost" icon="plus" onPress={onNewGroup}>
-              {strings.newGroup}
-            </Button>
-          )
+          // A button here would leave the drawer and what was typed in it: Options is where groups are made.
+          <Callout tone="info">{strings.groupsLater}</Callout>
         ) : (
           <ChoiceChips
             label={strings.groups}
