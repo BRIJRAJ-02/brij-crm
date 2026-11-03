@@ -205,10 +205,10 @@ export function HostedFormSteps({
   const ahead = new Set(groups.slice(index + 1).flatMap((group) => (group.id === undefined ? [] : [group.id])));
   const isCertain =
     layout === 'conversational'
-      ? !groups
-          .slice(index + 1)
-          .some((group) => group.questions.some((question) => (question.jumps?.length ?? 0) > 0))
-      : !(form.steps ?? []).some((step) => step.id !== undefined && ahead.has(step.id) && (step.jumps?.length ?? 0) > 0);
+      ? !groups.slice(index + 1).some((group) => group.questions.some((question) => (question.jumps?.length ?? 0) > 0))
+      : !(form.steps ?? []).some(
+          (step) => step.id !== undefined && ahead.has(step.id) && (step.jumps?.length ?? 0) > 0,
+        );
   const place = isCertain
     ? layout === 'conversational'
       ? words.questionOf(index + 1, groups.length)

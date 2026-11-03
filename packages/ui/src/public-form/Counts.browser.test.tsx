@@ -96,7 +96,10 @@ it('promises a total only while the steps ahead hold no jump', async () => {
   const plain: PublicForm = {
     ...FORM,
     layout: 'steps',
-    steps: [{ id: 'who', keys: ['name', 'email'] }, { id: 'more', keys: ['company'] }],
+    steps: [
+      { id: 'who', keys: ['name', 'email'] },
+      { id: 'more', keys: ['company'] },
+    ],
   };
   drawn = mountHostedForm(host, plain, { mode: 'page' });
   await expect

@@ -197,7 +197,7 @@ const SENTENCES: SentenceTemplates = {
         ? `published ${w.thing(entry.target)} with changed routing rules`
         : `changed the routing rules of ${w.thing(entry.target)}`,
     ),
-  'form.created': (entry, w) => actor(`made ${w.thing(entry.target)}`),
+  'form.created': (entry, w) => actor(`made the form ${w.thing(entry.target)}`),
   'form.owner_changed': (entry, w) => actor(`changed who gets ${w.thing(entry.target)}’s leads`),
   'form.notify_changed': (entry, w) => actor(`changed who is emailed ${w.thing(entry.target)}’s new submissions`),
   // Lists (spec 0048): "Ada made the list Sales pipeline".
