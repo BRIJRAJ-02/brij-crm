@@ -128,7 +128,34 @@ test.describe('round robin', () => {
     await page.goto(`/w/${slug}/bookings/calendar`);
     await page.getByRole('radio', { name: 'Team' }).click({ force: true });
     const team = page.getByRole('region', { name: /^Team, / });
+    // The first free times may be on a later day than today (late in the afternoon): step to the day they are on.
+    for (let day = 0; day < 7; day += 1) {
+      await page.waitForTimeout(1_000);
+      if ((await team.getByRole('button', { name: /^Sales intro, / }).count()) > 0) break;
+      await page.getByRole('button', { name: 'Next day' }).click();
+    }
     await expect(team.getByRole('button', { name: /^Sales intro, / })).toHaveCount(3);
     await expect(team.getByRole('button', { name: /Outside hours/ })).toHaveCount(0);
+
+    // Reassign a teammate's meeting to the next in the group: Bookings › List and its panel show the new host at once.
+    const moved = hosts.findIndex((host) => host !== 'Ada Lovelace');
+    const was = hosts[moved] ?? '';
+    await page.goto(`/w/${slug}/bookings/list`);
+    await page.getByRole('radio', { name: 'Everyone' }).click({ force: true });
+    // The meetings list, not the panel's Who list, which names the visitor too.
+    const row = page
+      .getByRole('region', { name: /^Upcoming meetings/ })
+      .getByRole('listitem')
+      .filter({ hasText: `Visitor ${String(moved)}` });
+    await expect(row).toContainText(`${was} and`);
+    await row.getByRole('button', { name: 'Sales intro' }).click();
+    await page.getByRole('button', { name: 'More for this booking' }).click();
+    await page.getByRole('menuitem', { name: 'Reassign' }).click();
+    await page
+      .getByRole('dialog', { name: /^Reassign / })
+      .getByRole('button', { name: 'Reassign', exact: true })
+      .click();
+    await expect(page.getByText('Reassigned. Guest and hosts are emailed.')).toBeVisible();
+    await expect(row).not.toContainText(`${was} and`, { timeout: 10_000 });
   });
 });

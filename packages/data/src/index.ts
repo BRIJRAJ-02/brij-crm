@@ -8,6 +8,7 @@
 import { ROLES as BUILT_IN_ROLES } from '@crm/contracts/roles';
 import type {
   ActivityKind,
+  BookingListItem,
   RecordsExportView,
   StartExportInput,
   ImportLinks,
@@ -4781,15 +4782,22 @@ export function createDataLayer({
       ): Promise<ReassignedBooking> => {
         // A named host shows at once, by name; "next in rotation" waits for the server to say who.
         const { memberId, memberName } = to;
+        // Both the held weeks and Bookings › List (the meetings store) show the host, so both change and both read.
+        const toNamed = (booking: BookingListItem) =>
+          memberId === undefined
+            ? booking
+            : { ...booking, hostMemberId: memberId, hostName: memberName ?? booking.hostName, needsHost: false };
         const restoreLists =
           memberId === undefined
             ? () => undefined
-            : bookingsLists.patchBooking(workspace, bookingId, (booking) => ({
-                ...booking,
-                hostMemberId: memberId,
-                hostName: memberName ?? booking.hostName,
-                needsHost: false,
-              }));
+            : (() => {
+                const weeks = bookingsLists.patchBooking(workspace, bookingId, toNamed);
+                const list = meetings.patchBooking(workspace, bookingId, toNamed);
+                return () => {
+                  weeks();
+                  list();
+                };
+              })();
         // On a Team day the booking leaves its host's column for the new host's, and the lane (AC-777, AC-1435).
         const restoreDays =
           memberId === undefined
@@ -4812,11 +4820,11 @@ export function createDataLayer({
               options,
             ),
           );
-          bookingsLists.reloadAll(workspace);
+          reloadBookings(workspace);
           return done;
         } catch (error) {
           restore();
-          bookingsLists.reloadAll(workspace);
+          reloadBookings(workspace);
           throw error;
         }
       },
