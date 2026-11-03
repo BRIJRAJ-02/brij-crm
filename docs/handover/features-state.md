@@ -67,6 +67,9 @@ on main with it.
   Powered by Timefix), migration `0164`. Embedded booking pages take their content's height (the details step
   no longer keeps the calendar's), and embed dialogs follow the visitor's light or dark setting.
 
+- In an embed the booking details step is as tall as the details: what it covers leaves the layout, so the
+  popup shrinks after the calendar (`321245b2c`).
+
 ## Built, pushed, **not landed**
 
 Two branches. Land `car/propagated-audit` first — it is the one that unblocks deploys.
