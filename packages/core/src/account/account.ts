@@ -108,6 +108,7 @@ export async function startWorkspace(
     slug: input.slug,
     firstMember: { userId: user.id, name: input.memberName, email: user.email },
     onboarding: input.onboarding,
+    timeZone: input.timeZone,
   });
   await deps.identity.setUserNameIfEmpty(user.id, input.memberName);
   return { workspace: created.workspace, milestones: created.milestones };

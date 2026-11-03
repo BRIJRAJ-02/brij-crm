@@ -80,6 +80,11 @@ export const CreateWorkspaceInput = z.object({
   memberName: z.string().trim().min(1, 'Enter your name.').max(80, 'Use at most 80 characters.'),
   /** About you, when anything was answered: stored with the first member, for them alone. */
   onboarding: OnboardingAnswers.optional(),
+  /**
+   * The maker's browser's time zone, the workspace's from the start (members who set none read in it). Not checked
+   * against the zone list here, so a browser naming one this server lacks still makes its workspace, in UTC.
+   */
+  timeZone: z.string().max(64).optional(),
 });
 /** Creating your own workspace. */
 export type CreateWorkspaceInput = z.infer<typeof CreateWorkspaceInput>;
