@@ -23,6 +23,12 @@ export interface BookingMail {
 export interface BookingEmailOptions {
   readonly appOrigin: string;
   readonly medium: 'email_booking' | 'email_reminder';
+  /**
+   * Where the public booking pages are served (`BOOKING_PUBLIC_ORIGIN`), when it is a host of its own: core
+   * builds the manage button and Book again on it, and the render refuses a button on an origin it was not
+   * told about. The same mismatch made the resume email impossible to send (3 November 2026).
+   */
+  readonly publicOrigin?: string | undefined;
 }
 
 /** A booking email, ready for a `Mailer`: subject, HTML, plain text and the calendar file. */

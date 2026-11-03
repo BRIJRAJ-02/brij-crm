@@ -51,6 +51,22 @@ export type HostedSubmitOutcome =
  */
 export type HostedFormCount = { readonly kind: 'start' } | { readonly kind: 'reach'; readonly questionId: string };
 
+/** What a save answered (spec 0063, AC-6319): the link that brings the visitor back, and when it stops working. */
+export interface HostedFormKept {
+  readonly resumeToken: string;
+  /** The whole address to come back to, built by the page: the form's own, with the token on it. */
+  readonly resumeUrl: string;
+  /** ISO 8601 UTC. */
+  readonly expiresAt: string;
+}
+
+/** Where a save has got to, for the line under the form and the Finish later panel. */
+export type HostedSaveState =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'saving' }
+  | { readonly kind: 'kept'; readonly kept: HostedFormKept }
+  | { readonly kind: 'failed' };
+
 /** What the state needs from the page. */
 export interface HostedFormSettings {
   readonly form: PublicForm;
@@ -77,7 +93,32 @@ export interface HostedFormSettings {
    * preview, and never awaited — a count is a side note, not a step in filling the form in.
    */
   readonly onCount?: ((count: HostedFormCount) => void) | undefined;
+  /**
+   * Keeps what has been typed so far and answers the link back (spec 0063, AC-6319). Without it the form has
+   * no Finish later and saves nothing, which is what a form with save and resume turned off does, and what the
+   * builder's preview always does.
+   */
+  readonly onSave?: ((fill: HostedFill) => Promise<HostedFormKept | undefined>) | undefined;
+  /** Emails the resume link to the address this form already holds; false when there is none to send to. */
+  readonly onEmailResume?: ((resumeToken: string) => Promise<boolean>) | undefined;
+  /** A fill the visitor is coming back to: its answers are already in `prefill`, this is the step they left on. */
+  readonly resumedStepId?: string | undefined;
 }
+
+/** What a save sends: the answers so far and the step they are on. */
+export interface HostedFill {
+  readonly answers: Readonly<Record<string, unknown>>;
+  readonly stepId?: string | undefined;
+}
+
+/**
+ * How long the typing stops before a long Classic form keeps itself (spec 0063, AC-6319). Long enough that it
+ * is not one save per word, short enough that a closed tab rarely loses more than a sentence.
+ */
+const QUIET_SAVE_MS = 2_000;
+
+/** How many questions make a Classic form long enough to keep itself as it is filled in (AC-6319). */
+const QUIET_SAVE_FROM = 10;
 
 type Answers = Readonly<Record<string, unknown>>;
 type Messages = Readonly<Record<string, string>>;
@@ -147,6 +188,14 @@ export interface HostedFormState {
    * with what it has just drawn; each question counts once, so calling it on every render is right.
    */
   readonly reached: (questionIds: readonly string[]) => void;
+  /** Where a save has got to (spec 0063, AC-6319); `none` on a form that keeps nothing. */
+  readonly save: HostedSaveState;
+  /** Whether this form keeps anything at all: without it there is no Finish later to draw. */
+  readonly savesFills: boolean;
+  /** Keeps what is typed now, whatever the layout: what Finish later presses. */
+  readonly keepNow: (stepId?: string) => void;
+  /** Emails the resume link; undefined where the page gave no way to. */
+  readonly emailResume: HostedFormSettings['onEmailResume'];
   /** Moves focus to the first control of a question. */
   readonly focus: (key: string) => void;
 }
@@ -271,6 +320,8 @@ export function useHostedForm({
   onRemoveUpload,
   onStale,
   onCount,
+  onSave,
+  onEmailResume,
   now,
   onRefused,
 }: HostedFormSettings): {
@@ -303,6 +354,64 @@ export function useHostedForm({
   // What has already been counted, so each thing is said once however often it is drawn. A ref, not state:
   // counting must never be a reason to render, and a count that arrives twice would be a wrong number.
   const counted = useRef<Set<string>>(new Set());
+  // Only a Classic form saves on a quiet timer: a stepped one has Continue, which is a better moment than a
+  // pause in typing, and a short one has little enough to lose that the requests are not worth it.
+  const savesQuietly =
+    onSave !== undefined &&
+    !preview &&
+    (form.layout === undefined || form.layout === 'classic') &&
+    form.questions.length > QUIET_SAVE_FROM;
+  const [saveState, setSaveState] = useState<HostedSaveState>({ kind: 'none' });
+  const savingFill = useRef<HostedFill | undefined>(undefined);
+  const quiet = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  /**
+   * Keeps the fill, at most one save at a time. A save that arrives while one is going is held as the newest
+   * fill and sent when that one lands, so typing never queues a save per keystroke and the last state typed is
+   * always the state kept.
+   */
+  const keep = (fill: HostedFill) => {
+    if (onSave === undefined || preview) return;
+    if (savingFill.current !== undefined) {
+      savingFill.current = fill;
+      return;
+    }
+    savingFill.current = fill;
+    setSaveState((current) => (current.kind === 'kept' ? current : { kind: 'saving' }));
+    const send = (sending: HostedFill): void => {
+      // The page holds the token and puts it on the body: which partial this is belongs to whoever talks to
+      // the server, not to the form's state.
+      void onSave(sending).then(
+        (kept) => {
+          const next = savingFill.current;
+          savingFill.current = undefined;
+          if (kept === undefined) {
+            setSaveState({ kind: 'failed' });
+            return;
+          }
+          setSaveState({ kind: 'kept', kept });
+          // Something was typed while this one was going: keep that too, so the newest answers are the kept ones.
+          if (next !== undefined && next !== sending) {
+            savingFill.current = next;
+            send(next);
+          }
+        },
+        () => {
+          savingFill.current = undefined;
+          setSaveState({ kind: 'failed' });
+        },
+      );
+    };
+    send(fill);
+  };
+
+  useEffect(
+    () => () => {
+      if (quiet.current !== undefined) clearTimeout(quiet.current);
+    },
+    [],
+  );
+
   const count = (event: HostedFormCount) => {
     if (preview || onCount === undefined) return;
     const token = event.kind === 'start' ? 'start' : `reach:${event.questionId}`;
@@ -363,6 +472,15 @@ export function useHostedForm({
       // The form was started the moment one question holds an answer. A prefilled one is not a start: those
       // arrive in `firstAnswers`, which never goes through here.
       count({ kind: 'start' });
+    }
+    // A long Classic form has no Continue to save on, so it saves when the typing stops (AC-6319). A short one
+    // does not: there is less to lose than the save would cost in requests, and Finish later still saves on press.
+    if (savesQuietly) {
+      if (quiet.current !== undefined) clearTimeout(quiet.current);
+      quiet.current = setTimeout(() => {
+        quiet.current = undefined;
+        keep({ answers: { ...answers, [question.key]: value } });
+      }, QUIET_SAVE_MS);
     }
     // A shown error clears the moment it stops being true (the answer passes, or now fails for another
     // reason, which focus leaving will say); a new one never appears while typing.
@@ -431,6 +549,11 @@ export function useHostedForm({
     setSubmitted(true);
     show(result.fields, questions);
     return false;
+  };
+
+  /** A step passed its check and the visitor is moving on, so what they have typed is kept (AC-6319). */
+  const keepStep = (stepId: string | undefined) => {
+    keep({ answers, ...(stepId === undefined ? {} : { stepId }) });
   };
 
   const submit = () => {
@@ -591,6 +714,10 @@ export function useHostedForm({
     reached: (questionIds) => {
       for (const questionId of questionIds) count({ kind: 'reach', questionId });
     },
+    save: saveState,
+    savesFills: onSave !== undefined && !preview,
+    keepNow: keepStep,
+    emailResume: onEmailResume,
     focus,
   };
   return { state, refs: { container, heading } };

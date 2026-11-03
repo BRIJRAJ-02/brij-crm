@@ -75,6 +75,7 @@ export const AUDIT_KINDS = {
     'booking.no_show',
     'booking.no_show_undone',
     'routing.changed',
+    'form.created',
     'form.owner_changed',
     'form.notify_changed',
     'booking.record_linked',

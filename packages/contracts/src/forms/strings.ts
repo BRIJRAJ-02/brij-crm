@@ -60,6 +60,22 @@ export interface FormStrings {
   readonly questionsHidden: string;
   /** A question with no label yet, in the builder's preview. */
   readonly untitledQuestion: string;
+  /** Save and resume (spec 0063, AC-6319): the button, what it says once kept, and the link it hands back. */
+  readonly finishLater: string;
+  readonly saving: string;
+  readonly savedOn: (date: string) => string;
+  readonly saveFailed: string;
+  readonly resumeHeading: string;
+  readonly resumeLine: (date: string) => string;
+  readonly resumeLinkLabel: string;
+  readonly copyLink: string;
+  readonly copiedLink: string;
+  readonly emailLink: string;
+  readonly emailSent: string;
+  readonly emailNeedsAddress: string;
+  readonly keepFilling: string;
+  /** Said when a resumed fill is drawn, so a visitor knows why their answers are already there. */
+  readonly resumedNote: string;
   /**
    * The words before the Timefix wordmark under every form (spec 0058, AC-26), as on a link page and a booking page
    * (spec 0060, AC-19). Nothing takes it off until branding removal arrives as a plan flag (AC-577).
@@ -195,6 +211,20 @@ const EN: FormStrings = {
   questionsShown: 'Your answer added a question below.',
   questionsHidden: 'Your answer removed a question that no longer applies.',
   untitledQuestion: 'Untitled question',
+  finishLater: 'Finish later',
+  saving: 'Saving…',
+  savedOn: (date) => `Saved ${date}`,
+  saveFailed: 'That didn’t save. It will try again as you type.',
+  resumeHeading: 'Come back to this',
+  resumeLine: (date) => `Your answers are kept until ${date}. Open this link to pick up where you left off.`,
+  resumeLinkLabel: 'Your link',
+  copyLink: 'Copy link',
+  copiedLink: 'Copied',
+  emailLink: 'Email it to me',
+  emailSent: 'Sent. Check your inbox.',
+  emailNeedsAddress: 'Add your email address to the form first, then ask again.',
+  keepFilling: 'Keep filling it in',
+  resumedNote: 'We kept your answers from last time.',
   poweredBy: 'Powered by',
   product: 'Timefix',
   dialCodeOf: (country) => `Country code, ${country}`,

@@ -19,10 +19,13 @@ import styles from './HostedForm.module.css';
 import { BookingView, useLoadedBooking } from './BookingView.tsx';
 import type { HostedRemoveUpload, HostedUpload } from './files.ts';
 import { useEffect } from 'react';
+import { FinishLater } from './FinishLater.tsx';
 import { Question } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
 import {
+  type HostedFill,
   type HostedFormCount,
+  type HostedFormKept,
   useHostedForm,
   type HostedFormMode,
   type HostedSubmission,
@@ -59,6 +62,12 @@ export interface HostedFormProps {
   readonly onStale?: () => Promise<boolean>;
   /** Told what the visitor did, for the form's own counts (spec 0063, AC-6320); see `HostedFormCount`. */
   readonly onCount?: ((count: HostedFormCount) => void) | undefined;
+  /** Keeps what has been typed so far and answers the link back (spec 0063, AC-6319); see `HostedFormSettings`. */
+  readonly onSave?: ((fill: HostedFill) => Promise<HostedFormKept | undefined>) | undefined;
+  /** Emails the resume link to the address this form already holds; false when there is none. */
+  readonly onEmailResume?: ((resumeToken: string) => Promise<boolean>) | undefined;
+  /** The step a resumed fill was left on (spec 0063, AC-6319): a stepped form opens there, Classic ignores it. */
+  readonly resumedStepId?: string | undefined;
   /** The clock, for the fill time (tests pass their own). */
   readonly now?: () => number;
   /** The Timefix wordmark under the form; the web app serves these two by default. */
@@ -89,6 +98,8 @@ export function HostedForm({
   onRemoveUpload,
   onStale,
   onCount,
+  onSave,
+  onEmailResume,
   now = Date.now,
   logo = TIMEFIX_LOGO,
   brand,
@@ -104,6 +115,8 @@ export function HostedForm({
     onRemoveUpload,
     onStale,
     onCount,
+    onSave,
+    onEmailResume,
     now,
   });
   const { words, preview } = state;
@@ -173,6 +186,7 @@ export function HostedForm({
             <Button variant="primary" size="lg" type={preview ? 'button' : 'submit'} isFullWidth="center">
               {state.isSending ? words.sending : form.buttonText}
             </Button>
+            <FinishLater state={state} language={form.language} />
           </div>
         </form>
       </>

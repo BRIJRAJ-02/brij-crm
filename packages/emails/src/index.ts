@@ -92,6 +92,9 @@ export async function renderEmail(kind: EmailKind, params: unknown, context: Ema
   return renderDocument(template(parsed, templateContext(context)), {
     appOrigin: context.appOrigin,
     medium: entry.medium,
+    // The public pages' own origin, where one is configured: a booking email's manage button and Book again
+    // are served from there, and without this the whole email throws rather than linking to it (3 November).
+    ...(context.publicOrigin === undefined ? {} : { publicOrigins: [context.publicOrigin] }),
     ...(optional && context.preferencesUrl !== undefined ? { preferencesUrl: context.preferencesUrl } : {}),
   });
 }
@@ -146,11 +149,22 @@ export async function renderSignInAlert(
  */
 export function renderBookingEmail(
   words: BookingWords,
-  context: { readonly appOrigin: string; readonly medium: Extract<EmailMedium, 'email_booking' | 'email_reminder'> },
+  context: {
+    readonly appOrigin: string;
+    readonly medium: Extract<EmailMedium, 'email_booking' | 'email_reminder'>;
+    /**
+     * Where the public booking pages are served (`BOOKING_PUBLIC_ORIGIN`), when that is a host of its own.
+     * The manage button and Book again are built on it (`mail.ts`), and every button is checked against the
+     * origins this email was told about: without it the render throws and no booking email goes out at all.
+     */
+    readonly publicOrigin?: string | undefined;
+  },
 ): Promise<RenderedEmail> {
-  return renderDocument(bookingDocument(words, context.appOrigin), {
+  const ours = context.publicOrigin === undefined ? [] : [context.publicOrigin];
+  return renderDocument(bookingDocument(words, context.appOrigin, ours), {
     appOrigin: context.appOrigin,
     medium: context.medium,
+    ...(context.publicOrigin === undefined ? {} : { publicOrigins: [context.publicOrigin] }),
   });
 }
 

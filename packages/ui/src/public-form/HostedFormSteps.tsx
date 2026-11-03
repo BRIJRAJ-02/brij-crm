@@ -15,6 +15,7 @@ import {
   QuestionSlot,
   TIMEFIX_LOGO,
 } from './FormParts.tsx';
+import { FinishLater } from './FinishLater.tsx';
 import type { HostedFormProps } from './HostedForm.tsx';
 import styles from './HostedFormSteps.module.css';
 import { BookingView, useLoadedBooking } from './BookingView.tsx';
@@ -75,11 +76,16 @@ export function HostedFormSteps({
   onRemoveUpload,
   onStale,
   onCount,
+  onSave,
+  onEmailResume,
+  resumedStepId,
   now = Date.now,
   logo = TIMEFIX_LOGO,
   previewStep = 0,
   brand,
 }: HostedFormStepsProps) {
+  // A resumed fill opens on the step it was left on (AC-6319), found by id among the steps this path shows.
+  // A step the answers have since taken away, or an id from an older version, leaves them at the first step.
   const [shownIndex, setIndex] = useState(0);
   // How the visitor last moved: a pointer's move eases the next question in, a key's shows it at once.
   const [moved, setMoved] = useState<'pointer' | 'key' | undefined>(undefined);
@@ -101,6 +107,8 @@ export function HostedFormSteps({
     onRemoveUpload,
     onStale,
     onCount,
+    onSave,
+    onEmailResume,
     now,
     // A refusal for an earlier step goes back to it, where its errors show.
     onRefused: (keys) => {
@@ -120,7 +128,8 @@ export function HostedFormSteps({
       const question = byKey.get(key);
       return question === undefined || question.answerType === 'hidden' ? [] : [question];
     });
-    return questions.length === 0 ? [] : [{ title: shown.title, questions }];
+    // The step's own id travels with it, so a save can say which step to reopen on (AC-6319).
+    return questions.length === 0 ? [] : [{ id: shown.id, title: shown.title, questions }];
   });
   // Send another starts again from the first step.
   if (state.round !== round) {
@@ -132,8 +141,15 @@ export function HostedFormSteps({
   }
   // The step on screen: the one reached, kept within the steps the path has now (an answer can take some away), or
   // in the builder's preview the one being edited.
+  // Only before the visitor has moved: once they press Continue or Back, where they are is theirs.
+  const [hasResumed, setResumed] = useState(resumedStepId === undefined);
+  if (!hasResumed && groups.length > 0) {
+    setResumed(true);
+    const at = groups.findIndex((group) => group.id === resumedStepId);
+    if (at > 0) setIndex(at);
+  }
   const index = Math.max(0, Math.min(mode === 'preview' ? previewStep : shownIndex, groups.length - 1));
-  const step = groups[index] ?? { title: undefined, questions: [] };
+  const step = groups[index] ?? { id: undefined, title: undefined, questions: [] };
   const isLast = index >= groups.length - 1;
   const first = step.questions[0];
 
@@ -260,7 +276,12 @@ export function HostedFormSteps({
           onSubmit={(event) => {
             event.preventDefault();
             if (!isLast) {
-              if (state.checkStep(step.questions)) go(index + 1);
+              if (state.checkStep(step.questions)) {
+                // Continue is the moment to keep the fill (AC-6319): the step passed its check, so what is
+                // kept is answers the server would accept, and the link reopens on the step they move to.
+                go(index + 1);
+                state.keepNow(groups[index + 1]?.id);
+              }
               return;
             }
             state.submit();
@@ -330,6 +351,7 @@ export function HostedFormSteps({
                 {state.isSending ? words.sending : isLast ? form.buttonText : isOpen ? words.ok : words.next}
               </Button>
             </div>
+            <FinishLater state={state} language={form.language} stepId={step.id} />
           </div>
         </form>
       </>

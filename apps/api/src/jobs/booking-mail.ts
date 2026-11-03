@@ -101,7 +101,13 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
           ? undefined
           : `booking/${bookingId}/${kind}/${String(prepared.stamp)}/${String(index)}`;
       await deps.mailer.send({
-        ...(await bookingEmail(mail, { appOrigin: deps.links.appOrigin, medium })),
+        // The same origin core built the manage button on, so the render recognises it as ours: these two
+        // reading different variables is exactly what made the resume email unsendable (3 November 2026).
+        ...(await bookingEmail(mail, {
+          appOrigin: deps.links.appOrigin,
+          medium,
+          ...(deps.links.publicOrigin === undefined ? {} : { publicOrigin: deps.links.publicOrigin }),
+        })),
         ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
       });
     } catch (error) {

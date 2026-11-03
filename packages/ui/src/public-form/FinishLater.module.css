@@ -1,0 +1,39 @@
+/* Finish later (spec 0063, AC-6319): a quiet line under the button saying what
+   is kept, and, once pressed, the link that brings the visitor back. It takes
+   the card's own colours, so a branded form needs none of its own here, and
+   it shares one class between its lines rather than one per role: the hosted
+   page's CSS budget is the tightest in the product. */
+@layer components {
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    align-items: center;
+    text-align: center;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    inline-size: 100%;
+    padding: var(--space-16);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+  }
+
+  /* Every line in here: the saved note, the heading, the explanation and the link itself. The link is long and
+     unbreakable, so it wraps inside the card instead of widening it. */
+  .line {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    overflow-wrap: anywhere;
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    justify-content: center;
+  }
+}

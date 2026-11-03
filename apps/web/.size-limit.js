@@ -120,7 +120,11 @@ export default [
   // toast region), its questions use SelectBase (no StatusDot or Badge), and Lucide's shape keys are numbered: from
   // 222.99 kB and 16.98 kB to about 188.6 kB and 15.4 kB. These lines stay where they were.
   { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '223 kB', gzip: true, running: false },
-  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '17 kB', gzip: true, running: false },
+  // 3 November 2026: 17 kB to 18 kB, for Finish later (spec 0063, AC-6319). The line stood at 16.97 kB with
+  // 30 bytes of room, so any new piece of UI on the hosted page breached it; this one is four rules sharing one
+  // class and still came to 140 bytes over. A kilobyte of gzipped CSS is about 20 ms on slow 3G, against a
+  // visitor otherwise having no way to come back to a half filled form. The JavaScript line is untouched.
+  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '18 kB', gzip: true, running: false },
   // Spec 0063's own line: Steps and One at a time together at most 10 kB, loaded only by a form that uses them.
   {
     name: 'Form step layouts, lazy (gzipped)',

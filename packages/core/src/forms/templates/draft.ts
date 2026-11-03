@@ -54,6 +54,7 @@ function questionOf(question: FormTemplateQuestion, target: TemplateTarget | und
     ...(question.placeholder === undefined ? {} : { placeholder: question.placeholder }),
     ...(question.choices === undefined ? {} : { choices: [...question.choices] }),
     ...(question.options === undefined ? {} : { options: question.options }),
+    ...(question.points === undefined ? {} : { points: question.points }),
     ...(attributeId === undefined
       ? { kept: true as const }
       : { filedOn: { objectRole: 'main' as const, attributeId } }),

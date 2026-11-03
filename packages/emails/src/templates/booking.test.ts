@@ -84,3 +84,56 @@ describe('a booking email', () => {
     expect(email.text).toContain('Your host: Sam Lee');
   });
 });
+
+describe('booking pages served from their own origin (BOOKING_PUBLIC_ORIGIN)', () => {
+  // `mail.ts` builds the manage button and Book again on the public origin while the email is drawn against
+  // the app's. Where those differ and the document is not told, the button is not recognised as ours and is
+  // drawn as the meeting's video call button instead: "View your booking" styled and labelled as join the
+  // call, with no error anywhere. Found 3 November 2026, after the same mismatch had already made the forms
+  // resume email impossible to send.
+  const PUBLIC = 'https://book.example.com';
+  const onPublic: BookingWords = {
+    ...WORDS,
+    button: { label: 'View your booking', url: `${PUBLIC}/b/intro/manage?t=token` },
+  };
+
+  it('sends, with the button on the public origin', async () => {
+    const { html, text } = await renderBookingEmail(onPublic, {
+      appOrigin: ORIGIN,
+      medium: 'email_booking',
+      publicOrigin: PUBLIC,
+    });
+    expect(html).toContain(`${PUBLIC}/b/intro/manage?t=token`);
+    expect(text).toContain(`${PUBLIC}/b/intro/manage?t=token`);
+  });
+
+  it('draws it as a real button, not the video call one it was silently becoming', () => {
+    const told = bookingDocument(onPublic, ORIGIN, [PUBLIC]);
+    expect(told.blocks).toContainEqual({
+      type: 'button',
+      label: 'View your booking',
+      url: `${PUBLIC}/b/intro/manage?t=token`,
+    });
+    // Not told, the same words give a call button: this is the defect itself, held here so it cannot come back.
+    const untold = bookingDocument(onPublic, ORIGIN);
+    expect(untold.blocks).toContainEqual({
+      type: 'callButton',
+      label: 'View your booking',
+      url: `${PUBLIC}/b/intro/manage?t=token`,
+    });
+  });
+
+  it('still keeps a link off every origin of ours out of the buttons the layout trusts', () => {
+    const elsewhere: BookingWords = {
+      ...WORDS,
+      button: { label: 'Join the call', url: 'https://meet.example.com/abc' },
+    };
+    const drawn = bookingDocument(elsewhere, ORIGIN, [PUBLIC]);
+    // A video call really is off our origins, so it stays the call button, which is what that type is for.
+    expect(drawn.blocks).toContainEqual({
+      type: 'callButton',
+      label: 'Join the call',
+      url: 'https://meet.example.com/abc',
+    });
+  });
+});
