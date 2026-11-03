@@ -7,8 +7,8 @@
 --    `moved` (true only, the one time note of AC-6805). The check keeps every rule it had and lets these two through.
 -- 3. Every existing link page moves to the nearest template once (AC-6805), by which of the old presets its look
 --    is, key for key with the hue left out (`nearestTemplate` in `@crm/contracts`, held to this table by
---    `page-theme.test.ts`): plain, paper, quiet, ocean, mint → Classic; editorial, dawn, gallery → Studio; ink,
---    bold → Night; studio and any remaining → Split with a cover photo, else Classic. The old keys stay stored and
+--    `page-theme.test.ts`): plain, paper, quiet, ocean, mint → Classic; editorial, dawn, gallery, peach → Studio;
+--    ink, bold, night, graphite → Night; studio and any remaining → Split with a cover photo, else Classic. The old keys stay stored and
 --    unused, and the page carries `moved` so its editor says so once.
 set local lock_timeout = '5s';
 --> statement-breakpoint
@@ -71,7 +71,8 @@ mapped as (
       when 'plain' then 'classic' when 'paper' then 'classic' when 'quiet' then 'classic'
       when 'ocean' then 'classic' when 'mint' then 'classic'
       when 'editorial' then 'studio' when 'dawn' then 'studio' when 'gallery' then 'studio'
-      when 'ink' then 'night' when 'bold' then 'night'
+      when 'ink' then 'night' when 'bold' then 'night' when 'night' then 'night' when 'graphite' then 'night'
+      when 'peach' then 'studio'
       else case when p.cover_path is not null then 'split' else 'classic' end
     end as template
   from auth.public_profiles p

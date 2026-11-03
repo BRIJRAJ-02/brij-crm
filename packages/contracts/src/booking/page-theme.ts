@@ -232,7 +232,7 @@ export function themeForTemplate(template: PageTemplate, from: PageTheme): PageT
 
 /**
  * The template an old look moves to (spec 0068, AC-6805): plain, paper, quiet, ocean, mint → Classic; editorial,
- * dawn, gallery → Studio; ink, bold → Night; studio and any remaining (night, peach, graphite, a look made by hand)
+ * dawn, gallery, peach → Studio; ink, bold, night, graphite → Night; studio and any remaining (a look made by hand)
  * → Split with a cover photo, else Classic. The preset is found by its keys, as the editor found it; a look made by hand matches none. The
  * migration that moved every page (0170) runs the same table in SQL; `page-theme.test.ts` holds the two together.
  */
@@ -249,9 +249,12 @@ export function nearestTemplate(theme: PageTheme, hasCover: boolean): PageTempla
     case 'editorial':
     case 'dawn':
     case 'gallery':
+    case 'peach':
       return 'studio';
     case 'ink':
     case 'bold':
+    case 'night':
+    case 'graphite':
       return 'night';
     default:
       return hasCover ? 'split' : 'classic';

@@ -28,9 +28,9 @@ const EXPECTED = {
   ink: 'night',
   bold: 'night',
   studio: 'classic',
-  night: 'classic',
-  peach: 'classic',
-  graphite: 'classic',
+  night: 'night',
+  peach: 'studio',
+  graphite: 'night',
 } as const;
 
 describe('the four templates', () => {
