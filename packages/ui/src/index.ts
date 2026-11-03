@@ -52,6 +52,7 @@ export { RelativeTime, type RelativeTimeProps } from './atoms/RelativeTime/Relat
 export { RemoteCursor, type RemoteCursorProps } from './atoms/RemoteCursor/RemoteCursor.tsx';
 export { Separator, type SeparatorProps } from './atoms/Separator/Separator.tsx';
 export { Skeleton, type SkeletonProps, type SkeletonShape, type SkeletonWidth } from './atoms/Skeleton/Skeleton.tsx';
+export { Slider, type SliderProps } from './atoms/Slider/Slider.tsx';
 export { Spinner, type SpinnerProps } from './atoms/Spinner/Spinner.tsx';
 export { StatusDot, type StatusDotProps } from './atoms/StatusDot/StatusDot.tsx';
 /** A booking link's colour from its id, the same on its card and its bookings on the week (grey and red left out). */
@@ -370,6 +371,9 @@ export { DayStrip, type DayStripProps } from './modules/DayStrip/DayStrip.tsx';
 export { ReadyPanel, type ReadyPanelProps } from './modules/ReadyPanel/ReadyPanel.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot, type SlotListProps } from './modules/SlotList/SlotList.tsx';
+export { PhotoCrop, type PhotoCropProps, type PhotoShape } from './modules/PhotoCrop/PhotoCrop.tsx';
+export { usePhotoCrop, type PhotoCropping } from './modules/PhotoCrop/usePhotoCrop.tsx';
+export type { PhotoRect } from './lib/photo/crop-math.ts';
 export {
   VisitorBar,
   type VisitorBarCalendar,

@@ -60,6 +60,11 @@ export interface FileDropProps {
    * (an Excel file: how to save it as CSV); undefined keeps the built in sentence.
    */
   readonly wrongTypeText?: (fileName: string) => string | undefined;
+  /**
+   * Crops the picture there now again (spec 0068, AC-6809): an "Adjust crop" button beside browse while `preview`
+   * shows (beside the button with `variant="button"`), which opens the screen's PhotoCrop on it.
+   */
+  readonly onAdjust?: () => void;
 }
 
 function accepts(file: File, types: readonly string[] | undefined): boolean {
@@ -88,6 +93,7 @@ export function FileDrop({
   isPending = false,
   error: given,
   wrongTypeText,
+  onAdjust,
 }: FileDropProps) {
   const { locale } = useFormatSettings();
   const [error, setError] = useState<string | undefined>(undefined);
@@ -146,6 +152,11 @@ export function FileDrop({
             {label}
           </Button>
         </FileTrigger>
+        {onAdjust !== undefined && (
+          <Button variant="ghost" isDisabled={isDisabled || isPending} onPress={onAdjust}>
+            {strings.adjust}
+          </Button>
+        )}
         {refusal}
       </div>
     );
@@ -190,6 +201,13 @@ export function FileDrop({
             </AriaButton>
           </FileTrigger>
         </span>
+        {onAdjust !== undefined && shown !== undefined && failed !== shown && (
+          <span className={styles.hint}>
+            <AriaButton className={styles.browse} isDisabled={isDisabled || isPending} onPress={onAdjust}>
+              {strings.adjust}
+            </AriaButton>
+          </span>
+        )}
         {limits.length > 0 && <span className={styles.limits}>{limits.join(' · ')}</span>}
       </DropZone>
       {refusal}

@@ -141,6 +141,7 @@ describe('@crm/ui', () => {
       'PersonLine',
       'PhoneField',
       'PhonePreview',
+      'PhotoCrop',
       'Popover',
       'PreviewFrame',
       'PreviewLayout',
@@ -185,6 +186,7 @@ describe('@crm/ui', () => {
       'SignInForm',
       'SiteIconsContext',
       'Skeleton',
+      'Slider',
       'SlotList',
       'SocialLinks',
       'SocialLinksEditor',
@@ -266,6 +268,7 @@ describe('@crm/ui', () => {
       'useFileHref',
       'useFormatSettings',
       'useKeyboardPlatform',
+      'usePhotoCrop',
     ]);
   });
 });
