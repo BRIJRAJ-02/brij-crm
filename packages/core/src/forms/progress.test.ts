@@ -7,7 +7,7 @@
 // then resume the next day; the link empty after a submit; ten views, six
 // starts, three completions and three left on question four; and a cross
 // workspace read of either table returning nothing.
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { FormDocument, FormQuestion, SubmitBody } from '@crm/contracts';
@@ -218,7 +218,7 @@ describe('save and resume (AC-6319)', () => {
     // Another form's live token, an unknown one and a malformed one: one answer, so probing learns nothing.
     for (const token of [saved.resumeToken, 'a'.repeat(43), 'not-a-token']) {
       expect(await refusalOf(resumePartial(scope, { formId, resumeToken: token })), token).toMatchObject([
-        { code: 'NOT_FOUND', message: expect.stringContaining('expired') },
+        { code: 'NOT_FOUND', message: expect.stringContaining('expired') as unknown },
       ]);
     }
   });
