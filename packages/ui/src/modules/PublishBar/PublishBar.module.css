@@ -3,9 +3,13 @@
    under them, the changes as a quiet list and a refused Publish's one line (first, on a phone). The app's own look:
    tokens, a card's border and radius, body type, and a plain crossfade when the status changes. */
 @layer components {
+  /* A container for the phone layout, so it takes its slot's width rather than its content's (a size container
+     has none of its own). */
   .root {
     container: publish-bar / inline-size;
+    box-sizing: border-box;
     display: flex;
+    inline-size: 100%;
     flex-direction: column;
     gap: var(--space-8);
     padding: var(--space-8) var(--space-12);
