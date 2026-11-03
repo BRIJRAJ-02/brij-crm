@@ -21,10 +21,11 @@ test.describe('the booking journey', () => {
     const slug = `bookjourney-${tag}`;
     await newWorkspace(page, `bookjourney-${tag}@example.com`, slug);
 
-    // Bookings › New: one dialog, then the page itself, live with no publish step.
+    // Captures › New: one dialog, then the page itself, live with no publish step.
+    // New booking page lives on Captures › Links; Bookings' own New is New meeting once a page exists.
     await page
       .getByRole('navigation', { name: 'Main navigation' })
-      .getByRole('link', { name: 'Bookings', exact: true })
+      .getByRole('link', { name: 'Captures', exact: true })
       .click();
     await page.getByRole('button', { name: /^New booking page/ }).click();
     const create = page.getByRole('dialog', { name: 'Add a booking page' });

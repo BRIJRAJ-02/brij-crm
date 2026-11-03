@@ -254,9 +254,10 @@ test.describe('the booking journey’s edges', () => {
     test.setTimeout(120_000);
     const tag = randomUUID().slice(0, 8);
     await newWorkspace(page, `bookrr-${tag}@example.com`, `bookrr-${tag}`);
+    // New booking page lives on Captures › Links; Bookings' own New is New meeting once a page exists.
     await page
       .getByRole('navigation', { name: 'Main navigation' })
-      .getByRole('link', { name: 'Bookings', exact: true })
+      .getByRole('link', { name: 'Captures', exact: true })
       .click();
     await page.getByRole('button', { name: /^New booking page/ }).click();
     const create = page.getByRole('dialog', { name: 'Add a booking page' });
