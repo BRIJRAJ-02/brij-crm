@@ -1,4 +1,4 @@
-// The Hospitality suite's setup (spec 0065, H0, migration 0168_hospitality_apps): which apps a workspace installed,
+// The business apps' shared base (spec 0065, H0, migration 0168_hospitality_apps), Hospitality first: which apps a workspace installed,
 // its business profile, its places with opening hours, and each place's areas and tables. Tenant tables under forced
 // row level security with the plain workspace policy; every index leads with workspace_id, but the places' two public
 // keys, which a guest page finds before the workspace is known (H1, H3), so they are unique everywhere.
@@ -80,7 +80,10 @@ export const businessProfiles = pgTable(
       foreignColumns: [workspaces.id],
     }).onDelete('cascade'),
     check('business_profiles_name', sql`char_length(${t.name}) between 1 and 80`),
-    check('business_profiles_kind', sql`${t.kind} in ('restaurant', 'cafe', 'bar', 'bakery', 'other')`),
+    check(
+      'business_profiles_kind',
+      sql`${t.kind} in ('restaurant', 'cafe', 'bar', 'bakery', 'salon', 'spa', 'barber', 'clinic', 'fitness', 'other')`,
+    ),
     check('business_profiles_description', sql`char_length(${t.description}) <= 160`),
     check('business_profiles_phone', sql`char_length(${t.phone}) <= 40`),
     check('business_profiles_email', sql`char_length(${t.email}) <= 254`),
@@ -168,20 +171,23 @@ export const areas = pgTable(
 );
 
 /**
- * A table of a place (AC-6509; `place_tables`, as `tables` would read as SQL's own word). Its label is unique among
- * the place's live tables, ignoring case; an archived table leaves online fitting and keeps its holds (Rules settled:
- * Tables with future reservations). `joins` are other tables of the same place, at most 10.
+ * What a place books or seats (AC-6509, generalised 4 Nov 2026 so every business app shares it): a table, a room, a
+ * chair, a bed, a court, a station, equipment (`kind`, a closed list). Its label is unique among the place's live
+ * resources, ignoring case; capacity is how many people it takes (1 to 100). An archived one leaves online fitting and
+ * keeps its holds (Rules settled: Tables with future reservations). `joins` are others of the same place, at most 10.
  */
-export const placeTables = pgTable(
-  'place_tables',
+export const resources = pgTable(
+  'resources',
   {
     workspaceId: workspaceId(),
     id: id(),
     placeId: uuid('place_id').notNull(),
     areaId: uuid('area_id'),
+    /** `table`, `room`, `chair`, `bed`, `court`, `station`, `equipment` or `other` (`RESOURCE_KINDS`). */
+    kind: text('kind').notNull(),
     label: text('label').notNull(),
-    minGuests: smallint('min_guests').notNull(),
-    maxGuests: smallint('max_guests').notNull(),
+    minCapacity: smallint('min_capacity').notNull(),
+    maxCapacity: smallint('max_capacity').notNull(),
     online: boolean('online').notNull().default(true),
     position: integer('position').notNull(),
     joins: uuid('joins')
@@ -195,22 +201,26 @@ export const placeTables = pgTable(
     updatedByMemberId: uuid('updated_by_member_id'),
   },
   (t) => [
-    primaryKey({ name: 'place_tables_pkey', columns: [t.workspaceId, t.id] }),
+    primaryKey({ name: 'resources_pkey', columns: [t.workspaceId, t.id] }),
     foreignKey({
-      name: 'place_tables_place',
+      name: 'resources_place',
       columns: [t.workspaceId, t.placeId],
       foreignColumns: [places.workspaceId, places.id],
     }).onDelete('cascade'),
-    uniqueIndex('place_tables_label')
+    uniqueIndex('resources_label')
       .on(t.workspaceId, t.placeId, sql`lower(${t.label})`)
       .where(sql`${t.archivedAt} is null`),
-    index('place_tables_order').on(t.workspaceId, t.placeId, t.position),
-    index('place_tables_area').on(t.workspaceId, t.areaId),
-    check('place_tables_label_length', sql`char_length(${t.label}) between 1 and 12`),
+    index('resources_order').on(t.workspaceId, t.placeId, t.position),
+    index('resources_area').on(t.workspaceId, t.areaId),
     check(
-      'place_tables_guests',
-      sql`${t.minGuests} between 1 and 30 and ${t.maxGuests} between 1 and 30 and ${t.minGuests} <= ${t.maxGuests}`,
+      'resources_kind',
+      sql`${t.kind} in ('table', 'room', 'chair', 'bed', 'court', 'station', 'equipment', 'other')`,
     ),
-    check('place_tables_joins', sql`cardinality(${t.joins}) <= 10 and not (${t.id} = any(${t.joins}))`),
+    check('resources_label_length', sql`char_length(${t.label}) between 1 and 12`),
+    check(
+      'resources_capacity',
+      sql`${t.minCapacity} between 1 and 100 and ${t.maxCapacity} between 1 and 100 and ${t.minCapacity} <= ${t.maxCapacity}`,
+    ),
+    check('resources_joins', sql`cardinality(${t.joins}) <= 10 and not (${t.id} = any(${t.joins}))`),
   ],
 );

@@ -1,6 +1,25 @@
 // The Hospitality suite's words (spec 0065, H0): Settings › Apps, Settings › Business, a place's tables, and the
 // apps' pages until each app arrives. Short on purpose (the owner: far less text).
-import type { BusinessKind, HospitalityApp, WeekDay } from '@crm/data';
+import type { BusinessKind, HospitalityApp, ResourceKind, WeekDay } from '@crm/data';
+
+/** Each resource kind's name, one and many: the words a place's page uses for what it books or seats. */
+const NOUNS: Readonly<Record<ResourceKind, readonly [one: string, many: string]>> = {
+  table: ['table', 'tables'],
+  room: ['room', 'rooms'],
+  chair: ['chair', 'chairs'],
+  bed: ['bed', 'beds'],
+  court: ['court', 'courts'],
+  station: ['station', 'stations'],
+  equipment: ['item', 'items'],
+  other: ['spot', 'spots'],
+};
+
+/** `count` of a kind: "1 table", "6 rooms". */
+const countOf = (kind: ResourceKind, count: number) =>
+  `${String(count)} ${count === 1 ? NOUNS[kind][0] : NOUNS[kind][1]}`;
+
+/** A noun with its first letter up: "Tables". */
+const title = (word: string) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
 
 /** Settings › Apps and Settings › Business. */
 export const strings = {
@@ -50,8 +69,34 @@ export const strings = {
     cafe: 'Café',
     bar: 'Bar',
     bakery: 'Bakery',
+    salon: 'Salon',
+    spa: 'Spa',
+    barber: 'Barber',
+    clinic: 'Clinic',
+    fitness: 'Fitness studio',
     other: 'Other',
   } satisfies Record<BusinessKind, string>,
+  // What a place books or seats (generalised 4 Nov 2026), in the words of the kind it mostly uses.
+  resourceKind: 'Kind',
+  resourceKinds: {
+    table: 'Table',
+    room: 'Room',
+    chair: 'Chair',
+    bed: 'Bed',
+    court: 'Court',
+    station: 'Station',
+    equipment: 'Equipment',
+    other: 'Other',
+  } satisfies Record<ResourceKind, string>,
+  resourcesTitle: (kind: ResourceKind) => title(NOUNS[kind][1]),
+  addResourcesOf: (kind: ResourceKind) => `Add ${NOUNS[kind][1]}`,
+  resourceCount: countOf,
+  addCountOf: (kind: ResourceKind, count: number) => `Add ${countOf(kind, count)}`,
+  noResourcesOf: (kind: ResourceKind) => `No ${NOUNS[kind][1]} yet`,
+  limitOf: (kind: ResourceKind, max: number) => `Up to ${String(max)} ${NOUNS[kind][1]} per place`,
+  resourcesAt: (kind: ResourceKind, place: string) => `${title(NOUNS[kind][1])} at ${place}`,
+  bulkAreaOf: (kind: ResourceKind, count: number) => `Area for ${countOf(kind, count)}`,
+  capacity: 'People',
   address: 'Address',
   city: 'City',
   postcode: 'Postcode',
@@ -94,7 +139,7 @@ export const strings = {
   tableCount: (count: number) => (count === 1 ? '1 table' : `${String(count)} tables`),
   openTables: (place: string) => `Tables at ${place}`,
   notInstalled: 'Install an app first',
-  notInstalledText: 'The business belongs to the Hospitality apps.',
+  notInstalledText: 'The business belongs to the business apps.',
   openApps: 'Open Apps',
   weekDays: {
     mon: 'Monday',
@@ -137,7 +182,7 @@ export const strings = {
   archiveSelected: 'Archive',
   edit: 'Edit',
   deleteAreaText: 'Its tables stay, with no area.',
-  addTables: 'Add tables',
+  addResources: 'Add tables',
   prefix: 'Label',
   from: 'From',
   to: 'To',
@@ -153,7 +198,7 @@ export const strings = {
   area: 'Area',
   actions: 'Actions',
   tableActions: (table: string) => `${table} actions`,
-  moveTable: (table: string) => `Move ${table}`,
+  moveResource: (table: string) => `Move ${table}`,
   archive: 'Archive',
   restore: 'Bring back',
   delete: 'Delete',
@@ -165,7 +210,7 @@ export const strings = {
         ? `Adds ${labels[0] ?? ''}`
         : `Adds ${String(labels.length)}: ${labels[0] ?? ''} to ${labels.at(-1) ?? ''}`,
   rangeInvalid: 'Use a range of up to 100, such as 1 to 10.',
-  seatsInvalid: 'Seats run from 1 to 30, the fewest first.',
+  seatsInvalid: 'People run from 1 to 100, the fewest first.',
   addCount: (count: number) => (count === 1 ? 'Add 1 table' : `Add ${String(count)} tables`),
   noTables: 'No tables yet',
   noTablesText: 'Add them in one go: T1 to T10.',
@@ -181,7 +226,7 @@ export const strings = {
     reservations: 'Reservations are on their way',
     service: 'Service is on its way',
   },
-  comingText: 'Set up your places and tables meanwhile.',
+  comingText: 'Set up your places meanwhile.',
   openBusiness: 'Open Business',
 } as const;
 

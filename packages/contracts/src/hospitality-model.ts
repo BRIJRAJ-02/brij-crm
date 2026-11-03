@@ -19,15 +19,64 @@ export function appsNeeding(app: HospitalityApp): readonly HospitalityApp[] {
   return HOSPITALITY_APPS.filter((other) => APP_NEEDS[other].includes(app));
 }
 
-/** The flags Timefix opens per workspace from the operator console (AC-6502). A closed list. */
-export const EARLY_ACCESS_FLAGS = ['hospitality'] as const;
+/**
+ * The flags Timefix opens per workspace from the operator console (AC-6502). A closed list: `business_apps`, the apps
+ * for businesses that book places and people (Hospitality first; salons, spas, clinics and courts share the base).
+ */
+export const EARLY_ACCESS_FLAGS = ['business_apps'] as const;
 /** One early access flag. */
 export type EarlyAccessFlag = (typeof EARLY_ACCESS_FLAGS)[number];
 
-/** What a business is (AC-6506). */
-export const BUSINESS_KINDS = ['restaurant', 'cafe', 'bar', 'bakery', 'other'] as const;
+/**
+ * What a business is (AC-6506; widened 4 Nov 2026, the owner: every business that books places, not only food). The
+ * business profile and its places are the shared base of every business app.
+ */
+export const BUSINESS_KINDS = [
+  'restaurant',
+  'cafe',
+  'bar',
+  'bakery',
+  'salon',
+  'spa',
+  'barber',
+  'clinic',
+  'fitness',
+  'other',
+] as const;
 /** What a business is. */
 export type BusinessKind = (typeof BUSINESS_KINDS)[number];
+
+/** What a place books or seats (a resource): a table, a room, a chair, a bed, a court, a station, equipment. */
+export const RESOURCE_KINDS = ['table', 'room', 'chair', 'bed', 'court', 'station', 'equipment', 'other'] as const;
+/** What a resource is. */
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
+
+/** The resource a kind of business mostly books, the Add dialog's first choice. */
+export const DEFAULT_RESOURCE_KIND: Readonly<Record<BusinessKind, ResourceKind>> = {
+  restaurant: 'table',
+  cafe: 'table',
+  bar: 'table',
+  bakery: 'table',
+  salon: 'chair',
+  barber: 'chair',
+  spa: 'room',
+  clinic: 'room',
+  fitness: 'room',
+  other: 'other',
+};
+
+/** The kind most of a place's live resources are, or undefined when it has none. */
+export function mainResourceKind(
+  resources: readonly { readonly kind: ResourceKind; readonly archived: boolean }[],
+): ResourceKind | undefined {
+  const counts = new Map<ResourceKind, number>();
+  for (const resource of resources) {
+    if (!resource.archived) counts.set(resource.kind, (counts.get(resource.kind) ?? 0) + 1);
+  }
+  let best: ResourceKind | undefined;
+  for (const [kind, count] of counts) if (best === undefined || count > (counts.get(best) ?? 0)) best = kind;
+  return best;
+}
 
 /** The days of a weekly pattern, Monday first. */
 export const WEEK_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
@@ -38,14 +87,14 @@ export type WeekDay = (typeof WEEK_DAYS)[number];
 export const HOSPITALITY_LIMITS = {
   places: 20,
   areasPerPlace: 12,
-  tablesPerPlace: 300,
-  /** Tables one bulk add makes. */
-  tablesPerAdd: 100,
-  joinsPerTable: 10,
+  resourcesPerPlace: 300,
+  /** Resources one bulk add makes. */
+  resourcesPerAdd: 100,
+  joinsPerResource: 10,
   rangesPerDay: 3,
   exceptions: 100,
-  guestsMin: 1,
-  guestsMax: 30,
+  capacityMin: 1,
+  capacityMax: 100,
   labelMax: 12,
   areaNameMax: 40,
   placeNameMax: 80,
@@ -160,17 +209,17 @@ export function hoursProblem(hours: PlaceHoursShape): string | undefined {
 }
 
 /** A table label typed into Add tables: letters and digits, spaces inside, up to 12 characters ("T4", "Bar 2"). */
-export const TABLE_LABEL_PATTERN = /^[\p{L}\p{N}](?:[\p{L}\p{N} ._/-]*[\p{L}\p{N}])?$/u;
+export const RESOURCE_LABEL_PATTERN = /^[\p{L}\p{N}](?:[\p{L}\p{N} ._/-]*[\p{L}\p{N}])?$/u;
 
 /**
  * The labels "T1 to T10" makes (AC-6509): `prefix` followed by each number from `from` to `to`, or undefined when
  * the run is empty, over the one add's limit, or makes a label that isn't one.
  */
-export function tableLabels(prefix: string, from: number, to: number): readonly string[] | undefined {
+export function resourceLabels(prefix: string, from: number, to: number): readonly string[] | undefined {
   if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) return undefined;
-  if (to - from + 1 > HOSPITALITY_LIMITS.tablesPerAdd) return undefined;
+  if (to - from + 1 > HOSPITALITY_LIMITS.resourcesPerAdd) return undefined;
   const labels = Array.from({ length: to - from + 1 }, (_, index) => `${prefix}${String(from + index)}`);
-  return labels.every((label) => label.length <= HOSPITALITY_LIMITS.labelMax && TABLE_LABEL_PATTERN.test(label))
+  return labels.every((label) => label.length <= HOSPITALITY_LIMITS.labelMax && RESOURCE_LABEL_PATTERN.test(label))
     ? labels
     : undefined;
 }

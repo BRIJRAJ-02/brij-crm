@@ -1,6 +1,6 @@
 // The Hospitality suite's setup (spec 0065, H0, AC-6501 to AC-6511): the Apps page (install and remove per workspace,
 // behind Timefix's early access), the business profile, its places with opening hours, and each place's areas and
-// tables. Every procedure is inside a workspace, behind the member door; installing and removing are for
+// resources. Every procedure is inside a workspace, behind the member door; installing and removing are for
 // `workspace.manage`, the business and its places for `hospitality.manage`, and each refuses `APP_NOT_INSTALLED`
 // while no Hospitality app is installed. The closed lists and pure rules are in `hospitality-model.ts`, shared with
 // the browser without Zod.
@@ -14,7 +14,8 @@ import {
   HOSPITALITY_LIMITS,
   hoursProblem,
   rangesProblem,
-  TABLE_LABEL_PATTERN,
+  RESOURCE_KINDS,
+  RESOURCE_LABEL_PATTERN,
   WEEK_DAYS,
 } from './hospitality-model.ts';
 import { SocialLinks } from './profile.ts';
@@ -191,7 +192,8 @@ export const Place = z.object({
   locale: z.string(),
   phone: z.string().optional(),
   hours: PlaceHours,
-  tables: z.number().int().nonnegative(),
+  /** Its live resources. */
+  resourceCount: z.number().int().nonnegative(),
   updatedAt: Timestamp,
 });
 /** One place. */
@@ -202,23 +204,29 @@ export const Area = z.object({ id: Uuid, name: z.string(), position: z.number().
 /** One area of a place. */
 export type Area = z.infer<typeof Area>;
 
-/** One table of a place (AC-6509). */
-export const DiningTable = z.object({
+/** What a resource is. */
+export const ResourceKindName = z.enum(RESOURCE_KINDS, { error: 'Pick what it is.' });
+/** What a resource is. */
+export type ResourceKindName = z.infer<typeof ResourceKindName>;
+
+/** One resource of a place (AC-6509): a resource, a room, a chair, a bed, a court. Capacity is how many people it takes. */
+export const Resource = z.object({
   id: Uuid,
+  kind: ResourceKindName,
   label: z.string(),
   areaId: Uuid.optional(),
-  minGuests: z.number().int(),
-  maxGuests: z.number().int(),
+  minCapacity: z.number().int(),
+  maxCapacity: z.number().int(),
   online: z.boolean(),
   joins: z.array(Uuid),
   position: z.number().int(),
   archived: z.boolean(),
 });
-/** One table of a place. */
-export type DiningTable = z.infer<typeof DiningTable>;
+/** One resource of a place. */
+export type Resource = z.infer<typeof Resource>;
 
-/** One place's floor: its areas and tables in order, archived tables last. */
-export const PlaceFloor = z.object({ placeId: Uuid, areas: z.array(Area), tables: z.array(DiningTable) });
+/** One place's floor: its areas and resources in order, archived ones last. */
+export const PlaceFloor = z.object({ placeId: Uuid, areas: z.array(Area), resources: z.array(Resource) });
 /** One place's floor. */
 export type PlaceFloor = z.infer<typeof PlaceFloor>;
 
@@ -323,73 +331,75 @@ export const SaveAreaInput = WorkspaceScoped.extend({
 /** Adding or renaming an area. */
 export type SaveAreaInput = z.infer<typeof SaveAreaInput>;
 
-/** Deleting an area: its tables stay, with no area. */
+/** Deleting an area: its resources stay, with no area. */
 export const DeleteAreaInput = WorkspaceScoped.extend({ placeId: Uuid, areaId: Uuid, mutationId: Uuid });
 /** Deleting an area. */
 export type DeleteAreaInput = z.infer<typeof DeleteAreaInput>;
 
-/** A table's label: up to 12 characters ("T4", "Bar 2"), unique in its place ignoring case. */
-export const TableLabel = z
+/** A resource's label: up to 12 characters ("T4", "Chair 2"), unique in its place ignoring case. */
+export const ResourceLabel = z
   .string()
   .trim()
-  .min(1, 'Give the table a label.')
+  .min(1, 'Give it a label.')
   .max(L.labelMax, `Use ${String(L.labelMax)} characters or fewer.`)
-  .regex(TABLE_LABEL_PATTERN, 'Use letters and numbers, such as T4 or Bar 2.');
+  .regex(RESOURCE_LABEL_PATTERN, 'Use letters and numbers, such as T4 or Chair 2.');
 
-const Guests = z
+const Capacity = z
   .number()
   .int()
-  .min(L.guestsMin, `Seat at least ${String(L.guestsMin)}.`)
-  .max(L.guestsMax, `Seat at most ${String(L.guestsMax)}.`);
+  .min(L.capacityMin, `Take at least ${String(L.capacityMin)}.`)
+  .max(L.capacityMax, `Take at most ${String(L.capacityMax)}.`);
 
-/** Adding tables at once ("T1 to T10, seats 2 to 4"): the labels, one area, the seats, online or not. */
-export const AddTablesInput = WorkspaceScoped.extend({
+/** Adding resources at once ("T1 to T10, 2 to 4 people"): their kind, the labels, one area, the capacity, online. */
+export const AddResourcesInput = WorkspaceScoped.extend({
   placeId: Uuid,
-  labels: z.array(TableLabel).min(1).max(L.tablesPerAdd),
+  kind: ResourceKindName,
+  labels: z.array(ResourceLabel).min(1).max(L.resourcesPerAdd),
   areaId: Uuid.optional(),
-  minGuests: Guests,
-  maxGuests: Guests,
+  minCapacity: Capacity,
+  maxCapacity: Capacity,
   online: z.boolean().default(true),
   mutationId: Uuid,
-}).refine((input) => input.minGuests <= input.maxGuests, {
-  message: 'The fewest guests can’t be more than the most.',
-  path: ['minGuests'],
+}).refine((input) => input.minCapacity <= input.maxCapacity, {
+  message: 'The fewest can’t be more than the most.',
+  path: ['minCapacity'],
 });
-/** Adding tables at once. */
-export type AddTablesInput = z.infer<typeof AddTablesInput>;
+/** Adding resources at once. */
+export type AddResourcesInput = z.infer<typeof AddResourcesInput>;
 
-/** Changing one table: any of its fields (`areaId: null` takes it out of its area). */
-export const UpdateTableInput = WorkspaceScoped.extend({
+/** Changing one resource: any of its fields (`areaId: null` takes it out of its area). */
+export const UpdateResourceInput = WorkspaceScoped.extend({
   placeId: Uuid,
-  tableId: Uuid,
-  label: TableLabel.optional(),
+  resourceId: Uuid,
+  kind: ResourceKindName.optional(),
+  label: ResourceLabel.optional(),
   areaId: Uuid.nullable().optional(),
-  minGuests: Guests.optional(),
-  maxGuests: Guests.optional(),
+  minCapacity: Capacity.optional(),
+  maxCapacity: Capacity.optional(),
   online: z.boolean().optional(),
   joins: z
     .array(Uuid)
-    .max(L.joinsPerTable, `A table joins up to ${String(L.joinsPerTable)} others.`)
+    .max(L.joinsPerResource, `One joins up to ${String(L.joinsPerResource)} others.`)
     .optional(),
   mutationId: Uuid,
 });
-/** Changing one table. */
-export type UpdateTableInput = z.infer<typeof UpdateTableInput>;
+/** Changing one resource. */
+export type UpdateResourceInput = z.infer<typeof UpdateResourceInput>;
 
-/** Moving a table to a place among its place's live tables (drag to reorder). */
-export const MoveTableInput = WorkspaceScoped.extend({
+/** Moving a resource to a place among its place's live resources (drag to reorder). */
+export const MoveResourceInput = WorkspaceScoped.extend({
   placeId: Uuid,
-  tableId: Uuid,
+  resourceId: Uuid,
   toIndex: z.number().int().min(0),
   mutationId: Uuid,
 });
-/** Moving a table. */
-export type MoveTableInput = z.infer<typeof MoveTableInput>;
+/** Moving a resource. */
+export type MoveResourceInput = z.infer<typeof MoveResourceInput>;
 
-/** Archiving a table (it leaves online fitting, keeps its holds), bringing one back, or deleting it. */
-export const TableInput = WorkspaceScoped.extend({ placeId: Uuid, tableId: Uuid, mutationId: Uuid });
-/** One table. */
-export type TableInput = z.infer<typeof TableInput>;
+/** Archiving a resource (it leaves online fitting, keeps its holds), bringing one back, or deleting it. */
+export const ResourceInput = WorkspaceScoped.extend({ placeId: Uuid, resourceId: Uuid, mutationId: Uuid });
+/** One resource. */
+export type ResourceInput = z.infer<typeof ResourceInput>;
 
 /**
  * The Hospitality setup (H0). `apps` is any member's (empty without early access); `install` and `remove` are
@@ -404,16 +414,16 @@ export const hospitalityContract = {
   saveBusiness: oc.input(SaveBusinessInput).output(BusinessProfile),
   createPlace: oc.input(CreatePlaceInput).output(Place),
   updatePlace: oc.input(UpdatePlaceInput).output(Place),
-  floor: oc.input(PlaceInput).output(PlaceFloor),
+  resources: oc.input(PlaceInput).output(PlaceFloor),
   saveArea: oc.input(SaveAreaInput).output(PlaceFloor),
   deleteArea: oc.input(DeleteAreaInput).output(PlaceFloor),
-  addTables: oc.input(AddTablesInput).output(PlaceFloor),
-  updateTable: oc.input(UpdateTableInput).output(PlaceFloor),
-  moveTable: oc.input(MoveTableInput).output(PlaceFloor),
-  archiveTable: oc.input(TableInput).output(PlaceFloor),
-  restoreTable: oc.input(TableInput).output(PlaceFloor),
-  /** Refused `IN_USE` while the table holds future reservations (none until Table seating, H3). */
-  deleteTable: oc.input(TableInput).output(PlaceFloor),
+  addResources: oc.input(AddResourcesInput).output(PlaceFloor),
+  updateResource: oc.input(UpdateResourceInput).output(PlaceFloor),
+  moveResource: oc.input(MoveResourceInput).output(PlaceFloor),
+  archiveResource: oc.input(ResourceInput).output(PlaceFloor),
+  restoreResource: oc.input(ResourceInput).output(PlaceFloor),
+  /** Refused `IN_USE` while the resource holds future reservations (none until Table seating, H3). */
+  deleteResource: oc.input(ResourceInput).output(PlaceFloor),
 };
 
 /** The operator console's one write (AC-6502): a workspace's early access flag on or off. */

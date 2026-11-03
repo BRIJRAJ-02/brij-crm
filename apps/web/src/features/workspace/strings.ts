@@ -50,7 +50,7 @@ export const strings = {
   lists: 'Lists',
   scheduling: 'Scheduling',
   // The Hospitality section and its pages (spec 0065, AC-6510).
-  hospitality: 'Hospitality',
+  hospitality: 'Business',
   menus: 'Menus',
   qrCodes: 'QR codes',
   reservations: 'Reservations',

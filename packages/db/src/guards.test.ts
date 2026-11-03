@@ -1311,12 +1311,12 @@ describe('isolation', () => {
               ${`menkey${String(index)}aaaaaaaaa`}, 0)`,
         );
         await tx.execute(
-          sql`insert into place_tables (workspace_id, place_id, label, min_guests, max_guests, position)
-            values (${w.workspaceId}, ${place}, 'T1', 2, 4, 0)`,
+          sql`insert into resources (workspace_id, place_id, kind, label, min_capacity, max_capacity, position)
+            values (${w.workspaceId}, ${place}, 'table', 'T1', 2, 4, 0)`,
         );
       });
     }
-    for (const table of ['workspace_apps', 'places', 'place_tables']) {
+    for (const table of ['workspace_apps', 'places', 'resources']) {
       const seen = await db.withWorkspace(a.workspaceId, (tx) =>
         tx.execute<{ workspace_id: string }>(sql`select workspace_id from ${sql.identifier(table)}`),
       );
@@ -1324,7 +1324,7 @@ describe('isolation', () => {
     }
     // A table's seats stay between 1 and 30, the fewest never above the most.
     await expect(
-      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update place_tables set min_guests = 6, max_guests = 4`)),
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update resources set min_capacity = 6, max_capacity = 4`)),
     ).rejects.toMatchObject({ cause: { code: '23514' } });
   });
 
@@ -1336,14 +1336,14 @@ describe('isolation', () => {
           sql`select before, after from crm_set_early_access(${a.workspaceId}::uuid, ${flag}, ${on})`,
         ),
       );
-    expect((await call('hospitality', true)).rows).toEqual([{ before: [], after: ['hospitality'] }]);
-    expect((await call('hospitality', true)).rows).toEqual([{ before: ['hospitality'], after: ['hospitality'] }]);
+    expect((await call('business_apps', true)).rows).toEqual([{ before: [], after: ['business_apps'] }]);
+    expect((await call('business_apps', true)).rows).toEqual([{ before: ['business_apps'], after: ['business_apps'] }]);
     expect((await call('billing', true)).rows).toEqual([]);
-    expect((await call('hospitality', false)).rows).toEqual([{ before: ['hospitality'], after: [] }]);
+    expect((await call('business_apps', false)).rows).toEqual([{ before: ['business_apps'], after: [] }]);
     // The app may not write the column itself.
     await expect(
       db.withWorkspace(a.workspaceId, (tx) =>
-        tx.execute(sql`update workspaces set early_access = '{hospitality}' where id = ${a.workspaceId}`),
+        tx.execute(sql`update workspaces set early_access = '{business_apps}' where id = ${a.workspaceId}`),
       ),
     ).rejects.toMatchObject({ cause: { code: '42501' } });
   });

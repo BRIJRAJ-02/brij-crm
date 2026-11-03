@@ -67,7 +67,7 @@ describe('the operator gate (AC-1617 to AC-1620)', () => {
       () => client.operator.pages({ period: '30d' }),
       () => client.operator.page({ workspaceId: id, pageId: id, period: '30d' }),
       () => client.operator.site({ period: '30d' }),
-      () => client.operator.setEarlyAccess({ workspaceId: id, flag: 'hospitality', on: true }),
+      () => client.operator.setEarlyAccess({ workspaceId: id, flag: 'business_apps', on: true }),
     ]) {
       expect((await failure(call)).code).toBe('NOT_FOUND');
     }
@@ -175,8 +175,8 @@ describe('the one write: early access (spec 0065, AC-6502)', () => {
     expect((await m.client.hospitality.apps({ workspace: m.slug })).available).toBe(false);
     const client = rpcClient(app, await asOperator());
     expect(
-      await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'hospitality', on: true }),
-    ).toEqual({ workspaceId: m.workspace.id, before: [], after: ['hospitality'] });
+      await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'business_apps', on: true }),
+    ).toEqual({ workspaceId: m.workspace.id, before: [], after: ['business_apps'] });
     expect((await m.client.hospitality.apps({ workspace: m.slug })).available).toBe(true);
     const logged = await testQuery<{ action: string; target: string; before: unknown; after: unknown }>(
       identityUrl,
@@ -189,13 +189,13 @@ describe('the one write: early access (spec 0065, AC-6502)', () => {
         action: 'operator.earlyAccessChanged',
         target: m.workspace.id,
         before: { earlyAccess: [] },
-        after: { earlyAccess: ['hospitality'] },
+        after: { earlyAccess: ['business_apps'] },
       },
     ]);
     expect(
       (
         await failure(() =>
-          client.operator.setEarlyAccess({ workspaceId: randomUUID(), flag: 'hospitality', on: true }),
+          client.operator.setEarlyAccess({ workspaceId: randomUUID(), flag: 'business_apps', on: true }),
         )
       ).code,
     ).toBe('NOT_FOUND');

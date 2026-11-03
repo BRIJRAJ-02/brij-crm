@@ -32,7 +32,7 @@ export { commentReactions, comments, commentVersions } from './comments.ts';
 export { notificationKind, notifications, notificationSettings } from './notifications.ts';
 export { memberPreferences } from './preferences.ts';
 export { workspaceBrands } from './brand.ts';
-export { areas, businessProfiles, places, placeTables, workspaceApps } from './hospitality.ts';
+export { areas, businessProfiles, places, resources, workspaceApps } from './hospitality.ts';
 export {
   attendeeMatch,
   attendeeResponse,

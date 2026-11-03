@@ -3,9 +3,15 @@
 // areas as plain lists, the base for Menu QR's codes and Table seating's online fitting.
 // Main task: add many tables at once ("T1 to T10, seats 2 to 4"), drag them into order, and say which go online.
 // Leaves out: a floor plan canvas (later), reservations and holds (Table seating, H3), and codes (Menu QR, H2).
-import type { Area, DiningTable, HospitalityStore, Place, PlaceFloor } from '@crm/data';
+import type { Area, HospitalityStore, Place, PlaceFloor, Resource, ResourceKind } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
-import { HOSPITALITY_LIMITS, tableLabels } from '@crm/data/hospitality';
+import {
+  DEFAULT_RESOURCE_KIND,
+  HOSPITALITY_LIMITS,
+  mainResourceKind,
+  RESOURCE_KINDS,
+  resourceLabels,
+} from '@crm/data/hospitality';
 import {
   BulkActionBar,
   Button,
@@ -47,24 +53,25 @@ export interface FloorScreenProps {
 const TABLE_COLUMNS: readonly TableColumn[] = [
   { id: 'label', label: strings.label, isRowHeader: true },
   { id: 'area', label: strings.area },
-  { id: 'seats', label: strings.seats, align: 'end', size: 'fit' },
+  { id: 'seats', label: strings.capacity, align: 'end', size: 'fit' },
   { id: 'joins', label: strings.joins, size: 'fill' },
   { id: 'online', label: strings.online, size: 'fit' },
   { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit', showsOnHover: true },
 ];
 
-const AREA_COLUMNS: readonly TableColumn[] = [
+/** The areas' columns, the count named for the kind the place mostly uses. */
+const areaColumns = (kind: ResourceKind): readonly TableColumn[] => [
   { id: 'name', label: strings.areaName, isRowHeader: true, size: 'fill' },
-  { id: 'tables', label: strings.tables, align: 'end', size: 'fit' },
+  { id: 'tables', label: strings.resourcesTitle(kind), align: 'end', size: 'fit' },
   { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit', showsOnHover: true },
 ];
 
 /** What a dialog is open for. */
 type Editing =
   | { readonly kind: 'add' }
-  | { readonly kind: 'table'; readonly table: DiningTable }
+  | { readonly kind: 'table'; readonly table: Resource }
   | { readonly kind: 'area'; readonly area?: Area }
-  | { readonly kind: 'delete'; readonly table: DiningTable }
+  | { readonly kind: 'delete'; readonly table: Resource }
   | { readonly kind: 'delete-area'; readonly area: Area };
 
 /** One place's areas and tables. */
@@ -79,17 +86,22 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
   const limitId = useId();
   const floor = state.status === 'ready' ? state.value : undefined;
   // One list per answer, so the tables never see new rows when nothing changed.
-  const live = useMemo(() => floor?.tables.filter((table) => !table.archived) ?? [], [floor]);
-  const archived = useMemo(() => floor?.tables.filter((table) => table.archived) ?? [], [floor]);
-  const labels = useMemo(() => new Map(floor?.tables.map((table) => [table.id, table.label]) ?? []), [floor]);
+  const live = useMemo(() => floor?.resources.filter((table) => !table.archived) ?? [], [floor]);
+  const archived = useMemo(() => floor?.resources.filter((table) => table.archived) ?? [], [floor]);
+  const labels = useMemo(() => new Map(floor?.resources.map((table) => [table.id, table.label]) ?? []), [floor]);
   const areaNames = useMemo(() => new Map(floor?.areas.map((area) => [area.id, area.name]) ?? []), [floor]);
-  const isFull = live.length >= HOSPITALITY_LIMITS.tablesPerPlace;
+  const isFull = live.length >= HOSPITALITY_LIMITS.resourcesPerPlace;
+  // The words follow what the place mostly books (tables, rooms, chairs), else what its kind of business does.
+  const businessKind = business.status === 'ready' ? business.value.profile?.kind : undefined;
+  const startKind: ResourceKind = businessKind === undefined ? 'table' : DEFAULT_RESOURCE_KIND[businessKind];
+  const kind = (floor === undefined ? undefined : mainResourceKind(floor.resources)) ?? startKind;
+  const areaCols = useMemo(() => areaColumns(kind), [kind]);
   const ticked = live.filter((table) => selected.has(table.id));
   const said = (refused: { readonly message: string } | undefined) => {
     if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
   };
-  const archive = (table: DiningTable) => {
-    void store.archiveTable(slug, place.id, table.id).then((refused) => {
+  const archive = (table: Resource) => {
+    void store.archiveResource(slug, place.id, table.id).then((refused) => {
       if (refused !== undefined) {
         said(refused);
         return;
@@ -97,25 +109,28 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
       toasts.toast({
         tone: 'success',
         message: strings.archivedToast(table.label),
-        action: { label: strings.undo, onAction: () => void store.restoreTable(slug, place.id, table.id).then(said) },
+        action: {
+          label: strings.undo,
+          onAction: () => void store.restoreResource(slug, place.id, table.id).then(said),
+        },
       });
     });
   };
   /** One change for every ticked table, one after another (the store keeps them in order). */
-  const forTicked = (run: (table: DiningTable) => Promise<{ readonly message: string } | undefined>) => {
+  const forTicked = (run: (table: Resource) => Promise<{ readonly message: string } | undefined>) => {
     const tables = ticked;
     setSelected(new Set());
     void Promise.all(tables.map(run)).then((answers) => said(answers.find((each) => each !== undefined)));
   };
 
-  const tableCell = (table: DiningTable, column: string) => {
+  const tableCell = (table: Resource, column: string) => {
     switch (column) {
       case 'label':
         return table.label;
       case 'area':
         return table.areaId === undefined ? '' : (areaNames.get(table.areaId) ?? '');
       case 'seats':
-        return strings.seatsRange(table.minGuests, table.maxGuests);
+        return strings.seatsRange(table.minCapacity, table.maxCapacity);
       case 'joins':
         return table.joins.map((id) => labels.get(id) ?? '').join(', ');
       case 'online':
@@ -125,7 +140,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
             isLabelHidden
             isSelected={table.online}
             onChange={(online) => {
-              void store.updateTable(slug, place.id, table.id, { online }).then(said);
+              void store.updateResource(slug, place.id, table.id, { online }).then(said);
             }}
           />
         );
@@ -178,16 +193,16 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
       ) : (
         <>
           <SettingsSection
-            title={strings.tables}
+            title={strings.resourcesTitle(kind)}
             actions={
               <>
                 {/* At the limit the button says why beside it, a lock with the reason, read with the button. */}
                 {isFull && (
                   <>
                     <VisuallyHidden id={limitId}>
-                      {strings.tablesLimit(HOSPITALITY_LIMITS.tablesPerPlace)}
+                      {strings.limitOf(kind, HOSPITALITY_LIMITS.resourcesPerPlace)}
                     </VisuallyHidden>
-                    <LockReason reason={strings.tablesLimit(HOSPITALITY_LIMITS.tablesPerPlace)} />
+                    <LockReason reason={strings.limitOf(kind, HOSPITALITY_LIMITS.resourcesPerPlace)} />
                   </>
                 )}
                 <Button
@@ -197,7 +212,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
                   {...(isFull ? { 'aria-describedby': limitId } : {})}
                   onPress={() => setEditing({ kind: 'add' })}
                 >
-                  {strings.addTables}
+                  {strings.addResourcesOf(kind)}
                 </Button>
               </>
             }
@@ -206,7 +221,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
               <BulkActionBar count={ticked.length} total={live.length} onClear={() => setSelected(new Set())}>
                 <Select
                   savesOnPick
-                  label={strings.bulkArea(ticked.length)}
+                  label={strings.bulkAreaOf(kind, ticked.length)}
                   isLabelHidden
                   placeholder={strings.area}
                   items={areaItems(floor)}
@@ -214,30 +229,32 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
                   onChange={(chosen) => {
                     if (chosen === null) return;
                     forTicked((table) =>
-                      store.updateTable(slug, place.id, table.id, { areaId: chosen === '' ? null : chosen }),
+                      store.updateResource(slug, place.id, table.id, { areaId: chosen === '' ? null : chosen }),
                     );
                   }}
                 />
                 <Button
-                  onPress={() => forTicked((table) => store.updateTable(slug, place.id, table.id, { online: true }))}
+                  onPress={() => forTicked((table) => store.updateResource(slug, place.id, table.id, { online: true }))}
                 >
                   {strings.goOnline}
                 </Button>
                 <Button
-                  onPress={() => forTicked((table) => store.updateTable(slug, place.id, table.id, { online: false }))}
+                  onPress={() =>
+                    forTicked((table) => store.updateResource(slug, place.id, table.id, { online: false }))
+                  }
                 >
                   {strings.goOffline}
                 </Button>
                 <Button
                   icon="archive"
-                  onPress={() => forTicked((table) => store.archiveTable(slug, place.id, table.id))}
+                  onPress={() => forTicked((table) => store.archiveResource(slug, place.id, table.id))}
                 >
                   {strings.archiveSelected}
                 </Button>
               </BulkActionBar>
             )}
             <Table
-              label={strings.openTables(place.name)}
+              label={strings.resourcesAt(kind, place.name)}
               columns={TABLE_COLUMNS}
               rows={live}
               getRowId={(table) => table.id}
@@ -256,15 +273,15 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
                 const rest = live.filter((table) => table.id !== id);
                 const at = rest.findIndex((table) => table.id === targetId);
                 if (at < 0) return;
-                void store.moveTable(slug, place.id, id, at + (position === 'after' ? 1 : 0)).then(said);
+                void store.moveResource(slug, place.id, id, at + (position === 'after' ? 1 : 0)).then(said);
               }}
               emptyState={
                 <EmptyState
-                  title={strings.noTables}
+                  title={strings.noResourcesOf(kind)}
                   icon="table"
                   actions={
                     <Button variant="primary" icon="plus" onPress={() => setEditing({ kind: 'add' })}>
-                      {strings.addTables}
+                      {strings.addResourcesOf(kind)}
                     </Button>
                   }
                 >
@@ -292,7 +309,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
                         size="sm"
                         icon="archive-restore"
                         onPress={() => {
-                          void store.restoreTable(slug, place.id, table.id).then(said);
+                          void store.restoreResource(slug, place.id, table.id).then(said);
                         }}
                       >
                         {strings.restore}
@@ -318,13 +335,15 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
           >
             <Table
               label={strings.areas}
-              columns={AREA_COLUMNS}
+              columns={areaCols}
               rows={floor?.areas ?? []}
               getRowId={(area) => area.id}
               isLoading={floor === undefined}
               renderCell={(area, column) => {
                 if (column === 'name') return area.name;
-                if (column === 'tables') return strings.tableCount(live.filter((t) => t.areaId === area.id).length);
+                if (column === 'tables') {
+                  return strings.resourceCount(kind, live.filter((each) => each.areaId === area.id).length);
+                }
                 return (
                   <MenuTrigger>
                     <Button variant="ghost" icon="ellipsis" label={strings.tableActions(area.name)} />
@@ -353,6 +372,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
       {floor !== undefined && (
         <>
           <AddTablesDialog
+            startKind={kind}
             key={editing?.kind === 'add' ? 'open' : 'closed'}
             isOpen={editing?.kind === 'add'}
             onOpenChange={(open) => {
@@ -360,7 +380,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
             }}
             floor={floor}
             onAdd={async (input) => {
-              const refused = await store.addTables(slug, place.id, input);
+              const refused = await store.addResources(slug, place.id, input);
               if (refused !== undefined) throw refused;
             }}
           />
@@ -369,7 +389,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
             floor={floor}
             onClose={() => setEditing(undefined)}
             onSave={async (table, change) => {
-              const refused = await store.updateTable(slug, place.id, table.id, change);
+              const refused = await store.updateResource(slug, place.id, table.id, change);
               if (refused !== undefined) throw refused;
             }}
           />
@@ -403,7 +423,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
             <Button
               variant="danger-solid"
               onPress={() => {
-                if (editing?.kind === 'delete') void store.deleteTable(slug, place.id, editing.table.id).then(said);
+                if (editing?.kind === 'delete') void store.deleteResource(slug, place.id, editing.table.id).then(said);
                 if (editing?.kind === 'delete-area') void store.deleteArea(slug, place.id, editing.area.id).then(said);
                 setEditing(undefined);
               }}
@@ -419,6 +439,18 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
   );
 }
 
+/** The letter a run of each kind starts with: T1, R1, C1. */
+const PREFIX: Readonly<Record<ResourceKind, string>> = {
+  table: 'T',
+  room: 'R',
+  chair: 'C',
+  bed: 'B',
+  court: 'Court ',
+  station: 'S',
+  equipment: 'E',
+  other: 'P',
+};
+
 /** A whole number from a field, or undefined. */
 const whole = (value: string): number | undefined =>
   /^\d{1,3}$/.test(value.trim()) ? Number(value.trim()) : undefined;
@@ -429,8 +461,12 @@ const areaItems = (floor: PlaceFloor) => [
   ...floor.areas.map((area) => ({ id: area.id, label: area.name })),
 ];
 
-/** Add tables: a label and a run of numbers, the seats, an area; the line under says what it will add. */
+/**
+ * Add resources: their kind (first what the place mostly uses), a label and a run of numbers, how many people each
+ * takes, an area; the To field's hint says what it will add.
+ */
 function AddTablesDialog({
+  startKind,
   isOpen,
   onOpenChange,
   floor,
@@ -439,17 +475,20 @@ function AddTablesDialog({
   readonly isOpen: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly floor: PlaceFloor;
+  readonly startKind: ResourceKind;
   readonly onAdd: (input: {
+    readonly kind: ResourceKind;
     readonly labels: readonly string[];
     readonly areaId?: string;
-    readonly minGuests: number;
-    readonly maxGuests: number;
+    readonly minCapacity: number;
+    readonly maxCapacity: number;
   }) => Promise<void>;
 }) {
   const formId = useId();
   // After the highest number any label ends with, archived ones too, so a run never meets a label already held.
-  const next = Math.max(0, ...floor.tables.map((table) => Number(/(\d+)$/.exec(table.label)?.[1] ?? '0'))) + 1;
-  const [prefix, setPrefix] = useState('T');
+  const next = Math.max(0, ...floor.resources.map((table) => Number(/(\d+)$/.exec(table.label)?.[1] ?? '0'))) + 1;
+  const [resourceKind, setResourceKind] = useState<ResourceKind>(startKind);
+  const [prefix, setPrefix] = useState(PREFIX[startKind]);
   const [from, setFrom] = useState(String(next));
   const [to, setTo] = useState(String(next + 9));
   const [fewest, setFewest] = useState('2');
@@ -459,7 +498,7 @@ function AddTablesDialog({
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const start = whole(from);
   const end = whole(to);
-  const labels = start === undefined || end === undefined ? undefined : tableLabels(prefix.trim(), start, end);
+  const labels = start === undefined || end === undefined ? undefined : resourceLabels(prefix.trim(), start, end);
   const add = () => {
     const min = whole(fewest);
     const max = whole(most);
@@ -467,26 +506,32 @@ function AddTablesDialog({
       setRefusals([{ code: 'INPUT_INVALID', message: strings.rangeInvalid, attributeId: 'to' }]);
       return;
     }
-    if (min === undefined || max === undefined || min < 1 || max > 30 || min > max) {
+    if (min === undefined || max === undefined || min < 1 || max > HOSPITALITY_LIMITS.capacityMax || min > max) {
       setRefusals([{ code: 'INPUT_INVALID', message: strings.seatsInvalid, attributeId: 'most' }]);
       return;
     }
     setBusy(true);
     setRefusals([]);
-    onAdd({ labels, minGuests: min, maxGuests: max, ...(areaId === '' ? {} : { areaId }) }).then(
+    onAdd({
+      kind: resourceKind,
+      labels,
+      minCapacity: min,
+      maxCapacity: max,
+      ...(areaId === '' ? {} : { areaId }),
+    }).then(
       () => {
         setBusy(false);
         onOpenChange(false);
       },
       (error: unknown) => {
         setBusy(false);
-        setRefusals(formRefusals(error, ['labels', 'areaId', 'minGuests']));
+        setRefusals(formRefusals(error, ['labels', 'areaId', 'minCapacity']));
       },
     );
   };
   return (
     <Modal
-      title={strings.addTables}
+      title={strings.addResourcesOf(resourceKind)}
       variant="window"
       isOpen={isOpen}
       onOpenChange={(open) => {
@@ -499,7 +544,9 @@ function AddTablesDialog({
             {strings.cancel}
           </Button>
           <Button variant="primary" type="submit" form={formId} isPending={isBusy} isDisabled={labels === undefined}>
-            {labels === undefined ? strings.addTables : strings.addCount(labels.length)}
+            {labels === undefined
+              ? strings.addResourcesOf(resourceKind)
+              : strings.addCountOf(resourceKind, labels.length)}
           </Button>
         </>
       }
@@ -510,9 +557,21 @@ function AddTablesDialog({
         refusals={refusals}
         fieldFor={(refusal) => refusal.attributeId}
         onSubmit={add}
-        label={strings.addTables}
+        label={strings.addResourcesOf(resourceKind)}
         focusesFirstField
       >
+        <Select
+          label={strings.resourceKind}
+          items={RESOURCE_KINDS.map((id) => ({ id, label: strings.resourceKinds[id] }))}
+          value={resourceKind}
+          onChange={(id) => {
+            const picked = RESOURCE_KINDS.find((each) => each === id);
+            if (picked === undefined) return;
+            // A label still at the old kind's letter follows the new kind's.
+            if (prefix === PREFIX[resourceKind]) setPrefix(PREFIX[picked]);
+            setResourceKind(picked);
+          }}
+        />
         <FormRow>
           <Field label={strings.prefix} name="prefix" maxLength={8} value={prefix} onChange={setPrefix} />
           <Field label={strings.from} name="from" inputMode="numeric" maxLength={3} value={from} onChange={setFrom} />
@@ -531,11 +590,11 @@ function AddTablesDialog({
             label={strings.fewest}
             name="fewest"
             inputMode="numeric"
-            maxLength={2}
+            maxLength={3}
             value={fewest}
             onChange={setFewest}
           />
-          <Field label={strings.most} name="most" inputMode="numeric" maxLength={2} value={most} onChange={setMost} />
+          <Field label={strings.most} name="most" inputMode="numeric" maxLength={3} value={most} onChange={setMost} />
           <Select label={strings.area} items={areaItems(floor)} value={areaId} onChange={(id) => setAreaId(id ?? '')} />
         </FormRow>
       </Form>
@@ -550,12 +609,12 @@ function TableDialog({
   onClose,
   onSave,
 }: {
-  readonly table: DiningTable | undefined;
+  readonly table: Resource | undefined;
   readonly floor: PlaceFloor;
   readonly onClose: () => void;
   readonly onSave: (
-    table: DiningTable,
-    change: { label: string; areaId: string | null; minGuests: number; maxGuests: number; joins: string[] },
+    table: Resource,
+    change: { label: string; areaId: string | null; minCapacity: number; maxCapacity: number; joins: string[] },
   ) => Promise<void>;
 }) {
   const formId = useId();
@@ -606,28 +665,28 @@ function TableForm({
   readonly formId: string;
   readonly isBusy: boolean;
   readonly onBusyChange: (isBusy: boolean) => void;
-  readonly table: DiningTable;
+  readonly table: Resource;
   readonly floor: PlaceFloor;
   readonly onClose: () => void;
   readonly onSave: (
-    table: DiningTable,
-    change: { label: string; areaId: string | null; minGuests: number; maxGuests: number; joins: string[] },
+    table: Resource,
+    change: { label: string; areaId: string | null; minCapacity: number; maxCapacity: number; joins: string[] },
   ) => Promise<void>;
 }) {
   const [label, setLabel] = useState(table.label);
-  const [fewest, setFewest] = useState(String(table.minGuests));
-  const [most, setMost] = useState(String(table.maxGuests));
+  const [fewest, setFewest] = useState(String(table.minCapacity));
+  const [most, setMost] = useState(String(table.maxCapacity));
   const [areaId, setAreaId] = useState(table.areaId ?? '');
   const [joins, setJoins] = useState<readonly string[]>(table.joins);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
-  const others = floor.tables
+  const others = floor.resources
     .filter((each) => !each.archived && each.id !== table.id)
     .map((each) => ({ id: each.id, label: each.label }));
   const save = () => {
     const min = whole(fewest);
     const max = whole(most);
-    if (min === undefined || max === undefined || min < 1 || max > 30 || min > max) {
-      setRefusals([{ code: 'INPUT_INVALID', message: strings.seatsInvalid, attributeId: 'maxGuests' }]);
+    if (min === undefined || max === undefined || min < 1 || max > HOSPITALITY_LIMITS.capacityMax || min > max) {
+      setRefusals([{ code: 'INPUT_INVALID', message: strings.seatsInvalid, attributeId: 'maxCapacity' }]);
       return;
     }
     setBusy(true);
@@ -635,8 +694,8 @@ function TableForm({
     onSave(table, {
       label: label.trim(),
       areaId: areaId === '' ? null : areaId,
-      minGuests: min,
-      maxGuests: max,
+      minCapacity: min,
+      maxCapacity: max,
       joins: [...joins],
     }).then(
       () => {
@@ -645,7 +704,7 @@ function TableForm({
       },
       (error: unknown) => {
         setBusy(false);
-        setRefusals(formRefusals(error, ['label', 'minGuests', 'maxGuests', 'joins', 'areaId']));
+        setRefusals(formRefusals(error, ['label', 'minCapacity', 'maxCapacity', 'joins', 'areaId']));
       },
     );
   };
@@ -663,17 +722,17 @@ function TableForm({
       <FormRow>
         <Field
           label={strings.fewest}
-          name="minGuests"
+          name="minCapacity"
           inputMode="numeric"
-          maxLength={2}
+          maxLength={3}
           value={fewest}
           onChange={setFewest}
         />
         <Field
           label={strings.most}
-          name="maxGuests"
+          name="maxCapacity"
           inputMode="numeric"
-          maxLength={2}
+          maxLength={3}
           value={most}
           onChange={setMost}
         />

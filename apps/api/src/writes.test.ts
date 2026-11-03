@@ -116,7 +116,7 @@ const READS: ReadonlySet<string> = new Set([
   // The Hospitality setup's reads (spec 0065, H0).
   'hospitality.apps',
   'hospitality.business',
-  'hospitality.floor',
+  'hospitality.resources',
   // The roles every role picker offers (spec 0037, AC-1439), and the Roles page's reads (job J9).
   'roles.list',
   'roles.overview',
@@ -3056,12 +3056,12 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'hospitality.updatePlace': 2,
   'hospitality.saveArea': 2,
   'hospitality.deleteArea': 3,
-  'hospitality.addTables': 2,
-  'hospitality.updateTable': 3,
-  'hospitality.moveTable': 3,
-  'hospitality.archiveTable': 3,
-  'hospitality.restoreTable': 4,
-  'hospitality.deleteTable': 3,
+  'hospitality.addResources': 2,
+  'hospitality.updateResource': 3,
+  'hospitality.moveResource': 3,
+  'hospitality.archiveResource': 3,
+  'hospitality.restoreResource': 4,
+  'hospitality.deleteResource': 3,
   // Webhooks (spec 0064): the endpoint made first (and a test event before a resend).
   'webhooks.update': 2,
   'webhooks.rotateSecret': 2,
@@ -3337,7 +3337,7 @@ Object.assign(WRITES, {
 
 /** Opens early access and installs Table seating with its business card (one write), answering the first place. */
 async function hospitalityOf(m: Member): Promise<{ readonly placeId: string }> {
-  await testQuery(ownerUrl, `update workspaces set early_access = '{hospitality}' where id = $1`, [m.workspace.id]);
+  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
   await m.client.hospitality.install({
     workspace: m.slug,
     app: 'table_seating',
@@ -3357,15 +3357,16 @@ async function hospitalityOf(m: Member): Promise<{ readonly placeId: string }> {
 
 /** Two tables at a place (one write), answering their ids. */
 async function tablesAt(m: Member, placeId: string): Promise<readonly [string, string]> {
-  const floor = await m.client.hospitality.addTables({
+  const floor = await m.client.hospitality.addResources({
     workspace: m.slug,
     placeId,
+    kind: 'table',
     labels: ['T1', 'T2'],
-    minGuests: 2,
-    maxGuests: 4,
+    minCapacity: 2,
+    maxCapacity: 4,
     mutationId: newId(),
   });
-  const [one, two] = floor.tables;
+  const [one, two] = floor.resources;
   if (one === undefined || two === undefined) throw new Error('No tables.');
   return [one.id, two.id];
 }
@@ -3374,7 +3375,7 @@ async function tablesAt(m: Member, placeId: string): Promise<readonly [string, s
 // member (their sidebars follow); the setup writes change no record and store none. Each case installs first.
 Object.assign(WRITES, {
   'hospitality.install': async (m: Member, mutationId: string) => {
-    await testQuery(ownerUrl, `update workspaces set early_access = '{hospitality}' where id = $1`, [m.workspace.id]);
+    await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
     await m.client.hospitality.install({
       workspace: m.slug,
       app: 'menu',
@@ -3429,47 +3430,54 @@ Object.assign(WRITES, {
     await m.client.hospitality.deleteArea({ workspace: m.slug, placeId, areaId, mutationId });
     return [{ kind: 'nav' }];
   },
-  'hospitality.addTables': async (m: Member, mutationId: string) => {
+  'hospitality.addResources': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
-    await m.client.hospitality.addTables({
+    await m.client.hospitality.addResources({
       workspace: m.slug,
       placeId,
+      kind: 'table',
       labels: ['T1'],
-      minGuests: 1,
-      maxGuests: 2,
+      minCapacity: 1,
+      maxCapacity: 2,
       mutationId,
     });
     return [{ kind: 'nav' }];
   },
-  'hospitality.updateTable': async (m: Member, mutationId: string) => {
+  'hospitality.updateResource': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [one, two] = await tablesAt(m, placeId);
-    await m.client.hospitality.updateTable({ workspace: m.slug, placeId, tableId: one, joins: [two], mutationId });
+    await m.client.hospitality.updateResource({
+      workspace: m.slug,
+      placeId,
+      resourceId: one,
+      joins: [two],
+      mutationId,
+    });
     return [{ kind: 'nav' }];
   },
-  'hospitality.moveTable': async (m: Member, mutationId: string) => {
+  'hospitality.moveResource': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [, two] = await tablesAt(m, placeId);
-    await m.client.hospitality.moveTable({ workspace: m.slug, placeId, tableId: two, toIndex: 0, mutationId });
+    await m.client.hospitality.moveResource({ workspace: m.slug, placeId, resourceId: two, toIndex: 0, mutationId });
     return [{ kind: 'nav' }];
   },
-  'hospitality.archiveTable': async (m: Member, mutationId: string) => {
+  'hospitality.archiveResource': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [one] = await tablesAt(m, placeId);
-    await m.client.hospitality.archiveTable({ workspace: m.slug, placeId, tableId: one, mutationId });
+    await m.client.hospitality.archiveResource({ workspace: m.slug, placeId, resourceId: one, mutationId });
     return [{ kind: 'nav' }];
   },
-  'hospitality.restoreTable': async (m: Member, mutationId: string) => {
+  'hospitality.restoreResource': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [one] = await tablesAt(m, placeId);
-    await m.client.hospitality.archiveTable({ workspace: m.slug, placeId, tableId: one, mutationId: newId() });
-    await m.client.hospitality.restoreTable({ workspace: m.slug, placeId, tableId: one, mutationId });
+    await m.client.hospitality.archiveResource({ workspace: m.slug, placeId, resourceId: one, mutationId: newId() });
+    await m.client.hospitality.restoreResource({ workspace: m.slug, placeId, resourceId: one, mutationId });
     return [{ kind: 'nav' }];
   },
-  'hospitality.deleteTable': async (m: Member, mutationId: string) => {
+  'hospitality.deleteResource': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [one] = await tablesAt(m, placeId);
-    await m.client.hospitality.deleteTable({ workspace: m.slug, placeId, tableId: one, mutationId });
+    await m.client.hospitality.deleteResource({ workspace: m.slug, placeId, resourceId: one, mutationId });
     return [{ kind: 'nav' }];
   },
 });

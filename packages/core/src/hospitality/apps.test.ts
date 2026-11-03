@@ -15,15 +15,15 @@ import { setEarlyAccess } from '../operator/early-access.ts';
 import { testScope } from '../testing.ts';
 import { installApp, listApps, removeApp } from './apps.ts';
 import {
-  addTables,
-  archiveTable,
+  addResources,
+  archiveResource,
   deleteArea,
-  deleteTable,
-  moveTable,
-  readFloor,
-  restoreTable,
+  deleteResource,
+  moveResource,
+  listResources,
+  restoreResource,
   saveArea,
-  updateTable,
+  updateResource,
 } from './floor.ts';
 import { createPlace, getBusiness, saveBusiness, updatePlace } from './places.ts';
 
@@ -53,7 +53,7 @@ async function workspace(closed = false) {
       sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${created.workspaceId}, ${memberId}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`,
     ),
   );
-  if (!closed) await setEarlyAccess({ db }, { workspaceId: created.workspaceId, flag: 'hospitality', on: true });
+  if (!closed) await setEarlyAccess({ db }, { workspaceId: created.workspaceId, flag: 'business_apps', on: true });
   const owner = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   const member = testScope({
     db,
@@ -88,8 +88,8 @@ describe('apps behind early access (AC-6501, AC-6502)', () => {
     const w = await workspace(true);
     expect(await listApps(w.owner)).toEqual({ available: false, canManage: true, hasBusiness: false, apps: [] });
     expect(await refusalOf(installApp(w.owner, { app: 'menu', business: CARD }))).toBe('NOT_FOUND');
-    const opened = await setEarlyAccess({ db }, { workspaceId: w.workspaceId, flag: 'hospitality', on: true });
-    expect(opened).toEqual({ workspaceId: w.workspaceId, before: [], after: ['hospitality'] });
+    const opened = await setEarlyAccess({ db }, { workspaceId: w.workspaceId, flag: 'business_apps', on: true });
+    expect(opened).toEqual({ workspaceId: w.workspaceId, before: [], after: ['business_apps'] });
     const view = await listApps(w.member);
     expect(view.available).toBe(true);
     expect(view.canManage).toBe(false);
@@ -101,7 +101,7 @@ describe('apps behind early access (AC-6501, AC-6502)', () => {
   });
 
   it('answers NOT_FOUND for a workspace that isn’t there', async () => {
-    expect(await refusalOf(setEarlyAccess({ db }, { workspaceId: newId(), flag: 'hospitality', on: true }))).toBe(
+    expect(await refusalOf(setEarlyAccess({ db }, { workspaceId: newId(), flag: 'business_apps', on: true }))).toBe(
       'NOT_FOUND',
     );
   });
@@ -120,7 +120,12 @@ describe('install and remove (AC-6503 to AC-6506, AC-6511)', () => {
     const business = await getBusiness(w.owner);
     expect(business.profile).toMatchObject({ name: 'Somewhere Nowhere', kind: 'restaurant', currency: 'GBP' });
     expect(business.places).toHaveLength(1);
-    expect(business.places[0]).toMatchObject({ name: 'Somewhere Nowhere', country: 'GB', locale: 'en-GB', tables: 0 });
+    expect(business.places[0]).toMatchObject({
+      name: 'Somewhere Nowhere',
+      country: 'GB',
+      locale: 'en-GB',
+      resourceCount: 0,
+    });
 
     const roles = await db.withWorkspace(w.workspaceId, (tx) =>
       tx.execute<{ name: string; permissions: string[]; level: string }>(
@@ -152,7 +157,7 @@ describe('install and remove (AC-6503 to AC-6506, AC-6511)', () => {
     await installApp(w.owner, { app: 'menu' });
     expect((await getBusiness(w.owner)).places).toHaveLength(1);
     // Closing early access closes the apps too.
-    await setEarlyAccess({ db }, { workspaceId: w.workspaceId, flag: 'hospitality', on: false });
+    await setEarlyAccess({ db }, { workspaceId: w.workspaceId, flag: 'business_apps', on: false });
     expect(await refusalOf(getBusiness(w.owner))).toBe('APP_NOT_INSTALLED');
   });
 });
@@ -252,52 +257,65 @@ describe('a place’s floor (AC-6509)', () => {
     expect(await refusalOf(saveArea(w.owner, { placeId: w.placeId, name: 'terrace' }))).toBe('NAME_TAKEN');
 
     const labels = Array.from({ length: 10 }, (_, index) => `T${String(index + 1)}`);
-    floor = await addTables(w.owner, { placeId: w.placeId, labels, minGuests: 2, maxGuests: 4, areaId: terrace });
-    expect(floor.tables.map((table) => table.label)).toEqual(labels);
-    expect(floor.tables.every((table) => table.areaId === terrace && table.online)).toBe(true);
+    floor = await addResources(w.owner, {
+      placeId: w.placeId,
+      kind: 'table',
+      labels,
+      minCapacity: 2,
+      maxCapacity: 4,
+      areaId: terrace,
+    });
+    expect(floor.resources.map((table) => table.label)).toEqual(labels);
+    expect(floor.resources.every((table) => table.areaId === terrace && table.online)).toBe(true);
     expect(
-      await refusalOf(addTables(w.owner, { placeId: w.placeId, labels: ['t4'], minGuests: 2, maxGuests: 2 })),
+      await refusalOf(
+        addResources(w.owner, { placeId: w.placeId, kind: 'table', labels: ['t4'], minCapacity: 2, maxCapacity: 2 }),
+      ),
     ).toBe('NAME_TAKEN');
 
-    const [t1, t2, t3] = floor.tables;
+    const [t1, t2, t3] = floor.resources;
     if (t1 === undefined || t2 === undefined || t3 === undefined) throw new Error('No tables.');
-    floor = await moveTable(w.owner, { placeId: w.placeId, tableId: t3.id, toIndex: 0 });
-    expect(floor.tables.slice(0, 3).map((table) => table.label)).toEqual(['T3', 'T1', 'T2']);
+    floor = await moveResource(w.owner, { placeId: w.placeId, resourceId: t3.id, toIndex: 0 });
+    expect(floor.resources.slice(0, 3).map((table) => table.label)).toEqual(['T3', 'T1', 'T2']);
 
-    floor = await updateTable(w.owner, { placeId: w.placeId, tableId: t1.id, joins: [t2.id, t3.id] });
-    expect(floor.tables.find((table) => table.id === t2.id)?.joins).toEqual([t1.id]);
-    floor = await updateTable(w.owner, { placeId: w.placeId, tableId: t1.id, joins: [t3.id] });
-    expect(floor.tables.find((table) => table.id === t2.id)?.joins).toEqual([]);
+    floor = await updateResource(w.owner, { placeId: w.placeId, resourceId: t1.id, joins: [t2.id, t3.id] });
+    expect(floor.resources.find((table) => table.id === t2.id)?.joins).toEqual([t1.id]);
+    floor = await updateResource(w.owner, { placeId: w.placeId, resourceId: t1.id, joins: [t3.id] });
+    expect(floor.resources.find((table) => table.id === t2.id)?.joins).toEqual([]);
     expect(
-      await refusalOf(updateTable(w.owner, { placeId: w.placeId, tableId: t1.id, minGuests: 6, maxGuests: 4 })),
+      await refusalOf(
+        updateResource(w.owner, { placeId: w.placeId, resourceId: t1.id, minCapacity: 6, maxCapacity: 4 }),
+      ),
     ).toBe('CONFIG_INVALID');
 
     // Archived, its label is free; brought back while a live table holds it, it is refused.
-    floor = await archiveTable(w.owner, { placeId: w.placeId, tableId: t2.id });
-    expect(floor.tables.at(-1)).toMatchObject({ id: t2.id, archived: true });
-    await addTables(w.owner, { placeId: w.placeId, labels: ['T2'], minGuests: 2, maxGuests: 2 });
-    expect(await refusalOf(restoreTable(w.owner, { placeId: w.placeId, tableId: t2.id }))).toBe('NAME_TAKEN');
+    floor = await archiveResource(w.owner, { placeId: w.placeId, resourceId: t2.id });
+    expect(floor.resources.at(-1)).toMatchObject({ id: t2.id, archived: true });
+    await addResources(w.owner, { placeId: w.placeId, kind: 'table', labels: ['T2'], minCapacity: 2, maxCapacity: 2 });
+    expect(await refusalOf(restoreResource(w.owner, { placeId: w.placeId, resourceId: t2.id }))).toBe('NAME_TAKEN');
 
     // Deleting a table takes it out of every join, and leaves its line in History; deleting an area keeps its tables.
-    floor = await deleteTable(w.owner, { placeId: w.placeId, tableId: t3.id });
+    floor = await deleteResource(w.owner, { placeId: w.placeId, resourceId: t3.id });
     const audited = await db.withWorkspace(w.workspaceId, (tx) =>
       tx.execute<{ what: string }>(
         sql`select after ->> 'hospitality' as what from audit_events where after ? 'hospitality' order by at desc limit 1`,
       ),
     );
-    expect(audited.rows).toEqual([{ what: 'table.deleted' }]);
-    expect(floor.tables.find((table) => table.id === t1.id)?.joins).toEqual([]);
+    expect(audited.rows).toEqual([{ what: 'resource.deleted' }]);
+    expect(floor.resources.find((table) => table.id === t1.id)?.joins).toEqual([]);
     floor = await deleteArea(w.owner, { placeId: w.placeId, areaId: terrace ?? '' });
     expect(floor.areas).toEqual([]);
-    expect(floor.tables.some((table) => table.areaId !== undefined)).toBe(false);
+    expect(floor.resources.some((table) => table.areaId !== undefined)).toBe(false);
   });
 
   it('never reaches another workspace’s place', async () => {
     const a = await floorOf();
     const b = await floorOf();
-    expect(await refusalOf(readFloor(b.owner, { placeId: a.placeId }))).toBe('NOT_FOUND');
+    expect(await refusalOf(listResources(b.owner, { placeId: a.placeId }))).toBe('NOT_FOUND');
     expect(
-      await refusalOf(addTables(b.owner, { placeId: a.placeId, labels: ['X1'], minGuests: 1, maxGuests: 2 })),
+      await refusalOf(
+        addResources(b.owner, { placeId: a.placeId, kind: 'table', labels: ['X1'], minCapacity: 1, maxCapacity: 2 }),
+      ),
     ).toBe('NOT_FOUND');
   });
 
@@ -305,10 +323,12 @@ describe('a place’s floor (AC-6509)', () => {
     const w = await floorOf();
     for (let start = 1; start <= 300; start += 100) {
       const labels = Array.from({ length: 100 }, (_, index) => `T${String(start + index)}`);
-      await addTables(w.owner, { placeId: w.placeId, labels, minGuests: 2, maxGuests: 4 });
+      await addResources(w.owner, { placeId: w.placeId, kind: 'table', labels, minCapacity: 2, maxCapacity: 4 });
     }
     expect(
-      await refusalOf(addTables(w.owner, { placeId: w.placeId, labels: ['Bar 1'], minGuests: 1, maxGuests: 2 })),
+      await refusalOf(
+        addResources(w.owner, { placeId: w.placeId, kind: 'table', labels: ['Bar 1'], minCapacity: 1, maxCapacity: 2 }),
+      ),
     ).toBe('LIMIT_REACHED');
   });
 });

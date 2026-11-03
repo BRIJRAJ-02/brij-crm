@@ -2,9 +2,9 @@
 // Purpose: Settings › Business (spec 0065, AC-6507, AC-6508): the business the Hospitality apps share, and its places.
 // Main task: keep the profile right, see each place at a glance, and open one for its hours and tables.
 // Leaves out: menus, codes and reservation rules (each app's page), the logo (Settings › Brand), the cover photo.
-import type { BusinessKind, BusinessProfile, HospitalityStore, Place, PlaceFields } from '@crm/data';
+import type { BusinessKind, BusinessProfile, HospitalityStore, Place, PlaceFields, ResourceKind } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
-import { BUSINESS_KINDS } from '@crm/data/hospitality';
+import { BUSINESS_KINDS, DEFAULT_RESOURCE_KIND } from '@crm/data/hospitality';
 import {
   Button,
   ButtonLink,
@@ -34,11 +34,12 @@ import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { clockLabel, todayRanges } from './hours-rows.ts';
 import { strings } from './strings.ts';
 
-const PLACE_COLUMNS: readonly TableColumn[] = [
+/** The places' columns, the count named for what this kind of business books. */
+const placeColumns = (kind: ResourceKind): readonly TableColumn[] => [
   { id: 'name', label: strings.place, isRowHeader: true },
   { id: 'address', label: strings.address },
   { id: 'today', label: strings.today },
-  { id: 'tables', label: strings.tables, align: 'end' },
+  { id: 'tables', label: strings.resourcesTitle(kind), align: 'end' },
 ];
 
 /** A place's address on one line. */
@@ -59,6 +60,10 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
   const navigate = useNavigate();
   const { locale } = useFormatSettings();
   const now = useMemo(() => new Date(), []);
+  // A place's count reads in the words of what this kind of business books (6 tables, 4 chairs).
+  const businessKind = state.status === 'ready' ? state.value.profile?.kind : undefined;
+  const countKind: ResourceKind = businessKind === undefined ? 'table' : DEFAULT_RESOURCE_KIND[businessKind];
+  const columns = useMemo(() => placeColumns(countKind), [countKind]);
   // Someone without Manage hospitality meets the page as one that isn't there, never a locked one.
   if (state.status === 'error' && state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
   if (state.status === 'error') {
@@ -129,7 +134,7 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
         ) : (
           <Table
             label={strings.places}
-            columns={PLACE_COLUMNS}
+            columns={columns}
             rows={view.places}
             getRowId={(place) => place.id}
             layout="even"
@@ -156,7 +161,7 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
                   );
                 }
                 default:
-                  return strings.tableCount(place.tables);
+                  return strings.resourceCount(countKind, place.resourceCount);
               }
             }}
           />

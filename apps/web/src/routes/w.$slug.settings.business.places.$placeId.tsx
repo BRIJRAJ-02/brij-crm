@@ -16,7 +16,7 @@ export const Route = createFileRoute('/w/$slug/settings/business/places/$placeId
     try {
       const [business] = await Promise.all([
         store.readBusiness(params.slug),
-        store.readFloor(params.slug, params.placeId).catch(() => undefined),
+        store.listResources(params.slug, params.placeId).catch(() => undefined),
       ]);
       return { store, place: business.places.find((each) => each.id === params.placeId) };
     } catch (error) {

@@ -3,14 +3,15 @@
 -- 0165, with 0166 and 0167 claimed by other lanes.
 --
 -- What changes:
--- * `workspaces.early_access`, a closed list of flags (`hospitality` today), written only by the operator console's
+-- * `workspaces.early_access`, a closed list of flags (`business_apps` today: the business apps, Hospitality first), written only by the operator console's
 --   first write: `crm_set_early_access`, a definer owned by crm_operator, which may update that column and nothing
 --   else (column privileges, so Postgres refuses any other whatever a body says). crm_app may execute it; the api
 --   calls it only from its operator module, behind OPERATOR_EMAILS, two factor and a recent sign in.
 -- * `crm_operator_workspaces` answers each workspace's early access too, so the console shows the switch's state;
 --   crm_operator gains select on that one column.
 -- * `auth.operator_event` gains `before` and `after`, so a console write keeps what it changed (AC-6502).
--- * Five tenant tables: `workspace_apps`, `business_profiles`, `places`, `areas`, `place_tables`, each with forced
+-- * Five tenant tables: `workspace_apps`, `business_profiles`, `places`, `areas` and `resources` (what a place books or
+--   seats: tables, rooms, chairs, beds, courts; the shared base of every business app), each with forced
 --   row level security and the plain workspace policy; every index leads with workspace_id, but the places' two
 --   public keys, which a guest page finds before the workspace is known (H1, H3).
 --
@@ -19,7 +20,7 @@ set local lock_timeout = '5s';
 --> statement-breakpoint
 alter table workspaces add column early_access text[] not null default '{}'::text[];
 --> statement-breakpoint
-alter table workspaces add constraint workspaces_early_access check (early_access <@ array['hospitality']::text[]);
+alter table workspaces add constraint workspaces_early_access check (early_access <@ array['business_apps']::text[]);
 --> statement-breakpoint
 -- The app keeps updating every other column of a workspace, but never its early access: its table wide update (from
 -- the default privileges) becomes one on each column but that one.
@@ -78,7 +79,7 @@ CREATE TABLE "business_profiles" (
 	"updated_by_member_id" uuid,
 	CONSTRAINT "business_profiles_pkey" PRIMARY KEY("workspace_id"),
 	CONSTRAINT "business_profiles_name" CHECK (char_length("business_profiles"."name") between 1 and 80),
-	CONSTRAINT "business_profiles_kind" CHECK ("business_profiles"."kind" in ('restaurant', 'cafe', 'bar', 'bakery', 'other')),
+	CONSTRAINT "business_profiles_kind" CHECK ("business_profiles"."kind" in ('restaurant', 'cafe', 'bar', 'bakery', 'salon', 'spa', 'barber', 'clinic', 'fitness', 'other')),
 	CONSTRAINT "business_profiles_description" CHECK (char_length("business_profiles"."description") <= 160),
 	CONSTRAINT "business_profiles_phone" CHECK (char_length("business_profiles"."phone") <= 40),
 	CONSTRAINT "business_profiles_email" CHECK (char_length("business_profiles"."email") <= 254),
@@ -145,14 +146,15 @@ ALTER TABLE "areas" ADD CONSTRAINT "areas_place" FOREIGN KEY ("workspace_id","pl
 --> statement-breakpoint
 CREATE UNIQUE INDEX "areas_name" ON "areas" USING btree ("workspace_id","place_id",lower("name"));
 --> statement-breakpoint
-CREATE TABLE "place_tables" (
+CREATE TABLE "resources" (
 	"workspace_id" uuid NOT NULL,
 	"id" uuid DEFAULT uuidv7() NOT NULL,
 	"place_id" uuid NOT NULL,
 	"area_id" uuid,
+	"kind" text NOT NULL,
 	"label" text NOT NULL,
-	"min_guests" smallint NOT NULL,
-	"max_guests" smallint NOT NULL,
+	"min_capacity" smallint NOT NULL,
+	"max_capacity" smallint NOT NULL,
 	"online" boolean DEFAULT true NOT NULL,
 	"position" integer NOT NULL,
 	"joins" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
@@ -161,22 +163,23 @@ CREATE TABLE "place_tables" (
 	"created_by_member_id" uuid,
 	"updated_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"updated_by_member_id" uuid,
-	CONSTRAINT "place_tables_pkey" PRIMARY KEY("workspace_id","id"),
-	CONSTRAINT "place_tables_label_length" CHECK (char_length("place_tables"."label") between 1 and 12),
-	CONSTRAINT "place_tables_guests" CHECK ("place_tables"."min_guests" between 1 and 30 and "place_tables"."max_guests" between 1 and 30 and "place_tables"."min_guests" <= "place_tables"."max_guests"),
-	CONSTRAINT "place_tables_joins" CHECK (cardinality("place_tables"."joins") <= 10 and not ("place_tables"."id" = any("place_tables"."joins")))
+	CONSTRAINT "resources_pkey" PRIMARY KEY("workspace_id","id"),
+	CONSTRAINT "resources_kind" CHECK ("resources"."kind" in ('table', 'room', 'chair', 'bed', 'court', 'station', 'equipment', 'other')),
+	CONSTRAINT "resources_label_length" CHECK (char_length("resources"."label") between 1 and 12),
+	CONSTRAINT "resources_capacity" CHECK ("resources"."min_capacity" between 1 and 100 and "resources"."max_capacity" between 1 and 100 and "resources"."min_capacity" <= "resources"."max_capacity"),
+	CONSTRAINT "resources_joins" CHECK (cardinality("resources"."joins") <= 10 and not ("resources"."id" = any("resources"."joins")))
 );
 --> statement-breakpoint
-ALTER TABLE "place_tables" ADD CONSTRAINT "place_tables_place" FOREIGN KEY ("workspace_id","place_id") REFERENCES "public"."places"("workspace_id","id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "resources" ADD CONSTRAINT "resources_place" FOREIGN KEY ("workspace_id","place_id") REFERENCES "public"."places"("workspace_id","id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 -- Deleting an area leaves its tables in the place with no area (only area_id is set null, never the workspace).
-ALTER TABLE "place_tables" ADD CONSTRAINT "place_tables_area" FOREIGN KEY ("workspace_id","area_id") REFERENCES "public"."areas"("workspace_id","id") ON DELETE set null ("area_id") ON UPDATE no action;
+ALTER TABLE "resources" ADD CONSTRAINT "resources_area" FOREIGN KEY ("workspace_id","area_id") REFERENCES "public"."areas"("workspace_id","id") ON DELETE set null ("area_id") ON UPDATE no action;
 --> statement-breakpoint
-CREATE UNIQUE INDEX "place_tables_label" ON "place_tables" USING btree ("workspace_id","place_id",lower("label")) WHERE "place_tables"."archived_at" is null;
+CREATE UNIQUE INDEX "resources_label" ON "resources" USING btree ("workspace_id","place_id",lower("label")) WHERE "resources"."archived_at" is null;
 --> statement-breakpoint
-CREATE INDEX "place_tables_order" ON "place_tables" USING btree ("workspace_id","place_id","position");
+CREATE INDEX "resources_order" ON "resources" USING btree ("workspace_id","place_id","position");
 --> statement-breakpoint
-CREATE INDEX "place_tables_area" ON "place_tables" USING btree ("workspace_id","area_id");
+CREATE INDEX "resources_area" ON "resources" USING btree ("workspace_id","area_id");
 --> statement-breakpoint
 alter table workspace_apps enable row level security;
 --> statement-breakpoint
@@ -210,11 +213,11 @@ create policy areas_tenant on areas
   using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
   with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
 --> statement-breakpoint
-alter table place_tables enable row level security;
+alter table resources enable row level security;
 --> statement-breakpoint
-alter table place_tables force row level security;
+alter table resources force row level security;
 --> statement-breakpoint
-create policy place_tables_tenant on place_tables
+create policy resources_tenant on resources
   using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
   with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
 --> statement-breakpoint
@@ -262,13 +265,13 @@ begin atomic
     select w.id, w.early_access
     from public.workspaces w
     where w.id = crm_set_early_access.workspace
-      and crm_set_early_access.flag = any(array['hospitality']::text[])
+      and crm_set_early_access.flag = any(array['business_apps']::text[])
       and crm_set_early_access.turn_on is not null
     for update
   )
   update public.workspaces w
   set early_access = array(
-    select f from unnest(array['hospitality']::text[]) with ordinality as l(f, n)
+    select f from unnest(array['business_apps']::text[]) with ordinality as l(f, n)
     where (f = any(was.early_access) and f <> crm_set_early_access.flag)
       or (f = crm_set_early_access.flag and crm_set_early_access.turn_on)
     order by n

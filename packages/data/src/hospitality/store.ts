@@ -11,13 +11,14 @@ import type {
   BusinessProfile,
   BusinessProfileFields,
   BusinessView,
-  DiningTable,
+  Resource,
   FirstBusiness,
   HospitalityApp,
   Place,
   PlaceFields,
   PlaceFloor,
   PlaceHours,
+  ResourceKind,
 } from '@crm/contracts';
 import { dataError, toDataError, type DataError } from '../errors.ts';
 
@@ -69,7 +70,7 @@ export interface HospitalityProcedures {
     input: Scoped & { placeId: string; place?: PlaceFields; hours?: PlaceHours; mutationId: string },
     options: Options,
   ) => Promise<Place>;
-  readonly floor: (input: Scoped & { placeId: string }, options: Options) => Promise<PlaceFloor>;
+  readonly resources: (input: Scoped & { placeId: string }, options: Options) => Promise<PlaceFloor>;
   readonly saveArea: (
     input: Scoped & { placeId: string; areaId?: string; id?: string; name: string; mutationId: string },
     options: Options,
@@ -78,46 +79,48 @@ export interface HospitalityProcedures {
     input: Scoped & { placeId: string; areaId: string; mutationId: string },
     options: Options,
   ) => Promise<PlaceFloor>;
-  readonly addTables: (
+  readonly addResources: (
     input: Scoped & {
       placeId: string;
+      kind: ResourceKind;
       labels: string[];
       areaId?: string;
-      minGuests: number;
-      maxGuests: number;
+      minCapacity: number;
+      maxCapacity: number;
       online: boolean;
       mutationId: string;
     },
     options: Options,
   ) => Promise<PlaceFloor>;
-  readonly updateTable: (
-    input: Scoped & { placeId: string; tableId: string; mutationId: string } & TableChange,
+  readonly updateResource: (
+    input: Scoped & { placeId: string; resourceId: string; mutationId: string } & ResourceChange,
     options: Options,
   ) => Promise<PlaceFloor>;
-  readonly moveTable: (
-    input: Scoped & { placeId: string; tableId: string; toIndex: number; mutationId: string },
+  readonly moveResource: (
+    input: Scoped & { placeId: string; resourceId: string; toIndex: number; mutationId: string },
     options: Options,
   ) => Promise<PlaceFloor>;
-  readonly archiveTable: (
-    input: Scoped & { placeId: string; tableId: string; mutationId: string },
+  readonly archiveResource: (
+    input: Scoped & { placeId: string; resourceId: string; mutationId: string },
     options: Options,
   ) => Promise<PlaceFloor>;
-  readonly restoreTable: (
-    input: Scoped & { placeId: string; tableId: string; mutationId: string },
+  readonly restoreResource: (
+    input: Scoped & { placeId: string; resourceId: string; mutationId: string },
     options: Options,
   ) => Promise<PlaceFloor>;
-  readonly deleteTable: (
-    input: Scoped & { placeId: string; tableId: string; mutationId: string },
+  readonly deleteResource: (
+    input: Scoped & { placeId: string; resourceId: string; mutationId: string },
     options: Options,
   ) => Promise<PlaceFloor>;
 }
 
 /** What one table change may set: `areaId: null` takes it out of its area. */
-export interface TableChange {
+export interface ResourceChange {
+  kind?: ResourceKind;
   label?: string;
   areaId?: string | null;
-  minGuests?: number;
-  maxGuests?: number;
+  minCapacity?: number;
+  maxCapacity?: number;
   online?: boolean;
   joins?: string[];
 }
@@ -225,11 +228,11 @@ function holder<Value>(load: () => Promise<Value>, now: () => number) {
 }
 
 /** `tables` with the live ones in `order` (by id), positions renumbered, archived ones after. */
-function reordered(tables: readonly DiningTable[], tableId: string, toIndex: number): DiningTable[] {
+function reordered(tables: readonly Resource[], resourceId: string, toIndex: number): Resource[] {
   const live = tables.filter((table) => !table.archived);
-  const moving = live.find((table) => table.id === tableId);
+  const moving = live.find((table) => table.id === resourceId);
   if (moving === undefined) return [...tables];
-  const rest = live.filter((table) => table.id !== tableId);
+  const rest = live.filter((table) => table.id !== resourceId);
   rest.splice(Math.min(Math.max(toIndex, 0), rest.length), 0, moving);
   return [...rest.map((table, position) => ({ ...table, position })), ...tables.filter((table) => table.archived)];
 }
@@ -271,7 +274,7 @@ export function openHospitality(given: {
     const key = `${workspace}:${placeId}`;
     let found = floors.get(key);
     if (found === undefined) {
-      found = holder(() => call((options) => api.floor({ workspace, placeId }, options)), now);
+      found = holder(() => call((options) => api.resources({ workspace, placeId }, options)), now);
       floors.set(key, found);
     }
     return found;
@@ -284,7 +287,9 @@ export function openHospitality(given: {
     held.patch((view) => ({
       ...view,
       places: view.places.map((place) =>
-        place.id === placeId ? { ...place, tables: floor.tables.filter((table) => !table.archived).length } : place,
+        place.id === placeId
+          ? { ...place, resourceCount: floor.resources.filter((table) => !table.archived).length }
+          : place,
       ),
     }));
   };
@@ -433,7 +438,7 @@ export function openHospitality(given: {
     /** One place's areas and tables (AC-6509), read when first held. */
     floor: (workspace: string, placeId: string): HospitalityHeld<PlaceFloor> => floorOf(workspace, placeId).held,
     /** Reads a floor now; rejects with the refusal. */
-    readFloor: (workspace: string, placeId: string): Promise<PlaceFloor> => floorOf(workspace, placeId).read(),
+    listResources: (workspace: string, placeId: string): Promise<PlaceFloor> => floorOf(workspace, placeId).read(),
     /** Adds an area (`areaId` absent) or renames one. */
     saveArea: (workspace: string, placeId: string, name: string, areaId?: string): Promise<DataError | undefined> =>
       onFloor(
@@ -457,7 +462,7 @@ export function openHospitality(given: {
         (floor) => ({
           ...floor,
           areas: floor.areas.filter((area) => area.id !== areaId),
-          tables: floor.tables.map((table) => {
+          resources: floor.resources.map((table) => {
             if (table.areaId !== areaId) return table;
             const { areaId: _gone, ...rest } = table;
             return rest;
@@ -466,14 +471,15 @@ export function openHospitality(given: {
         (mutationId, options) => api.deleteArea({ workspace, placeId, areaId, mutationId }, options),
       ),
     /** Adds tables at once ("T1 to T10"); they show once the server made them. */
-    addTables: (
+    addResources: (
       workspace: string,
       placeId: string,
       input: {
+        readonly kind: ResourceKind;
         readonly labels: readonly string[];
         readonly areaId?: string;
-        readonly minGuests: number;
-        readonly maxGuests: number;
+        readonly minCapacity: number;
+        readonly maxCapacity: number;
         readonly online?: boolean;
       },
     ): Promise<DataError | undefined> =>
@@ -482,14 +488,15 @@ export function openHospitality(given: {
         placeId,
         (floor) => floor,
         (mutationId, options) =>
-          api.addTables(
+          api.addResources(
             {
               workspace,
               placeId,
+              kind: input.kind,
               labels: [...input.labels],
               ...(input.areaId === undefined ? {} : { areaId: input.areaId }),
-              minGuests: input.minGuests,
-              maxGuests: input.maxGuests,
+              minCapacity: input.minCapacity,
+              maxCapacity: input.maxCapacity,
               online: input.online ?? true,
               mutationId,
             },
@@ -497,19 +504,19 @@ export function openHospitality(given: {
           ),
       ),
     /** Changes one table; its fields show at once (joins once the server kept both sides). */
-    updateTable: (
+    updateResource: (
       workspace: string,
       placeId: string,
-      tableId: string,
-      change: TableChange,
+      resourceId: string,
+      change: ResourceChange,
     ): Promise<DataError | undefined> =>
       onFloor(
         workspace,
         placeId,
         (floor) => ({
           ...floor,
-          tables: floor.tables.map((table) => {
-            if (table.id !== tableId) return table;
+          resources: floor.resources.map((table) => {
+            if (table.id !== resourceId) return table;
             const { areaId, joins: _joins, ...fields } = change;
             const next = { ...table, ...fields };
             if (areaId === undefined) return next;
@@ -520,47 +527,55 @@ export function openHospitality(given: {
             return { ...next, areaId };
           }),
         }),
-        (mutationId, options) => api.updateTable({ workspace, placeId, tableId, ...change, mutationId }, options),
+        (mutationId, options) => api.updateResource({ workspace, placeId, resourceId, ...change, mutationId }, options),
       ),
     /** Moves a table to `toIndex` among the live ones (drag to reorder); shown at once. */
-    moveTable: (workspace: string, placeId: string, tableId: string, toIndex: number): Promise<DataError | undefined> =>
+    moveResource: (
+      workspace: string,
+      placeId: string,
+      resourceId: string,
+      toIndex: number,
+    ): Promise<DataError | undefined> =>
       onFloor(
         workspace,
         placeId,
-        (floor) => ({ ...floor, tables: reordered(floor.tables, tableId, toIndex) }),
-        (mutationId, options) => api.moveTable({ workspace, placeId, tableId, toIndex, mutationId }, options),
+        (floor) => ({ ...floor, resources: reordered(floor.resources, resourceId, toIndex) }),
+        (mutationId, options) => api.moveResource({ workspace, placeId, resourceId, toIndex, mutationId }, options),
       ),
     /** Archives a table (it leaves online fitting, keeps its holds); shown at once, last. */
-    archiveTable: (workspace: string, placeId: string, tableId: string): Promise<DataError | undefined> =>
+    archiveResource: (workspace: string, placeId: string, resourceId: string): Promise<DataError | undefined> =>
       onFloor(
         workspace,
         placeId,
         (floor) => {
-          const moving = floor.tables.find((table) => table.id === tableId);
+          const moving = floor.resources.find((table) => table.id === resourceId);
           return moving === undefined
             ? floor
             : {
                 ...floor,
-                tables: [...floor.tables.filter((table) => table.id !== tableId), { ...moving, archived: true }],
+                resources: [
+                  ...floor.resources.filter((table) => table.id !== resourceId),
+                  { ...moving, archived: true },
+                ],
               };
         },
-        (mutationId, options) => api.archiveTable({ workspace, placeId, tableId, mutationId }, options),
+        (mutationId, options) => api.archiveResource({ workspace, placeId, resourceId, mutationId }, options),
       ),
     /** Brings an archived table back, last among the live ones. */
-    restoreTable: (workspace: string, placeId: string, tableId: string): Promise<DataError | undefined> =>
+    restoreResource: (workspace: string, placeId: string, resourceId: string): Promise<DataError | undefined> =>
       onFloor(
         workspace,
         placeId,
         (floor) => floor,
-        (mutationId, options) => api.restoreTable({ workspace, placeId, tableId, mutationId }, options),
+        (mutationId, options) => api.restoreResource({ workspace, placeId, resourceId, mutationId }, options),
       ),
     /** Deletes a table for good (the screen asks first); gone at once. */
-    deleteTable: (workspace: string, placeId: string, tableId: string): Promise<DataError | undefined> =>
+    deleteResource: (workspace: string, placeId: string, resourceId: string): Promise<DataError | undefined> =>
       onFloor(
         workspace,
         placeId,
-        (floor) => ({ ...floor, tables: floor.tables.filter((table) => table.id !== tableId) }),
-        (mutationId, options) => api.deleteTable({ workspace, placeId, tableId, mutationId }, options),
+        (floor) => ({ ...floor, resources: floor.resources.filter((table) => table.id !== resourceId) }),
+        (mutationId, options) => api.deleteResource({ workspace, placeId, resourceId, mutationId }, options),
       ),
 
     /** Signed out: forgets every copy. */

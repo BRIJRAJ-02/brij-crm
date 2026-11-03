@@ -80,7 +80,7 @@ export function UserScreen({
     return <AdminFailed title={strings.users} error={state.error} data={data} onRetry={retry} />;
   }
   const switchTo = (workspace: { readonly id: string; readonly name: string }, on: boolean) => {
-    void data.operator.setEarlyAccess(workspace.id, 'hospitality', on).then((refused) => {
+    void data.operator.setEarlyAccess(workspace.id, 'business_apps', on).then((refused) => {
       toasts.toast(
         refused === undefined
           ? {
@@ -173,7 +173,7 @@ export function UserBody({
           <Switch
             label={strings.hospitalityFor(workspace.name)}
             isLabelHidden
-            isSelected={workspace.earlyAccess.includes('hospitality')}
+            isSelected={workspace.earlyAccess.includes('business_apps')}
             onChange={(on) => onEarlyAccess?.(workspace.workspaceId, on, workspace.name)}
           />
         );

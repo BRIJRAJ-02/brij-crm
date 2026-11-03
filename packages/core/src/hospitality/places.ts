@@ -25,7 +25,7 @@ import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import { auditSetup, hospitalityMember, requireAnyApp } from './gate.ts';
 
-const { businessProfiles, places, placeTables, workspaces } = schema;
+const { businessProfiles, places, resources, workspaces } = schema;
 
 /** The refusal for a place that isn't there, or is another workspace's. */
 export const PLACE_NOT_FOUND = 'That place doesn’t exist.';
@@ -147,7 +147,7 @@ function placeView(row: PlaceRow, tables: number): Place {
     locale: row.locale,
     ...(row.phone === null ? {} : { phone: row.phone }),
     hours: row.hours as PlaceHours,
-    tables,
+    resourceCount: tables,
     updatedAt: new Date(row.updatedAt).toISOString(),
   };
 }
@@ -160,16 +160,16 @@ async function readPlaces(tx: WorkspaceTx, workspaceId: string, only?: string): 
     .where(and(eq(places.workspaceId, workspaceId), ...(only === undefined ? [] : [eq(places.id, only)])))
     .orderBy(asc(places.position), asc(places.id));
   const counts = await tx
-    .select({ placeId: placeTables.placeId, n: count() })
-    .from(placeTables)
+    .select({ placeId: resources.placeId, n: count() })
+    .from(resources)
     .where(
       and(
-        eq(placeTables.workspaceId, workspaceId),
-        isNull(placeTables.archivedAt),
-        ...(only === undefined ? [] : [eq(placeTables.placeId, only)]),
+        eq(resources.workspaceId, workspaceId),
+        isNull(resources.archivedAt),
+        ...(only === undefined ? [] : [eq(resources.placeId, only)]),
       ),
     )
-    .groupBy(placeTables.placeId);
+    .groupBy(resources.placeId);
   const byPlace = new Map(counts.map((row) => [row.placeId, row.n]));
   return rows.map((row) => placeView(row, byPlace.get(row.id) ?? 0));
 }

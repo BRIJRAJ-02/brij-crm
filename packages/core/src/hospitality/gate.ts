@@ -20,7 +20,7 @@ export const isApp = (value: string): value is HospitalityApp =>
 /** Whether the workspace has early access to the Hospitality apps (AC-6501). */
 export async function hasEarlyAccess(tx: WorkspaceTx, workspaceId: string): Promise<boolean> {
   const [row] = await tx
-    .select({ on: sql<boolean>`'hospitality' = any(${workspaces.earlyAccess})` })
+    .select({ on: sql<boolean>`'business_apps' = any(${workspaces.earlyAccess})` })
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId));
   return row?.on === true;
@@ -51,7 +51,7 @@ export async function installedHospitalityApps(
       and(
         eq(workspaceApps.workspaceId, workspaceId),
         isNull(workspaceApps.removedAt),
-        sql`'hospitality' = any(${workspaces.earlyAccess})`,
+        sql`'business_apps' = any(${workspaces.earlyAccess})`,
       ),
     );
   return new Set(rows.map((row) => row.app).filter(isApp));

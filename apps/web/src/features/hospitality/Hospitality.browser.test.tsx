@@ -75,7 +75,7 @@ const BUSINESS: BusinessView = {
         },
         exceptions: [{ date: '2026-12-25', closed: true, note: 'Christmas' }],
       },
-      tables: 6,
+      resourceCount: 6,
       updatedAt: '2026-11-01T10:00:00.000Z',
     },
   ],
@@ -83,10 +83,11 @@ const BUSINESS: BusinessView = {
 
 const table = (index: number, area?: string) => ({
   id: `0190000${String(index)}-0000-7000-8000-000000000000`,
+  kind: 'table' as const,
   label: `T${String(index)}`,
   ...(area === undefined ? {} : { areaId: area }),
-  minGuests: 2,
-  maxGuests: index > 4 ? 6 : 4,
+  minCapacity: 2,
+  maxCapacity: index > 4 ? 6 : 4,
   online: index !== 3,
   joins: [],
   position: index - 1,
@@ -100,7 +101,7 @@ const FLOOR: PlaceFloor = {
     { id: TERRACE, name: 'Terrace', position: 0 },
     { id: '01900000-0000-7000-8000-0000000000bb', name: 'Inside', position: 1 },
   ],
-  tables: [table(1, TERRACE), table(2, TERRACE), table(3), table(4), table(5), table(6)],
+  resources: [table(1, TERRACE), table(2, TERRACE), table(3), table(4), table(5), table(6)],
 };
 
 /** A held copy that a test changes by hand, as the real store's holder shows a change. */
@@ -155,28 +156,28 @@ function storeOf() {
       }));
       return done();
     },
-    addTables: (_slug: string, _place: string, input: { readonly labels: readonly string[] }) => {
+    addResources: (_slug: string, _place: string, input: { readonly labels: readonly string[] }) => {
       calls.push(`add:${input.labels.join(',')}`);
       floor.set((view) => ({
         ...view,
-        tables: [
-          ...view.tables,
+        resources: [
+          ...view.resources,
           ...input.labels.map((label, index) => ({
             ...table(7 + index),
             id: `01900009-0000-7000-8000-${String(index).padStart(12, '0')}`,
             label,
-            position: view.tables.length + index,
+            position: view.resources.length + index,
           })),
         ],
       }));
       return done();
     },
-    updateTable: (_slug: string, _place: string, tableId: string, change: { readonly online?: boolean }) => {
+    updateResource: (_slug: string, _place: string, resourceId: string, change: { readonly online?: boolean }) => {
       calls.push(`online:${String(change.online)}`);
       floor.set((view) => ({
         ...view,
-        tables: view.tables.map((each) =>
-          each.id === tableId && change.online !== undefined ? { ...each, online: change.online } : each,
+        resources: view.resources.map((each) =>
+          each.id === resourceId && change.online !== undefined ? { ...each, online: change.online } : each,
         ),
       }));
       return done();
@@ -184,10 +185,10 @@ function storeOf() {
     updatePlace: done,
     saveBusiness: done,
     createPlace: done,
-    moveTable: done,
-    archiveTable: done,
-    restoreTable: done,
-    deleteTable: done,
+    moveResource: done,
+    archiveResource: done,
+    restoreResource: done,
+    deleteResource: done,
     saveArea: done,
     deleteArea: done,
   } as unknown as HospitalityStore;

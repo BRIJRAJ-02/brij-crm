@@ -39,7 +39,7 @@ export const workspaces = pgTable(
     /** When a deleted workspace's purge may take it; set with `deleted_at`, cleared on restore (AC-823). */
     purgeAfter: timestamptz('purge_after'),
     /**
-     * What Timefix opened early for the workspace (spec 0065, AC-6502): `hospitality` today. Written only by
+     * What Timefix opened early for the workspace (spec 0065, AC-6502): `business_apps` today. Written only by
      * `crm_set_early_access`, the operator console's one write.
      */
     earlyAccess: text('early_access')
@@ -53,7 +53,7 @@ export const workspaces = pgTable(
     check('workspaces_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
     check('workspaces_currency', sql`${t.currency} is null or ${t.currency} ~ '^[A-Z]{3}$'`),
     check('workspaces_country', sql`${t.country} is null or ${t.country} ~ '^[A-Z]{2}$'`),
-    check('workspaces_early_access', sql`${t.earlyAccess} <@ array['hospitality']::text[]`),
+    check('workspaces_early_access', sql`${t.earlyAccess} <@ array['business_apps']::text[]`),
     uniqueIndex('workspaces_slug')
       .on(t.slug)
       .where(sql`${t.deletedAt} is null`),

@@ -898,15 +898,15 @@ export { listApps, installApp, removeApp } from './hospitality/apps.ts';
 export { appInstalled, requireApp, requireAnyApp, APP_NOT_INSTALLED_MESSAGE } from './hospitality/gate.ts';
 export { getBusiness, saveBusiness, createPlace, updatePlace, localeForCountry } from './hospitality/places.ts';
 export {
-  readFloor,
+  listResources,
   saveArea,
   deleteArea,
-  addTables,
-  updateTable,
-  moveTable,
-  archiveTable,
-  restoreTable,
-  deleteTable,
+  addResources,
+  updateResource,
+  moveResource,
+  archiveResource,
+  restoreResource,
+  deleteResource,
 } from './hospitality/floor.ts';
 /** A place's hours read at an instant (spec 0065, AC-6508): pure, on the place's own wall clock. */
 export { openAt, nextOpening, rangesOn, type OpenNow } from './hospitality/hours.ts';

@@ -1,20 +1,20 @@
 import {
-  addTables,
-  archiveTable,
+  addResources,
+  archiveResource,
   createPlace,
   deleteArea,
-  deleteTable,
+  deleteResource,
   getBusiness,
   installApp,
   listApps,
-  moveTable,
-  readFloor,
+  moveResource,
+  listResources,
   removeApp,
-  restoreTable,
+  restoreResource,
   saveArea,
   saveBusiness,
   updatePlace,
-  updateTable,
+  updateResource,
 } from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
@@ -64,7 +64,7 @@ export const hospitalityRouter = h.router({
       }),
     ),
   ),
-  floor: h.floor.handler(({ context, input }) => readFloor(context.scope, { placeId: input.placeId })),
+  resources: h.resources.handler(({ context, input }) => listResources(context.scope, { placeId: input.placeId })),
   saveArea: h.saveArea.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       saveArea(context.scope, {
@@ -80,50 +80,52 @@ export const hospitalityRouter = h.router({
       deleteArea(context.scope, { placeId: input.placeId, areaId: input.areaId }),
     ),
   ),
-  addTables: h.addTables.handler(({ context, input }) =>
+  addResources: h.addResources.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      addTables(context.scope, {
+      addResources(context.scope, {
         placeId: input.placeId,
+        kind: input.kind,
         labels: input.labels,
-        minGuests: input.minGuests,
-        maxGuests: input.maxGuests,
+        minCapacity: input.minCapacity,
+        maxCapacity: input.maxCapacity,
         online: input.online,
         ...(input.areaId === undefined ? {} : { areaId: input.areaId }),
       }),
     ),
   ),
-  updateTable: h.updateTable.handler(({ context, input }) =>
+  updateResource: h.updateResource.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      updateTable(context.scope, {
+      updateResource(context.scope, {
         placeId: input.placeId,
-        tableId: input.tableId,
+        resourceId: input.resourceId,
+        ...(input.kind === undefined ? {} : { kind: input.kind }),
         ...(input.label === undefined ? {} : { label: input.label }),
         ...(input.areaId === undefined ? {} : { areaId: input.areaId }),
-        ...(input.minGuests === undefined ? {} : { minGuests: input.minGuests }),
-        ...(input.maxGuests === undefined ? {} : { maxGuests: input.maxGuests }),
+        ...(input.minCapacity === undefined ? {} : { minCapacity: input.minCapacity }),
+        ...(input.maxCapacity === undefined ? {} : { maxCapacity: input.maxCapacity }),
         ...(input.online === undefined ? {} : { online: input.online }),
         ...(input.joins === undefined ? {} : { joins: input.joins }),
       }),
     ),
   ),
-  moveTable: h.moveTable.handler(({ context, input }) =>
+  moveResource: h.moveResource.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      moveTable(context.scope, { placeId: input.placeId, tableId: input.tableId, toIndex: input.toIndex }),
+      moveResource(context.scope, { placeId: input.placeId, resourceId: input.resourceId, toIndex: input.toIndex }),
     ),
   ),
-  archiveTable: h.archiveTable.handler(({ context, input }) =>
+  archiveResource: h.archiveResource.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      archiveTable(context.scope, { placeId: input.placeId, tableId: input.tableId }),
+      archiveResource(context.scope, { placeId: input.placeId, resourceId: input.resourceId }),
     ),
   ),
-  restoreTable: h.restoreTable.handler(({ context, input }) =>
+  restoreResource: h.restoreResource.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      restoreTable(context.scope, { placeId: input.placeId, tableId: input.tableId }),
+      restoreResource(context.scope, { placeId: input.placeId, resourceId: input.resourceId }),
     ),
   ),
-  deleteTable: h.deleteTable.handler(({ context, input }) =>
+  deleteResource: h.deleteResource.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      deleteTable(context.scope, { placeId: input.placeId, tableId: input.tableId }),
+      deleteResource(context.scope, { placeId: input.placeId, resourceId: input.resourceId }),
     ),
   ),
 });

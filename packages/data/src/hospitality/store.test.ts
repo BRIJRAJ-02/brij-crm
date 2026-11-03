@@ -7,9 +7,10 @@ import { openHospitality, type HospitalityProcedures } from './store.ts';
 const PLACE = '01900000-0000-7000-8000-000000000001';
 const table = (id: string, label: string, position: number) => ({
   id,
+  kind: 'table' as const,
   label,
-  minGuests: 2,
-  maxGuests: 4,
+  minCapacity: 2,
+  maxCapacity: 4,
   online: true,
   joins: [],
   position,
@@ -18,7 +19,7 @@ const table = (id: string, label: string, position: number) => ({
 const FLOOR: PlaceFloor = {
   placeId: PLACE,
   areas: [],
-  tables: [table('a', 'T1', 0), table('b', 'T2', 1), table('c', 'T3', 2)],
+  resources: [table('a', 'T1', 0), table('b', 'T2', 1), table('c', 'T3', 2)],
 };
 const APPS: AppsView = {
   available: true,
@@ -61,26 +62,26 @@ function setUp(overrides: Partial<HospitalityProcedures>) {
 describe('the floor', () => {
   it('moves a table at once, takes the server’s floor, and puts it back when refused', async () => {
     const answer = deferred<PlaceFloor>();
-    const { store } = setUp({ floor: () => Promise.resolve(FLOOR), moveTable: () => answer.promise });
-    await store.readFloor('acme', PLACE);
-    const moving = store.moveTable('acme', PLACE, 'c', 0);
+    const { store } = setUp({ resources: () => Promise.resolve(FLOOR), moveResource: () => answer.promise });
+    await store.listResources('acme', PLACE);
+    const moving = store.moveResource('acme', PLACE, 'c', 0);
     const shown = store.floor('acme', PLACE).getSnapshot();
-    expect(shown.status === 'ready' && shown.value.tables.map((each) => each.label)).toEqual(['T3', 'T1', 'T2']);
+    expect(shown.status === 'ready' && shown.value.resources.map((each) => each.label)).toEqual(['T3', 'T1', 'T2']);
     answer.reject(Object.assign(new Error('Nope.'), { code: 'NOT_FOUND' }));
     expect(await moving).toBeDefined();
     const back = store.floor('acme', PLACE).getSnapshot();
-    expect(back.status === 'ready' && back.value.tables.map((each) => each.label)).toEqual(['T1', 'T2', 'T3']);
+    expect(back.status === 'ready' && back.value.resources.map((each) => each.label)).toEqual(['T1', 'T2', 'T3']);
   });
 
   it('archives a table at once, last in the list', async () => {
     const { store } = setUp({
-      floor: () => Promise.resolve(FLOOR),
-      archiveTable: () => new Promise(() => undefined),
+      resources: () => Promise.resolve(FLOOR),
+      archiveResource: () => new Promise(() => undefined),
     });
-    await store.readFloor('acme', PLACE);
-    void store.archiveTable('acme', PLACE, 'a');
+    await store.listResources('acme', PLACE);
+    void store.archiveResource('acme', PLACE, 'a');
     const shown = store.floor('acme', PLACE).getSnapshot();
-    expect(shown.status === 'ready' && shown.value.tables.at(-1)).toMatchObject({ id: 'a', archived: true });
+    expect(shown.status === 'ready' && shown.value.resources.at(-1)).toMatchObject({ id: 'a', archived: true });
   });
 });
 
@@ -120,12 +121,12 @@ describe('the held copies', () => {
   it('answers NOT_READY to a change asked before the copy is read, sending nothing', async () => {
     let sent = 0;
     const { store } = setUp({
-      moveTable: () => {
+      moveResource: () => {
         sent += 1;
         return Promise.resolve(FLOOR);
       },
     });
-    expect((await store.moveTable('acme', PLACE, 'a', 1))?.code).toBe('NOT_READY');
+    expect((await store.moveResource('acme', PLACE, 'a', 1))?.code).toBe('NOT_READY');
     expect(sent).toBe(0);
   });
 
@@ -133,16 +134,16 @@ describe('the held copies', () => {
     let reads = 0;
     const first = deferred<PlaceFloor>();
     const { store } = setUp({
-      floor: () => {
+      resources: () => {
         reads += 1;
         return Promise.resolve(FLOOR);
       },
-      moveTable: () => first.promise,
-      archiveTable: () => Promise.resolve(FLOOR),
+      moveResource: () => first.promise,
+      archiveResource: () => Promise.resolve(FLOOR),
     });
-    await store.readFloor('acme', PLACE);
-    const moving = store.moveTable('acme', PLACE, 'c', 0);
-    const archiving = store.archiveTable('acme', PLACE, 'a');
+    await store.listResources('acme', PLACE);
+    const moving = store.moveResource('acme', PLACE, 'c', 0);
+    const archiving = store.archiveResource('acme', PLACE, 'a');
     first.reject(Object.assign(new Error('Nope.'), { code: 'NOT_FOUND' }));
     expect(await moving).toBeDefined();
     expect(await archiving).toBeUndefined();

@@ -319,7 +319,7 @@ import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/pict
 import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 import type { HospitalityStore } from './hospitality/store.ts';
-export type { HospitalityHeld, HospitalityHeldState, HospitalityStore, TableChange } from './hospitality/store.ts';
+export type { HospitalityHeld, HospitalityHeldState, HospitalityStore, ResourceChange } from './hospitality/store.ts';
 // The Hospitality suite's setup (spec 0065, H0): the shapes Settings › Apps and Business show.
 export type {
   AppsView,
@@ -329,7 +329,7 @@ export type {
   BusinessProfile,
   BusinessProfileFields,
   BusinessView,
-  DiningTable,
+  Resource,
   EarlyAccessFlag,
   FirstBusiness,
   HospitalityApp,
@@ -339,6 +339,7 @@ export type {
   PlaceFields,
   PlaceFloor,
   PlaceHours,
+  ResourceKind,
   WeekDay,
 } from '@crm/contracts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
