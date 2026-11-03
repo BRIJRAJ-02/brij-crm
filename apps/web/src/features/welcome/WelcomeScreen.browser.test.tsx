@@ -42,6 +42,7 @@ function fakeData(taken: readonly string[] = ['taken-one']) {
     readonly name: string;
     readonly slug: string;
     readonly memberName: string;
+    readonly timeZone?: string;
   }[] = [];
   const checked: string[] = [];
   const invites: { readonly workspace: string; readonly emails: readonly string[]; readonly role: string }[] = [];
@@ -267,7 +268,14 @@ describe('first run’s steps', () => {
     await expect.element(page.getByText('Step 3 of 5')).toBeVisible();
     expect(router.state.location.search).toEqual({ step: 'booking', workspace: 'ada' });
     expect(fake.created).toEqual([
-      { id: WORKSPACE_ID, name: 'Ada’s workspace', slug: 'ada', memberName: 'Ada Lovelace' },
+      // The workspace takes the browser's own zone (0c8351406), whatever machine runs this.
+      {
+        id: WORKSPACE_ID,
+        name: 'Ada’s workspace',
+        slug: 'ada',
+        memberName: 'Ada Lovelace',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
     ]);
   });
 
