@@ -66,6 +66,12 @@ export interface PublishInput {
   /** The main object's name, for the sentences that name it; "People" when it isn't given. */
   readonly objectName?: string;
   /**
+   * Whether the form adds people to the CRM: its main object is People (AC-1053). False refuses a Consent question,
+   * which only a person can hold; absent (the builder, which doesn't know) checks nothing, and the server always
+   * says.
+   */
+  readonly isPeople?: boolean;
+  /**
    * Whether the publisher may change the object's attributes (`schema.manage`). Without it, an email the object
    * can't match on is something only a workspace admin can put right, so the sentence sends them to one instead of
    * telling them to file a question that is already filed (late trap #17).
@@ -99,7 +105,8 @@ export interface PublishProblem {
     | 'ENDING_INVALID'
     | 'RECALL_INVALID'
     | 'SCORE_FILING_INVALID'
-    | 'BRAND_UNREADABLE';
+    | 'BRAND_UNREADABLE'
+    | 'CONSENT_INVALID';
   readonly message: string;
   readonly questionId?: string;
   /** The step at fault (spec 0063): its Show when, or nothing under it. */
@@ -531,6 +538,35 @@ function recallProblem(input: PublishInput): PublishProblem | undefined {
   return undefined;
 }
 
+/**
+ * Why a Consent question can't go live (AC-1053), or undefined: its words recall an answer, so each visitor would
+ * agree to different words than the record keeps; or the form adds no person to the CRM, so there is nobody to
+ * keep the consent on.
+ */
+function consentProblem(
+  questions: readonly FormDocument['questions'][number][],
+  isPeople: boolean | undefined,
+): PublishProblem | undefined {
+  for (const question of questions) {
+    if (question.answerType !== 'consent') continue;
+    if (recalledKeys(question.label).length > 0) {
+      return {
+        code: 'CONSENT_INVALID',
+        message: `${named(question)} recalls an answer, so each visitor would agree to different words. Write the wording out in full.`,
+        questionId: question.id,
+      };
+    }
+    if (isPeople === false) {
+      return {
+        code: 'CONSENT_INVALID',
+        message: `${named(question)} is a consent, and a consent is kept on a person. Add answers to People, or take it out.`,
+        questionId: question.id,
+      };
+    }
+  }
+  return undefined;
+}
+
 /** Why the score can't be filed where it is pointed (AC-6316), or undefined: an attribute gone, not a number, or read only. */
 function scoreFilingProblem(input: PublishInput): PublishProblem | undefined {
   const filed = input.document.scoreFiledOn;
@@ -608,6 +644,8 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
     if (unreadable !== undefined) return { code: 'BRAND_UNREADABLE', message: unreadable };
   }
   const { questions, targets } = input.document;
+  const consent = consentProblem(questions, input.isPeople);
+  if (consent !== undefined) return consent;
   if (targets.main !== undefined) {
     const match = targets.main.matchAttributeId;
     const where = input.objectName ?? 'People';

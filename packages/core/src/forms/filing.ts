@@ -53,6 +53,7 @@ import {
 } from './process.ts';
 import { canSeeForm, loadForm, loadVersions, type FormRow } from './shared.ts';
 import { lockRotation } from '../rotation/ledger.ts';
+import { consentAnswersOf, isPeopleObject, recordConsents } from './consent.ts';
 import type { RecordFileStore } from '../records/files.ts';
 
 /** The Add to CRM job's name. */
@@ -85,6 +86,8 @@ interface Mapping {
   readonly objectId: string;
   readonly attributes: ReadonlyMap<string, AttributeDef>;
   readonly options: Awaited<ReturnType<typeof optionsFor>>;
+  /** Whether it files onto People, the one object whose records hold consents (AC-1053). */
+  readonly isPeople: boolean;
 }
 
 /** A form's live mapping; `unpublished` with no live version, `unmapped` when that version keeps submissions only. */
@@ -103,6 +106,7 @@ async function mappingOf(tx: WorkspaceTx, formId: string): Promise<Mapping | 'un
     objectId: target.objectId,
     attributes,
     options: await optionsFor(tx, live.document, attributes),
+    isPeople: await isPeopleObject(tx, target.objectId),
   };
 }
 
@@ -157,6 +161,7 @@ interface ScopedRow extends Record<string, unknown> {
   readonly state: string;
   readonly answers: unknown;
   readonly assignment?: unknown;
+  readonly version_id: string;
   readonly live_record_id: string | null;
   readonly live_object_id: string | null;
 }
@@ -229,7 +234,7 @@ async function fileBatch(
   const outcomes: ItemOutcome[] = [];
   for (const item of input.items) {
     const found = await tx.execute<ScopedRow>(sql`
-      select s.id::text, s.state, s.answers, s.assignment, r.id::text as live_record_id,
+      select s.id::text, s.state, s.answers, s.assignment, s.version_id::text, r.id::text as live_record_id,
         r.object_id::text as live_object_id
       from form_submissions s
       left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
@@ -275,6 +280,20 @@ async function fileBatch(
     else if (filed.action === 'updated') totals.updated += 1;
     else totals.unchanged += 1;
     await settle(tx, row.id, filed, { filedWith: mapping.versionNumber });
+    // The consents it gave, from the version the visitor answered (never the mapping's): written once, so a
+    // submission processing already filed adds nothing here (AC-1053).
+    if (mapping.isPeople) {
+      const own = (await loadVersions(tx, [row.version_id])).get(row.version_id);
+      const consents = own === undefined ? undefined : consentAnswersOf(own.document, answersOf(row.answers));
+      if (consents?.kind === 'given') {
+        await recordConsents(tx, {
+          workspaceId: context.scope.workspaceId,
+          recordId: filed.recordId,
+          submissionId: row.id,
+          ticked: consents.ticked,
+        });
+      }
+    }
     outcomes.push({ position: item.position, state: 'done' });
   }
   return { finished: false, items: outcomes, checkpoint: totals, result: { filing: totals } };

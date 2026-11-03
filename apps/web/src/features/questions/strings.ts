@@ -1,7 +1,7 @@
 // Every word the question editor shows (spec 0023, 0023-experience.md, Questions; spec 0057), in one place: a form's
 // builder and a booking page's editor draw the same section. Where the two say something different (what an
 // unfiled answer is kept with), each has its own line.
-import type { AnswerType } from '@crm/data';
+import type { AnswerType, ConsentPurpose } from '@crm/data';
 
 export const strings = {
   questions: 'Questions',
@@ -18,11 +18,14 @@ export const strings = {
   /** A Consent question's label: the exact words beside its tick box (spec 0023, AC-1053). */
   consentWording: 'Wording',
   consentWordingHint: 'Shown beside the tick box, word for word, and kept with each answer.',
-  consentPlaceholder: 'I agree to get emails from Acme.',
+  consentPlaceholder: 'I agree to get emails from you.',
   consentPurpose: 'For',
   /** A consent's card line: where its answer goes instead of a field. */
   consentKept: 'Kept as consent',
-  consentPurposes: { marketing_email: 'Marketing emails', terms: 'Terms and privacy' },
+  consentPurposes: { marketing_email: 'Marketing emails', terms: 'Terms and privacy' } satisfies Record<
+    ConsentPurpose,
+    string
+  >,
   untitledQuestion: 'Untitled question',
   answerType: 'Answer type',
   choices: 'Choices',

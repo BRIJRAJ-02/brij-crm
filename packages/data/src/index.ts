@@ -705,6 +705,8 @@ export { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme } from '@crm/contract
 // Managed booking pages (spec 0037, AC-1333): the lockable parts in the order the template editor lists them, and
 // how many people one covers — values a screen renders, not only types, so they come through the one data layer.
 export { MANAGED_MEMBERS_MAX, MANAGED_PART_KEYS, MANAGED_PARTS } from '@crm/contracts';
+// What a Consent question is for (spec 0023, AC-1053), so the builder's picker lists exactly the contract's.
+export { CONSENT_PURPOSES, type ConsentPurpose } from '@crm/contracts';
 export type {
   BookingsCalendarHeld,
   BookingsCalendarState,

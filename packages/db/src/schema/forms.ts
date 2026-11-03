@@ -334,8 +334,8 @@ export const formSubmissionRecords = pgTable(
 
 /**
  * A consent a person gave or refused (spec 0023, AC-1053, AC-578): the purpose, the answer, the exact words and their
- * version, where it came from (a submission, a member, a site) and when. Only ever inserted: a withdrawal is a new
- * row, so a person's latest row for a purpose is their answer (AC-579). Migration 0165 holds the table.
+ * version, where it came from (a submission and its question, a member, a site) and when. Only ever inserted (the
+ * app's grants allow nothing else but a merge's move and the purge): a withdrawal is a new row, so a person's latest row for a purpose is their answer (AC-579). Migration 0165 holds the table.
  */
 export const consentRecords = pgTable(
   'consent_records',
@@ -351,6 +351,8 @@ export const consentRecords = pgTable(
     wordingVersion: integer('wording_version').notNull(),
     sourceType: text('source_type').notNull(),
     sourceId: uuid('source_id'),
+    /** The consent question it answers, for a submission's: one row per question a submission answered. */
+    questionId: text('question_id'),
     at: timestamptz('at').notNull().defaultNow(),
   },
   (t) => [
@@ -362,14 +364,17 @@ export const consentRecords = pgTable(
       foreignColumns: [records.workspaceId, records.id],
     }),
     index('consent_records_by_record').on(t.workspaceId, t.recordId, t.purpose, t.at.desc()),
-    index('consent_records_by_source').on(t.workspaceId, t.sourceType, t.sourceId),
+    uniqueIndex('consent_records_by_source')
+      .on(t.workspaceId, t.sourceId, t.questionId)
+      .where(sql`${t.sourceType} = 'submission'`),
     check('consent_records_purpose', sql`${t.purpose} ~ '^[a-z][a-z0-9_]{0,39}$'`),
     check('consent_records_wording', sql`char_length(${t.wording}) between 1 and 2000`),
     check('consent_records_version', sql`${t.wordingVersion} >= 1`),
     check(
       'consent_records_source',
-      sql`${t.sourceType} in ('submission', 'member', 'site') and (${t.sourceType} <> 'submission' or ${t.sourceId} is not null)`,
+      sql`${t.sourceType} in ('submission', 'member', 'site') and (${t.sourceType} <> 'submission' or (${t.sourceId} is not null and ${t.questionId} is not null))`,
     ),
+    check('consent_records_question', sql`${t.questionId} ~ '^[a-z0-9][a-z0-9_-]{0,39}$'`),
   ],
 );
 

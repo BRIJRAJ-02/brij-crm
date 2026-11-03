@@ -2,7 +2,7 @@
 // Purpose: a list of questions (spec 0023, 0023-experience.md, Questions), shared by a form's Form tab and a booking page's editor (spec 0057): cards closed until opened, each with its editor.
 // Main task: add, word, type, file, require, duplicate, delete (with Undo) and reorder the questions.
 // Leaves out: saving (each editor saves as it goes), the look and the words around the questions.
-import type { AnswerType, FormAttributeChoice, FormQuestion } from '@crm/data';
+import { CONSENT_PURPOSES, type AnswerType, type FormAttributeChoice, type FormQuestion } from '@crm/data';
 import {
   ANSWER_TYPES,
   BOOKING_ANSWER_TYPES,
@@ -1074,14 +1074,12 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
       return (
         <Select
           label={strings.consentPurpose}
-          items={[
-            { id: 'marketing_email', label: strings.consentPurposes.marketing_email },
-            { id: 'terms', label: strings.consentPurposes.terms },
-          ]}
+          items={CONSENT_PURPOSES.map((id) => ({ id, label: strings.consentPurposes[id] }))}
           value={options.purpose ?? 'marketing_email'}
           isReadOnly={isReadOnly}
           onChange={(purpose) => {
-            if (purpose === 'marketing_email' || purpose === 'terms') onChange({ options: { purpose } });
+            const picked = CONSENT_PURPOSES.find((each) => each === purpose);
+            if (picked !== undefined) onChange({ options: { purpose: picked } });
           }}
         />
       );

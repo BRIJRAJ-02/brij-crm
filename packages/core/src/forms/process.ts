@@ -40,7 +40,7 @@ import { copyFiledFile, type RecordFileStore } from '../records/files.ts';
 import { newId } from '../engine/ids.ts';
 import { tellTeam } from './notify.ts';
 import { tellVisitor } from './confirm.ts';
-import { isPeopleObject, recordConsents } from './consent.ts';
+import { consentAnswersOf, consentMissing, isPeopleObject, recordConsents } from './consent.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -1003,6 +1003,14 @@ export async function processSubmission(
     await tellVisitor(context, submission.id);
     return;
   }
+  // A required consent never ticked (a released submission was stored unchecked) stops the filing before any record
+  // is touched, with why (AC-1053): a person is never filed as having agreed to something they didn't.
+  const isPeople = await isPeopleObject(tx, target.objectId);
+  const consents = consentAnswersOf(document, answersOf(submission.answers));
+  if (isPeople && consents.kind === 'missing') {
+    await failSubmission(tx, submission.id, consentMissing(consents.question.label));
+    return;
+  }
   const attributes = await loadAttributes(tx, target.objectId);
   // A form filing People files the person's company by their email too (spec 0059), so its access reaches it.
   const filing = await companyFilingTarget(tx, target.objectId, attributes);
@@ -1034,14 +1042,13 @@ export async function processSubmission(
       ),
   });
   await settle(tx, submission.id, filed);
-  // Each Consent question answered becomes a consent record on the person, in this same transaction (AC-1053).
-  if (filed.kind === 'filed' && (await isPeopleObject(tx, target.objectId))) {
+  // Each consent ticked becomes a consent record on the person, in this same transaction (AC-1053).
+  if (filed.kind === 'filed' && isPeople && consents.kind === 'given') {
     await recordConsents(tx, {
       workspaceId: context.scope.workspaceId,
       recordId: filed.recordId,
       submissionId: submission.id,
-      document,
-      answers: answersOf(submission.answers),
+      ticked: consents.ticked,
     });
   }
   await tellTeam(context, rules, submission.id);

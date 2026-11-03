@@ -391,7 +391,10 @@ export function checkAnswers(
   ): Readonly<Record<string, CheckedAnswer>> | undefined => {
     // A question whose Show when doesn't hold over the answers kept so far is skipped: never required, never kept.
     if (!matchesShowWhen(question.showWhen, values)) return undefined;
-    if (options.absentNotAsked === true && !Object.hasOwn(answers, question.key)) return undefined;
+    // A required consent is never taken as not asked: a site's own form that leaves it out (an unticked box posts
+    // nothing, and so does HTML copied before it was added) is refused, never filed as if agreed (AC-1053).
+    const consentRequired = question.answerType === 'consent' && question.required;
+    if (options.absentNotAsked === true && !consentRequired && !Object.hasOwn(answers, question.key)) return undefined;
     const given = Object.hasOwn(answers, question.key) ? answers[question.key] : undefined;
     // A hidden question takes the link's value, else its default (AC-6309), and is never refused for being empty:
     // a visitor can't see it to answer it.

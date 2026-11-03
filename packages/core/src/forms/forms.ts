@@ -48,7 +48,7 @@ import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
 import { withdrawSubmissionNotices } from '../notifications/notify.ts';
 import { brandRowOf } from '../brand/brand.ts';
-import { stampConsentVersions } from './consent.ts';
+import { isPeopleObject, publishedDocuments, stampConsentVersions } from './consent.ts';
 import {
   canSeeForm,
   fileable,
@@ -957,6 +957,9 @@ export async function publishForm(
         attributes: await publishAttributes(tx, scope.access, form.mainObjectId),
         // So a refusal names the object the form files onto, not People whatever it is (27 October 2026).
         ...(form.mainObjectId === null ? {} : { objectName: await objectName(tx, form.mainObjectId) }),
+        // A consent is kept on a person (AC-1053): a form keeping its submissions only, or filing elsewhere, can't ask one.
+        isPeople:
+          draft.document.targets.main !== undefined && (await isPeopleObject(tx, draft.document.targets.main.objectId)),
         canChangeAttributes: can(scope.access, 'schema.manage'),
       });
       if (problem !== undefined) {
@@ -998,7 +1001,7 @@ export async function publishForm(
       }
       const by = actorRow(scope.actor);
       // Each Consent question goes live with the version of its words (AC-1053): changed words, a new version.
-      const stamped = stampConsentVersions(draft.document, was?.document);
+      const stamped = stampConsentVersions(draft.document, await publishedDocuments(tx, form.id));
       await tx
         .update(formVersions)
         .set({
