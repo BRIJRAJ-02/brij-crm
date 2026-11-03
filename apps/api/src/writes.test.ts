@@ -3370,7 +3370,8 @@ async function tablesAt(m: Member, placeId: string): Promise<readonly [string, s
   return [one.id, two.id];
 }
 
-// The Hospitality setup (spec 0065, H0): no record changes, so no change event; each screen reads its own copy.
+// The Hospitality setup (spec 0065, H0): installing or removing an app stores one `nav` row naming every active
+// member (their sidebars follow); the setup writes change no record and store none. Each case installs first.
 Object.assign(WRITES, {
   'hospitality.install': async (m: Member, mutationId: string) => {
     await testQuery(ownerUrl, `update workspaces set early_access = '{hospitality}' where id = $1`, [m.workspace.id]);
@@ -3380,12 +3381,12 @@ Object.assign(WRITES, {
       business: { name: 'Cafe', kind: 'cafe', place: { country: 'GB', timeZone: 'UTC' }, currency: 'GBP' },
       mutationId,
     });
-    return [];
+    return [{ kind: 'nav', mutation_id: mutationId }];
   },
   'hospitality.remove': async (m: Member, mutationId: string) => {
     await hospitalityOf(m);
     await m.client.hospitality.remove({ workspace: m.slug, app: 'table_seating', mutationId });
-    return [];
+    return [{ kind: 'nav' }, { kind: 'nav', mutation_id: mutationId }];
   },
   'hospitality.saveBusiness': async (m: Member, mutationId: string) => {
     await hospitalityOf(m);
@@ -3394,7 +3395,7 @@ Object.assign(WRITES, {
       profile: { name: 'Somewhere Nowhere', kind: 'bar' },
       mutationId,
     });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.createPlace': async (m: Member, mutationId: string) => {
     await hospitalityOf(m);
@@ -3404,7 +3405,7 @@ Object.assign(WRITES, {
       place: { name: 'Soho', country: 'GB', timeZone: 'Europe/London' },
       mutationId,
     });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.updatePlace': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
@@ -3414,19 +3415,19 @@ Object.assign(WRITES, {
       hours: { weekly: { fri: [{ from: '18:00', to: '02:00' }] }, exceptions: [] },
       mutationId,
     });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.saveArea': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     await m.client.hospitality.saveArea({ workspace: m.slug, placeId, name: 'Terrace', mutationId });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.deleteArea': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const floor = await m.client.hospitality.saveArea({ workspace: m.slug, placeId, name: 'Bar', mutationId: newId() });
     const areaId = floor.areas[0]?.id ?? newId();
     await m.client.hospitality.deleteArea({ workspace: m.slug, placeId, areaId, mutationId });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.addTables': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
@@ -3438,38 +3439,38 @@ Object.assign(WRITES, {
       maxGuests: 2,
       mutationId,
     });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.updateTable': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [one, two] = await tablesAt(m, placeId);
     await m.client.hospitality.updateTable({ workspace: m.slug, placeId, tableId: one, joins: [two], mutationId });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.moveTable': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [, two] = await tablesAt(m, placeId);
     await m.client.hospitality.moveTable({ workspace: m.slug, placeId, tableId: two, toIndex: 0, mutationId });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.archiveTable': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [one] = await tablesAt(m, placeId);
     await m.client.hospitality.archiveTable({ workspace: m.slug, placeId, tableId: one, mutationId });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.restoreTable': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [one] = await tablesAt(m, placeId);
     await m.client.hospitality.archiveTable({ workspace: m.slug, placeId, tableId: one, mutationId: newId() });
     await m.client.hospitality.restoreTable({ workspace: m.slug, placeId, tableId: one, mutationId });
-    return [];
+    return [{ kind: 'nav' }];
   },
   'hospitality.deleteTable': async (m: Member, mutationId: string) => {
     const { placeId } = await hospitalityOf(m);
     const [one] = await tablesAt(m, placeId);
     await m.client.hospitality.deleteTable({ workspace: m.slug, placeId, tableId: one, mutationId });
-    return [];
+    return [{ kind: 'nav' }];
   },
 });
 

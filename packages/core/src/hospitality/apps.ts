@@ -22,11 +22,25 @@ import { lockKey } from '../booking/locks.ts';
 import { newId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
+import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { writeAudit } from '../members/audit.ts';
 import { hasEarlyAccess, hospitalityMember, installedRows, isApp } from './gate.ts';
 import { insertPlace } from './places.ts';
 
-const { businessProfiles, workspaceApps, workspaceRoles, workspaces } = schema;
+const { businessProfiles, members, workspaceApps, workspaceRoles, workspaces } = schema;
+
+/**
+ * Tells every active member's sidebar that the Hospitality section changed (AC-6510): one `nav` change event naming
+ * them, which their sidebars already follow, so the section comes and goes within the usual moment.
+ */
+async function recordSidebars(context: WriteContext): Promise<void> {
+  const { tx, scope } = context;
+  const rows = await tx
+    .select({ id: members.id })
+    .from(members)
+    .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.status, 'active')));
+  context.record({ nav: rows.map((row) => row.id) });
+}
 
 /** The app names in words, for refusals. */
 const APP_NAMES: Readonly<Record<HospitalityApp, string>> = {
@@ -147,73 +161,81 @@ function auditApps(
 export async function installApp(
   scope: EngineScope,
   input: { readonly app: HospitalityApp; readonly withNeeded?: boolean; readonly business?: FirstBusiness },
+  hooks: readonly AfterWrite[] = [],
 ): Promise<AppsView> {
   requirePermission(scope, 'workspace.manage');
   const by = hospitalityMember(scope);
   if (!isApp(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
-  return inWorkspace(scope, async (tx) => {
-    await lockKey(tx, `apps:${scope.workspaceId}`);
-    if (!(await hasEarlyAccess(tx, scope.workspaceId))) {
-      throw refuse('NOT_FOUND', 'The Hospitality apps aren’t open to this workspace yet.');
-    }
-    const before = await installedRows(tx, scope.workspaceId);
-    const needed = APP_NEEDS[input.app].filter((app) => !before.has(app));
-    if (needed.length > 0 && input.withNeeded !== true) {
-      throw refuse(
-        'APP_NEEDED',
-        `${APP_NAMES[input.app]} needs ${needed.map((app) => APP_NAMES[app]).join(' and ')}. Install both?`,
-      );
-    }
-    const [profile] = await tx
-      .select({ name: businessProfiles.name })
-      .from(businessProfiles)
-      .where(eq(businessProfiles.workspaceId, scope.workspaceId));
-    if (profile === undefined) {
-      if (input.business === undefined) {
-        throw refuse('BUSINESS_NEEDED', 'Tell us about the business first: its name, kind and first place.');
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      await lockKey(tx, `apps:${scope.workspaceId}`);
+      if (!(await hasEarlyAccess(tx, scope.workspaceId))) {
+        throw refuse('NOT_FOUND', 'The Hospitality apps aren’t open to this workspace yet.');
       }
-      await tx.insert(businessProfiles).values({
-        workspaceId: scope.workspaceId,
-        name: input.business.name,
-        kind: input.business.kind,
-        createdByMemberId: by,
-        updatedByMemberId: by,
-      });
-      await insertPlace(tx, scope, newId(), { name: input.business.name, ...input.business.place }, by);
-      // The card's currency becomes the workspace's only while it has none: an existing default is never moved.
-      const changed = await tx
-        .update(workspaces)
-        .set({ currency: input.business.currency })
-        .where(and(eq(workspaces.id, scope.workspaceId), isNull(workspaces.currency)))
-        .returning({ id: workspaces.id });
-      if (changed.length > 0) {
-        await writeAudit(tx, scope.workspaceId, scope.actor, {
-          action: 'workspace.updated',
-          targetType: 'workspace',
-          targetId: scope.workspaceId,
-          before: { currency: null },
-          after: { currency: input.business.currency },
-        });
+      const before = await installedRows(tx, scope.workspaceId);
+      const needed = APP_NEEDS[input.app].filter((app) => !before.has(app));
+      if (needed.length > 0 && input.withNeeded !== true) {
+        throw refuse(
+          'APP_NEEDED',
+          `${APP_NAMES[input.app]} needs ${needed.map((app) => APP_NAMES[app]).join(' and ')}. Install both?`,
+        );
       }
-    }
-    const [ever] = await tx
-      .select({ n: count() })
-      .from(workspaceApps)
-      .where(eq(workspaceApps.workspaceId, scope.workspaceId));
-    if ((ever?.n ?? 0) === 0) await seedFloorStaff(tx, scope);
-    const adding = [...needed, input.app].filter((app) => !before.has(app));
-    if (adding.length > 0) {
-      await tx
-        .insert(workspaceApps)
-        .values(adding.map((app) => ({ workspaceId: scope.workspaceId, app, installedByMemberId: by })))
-        .onConflictDoUpdate({
-          target: [workspaceApps.workspaceId, workspaceApps.app],
-          set: { removedAt: null, installedAt: sql`now()`, installedByMemberId: by },
+      const [profile] = await tx
+        .select({ name: businessProfiles.name })
+        .from(businessProfiles)
+        .where(eq(businessProfiles.workspaceId, scope.workspaceId));
+      if (profile === undefined) {
+        if (input.business === undefined) {
+          throw refuse('BUSINESS_NEEDED', 'Tell us about the business first: its name, kind and first place.');
+        }
+        await tx.insert(businessProfiles).values({
+          workspaceId: scope.workspaceId,
+          name: input.business.name,
+          kind: input.business.kind,
+          createdByMemberId: by,
+          updatedByMemberId: by,
         });
-      await auditApps(tx, scope, before, new Set([...before, ...adding]));
-    }
-    return viewOf(tx, scope);
-  });
+        await insertPlace(tx, scope, newId(), { name: input.business.name, ...input.business.place }, by);
+        // The card's currency becomes the workspace's only while it has none: an existing default is never moved.
+        const changed = await tx
+          .update(workspaces)
+          .set({ currency: input.business.currency })
+          .where(and(eq(workspaces.id, scope.workspaceId), isNull(workspaces.currency)))
+          .returning({ id: workspaces.id });
+        if (changed.length > 0) {
+          await writeAudit(tx, scope.workspaceId, scope.actor, {
+            action: 'workspace.updated',
+            targetType: 'workspace',
+            targetId: scope.workspaceId,
+            before: { currency: null },
+            after: { currency: input.business.currency },
+          });
+        }
+      }
+      const [ever] = await tx
+        .select({ n: count() })
+        .from(workspaceApps)
+        .where(eq(workspaceApps.workspaceId, scope.workspaceId));
+      if ((ever?.n ?? 0) === 0) await seedFloorStaff(tx, scope);
+      const adding = [...needed, input.app].filter((app) => !before.has(app));
+      if (adding.length > 0) {
+        await tx
+          .insert(workspaceApps)
+          .values(adding.map((app) => ({ workspaceId: scope.workspaceId, app, installedByMemberId: by })))
+          .onConflictDoUpdate({
+            target: [workspaceApps.workspaceId, workspaceApps.app],
+            set: { removedAt: null, installedAt: sql`now()`, installedByMemberId: by },
+          });
+        await auditApps(tx, scope, before, new Set([...before, ...adding]));
+        await recordSidebars(context);
+      }
+      return viewOf(tx, scope);
+    },
+    hooks,
+  );
+  return result;
 }
 
 /**
@@ -224,29 +246,37 @@ export async function installApp(
 export async function removeApp(
   scope: EngineScope,
   input: { readonly app: HospitalityApp; readonly withDependents?: boolean },
+  hooks: readonly AfterWrite[] = [],
 ): Promise<AppsView> {
   requirePermission(scope, 'workspace.manage');
   hospitalityMember(scope);
   if (!isApp(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
-  return inWorkspace(scope, async (tx) => {
-    await lockKey(tx, `apps:${scope.workspaceId}`);
-    const before = await installedRows(tx, scope.workspaceId);
-    if (!before.has(input.app)) return viewOf(tx, scope);
-    const dependents = appsNeeding(input.app).filter((app) => before.has(app));
-    if (dependents.length > 0 && input.withDependents !== true) {
-      throw refuse(
-        'APP_NEEDED',
-        `${dependents.map((app) => APP_NAMES[app]).join(' and ')} needs ${APP_NAMES[input.app]}. Remove both?`,
-      );
-    }
-    const removing = [input.app, ...dependents];
-    for (const app of removing) {
-      await tx
-        .update(workspaceApps)
-        .set({ removedAt: sql`now()` })
-        .where(and(eq(workspaceApps.workspaceId, scope.workspaceId), eq(workspaceApps.app, app)));
-    }
-    await auditApps(tx, scope, before, new Set([...before].filter((app) => !removing.includes(app))));
-    return viewOf(tx, scope);
-  });
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      await lockKey(tx, `apps:${scope.workspaceId}`);
+      const before = await installedRows(tx, scope.workspaceId);
+      if (!before.has(input.app)) return viewOf(tx, scope);
+      const dependents = appsNeeding(input.app).filter((app) => before.has(app));
+      if (dependents.length > 0 && input.withDependents !== true) {
+        throw refuse(
+          'APP_NEEDED',
+          `${dependents.map((app) => APP_NAMES[app]).join(' and ')} needs ${APP_NAMES[input.app]}. Remove both?`,
+        );
+      }
+      const removing = [input.app, ...dependents];
+      for (const app of removing) {
+        await tx
+          .update(workspaceApps)
+          .set({ removedAt: sql`now()` })
+          .where(and(eq(workspaceApps.workspaceId, scope.workspaceId), eq(workspaceApps.app, app)));
+      }
+      await auditApps(tx, scope, before, new Set([...before].filter((app) => !removing.includes(app))));
+      await recordSidebars(context);
+      return viewOf(tx, scope);
+    },
+    hooks,
+  );
+  return result;
 }

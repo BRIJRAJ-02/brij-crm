@@ -19,7 +19,7 @@ import type {
   PlaceFloor,
   PlaceHours,
 } from '@crm/contracts';
-import { toDataError, type DataError } from '../errors.ts';
+import { dataError, toDataError, type DataError } from '../errors.ts';
 
 /** A copy as a screen holds it. */
 export type HospitalityHeldState<Value> =
@@ -160,15 +160,27 @@ function holder<Value>(load: () => Promise<Value>, now: () => number) {
   // answer decides what shows; a refusal puts back what was there before that change.
   let queue: Promise<unknown> = Promise.resolve();
   let made = 0;
+  let pending = 0;
+  // A refused change that wasn't the latest can't put back what it changed (a later one is laid over it), so the
+  // copy is read again once every change has answered.
+  let stale = false;
+  const settle = () => {
+    pending -= 1;
+    if (pending === 0 && stale) {
+      stale = false;
+      void read().catch(() => undefined);
+    }
+  };
   const change = async (
     next: (value: Value) => Value,
     send: () => Promise<Value | ((value: Value) => Value)>,
   ): Promise<DataError | undefined> => {
-    if (state.status !== 'ready') return undefined;
+    if (state.status !== 'ready') return dataError('NOT_READY', 'Still loading, try again.');
     made += 1;
     const mine = made;
     const was = state.value;
     set({ status: 'ready', value: next(was), isSaving: true });
+    pending += 1;
     const sent = queue.then(send);
     queue = sent.catch(() => undefined);
     try {
@@ -184,8 +196,15 @@ function holder<Value>(load: () => Promise<Value>, now: () => number) {
       return undefined;
     } catch (error) {
       if (mine === made) set({ status: 'ready', value: was, isSaving: false });
+      else stale = true;
       return toDataError(error);
+    } finally {
+      settle();
     }
+  };
+  /** Lays `next` over the copy as it stands, outside the change queue (a count another copy's write moved). */
+  const patch = (next: (value: Value) => Value) => {
+    if (state.status === 'ready') set({ ...state, value: next(state.value) });
   };
   const held: HospitalityHeld<Value> = {
     subscribe(listener) {
@@ -202,7 +221,7 @@ function holder<Value>(load: () => Promise<Value>, now: () => number) {
       void read().catch(() => undefined);
     },
   };
-  return { held, read, change };
+  return { held, read, change, patch };
 }
 
 /** `tables` with the live ones in `order` (by id), positions renumbered, archived ones after. */
@@ -262,15 +281,12 @@ export function openHospitality(given: {
   const countTables = (workspace: string, placeId: string, floor: PlaceFloor) => {
     const held = businessHeld.get(workspace);
     if (held === undefined) return;
-    void held.change(
-      (view) => ({
-        ...view,
-        places: view.places.map((place) =>
-          place.id === placeId ? { ...place, tables: floor.tables.filter((table) => !table.archived).length } : place,
-        ),
-      }),
-      () => Promise.resolve((view: BusinessView) => view),
-    );
+    held.patch((view) => ({
+      ...view,
+      places: view.places.map((place) =>
+        place.id === placeId ? { ...place, tables: floor.tables.filter((table) => !table.archived).length } : place,
+      ),
+    }));
   };
 
   /** One floor write: shown at once by `show`, then the server's floor. */

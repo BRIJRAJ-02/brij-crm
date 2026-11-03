@@ -75,7 +75,8 @@ async function onPlace(
   const id = checkId(placeId, PLACE_NOT_FOUND);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    await lockKey(tx, `place:${scope.workspaceId}:${id}`);
+    // Only a write takes the place's lock; a read never waits behind one.
+    if (what !== undefined) await lockKey(tx, `place:${scope.workspaceId}:${id}`);
     const [place] = await tx
       .select({ id: places.id })
       .from(places)
@@ -117,7 +118,13 @@ async function checkArea(tx: WorkspaceTx, workspaceId: string, placeId: string, 
 async function tableOf(tx: WorkspaceTx, workspaceId: string, placeId: string, tableId: string) {
   const id = checkId(tableId, TABLE_NOT_FOUND);
   const [row] = await tx
-    .select({ id: placeTables.id, joins: placeTables.joins, archivedAt: placeTables.archivedAt })
+    .select({
+      id: placeTables.id,
+      joins: placeTables.joins,
+      archivedAt: placeTables.archivedAt,
+      minGuests: placeTables.minGuests,
+      maxGuests: placeTables.maxGuests,
+    })
     .from(placeTables)
     .where(and(eq(placeTables.workspaceId, workspaceId), eq(placeTables.placeId, placeId), eq(placeTables.id, id)))
     .for('update');
@@ -288,34 +295,49 @@ async function setJoins(
       )
       .for('update');
     if (others.length !== next.length) throw refuseOn('NOT_FOUND', 'Join only live tables of this place.', 'joins');
-    for (const other of others) {
-      if (!other.joins.includes(tableId)) {
-        if (other.joins.length >= HOSPITALITY_LIMITS.joinsPerTable) {
-          throw refuseOn('LIMIT_REACHED', 'One of those tables already joins 10 others.', 'joins');
-        }
-        await tx
-          .update(placeTables)
-          .set({ joins: [...other.joins, tableId] })
-          .where(and(eq(placeTables.workspaceId, workspaceId), eq(placeTables.id, other.id)));
-      }
+    const joining = others.filter((other) => !other.joins.includes(tableId));
+    if (joining.some((other) => other.joins.length >= HOSPITALITY_LIMITS.joinsPerTable)) {
+      throw refuseOn('LIMIT_REACHED', 'One of those tables already joins 10 others.', 'joins');
+    }
+    // Each newly named table joins it back, in one statement.
+    if (joining.length > 0) {
+      await tx
+        .update(placeTables)
+        .set({ joins: sql`array_append(${placeTables.joins}, ${tableId}::uuid)` })
+        .where(
+          and(
+            eq(placeTables.workspaceId, workspaceId),
+            inArray(
+              placeTables.id,
+              joining.map((other) => other.id),
+            ),
+          ),
+        );
     }
   }
   const dropped = was.filter((id) => !next.includes(id));
-  if (dropped.length > 0) await forget(tx, workspaceId, tableId, dropped);
+  if (dropped.length > 0) await forget(tx, workspaceId, placeId, tableId, dropped);
   await tx
     .update(placeTables)
     .set({ joins: next })
     .where(and(eq(placeTables.workspaceId, workspaceId), eq(placeTables.id, tableId)));
 }
 
-/** Takes `tableId` out of the joins of `from` (all of the workspace's tables naming it when `from` is absent). */
-async function forget(tx: WorkspaceTx, workspaceId: string, tableId: string, from?: readonly string[]): Promise<void> {
+/** Takes `tableId` out of the joins of `from` (all of its place's tables naming it when `from` is absent). */
+async function forget(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  placeId: string,
+  tableId: string,
+  from?: readonly string[],
+): Promise<void> {
   await tx
     .update(placeTables)
     .set({ joins: sql`array_remove(${placeTables.joins}, ${tableId}::uuid)` })
     .where(
       and(
         eq(placeTables.workspaceId, workspaceId),
+        eq(placeTables.placeId, placeId),
         sql`${tableId}::uuid = any(${placeTables.joins})`,
         ...(from === undefined ? [] : [inArray(placeTables.id, [...from])]),
       ),
@@ -342,12 +364,8 @@ export async function updateTable(
   return onPlace(scope, input.placeId, 'table.updated', async (tx, by) => {
     const table = await tableOf(tx, scope.workspaceId, input.placeId, input.tableId);
     if (typeof input.areaId === 'string') await checkArea(tx, scope.workspaceId, input.placeId, input.areaId);
-    const [current] = await tx
-      .select({ min: placeTables.minGuests, max: placeTables.maxGuests })
-      .from(placeTables)
-      .where(and(eq(placeTables.workspaceId, scope.workspaceId), eq(placeTables.id, table.id)));
-    const min = input.minGuests ?? current?.min ?? 1;
-    const max = input.maxGuests ?? current?.max ?? 1;
+    const min = input.minGuests ?? table.minGuests;
+    const max = input.maxGuests ?? table.maxGuests;
     if (min > max) throw refuseOn('CONFIG_INVALID', 'The fewest guests can’t be more than the most.', 'minGuests');
     await labelGuard('label', () =>
       tx
@@ -448,7 +466,7 @@ export async function deleteTable(
     if (holds > 0) {
       throw refuse('IN_USE', `This table holds ${String(holds)} upcoming reservations. Archive it instead.`);
     }
-    await forget(tx, scope.workspaceId, table.id);
+    await forget(tx, scope.workspaceId, input.placeId, table.id);
     await tx
       .delete(placeTables)
       .where(and(eq(placeTables.workspaceId, scope.workspaceId), eq(placeTables.id, table.id)));

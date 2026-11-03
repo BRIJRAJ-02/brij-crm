@@ -22,23 +22,28 @@ import { member } from '../../orpc.ts';
 // The Hospitality suite's setup (spec 0065, H0): the Apps page, the business, its places and each place's floor.
 // Inside a workspace, behind the member door; core checks the permission (`workspace.manage` to install and remove,
 // `hospitality.manage` for the rest) before anything is read, then the app gate (`APP_NOT_INSTALLED`). None of these
-// change a record, so they store no change event; each screen holds its own copy and reads it again when opened.
+// change a record; installing or removing an app stores one `nav` change event naming every active member, so their
+// sidebars follow, and the rest store none (each screen holds its own copy and reads it again when opened).
 const h = member.hospitality;
 
 export const hospitalityRouter = h.router({
   apps: h.apps.handler(({ context }) => listApps(context.scope)),
   install: h.install.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      installApp(context.scope, {
-        app: input.app,
-        withNeeded: input.withNeeded,
-        ...(input.business === undefined ? {} : { business: input.business }),
-      }),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      installApp(
+        context.scope,
+        {
+          app: input.app,
+          withNeeded: input.withNeeded,
+          ...(input.business === undefined ? {} : { business: input.business }),
+        },
+        hooks,
+      ),
     ),
   ),
   remove: h.remove.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      removeApp(context.scope, { app: input.app, withDependents: input.withDependents }),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      removeApp(context.scope, { app: input.app, withDependents: input.withDependents }, hooks),
     ),
   ),
   business: h.business.handler(({ context }) => getBusiness(context.scope)),

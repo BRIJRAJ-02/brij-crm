@@ -152,17 +152,23 @@ function placeView(row: PlaceRow, tables: number): Place {
   };
 }
 
-/** The workspace's places in order, each with its live table count. */
-async function readPlaces(tx: WorkspaceTx, workspaceId: string): Promise<Place[]> {
+/** The workspace's places in order (or the one `only` names), each with its live table count. */
+async function readPlaces(tx: WorkspaceTx, workspaceId: string, only?: string): Promise<Place[]> {
   const rows = await tx
     .select(PLACE_COLUMNS)
     .from(places)
-    .where(eq(places.workspaceId, workspaceId))
+    .where(and(eq(places.workspaceId, workspaceId), ...(only === undefined ? [] : [eq(places.id, only)])))
     .orderBy(asc(places.position), asc(places.id));
   const counts = await tx
     .select({ placeId: placeTables.placeId, n: count() })
     .from(placeTables)
-    .where(and(eq(placeTables.workspaceId, workspaceId), isNull(placeTables.archivedAt)))
+    .where(
+      and(
+        eq(placeTables.workspaceId, workspaceId),
+        isNull(placeTables.archivedAt),
+        ...(only === undefined ? [] : [eq(placeTables.placeId, only)]),
+      ),
+    )
     .groupBy(placeTables.placeId);
   const byPlace = new Map(counts.map((row) => [row.placeId, row.n]));
   return rows.map((row) => placeView(row, byPlace.get(row.id) ?? 0));
@@ -170,7 +176,7 @@ async function readPlaces(tx: WorkspaceTx, workspaceId: string): Promise<Place[]
 
 /** One place, or NOT_FOUND. */
 async function readPlace(tx: WorkspaceTx, workspaceId: string, placeId: string): Promise<Place> {
-  const found = (await readPlaces(tx, workspaceId)).find((place) => place.id === placeId);
+  const [found] = await readPlaces(tx, workspaceId, placeId);
   if (found === undefined) throw refuse('NOT_FOUND', PLACE_NOT_FOUND);
   return found;
 }

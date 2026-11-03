@@ -35,13 +35,26 @@ export async function installedRows(tx: WorkspaceTx, workspaceId: string): Promi
   return new Set(rows.map((row) => row.app).filter(isApp));
 }
 
-/** The Hospitality apps installed now (the sidebar's section, AC-6510); none without early access. */
+/**
+ * The Hospitality apps installed now (the sidebar's section, AC-6510); none without early access. One query: the
+ * workspace's early access joined to its live app rows.
+ */
 export async function installedHospitalityApps(
   tx: WorkspaceTx,
   workspaceId: string,
 ): Promise<ReadonlySet<HospitalityApp>> {
-  if (!(await hasEarlyAccess(tx, workspaceId))) return new Set();
-  return installedRows(tx, workspaceId);
+  const rows = await tx
+    .select({ app: workspaceApps.app })
+    .from(workspaceApps)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceApps.workspaceId))
+    .where(
+      and(
+        eq(workspaceApps.workspaceId, workspaceId),
+        isNull(workspaceApps.removedAt),
+        sql`'hospitality' = any(${workspaces.earlyAccess})`,
+      ),
+    );
+  return new Set(rows.map((row) => row.app).filter(isApp));
 }
 
 /** Whether `app` is installed and its early access still open, in the caller's own transaction (AC-6504). */
