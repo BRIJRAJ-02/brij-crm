@@ -19,6 +19,16 @@ The owner (4 Nov 2026): everything public must look professional; customisation 
   - **Split**: on wide screens a sticky identity panel on the left (logo, name, open now, Book) and the content on the right; one column on phones. For clinics, studios, practices (after Fresha's venue page).
 - **AC-6802**: What the owner customises, and only this: template, accent (brand kit), logo, cover photo (Studio, Split; optional elsewhere), and avatar shape (circle or rounded). Fonts, grounds, gradients, patterns, row shapes and fills are fixed per template. Every template passes WCAG AA with any accent: the accent is adjusted for contrast where it carries text (the 0060 rule).
 - **AC-6803**: Interactive by default, in every template, from the shared motion parts: a once only staggered entrance (off under reduced motion), springy press states, a hover lift on rows and cards, photos fading in from a blurred placeholder, sticky section tabs that follow the scroll, and smooth crossfades between steps. No motion longer than the motion tokens allow.
+- **AC-6806**: The motion comes from transitions.dev (owner, 4 Nov 2026; its licence allows use in our product, not resale as a motion kit), installed as the `transitions-dev` skill, built once as shared `@crm/ui` motion parts and tuned with `transitions-polish` against our motion tokens. Mapping:
+  - steps of a booking, form or reservation flow: page side by side; height changes: card resize
+  - prices, totals, "42 going", counters: number pop in; dashboard numbers: spinning counter; analytics rings: donut chart
+  - Publish → Published, Book → Booked: text states swap; icon changes: icon swap
+  - booking confirmed, registration done: success check
+  - section tabs and template picker: tabs sliding; menus: menu dropdown; dialogs: modal; item sheet and side panels: panel reveal; FAQ and About: accordion
+  - refused field: error state shake; clearing search: input clear dissolve; loading: skeleton reveal (never a flash); entrance of a page: texts reveal (once)
+  - event guests: avatar group hover; toasts and undo: toast and banner stacking; checkboxes, consent ticks and switches: checkbox check and toggle; add menus: plus menu morph; tooltips: tooltip
+  - not used on public pages: card tilt, matrix loader, thinking and streaming text (not professional for these pages).
+  Every part honours reduced motion and has a story.
 - **AC-6804**: One look per workspace: the template lives in the brand kit and every public page uses it. A link page may pick another of the four for that person's page. The editor shows the four as large live previews of the real page (not thumbnails), switching with a crossfade.
 - **AC-6805**: Existing pages move to the nearest template once, at migration: plain, paper, quiet, ocean, mint → Classic; editorial, dawn, gallery → Studio; ink, bold → Night; studio and any remaining → Split if they have a cover photo, else Classic. Old theme fields stay stored but unused; the editor shows a one time note "Your page now uses Classic" with a link to choose another.
 
