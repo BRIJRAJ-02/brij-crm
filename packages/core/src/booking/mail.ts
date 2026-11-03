@@ -423,7 +423,30 @@ export async function prepareBookingMail(
           why: `You got this email because ${row.visitorName} had added this address to ${page.title}.`,
           ...guestFile('CANCEL', guest),
         }));
-        return { messages: [...invitations(true), ...removals], invited: newGuests, uninvited: removed, stamp };
+        // A guest who invites people from their page tells the host, once per new guest (a host adding them knows).
+        const toHost: BookingMail[] =
+          byGuest && newGuests.length > 0
+            ? hosts.map((each): BookingMail => ({
+                to: each.email,
+                subject: `Guests added: ${page.title} with ${row.visitorName}`,
+                preview: `${row.visitorName} invited ${newGuests.join(', ')}.`,
+                heading: 'Guests added',
+                intro: `${row.visitorName} invited ${newGuests.join(', ')} to ${page.title}. They have the calendar file.`,
+                rows: [
+                  when(hostZone),
+                  { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
+                  { label: 'Guests', value: guests.join(', ') },
+                ],
+                button: { label: 'Open Bookings', url: bookingsUrl },
+                why: hostWhy,
+              }))
+            : [];
+        return {
+          messages: [...invitations(true), ...removals, ...toHost],
+          invited: newGuests,
+          uninvited: removed,
+          stamp,
+        };
       }
       case 'moved': {
         const toVisitor: BookingMail = {

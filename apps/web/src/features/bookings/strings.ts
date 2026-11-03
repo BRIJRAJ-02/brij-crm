@@ -405,7 +405,7 @@ export const strings = {
     only_free: 'was the only one free then',
     routed: 'was chosen by the routing form',
     manual: 'was picked by hand',
-    reassigned: 'was reassigned by hand',
+    reassigned: 'took it over when it was reassigned',
     adjustment: 'had their count adjusted by hand',
   },
   // The Team day (spec 0030, as spec 0037 amends it).

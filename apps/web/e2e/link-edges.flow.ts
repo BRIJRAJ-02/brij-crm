@@ -123,7 +123,7 @@ test.describe('the link page journey’s edges', () => {
     await page.getByRole('button', { name: 'More for shop.example.com' }).click();
     await page.getByRole('menuitem', { name: 'Delete' }).click();
     const confirm = page.getByRole('alertdialog', { name: 'Delete shop.example.com?' });
-    await expect(confirm).toContainText('Archive keeps it instead.');
+    await expect(confirm).toContainText('Archive keeps it.');
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(confirm).toBeHidden();
     await page.getByRole('button', { name: 'More for shop.example.com' }).click();

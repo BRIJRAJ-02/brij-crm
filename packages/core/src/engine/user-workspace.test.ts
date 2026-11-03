@@ -58,6 +58,23 @@ async function inside(workspaceId: string) {
 }
 
 describe('a signed in user creates a workspace', () => {
+  it('takes the maker’s time zone, and keeps UTC for none or a name it doesn’t know', async () => {
+    const zoneOf = async (workspaceId: string) =>
+      db.withWorkspace(workspaceId, async (tx) => {
+        const rows = await tx.execute<{ time_zone: string }>(sql`select time_zone from workspaces`);
+        return rows.rows[0]?.time_zone;
+      });
+    const kolkata = await input({ timeZone: 'Asia/Kolkata' });
+    await createUserWorkspace(db, kolkata);
+    expect(await zoneOf(kolkata.id)).toBe('Asia/Kolkata');
+    const none = await input();
+    await createUserWorkspace(db, none);
+    expect(await zoneOf(none.id)).toBe('UTC');
+    const unknown = await input({ timeZone: 'Mars/Olympus_Mons' });
+    await createUserWorkspace(db, unknown);
+    expect(await zoneOf(unknown.id)).toBe('UTC');
+  });
+
   it('writes the workspace, the template, their member row (its owner) and the directory rows', async () => {
     const given = await input();
     const created = await createUserWorkspace(db, given);

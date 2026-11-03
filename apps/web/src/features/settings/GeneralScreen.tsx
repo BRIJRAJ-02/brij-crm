@@ -443,6 +443,7 @@ export function GeneralScreen({
           </SettingsRow>
           <SettingsRow
             title={strings.timeZone}
+            description={strings.timeZoneUse}
             control="field"
             meta={<InfoTip label={strings.timeZone}>{strings.timeZoneInfo}</InfoTip>}
           >
@@ -636,7 +637,7 @@ export function GeneralPending() {
               </Button>
             )}
           </SettingsRow>
-          <SettingsRow title={strings.timeZone} control="field">
+          <SettingsRow title={strings.timeZone} description={strings.timeZoneUse} control="field">
             <Skeleton shape="field" />
           </SettingsRow>
           <SettingsRow title={strings.currency} control="field">

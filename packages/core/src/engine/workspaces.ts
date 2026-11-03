@@ -7,7 +7,7 @@
 // A signed in user's workspace (spec 0005, AC-30) is the same write with the
 // client's id, plus the directory rows in the same transaction, and a repeated
 // request returns the workspace it already made.
-import type { OnboardingAnswers } from '@crm/contracts';
+import { isTimeZone, type OnboardingAnswers } from '@crm/contracts';
 import { and, eq, sql } from 'drizzle-orm';
 import { ADDRESS_CLAIM_CONSTRAINT, addWorkspaceToDirectory, DIRECTORY_SLUG_CONSTRAINT, schema } from '@crm/db';
 import { STANDARD_OBJECTS, STANDARD_RELATIONSHIPS, STANDARD_TEMPLATE_VERSION } from '../templates/standard-v1.ts';
@@ -30,6 +30,11 @@ export interface WorkspaceInput {
   readonly name: string;
   readonly slug: string;
   readonly firstMember: { readonly name: string; readonly email: string; readonly userId?: string };
+  /**
+   * The maker's time zone (their browser's), so the team's hours, the team calendar and daily limits read in the
+   * zone the workspace works in, not UTC. Left out, or a name this server doesn't know, keeps the UTC default.
+   */
+  readonly timeZone?: string | undefined;
 }
 
 /** The new workspace, its first member, and the standard objects by key. */
@@ -74,7 +79,10 @@ async function insertWorkspace(
       async (context) => {
         const { tx } = context;
         const system = { createdByType: 'system', updatedByType: 'system' } as const;
-        await tx.insert(workspaces).values({ id: workspaceId, name: input.name.trim(), slug: input.slug, ...system });
+        const zone = input.timeZone !== undefined && isTimeZone(input.timeZone) ? { timeZone: input.timeZone } : {};
+        await tx
+          .insert(workspaces)
+          .values({ id: workspaceId, name: input.name.trim(), slug: input.slug, ...zone, ...system });
         await tx.insert(workspaceCounters).values({ workspaceId });
         await tx.insert(members).values({
           workspaceId,
@@ -155,6 +163,8 @@ export interface UserWorkspaceInput {
   readonly firstMember: { readonly userId: string; readonly name: string; readonly email: string };
   /** First run's About you answers (spec 0036), kept for the first member alone; left out when nothing was answered. */
   readonly onboarding?: OnboardingAnswers | undefined;
+  /** The maker's browser's time zone (`WorkspaceInput.timeZone`). */
+  readonly timeZone?: string | undefined;
 }
 
 /** The workspace as the directory lists it, its first member, and whether this was a repeat. */

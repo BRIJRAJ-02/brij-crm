@@ -309,7 +309,7 @@ describe('the group dialog', () => {
     await expect.element(page.getByRole('button', { name: `About ${strings.window}` })).toBeVisible();
   });
 
-  it('offers a refused member’s hours in a new tab, and to remove them, for the member that was sent', async () => {
+  it('offers to remove a refused member, for the member that was sent, and never a way to their hours', async () => {
     const LEE: MemberSummary = { id: '0199a6f2-0000-7000-8000-000000000003', name: 'Lee Chen', email: 'lee@acme.dev' };
     const [ada] = SALES.members;
     if (ada === undefined) throw new Error('Sales has Ada.');
@@ -317,7 +317,7 @@ describe('the group dialog', () => {
       ...SALES,
       members: [...SALES.members, { ...ada, memberId: LEE.id, name: LEE.name }],
     };
-    const refused = 'Maya Patel needs to set hours or connect a calendar first.';
+    const refused = 'Only active members of this workspace can be in a rotation.';
     const data = layerWith([withLee], () =>
       Promise.reject(
         dataError('CONFIG_INVALID', refused, {
@@ -342,17 +342,15 @@ describe('the group dialog', () => {
     await userEvent.click(page.getByRole('button', { name: strings.save, exact: true }));
     const alert = page.getByRole('alert').filter({ hasText: refused });
     await expect.element(alert).toBeVisible();
-    const toHours = alert.getByRole('link', { name: strings.setHoursFor(MAYA.name), exact: true });
-    await expect.element(toHours).toHaveTextContent(strings.setHours);
-    expect(toHours.element().getAttribute('href')).toBe(`/w/acme/bookings/availability?member=${MAYA.id}`);
-    // A new tab, so the group being made stays.
-    expect(toHours.element().getAttribute('target')).toBe('_blank');
+    // Missing hours is never why (a member who saved none books weekdays 9 to 5): no link away from the group.
+    expect(alert.getByRole('link').elements()).toEqual([]);
 
-    // Ada leaves the draft from above Maya: the refusal still names Maya, and still opens Maya's hours. Focus moves
-    // on to the next row's remove.
+    // Ada leaves the draft from above Maya: the refusal still names Maya. Focus moves on to the next row's remove.
     await userEvent.click(page.getByRole('button', { name: strings.remove(ADA.name), exact: true }));
     await expect.element(alert).toBeVisible();
-    expect(toHours.element().getAttribute('href')).toBe(`/w/acme/bookings/availability?member=${MAYA.id}`);
+    await expect
+      .element(alert.getByRole('button', { name: strings.removeRefused(MAYA.name), exact: true }))
+      .toBeVisible();
     await expect.element(page.getByRole('button', { name: strings.remove(MAYA.name), exact: true })).toHaveFocus();
 
     // Removing Maya takes the refusal with her, and focus goes to Save, not the title bar's Close.
@@ -383,7 +381,7 @@ describe('the group dialog', () => {
       ...SALES,
       members: [...SALES.members, { ...ada, memberId: LONG.id, name: LONG.name }],
     };
-    const refused = `${LONG.name} needs to set hours or connect a calendar first.`;
+    const refused = 'Only active members of this workspace can be in a rotation.';
     const data = layerWith([withLong], () =>
       Promise.reject(
         dataError('CONFIG_INVALID', refused, {
@@ -412,9 +410,7 @@ describe('the group dialog', () => {
     await expect.element(remove).toHaveTextContent(strings.removeFromGroup);
     // Nothing in the refusal reaches past its own box.
     const box = alert.element().getBoundingClientRect();
-    for (const action of [remove, alert.getByRole('link', { name: strings.setHoursFor(LONG.name), exact: true })]) {
-      expect(action.element().getBoundingClientRect().right).toBeLessThanOrEqual(box.right);
-    }
+    expect(remove.element().getBoundingClientRect().right).toBeLessThanOrEqual(box.right);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
   });
 

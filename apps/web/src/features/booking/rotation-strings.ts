@@ -2,8 +2,8 @@
 // Team card. Plain words, no dashes as punctuation. In code these are rotations; on screen, round robin groups (the
 // owner, 22 October 2026: "if this is round robin, call it that").
 
-/** Who can be in a group (SS-R1), said in the member picker's hint until the picker can mark who can't. */
-const CAN_JOIN = 'Only people with hours or a calendar can join.';
+/** Whose hours a group books on (SS-R1), said in the member picker's hint: someone with none saved isn't refused. */
+const CAN_JOIN = 'Anyone who hasn’t set hours books weekdays, 9 to 5.';
 
 export const strings = {
   title: 'Round robin',
@@ -82,10 +82,6 @@ export const strings = {
   days: (count: number) => `${String(count)} days`,
   addMember: 'Add a member',
   addMemberPlaceholder: 'Search people',
-  /** On the server's refusal of someone who can't take meetings yet: their hours, in a new tab, so the group stays. */
-  setHours: 'Set hours',
-  /** Set hours' name: whose hours, and that they open in a new tab, as booking's "Open X in a new tab" says. */
-  setHoursFor: (name: string) => `Set hours for ${name}, in a new tab`,
   /** On the server's refusal of one member: save the group without them. Short, so a long name never widens it. */
   removeFromGroup: 'Remove from group',
   /** Remove from group's name: its visible words first (WCAG 2.5.3), then the member it removes. */

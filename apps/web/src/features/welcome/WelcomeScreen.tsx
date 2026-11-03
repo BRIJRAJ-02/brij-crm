@@ -283,7 +283,9 @@ export function WelcomeScreen({
     setCreating(true);
     setRefusals([]);
     const memberNameSent = memberNameFor(memberName, user.name, user.email);
-    data.workspaces.create({ id, name: name.trim(), slug, memberName: memberNameSent }).then(
+    // The browser's zone becomes the workspace's, so a team's hours and calendar read where it works, not in UTC.
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    data.workspaces.create({ id, name: name.trim(), slug, memberName: memberNameSent, timeZone }).then(
       async ({ workspace: made }) => {
         clearDraft(storage);
         // The first step after the workspace loads with it before it shows, so the card goes straight there.

@@ -17,6 +17,8 @@ export const strings = {
   openBrand: 'Open Brand',
   timeZone: 'Time zone',
   timeZoneInfo: 'Default for new pages and members.',
+  /** Under the time zone's title: what reads in it, so a wrong zone is noticed (meetings QA, 4 November 2026). */
+  timeZoneUse: 'Used for team calendars and daily limits.',
   currency: 'Currency',
   country: 'Country',
   /** What a cleared currency or country shows: the language's region's, as before it was set. */

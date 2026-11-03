@@ -148,6 +148,13 @@ async function renderGeneral({
 
 const nameField = () => page.getByRole('textbox', { name: strings.name });
 
+describe('the time zone', () => {
+  it('says what reads in it, under its title', async () => {
+    await renderGeneral();
+    await expect.element(page.getByText(strings.timeZoneUse)).toBeVisible();
+  });
+});
+
 describe('the name', () => {
   it('saves once when the field is left, with Name changed. and Undo', async () => {
     const { update } = await renderGeneral();

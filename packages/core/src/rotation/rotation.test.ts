@@ -276,18 +276,18 @@ describe('rotations (AC-728, AC-729, AC-751, AC-752, AC-758)', () => {
     });
   });
 
-  it('refuses a member with neither hours nor a calendar, and anyone not an active member (AC-729)', async () => {
+  it('takes a member who never saved hours (the virtual default), and refuses anyone not an active member (AC-729)', async () => {
     const w = await workspace();
     const sam = await w.addMember('Sam Lee');
+    // Nobody who just joined has saved hours: they book on weekdays 9 to 5 (spec 0035), as the slots read them.
     const bare = await w.addMember('No Hours', { hours: false });
     const settings = { name: 'Sales', strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' } as const;
-    expect(
-      await refusalOf(createRotation(w.owner, { id: newId(), settings, members: [pooled(sam.id), pooled(bare.id)] })),
-    ).toEqual({
-      code: 'CONFIG_INVALID',
-      message: 'No Hours needs to set hours or connect a calendar first.',
-      field: 'members.1',
+    const made = await createRotation(w.owner, {
+      id: newId(),
+      settings,
+      members: [pooled(sam.id), pooled(bare.id)],
     });
+    expect(made.members.map((member) => member.memberId).sort()).toEqual([sam.id, bare.id].sort());
     expect(
       await refusalOf(createRotation(w.owner, { id: newId(), settings, members: [pooled(sam.id), pooled(newId())] })),
     ).toMatchObject({ code: 'CONFIG_INVALID', field: 'members.1' });
