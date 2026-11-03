@@ -160,6 +160,7 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   tasks_done_by: 'history: who completed a task',
   meeting_attendees_member: 'history: they attended; the meeting stays, flagged when they organised it',
   form_versions_published_by: 'history: who published a form version',
+  page_versions_published_by: 'history: who published a booking or link page version (spec 0068)',
   forms_owner:
     'the form keeps working; its submissions get no owner while this one has left (owner_removed, spec 0023)',
   bookings_host: 'their bookings stay for admins to hand on (AC-815)',

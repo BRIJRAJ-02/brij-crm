@@ -599,7 +599,8 @@ describe('the walk: a principal without the access is refused', () => {
         name === 'readOwnProfileImage' ||
         name === 'readOwnLinkAddress' ||
         name === 'readQrStyle' ||
-        name === 'profileInsightsCsv'
+        name === 'profileInsightsCsv' ||
+        name === 'listLinkPageVersions'
       ) {
         // The reads answer Bea's own page, which holds nothing of Ada's: a refusal would say the wrong thing.
         expect(JSON.stringify(outcome)).not.toContain(theirs.id);

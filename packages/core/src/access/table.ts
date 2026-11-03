@@ -250,6 +250,12 @@ export const ACCESS_TABLE = {
   readQrStyle: { ownLinkPage: true },
   saveQrStyle: { ownLinkPage: true },
   profileInsightsCsv: { ownLinkPage: true },
+  // Publish for the link page (spec 0068, AC-6811, AC-6812): the caller's own draft, versions and publication.
+  readLinkPagePublication: { ownLinkPage: true },
+  publishLinkPage: { ownLinkPage: true },
+  discardLinkDraft: { ownLinkPage: true },
+  listLinkPageVersions: { ownLinkPage: true },
+  restoreLinkPageVersion: { ownLinkPage: true },
   // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
   getWorkspaceSettings: { anyMember: true },
   updateWorkspace: { permission: 'workspace.manage' },
@@ -261,6 +267,10 @@ export const ACCESS_TABLE = {
   requireBrandEditor: { permission: 'workspace.manage' },
   saveBrandLogo: { permission: 'workspace.manage' },
   clearBrandLogo: { permission: 'workspace.manage' },
+  // The workspace template waits for Publish (spec 0068, AC-6804, AC-6816); its handles are read to purge the edge.
+  publishBrandTemplate: { permission: 'workspace.manage' },
+  discardBrandTemplate: { permission: 'workspace.manage' },
+  workspaceHandles: { permission: 'workspace.manage' },
   deleteWorkspace: { permission: 'workspace.delete' },
   restoreWorkspace: { permission: 'workspace.delete' },
   setWorkspaceDomains: { permission: 'workspace.manage' },
