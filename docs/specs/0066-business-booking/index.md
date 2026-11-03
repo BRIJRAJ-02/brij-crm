@@ -17,8 +17,9 @@
 | B5 | Several services in one visit; intake forms and consent for clinics; sensitive services | B2 |
 | B6 | Verified reviews and replies | B2, B4 |
 | B7 | Table seating as a preset (party size fitting, joined tables, floor grid with timers, walk ins) | B3 |
+| B8 | Events and classes, after Luma: event pages, registration with capacity, approval and waitlist, guest list and check in, a business's events calendar, recurring classes | B2, B4 |
 
-Later, each with its own decision: classes and group sessions (spots shared by many clients), deposits, card holds and no show fees (Stripe, 0062 L5), text messages (Twilio, 0062 L5), waitlist, packages, memberships and gift cards, a discovery marketplace (search, nearby), staff who never sign in getting their day by email, rebook reminders, POS and tips.
+Later, each with its own decision: paid tickets, deposits, card holds and no show fees (Stripe, 0062 L5), text messages (Twilio, 0062 L5), waitlist, packages, memberships and gift cards, a discovery marketplace (search, nearby), staff who never sign in getting their day by email, rebook reminders, POS and tips.
 
 ## Summary
 
@@ -91,6 +92,16 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
 - **AC-6670**: Installing Table seating creates a service "Table" in capacity mode party (no staff, needs one table resource or joined tables) with holds by party size (0065 AC-6550's defaults), and the reservation rules of 0065 AC-6550 map onto place and service settings. The guest flow is 0065 AC-6551 (party size first) on this engine; the public address is `timefix.com/<handle>/reserve` (and `/r/<key>` kept as a short link).
 - **AC-6671**: Service screen (0065 H4) is the Calendar in resource mode plus a Floor view: a grid of table tiles (after the owner's references) coloured by state (free, booked soon, seated, needs attention), each with its timer since seating and the next booking ("Booking at 20:30"), joined tables drawn as one tile with a link mark, an area switcher at the bottom, and walk in from any free tile.
 
+*B8. Events and classes (after Luma)*
+- **AC-6680**: An event has a title, cover image, description (rich text), start and end in the place's zone (or online with a video link shown only to registered guests), a place or a free address, hosts (staff profiles or members), a capacity (or unlimited), and optional registration questions (the forms question model, 0057). It holds its hosts and its room through the engine's holds (AC-6602), so nobody can book the yoga teacher or the studio during the class.
+- **AC-6681**: Each event has a public page at `timefix.com/<handle>/e/<slug>` (and `/e/<key>` as a short link): cover, title, date and time in the visitor's zone with the place's zone shown when different, location with Directions, hosts with photos, "42 going" with up to 8 guest avatars (only guests who chose to show themselves; off by default), the description, and one Register button opening a short form (name, email, the event's questions). It embeds with the widget (`data-timefix-event`).
+- **AC-6682**: Registration modes: open (instant, until full), approval (each registration waits for a host to accept; the guest is told it is pending), and invite only (the page asks for an invite link). When full, guests can join a waitlist; a cancellation offers the spot to the first on the waitlist by email for 12 hours, then the next.
+- **AC-6683**: Guests get a confirmation with an add to calendar file, reminders 24 hours and 1 hour before, a Cancel link, and a personal QR code. The host's guest list screen shows registered, pending, waitlist and checked in counts, searches guests, exports CSV, and checks in by scanning the QR with the phone camera (the app page asks for the camera) or by tapping a name.
+- **AC-6684**: Hosts can email all guests (or one status) from the event, plainly, through the mail queue with the business brand; at most 3 such emails per event per day.
+- **AC-6685**: Recurring classes: an event can repeat weekly on chosen days until a date (up to 52 occurrences); each occurrence has its own guest list and capacity; a client can register for one occurrence or the series. Cancelling one occurrence emails its guests.
+- **AC-6686**: The business page gains an Events section (upcoming first) and `timefix.com/<handle>/events` lists them as a calendar page (after Luma's calendar pages): upcoming and past, filterable by category, with "Subscribe" giving an iCal feed of public events.
+- **AC-6687**: Every registered guest matches or creates a Person; the Person page lists events attended (checked in) and missed. Paid tickets wait for Stripe (0062 L5).
+
 ## Decision
 
 Build one place based visit engine for every appointment business, with staff, resources and services as data, rather than separate engines for restaurants, salons and clinics. Keep the meeting engine (booking pages) as it is, linked by the one person rule, and converge them later. Make Table seating a preset, so 0065's separate reservation tables are not built. Give every business a public business page in the handle namespace.
@@ -133,6 +144,7 @@ Build one place based visit engine for every appointment business, with staff, r
 6. **B5** several services, intake and consent, sensitive services.
 7. **B6** reviews.
 8. **B7** Table seating preset and the Floor view.
+9. **B8** events: one off event with open registration, page, emails, guest list; then approval, waitlist, check in, recurring classes, calendar page and iCal.
 
 Each slice gets the security, design, UX and state reviews, and screenshots in the real layout before landing.
 

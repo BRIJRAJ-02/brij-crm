@@ -36,6 +36,9 @@ Only completed visits can review, which is what makes Fresha's reviews trusted. 
 ### Health data
 Clinics bring special category data. Fencing sensitive intake to the treating staff and managers, never filing it onto People, never sending it in webhooks, auditing every read, and stating plainly that Timefix is not a medical record keeps the product honest without becoming an EHR.
 
+### Events (Luma)
+The owner then pointed at Luma: event pages with a cover, date, hosts and one Register button, guest lists with approval and check in, and calendar pages a community subscribes to. Classes are the same thing repeating. Events reuse the visit engine's holds for their hosts and room (a class blocks the teacher and the studio) but count registrations against a capacity instead of holding a resource per guest, which also covers group sessions that 0062 L4's seats would have handled for meetings.
+
 ## Calls made on the owner's behalf
 
 - One engine with presets; Table seating rebuilt as a preset (0065's reservation tables dropped).
@@ -46,10 +49,12 @@ Clinics bring special category data. Fencing sensitive intake to the treating st
 - Verified reviews only, replies yes, deletion no.
 - Several services per visit (up to 5) in B5, not the first thread.
 - Pay at the venue until Stripe lands.
+- Events as B8 of this spec (not a separate spec): free registration first, paid tickets after Stripe; guest avatars on event pages are opt in.
 
 ## References
 
 - Fresha venue page reviewed 4 Nov 2026 (fresha.com/a/hair-fixr-studio-sahakarnagar-…): gallery, rating, section tabs, services by category with length and from price, team, reviews, about, hours, map, sticky book panel, nearby venues.
 - Owner's layout references (menu editor, guest menu, item sheet, table tiles with timers, table detail with guests and timeline): kept with the hospitality notes.
 - Specs: 0035 availability, 0057 questions, 0060 brand kit, 0062 L1 requests and cutoffs, 0063 forms, 0064 public platform and domains, 0065 Hospitality suite (places, resources, apps), 0165 consent records.
+- Luma (luma.com), event and calendar pages, reviewed by reference on 4 Nov 2026.
 - schema.org types: Restaurant, HairSalon, BeautySalon, DaySpa, MedicalClinic, Dentist, HealthClub, LocalBusiness.
