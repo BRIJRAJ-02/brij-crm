@@ -24,6 +24,7 @@ One umbrella, built in six slices. Every slice is a thin thread through every la
 | H3 | Table seating: reservation page, table fitting, guest emails, guests as People | H0 (places, areas and tables live there) |
 | H4 | Service screen: today's book, walk ins, seat and finish, live for every device | H3 |
 | H5 | SN look: the Warm preset and the guest theme polish for Somewhere Nowhere | H1 |
+| H6 | Import from checklabs: business, places, hours, menus (with photos), tables and areas | H1 (H2 for QR codes) |
 
 Later, each with its own decision: menu import (paste, CSV, PDF), waitlist, deposits and card holds (after 0062 L5 Stripe), text message reminders (after 0062 L5 Twilio), floor plan canvas, ordering and paying at the table, per app billing (#38 and #42).
 
@@ -104,6 +105,15 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
 *H5. The SN look*
 - **AC-6570**: The guest menu and reservation pages take their look from the brand kit (spec 0060 accent, logo, font pack) through the same `look.css` variables route, plus a menu theme preset. Three presets: Warm (the default, after the checklabs guest look: warm off white ground, near black text, soft pill chips, glass sticky bar), Clean (white, the app's own neutrals), Night (dark ground for bars). Each passes AA in its own colours.
 - **AC-6571**: Somewhere Nowhere's workspace uses Warm with its brand kit; its look is reviewed against its current menu site with screenshots at 390 and 1280 before it is turned on. Filling SN's real menu is out of this spec (the owner deferred it).
+
+*H6. Import from checklabs (owner, 4 Nov 2026: "the checklabs import is needed properly, and make sure the UI and all is ours")*
+- **AC-6580**: Data only. Nothing of checklabs' UI, code or styles comes across; every imported thing is shown and edited with Timefix's own screens and looks.
+- **AC-6581**: Two halves. (1) An export script kept in this repo (`tools/checklabs-export/`, never shipped) that the owner runs against checklabs with checklabs' own credentials from their own shell; it reads read only through checklabs' Prisma schema and writes one JSON file per workspace (`CheckLabsExport`, a Zod schema in that tool) with property, venues, opening hours, menus, categories, sub categories, items, variants, add ons, modifier groups and modifiers, allergens and diet tags, floor zones and tables, and image URLs. Timefix never connects to checklabs' database or reads its `.env`. (2) An importer in Timefix: Settings > Business > Import from checklabs takes that file.
+- **AC-6582**: The importer always shows a dry run first: what will be created per kind ("2 places, 3 menus, 41 sections, 286 items, 120 photos, 38 tables"), what is skipped and why (unrendered checklabs features: bundles, upsells, videos, AI imports, translations), and every value it had to change (a price with more decimals than the currency allows, a name too long, an allergen outside the EU 14, a table label clash). Nothing is written until Import is pressed.
+- **AC-6583**: Mapping: property and venues → business profile and places (hours in the venue's zone); menu → menu; category → section; sub category → nested section; item → item (Decimal price → integer minor units by the currency's minor units, rounded half up, each rounding listed); variant → size; add ons and modifier groups → option groups shared by name within the import; allergens → EU 14 with Contains (anything else becomes a note); diet tags → diet marks; eightySixed → Sold out; inactive → hidden; floor zones → areas; tables → resources of kind table (capacity, zone); table codes are never copied (Menu QR issues new ones; old printed codes are not carried over).
+- **AC-6584**: Photos are fetched by the importer from their public URLs (https only, our own fetcher with size and type checks, at most 4 MB each, 20 at a time), then go through the normal photo pipeline. A photo that fails is listed and the item imports without it.
+- **AC-6585**: Import runs as a job with progress, is idempotent by checklabs ids (kept in an `import_source` column on each imported row), so running it again updates what was imported and adds what is new, never duplicating; anything edited in Timefix since the last import is kept and listed as "changed here, not overwritten". Imported menus land as drafts; the owner publishes.
+- **AC-6586**: Reservations, guests and orders are not imported in this spec (guest data needs its own decision and consent check).
 
 ## Decision
 

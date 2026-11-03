@@ -42,6 +42,12 @@ The owner (4 Nov 2026): everything public must look professional; customisation 
 - **AC-6815**: Managed pages (0021 templates): publishing the template publishes its locked parts to every member's page at once; a member's own unlocked edits stay in their draft until they publish.
 - **AC-6816**: Publish purges the page's edge cache tags; the published snapshot is what the cache stores.
 
+## Two rules across every phase (owner, 4 Nov 2026)
+
+- **The dashboard stays as it is.** Templates, new looks and new motion are for public pages. Every app screen (settings, editors, calendar, service, menus, imports) uses the current design system exactly as the rest of the app does today: tokens, library components, the same layouts, density and copy style. A lane that needs something new adds a variant to the library, reviewed by the design system guardian; nothing app only.
+- **Foolproof from the first click.** Every app starts with a setup checklist (the `SetupChecklist` module) that walks one step at a time (business, place and hours, then the app's own first thing, then Publish, then share); every empty state has exactly one next action; sensible defaults are filled so a first try works without reading anything; Publish refuses a page that would be broken (no price, no hours, no services) and says what to fix in one line with a link to it; destructive steps ask first and undo where they can; no screen is a dead end. Each phase's verify includes a first run walk by someone who has never seen the app.
+- **Skills at every level.** Every lane loads the house skills for its area, the design skills pass for any UI (impeccable, interaction-design, emil-design-eng, ux-heuristics, interface-affordances), `transitions-dev` and `transitions-polish` for motion, `stageshow` for key interactions, `security-and-hardening` for any public input, and the matching reviewers before landing.
+
 ## Decision
 
 Replace configurable themes with four finished templates in the brand kit, and put every public page on the forms publish model with versions, keeping operational switches instant.
@@ -59,7 +65,7 @@ Replace configurable themes with four finished templates in the brand kit, and p
 |---|---|---|---|
 | P0 | Land what is built: form retention and the intake template; booking rules (0062 L1); the specs | 0023, 0063, 0062 L1, 0065 to 0068 | in CI now |
 | P1 | Professional pages: the four templates and Publish for link and booking pages | 0068 | first, because every later page is born on it |
-| P2 | Business base and Menu: apps, business profile, places, resources; Menu; Menu QR | 0065 H0, H1, H2 | H0 and H1 built, under review |
+| P2 | Business base and Menu: apps, business profile, places, resources; Menu; Menu QR; import from checklabs | 0065 H0, H1, H2, H6 | H0 and H1 being built |
 | P3 | Visit engine and online booking: engine, services, staff, shifts, booking flow | 0066 B0, B1, B2 | |
 | P4 | Front desk and public presence: calendar, business pages, Table seating | 0066 B3, B4, B7 | SN can go live on menu, page and reservations here |
 | P5 | Clinics and trust: several services, intake and sensitive services, reviews | 0066 B5, B6 | |
