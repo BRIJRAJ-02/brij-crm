@@ -2,11 +2,12 @@
 // on the guest menu (its photo, price, words, allergens in words, sizes and option groups as stacked cards, and Add to
 // your picks) and the list of their picks with steppers and the total. Both go inside a `Modal` `sheet`, which holds
 // focus and closes on Escape; data comes in through props, and picks are the caller's to keep.
-import { formatPrice, formatPriceDelta, pickPrice } from '@crm/contracts/menu';
+import { choicesAllowed, formatPrice, formatPriceDelta, MENU_LIMITS, pickPrice } from '@crm/contracts/menu';
 import type { OptionGroup, PublicMenu, SnapshotItem } from '@crm/contracts';
 import { useId, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
+import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
 import styles from './ItemSheet.module.css';
 import { strings } from './strings.ts';
 
@@ -125,95 +126,88 @@ export function ItemSheet({
         </ul>
       )}
       {item.sizes.length < 2 ? null : (
-        <fieldset className={styles.group}>
-          <legend className={styles.groupName}>{strings.sizes}</legend>
+        <RadioGroup
+          label={strings.sizes}
+          variant="cards"
+          value={String(size ?? 0)}
+          onChange={(value) => setSize(Number(value))}
+          isDisabled={isSoldOut}
+        >
           {item.sizes.map((each, index) => (
-            <label
-              key={each.name}
-              className={styles.option}
-              htmlFor={`${name}-size-${String(index)}`}
-              aria-label={strings.choice(each.name, formatPrice(each.priceMinor, currency, locale))}
-            >
-              <input
-                id={`${name}-size-${String(index)}`}
-                className={styles.input}
-                type="radio"
-                name={`${name}-size`}
-                checked={size === index}
-                onChange={() => setSize(index)}
-                disabled={isSoldOut}
-              />
-              <span className={styles.optionText}>
-                <span className={styles.optionName}>{each.name}</span>
-                <span className={styles.optionPrice}>{formatPrice(each.priceMinor, currency, locale)}</span>
-              </span>
-            </label>
+            <Radio key={each.name} value={String(index)} description={formatPrice(each.priceMinor, currency, locale)}>
+              {each.name}
+            </Radio>
           ))}
-        </fieldset>
+        </RadioGroup>
       )}
-      {groups.map((group) => (
-        <fieldset key={group.id} className={styles.group}>
-          <legend className={styles.groupName}>
-            {group.name}
-            <span className={styles.quiet}>{ruleWords(group)}</span>
-          </legend>
-          {group.options.map((option) => {
-            const isChosen = (chosen.get(group.id) ?? []).includes(option.id);
-            const isFull =
-              group.rule === 'up_to' && !isChosen && (chosen.get(group.id) ?? []).length >= (group.max ?? 1);
-            return (
-              <label key={option.id} className={styles.option} htmlFor={`${name}-${option.id}`}>
-                <input
-                  id={`${name}-${option.id}`}
-                  className={styles.input}
-                  type={group.rule === 'one' ? 'radio' : 'checkbox'}
-                  name={`${name}-${group.id}`}
-                  checked={isChosen}
-                  disabled={isSoldOut || isFull}
+      {groups.map((group) => {
+        const picked = chosen.get(group.id) ?? [];
+        const label = `${group.name} · ${ruleWords(group)}`;
+        const priceOf = (delta: number) =>
+          delta === 0 ? undefined : strings.delta(formatPriceDelta(delta, currency, locale));
+        return group.rule === 'one' ? (
+          <RadioGroup
+            key={group.id}
+            label={label}
+            variant="cards"
+            value={picked[0] ?? null}
+            onChange={(value) => toggle(group, value)}
+            isDisabled={isSoldOut}
+          >
+            {group.options.map((option) => {
+              const description = priceOf(option.priceDeltaMinor);
+              return (
+                <Radio key={option.id} value={option.id} {...(description === undefined ? {} : { description })}>
+                  {option.name}
+                </Radio>
+              );
+            })}
+          </RadioGroup>
+        ) : (
+          <fieldset key={group.id} className={styles.group}>
+            <legend className={styles.groupName}>{label}</legend>
+            {group.options.map((option) => {
+              const description = priceOf(option.priceDeltaMinor);
+              const isChosen = picked.includes(option.id);
+              return (
+                <Checkbox
+                  key={option.id}
+                  label={option.name}
+                  {...(description === undefined ? {} : { description })}
+                  isSelected={isChosen}
+                  isDisabled={isSoldOut || (group.rule === 'up_to' && !isChosen && picked.length >= (group.max ?? 1))}
                   onChange={() => toggle(group, option.id)}
                 />
-                <span className={styles.optionText}>
-                  <span className={styles.optionName}>{option.name}</span>
-                  {option.priceDeltaMinor === 0 ? null : (
-                    <span className={styles.optionPrice}>
-                      {strings.delta(formatPriceDelta(option.priceDeltaMinor, currency, locale))}
-                    </span>
-                  )}
-                </span>
-              </label>
-            );
-          })}
-        </fieldset>
-      ))}
+              );
+            })}
+          </fieldset>
+        );
+      })}
       {onPick === undefined || isSoldOut || !hasPrice ? null : (
         <div className={styles.sheetActions}>
           <div className={styles.stepper} role="group" aria-label={strings.quantity}>
-            <button
-              type="button"
-              className={styles.step}
-              aria-label={strings.fewer}
-              disabled={quantity <= 1}
-              onClick={() => setQuantity((was) => Math.max(1, was - 1))}
-            >
-              <Icon name="minus" size="sm" />
-            </button>
+            <Button
+              variant="ghost"
+              icon="minus"
+              label={strings.fewer}
+              isDisabled={quantity <= 1}
+              onPress={() => setQuantity((was) => Math.max(1, was - 1))}
+            />
             <output className={styles.stepValue} aria-live="polite">
               {quantity}
             </output>
-            <button
-              type="button"
-              className={styles.step}
-              aria-label={strings.more}
-              disabled={quantity >= 20}
-              onClick={() => setQuantity((was) => Math.min(20, was + 1))}
-            >
-              <Icon name="plus" size="sm" />
-            </button>
+            <Button
+              variant="ghost"
+              icon="plus"
+              label={strings.more}
+              isDisabled={quantity >= MENU_LIMITS.quantityMax}
+              onPress={() => setQuantity((was) => Math.min(MENU_LIMITS.quantityMax, was + 1))}
+            />
           </div>
-          <button
-            type="button"
-            className={styles.add}
-            onClick={() =>
+          <Button
+            variant="primary"
+            isDisabled={!groups.every((group) => choicesAllowed(group, (chosen.get(group.id) ?? []).length))}
+            onPress={() =>
               onPick({
                 itemId: item.id,
                 ...(size === undefined ? {} : { size }),
@@ -223,7 +217,7 @@ export function ItemSheet({
             }
           >
             {strings.addToPicks(formatPrice(total, currency, locale))}
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -282,11 +276,11 @@ export function PicksSheet({
               <span className={styles.pickEnd}>
                 <span className={styles.price}>{formatPrice(pickTotal(menu, pick), currency, locale)}</span>
                 <span className={styles.stepper} role="group" aria-label={strings.quantityOf(item.name)}>
-                  <button
-                    type="button"
-                    className={styles.step}
-                    aria-label={pick.quantity === 1 ? strings.removePick(item.name) : strings.fewer}
-                    onClick={() =>
+                  <Button
+                    variant="ghost"
+                    icon={pick.quantity === 1 ? 'trash' : 'minus'}
+                    label={pick.quantity === 1 ? strings.removePick(item.name) : strings.fewer}
+                    onPress={() =>
                       onPicksChange(
                         pick.quantity === 1
                           ? picks.filter((each) => each.key !== pick.key)
@@ -295,23 +289,19 @@ export function PicksSheet({
                             ),
                       )
                     }
-                  >
-                    <Icon name={pick.quantity === 1 ? 'trash' : 'minus'} size="sm" />
-                  </button>
+                  />
                   <output className={styles.stepValue}>{pick.quantity}</output>
-                  <button
-                    type="button"
-                    className={styles.step}
-                    aria-label={strings.more}
-                    disabled={pick.quantity >= 20}
-                    onClick={() =>
+                  <Button
+                    variant="ghost"
+                    icon="plus"
+                    label={strings.more}
+                    isDisabled={pick.quantity >= MENU_LIMITS.quantityMax}
+                    onPress={() =>
                       onPicksChange(
                         picks.map((each) => (each.key === pick.key ? { ...each, quantity: each.quantity + 1 } : each)),
                       )
                     }
-                  >
-                    <Icon name="plus" size="sm" />
-                  </button>
+                  />
                 </span>
               </span>
             </li>

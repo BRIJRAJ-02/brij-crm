@@ -3,7 +3,15 @@
 // bar that sticks with the menus and the section chips, search and dietary filters, items as rows or a photo grid,
 // a bottom sheet per item with its sizes, options, allergens in words and calories, and Your picks kept only in the
 // guest's browser. Everything comes in through props: the page's entry reads the menu and keeps the picks.
-import { DIET_FILTERS, formatPrice, nextOpening, openAt, servingAt, type DietMark } from '@crm/contracts/menu';
+import {
+  DIET_FILTERS,
+  EU_ALLERGENS,
+  formatPrice,
+  nextOpening,
+  openAt,
+  servingAt,
+  type DietMark,
+} from '@crm/contracts/menu';
 import type { PublicMenu, SnapshotItem, SnapshotSection, SnapshotSubsection } from '@crm/contracts';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -21,6 +29,8 @@ export type { GuestPick, MenuPhotoHref } from '../ItemSheet/ItemSheet.tsx';
 export interface MenuListProps {
   /** The published menu, as `GET /api/public/menu/:key` answers it. */
   readonly menu: PublicMenu;
+  /** A wide photo over the venue's name (the place's or the business's cover), when there is one. */
+  readonly coverHref?: string;
   /** The business's logo, when it has one. */
   readonly logoHref?: string;
   /** Where each photo is served; without it no photo draws. */
@@ -62,7 +72,17 @@ const sectionItems = (section: SnapshotSection): readonly string[] => [
 ];
 
 /** The guest menu's page (spec 0065, H1): the bar, the venue, the menus and their dishes, and Your picks. */
-export function MenuList({ menu, logoHref, photoHref, table, picks, onPicksChange, foot, openItemId }: MenuListProps) {
+export function MenuList({
+  menu,
+  logoHref,
+  coverHref,
+  photoHref,
+  table,
+  picks,
+  onPicksChange,
+  foot,
+  openItemId,
+}: MenuListProps) {
   const now = new Date(useNow());
   const { place, business } = menu;
   const { currency } = menu.menu;
@@ -125,13 +145,20 @@ export function MenuList({ menu, logoHref, photoHref, table, picks, onPicksChang
   );
   const active = useScrollSpy(shownSections.map((section) => section.id));
   const headingId = useId();
+  const isNameShown = useScrolledPast(headingId);
+  // The allergens this menu's dishes name, in the EU list's order (ported from checklabs' allergen footer).
+  const menuAllergens = EU_ALLERGENS.filter((code) =>
+    sections.some((section) =>
+      sectionItems(section).some((id) => menu.menu.items[id]?.allergens.some((each) => each.code === code) === true),
+    ),
+  );
   const pickCount = (picks ?? []).reduce((sum, pick) => sum + pick.quantity, 0);
 
   return (
     <div className={styles.root} data-menu-list="">
       {/* The dark bar: the venue and the section tabs, stuck to the top; the active tab in the accent, underlined. */}
       <div className={styles.bar} data-sticky="">
-        <div className={styles.barTop}>
+        <div className={styles.barTop} data-name-shown={isNameShown ? '' : undefined} aria-hidden={!isNameShown}>
           {logoHref === undefined ? null : (
             <img className={styles.logo} src={logoHref} alt={strings.decorative} width={32} height={32} />
           )}
@@ -156,6 +183,9 @@ export function MenuList({ menu, logoHref, photoHref, table, picks, onPicksChang
       </div>
 
       <header className={styles.head}>
+        {coverHref === undefined ? null : (
+          <img className={styles.cover} src={coverHref} alt={strings.decorative} width={1200} height={400} />
+        )}
         <h1 className={styles.name} id={headingId}>
           {business.name}
         </h1>
@@ -293,6 +323,9 @@ export function MenuList({ menu, logoHref, photoHref, table, picks, onPicksChang
           ))
         )}
         {current?.menu.note === undefined ? null : <p className={styles.note}>{current.menu.note}</p>}
+        {menuAllergens.length === 0 ? null : (
+          <p className={styles.note}>{strings.allergenFooter(menuAllergens.map((code) => strings.allergen[code]))}</p>
+        )}
       </main>
 
       {foot === undefined ? null : <footer className={styles.foot}>{foot}</footer>}
@@ -348,6 +381,21 @@ export function MenuList({ menu, logoHref, photoHref, table, picks, onPicksChang
       )}
     </div>
   );
+}
+
+/** Whether the element with `id` has scrolled up out of the view (the bar then shows the venue's name). */
+function useScrolledPast(id: string): boolean {
+  const [isPast, setPast] = useState(false);
+  useEffect(() => {
+    const element = document.getElementById(id);
+    if (element === null || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry !== undefined) setPast(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [id]);
+  return isPast;
 }
 
 /** Which section is under the sticky bar now: the last whose top passed the bar (the chips follow the scroll). */
@@ -470,13 +518,13 @@ function ItemCard({
         />
       )}
       <span className={styles.itemText}>
-        <span className={styles.itemName}>
-          {item.name}
-          {item.featured ? <span className={styles.badge}>{strings.featured}</span> : null}
-        </span>
-        <span className={styles.itemMeta}>
+        <span className={styles.itemLine}>
+          <span className={styles.itemName}>
+            {item.name}
+            {item.featured ? <span className={styles.badge}>{strings.featured}</span> : null}
+            {isSoldOut ? <span className={styles.soldOut}>{strings.soldOut}</span> : null}
+          </span>
           {price === undefined ? null : <span className={styles.price}>{price}</span>}
-          {isSoldOut ? <span className={styles.soldOut}>{strings.soldOut}</span> : null}
         </span>
         {item.description === undefined ? null : <span className={styles.itemAbout}>{item.description}</span>}
         {marks.length === 0 ? null : <span className={styles.marks}>{marks.join(' · ')}</span>}

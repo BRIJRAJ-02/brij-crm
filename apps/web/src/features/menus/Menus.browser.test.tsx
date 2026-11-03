@@ -14,6 +14,14 @@ import { MenusScreen } from './MenusScreen.tsx';
 import { previewMenu } from './preview.ts';
 
 const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
+
+/** A stand in photo per dish: a warm gradient drawn as SVG, so the shots prove the photo rows and grid. */
+const PHOTO_HUES = ['#d9a26b', '#8fae6b', '#c9704f', '#b89a7a', '#7f9fb0'];
+const photoHref = (photoId: string) => {
+  const hue = PHOTO_HUES[Number.parseInt(photoId.slice(-2), 16) % PHOTO_HUES.length] ?? '#d9a26b';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><defs><radialGradient id="g"><stop offset="0" stop-color="#fff6e8"/><stop offset="1" stop-color="${hue}"/></radialGradient></defs><rect width="400" height="400" fill="#efe7dc"/><circle cx="200" cy="210" r="130" fill="url(#g)"/><ellipse cx="200" cy="300" rx="150" ry="28" fill="#00000014"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
 const id = (n: number) => `01900000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const PLACE = id(1);
 const MENU = id(2);
@@ -51,7 +59,7 @@ const DRAFT: MenuDraft = {
       position: 0,
       itemIds: [id(10), id(11), id(12)],
     },
-    { id: MAINS, menuId: MENU, name: 'Mains', layout: 'list', position: 1, itemIds: [id(13)] },
+    { id: MAINS, menuId: MENU, name: 'Mains', layout: 'grid', position: 1, itemIds: [id(13), id(14), id(15)] },
   ],
   items: [
     item(10, 'Burrata, blood orange, chilli', {
@@ -60,12 +68,14 @@ const DRAFT: MenuDraft = {
       diet: ['vegetarian'],
       allergens: [{ code: 'milk', level: 'contains' }],
       featured: true,
+      photo: { id: id(50), version: '0123456789ab' },
     }),
     item(11, 'Charred hispi cabbage', {
       description: 'Miso butter, crispy shallots.',
       priceMinor: 900,
       diet: ['vegan', 'gluten_free'],
       allergens: [{ code: 'soya', level: 'contains' }],
+      photo: { id: id(51), version: '0123456789ab' },
     }),
     item(12, 'Oysters', {
       priceNote: 'Market price',
@@ -80,7 +90,10 @@ const DRAFT: MenuDraft = {
       ],
       groupIds: [id(40)],
       allergens: [{ code: 'fish', level: 'contains' }],
+      photo: { id: id(52), version: '0123456789ab' },
     }),
+    item(14, 'Grilled hispi, whole', { priceMinor: 1800, photo: { id: id(53), version: '0123456789ab' } }),
+    item(15, 'Lamb shoulder for two', { priceMinor: 4200, photo: { id: id(54), version: '0123456789ab' } }),
   ],
   groups: [
     {
@@ -229,7 +242,13 @@ describe('the guest menu', () => {
         wearWarm();
         shown = await renderInApp(
           () => (
-            <MenuList menu={guest()} picks={[]} onPicksChange={() => undefined} foot={<BookingFoot page="menu" />} />
+            <MenuList
+              menu={guest()}
+              photoHref={photoHref}
+              picks={[]}
+              onPicksChange={() => undefined}
+              foot={<BookingFoot page="menu" />}
+            />
           ),
           { data: {}, pattern: '/m/$key', at: '/m/AbCdEfGhIjKlMnOp' },
         );
@@ -242,7 +261,9 @@ describe('the guest menu', () => {
         const sheet = page.getByRole('dialog', { name: 'Wood fired bream' });
         await expect.element(sheet).toBeVisible();
         await expect.element(sheet.getByText(/Allergens: fish/)).toBeVisible();
-        await userEvent.click(sheet.getByRole('radio', { name: /Whole/ }));
+        // By keyboard, as a guest using one would: the size group holds Half, and the arrow moves to Whole.
+        (sheet.getByRole('radio', { name: /Half/ }).element() as HTMLElement).focus();
+        await userEvent.keyboard('{ArrowDown}');
         await expect.element(sheet.getByRole('button', { name: /Add to your picks · £26.00/ })).toBeVisible();
         expect(await axeViolations()).toEqual([]);
         await shoot('guest-sheet', theme, width);

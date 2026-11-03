@@ -47,7 +47,7 @@ function isPick(value: unknown): value is GuestPick {
     typeof pick.quantity === 'number' &&
     Number.isInteger(pick.quantity) &&
     pick.quantity >= 1 &&
-    pick.quantity <= 20
+    pick.quantity <= 99
   );
 }
 

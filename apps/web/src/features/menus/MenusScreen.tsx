@@ -5,7 +5,7 @@
 import {
   isDataError,
   type MenuDraft,
-  type MenuItem,
+  type MenuItem as Dish,
   type MenuSection,
   type MenuStore,
   type PlaceHours,
@@ -18,6 +18,9 @@ import {
   Callout,
   Card,
   ChoiceChips,
+  Menu,
+  MenuItem,
+  MenuTrigger,
   CopyButton,
   EmptyState,
   Field,
@@ -32,7 +35,8 @@ import {
   TopBar,
   type Toasts,
 } from '@crm/ui';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from '@tanstack/react-router';
 import { publicMenuUrl } from '../booking/links.ts';
 import { businessSettingsHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -43,9 +47,10 @@ import { strings } from './strings.ts';
 
 /** What the screen opens over itself: a dish's form, a confirm. */
 type Open =
-  | { readonly kind: 'item'; readonly item?: MenuItem; readonly sectionId?: string; readonly newName?: string }
+  | { readonly kind: 'item'; readonly item?: Dish; readonly sectionId?: string; readonly newName?: string }
   | { readonly kind: 'discard' }
   | { readonly kind: 'deleteMenu'; readonly menuId: string; readonly name: string }
+  | { readonly kind: 'deleteSection'; readonly sectionId: string; readonly name: string }
   | undefined;
 
 export interface MenusScreenProps {
@@ -64,10 +69,23 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
   const [open, setOpen] = useState<Open>();
   const [isPublishing, setPublishing] = useState(false);
   const [justPublished, setJustPublished] = useState(false);
+  const router = useRouter();
+  // "Published" stands in the button for two seconds after a publish, then it reads Publish again.
+  useEffect(() => {
+    if (!justPublished) return undefined;
+    const timer = globalThis.setTimeout(() => setJustPublished(false), 2_000);
+    return () => globalThis.clearTimeout(timer);
+  }, [justPublished]);
 
   if (state.status === 'loading') {
     return (
-      <WorkspacePage currentPage="menus" page={{ topBar: <TopBar title={strings.title} isLoading />, body: null }} />
+      <WorkspacePage
+        currentPage="menus"
+        page={{
+          topBar: <TopBar title={strings.title} isLoading />,
+          body: <EmptyState title={strings.title} isLoading />,
+        }}
+      />
     );
   }
   if (state.status === 'error') {
@@ -104,7 +122,15 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
       return;
     }
     setJustPublished(true);
-    globalThis.setTimeout(() => setJustPublished(false), 2_000);
+  };
+
+  const copyLink = async (link: string) => {
+    try {
+      await globalThis.navigator.clipboard.writeText(link);
+      toasts.toast({ tone: 'success', message: strings.linkCopied });
+    } catch {
+      toasts.toast({ tone: 'danger', message: link });
+    }
   };
 
   const newMenu = () => {
@@ -130,8 +156,15 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
       isDone: draft.sections.some((section) => section.itemIds.length > 0),
       action: strings.add,
     },
-    { id: 'publish', title: strings.stepPublish, isDone: isLive, action: strings.publish },
-    { id: 'share', title: strings.stepShare, detail: strings.stepShareDetail, isDone: false, action: strings.open },
+    // Publish has one primary button, the page's own; the step only says where it is.
+    { id: 'publish', title: strings.stepPublish, detail: strings.stepPublishDetail, isDone: isLive },
+    {
+      id: 'share',
+      title: strings.stepShare,
+      detail: isLive ? strings.stepShareDetail : strings.stepShareLater,
+      isDone: false,
+      ...(isLive ? { action: strings.copyLink } : {}),
+    },
   ];
 
   const actions = (
@@ -150,7 +183,7 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
         <Button
           variant="primary"
           isPending={isPublishing}
-          isDisabled={draft.changes === 0 && isLive}
+          isDisabled={(draft.changes === 0 && isLive) || blocker !== undefined}
           onPress={() => void publish()}
           {...(blocker === undefined ? {} : { 'aria-describedby': 'menu-blocker' })}
         >
@@ -187,6 +220,7 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
         body: (
           <>
             <PreviewLayout
+              previewShare="wide"
               notices={
                 <>
                   {!isLive ? (
@@ -194,9 +228,9 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
                       title={strings.setup}
                       steps={steps}
                       onAction={(id) => {
-                        if (id === 'hours') globalThis.location.assign(businessSettingsHref(slug));
+                        if (id === 'hours') router.history.push(businessSettingsHref(slug));
                         else if (id === 'menu') newMenu();
-                        else if (id === 'publish') void publish();
+                        else if (id === 'share' && place !== undefined) void copyLink(publicMenuUrl(place.menuKey));
                         else if (id === 'items' && current !== undefined) {
                           const section = draft.sections.find((each) => each.menuId === current.id);
                           setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
@@ -205,7 +239,30 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
                     />
                   ) : null}
                   {blocker !== undefined && draft.menus.length > 0 ? (
-                    <Callout tone="warning">
+                    <Callout
+                      tone="warning"
+                      actions={
+                        blocker.reason === 'unpriced' ? (
+                          <Button
+                            onPress={() => {
+                              const dish = draft.items.find((each) => each.id === blocker.itemId);
+                              if (dish !== undefined) setOpen({ kind: 'item', item: dish });
+                            }}
+                          >
+                            {strings.editNamed(blocker.name)}
+                          </Button>
+                        ) : (
+                          <Button
+                            onPress={() => {
+                              const section = draft.sections.find((each) => each.menuId === current?.id);
+                              setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
+                            }}
+                          >
+                            {strings.addADish}
+                          </Button>
+                        )
+                      }
+                    >
                       <span id="menu-blocker">
                         {blocker.reason === 'empty' ? strings.emptyBlocker : strings.unpricedBlocker(blocker.name)}
                       </span>
@@ -270,6 +327,7 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
                         menuId={menu.id}
                         onOpen={setOpen}
                         said={said}
+                        toasts={toasts}
                       />
                     </TabPanel>
                   ))}
@@ -339,6 +397,31 @@ export function MenusScreen({ store, slug, toasts, business }: MenusScreenProps)
             >
               {strings.deleteMenuLine}
             </Modal>
+            <Modal
+              variant="confirm"
+              tone="danger"
+              title={open?.kind === 'deleteSection' ? strings.deleteSectionQuestion(open.name) : strings.deleteSection}
+              isOpen={open?.kind === 'deleteSection'}
+              onOpenChange={(isOpen) => {
+                if (!isOpen) setOpen(undefined);
+              }}
+              actions={
+                <>
+                  <Button slot="close">{strings.cancel}</Button>
+                  <Button
+                    variant="danger-solid"
+                    onPress={() => {
+                      if (open?.kind === 'deleteSection') void store.deleteSection(slug, open.sectionId).then(said);
+                      setOpen(undefined);
+                    }}
+                  >
+                    {strings.deleteSection}
+                  </Button>
+                </>
+              }
+            >
+              {strings.deleteSectionLine}
+            </Modal>
           </>
         ),
       }}
@@ -394,7 +477,9 @@ function MenuEditor({
   menuId,
   onOpen,
   said,
+  toasts,
 }: {
+  readonly toasts: Toasts;
   readonly store: MenuStore;
   readonly slug: string;
   readonly draft: MenuDraft;
@@ -509,6 +594,7 @@ function MenuEditor({
           subsections={sections.filter((each) => each.parentId === section.id)}
           onOpen={onOpen}
           said={said}
+          toasts={toasts}
         />
       ))}
       {draft.canEdit ? (
@@ -542,7 +628,9 @@ function SectionCard({
   subsections,
   onOpen,
   said,
+  toasts,
 }: {
+  readonly toasts: Toasts;
   readonly index: number;
   readonly store: MenuStore;
   readonly slug: string;
@@ -570,7 +658,7 @@ function SectionCard({
       .filter((name): name is string => name !== undefined);
   return (
     <Card
-      title={`${String(index + 1)}. ${section.name}`}
+      title={strings.sectionNumber(index + 1)}
       {...(section.description === undefined ? {} : { description: section.description })}
       actions={
         draft.canEdit ? (
@@ -578,7 +666,7 @@ function SectionCard({
             variant="ghost"
             icon="trash"
             label={strings.deleteSection}
-            onPress={() => void store.deleteSection(slug, section.id).then(said)}
+            onPress={() => onOpen({ kind: 'deleteSection', sectionId: section.id, name: section.name })}
           />
         ) : undefined
       }
@@ -689,12 +777,32 @@ function SectionCard({
                   {draft.canEdit ? (
                     <>
                       <Button onPress={() => onOpen({ kind: 'item', item })}>{strings.editDish}</Button>
-                      <Button
-                        variant="ghost"
-                        icon="x"
-                        label={strings.removeFromSection}
-                        onPress={() => void store.placeItem(slug, item.id, section.id, false).then(said)}
-                      />
+                      <MenuTrigger>
+                        <Button variant="ghost" icon="ellipsis" label={strings.moreFor(item.name)} />
+                        <Menu
+                          label={strings.moreFor(item.name)}
+                          onAction={() => {
+                            void store.placeItem(slug, item.id, section.id, false).then((refused) => {
+                              if (refused !== undefined) {
+                                said(refused);
+                                return;
+                              }
+                              toasts.toast({
+                                tone: 'info',
+                                message: strings.removed(item.name),
+                                action: {
+                                  label: strings.undo,
+                                  onAction: () => void store.placeItem(slug, item.id, section.id, true).then(said),
+                                },
+                              });
+                            });
+                          }}
+                        >
+                          <MenuItem id="remove" icon="x">
+                            {strings.removeFromSection}
+                          </MenuItem>
+                        </Menu>
+                      </MenuTrigger>
                     </>
                   ) : null}
                 </>

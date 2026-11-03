@@ -34,10 +34,37 @@
   }
 
   .barTop {
+    opacity: 0;
+    transform: translateY(calc(var(--space-4) * -1));
+    transition:
+      opacity var(--duration-popover) var(--ease-out),
+      transform var(--duration-popover) var(--ease-out);
     display: flex;
     align-items: center;
     gap: var(--space-8);
     min-block-size: var(--size-bar);
+  }
+
+  .barTop[data-name-shown] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .cover {
+    inline-size: calc(100% + var(--space-32));
+    max-inline-size: none;
+    margin-inline: calc(var(--space-16) * -1);
+    aspect-ratio: 3 / 1;
+    object-fit: cover;
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    background: var(--menu-chip, var(--surface-sunken));
+  }
+
+  .itemLine {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-8);
   }
 
   .logo {
@@ -98,7 +125,7 @@
   }
 
   .tab[aria-current='true'] {
-    color: var(--menu-bar-accent, var(--accent));
+    color: var(--menu-bar-accent, var(--on-inverse));
   }
 
   .tab[aria-current='true']::after {
@@ -314,8 +341,8 @@
 
   .thumb {
     flex: none;
-    inline-size: calc(var(--size-tile) * 1.5);
-    block-size: calc(var(--size-tile) * 1.5);
+    inline-size: calc(var(--size-tile) * 4);
+    block-size: calc(var(--size-tile) * 4);
     border-radius: var(--radius-xl);
     object-fit: cover;
     background: var(--menu-chip, var(--surface-sunken));
@@ -455,6 +482,7 @@
   @media (prefers-reduced-motion: reduce) {
     .item,
     .picksBar,
+    .barTop,
     .tab::after {
       transition: none;
     }

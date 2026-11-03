@@ -32,6 +32,8 @@ export const strings = {
   picksPill: (total: string) => `Your picks · ${total}`,
   quantityOf: (name: string) => `How many ${name}`,
   allergens: 'Allergens',
+  allergenFooter: (list: readonly string[]) =>
+    `This menu’s dishes name: ${list.join(', ')}. Tell your server about any allergy before you order.`,
   noAllergens: 'No allergens listed. Ask your server if unsure.',
   kcal: (kcal: number) => `${String(kcal)} kcal`,
   addToPicks: (price: string) => `Add to your picks · ${price}`,
