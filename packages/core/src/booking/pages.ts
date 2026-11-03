@@ -18,6 +18,7 @@ import {
   type FormTargetChoices,
   type GetBookingPageInput,
   type ListBookingsInput,
+  type ManagedPart,
   type ProfileOrder,
   type ReorderProfileInput,
   type RoutingRule,
@@ -49,7 +50,9 @@ import { pageAuditSides } from './page-audit.ts';
 import { queueSchedulingNotice } from '../scheduling/notice.ts';
 import { deleteEditorsOf, editedBy } from '../scheduling/editor-rows.ts';
 import { placeNewPage } from '../profile/items.ts';
+import { checkNotRouted } from '../routing/in-use.ts';
 import { linksOf, seenLinks } from './links.ts';
+import { LOCKED_PART_REFUSAL, lockedPartOfWrite, templateLocksOf } from './managed-locks.ts';
 import { lockKey } from './locks.ts';
 import { lockRotations } from '../rotation/assign.ts';
 import { everyoneRotation } from '../rotation/roster.ts';
@@ -175,11 +178,29 @@ export async function bookingTargetProblem(
  * page (AC-1273). A colleague's page is reached through the reader's Manage over its owner, who must still be an
  * active member who isn't a guest.
  */
-async function pageToChange(tx: WorkspaceTx, scope: EngineScope, pageId: string, lock: boolean): Promise<ReachedPage> {
+async function pageToChange(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  pageId: string,
+  lock: boolean,
+  /** Whether a managed template counts: only Sharing, which names a template's editors (AC-1331, AC-1333). */
+  managed = false,
+): Promise<ReachedPage> {
   const query = tx
     .select()
     .from(bookingPages)
-    .where(and(eq(bookingPages.id, pageId), isNull(bookingPages.deletedAt)));
+    .where(
+      and(
+        eq(bookingPages.id, pageId),
+        isNull(bookingPages.deletedAt),
+        // A managed template is not a page to these procedures (spec 0037, AC-1333): it is changed and deleted
+        // through `managedPages.*`, which propagates its locks and keeps its member pages. Reached here it would
+        // let a save skip the propagation (leaving every member page on older locked settings), a delete orphan
+        // them, and a status change publish a template that can never book. One predicate closes the get, the
+        // update and the delete, since every page write comes through here.
+        managed ? undefined : sql`${bookingPages.kind} <> 'managed'`,
+      ),
+    );
   const [row] = lock ? await query.for('no key update') : await query;
   if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
   const others = isSomeoneElses(scope, row);
@@ -287,12 +308,16 @@ function viewOf(
   seen: (questions: PageRecord['questions'], named?: string | null) => PageRecord['questions'],
   reach?: SchedulingReach,
   edits: ReadonlySet<string> = NO_EDITS,
+  /** The locks the page's managed template holds (spec 0037, AC-1334); undefined for a page made from none. */
+  locked?: readonly ManagedPart[],
 ): BookingPageView {
   const changeable = mayChange(scope, page, reach, edits);
   return {
     id: page.id,
     publicKey: page.publicKey,
-    kind: page.kind,
+    // A managed template never reaches here: `pageToChange` and `listBookingPages` both exclude it, and Sharing
+    // reads only its id and title. The narrowing keeps the view's kind closed to the three bookable kinds.
+    kind: page.kind === 'managed' ? 'personal' : page.kind,
     scope: page.scope,
     ownerMemberId: page.ownerMemberId,
     ...(handle === undefined ? {} : { handle }),
@@ -323,6 +348,7 @@ function viewOf(
     questions: seen(page.questions, page.answersObjectId),
     fileToCrm: page.fileToCrm,
     answersObjectId: page.answersObjectId,
+    formOnly: page.formOnly,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     // Who hosts it and how it routes are for those who manage it: a member seeing a workspace link gets neither.
     ...(hosts === undefined || !changeable ? {} : { hosts }),
@@ -334,6 +360,10 @@ function viewOf(
     canChange: changeable,
     // Only as one of its editors: not its owner, an admin or a manager of its owner (AC-1332's badge).
     ...(edits.has(page.id) && !mayChange(scope, page, reach) ? { isEditor: true } : {}),
+    // From a managed template (AC-1333, AC-1334): what the editor shows "From <template>" and, per locked part,
+    // "Set by your workspace" from. The server's refusal is the guard; this is only the label.
+    ...(page.templateId === null ? {} : { templateId: page.templateId }),
+    ...(locked === undefined ? {} : { lockedParts: [...locked] }),
     createdAt: page.createdAt.toISOString(),
     updatedAt: page.updatedAt.toISOString(),
   };
@@ -368,6 +398,8 @@ export async function listBookingPages(
       .where(
         and(
           isNull(bookingPages.deletedAt),
+          // A managed template is listed by `managedPages.list`, never here: it is not a bookable page (AC-1333).
+          sql`${bookingPages.kind} <> 'managed'`,
           // A member's own pages, and the workspace's links (owner, 30 Oct 2026: the company's front door, which every
           // member may see and copy; only `booking.admin` changes one, whoever made it).
           mine === undefined
@@ -457,6 +489,7 @@ async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: Reached
     seen,
     page.reach,
     page.edits,
+    await templateLocksOf(tx, page.templateId),
   );
 }
 
@@ -646,7 +679,12 @@ export function checkDurations(durations: readonly number[] | undefined): void {
  * A slug free among the owner's live pages, so `/<handle>/<slug>` names one page: in this workspace, including the
  * ones their pages used to hold (`crm_booking_owner_slugs`). A slug may repeat across a person's workspaces (spec 0056). The wanted one, else it with -2, -3 …
  */
-async function freeSlug(tx: WorkspaceTx, workspaceId: string, ownerMemberId: string, wanted: string): Promise<string> {
+export async function freeSlug(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  ownerMemberId: string,
+  wanted: string,
+): Promise<string> {
   const base = wanted.slice(0, 56).replace(/-+$/, '');
   const [owner] = await tx.select({ userId: members.userId }).from(members).where(eq(members.id, ownerMemberId));
   const here = await tx
@@ -688,7 +726,7 @@ const PROFILE_POSITION_MAX = 999;
  * Where a new page joins its owner's profile: after their last page here, so an order they arranged keeps its top
  * (a page made before any reorder sat at 0, ahead of everything but the oldest).
  */
-async function nextProfilePosition(tx: WorkspaceTx, ownerMemberId: string): Promise<number> {
+export async function nextProfilePosition(tx: WorkspaceTx, ownerMemberId: string): Promise<number> {
   const [row] = await tx
     .select({ last: sql<number | null>`max(${bookingPages.profilePosition})::int` })
     .from(bookingPages)
@@ -716,7 +754,7 @@ const OLD_SLUG_CONSTRAINT = 'booking_page_slugs_owner_slug';
  * The refusal, on the `slug` field, for a slug the owner's other page holds now, or held and still redirects from;
  * undefined for any other error.
  */
-function slugRefusal(error: unknown) {
+export function slugRefusal(error: unknown) {
   const constraint = postgresError(error)?.constraint;
   if (SLUG_CONSTRAINTS.has(constraint)) {
     return refuseOn('SLUG_TAKEN', 'You have another booking page at that address.', 'slug');
@@ -802,6 +840,7 @@ export async function createBookingPage(
       questions: given.questions ?? [],
       fileToCrm: given.fileToCrm ?? true,
       answersObjectId: given.answersObjectId ?? null,
+      formOnly: kind === 'round_robin' && given.formOnly === true,
     };
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
     if (settings.answersObjectId !== null) {
@@ -850,6 +889,7 @@ export async function createBookingPage(
           questions: settings.questions,
           fileToCrm: settings.fileToCrm,
           answersObjectId: settings.answersObjectId,
+          formOnly: settings.formOnly,
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -902,6 +942,14 @@ export async function updateBookingPage(
   return inWorkspace(scope, async (tx) => {
     const page = await pageToChange(tx, scope, input.pageId, true);
     const { settings } = input;
+    // A managed page's locked parts are the workspace's (spec 0037, AC-1334): the refusal is here, on the server, so
+    // a direct API call is refused whatever the member's editor shows. It holds for an admin too: a locked part is
+    // changed on the template, and a change made here would be overwritten by the template's next save.
+    const locked = await templateLocksOf(tx, page.templateId);
+    if (locked !== undefined) {
+      const hit = lockedPartOfWrite(locked, settings);
+      if (hit !== undefined) throw refuseOn('FORBIDDEN', LOCKED_PART_REFUSAL, hit.key);
+    }
     // The address after the owner's handle, where the page sits on their profile, and whether it shows their social
     // links, are the owner's alone: an admin of a workspace may change the page, never what is published under the
     // person's name.
@@ -924,6 +972,12 @@ export async function updateBookingPage(
     }
     checkTeamSchedule(page.kind, settings.scheduleId);
     checkDurations(settings.durations);
+    // Only through a form is a team page's (spec 0037, AC-1388): a personal page has no form in front of it.
+    if (settings.formOnly === true && page.kind !== 'round_robin') {
+      throw refuseOn('CONFIG_INVALID', 'Only a team page books through a form only.', 'formOnly');
+    }
+    // A page a published form still sends visitors to stays live until that form changes (AC-1341).
+    if (settings.status === 'paused' && page.status === 'live') await checkNotRouted(tx, scope.access, page.id);
     if (settings.scheduleId !== undefined && settings.scheduleId !== null) {
       await checkPageSchedule(tx, page.ownerMemberId, settings.scheduleId);
     }
@@ -1051,6 +1105,7 @@ export async function updateBookingPage(
           ...(questions === undefined ? {} : { questions }),
           ...(settings.fileToCrm === undefined ? {} : { fileToCrm: settings.fileToCrm }),
           ...(settings.answersObjectId === undefined ? {} : { answersObjectId: settings.answersObjectId }),
+          ...(settings.formOnly === undefined ? {} : { formOnly: settings.formOnly }),
           ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
@@ -1122,6 +1177,7 @@ export async function deleteBookingPage(
     const page = await pageToChange(tx, scope, input.pageId, true);
     // An editor changes everything on a page but its deletion (spec 0037, AC-1331).
     if (onlyEdits(scope, page)) throw refuse('FORBIDDEN', 'Only an admin or the page’s owner can delete it.');
+    await checkNotRouted(tx, scope.access, page.id);
     await changedFor(tx, scope, page, undefined);
     await deleteEditorsOf(tx, 'booking_page', [page.id]);
     const by = actorRow(scope.actor);
@@ -1383,7 +1439,8 @@ export async function pageForEditors(
   pageId: string,
   lock: boolean,
 ): Promise<{ readonly id: string; readonly title: string }> {
-  const page = await pageToChange(tx, scope, pageId, lock);
+  // A managed template names editors too (AC-1333): Sharing is the one place a template is reached as a page.
+  const page = await pageToChange(tx, scope, pageId, lock, true);
   return { id: page.id, title: page.title };
 }
 

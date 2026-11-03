@@ -4,9 +4,10 @@ import type { BookingPageSettings } from '@crm/data';
 
 /**
  * The settings the editor never sends: a page's place on its owner's profile is set by Settings › Profile's order
- * (owner ask A102), so a draft read before a reorder never puts the old place back.
+ * (owner ask A102), so a draft read before a reorder never puts the old place back. Only through a form saves at
+ * once from its own switch (spec 0037, AC-1388), so the draft never sends it back.
  */
-const NOT_EDITED: ReadonlySet<keyof BookingPageSettings> = new Set(['profilePosition']);
+const NOT_EDITED: ReadonlySet<keyof BookingPageSettings> = new Set(['profilePosition', 'formOnly']);
 
 /**
  * A setting as text that two spellings of one value share: every object's keys in order, a list's items left in

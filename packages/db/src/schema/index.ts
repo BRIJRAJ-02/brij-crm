@@ -4,6 +4,7 @@
 // that lead with workspace_id (spec 0004).
 export { actorType, attributeType, systemColumn } from './common.ts';
 export { memberOnboarding, memberRole, memberStatus, members, workspaceCounters, workspaces } from './workspaces.ts';
+export { workspaceRoles } from './roles.ts';
 export {
   attributes,
   computedInputRole,
@@ -69,6 +70,7 @@ export {
   bookingPages,
   bookings,
   bookingTimeBlocks,
+  managedPageMembers,
 } from './booking.ts';
 export { exportChunks, exports } from './exports.ts';
 export { auditEvents, invitations, joinRequests, workspaceDomains, workspaceSecurity } from './team.ts';
@@ -76,7 +78,7 @@ export { emailPreferences, emails, emailStatus } from './emails.ts';
 export { bookingPageRotations, rotationAssignments, rotationMembers, rotationRoster, rotations } from './rotation.ts';
 export { memberBookingLimits, scheduleDelegations, schedulingEditors } from './scheduling.ts';
 export { accessRules, recordRules, teamMembers, teams } from './teams.ts';
-export { routingDecisions } from './routing.ts';
+export { memberSkills, routingDecisions, routingSettings, routingSkills } from './routing.ts';
 export { automationRuns, automations } from './automations.ts';
 export { apiKeys } from './developer.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';

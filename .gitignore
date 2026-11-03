@@ -11,6 +11,8 @@ dist/
 .claude/settings.local.json
 .vercel
 .env*
+# Any env file by another name (prod.env, staging.env): .env* only catches names that start with .env
+*.env
 # Storybook and the component library's test output
 storybook-static/
 .vitest/

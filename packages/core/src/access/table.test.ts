@@ -238,6 +238,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // Lead routing (spec 0043): the report checks its surface (the form's or page's own access) itself; the route and
   // the record facts it reads are pure. (A no show is marked through the booking's target: in the table.)
   'routingReport',
+  // Bookings › Routing (spec 0037, L6): each checks routing.manage itself, then reads only what the reader may see.
+  'routingOverview',
+  'routingDecisions',
+  'routingDecision',
   'decideRoute',
   'recordFactKeys',
   // The notifications email (spec 0038): the worker's task parts, run as the member the door entered for it, on
@@ -311,6 +315,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'formTemplate',
   'offeredFormTemplates',
   'templateDocument',
+  // Which part of a managed page a member may not write (spec 0037, AC-1334): the locks and the settings in,
+  // the first locked key out. Pure, it reads nothing.
+  'lockedPartOfWrite',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -772,6 +779,11 @@ describe('the walk: a principal without the access is refused', () => {
     '%s answers any member',
     async (name) => {
       const { scope } = await memberOf('member');
+      // One custom role by id (spec 0037): any member reaches the lookup, and a role that isn't there is absent.
+      if (name === 'getRole') {
+        expect(await refusalOf(core.getRole(scope, { roleId: core.newId() }))).toMatchObject({ code: 'NOT_FOUND' });
+        return;
+      }
       await expect(Promise.resolve(service(name)(scope, ANY_MEMBER_INPUT[name]))).resolves.toBeDefined();
     },
   );
@@ -862,6 +874,31 @@ describe('the walk: a principal without the access is refused', () => {
           (await refusalOf(core.listEditors(scope, { resourceType: 'booking_page', resourceId: link.id }))).code,
         ).toBe('NOT_FOUND');
       }
+    },
+  );
+
+  // Managed booking pages (spec 0037, AC-1333 to AC-1336): a template is the workspace's, so a member who neither
+  // holds booking.admin nor edits it meets it as absent, and lists none of them.
+  it.each(entries.filter(([, entry]) => 'managedPage' in entry).map(([name]) => name))(
+    '%s answers a member who neither administers booking nor edits the template as absent',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
+      expect(await refusalOf(Promise.resolve().then(() => service(name)(key, { templateId: core.newId() })))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS['booking.manage'].message,
+      });
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      const template = await core.createManagedPage(owner, { id: core.newId(), title: 'Intro', timeZone: 'UTC' });
+      if (name === 'listManagedPages') {
+        expect((await core.listManagedPages(scope)).templates).toEqual([]);
+        return;
+      }
+      expect((await refusalOf(service(name)(scope, { templateId: template.id, memberIds: [] }))).code).toBe(
+        'NOT_FOUND',
+      );
+      // The owner, who holds booking.admin, reads the same template.
+      expect((await core.getManagedPage(owner, { templateId: template.id })).id).toBe(template.id);
     },
   );
 

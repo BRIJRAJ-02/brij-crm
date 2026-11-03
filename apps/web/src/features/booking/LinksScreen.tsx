@@ -2,9 +2,19 @@
 // Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards, the same cards as Forms; the workspace's own links (30 Oct 2026) in a Workspace group first, then the reader's own, then each colleague whose scheduling they Manage (an admin: everyone) under their name (spec 0037, AC-1273), pages they edit with an Editor badge (AC-1332).
 // Main task: open a page, copy its link, or make a new one in the dialog and land in its editor.
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
-import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
+import { isDataError, type BookingPageView, type DataLayer, type ManagedPageView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import { Button, focusLater, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip, type LinkGridCard } from '@crm/ui';
+import {
+  Button,
+  focusLater,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+  Modal,
+  Tooltip,
+  type LinkGridCard,
+} from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
@@ -12,12 +22,15 @@ import { strings as capturesStrings } from '../captures/strings.ts';
 import { useCapturesCreate } from '../captures/create.tsx';
 import { pageHeading } from '../navigation/focus.ts';
 import { DeletePageDialog } from './DeletePageDialog.tsx';
-import { pageEditorHref, publicBookingPath, publicBookingUrl, type PageTab } from './links.ts';
+import { managedStrings } from './managed-strings.ts';
+import { managedPageHref, pageEditorHref, publicBookingPath, publicBookingUrl, type PageTab } from './links.ts';
 import { sharingStrings } from './sharing-strings.ts';
 import { strings } from './strings.ts';
 
 /** The groups' ids: the workspace's own links, the reader's own pages, and one per colleague (`member:<id>`). */
 const WORKSPACE_GROUP = 'workspace';
+/** The managed pages an admin sets up (spec 0037, AC-1333): templates, not bookable pages, so a group of their own. */
+const MANAGED_GROUP = 'managed';
 const MINE_GROUP = 'mine';
 const memberGroup = (memberId: string) => `member:${memberId}`;
 
@@ -33,14 +46,18 @@ const groupOf = (page: BookingPageView) =>
  * The list's groups, once it holds more than the reader's own: Workspace, then Your pages, then each colleague by
  * name (AC-1273). Undefined while every page is the reader's own, so a lone list draws no heading.
  */
-function groupsOf(pages: readonly BookingPageView[]) {
+function groupsOf(pages: readonly BookingPageView[], templates: readonly ManagedPageView[]) {
   const people = new Map<string, string>();
   for (const page of pages) {
     if (page.scope === 'member' && page.ownerName !== undefined) people.set(page.ownerMemberId, page.ownerName);
   }
   const hasWorkspace = pages.some((page) => page.scope === 'workspace');
-  if (!hasWorkspace && people.size === 0) return undefined;
+  if (!hasWorkspace && people.size === 0 && templates.length === 0) return undefined;
   return [
+    // The templates first: they are what the other cards were made from.
+    ...(templates.length === 0
+      ? []
+      : [{ id: MANAGED_GROUP, label: managedStrings.group, description: managedStrings.groupLine }]),
     ...(hasWorkspace
       ? [{ id: WORKSPACE_GROUP, label: strings.workspaceGroup, description: strings.workspaceGroupLine }]
       : []),
@@ -75,6 +92,9 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const list = useCaptureList(data.bookingPages.view(slug));
+  // The managed pages the reader may change (AC-1333): an empty list for anyone who isn't an admin or an editor.
+  const templateList = useCaptureList(data.managedPages.view(slug));
+  const [deletingTemplate, setDeletingTemplate] = useState<ManagedPageView | undefined>(undefined);
   const create = useCapturesCreate();
   const [deleting, setDeleting] = useState<BookingPageView | undefined>(undefined);
   // A refusal says what was put back, then why.
@@ -117,6 +137,34 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       focusLater(() => (document.activeElement === document.body ? pageHeading(document) : undefined));
     });
   const pages = list.status === 'ready' ? list.items : [];
+  const templates = templateList.status === 'ready' ? templateList.items : [];
+  // A template is not a bookable page: no switch, no Copy link, no Open. Its card opens its editor, and its menu
+  // holds the one ending that is its own (deleting it keeps every member page, AC-1335).
+  const templateCards: readonly LinkGridCard[] = templates.map((template) => ({
+    id: template.id,
+    groupId: MANAGED_GROUP,
+    title: template.title,
+    href: managedPageHref(slug, template.id),
+    colourKey: template.id,
+    facts: [managedStrings.memberBadge(template.members.length)],
+    badge: managedStrings.badge,
+    isPending: templateList.status === 'ready' && templateList.pendingIds.has(template.id),
+    actions: (
+      <MenuTrigger>
+        <Button variant="ghost" size="lg" icon="ellipsis" label={managedStrings.more(template.title)} />
+        <Menu
+          label={managedStrings.more(template.title)}
+          onAction={(key) => {
+            if (key === 'delete') setDeletingTemplate(template);
+          }}
+        >
+          <MenuItem id="delete" icon="trash" isDanger>
+            {managedStrings.deleteTemplate}
+          </MenuItem>
+        </Menu>
+      </MenuTrigger>
+    ),
+  }));
   const cards: readonly LinkGridCard[] = pages.map((page) => {
     const isPending = list.status === 'ready' && list.pendingIds.has(page.id);
     const isOff = page.status === 'paused';
@@ -220,13 +268,13 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     };
   });
   // Grouped only once the list holds more than the reader's own pages.
-  const groups = groupsOf(pages);
+  const groups = groupsOf(pages, templates);
   return (
     <CapturesList
       label={strings.listLabel}
       searchLabel={strings.searchPages}
       status={list.status}
-      cards={cards}
+      cards={[...templateCards, ...cards]}
       {...(groups === undefined ? {} : { groups })}
       // An empty list offers New in its middle too, as a secondary: the TopBar's New stays the one primary.
       {...(create?.create === undefined
@@ -243,7 +291,49 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       onRetry={() => {
         data.bookingPages.view(slug).reload();
       }}
-      dialogs={<DeletePageDialog page={deleting} onClose={() => setDeleting(undefined)} onDelete={remove} />}
+      dialogs={
+        <>
+          <DeletePageDialog page={deleting} onClose={() => setDeleting(undefined)} onDelete={remove} />
+          {/* Deleting a managed page KEEPS every page made from it, the opposite of taking someone off it: the
+              question says so in as many words, since getting these two the wrong way round loses people's pages. */}
+          <Modal
+            title={managedStrings.deleteTitle(deletingTemplate?.title ?? '')}
+            variant="confirm"
+            tone="danger"
+            isOpen={deletingTemplate !== undefined}
+            onOpenChange={(open) => {
+              if (!open) setDeletingTemplate(undefined);
+            }}
+            actions={
+              <>
+                <Button slot="close">{managedStrings.deleteKeep}</Button>
+                <Button
+                  variant="danger-solid"
+                  onPress={() => {
+                    const gone = deletingTemplate;
+                    setDeletingTemplate(undefined);
+                    if (gone === undefined) return;
+                    data.managedPages.remove(slug, gone.id).then(
+                      () => {
+                        toasts.toast({ tone: 'success', message: managedStrings.deleted(gone.title) });
+                        // The card's menu went with it: focus goes to the page's title rather than falling to the page.
+                        focusLater(() =>
+                          document.activeElement === document.body ? pageHeading(document) : undefined,
+                        );
+                      },
+                      failed(managedStrings.deleteFailed(gone.title)),
+                    );
+                  }}
+                >
+                  {managedStrings.deleteAction}
+                </Button>
+              </>
+            }
+          >
+            <p>{managedStrings.deleteText(deletingTemplate?.members.length ?? 0)}</p>
+          </Modal>
+        </>
+      }
     />
   );
 }

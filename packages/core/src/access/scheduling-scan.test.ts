@@ -18,6 +18,7 @@ const BOOKING_ADMIN: Readonly<Record<string, string>> = {
   'packages/core/src/access/table.ts': 'the access table: rotations are things (AC-751)',
   'packages/core/src/access/events.ts': 'live events: a booking’s audience is its page’s managers (decision 12)',
   'packages/core/src/booking/pages.ts': 'booking pages and team pages are things',
+  'packages/core/src/booking/managed.ts': 'a managed page is the workspace’s own booking page: a thing (AC-1333)',
   'packages/core/src/booking/seen.ts': 'a page’s bookings are the page’s (decision 12), beside See and Manage reach',
   'packages/core/src/calendar/page-destination.ts': 'a booking page’s own destination: a thing',
   'packages/core/src/forms/forms.ts': 'which pages a form may hand to: things',

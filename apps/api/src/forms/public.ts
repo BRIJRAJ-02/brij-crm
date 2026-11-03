@@ -21,6 +21,7 @@ import {
   postingRules,
   resumePartial,
   submitForm,
+  type BusyReader,
   type JobRegistry,
   type PostingRules,
 } from '@crm/core';
@@ -70,6 +71,8 @@ export interface PublicFormsDeps {
    */
   readonly visitorKey?: Buffer;
   readonly now?: () => Date;
+  /** The hosts' cached busy times, for the free time check before a booking route is answered (spec 0037, AC-1358). */
+  readonly busy?: BusyReader;
 }
 
 interface Variables {
@@ -347,6 +350,7 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
               ...(body.resumeToken === undefined ? {} : { resumeToken: body.resumeToken }),
               ...(visitor === undefined ? {} : { visitor }),
               ...(handoffKey === undefined ? {} : { signHandoff: (handoff) => signHandoff(handoffKey, handoff) }),
+              ...(deps.busy === undefined ? {} : { freeTime: { busy: deps.busy } }),
             },
             hooks,
           ),

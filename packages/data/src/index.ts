@@ -5,6 +5,7 @@
 // store, a view per object, and optimistic creates and edits (loaded when a
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
+import { ROLES as BUILT_IN_ROLES } from '@crm/contracts/roles';
 import type {
   ActivityKind,
   RecordsExportView,
@@ -36,13 +37,21 @@ import type {
   RotationAdjustment,
   EditorResource,
   EditorView,
+  ManagedLocks,
+  ManagedPageView,
   ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
   RotationSettings,
   RotationView,
+  RoutingDecision,
   RoutingRules,
+  RoutingTestInput,
+  RoutingTestResult,
+  SkillGroup,
+  SkillsView,
   TeamHosts,
+  WonStage,
   TaskMine,
   BulkAction,
   BulkEdit,
@@ -110,7 +119,12 @@ import type {
   ScheduleMember,
   GuestPreview,
   RemovalPreview,
+  RoleDefinition,
   RolesList,
+  RolesOverview,
+  DataAccess,
+  StartFrom,
+  SetRolesResult,
   SubmissionState,
   Usage,
   ValidationRuleInput,
@@ -175,6 +189,14 @@ import {
   type RoutingReportSurface,
 } from './routing/reports.ts';
 import { createPageRules, type PageRulesHeld } from './routing/page-rules.ts';
+import { createRoutingSkills, type RoutingSettingsState, type RoutingSkillsState } from './routing/skills.ts';
+import {
+  createRoutingLog,
+  type RoutingDecisionFilters,
+  type RoutingDecisionsHeld,
+  type RoutingHeld,
+  type RoutingOverviewState,
+} from './routing/log.ts';
 import {
   createAccountSecurityStore,
   isFresh as isSessionFresh,
@@ -479,6 +501,10 @@ export type {
   RotationAdjustment,
   EditorResource,
   EditorView,
+  ManagedLocks,
+  ManagedMemberView,
+  ManagedPageView,
+  ManagedPart,
   ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
@@ -486,10 +512,24 @@ export type {
   RotationSettings,
   RotationView,
   Route,
+  RoutingDecision,
+  RoutingFallback,
+  RoutingOverview,
   RoutingReport,
   RoutingReportRow,
   RoutingRule,
   RoutingRules,
+  RoutingSettings,
+  RoutingSkill,
+  RoutingStepView,
+  RoutingSurface,
+  RoutingTestResult,
+  MemberSkills,
+  RequiredSkills,
+  RouteHosts,
+  SkillGroup,
+  SkillsView,
+  WonStage,
   ShowWhen,
   TeamHosts,
   DateOverride,
@@ -587,6 +627,11 @@ export type {
   RolesList,
   MergePreview,
   MergeSide,
+  RoleDefinition,
+  RolesOverview,
+  DataAccess,
+  StartFrom,
+  SetRolesResult,
   RecordRefDisplay,
   RecordView,
   RelationshipView,
@@ -657,6 +702,9 @@ export { opensInline, RECORD_FILE_ACCEPT, RECORD_FILE_MAX_BYTES } from '@crm/con
 // The link page's look (spec 0054): the default and the named starting points are values the editor presses, not
 // only types, so they come through the one data layer like every other shape a screen uses.
 export { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme } from '@crm/contracts';
+// Managed booking pages (spec 0037, AC-1333): the lockable parts in the order the template editor lists them, and
+// how many people one covers — values a screen renders, not only types, so they come through the one data layer.
+export { MANAGED_MEMBERS_MAX, MANAGED_PART_KEYS, MANAGED_PARTS } from '@crm/contracts';
 export type {
   BookingsCalendarHeld,
   BookingsCalendarState,
@@ -677,6 +725,14 @@ export type {
 } from './routing/reports.ts';
 export type { AuditLog, AuditLogState, AuditLogStatus } from './audit/log.ts';
 export type { PageRulesHeld } from './routing/page-rules.ts';
+export type {
+  RoutingDecisionFilters,
+  RoutingDecisionsHeld,
+  RoutingDecisionsState,
+  RoutingHeld,
+  RoutingOverviewState,
+} from './routing/log.ts';
+export type { RoutingSettingsState, RoutingSharedState, RoutingSkillsState } from './routing/skills.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -718,9 +774,17 @@ export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs'
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
 /** What each role lets someone do, area by area, derived from the permissions the server enforces (Members, Invite). */
 export {
+  CUSTOM_ROLE_PERMISSIONS,
   EVERYONE_CAN,
+  grantOf,
   PERMISSION_AREAS,
+  PERMISSION_GROUPS,
+  PERMISSION_NAMES,
+  PERMISSIONS,
+  powersOf,
   rolePowers,
+  type GrantLevel,
+  type PermissionGroup,
   type AreaPowers,
   type AreaStanding,
   type PermissionArea,
@@ -1300,6 +1364,18 @@ function toFormSummary(form: FormView): FormSummary {
 }
 
 /**
+ * A role as a role Select picks it (spec 0037, AC-1242): a built in role's name, or a custom role's id, as
+ * `roles.list` names each one.
+ */
+export type RoleChoice = string;
+
+/** A role choice as the API takes it: `role` for a built in one, `customRoleId` for a custom one. */
+function roleInput(choice: RoleChoice): { readonly role: Role } | { readonly customRoleId: string } {
+  const builtIn = BUILT_IN_ROLES.find((role) => role === choice);
+  return builtIn === undefined ? { customRoleId: choice } : { role: builtIn };
+}
+
+/**
  * The one client data layer. Screens read and write through it and never
  * call the network themselves. Every failure rejects with a DataError
  * (`{ code, message, data?, retryAfterSeconds? }`); a 401 from any call but
@@ -1375,6 +1451,8 @@ export function createDataLayer({
   const auditLogs = new Map<string, AuditLog>();
   // The roles every role picker offers (spec 0037, AC-1439), per workspace, for the app load.
   let roles = new Map<string, Promise<RolesList>>();
+  // Every role with what it holds (spec 0037, `roles.overview`): Settings › Roles, Compare and "What can Priya do".
+  let rolesOverview = new Map<string, Promise<RolesOverview>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
   // Each object's attributes with the archived ones too (settings, spec 0012), apart from the live lists the tables read.
   let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
@@ -1488,6 +1566,7 @@ export function createDataLayer({
     for (const listener of logoListeners) listener();
     auditLogs.clear();
     roles = new Map();
+    rolesOverview = new Map();
     attributes = new Map();
     allAttributes = new Map();
     lists = new Map();
@@ -1968,6 +2047,17 @@ export function createDataLayer({
     cached(teams, workspace, () =>
       call((options) => api.teams.list({ workspace }, options)).then((read) => read.teams),
     );
+  const readRoles = (workspace: string) =>
+    cached(roles, workspace, () => call((options) => api.roles.list({ workspace }, options)));
+  const readRolesOverview = (workspace: string) =>
+    cached(rolesOverview, workspace, () => call((options) => api.roles.overview({ workspace }, options)));
+  /** Drops what a role write changed: the role lists, the members (their roles) and the person's own access. */
+  const dropRoles = (workspace: string) => {
+    roles.delete(workspace);
+    rolesOverview.delete(workspace);
+    members.delete(workspace);
+    access.delete(workspace);
+  };
   const readAccess = (workspace: string) =>
     cached(access, workspace, () => call((options) => loadAccess(workspace, options)));
   /** Whether `memberIds` names the person, by the access this tab holds (unknown counts as named). */
@@ -2111,6 +2201,9 @@ export function createDataLayer({
         refreshHeld(members, workspace, () => readMembers(workspace)),
         // Teams share the event (spec 0031, slice 8): a team made, renamed, filled or deleted names its people.
         refreshHeld(teams, workspace, () => readTeams(workspace)),
+        // So do custom roles (spec 0037): a role made, changed, deleted or given names its writer and holders.
+        refreshHeld(roles, workspace, () => readRoles(workspace)),
+        refreshHeld(rolesOverview, workspace, () => readRolesOverview(workspace)),
       ]);
       // A Roster narrowed to a team reads its rows again (spec 0037, AC-1289).
       accessLoaded?.teamWeek.teamsChanged(workspace);
@@ -2302,6 +2395,8 @@ export function createDataLayer({
     usage.delete(workspace);
     members.delete(workspace);
     teams.delete(workspace);
+    roles.delete(workspace);
+    rolesOverview.delete(workspace);
     dropAllAttributes(workspace);
     onDefinitionsChange();
   });
@@ -2477,6 +2572,50 @@ export function createDataLayer({
   });
   // A team page's rules as its Routing card reads them: filled by the page's answers, patched by its updates.
   const pageRules = createPageRules();
+  // Bookings › Routing (spec 0037, L6): the Overview and the Decisions log, held per workspace (and filters), read
+  // again on return.
+  const routingLog = createRoutingLog({
+    overview: (workspace) =>
+      beforeRead(workspace).then(() => call((options) => api.routing.overview({ workspace }, options))),
+    decisions: (workspace, filters, cursor) =>
+      beforeRead(workspace).then(() =>
+        call((options) =>
+          api.routing.decisions({ workspace, ...filters, ...(cursor === undefined ? {} : { cursor }) }, options),
+        ),
+      ),
+  });
+  // Routing's shared layer (spec 0037, L7): skills and who holds them, and Won means, held per workspace, read again
+  // on return; every write shown at once and taken back on a refusal.
+  const routingSkills = createRoutingSkills({
+    list: (workspace) =>
+      beforeRead(workspace).then(() => call((options) => api.routing.skills.list({ workspace }, options))),
+    create: (workspace, input) =>
+      call((options) => api.routing.skills.create({ workspace, ...input, mutationId: mintId() }, options)),
+    update: (workspace, input) =>
+      call((options) => api.routing.skills.update({ workspace, ...input, mutationId: mintId() }, options)),
+    remove: (workspace, id) =>
+      call((options) => api.routing.skills.delete({ workspace, id, mutationId: mintId() }, options)),
+    setMember: (workspace, memberId, skillIds) =>
+      call((options) =>
+        api.routing.memberSkills.set({ workspace, memberId, skillIds: [...skillIds], mutationId: mintId() }, options),
+      ),
+    settings: (workspace) =>
+      beforeRead(workspace).then(() => call((options) => api.routing.settings.get({ workspace }, options))),
+    setSettings: (workspace, wonStage, updatedAt) =>
+      call((options) =>
+        api.routing.settings.set(
+          {
+            workspace,
+            wonStage:
+              wonStage === null ? null : { attributeId: wonStage.attributeId, optionIds: [...wonStage.optionIds] },
+            ...(updatedAt === undefined ? {} : { updatedAt }),
+            mutationId: mintId(),
+          },
+          options,
+        ),
+      ),
+    mintId,
+  });
 
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
   // a `schedules` event.
@@ -2778,6 +2917,13 @@ export function createDataLayer({
   // Settings › Rotations (spec 0029): one held list per workspace, patched by every rotation write below.
   const rotationLists = createCaptureList<RotationView>({
     read: (workspace) => call((options) => api.rotations.list({ workspace }, options)),
+  });
+  // Captures › Links › Managed pages (spec 0037, AC-1333): one held list per workspace, patched by every write
+  // below, so a template made or changed shows without a refresh. A template carries its members, so the editor
+  // reads its own row out of this list rather than holding a second store.
+  const managedPageLists = createCaptureList<ManagedPageView>({
+    read: (workspace) =>
+      call((options) => api.managedPages.list({ workspace }, options)).then((answer) => answer.templates),
   });
   // Sharing (spec 0037, AC-1331): one held list per page or rotation, keyed `workspace|type|id`, patched by `set`.
   const editorKey = (workspace: string, type: EditorResource, id: string) => `${workspace}|${type}|${id}`;
@@ -4360,6 +4506,96 @@ export function createDataLayer({
         }),
     },
     /**
+     * Managed booking pages (spec 0037, AC-1333 to AC-1336): the templates as a held list (`view`), and the four
+     * writes, each shown at once and put back on a refusal. A template is not a booking page: it never appears in
+     * `bookingPages.view`, and its own public link answers no longer available.
+     *
+     * `setMembers` and `remove` are the two opposite endings (AC-1335): taking a member off deletes their page
+     * (their bookings stay), while deleting the template keeps every member page as that member's own. Both ask
+     * first, in a Modal, in the screens that call them.
+     */
+    managedPages: {
+      /** A new template's id: mint it once per dialog, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /** The templates the reader may change, as the held list; `useCaptureList` reads it. */
+      view: (workspace: string): CaptureListView<ManagedPageView> => managedPageLists.view(workspace),
+      /** The same list for a loader beside other work (the template editor's route). */
+      held: async (workspace: string): Promise<readonly ManagedPageView[]> => {
+        await managedPageLists.view(workspace).ready();
+        return managedPageLists.items(workspace) ?? [];
+      },
+      /**
+       * A new template, which makes each named member their page at once. Refusals: `ID_TAKEN`,
+       * `MANAGED_MEMBERS_LIMIT`, `CONFIG_INVALID` (on `memberIds.<n>` or `followTeamId`), `FORBIDDEN`.
+       */
+      create: (
+        workspace: string,
+        input: { id: string; title: string; timeZone: string; locked?: ManagedLocks; memberIds?: string[] },
+      ): Promise<ManagedPageView> =>
+        managedPageLists.write(workspace, {
+          send: () =>
+            call((options) => api.managedPages.create({ workspace, ...input, mutationId: mintId() }, options)),
+          land: (items, template) => upsertFirst(template)(items),
+        }),
+      /**
+       * Changes the template's settings, and its locks when given, copying every locked part to every member page
+       * in one transaction on the server. Refusals: `CONFIG_INVALID` (on its field), `NOT_FOUND`, `FORBIDDEN`.
+       */
+      update: (
+        workspace: string,
+        templateId: string,
+        change: { settings?: Partial<BookingPageSettings>; locked?: ManagedLocks },
+      ): Promise<ManagedPageView> =>
+        managedPageLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.managedPages.update(
+                {
+                  workspace,
+                  templateId,
+                  ...(change.settings === undefined ? {} : { settings: change.settings }),
+                  ...(change.locked === undefined ? {} : { locked: change.locked }),
+                  mutationId: mintId(),
+                },
+                options,
+              ),
+            ),
+          ...shownPatch(managedPageLists.items(workspace), templateId, (template) => ({
+            ...template,
+            ...(change.settings?.title === undefined ? {} : { title: change.settings.title }),
+            ...(change.locked === undefined ? {} : { locked: [...change.locked] }),
+          })),
+          land: (items, template) => patchItem<ManagedPageView>(templateId, () => template)(items),
+        }),
+      /**
+       * Replaces who the template makes pages for: someone added gets their page, someone removed has theirs
+       * deleted as spec 0025 AC-648 deletes one (AC-1335), and each is emailed. Refusals:
+       * `MANAGED_MEMBERS_LIMIT`, `CONFIG_INVALID` (on `memberIds.<n>`), `ROUTING_IN_USE` (a form still books a
+       * page that would go), `FORBIDDEN`, `NOT_FOUND`.
+       */
+      setMembers: (workspace: string, templateId: string, memberIds: readonly string[]): Promise<ManagedPageView> =>
+        managedPageLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.managedPages.setMembers(
+                { workspace, templateId, memberIds: [...memberIds], mutationId: mintId() },
+                options,
+              ),
+            ),
+          land: (items, template) => patchItem<ManagedPageView>(templateId, () => template)(items),
+        }),
+      /**
+       * Deletes the template, gone from the list at once and back on a refusal. Every member page STAYS, as that
+       * member's own: the opposite of taking a member off (AC-1335). `booking.admin` only.
+       */
+      remove: (workspace: string, templateId: string): Promise<{ deleted: true }> =>
+        managedPageLists.write(workspace, {
+          send: () =>
+            call((options) => api.managedPages.delete({ workspace, templateId, mutationId: mintId() }, options)),
+          ...shownDrop(managedPageLists.items(workspace), templateId),
+        }),
+    },
+    /**
      * Sharing on a booking page or a rotation (spec 0037, AC-1331): its editors as a held list (`view`), and `set`,
      * which shows the new list at once and puts the old one back on a refusal (`EDITOR_LIMIT`, `CONFIG_INVALID` on
      * `memberIds.<n>`, `FORBIDDEN`), which it rejects with. Only `booking.admin` sets them.
@@ -4447,6 +4683,64 @@ export function createDataLayer({
        * `usePageRules`; undefined until an answer carrying the page arrives.
        */
       pageRules: (workspace: string, pageId: string): PageRulesHeld => pageRules.view(workspace, pageId),
+      /** Bookings › Routing › Overview (spec 0037, AC-1383): the routed surfaces; held while the tab shows it. */
+      overview: (workspace: string): RoutingHeld<RoutingOverviewState> => routingLog.overview(workspace),
+      /** Bookings › Routing › Decisions (AC-1383): newest first with these filters, `more()` for the next page. */
+      decisions: (workspace: string, filters: RoutingDecisionFilters): RoutingDecisionsHeld =>
+        routingLog.decisions(workspace, filters),
+      /** One decision by id (a link to it): its explanation, or NOT_FOUND. */
+      decision: (workspace: string, id: string): Promise<RoutingDecision> =>
+        beforeRead(workspace).then(() => call((options) => api.routing.decision({ workspace, id }, options))),
+      /**
+       * Routing › Skills (spec 0037, AC-1382): the workspace's skills and who holds them (`view`, held while a screen
+       * shows them, for any member), and the writes of holders of routing.manage. Each write shows at once and puts
+       * its change back on a refusal (`SKILL_IN_USE`, `SKILL_LIMIT`, `CONFIG_INVALID` on `name`), rejecting with it.
+       */
+      skills: {
+        view: (workspace: string): RoutingHeld<RoutingSkillsState> => routingSkills.view(workspace),
+        /** One read of them, for a route's loader (a team page's Known offers Customer only once Won means is set). */
+        list: (workspace: string): Promise<SkillsView> =>
+          beforeRead(workspace).then(() => call((options) => api.routing.skills.list({ workspace }, options))),
+        /** A new skill at the end of its group; answers its id. */
+        create: (workspace: string, group: SkillGroup, name: string): Promise<string> =>
+          routingSkills.create(workspace, group, name),
+        update: (
+          workspace: string,
+          id: string,
+          change: { readonly group?: SkillGroup; readonly name?: string },
+        ): Promise<void> => routingSkills.update(workspace, id, change),
+        remove: (workspace: string, id: string): Promise<void> => routingSkills.remove(workspace, id),
+        /** One member's skills, replaced. */
+        setMember: (workspace: string, memberId: string, skillIds: readonly string[]): Promise<void> =>
+          routingSkills.setMember(workspace, memberId, skillIds),
+      },
+      /** The workspace's routing settings (AC-1351): Won means (AC-1385), for holders of routing.manage. */
+      settings: {
+        view: (workspace: string): RoutingHeld<RoutingSettingsState> => routingSkills.settings(workspace),
+        /** Won means set, or cleared with null; `STALE` reads the settings again and rejects. */
+        setWonStage: (workspace: string, wonStage: WonStage | null): Promise<void> =>
+          routingSkills.setWonStage(workspace, wonStage),
+      },
+      /**
+       * Routing › Test (AC-1392): what a surface's rules would decide for typed answers and an email. Stores nothing
+       * but an audit row when an email is given; no screen holds its answer beyond the tab's own state.
+       */
+      test: (
+        workspace: string,
+        input: Pick<RoutingTestInput, 'surface' | 'answers' | 'email'>,
+      ): Promise<RoutingTestResult> =>
+        call((options) =>
+          api.routing.test(
+            {
+              workspace,
+              surface: input.surface,
+              answers: input.answers,
+              ...(input.email === undefined ? {} : { email: input.email }),
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        ),
     },
     home: {
       /**
@@ -5059,12 +5353,26 @@ export function createDataLayer({
        * `NOT_FOUND`. The list, and the person's own access, are read again after. Answers how many open invitations
        * they sent the change cancelled, when any (their new role can't send them).
        */
-      async setRole(workspace: string, memberId: string, role: Role): Promise<SetRoleResult> {
+      async setRole(workspace: string, memberId: string, role: RoleChoice): Promise<SetRoleResult> {
         const changed = await call((options) =>
-          api.members.setRole({ workspace, memberId, role, mutationId: mintId() }, options),
+          api.members.setRole({ workspace, memberId, ...roleInput(role), mutationId: mintId() }, options),
         );
-        members.delete(workspace);
-        access.delete(workspace);
+        dropRoles(workspace);
+        return changed;
+      },
+      /**
+       * Change role for several people at once (spec 0037, AC-1242), waiting for the server: one transaction, so a
+       * refusal (`FORBIDDEN`, `LAST_OWNER`, `SEAT_LIMIT`, `NOT_FOUND`) changes nobody. The lists and the person's own
+       * access are read again after.
+       */
+      async setRoles(workspace: string, memberIds: readonly string[], role: RoleChoice): Promise<SetRolesResult> {
+        const changed = await call((options) =>
+          api.members.setRoles(
+            { workspace, memberIds: [...memberIds], ...roleInput(role), mutationId: mintId() },
+            options,
+          ),
+        );
+        dropRoles(workspace);
         return changed;
       },
       /**
@@ -5337,11 +5645,26 @@ export function createDataLayer({
       /** The open email invitations, newest first: holders of `members.invite` only (`FORBIDDEN` otherwise). */
       list: (workspace: string): Promise<InvitationView[]> =>
         call((options) => api.invitations.list({ workspace }, options)),
-      /** Invites 1 to 20 addresses with one role. Refusals: `FORBIDDEN`, `INVITES_LIMIT`, `SEAT_LIMIT`, `RATE_LIMITED`. */
-      create: (workspace: string, emails: readonly string[], role: Role): Promise<InviteResult> =>
-        call((options) =>
-          api.invitations.create({ workspace, emails: [...emails], role, mutationId: mintId() }, options),
-        ),
+      /**
+       * Invites 1 to 20 addresses with one role: a built in one, or a custom role's id (spec 0037, AC-1236).
+       * Refusals: `FORBIDDEN`, `INVITES_LIMIT`, `SEAT_LIMIT`, `RATE_LIMITED`, `NOT_FOUND` (a role deleted meanwhile).
+       */
+      create: (workspace: string, emails: readonly string[], role: RoleChoice): Promise<InviteResult> => {
+        const given = roleInput(role);
+        return call((options) =>
+          api.invitations.create(
+            {
+              workspace,
+              emails: [...emails],
+              ...('role' in given
+                ? { role: given.role }
+                : { role: 'member' as const, customRoleId: given.customRoleId }),
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+      },
       /** Sends an open invitation again: a new link, the old one dead. `sent` is false when its email failed. */
       resend: (workspace: string, invitationId: string) =>
         call((options) => api.invitations.resend({ workspace, invitationId, mutationId: mintId() }, options)),
@@ -5617,10 +5940,114 @@ export function createDataLayer({
        * ones now, custom ones once they exist, and the default for new
        * people. Cached for the app load.
        */
-      list: (workspace: string): Promise<RolesList> =>
-        cached(roles, workspace, () =>
-          beforeRead(workspace).then(() => call((options) => api.roles.list({ workspace }, options))),
-        ),
+      list: (workspace: string): Promise<RolesList> => beforeRead(workspace).then(() => readRoles(workspace)),
+      /**
+       * Every role with its permissions, data access, people and default flag (spec 0037, AC-1239), for Settings ›
+       * Roles, Compare and "What can Priya do". Cached for the app load; a live `members` event reads it again.
+       */
+      overview: (workspace: string): Promise<RolesOverview> =>
+        beforeRead(workspace).then(() => readRolesOverview(workspace)),
+      /** One custom role as it stands now, for its page: read fresh each time. Refusals: `NOT_FOUND`. */
+      get: (workspace: string, roleId: string): Promise<RoleDefinition> =>
+        beforeRead(workspace).then(() => call((options) => api.roles.get({ workspace, roleId }, options))),
+      /** A fresh id for a new role, so a retried create makes one role. */
+      newId: (): string => mintId(),
+      /**
+       * Makes a custom role (spec 0037, AC-1228), waiting for the server: the name rules, the catalog's grant levels
+       * and the 20 role cap live there. Refusals: `FORBIDDEN`, `NAME_TAKEN` and `ROLE_NAME_RESERVED` (on `name`),
+       * `PERMISSION_NOT_ALLOWED`, `ROLE_LIMIT`.
+       */
+      async create(
+        workspace: string,
+        role: {
+          readonly id: string;
+          readonly name: string;
+          readonly description?: string;
+          readonly permissions: readonly string[];
+          readonly dataAccess: DataAccess;
+          readonly startFrom: StartFrom;
+        },
+      ): Promise<RoleDefinition> {
+        const made = await call((options) =>
+          api.roles.create(
+            {
+              workspace,
+              id: role.id,
+              name: role.name,
+              ...(role.description === undefined ? {} : { description: role.description }),
+              permissions: [...role.permissions],
+              dataAccess: role.dataAccess,
+              startFrom: role.startFrom,
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+        dropRoles(workspace);
+        return made;
+      },
+      /**
+       * Saves a custom role (spec 0037, AC-1231): what is given changes, against the version the page read
+       * (`updatedAt`; another save since is `STALE`). Answers the role and how many people it changed for.
+       */
+      async update(
+        workspace: string,
+        roleId: string,
+        change: {
+          readonly name?: string;
+          readonly description?: string;
+          readonly permissions?: readonly string[];
+          readonly dataAccess?: DataAccess;
+          readonly updatedAt: string;
+        },
+      ): Promise<{ readonly role: RoleDefinition; readonly affectedMembers: number }> {
+        const saved = await call((options) =>
+          api.roles.update(
+            {
+              workspace,
+              roleId,
+              ...(change.name === undefined ? {} : { name: change.name }),
+              ...(change.description === undefined ? {} : { description: change.description }),
+              ...(change.permissions === undefined ? {} : { permissions: [...change.permissions] }),
+              ...(change.dataAccess === undefined ? {} : { dataAccess: change.dataAccess }),
+              updatedAt: change.updatedAt,
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+        dropRoles(workspace);
+        return saved;
+      },
+      /** Copies a custom role as "<name> copy" (spec 0037, AC-1232). Refusals: `ROLE_LIMIT`, `NOT_FOUND`. */
+      async duplicate(workspace: string, roleId: string): Promise<RoleDefinition> {
+        const made = await call((options) =>
+          api.roles.duplicate({ workspace, roleId, id: mintId(), mutationId: mintId() }, options),
+        );
+        dropRoles(workspace);
+        return made;
+      },
+      /**
+       * Deletes a custom role, moving its people and open invitations to `moveTo` (spec 0037, AC-1238): `member`
+       * or another custom role's id. Answers how many people moved. Refusals: `MOVE_TO_INVALID`, `NOT_FOUND`.
+       */
+      async delete(workspace: string, roleId: string, moveTo: string): Promise<{ readonly moved: number }> {
+        const done = await call((options) =>
+          api.roles.delete({ workspace, roleId, moveTo, mutationId: mintId() }, options),
+        );
+        dropRoles(workspace);
+        return done;
+      },
+      /** The role new people get (spec 0037, AC-1237): a custom role's id, or `null` for Member. */
+      async setDefault(workspace: string, roleId: string | null): Promise<void> {
+        await call((options) => api.roles.setDefault({ workspace, roleId, mutationId: mintId() }, options));
+        dropRoles(workspace);
+      },
+      /** Moves a custom role to `position` among the custom roles (0 first). */
+      async move(workspace: string, roleId: string, position: number): Promise<void> {
+        await call((options) => api.roles.move({ workspace, roleId, position, mutationId: mintId() }, options));
+        dropRoles(workspace);
+      },
     },
     /**
      * The workspace's logo (spec 0060) for the sidebar's head and the tab's icon: its member route
@@ -6106,13 +6533,17 @@ export function createDataLayer({
        * Makes a record at once (see the records layer) with `id` (from
        * `newId`); rejects with the refusals when the server says no. Sending the
        * same id again after a lost answer gets the record already made.
+       * `onFiled` takes the notice that its email filed it under a company
+       * (spec 0059) in place of the app's, before the create settles, so a
+       * create dialog says both in one toast.
        */
       create: async (
         workspace: string,
         objectId: string,
         id: string,
         values: Readonly<Record<string, unknown>>,
-      ): Promise<RecordView> => (await recordsLayer()).create(workspace, objectId, values, id),
+        options?: { readonly onFiled?: (notice: FiledNotice) => void },
+      ): Promise<RecordView> => (await recordsLayer()).create(workspace, objectId, values, id, options?.onFiled),
       /**
        * Makes an option from a select, multi select or status cell and sets
        * it, as one optimistic write (spec 0012, AC-238; see `createOption`).
@@ -7008,8 +7439,14 @@ export function createDataLayer({
       /** Creates an untitled form at once (AC-649), waiting for the server (`forms.manage`). */
       create: (
         workspace: string,
-        // `mainObjectId: null` keeps its submissions only, adding nothing to the CRM.
-        form: { readonly id: string; readonly name?: string; readonly mainObjectId?: string | null },
+        // `mainObjectId: null` keeps its submissions only, adding nothing to the CRM; `starter: 'team_link'` makes the
+        // Team link (spec 0037, AC-1353).
+        form: {
+          readonly id: string;
+          readonly name?: string;
+          readonly mainObjectId?: string | null;
+          readonly starter?: 'team_link';
+        },
       ) =>
         formLists.write(workspace, {
           send: () => call((options) => api.forms.create({ workspace, ...form, mutationId: mintId() }, options)),

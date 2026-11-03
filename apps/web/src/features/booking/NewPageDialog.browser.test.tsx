@@ -56,6 +56,8 @@ async function render() {
       view: () => held({ status: 'ready' as const, items: [] as RotationView[], pendingIds: new Set<string>() }),
     },
     bookingPages: { newId: () => MADE.id, create },
+    // The dialog mints a managed page's id up front, whether or not it offers the choice (no `onManaged` here).
+    managedPages: { newId: () => '0199a6f2-0000-7000-8000-00000000mp01' },
   } as unknown as DataLayer;
   const onCreated = vi.fn();
   shown = await renderInApp(

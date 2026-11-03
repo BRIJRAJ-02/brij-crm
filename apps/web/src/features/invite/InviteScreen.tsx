@@ -111,7 +111,8 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
     setConfirming(true);
   };
 
-  const role = ROLE_LABELS[invitation.role];
+  // A custom role (spec 0037) by its own name, which the page carries.
+  const role = invitation.roleLabel ?? ROLE_LABELS[invitation.role];
   const isMismatch = standing.kind === 'mismatch';
   const message =
     standing.kind === 'mismatch' || standing.kind === 'refused' ? (

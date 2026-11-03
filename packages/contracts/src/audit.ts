@@ -223,7 +223,17 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(['join_request.approved'], member, z.strictObject({ alreadyMember: z.boolean() })),
   /** `account_deleted`: the system closed it when the asker deleted their account. */
   entry(['join_request.declined'], joinRequest, z.strictObject({ reason: z.literal('account_deleted').optional() })),
-  entry(['member.role_changed'], member, z.strictObject({ from: Role.optional(), to: Role.optional() })),
+  /** `fromName` and `toName`: a custom role's name then (spec 0037), beside the built in role it sits on. */
+  entry(
+    ['member.role_changed'],
+    member,
+    z.strictObject({
+      from: Role.optional(),
+      to: Role.optional(),
+      fromName: z.string().optional(),
+      toName: z.string().optional(),
+    }),
+  ),
   entry(['member.removed', 'member.left', 'workspace.ownership_transferred', 'account.deleted'], member, NoParams),
   /** `fields` holds only known fields; empty, the sentence says the profile changed. */
   entry(
@@ -344,6 +354,20 @@ export const AuditEntryView = z.discriminatedUnion('action', [
       isDefault: z.boolean(),
     }),
   ),
+  /**
+   * A custom role made, changed or deleted, or the default for new people changed (spec 0037): the role's name then,
+   * how many permissions a change added and removed, and how many people a delete moved.
+   */
+  entry(
+    ['role.created', 'role.updated', 'role.deleted', 'role.default_changed'],
+    workspace,
+    z.strictObject({
+      role: z.string(),
+      added: z.number().int().min(0).optional(),
+      removed: z.number().int().min(0).optional(),
+      moved: z.number().int().min(0).optional(),
+    }),
+  ),
   /** A booking made, moved or cancelled by someone other than its host (spec 0037, AC-1263). */
   entry(
     ['booking.changed_for'],
@@ -375,6 +399,14 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     z.union([rotation, bookingPage]),
     z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
   ),
+  /** A managed page template changed (spec 0037, AC-1333): how many members were added and how many removed. */
+  entry(
+    ['managed_page.changed'],
+    bookingPage,
+    z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
+  ),
+  /** Bookings › Routing (spec 0037): its settings or skills changed, or a Test run; what changed stays in the row. */
+  entry(['routing.settings_changed', 'routing.skills_changed', 'routing.tested'], workspace, NoParams),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;

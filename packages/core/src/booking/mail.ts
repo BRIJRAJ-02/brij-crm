@@ -17,13 +17,13 @@
 // - reminders: the visitor, 24 hours and 1 hour before, only while the
 //   booking is confirmed and that close (a stale reminder sends nothing).
 // A guest never gets the visitor's link: it is the visitor's key.
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { zoneDisplay } from '@crm/contracts/zones';
 import { schema } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { rolesManagingEveryone } from '../access/scheduling.ts';
+import { schedulingManagers } from '../access/scheduling.ts';
 import { addedLaterOf, guestsOf } from './change.ts';
 import { buildBookingIcs } from './ics.ts';
 import { answerWords, storedBookingAnswers } from './questions.ts';
@@ -508,10 +508,8 @@ export async function prepareBookingMail(
       case 'needs_host': {
         // A booking whose host left with nobody free to take it (spec 0029, AC-749): the admins are told.
         if (row.needsHostAt === null) return { messages: [], invited: [], skipped: 'has a host' };
-        const admins = await tx
-          .select({ email: members.email })
-          .from(members)
-          .where(and(eq(members.status, 'active'), inArray(members.role, [...rolesManagingEveryone()])));
+        // Everyone who manages everyone's scheduling (spec 0037, J9), read by the permission they hold now.
+        const admins = await schedulingManagers(tx, scope.workspaceId);
         return {
           messages: admins.map((admin) => ({
             to: admin.email,

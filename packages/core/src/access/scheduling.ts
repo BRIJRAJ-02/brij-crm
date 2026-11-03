@@ -19,6 +19,7 @@ import { ROLE_PERMISSIONS, ROLES, type Role } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { isUuid } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
+import { holdersOf } from '../roles/held.ts';
 import type { EngineScope } from './mint.ts';
 import { can, isRole, type Access, type Principal } from './policy.ts';
 
@@ -81,6 +82,20 @@ export function roleReach(access: Access): SchedulingLevel | undefined {
   const { principal } = access;
   if (principal.kind === 'system') return 'manage';
   if (principal.kind !== 'member') return undefined;
+  // A custom role's `schedule.*` never covers owners and admins (decision 7): its reach is `customRoleReach`'s.
+  if (principal.customRoleId !== undefined) return undefined;
+  if (can(access, 'schedule.manage')) return 'manage';
+  if (can(access, 'schedule.view')) return 'view';
+  return undefined;
+}
+
+/**
+ * The reach over everyone but owners and admins that a custom role gives (spec 0037, decision 7): its
+ * `schedule.manage` or `schedule.view`, over every active member on the Member role (custom role holders included).
+ */
+export function customRoleReach(access: Access): SchedulingLevel | undefined {
+  const { principal } = access;
+  if (principal.kind !== 'member' || principal.customRoleId === undefined) return undefined;
   if (can(access, 'schedule.manage')) return 'manage';
   if (can(access, 'schedule.view')) return 'view';
   return undefined;
@@ -115,6 +130,11 @@ export interface DelegationReachRow {
   readonly member_role: string | null;
   /** The role now of whoever last granted it, when they are still an active member. */
   readonly grantor_role: string | null;
+  /**
+   * Whether that member's custom role (spec 0037, AC-1229) holds `availability.own`: null when they hold none (or the
+   * row isn't a member delegation), so their built in role decides. Absent from rows a test builds by hand.
+   */
+  readonly member_owns_hours?: boolean | null;
 }
 
 /** The targets a reach row may name; anything else grants nothing (AC-1223). */
@@ -123,9 +143,14 @@ const KNOWN_TARGETS: ReadonlySet<string> = new Set(['member', 'team', 'everyone'
 /** A role the code knows that is an owner's or an admin's; an unknown one counts as one (fail closed). */
 const isProtected = (role: string | null): boolean => role === null || !isRole(role) || role !== 'member';
 
-/** Whether a member with `role` can change their own hours; an unknown role can't (fail closed). */
-const ownsHours = (role: string | null): boolean =>
-  role !== null && isRole(role) && (ROLE_PERMISSIONS[role] as readonly string[]).includes('availability.own');
+/**
+ * Whether a member with `role` can change their own hours; an unknown role can't (fail closed). A custom role holder
+ * (spec 0037) by what their role holds, read beside them (`custom`).
+ */
+const ownsHours = (role: string | null, custom: boolean | null | undefined): boolean => {
+  if (custom !== null && custom !== undefined) return custom;
+  return role !== null && isRole(role) && (ROLE_PERMISSIONS[role] as readonly string[]).includes('availability.own');
+};
 
 /**
  * The reach from the caller's delegations (pure, AC-1270): each row's level over its member, the highest level per
@@ -142,6 +167,7 @@ export function combineReach(
   const otherwise = new Map<string, SchedulingLevel>();
   const selfManaged = new Set<string>();
   const roles = new Map<string, string | null>();
+  const customHours = new Map<string, boolean | null | undefined>();
   for (const row of rows) {
     const level = parseSchedulingLevel(row.level);
     const memberId = row.member_id;
@@ -156,6 +182,7 @@ export function combineReach(
       if (!row.granted_by_self && !byOwner) continue;
     }
     roles.set(memberId, row.member_role);
+    if (row.target_type === 'member') customHours.set(memberId, row.member_owns_hours);
     members.set(memberId, higherLevel(members.get(memberId), level) ?? level);
     if (row.granted_by_self && row.target_type === 'member') {
       if (level === 'manage') selfManaged.add(memberId);
@@ -165,7 +192,9 @@ export function combineReach(
   }
   const hoursSeenOnly = new Set<string>();
   for (const memberId of selfManaged) {
-    if (!ownsHours(roles.get(memberId) ?? null) && otherwise.get(memberId) !== 'manage') hoursSeenOnly.add(memberId);
+    if (!ownsHours(roles.get(memberId) ?? null, customHours.get(memberId)) && otherwise.get(memberId) !== 'manage') {
+      hoursSeenOnly.add(memberId);
+    }
   }
   return { self, all, members, hoursSeenOnly };
 }
@@ -185,6 +214,7 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
   if (principal.role === 'guest') return { ...NOBODY, self };
   if (all === 'manage') return { ...NOBODY, self, all };
   const me = principal.memberId;
+  const custom = customRoleReach(access);
   const teamLevel = teamRoleReach(access);
   // One arm per target, so each takes its index: a member delegation's target by the members key, a team
   // delegation's members through `team_members` (its active members now, AC-1254), an everyone delegation's by the
@@ -193,20 +223,21 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
   // The granter is whoever last set the level.
   const found = await tx.execute<DelegationReachRow & Record<string, unknown>>(sql`
     select d.target_type, d.level, d.granted_by_self, t.id::text as member_id, t.role::text as member_role,
-      g.role::text as grantor_role
+      g.role::text as grantor_role, 'availability.own' = any(cr.permissions) as member_owns_hours
     from schedule_delegations d
     left join members t on t.workspace_id = d.workspace_id and t.id = d.target_member_id and t.status = 'active'
+    left join workspace_roles cr on cr.workspace_id = t.workspace_id and cr.id = t.custom_role_id
     left join members g on g.workspace_id = d.workspace_id and g.id = d.updated_by_member_id and g.status = 'active'
     where d.workspace_id = ${scope.workspaceId}::uuid and d.delegate_member_id = ${me}::uuid
       and d.target_type = 'member'
     union all
-    select d.target_type, d.level, d.granted_by_self, t.id::text, t.role::text, null
+    select d.target_type, d.level, d.granted_by_self, t.id::text, t.role::text, null, null
     from schedule_delegations d
     join members t on t.workspace_id = d.workspace_id and t.status = 'active' and t.id <> d.delegate_member_id
     where d.workspace_id = ${scope.workspaceId}::uuid and d.delegate_member_id = ${me}::uuid
       and d.target_type = 'everyone'
     union all
-    select d.target_type, d.level, d.granted_by_self, t.id::text, t.role::text, null
+    select d.target_type, d.level, d.granted_by_self, t.id::text, t.role::text, null, null
     from schedule_delegations d
     join team_members tm on tm.workspace_id = d.workspace_id and tm.team_id = d.target_team_id
     join members t on t.workspace_id = tm.workspace_id and t.id = tm.member_id and t.status = 'active'
@@ -216,11 +247,20 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
       teamLevel === undefined
         ? sql``
         : sql`union all
-    select ${TEAM_SCOPE}::text, ${teamLevel}::text, false, t.id::text, t.role::text, null
+    select ${TEAM_SCOPE}::text, ${teamLevel}::text, false, t.id::text, t.role::text, null, null
     from team_members mine
     join team_members tm on tm.workspace_id = mine.workspace_id and tm.team_id = mine.team_id
     join members t on t.workspace_id = tm.workspace_id and t.id = tm.member_id and t.status = 'active'
     where mine.workspace_id = ${scope.workspaceId}::uuid and mine.member_id = ${me}::uuid`
+    }
+    ${
+      custom === undefined
+        ? sql``
+        : sql`union all
+    select 'everyone', ${custom}::text, false, t.id::text, t.role::text, null, null
+    from members t
+    where t.workspace_id = ${scope.workspaceId}::uuid and t.status = 'active' and t.role = 'member'
+      and t.id <> ${me}::uuid`
     }
   `);
   return combineReach(self, all, found.rows);
@@ -343,4 +383,16 @@ export async function actingFor(
   if (row === undefined) throw refuse('NOT_FOUND', NO_PERSON);
   if (!canActFor(reach, memberId, need, what)) throw refuse('FORBIDDEN', seeOnlyMessage(row.name));
   return reach;
+}
+
+/**
+ * Everyone who manages everyone's scheduling now (spec 0037, J9): owners and admins, and custom roles holding
+ * `schedule.manage`, read by the permission they hold at the time. Who a booking that needs a host is told to.
+ * Named here so `schedule.*` stays in this one file (AC-1221).
+ */
+export function schedulingManagers(
+  tx: WorkspaceTx,
+  workspaceId: string,
+): Promise<readonly { readonly id: string; readonly email: string }[]> {
+  return holdersOf(tx, workspaceId, 'schedule.manage');
 }

@@ -51,7 +51,13 @@ export type QueuedEmail =
   | { readonly outcome: 'refused'; readonly code: 'PARAMS_INVALID' };
 
 /** An id in a key: a uuid, a count or time in digits, or a word from the closed list a kind keys by. */
-const Id = z.union([z.uuid(), z.string().regex(/^\d{1,16}$/), z.enum(['expired', 'failed', 'first', 'reminder'])]);
+const Id = z.union([
+  z.uuid(),
+  z.string().regex(/^\d{1,16}$/),
+  // `made` and `removed`: a managed page made and later removed for one member are two emails, not one (spec 0037,
+  // AC-1335), while each stays idempotent on a retry.
+  z.enum(['expired', 'failed', 'first', 'made', 'reminder', 'removed']),
+]);
 
 /** An email's idempotency key: its kind and the ids, `form_submission:<submission>:<member>`. Never a value. */
 export function emailKey(kind: QueuedEmailKind, ids: readonly string[]): string {

@@ -281,14 +281,14 @@
     color: var(--text-secondary);
   }
 
-  /* The legend: a key per tone, its look with its meaning inside it, then any hint, one quiet line that wraps on a
-     phone. */
+  /* The legend: one quiet line after the grid, a small mark per tone with its word beside it, then any hint, wrapping
+     on a phone (polish, 31 October 2026: four boxed keys and a boxed note read as busier than the grid). */
   .legend {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-8) var(--space-24);
-    color: var(--text-secondary);
+    gap: var(--space-6) var(--space-16);
+    color: var(--text-tertiary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
@@ -296,50 +296,55 @@
   .keys {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8) var(--space-16);
+    gap: var(--space-6) var(--space-12);
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  /* A key: a small cell of the look it explains, its meaning written inside it, so it reads in both themes without
-     a swatch to match by eye (the owner, 31 October 2026: the swatches all but vanished in dark). */
   .key {
-    position: relative;
     display: inline-flex;
     align-items: center;
-    min-block-size: var(--size-chip);
-    padding-inline: var(--space-6);
+    gap: var(--space-4);
+  }
+
+  /* A key's mark: the cell's look at icon size, each with an edge of its own, so it holds in dark (a mark of a tag
+     surface alone all but vanished there, the owner, 31 October 2026). */
+  /* A key's mark is a small copy of the cell it explains (its radius, fill and edge), never a square that reads as a
+     checkbox or a radio (review, 1 November 2026). */
+  .swatch {
+    position: relative;
+    flex: none;
+    inline-size: calc(var(--size-icon-xs) * 2);
+    block-size: var(--size-icon-xs);
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-xs);
     background: var(--tag-gray-bg);
-    color: var(--tag-gray-text);
   }
 
-  .key[data-tone='override'] {
-    padding-inline-end: var(--space-16);
+  .swatch[data-tone='override'] {
     border-color: var(--tag-blue-border);
     background: var(--tag-blue-bg);
-    color: var(--tag-blue-text);
   }
 
-  .key[data-tone='off'] {
+  .swatch[data-tone='off'] {
     border-style: dashed;
     border-color: var(--control-border);
     background: transparent;
-    color: var(--text-secondary);
   }
 
-  .key[data-tone='away'] {
-    border-color: transparent;
+  .swatch[data-tone='away'] {
+    border-color: var(--tag-yellow-border);
     background: var(--tag-yellow-bg);
-    color: var(--tag-yellow-text);
   }
 
-  .key > .dot {
-    inset-block-start: 50%;
-    inset-inline-end: var(--space-6);
-    translate: 0 -50%;
+  /* This date only keeps the cell's dot in its top corner, as the cell has it (a read only grid marks such a day with
+     the dot alone); centred at the end it read as a switch. */
+  .swatch > .dot {
+    inset-block-start: var(--space-2);
+    inset-inline-end: var(--space-2);
+    inline-size: var(--space-4);
+    block-size: var(--space-4);
   }
 
   .hint {
@@ -356,7 +361,7 @@
 
   @media (forced-colors: active) {
     .cell,
-    .key {
+    .swatch {
       border-color: CanvasText;
     }
   }

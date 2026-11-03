@@ -373,11 +373,19 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'member.role_changed': {
       const from = roleOf(before.role);
       const to = roleOf(after.role);
+      // A custom role (spec 0037) by the name it had then.
+      const fromName = text(before.customRoleName);
+      const toName = text(after.customRoleName);
       return {
         ...base,
         action,
         target: memberTarget(),
-        params: { ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) },
+        params: {
+          ...(from === undefined ? {} : { from }),
+          ...(to === undefined ? {} : { to }),
+          ...(fromName === undefined ? {} : { fromName }),
+          ...(toName === undefined ? {} : { toName }),
+        },
         changes: change('role', role(before.role), role(after.role)),
       };
     }
@@ -466,6 +474,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     }
     case 'workspace.restored':
     case 'workspace_security.signed_out_everyone':
+    case 'routing.settings_changed':
+    case 'routing.skills_changed':
+    case 'routing.tested':
       return { ...base, action, target: workspace, params: {}, changes: [] };
     case 'webhook.created':
     case 'webhook.updated':
@@ -645,6 +656,29 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: [],
       };
     }
+    case 'role.created':
+    case 'role.updated':
+    case 'role.deleted':
+    case 'role.default_changed': {
+      // The role by the name it had then (spec 0037); a change counts the permissions it added and took away.
+      const counted = (value: unknown) => (Array.isArray(value) ? value.length : undefined);
+      const added = counted(after.added);
+      const removed = counted(after.removed);
+      const moved =
+        typeof after.moved === 'number' && Number.isInteger(after.moved) && after.moved >= 0 ? after.moved : undefined;
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: {
+          role: text(after.name) ?? text(before.name) ?? 'a role',
+          ...(added === undefined ? {} : { added }),
+          ...(removed === undefined ? {} : { removed }),
+          ...(moved === undefined ? {} : { moved }),
+        },
+        changes: action === 'role.updated' ? change('name', plain(before.name), plain(after.name)) : [],
+      };
+    }
     case 'team.changed': {
       const kind = after.change;
       if (kind !== 'created' && kind !== 'renamed' && kind !== 'deleted' && kind !== 'members') {
@@ -752,6 +786,19 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
             ? thing('rotation', names.rotations)
             : thing('booking_page', names.bookingPages),
         params: { added: many(after.added), removed: many(after.removed) },
+        changes: [],
+      };
+    }
+    // A managed page template (spec 0037, AC-1333 to AC-1335): the target is the template page, and how many
+    // members were added and removed. The counts are written as numbers, not lists, so no member id is listed here.
+    case 'managed_page.changed': {
+      const count = (value: unknown) =>
+        typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
+      return {
+        ...base,
+        action,
+        target: thing('booking_page', names.bookingPages),
+        params: { added: count(after.added), removed: count(after.removed) },
         changes: [],
       };
     }

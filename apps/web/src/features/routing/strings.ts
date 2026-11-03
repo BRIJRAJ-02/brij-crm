@@ -46,7 +46,11 @@ export const strings = {
   yes: 'Yes',
   no: 'No',
   removedQuestion: 'A removed question',
-  fieldOf: (side: 'person' | 'company', title: string) => `${side === 'person' ? 'Person' : 'Company'} · ${title}`,
+  fieldOf: (side: 'person' | 'company' | 'deal', title: string) =>
+    `${side === 'person' ? 'Person' : side === 'company' ? 'Company' : 'Deal'} · ${title}`,
+  // Known (spec 0037, AC-1393): what the CRM knows of the guest.
+  known: 'Known in CRM',
+  knownValue: { new: 'New', person: 'Known person', company: 'Known company', customer: 'Customer' } as const,
   hiddenField: (field: HiddenField) => HIDDEN[field],
   // On a team page a hidden field is the one the sending form's visit brought.
   fromForm: (name: string) => `Form · ${name}`,
@@ -141,6 +145,20 @@ export const strings = {
   toMessage: 'Show a message',
   toRedirect: (url: string) => `Go to ${url}`,
   toHosts: (hosts: readonly string[]) => `Only ${hosts.join(' or ')}`,
+  // Members with skills (spec 0037, AC-1356).
+  toSkills: (skills: readonly string[]) => `Members with ${skills.join(' and ')}`,
+  toPageSkills: (title: string, skills: readonly string[]) => `Book ${title} with members with ${skills.join(' and ')}`,
+  hostsBy: 'Pick by',
+  byPeople: 'People',
+  bySkills: 'Skills',
+  skills: 'Required skills',
+  skillsNeeded: 'Pick at least one skill.',
+  noSkills: 'Add skills in Routing first.',
+  heldBy: (names: readonly string[]) =>
+    names.length === 0 ? 'Nobody holds these: the whole rotation picks.' : `Held by ${names.join(', ')}`,
+  removedSkill: 'a removed skill',
+  /** A rule's skill while the skills are still loading. */
+  skillLoading: 'a skill',
   missingPage: 'a removed page',
 
   // The report
@@ -160,4 +178,8 @@ export const strings = {
     of === 0 ? String(count) : `${String(count)} (${String(Math.round((count / of) * 100))}%)`,
   /** A rule that sends a visitor to one of the form's own endings (spec 0063, AC-6315). */
   toEnding: 'end with one of the form’s endings',
+
+  // Only through a form (spec 0037, AC-1388)
+  formOnly: 'Only through a form',
+  formOnlyFailed: 'That didn’t save. Try again.',
 };

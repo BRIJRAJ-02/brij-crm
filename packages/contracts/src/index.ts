@@ -14,13 +14,14 @@ import { teamDayProcedure } from './booking/team-day.ts';
 import { preferencesContract } from './preferences.ts';
 import { rotationsContract } from './booking/rotations.ts';
 import { editorsContract } from './booking/editors.ts';
+import { managedPagesContract } from './booking/managed.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { homeContract } from './home.ts';
 import { commentsContract } from './comments.ts';
 import { filesContract } from './files.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
-import { routingContract } from './forms/routing.ts';
+import { routingContract } from './forms/routing-shared.ts';
 import { exportsContract, importsContract } from './imports.ts';
 import { entriesContract } from './entries.ts';
 import { listsContract } from './lists.ts';
@@ -74,6 +75,7 @@ export * from './booking/team-week.ts';
 export * from './booking/team-day.ts';
 export * from './booking/rotations.ts';
 export * from './booking/editors.ts';
+export * from './booking/managed.ts';
 export * from './bulk.ts';
 export * from './bulk-ops.ts';
 export * from './calendar.ts';
@@ -207,6 +209,8 @@ export const contract = {
   rotations: rotationsContract,
   // Page and rotation editors (spec 0037, AC-1331): Sharing on pages and rotations.
   editors: editorsContract,
+  // Managed booking pages (spec 0037, AC-1333): one template, a page per member, locked parts kept in step.
+  managedPages: managedPagesContract,
   search: searchContract,
   recents: recentsContract,
   // The sidebar (spec 0034): each member's own order, folds, hidden items, favourites and rail.

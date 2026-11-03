@@ -119,12 +119,16 @@ const SENTENCES: SentenceTemplates = {
       ? { subject: 'none', text: `${asker}’s request to join closed when they deleted their account` }
       : actor(`declined ${entry.target.name ?? 'someone'}’s request to join`);
   },
-  'member.role_changed': (entry, w) =>
-    actor(
-      entry.params.from === undefined || entry.params.to === undefined
+  'member.role_changed': (entry, w) => {
+    // A custom role (spec 0037) by the name it had then, else the built in role's.
+    const from = entry.params.fromName ?? (entry.params.from === undefined ? undefined : w.role(entry.params.from));
+    const to = entry.params.toName ?? (entry.params.to === undefined ? undefined : w.role(entry.params.to));
+    return actor(
+      from === undefined || to === undefined
         ? `changed ${w.persons(entry.target.person)} role`
-        : `changed ${w.persons(entry.target.person)} role from ${w.role(entry.params.from)} to ${w.role(entry.params.to)}`,
-    ),
+        : `changed ${w.persons(entry.target.person)} role from ${from} to ${to}`,
+    );
+  },
   'member.removed': (entry, w) => actor(`removed ${w.person(entry.target.person)} from the workspace`),
   'member.left': () => actor('left the workspace'),
   'workspace.ownership_transferred': (entry, w) =>
@@ -244,6 +248,16 @@ const SENTENCES: SentenceTemplates = {
   'time_off.deleted': (entry, w) => actor(`removed ${w.persons(entry.target.person)} time off`),
   'limits.changed': (entry, w) => actor(`changed ${w.persons(entry.target.person)} meeting limits`),
   'calendar.reconnect_asked': (entry, w) => actor(`asked ${w.person(entry.target.person)} to reconnect their calendar`),
+  // Custom roles (spec 0037).
+  'role.created': (entry) => actor(`made the ${entry.params.role} role`),
+  'role.updated': (entry) => actor(`changed the ${entry.params.role} role`),
+  'role.deleted': (entry) =>
+    actor(
+      entry.params.moved === undefined || entry.params.moved === 0
+        ? `deleted the ${entry.params.role} role`
+        : `deleted the ${entry.params.role} role and moved ${String(entry.params.moved)} ${entry.params.moved === 1 ? 'person' : 'people'}`,
+    ),
+  'role.default_changed': (entry) => actor(`made ${entry.params.role} the role new people get`),
   'team.changed': (entry) => {
     const { team, joined, left } = entry.params;
     switch (entry.params.change) {
@@ -293,7 +307,27 @@ const SENTENCES: SentenceTemplates = {
     ),
   'rotation.changed': (entry, w) => actor(`changed who is in ${w.thing(entry.target)}`),
   'editors.changed': (entry, w) => actor(`changed who can edit ${w.thing(entry.target)}`),
+  // A managed page (spec 0037, AC-1333 to AC-1335): what changed is said by the counts when people moved, since
+  // that is the change with a consequence — a page was made or deleted for each of them.
+  'managed_page.changed': (entry, w) =>
+    entry.params.added === 0 && entry.params.removed === 0
+      ? actor(`changed the ${w.thing(entry.target)} managed page`)
+      : actor(
+          `changed who has the ${w.thing(entry.target)} managed page${peopleMoved(entry.params.added, entry.params.removed)}`,
+        ),
+  'routing.settings_changed': () => actor('changed the routing settings'),
+  'routing.skills_changed': () => actor('changed routing skills'),
+  'routing.tested': () => actor('tested routing'),
 };
+
+/** How many people a managed page gained and lost, in words (" (2 added, 1 taken off)"); empty when neither moved. */
+function peopleMoved(added: number, removed: number): string {
+  const parts = [
+    ...(added > 0 ? [`${String(added)} added`] : []),
+    ...(removed > 0 ? [`${String(removed)} taken off`] : []),
+  ];
+  return parts.length === 0 ? '' : ` (${parts.join(', ')})`;
+}
 
 /** A delegation's level as its verb: See or Manage. */
 function verbOf(level: 'view' | 'manage'): string {

@@ -39,6 +39,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { writeAudit, writeAudits, type AuditSource } from '../members/audit.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
+import { memberHeldNow } from '../roles/held.ts';
 
 const { members, scheduleDelegations, teams, workspaces } = schema;
 
@@ -221,10 +222,12 @@ export async function grantDelegation(
     scope,
     async (context) => {
       const { tx } = context;
-      const actor = await activeMember(tx, scope.workspaceId, me);
+      // What the actor holds now, their custom role's permissions included (spec 0037): a role changed since the door
+      // let them in counts.
+      const actor = await memberHeldNow(tx, scope.workspaceId, me);
       if (actor === undefined || !isRole(actor.role)) throw refuse('NOT_FOUND', NOT_A_MEMBER);
       if (overSelf) {
-        if (!(ROLE_PERMISSIONS[actor.role] as readonly string[]).includes('booking.manage')) {
+        if (!actor.permissions.includes('booking.manage')) {
           throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
         }
       } else if (!roleManages(actor.role)) {
@@ -648,16 +651,20 @@ export async function delegatesReachedBy(
         or (d.target_type = 'team' and exists (
           select 1 from team_members tm
           where tm.workspace_id = d.workspace_id and tm.team_id = d.target_team_id and tm.member_id = any(${ids}))))
-    ${
-      scoped.length === 0
-        ? sql``
-        : sql`union
+    union
     select mate.member_id::text from team_members mine
     join team_members mate on mate.workspace_id = mine.workspace_id and mate.team_id = mine.team_id
     join members m on m.workspace_id = mate.workspace_id and m.id = mate.member_id and m.status = 'active'
+    left join workspace_roles r on r.workspace_id = m.workspace_id and r.id = m.custom_role_id
     where mine.workspace_id = ${workspaceId}::uuid and mine.member_id = any(${ids})
-      and m.role::text = any(${`{${scoped.join(',')}}`}::text[])`
-    }
+      and ((m.custom_role_id is null and m.role::text = any(${`{${scoped.join(',')}}`}::text[]))
+        or (m.custom_role_id is not null and r.permissions && '{schedule.view.team,schedule.manage.team}'::text[]))
+    union
+    -- A custom role that sees or manages everyone reaches every member on the Member role (spec 0037, J9).
+    select m.id::text from members m
+    join workspace_roles r on r.workspace_id = m.workspace_id and r.id = m.custom_role_id
+    where m.workspace_id = ${workspaceId}::uuid and m.status = 'active'
+      and r.permissions && '{schedule.view,schedule.manage}'::text[]
   `);
   return found.rows.map((row) => row.id);
 }

@@ -91,6 +91,11 @@ export const PublicBookingPage = z.object({
    */
   questions: z.array(PublicQuestion).optional(),
   /**
+   * The page books only through a form (spec 0037, AC-1388) and this visit carries no hand off: the visitor sees the
+   * page's closed state. Only the host's own editor preview draws it anyway. Absent otherwise.
+   */
+  formOnly: z.literal(true).optional(),
+  /**
    * The brand it wears (spec 0060, AC-4, AC-14): the versions `brandStylesheetPath('booking', …)` and
    * `brandLogoPath('booking', …)` take. A personal page wears its owner's own accent when they set one, else the
    * workspace's, and a team page the workspace's. Absent when it wears the product's own accent and no logo.

@@ -1,6 +1,8 @@
 // New meeting (spec 0027, AC-709 to AC-711), in Chromium: the day moves in place rather than asking the member to
 // close the dialog and draw again (the design pass of 22 October 2026), For first and the one line note that no
 // calendar is connected before the guest (31 October 2026), and the guest's zone sits with who it is with.
+// Layout is measured (From and To on one row), so the library's styles load first, as main.tsx does.
+import '@crm/ui/styles.css';
 import type {
   BookingPageView,
   CalendarListState,
@@ -164,18 +166,29 @@ describe('New meeting', () => {
     expect(onSpanChange).toHaveBeenLastCalledWith({ dayKey: '2026-10-24', startMinute: 570, endMinute: 615 });
   });
 
-  it('says nobody is invited yet before the fields, and keeps their zone with who it is with', async () => {
+  it('says nobody is invited yet as Email’s hint, and keeps their zone with who it is with', async () => {
     await open();
-    const note = page.getByText('Guest emailed only. No calendar event or video link.').element();
     const name = page.getByRole('textbox', { name: 'With' }).element();
-    const email = page.getByRole('textbox', { name: 'Email' }).element();
+    const email = page.getByRole('textbox', { name: 'Email' });
     const zone = page.getByRole('button', { name: /Their time zone/ }).element();
     const day = page.getByRole('group', { name: 'Day' }).element();
-    expect(before(note, name)).toBe(true);
-    expect(before(email, zone)).toBe(true);
+    // One quiet line under Email, not a box above the fields.
+    await expect.element(email).toHaveAccessibleDescription('Emailed only, no calendar event or video link.');
+    expect(before(name, email.element())).toBe(true);
+    expect(before(email.element(), zone)).toBe(true);
     expect(before(zone, day)).toBe(true);
     // The name is still where typing starts.
     await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveFocus();
+  });
+
+  it('keeps it short with a calendar: no note under Email, From and To on one row, no zone line for one zone', async () => {
+    await open({ calendars: calendarsOf(['Work']) });
+    await expect.element(page.getByRole('textbox', { name: 'Email' })).not.toHaveAccessibleDescription();
+    const from = page.getByRole('button', { name: /From$/ }).element().getBoundingClientRect();
+    const to = page.getByRole('button', { name: / To$/ }).element().getBoundingClientRect();
+    expect(to.top).toBe(from.top);
+    // Their time zone starts on the member's own, which already names it.
+    expect(document.body.textContent).not.toContain('Times in');
   });
 
   it('offers People as With is typed, and a pick fills the name and email without booking', async () => {

@@ -392,3 +392,18 @@ export function Form<R extends FormRefusal = FormRefusal>({
     </AriaForm>
   );
 }
+
+/** Props for FormRow. */
+export interface FormRowProps {
+  /** Two or three short fields that read as one (From and To). */
+  readonly children: ReactNode;
+}
+
+/**
+ * Short fields that belong together, side by side in a form's column (From and To): they share its width
+ * `space-12` apart, each at least `size-column-narrow`, and go one to a row when the column is too narrow for that.
+ * Each field keeps its own label, hint and refusal, and Tab goes through them in order.
+ */
+export function FormRow({ children }: FormRowProps) {
+  return <div className={styles.row}>{children}</div>;
+}

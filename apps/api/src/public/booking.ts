@@ -928,6 +928,16 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     return c.json({}, 200, { 'cache-control': 'no-store' });
   });
 
+  /** A form's hand off for this page, or undefined: signed by us, unexpired, and naming this very page. */
+  const handoffFor = (entry: BookingEntry, token: string | undefined) =>
+    handoffForPage(services.handoffKey, token, entry.pageId, services.now?.() ?? new Date());
+
+  // A form's hand off on a page or slots read (spec 0043, AC-1609; spec 0037, AC-1388): a bad token is just ignored.
+  const routedLink = (entry: BookingEntry, token: string | undefined) => {
+    const handoff = handoffFor(entry, token);
+    return handoff === undefined ? undefined : { submissionId: handoff.submissionId };
+  };
+
   app.get('/public/booking/:publicKey', async (c) => {
     const address = addressKey(c.get('clientIp'));
     const key = c.req.param('publicKey');
@@ -938,9 +948,10 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (refused !== undefined) return refused;
     try {
       const entry = await enterBookingPage({ db }, key);
-      // The facts and the brand they wear (spec 0060, AC-4) side by side; a brand that won't read is none.
+      // A form's hand off (spec 0037, AC-1388): a page that books only through a form opens only with one. The facts
+      // and the brand they wear (spec 0060, AC-4) side by side; a brand that won't read is none.
       const [facts, brand] = await Promise.all([
-        getPublicBookingPage(entry, services.pictures),
+        getPublicBookingPage(entry, services.pictures, routedLink(entry, c.req.query('p'))),
         bookingBrandAnswer(entry),
       ]);
       return ok(brand === undefined ? facts : { ...facts, brand });
@@ -948,10 +959,6 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       return refusalAnswer(error);
     }
   });
-
-  /** A form's hand off for this page, or undefined: signed by us, unexpired, and naming this very page. */
-  const handoffFor = (entry: BookingEntry, token: string | undefined) =>
-    handoffForPage(services.handoffKey, token, entry.pageId, services.now?.() ?? new Date());
 
   // The name and email a form handed over (AC-1058): only from a token we signed for this page, never plain parameters.
   app.get('/public/booking/:publicKey/prefill', async (c) => {
@@ -976,12 +983,6 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       return refusalAnswer(error);
     }
   });
-
-  // A form's hand off on a slots read (spec 0043, AC-1609): the hosts its routing chose; a bad token is just ignored.
-  const routedLink = (entry: BookingEntry, token: string | undefined) => {
-    const handoff = handoffFor(entry, token);
-    return handoff === undefined ? undefined : { submissionId: handoff.submissionId };
-  };
 
   app.get('/public/booking/:publicKey/slots', async (c) => {
     const address = addressKey(c.get('clientIp'));

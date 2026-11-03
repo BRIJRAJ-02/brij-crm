@@ -11,6 +11,7 @@ import {
   bookingsRouter,
   rotationsRouter,
   editorsRouter,
+  managedPagesRouter,
   routingRouter,
   schedulesRouter,
 } from './modules/booking/router.ts';
@@ -113,6 +114,7 @@ export const router = base.router({
   availability: availabilityRouter,
   rotations: rotationsRouter,
   editors: editorsRouter,
+  managedPages: managedPagesRouter,
   routing: routingRouter,
   audit: auditRouter,
   webhooks: webhooksRouter,

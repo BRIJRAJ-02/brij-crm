@@ -110,8 +110,10 @@ const READS: ReadonlySet<string> = new Set([
   'operator.pages',
   'operator.page',
   'operator.site',
-  // The roles every role picker offers (spec 0037, AC-1439).
+  // The roles every role picker offers (spec 0037, AC-1439), and the Roles page's reads (job J9).
   'roles.list',
+  'roles.overview',
+  'roles.get',
   // Scheduling access (spec 0037): a member's delegations both ways, and the members in their See reach.
   'scheduling.delegations.list',
   'members.visible',
@@ -211,6 +213,9 @@ const READS: ReadonlySet<string> = new Set([
   'bookingPages.get',
   // Where a page's answers may be filed (spec 0057): People and its attributes as this reader may write them.
   'bookingPages.attributes',
+  // Managed booking pages (spec 0037, AC-1333): the templates the reader may change, and one of them.
+  'managedPages.list',
+  'managedPages.get',
   'bookings.list',
   'bookings.listAll',
   'bookings.meetings',
@@ -243,6 +248,13 @@ const READS: ReadonlySet<string> = new Set([
   'nav.get',
   // Lead routing's report (spec 0043).
   'routing.report',
+  // Bookings › Routing (spec 0037, L6): the Overview and the Decisions log, reads only.
+  'routing.overview',
+  'routing.decisions',
+  'routing.decision',
+  // Routing's skills (any member) and its settings (spec 0037, L7).
+  'routing.skills.list',
+  'routing.settings.get',
 ]);
 
 let db: Database;
@@ -610,6 +622,17 @@ async function webhookOf(m: Member): Promise<string> {
     mutationId: newId(),
   });
   return made.endpoint.id;
+}
+
+/** A managed page template to change in the case below (spec 0037, AC-1333): one write of its own. */
+async function newTemplate(m: Member) {
+  return m.client.managedPages.create({
+    workspace: m.slug,
+    id: newId(),
+    title: 'Intro',
+    timeZone: 'UTC',
+    mutationId: newId(),
+  });
 }
 
 const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly Partial<OutboxRow>[]>> = {
@@ -2012,6 +2035,45 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookingPages.reorderProfile({ workspace: m.slug, pageIds: [page.id], mutationId });
     return [];
   },
+  // Managed booking pages (spec 0037, AC-1333 to AC-1336): templates and the member pages made from them are
+  // settings, not CRM data, so no outbox row; still one poke per write.
+  'managedPages.create': async (m, mutationId) => {
+    await m.client.managedPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId,
+    });
+    return [];
+  },
+  'managedPages.update': async (m, mutationId) => {
+    const template = await newTemplate(m);
+    await m.client.managedPages.update({
+      workspace: m.slug,
+      templateId: template.id,
+      settings: { description: 'Hello' },
+      mutationId,
+    });
+    return [];
+  },
+  // Adding the caller themselves makes their own member page in the same write (AC-1335), still one poke.
+  'managedPages.setMembers': async (m, mutationId) => {
+    const template = await newTemplate(m);
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    await m.client.managedPages.setMembers({
+      workspace: m.slug,
+      templateId: template.id,
+      memberIds: [me],
+      mutationId,
+    });
+    return [];
+  },
+  'managedPages.delete': async (m, mutationId) => {
+    const template = await newTemplate(m);
+    await m.client.managedPages.delete({ workspace: m.slug, templateId: template.id, mutationId });
+    return [];
+  },
   // The default schedule's hours (spec 0035): the first save stores "Working hours", one `schedules` row.
   'bookings.setHours': async (m, mutationId) => {
     const { availability } = await m.client.bookings.hours({ workspace: m.slug, timeZone: 'UTC' });
@@ -2681,6 +2743,76 @@ Object.assign(WRITES, {
   },
 });
 
+/** A skill of the member's workspace, made through the procedure. */
+async function skillOn(m: Member): Promise<string> {
+  const id = newId();
+  await m.client.routing.skills.create({
+    workspace: m.slug,
+    id,
+    group: 'language',
+    name: 'Spanish',
+    mutationId: newId(),
+  });
+  return id;
+}
+
+// Routing's shared layer (spec 0037, L7): skills, member skills, Won means and Test are settings and an audit row,
+// so no outbox row.
+Object.assign(WRITES, {
+  'routing.skills.create': async (m: Member, mutationId: string) => {
+    await m.client.routing.skills.create({ workspace: m.slug, id: newId(), group: 'region', name: 'EMEA', mutationId });
+    return [];
+  },
+  'routing.skills.update': async (m: Member, mutationId: string) => {
+    const id = await skillOn(m);
+    await m.client.routing.skills.update({ workspace: m.slug, id, name: 'Español', mutationId });
+    return [];
+  },
+  'routing.skills.delete': async (m: Member, mutationId: string) => {
+    const id = await skillOn(m);
+    await m.client.routing.skills.delete({ workspace: m.slug, id, mutationId });
+    return [];
+  },
+  'routing.memberSkills.set': async (m: Member, mutationId: string) => {
+    const id = await skillOn(m);
+    const [me] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select id::text from members where workspace_id = $1 and status = 'active' limit 1`,
+      [m.workspace.id],
+    );
+    await m.client.routing.memberSkills.set({ workspace: m.slug, memberId: me?.id ?? '', skillIds: [id], mutationId });
+    return [];
+  },
+  'routing.settings.set': async (m: Member, mutationId: string) => {
+    const [won] = await testQuery<{ attribute_id: string; option_id: string }>(
+      ownerUrl,
+      `select a.id::text as attribute_id, o.id::text as option_id
+       from attributes a
+       join objects b on b.id = a.object_id and b.standard_key = 'deals'
+       join attribute_options o on o.attribute_id = a.id and o.outcome = 'won'
+       where a.workspace_id = $1 and a.api_slug = 'stage' limit 1`,
+      [m.workspace.id],
+    );
+    await m.client.routing.settings.set({
+      workspace: m.slug,
+      wonStage: { attributeId: won?.attribute_id ?? '', optionIds: [won?.option_id ?? ''] },
+      mutationId,
+    });
+    return [];
+  },
+  'routing.test': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.routing.test({
+      workspace: m.slug,
+      surface: { kind: 'form', formId: form.id },
+      answers: {},
+      email: 'ada@example.com',
+      mutationId,
+    });
+    return [];
+  },
+});
+
 /** A comment by the member on a new person of theirs, made in its own write: its record and thread. */
 async function commentOn(m: Member): Promise<{ readonly recordId: string; readonly threadId: string }> {
   const recordId = await personFor(m);
@@ -2946,6 +3078,13 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'imports.start': 3,
   'imports.undo': 5,
   'members.setRole': 3,
+  'members.setRoles': 3,
+  // Custom roles (spec 0037, job J9): a role made first, then the write (two for a move).
+  'roles.update': 2,
+  'roles.duplicate': 2,
+  'roles.delete': 2,
+  'roles.setDefault': 2,
+  'roles.move': 3,
   'members.remove': 3,
   'members.leave': 3,
   'members.transferOwnership': 3,
@@ -3004,6 +3143,10 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'calendar.destination.dismissNotice': 2,
   'calendar.pageDestination.set': 3,
   'bookingPages.update': 2,
+  // A template made first, then the case's own write (spec 0037, AC-1333).
+  'managedPages.update': 2,
+  'managedPages.setMembers': 2,
+  'managedPages.delete': 2,
   'rotations.create': 1,
   'bookings.reassign': 3,
   'rotations.adjust': 2,
@@ -3012,6 +3155,11 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'rotations.update': 2,
   'rotations.delete': 2,
   'editors.set': 2,
+  // Routing (spec 0037, L7): a skill made first.
+  'routing.skills.update': 2,
+  'routing.skills.delete': 2,
+  'routing.memberSkills.set': 2,
+  'routing.test': 2,
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
   'profile.saveTheme': 2,
@@ -3095,6 +3243,73 @@ Object.assign(WRITES, {
       { kind: 'members' },
       { kind: 'members', item_ids: [me], mutation_id: mutationId },
       { kind: 'access', item_ids: [me], mutation_id: mutationId },
+    ];
+  },
+});
+
+// Custom roles (spec 0037, job J9): every role write stores a `members` row naming the writer (every Roles and
+// Members screen reads the roles again); one that changes what its holders can do, or moves them, also names them in
+// an `access` row (here nobody holds the role, so none). Change role for several people is a role change for each.
+const newRole = (m: Member, name = 'Sales lead', mutationId = newId()) =>
+  m.client.roles.create({
+    workspace: m.slug,
+    id: newId(),
+    name,
+    permissions: ['booking.manage'],
+    dataAccess: 'write',
+    startFrom: 'member',
+    mutationId,
+  });
+Object.assign(WRITES, {
+  'roles.create': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    await newRole(m, 'Sales lead', mutationId);
+    return [{ kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.update': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const role = await newRole(m);
+    await m.client.roles.update({
+      workspace: m.slug,
+      roleId: role.id,
+      permissions: ['booking.manage', 'schedule.view'],
+      updatedAt: role.updatedAt ?? '',
+      mutationId,
+    });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.duplicate': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const role = await newRole(m);
+    await m.client.roles.duplicate({ workspace: m.slug, roleId: role.id, id: newId(), mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.delete': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const role = await newRole(m);
+    await m.client.roles.delete({ workspace: m.slug, roleId: role.id, moveTo: 'member', mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.setDefault': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const role = await newRole(m);
+    await m.client.roles.setDefault({ workspace: m.slug, roleId: role.id, mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.move': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    await newRole(m, 'First');
+    const second = await newRole(m, 'Second');
+    await m.client.roles.move({ workspace: m.slug, roleId: second.id, position: 0, mutationId });
+    return [{ kind: 'members' }, { kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'members.setRoles': async (m: Member, mutationId: string) => {
+    const mate = await teammate(m);
+    await m.client.members.setRoles({ workspace: m.slug, memberIds: [mate.memberId], role: 'admin', mutationId });
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
     ];
   },
 });

@@ -2,6 +2,12 @@ import {
   bookAsHost,
   listEditors,
   setEditors,
+  createManagedPage,
+  deleteManagedPage,
+  getManagedPage,
+  listManagedPages,
+  setManagedMembers,
+  updateManagedPage,
   bookingAssignments,
   reassignBooking,
   reassignUpcoming,
@@ -16,6 +22,17 @@ import {
   cancelBooking,
   linkBookingRecord,
   markNoShow,
+  routingDecision,
+  routingTest,
+  createSkill,
+  deleteSkill,
+  listSkills,
+  setMemberSkills,
+  updateSkill,
+  getRoutingSettings,
+  setRoutingSettings,
+  routingDecisions,
+  routingOverview,
   routingReport,
   hostTarget,
   moveBooking,
@@ -383,9 +400,106 @@ export const editorsRouter = member.editors.router({
   ),
 });
 
+// Managed booking pages (spec 0037, AC-1333 to AC-1336): one template, a page per member, locked parts kept in
+// step. Settings, not CRM data: no outbox row, but every write goes through `commitWrite`.
+export const managedPagesRouter = member.managedPages.router({
+  list: member.managedPages.list.handler(({ context }) => listManagedPages(context.scope)),
+  get: member.managedPages.get.handler(({ context, input }) =>
+    getManagedPage(context.scope, { templateId: input.templateId }),
+  ),
+  create: member.managedPages.create.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      createManagedPage(context.scope, {
+        id: input.id,
+        title: input.title,
+        timeZone: input.timeZone,
+        ...(input.settings === undefined ? {} : { settings: input.settings }),
+        ...(input.locked === undefined ? {} : { locked: input.locked }),
+        ...(input.memberIds === undefined ? {} : { memberIds: input.memberIds }),
+        ...(input.followTeamId === undefined ? {} : { followTeamId: input.followTeamId }),
+      }),
+    ),
+  ),
+  update: member.managedPages.update.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      updateManagedPage(context.scope, {
+        templateId: input.templateId,
+        ...(input.settings === undefined ? {} : { settings: input.settings }),
+        ...(input.locked === undefined ? {} : { locked: input.locked }),
+      }),
+    ),
+  ),
+  setMembers: member.managedPages.setMembers.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      setManagedMembers(context.scope, { templateId: input.templateId, memberIds: input.memberIds }),
+    ),
+  ),
+  delete: member.managedPages.delete.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      deleteManagedPage(context.scope, { templateId: input.templateId }),
+    ),
+  ),
+});
+
 // Lead routing (spec 0043, AC-1612): a form's or a team page's per rule report. Rules are saved with their surface.
 export const routingRouter = member.routing.router({
   report: member.routing.report.handler(({ context, input }) =>
     routingReport(context.scope, { surface: input.surface, days: input.days }),
+  ),
+  // Bookings › Routing (spec 0037, L6), for holders of routing.manage.
+  overview: member.routing.overview.handler(({ context }) => routingOverview(context.scope)),
+  decisions: member.routing.decisions.handler(({ context, input }) => {
+    const { workspace: _, ...filters } = input;
+    return routingDecisions(context.scope, filters);
+  }),
+  decision: member.routing.decision.handler(({ context, input }) => routingDecision(context.scope, { id: input.id })),
+  // Skills, Won means and Test (spec 0037, L7): skills listed for any member, the rest for holders of routing.manage.
+  skills: {
+    list: member.routing.skills.list.handler(({ context }) => listSkills(context.scope)),
+    create: member.routing.skills.create.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, () =>
+        createSkill(context.scope, { id: input.id, group: input.group, name: input.name }),
+      ),
+    ),
+    update: member.routing.skills.update.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, () =>
+        updateSkill(context.scope, {
+          id: input.id,
+          ...(input.group === undefined ? {} : { group: input.group }),
+          ...(input.name === undefined ? {} : { name: input.name }),
+        }),
+      ),
+    ),
+    delete: member.routing.skills.delete.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, () => deleteSkill(context.scope, { id: input.id })),
+    ),
+  },
+  memberSkills: {
+    set: member.routing.memberSkills.set.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, () =>
+        setMemberSkills(context.scope, { memberId: input.memberId, skillIds: input.skillIds }),
+      ),
+    ),
+  },
+  settings: {
+    get: member.routing.settings.get.handler(({ context }) => getRoutingSettings(context.scope)),
+    set: member.routing.settings.set.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, () =>
+        setRoutingSettings(context.scope, {
+          wonStage: input.wonStage,
+          ...(input.updatedAt === undefined ? {} : { updatedAt: input.updatedAt }),
+        }),
+      ),
+    ),
+  },
+  // Writes one audit row when it names an email, so it goes through the one write path too.
+  test: member.routing.test.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      routingTest(context.scope, {
+        surface: input.surface,
+        answers: input.answers,
+        ...(input.email === undefined ? {} : { email: input.email }),
+      }),
+    ),
   ),
 });

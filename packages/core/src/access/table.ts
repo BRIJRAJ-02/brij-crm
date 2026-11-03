@@ -88,7 +88,16 @@ export type AccessEntry =
    * member who is in the rotation but doesn't edit it is 403 `FORBIDDEN`, anyone else meets it as absent. Adding a
    * person also needs Manage over them (`ADD_MEMBER_FORBIDDEN`).
    */
-  | { readonly editor: 'booking_page' | 'rotation' | 'resource' };
+  | { readonly editor: 'booking_page' | 'rotation' | 'resource' }
+  /**
+   * A managed booking page (spec 0037, AC-1333 to AC-1336): the template is the workspace's, not a person's, so
+   * `booking.manage` first (403 `FORBIDDEN`), then `booking.admin` or one of its editors (AC-1331). Making one
+   * and deleting one are `booking.admin`'s alone, so they are plain permission entries. A template the caller may
+   * not change
+   * answers as absent (`NOT_FOUND`), so no refusal tells them a template exists; the list answers only the
+   * templates they may change, so a member with none gets an empty list rather than a refusal.
+   */
+  | { readonly managedPage: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -146,6 +155,8 @@ export const ACCESS_TABLE = {
   purgeDeleted: { permission: 'records.purge' },
   // Members.
   setMemberRole: { ownerRules: true },
+  // Spec 0037, AC-1242: Change role for several at once, under the same owner rules, all or nothing.
+  setMemberRoles: { ownerRules: true },
   removeMember: { ownerRules: true },
   // Spec 0031, AC-816: the remove dialog's counts, for `members.manage` or about oneself.
   previewRemoval: { ownerRules: true },
@@ -168,6 +179,16 @@ export const ACCESS_TABLE = {
   previewAccess: { permission: 'access.manage' },
   // Spec 0037, AC-1439: the roles every role picker offers.
   listRoles: { anyMember: true },
+  // Custom roles (spec 0037, job J9, AC-1228): every member reads the roles (a guest their names only); owners and
+  // admins (`access.manage`) make and change them.
+  roleOverview: { anyMember: true },
+  getRole: { anyMember: true },
+  createRole: { permission: 'access.manage' },
+  updateRole: { permission: 'access.manage' },
+  duplicateRole: { permission: 'access.manage' },
+  deleteRole: { permission: 'access.manage' },
+  setDefaultRole: { permission: 'access.manage' },
+  moveRole: { permission: 'access.manage' },
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.
   getWorkspaceSecurity: { permission: 'security.manage' },
   setWorkspaceSecurity: { permission: 'security.manage' },
@@ -632,9 +653,26 @@ export const ACCESS_TABLE = {
   // Count adjustments (AC-1329): booking.admin and the rotation's editors.
   adjustCount: { editor: 'rotation' },
   undoAdjustment: { editor: 'rotation' },
+  // Managed booking pages (spec 0037, AC-1333): making one is booking.admin's alone, since the template is the
+  // workspace's; reading and changing one is booking.admin's or its editors' (AC-1331).
+  createManagedPage: { permission: 'booking.admin' },
+  deleteManagedPage: { permission: 'booking.admin' },
+  listManagedPages: { managedPage: true },
+  getManagedPage: { managedPage: true },
+  updateManagedPage: { managedPage: true },
+  setManagedMembers: { managedPage: true },
   // Sharing (spec 0037, AC-1331): whoever may change the page or rotation lists its editors; only booking.admin sets them.
   listEditors: { editor: 'resource' },
   setEditors: { permission: 'booking.admin' },
+  // Routing's shared layer (spec 0037, L7): skills listed for any member; the rest for routing.manage.
+  listSkills: { anyMember: true },
+  createSkill: { permission: 'routing.manage' },
+  updateSkill: { permission: 'routing.manage' },
+  deleteSkill: { permission: 'routing.manage' },
+  setMemberSkills: { permission: 'routing.manage' },
+  getRoutingSettings: { permission: 'routing.manage' },
+  setRoutingSettings: { permission: 'routing.manage' },
+  routingTest: { permission: 'routing.manage' },
   // Scheduling access (spec 0037, J1): delegations, and the members in See reach (`members.visible`, AC-1261).
   listDelegations: { delegation: true },
   grantDelegation: { delegation: true },

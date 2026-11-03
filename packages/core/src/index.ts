@@ -563,6 +563,16 @@ export {
   reorderProfilePages,
   updateBookingPage,
 } from './booking/pages.ts';
+// Managed booking pages (spec 0037, AC-1333 to AC-1336): one template, a page per member, locked parts kept in step.
+export {
+  createManagedPage,
+  deleteManagedPage,
+  getManagedPage,
+  listManagedPages,
+  setManagedMembers,
+  updateManagedPage,
+} from './booking/managed.ts';
+export { LOCKED_BY_WORKSPACE, LOCKED_PART_REFUSAL, lockedPartOfWrite } from './booking/managed-locks.ts';
 // Availability schedules (spec 0035): a member's named hours, the one the slot engine resolves for a page, and the
 // default schedule's hours behind `bookings.hours` and `bookings.setHours`.
 export {
@@ -624,11 +634,11 @@ export {
   getMyAccess,
   leaveWorkspace,
   listMembers,
-  listRoles,
   previewGuest,
   previewRemoval,
   removeMember,
   setMemberRole,
+  setMemberRoles,
   transferOwnership,
   type MemberWithRole,
   type MemberWriteOptions,
@@ -644,6 +654,19 @@ export { listVisibleMembers } from './scheduling/visible.ts';
 export { copyWeek, readTeamWeek, setDayHours, setUsualHours } from './availability/team-week.ts';
 export { createTimeOff, deleteTimeOff, listTimeOff, updateTimeOff } from './scheduling/time-off.ts';
 export { getLimits, limitsAt, setLimits } from './scheduling/limits.ts';
+// Custom roles (spec 0037, job J9): the roles every picker offers, the Roles page, and the role writes.
+export {
+  createRole,
+  deleteRole,
+  duplicateRole,
+  getRole,
+  listRoles,
+  moveRole,
+  roleOverview,
+  setDefaultRole,
+  updateRole,
+  type RoleWriteOptions,
+} from './roles/roles.ts';
 // Teams (spec 0031, slice 8, AC-824 to AC-827): flat groups of members that access rules name.
 export { changeTeamMembers, createTeam, deleteTeam, listTeams, renameTeam } from './teams/teams.ts';
 export type { TeamWriteOptions } from './teams/teams.ts';
@@ -844,6 +867,12 @@ export { listEditors, setEditors } from './scheduling/editors.ts';
 // Lead routing (spec 0043): deciding a route, a surface's report.
 export { decideRoute, recordFactKeys, type RouteDecision } from './routing/decide.ts';
 export { routingReport } from './routing/report.ts';
+// Bookings › Routing (spec 0037, L6): the Overview and the Decisions log, for holders of routing.manage.
+export { routingDecision, routingDecisions, routingOverview } from './routing/log.ts';
+// Routing's shared layer (spec 0037, L7): skills and who holds them, the settings (Won means), and Test.
+export { createSkill, deleteSkill, listSkills, setMemberSkills, updateSkill } from './routing/skills.ts';
+export { getRoutingSettings, setRoutingSettings } from './routing/settings.ts';
+export { routingTest } from './routing/test.ts';
 export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
 export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';
 export {

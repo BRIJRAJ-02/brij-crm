@@ -6,6 +6,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
+import { ManagedPart } from './managed.ts';
 import { MEETINGS_PAGE_MAX } from '../meeting-limits.ts';
 import {
   BookAsHostInput,
@@ -95,6 +96,17 @@ export const BookingPageView = BookingPageSettings.extend({
    * the page's deletion, editors and owner stay out of their reach.
    */
   isEditor: z.boolean().optional(),
+  /**
+   * The managed template this page was made from (spec 0037, AC-1333); absent on a page made from none. With
+   * `lockedParts`, it is what the editor shows "From <template>" and "Set by your workspace" from.
+   */
+  templateId: Uuid.optional(),
+  /**
+   * The parts of this page its workspace sets, when it came from a managed template (AC-1334): the editor shows
+   * each read only. The server refuses a write to any of them whatever the editor renders, so this is a label, not
+   * the guard.
+   */
+  lockedParts: z.array(ManagedPart).optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });

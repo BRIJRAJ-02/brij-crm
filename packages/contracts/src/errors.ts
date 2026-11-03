@@ -89,10 +89,21 @@ export const ERROR_MAP = {
   DELEGATE_INVALID: UNPROCESSABLE,
   MEMBER_INVALID: UNPROCESSABLE,
   DELEGATION_LIMIT: CONFLICT,
+  // Custom roles (spec 0037, AC-1228, AC-1238).
+  ROLE_NAME_RESERVED: UNPROCESSABLE,
+  PERMISSION_NOT_ALLOWED: UNPROCESSABLE,
+  ROLE_LIMIT: CONFLICT,
+  MOVE_TO_INVALID: UNPROCESSABLE,
   // Time off (spec 0037, AC-1288): "Someone can have at most 50 upcoming time off entries."
   TIME_OFF_LIMIT: CONFLICT,
   // Page and rotation editors (spec 0037, AC-1331): "A page or rotation can have at most 20 editors."
   EDITOR_LIMIT: CONFLICT,
+  MANAGED_MEMBERS_LIMIT: CONFLICT,
+  // Routing (spec 0037, AC-1341): "Rule 3 of Contact us sends people here. Change the rule first."
+  ROUTING_IN_USE: CONFLICT,
+  // Skills (spec 0037, AC-1382): "Spanish is used by Rule 3 of Intro call." and "A workspace can have at most 100 skills."
+  SKILL_IN_USE: CONFLICT,
+  SKILL_LIMIT: CONFLICT,
   // The sidebar (spec 0034, AC-934): "You have 50 favourites. Remove one first."
   NAV_LIMIT: CONFLICT,
   // Domain join (spec 0031, AC-819).

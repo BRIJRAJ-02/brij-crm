@@ -7,7 +7,14 @@
 // at 390 in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
-import { dataError, type DataLayer, type MemberSummary, type MyAccess, type RotationView } from '@crm/data';
+import {
+  dataError,
+  type DataLayer,
+  type MemberSummary,
+  type MyAccess,
+  type RotationView,
+  type RoutingSkill,
+} from '@crm/data';
 import { createToasts, UiProvider, type Toasts } from '@crm/ui';
 import { createMemoryHistory, createRootRouteWithContext, createRouter, RouterProvider } from '@tanstack/react-router';
 import { act, type ReactNode } from 'react';
@@ -20,6 +27,7 @@ import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { SettingsTopBarSlot } from '../settings/topBarSlot.ts';
 import { RotationDialog } from './RotationDialog.tsx';
 import { RotationsScreen } from './RotationsScreen.tsx';
+import { skillStrings } from '../routing/skills-strings.ts';
 import { strings } from './rotation-strings.ts';
 import { sharingStrings } from './sharing-strings.ts';
 
@@ -89,8 +97,28 @@ const editorsView = {
   reload: () => undefined,
 };
 
+/**
+ * The workspace's skills as a held read (spec 0037, AC-1382). RotationsScreen reads this on every render, so a
+ * layer without it renders the screen's error boundary instead of the screen, and every locator here then times
+ * out against a page that already crashed. `renderInApp` takes a Partial<DataLayer> cast to DataLayer, so nothing
+ * but a run catches the omission: every harness in this file passes one.
+ */
+function heldSkills(skills: readonly RoutingSkill[] = []) {
+  const snapshot = { status: 'ready', value: { skills, members: [], wonMeansSet: false } } as const;
+  return {
+    subscribe: () => () => undefined,
+    getSnapshot: () => snapshot,
+    retain: () => () => undefined,
+    reload: () => undefined,
+  };
+}
+
 /** A data layer holding `items` as the groups, whose create and update answer `answer`. */
-function layerWith(items: readonly RotationView[], answer: () => Promise<RotationView> = () => Promise.resolve(SALES)) {
+function layerWith(
+  items: readonly RotationView[],
+  answer: () => Promise<RotationView> = () => Promise.resolve(SALES),
+  skills: readonly RoutingSkill[] = [],
+) {
   const view = groups(items);
   return {
     scheduling: { loaded: () => ({ health: allConnected }), open: () => new Promise(() => undefined) },
@@ -102,6 +130,7 @@ function layerWith(items: readonly RotationView[], answer: () => Promise<Rotatio
       // The Distribution tab reads only when opened.
       distribution: () => new Promise(() => undefined),
     },
+    routing: { skills: { view: () => heldSkills(skills) } },
     // Sharing (spec 0037, AC-1331): the group's editors, held, and set at once.
     editors: {
       view: () => editorsView,
@@ -112,6 +141,9 @@ function layerWith(items: readonly RotationView[], answer: () => Promise<Rotatio
     },
   } as unknown as DataLayer;
 }
+
+/** A skill's id, so the Skills column test reads the same uuid shape the store mints. */
+const SPANISH_ID = '0199a6f2-0000-7000-8000-0000000000s1';
 
 let shown: InApp | undefined;
 let bar: HTMLElement | undefined;
@@ -136,13 +168,17 @@ function withBar(screen: ReactNode): ReactNode {
 }
 
 /** The Round robin page for an admin of a two person workspace, over `items`. */
-async function renderRoundRobin(items: readonly RotationView[]) {
-  const data = layerWith(items);
+async function renderRoundRobin(
+  items: readonly RotationView[],
+  skills: readonly RoutingSkill[] = [],
+  permissions: readonly string[] = ['booking.manage', 'booking.admin', 'members.invite'],
+) {
+  const data = layerWith(items, () => Promise.resolve(SALES), skills);
   shown = await renderInApp(() => withBar(<RotationsScreen data={data} slug="acme" people={[ADA, MAYA]} canManage />), {
     data,
     pattern: '/w/$slug/settings/scheduling/round-robin',
     at: '/w/acme/settings/scheduling/round-robin',
-    permissions: ['booking.manage', 'booking.admin', 'members.invite'],
+    permissions: [...permissions],
   });
   return data;
 }
@@ -187,6 +223,19 @@ describe('New group, once', () => {
   it('says a group on no booking page in the same small letters', async () => {
     await renderRoundRobin([{ ...SALES, pages: 0 }]);
     await expect.element(page.getByText('Fair · last 30 days · not on a booking page yet')).toBeVisible();
+  });
+
+  // AC-1382: the column arrives with the workspace's first skill, and only then. Asserted because the harness used
+  // to pass no `routing` at all and the screen's read of it was never exercised.
+  it('shows no Skills column until the workspace has a skill', async () => {
+    await renderRoundRobin([SALES]);
+    await expect.element(page.getByRole('heading', { name: 'Sales' })).toBeVisible();
+    expect(page.getByRole('columnheader', { name: skillStrings.skills }).elements()).toHaveLength(0);
+  });
+
+  it('shows the Skills column once the workspace has one', async () => {
+    await renderRoundRobin([SALES], [{ id: SPANISH_ID, group: 'language', name: 'Spanish', position: 0 }]);
+    await expect.element(page.getByRole('columnheader', { name: skillStrings.skills })).toBeVisible();
   });
 });
 
@@ -414,6 +463,7 @@ describe('without booking.manage', () => {
       access: { mine: () => Promise.resolve(access) },
       members: { list: membersList },
       rotations: { view: rotationsView },
+      routing: { skills: { view: () => heldSkills() } },
     } as unknown as DataLayer;
     const toasts: Toasts = createToasts();
     const rootRoute = createRootRouteWithContext<{ data: DataLayer; toasts: Toasts }>()();

@@ -43,6 +43,7 @@ const booking = {
 } as const;
 const rotation = { type: 'rotation', id: ID, name: 'Sales', isGone: false } as const;
 const form = { type: 'form', id: ID, name: 'Contact us', isGone: false } as const;
+const managedPage = { type: 'booking_page', id: ID, name: 'Intro call', isGone: false } as const;
 
 /** Every sentence and variant, with the words a reader sees (the Who column's name first). */
 const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
@@ -323,6 +324,12 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed the routing rules of Intro call',
   ],
   [
+    { ...base, action: 'routing.settings_changed', target: workspace, params: {} },
+    'Ada Lovelace changed the routing settings',
+  ],
+  [{ ...base, action: 'routing.skills_changed', target: workspace, params: {} }, 'Ada Lovelace changed routing skills'],
+  [{ ...base, action: 'routing.tested', target: workspace, params: {} }, 'Ada Lovelace tested routing'],
+  [
     { ...base, action: 'form.owner_changed', target: form, params: {} },
     'Ada Lovelace changed who gets Contact us’s leads',
   ],
@@ -462,6 +469,23 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     },
     'Ada Lovelace made the Sales team',
   ],
+  // Custom roles (spec 0037).
+  [
+    { ...base, action: 'role.created', target: workspace, params: { role: 'Sales lead' } },
+    'Ada Lovelace made the Sales lead role',
+  ],
+  [
+    { ...base, action: 'role.updated', target: workspace, params: { role: 'Sales lead', added: 1, removed: 0 } },
+    'Ada Lovelace changed the Sales lead role',
+  ],
+  [
+    { ...base, action: 'role.deleted', target: workspace, params: { role: 'Doctor', moved: 3 } },
+    'Ada Lovelace deleted the Doctor role and moved 3 people',
+  ],
+  [
+    { ...base, action: 'role.default_changed', target: workspace, params: { role: 'Sales lead' } },
+    'Ada Lovelace made Sales lead the role new people get',
+  ],
   [
     {
       ...base,
@@ -537,6 +561,14 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
   [
     { ...base, action: 'editors.changed', target: rotation, params: { added: 1, removed: 0 } },
     'Ada Lovelace changed who can edit Sales',
+  ],
+  [
+    { ...base, action: 'managed_page.changed', target: managedPage, params: { added: 0, removed: 0 } },
+    'Ada Lovelace changed the Intro call managed page',
+  ],
+  [
+    { ...base, action: 'managed_page.changed', target: managedPage, params: { added: 2, removed: 1 } },
+    'Ada Lovelace changed who has the Intro call managed page (2 added, 1 taken off)',
   ],
 ];
 

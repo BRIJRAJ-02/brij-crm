@@ -7,6 +7,7 @@ import type {
   JobFailedEmail,
   SchedulingAccessGivenEmail,
   SchedulingAccessRemovedEmail,
+  ManagedPageEmail,
   SchedulingChangedEmail,
   StandinCoveringEmail,
 } from '@crm/contracts/emails';
@@ -223,5 +224,34 @@ export const editorAdded: Template<EditorAddedEmail> = (params, context) => {
           ]),
     ],
     why: `You got this email because who edits a ${kind} changed in ${workspaceOf(context)}.`,
+  };
+};
+
+/**
+ * A managed page made or removed (spec 0037, AC-1335): "You have a new booking page: Intro call" to the member a
+ * template made a page for, and "Your Intro call page was removed" when they came off the template.
+ */
+export const managedPage: Template<ManagedPageEmail> = (params, context) => {
+  const removed = params.removed === true;
+  const subject = removed
+    ? `Your ${params.pageTitle} page was removed`
+    : `You have a new booking page: ${params.pageTitle}`;
+  const what = removed
+    ? `${params.byName} took you off ${params.pageTitle}, so your page for it is gone. Its bookings are still yours, on Bookings.`
+    : `${params.byName} set up ${params.pageTitle} for the team, and you have your own page for it. Parts your workspace set are read only; the rest is yours to change.`;
+  return {
+    subject,
+    preheader: what,
+    eyebrow: workspaceOf(context),
+    heading: subject,
+    blocks: [
+      { type: 'paragraph', text: what },
+      {
+        type: 'button' as const,
+        label: removed ? 'Open your pages' : 'Open your page',
+        url: context.link(params.path),
+      },
+    ],
+    why: `You got this email because a booking page of yours changed in ${workspaceOf(context)}.`,
   };
 };

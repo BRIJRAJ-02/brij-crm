@@ -31,7 +31,8 @@ export interface AuditEntry {
     | 'automation'
     | 'object'
     | 'list'
-    | 'record';
+    | 'record'
+    | 'role';
   readonly targetId: string;
   /** Changed fields only, never a token, code or secret. */
   readonly before?: Readonly<Record<string, unknown>>;

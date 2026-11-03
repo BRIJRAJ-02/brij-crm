@@ -25,6 +25,11 @@ export const AUDIT_KINDS = {
     'member.profile_updated',
     // Teams (spec 0031): made, renamed, filled or deleted.
     'team.changed',
+    // Custom roles (spec 0037): made, changed, deleted, and the default for new people.
+    'role.created',
+    'role.updated',
+    'role.deleted',
+    'role.default_changed',
   ],
   joining: [
     'invitation.created',
@@ -90,6 +95,10 @@ export const AUDIT_KINDS = {
     'booking_page.changed_for',
     'rotation.changed',
     'editors.changed',
+    'managed_page.changed',
+    'routing.settings_changed',
+    'routing.skills_changed',
+    'routing.tested',
   ],
 } as const satisfies Record<AuditKindName, readonly AuditAction[]>;
 

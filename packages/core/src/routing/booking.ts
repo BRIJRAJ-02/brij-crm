@@ -13,6 +13,7 @@ import type { Team } from '../rotation/team.ts';
 import { decideRoute, recordFactKeys } from './decide.ts';
 import { recordFacts, type RecordFactObjects } from './facts.ts';
 import { submissionDecision } from './forms.ts';
+import { routeHostIds } from './hosts.ts';
 
 const { routingDecisions } = schema;
 
@@ -85,6 +86,8 @@ export async function routeBooking(
     readonly objects: RecordFactObjects;
     readonly email: string;
     readonly submissionId?: string;
+    /** The booking's own answers to the page's questions (spec 0057), by question key (spec 0037, AC-1352). */
+    readonly answers?: Readonly<Record<string, unknown>>;
   },
 ): Promise<BookingRouting> {
   const handoff =
@@ -92,12 +95,14 @@ export async function routeBooking(
   if (handoff?.hosts !== undefined) return { hosts: handoff.hosts, handoffDecisionId: handoff.decisionId };
   const handed = handoff === undefined ? {} : { handoffDecisionId: handoff.decisionId };
   const rules = input.page.routingRules ?? [];
-  if (rules.length === 0) return handed;
+  // Both doors write a decision (spec 0037, AC-1357): a page with no rules records its fallback, the whole rotation.
+  if (rules.length === 0) return { ...handed, page: { skipped: [] } };
   const fromForm = input.submissionId === undefined ? {} : await handoffFacts(tx, input.submissionId, input.page.id);
   const read = await recordFacts(tx, input.objects, input.email, recordFactKeys(rules));
+  // The page's own answers after the form's: asked the same key, the page's answer wins, since it was given last.
   const decision = decideRoute(
     rules,
-    { ...fromForm, ...read.facts },
+    { ...fromForm, ...(input.answers ?? {}), ...read.facts },
     { routes: PAGE_ROUTES, unreadable: read.unreadable },
   );
   const page = {
@@ -105,9 +110,12 @@ export async function routeBooking(
     ...(decision.qualified === undefined ? {} : { qualified: decision.qualified }),
     skipped: decision.skipped,
   };
+  // Named hosts, or the members holding the required skills (spec 0037, AC-1356): none holding them, none narrowed.
+  const hosts =
+    decision.route?.kind === 'hosts' ? await routeHostIds(tx, input.page.id, decision.route.hosts) : undefined;
   return {
     ...handed,
-    ...(decision.route?.kind === 'hosts' ? { hosts: new Set(decision.route.hosts) } : {}),
+    ...(hosts === undefined ? {} : { hosts: new Set(hosts) }),
     page,
   };
 }

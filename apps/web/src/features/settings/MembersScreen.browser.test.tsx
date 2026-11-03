@@ -5,6 +5,7 @@
 // confirm. The Joining tab: Asking to join, Pending invitations, then Other ways to join (the invite link, whose
 // limits save with a toast and Undo, then Company email). A member reads one note and no controls.
 import type {
+  RolesOverview,
   DataLayer,
   InvitationView,
   InviteLinkView,
@@ -72,6 +73,48 @@ const ROLES_LIST: RolesList = {
     { id: 'admin', label: 'Admin', description: 'Members and settings.', builtIn: 'admin' },
     { id: 'member', label: 'Member', description: 'Records.', builtIn: 'member' },
     { id: 'guest', label: 'Guest', description: 'What is shared.', builtIn: 'guest' },
+  ],
+  defaultRole: 'member',
+};
+// What each built in role holds (spec 0037, `roles.overview`): a step down asks first by it.
+const OVERVIEW: RolesOverview = {
+  roles: [
+    {
+      id: 'owner',
+      label: 'Owner',
+      description: '',
+      builtIn: 'owner',
+      permissions: ['workspace.delete', 'members.manage', 'records.export'],
+      dataAccess: 'write',
+      isDefault: false,
+    },
+    {
+      id: 'admin',
+      label: 'Admin',
+      description: '',
+      builtIn: 'admin',
+      permissions: ['members.manage', 'records.export'],
+      dataAccess: 'write',
+      isDefault: false,
+    },
+    {
+      id: 'member',
+      label: 'Member',
+      description: '',
+      builtIn: 'member',
+      permissions: ['records.export'],
+      dataAccess: 'write',
+      isDefault: true,
+    },
+    {
+      id: 'guest',
+      label: 'Guest',
+      description: '',
+      builtIn: 'guest',
+      permissions: [],
+      dataAccess: 'read',
+      isDefault: false,
+    },
   ],
   defaultRole: 'member',
 };
@@ -307,6 +350,7 @@ async function renderMembers(
         {...(extras.domains === undefined ? {} : { domains: extras.domains })}
         access={extras.access ?? ACCESS}
         roles={ROLES_LIST}
+        overview={OVERVIEW}
       />
     );
   };
@@ -454,11 +498,18 @@ describe('removing a member asks first', () => {
     await expect.element(dialog).not.toBeInTheDocument();
   });
 
-  it('offers no menu on the reader’s own row: leaving is the workspace menu’s', async () => {
+  it('offers only "What can Ada do" on the reader’s own row: leaving is the workspace menu’s', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer);
     await expect.element(page.getByRole('button', { name: 'Actions for Linus Torvalds' })).toBeVisible();
-    expect(page.getByRole('button', { name: 'Actions for Ada Lovelace' }).elements()).toHaveLength(0);
+    await page.getByRole('button', { name: 'Actions for Ada Lovelace' }).click();
+    expect(
+      page
+        .getByRole('menuitem')
+        .elements()
+        .map((item) => item.textContent),
+    ).toEqual(['What can Ada do']);
+    await userEvent.keyboard('{Escape}');
   });
 });
 
@@ -730,17 +781,21 @@ describe('linkStillReads', () => {
 });
 
 describe('a member who can’t invite', () => {
-  it('reads one note in the shared words, and no controls', async () => {
+  it('reads no note over the list, and no controls', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer, {
       invitations: 'none',
       access: { memberId: LINUS.id, role: 'member', roleLabel: 'Member', permissions: [] },
     });
-    await expect.element(page.getByText('Only owners and admins can change this.')).toBeVisible();
-    expect(page.getByText('Only owners and admins can change this.').elements()).toHaveLength(1);
+    // No note over the list: who changes it is a lock in the page's header bar (the owner's less-text rule), which
+    // this harness doesn't mount.
+    await expect.element(page.getByRole('row', { name: /Linus Torvalds/ })).toBeVisible();
+    expect(page.getByText('Only owners and admins can change this.').elements()).toHaveLength(0);
     expect(page.getByRole('tab').elements()).toHaveLength(0);
     expect(page.getByRole('button', { name: /Role for/ }).elements()).toHaveLength(0);
-    expect(page.getByRole('button', { name: /Actions for/ }).elements()).toHaveLength(0);
+    // Their own row's menu says what they can do (spec 0037, AC-1243); nobody else's has one.
+    expect(page.getByRole('button', { name: /Actions for/ }).elements()).toHaveLength(1);
+    expect(page.getByRole('button', { name: 'Actions for Linus Torvalds' }).elements()).toHaveLength(1);
     expect(page.getByRole('button', { name: 'Invite people' }).elements()).toHaveLength(0);
   });
 });

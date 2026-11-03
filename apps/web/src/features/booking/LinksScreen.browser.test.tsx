@@ -14,7 +14,7 @@ import {
 } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
-import { deferred, openDialog, renderInApp, type InApp } from '../../testing/renderInApp.tsx';
+import { deferred, emptyCaptureList, openDialog, renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { LinksScreen } from './LinksScreen.tsx';
 
 /** A booking page as the list holds it. */
@@ -73,6 +73,9 @@ function pagesOf(pages: readonly BookingPageView[]) {
   return { view, remove, answers };
 }
 
+/** The managed pages the screen also reads: none, and one view for every render (a new one would loop). */
+const noTemplates = emptyCaptureList<never>();
+
 let shown: InApp | undefined;
 
 beforeAll(async () => {
@@ -90,7 +93,11 @@ async function renderLinks(
     Promise.resolve({}),
 ) {
   const held = pagesOf(pages);
-  const data = { bookingPages: { view: () => held.view, remove: held.remove, update } } as unknown as DataLayer;
+  // No managed pages here: these tests are about the member's own cards, and Links reads the templates too.
+  const data = {
+    bookingPages: { view: () => held.view, remove: held.remove, update },
+    managedPages: { view: () => noTemplates, remove: vi.fn() },
+  } as unknown as DataLayer;
   shown = await renderInApp(
     () => (
       <main>

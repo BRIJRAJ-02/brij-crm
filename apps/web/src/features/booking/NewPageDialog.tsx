@@ -25,6 +25,7 @@ import { strings as rotationStrings } from './rotation-strings.ts';
 import { lengthOf } from './durations.ts';
 import { memberZone } from './zone.ts';
 import { strings } from './strings.ts';
+import { managedStrings } from './managed-strings.ts';
 import { publicBookingUrl, roundRobinHref } from './links.ts';
 
 /** The lengths offered as segments; any other the server allows goes through Custom. */
@@ -43,6 +44,19 @@ export interface NewPageDialogProps {
   readonly onCreated: (page: BookingPageView) => void;
   /** Makes it Link only from the start (Bookings' "Create a link only page", for reserved time). */
   readonly isLinkOnly?: boolean;
+  /**
+   * The reader may make forms (`forms.manage`): the dialog offers the Team link (spec 0037, AC-1353), a form in front
+   * of the live team pages, made in one step; `onTeamLink` then opens its editor.
+   */
+  readonly onTeamLink?: (formId: string) => void;
+  /** Opened as New › Team link (`?new=team-link`): the Team link is chosen. */
+  readonly isTeamLinkAsked?: boolean;
+  /**
+   * The reader may set up managed pages (`booking.admin`, spec 0037, AC-1333): the dialog offers "Everyone, their
+   * own page", which makes the template in one step; `onManaged` then opens its editor, where the parts the
+   * workspace sets and who has it are chosen.
+   */
+  readonly onManaged?: (templateId: string) => void;
 }
 
 /**
@@ -57,6 +71,9 @@ export function NewPageDialog({
   onClose,
   onCreated,
   isLinkOnly = false,
+  onTeamLink,
+  isTeamLinkAsked = false,
+  onManaged,
 }: NewPageDialogProps) {
   const [title, setTitle] = useState('');
   // A segment's minutes, or `custom` with the typed minutes beside it.
@@ -65,7 +82,20 @@ export function NewPageDialog({
   // The page just made: the dialog turns to its Ready panel until it is dismissed (spec 0058, AC-5).
   const [created, setCreated] = useState<BookingPageView | undefined>(undefined);
   // `everyone` makes the workspace's own link, booking whoever on the roster is free (team scheduling, decision 3).
-  const [who, setWho] = useState<'me' | 'rotation' | 'everyone'>('me');
+  const [who, setWho] = useState<'me' | 'rotation' | 'everyone' | 'team-link' | 'managed'>(
+    isTeamLinkAsked ? 'team-link' : 'me',
+  );
+  // Asked for as New › Team link while the dialog was already mounted: it opens on the Team link.
+  const [wasAsked, setWasAsked] = useState(isTeamLinkAsked);
+  if (isTeamLinkAsked !== wasAsked) {
+    setWasAsked(isTeamLinkAsked);
+    if (isTeamLinkAsked) setWho('team-link');
+  }
+  const canTeamLink = onTeamLink !== undefined && !isLinkOnly;
+  const isTeamLink = canTeamLink && who === 'team-link';
+  // A managed page is nobody's bookable page: Link only means nothing for it, and it has no rotation.
+  const canManaged = onManaged !== undefined && !isLinkOnly;
+  const isManaged = canManaged && who === 'managed';
   const [rotationId, setRotationId] = useState<string | null>(null);
   const [rotationError, setRotationError] = useState<string | undefined>(undefined);
   const rotations = useCaptureList(data.rotations.view(slug));
@@ -105,6 +135,10 @@ export function NewPageDialog({
     }
   }
   const [id, setId] = useState(() => data.bookingPages.newId());
+  // The Team link's form id, minted at its first Create and kept for a retry, so a retry makes one form.
+  const [formId, setFormId] = useState<string | undefined>(undefined);
+  // The template's id, minted once per opening so a retry makes one managed page.
+  const [managedId, setManagedId] = useState(() => data.managedPages.newId());
   const [isBusy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{ readonly title?: string; readonly custom?: string }>({});
   const [failure, setFailure] = useState<string | undefined>(undefined);
@@ -118,8 +152,61 @@ export function NewPageDialog({
     setErrors({});
     setFailure(undefined);
     setId(data.bookingPages.newId());
+    setFormId(undefined);
+    setManagedId(data.managedPages.newId());
+  };
+  // The Team link (spec 0037, AC-1353): one form made at once, then its editor.
+  const createTeamLink = () => {
+    if (isBusy || onTeamLink === undefined) return;
+    setBusy(true);
+    setFailure(undefined);
+    const teamLinkId = formId ?? data.forms.newId();
+    setFormId(teamLinkId);
+    data.forms
+      .create(slug, { id: teamLinkId, starter: 'team_link', ...(title.trim() === '' ? {} : { name: title.trim() }) })
+      .then(
+        (form) => {
+          setBusy(false);
+          reset();
+          onTeamLink(form.id);
+        },
+        (error: unknown) => {
+          setBusy(false);
+          setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        },
+      );
+  };
+  // A managed page (AC-1333): the template made at once, then its editor, where its locks and its people are set.
+  const createManaged = () => {
+    if (isBusy || onManaged === undefined) return;
+    const found = title.trim() === '' ? { title: strings.titleRequired } : {};
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
+    setBusy(true);
+    setFailure(undefined);
+    data.managedPages.create(slug, { id: managedId, title: title.trim(), timeZone: memberZone(data, slug) }).then(
+      (template) => {
+        setBusy(false);
+        reset();
+        onManaged(template.id);
+      },
+      (error: unknown) => {
+        setBusy(false);
+        const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        if (isDataError(error) && field === 'title') setErrors({ title: error.message });
+        else setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+      },
+    );
   };
   const create = () => {
+    if (isTeamLink) {
+      createTeamLink();
+      return;
+    }
+    if (isManaged) {
+      createManaged();
+      return;
+    }
     if (isBusy) return;
     const minutes = length === CUSTOM ? lengthOf(custom) : lengthOf(length);
     const found = {
@@ -208,7 +295,15 @@ export function NewPageDialog({
   }
   return (
     <Modal
-      title={isLinkOnly ? strings.addLinkOnlyPage : strings.addPage}
+      title={
+        isLinkOnly
+          ? strings.addLinkOnlyPage
+          : isTeamLink
+            ? rotationStrings.addTeamLink
+            : isManaged
+              ? managedStrings.addManaged
+              : strings.addPage
+      }
       isOpen={isOpen}
       // While the server answers, the dialog stays: a refusal has to land on its field.
       onOpenChange={(open) => {
@@ -220,7 +315,7 @@ export function NewPageDialog({
             {strings.cancel}
           </Button>
           <Button variant="primary" isPending={isBusy} onPress={create}>
-            {isBusy ? strings.creating : strings.createPage}
+            {isBusy ? strings.creating : isTeamLink ? rotationStrings.createTeamLink : strings.createPage}
           </Button>
         </>
       }
@@ -228,7 +323,8 @@ export function NewPageDialog({
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       <Field
         label={strings.title}
-        placeholder={strings.titlePlaceholder}
+        // The Team link's title is its form's name, "Book a call" unless typed.
+        placeholder={isTeamLink ? rotationStrings.teamLinkName : strings.titlePlaceholder}
         value={title}
         onChange={(value) => {
           setTitle(value);
@@ -236,63 +332,88 @@ export function NewPageDialog({
         }}
         onSubmit={create}
         maxLength={120}
-        isRequired
+        isRequired={!isTeamLink}
         isDisabled={isBusy}
         // The dialog opens to name the page: its first field is what the press asked for.
         // eslint-disable-next-line jsx-a11y-x/no-autofocus
         autoFocus
         {...(errors.title === undefined ? {} : { error: errors.title })}
       />
-      <SegmentedControl
-        label={strings.duration}
-        size="compact"
-        isLabelVisible
-        isDisabled={isBusy}
-        segments={[
-          ...SEGMENTS.map((minutes) => ({ value: String(minutes), label: strings.minutesShort(minutes) })),
-          { value: CUSTOM, label: strings.durationCustom },
-        ]}
-        value={length}
-        onChange={(value) => {
-          setLength(value);
-          setErrors(({ custom: _, ...rest }) => rest);
-        }}
-      />
-      {length === CUSTOM && (
-        <Field
-          label={strings.customMinutes}
-          inputMode="numeric"
-          hint={strings.customMinutesHint}
-          suffix={strings.minutesUnit}
-          value={custom}
-          onChange={(value) => {
-            setCustom(value);
-            setErrors(({ custom: _, ...rest }) => rest);
-          }}
-          onSubmit={create}
-          maxLength={3}
-          isRequired
-          isDisabled={isBusy}
-          {...(errors.custom === undefined ? {} : { error: errors.custom })}
-        />
-      )}
-      {canBookTeams && (
+      {(canBookTeams || canTeamLink) && (
         <RadioGroup
           label={rotationStrings.whoBooks}
           // Three short choices in a row; what each means waits in the tip, not in three lines under them.
-          info={<InfoTip label={rotationStrings.whoBooks}>{rotationStrings.whoBooksInfo}</InfoTip>}
+          info={
+            <InfoTip label={rotationStrings.whoBooks}>
+              {canTeamLink ? rotationStrings.whoBooksInfoTeamLink : rotationStrings.whoBooksInfo}
+            </InfoTip>
+          }
           orientation="horizontal"
           value={who}
           isDisabled={isBusy}
           onChange={(value) => {
-            if (value === 'me' || value === 'rotation' || value === 'everyone') setWho(value);
+            if (
+              value === 'me' ||
+              value === 'rotation' ||
+              value === 'everyone' ||
+              value === 'team-link' ||
+              value === 'managed'
+            ) {
+              setWho(value);
+            }
           }}
         >
           <Radio value="me">{rotationStrings.bookMe}</Radio>
-          <Radio value="rotation">{rotationStrings.bookRotation}</Radio>
+          {canBookTeams && <Radio value="rotation">{rotationStrings.bookRotation}</Radio>}
           {/* A workspace link is on nobody's profile, so Link only means nothing for it. */}
-          {!isLinkOnly && <Radio value="everyone">{rotationStrings.bookEveryone}</Radio>}
+          {canBookTeams && !isLinkOnly && <Radio value="everyone">{rotationStrings.bookEveryone}</Radio>}
+          {/* A form in front of the team pages: with none live there is nothing to send people to. */}
+          {canTeamLink && <TeamLinkRadio data={data} slug={slug} />}
+          {/* One page set up here, with a page of it for each person picked in its editor (spec 0037, AC-1333). */}
+          {canManaged && (
+            <Radio value="managed" description={managedStrings.managedInfo}>
+              {managedStrings.bookManaged}
+            </Radio>
+          )}
         </RadioGroup>
+      )}
+      {/* What the choice above decides comes under it, so choosing a card never moves the cards. */}
+      {!isTeamLink && !isManaged && (
+        <>
+          <SegmentedControl
+            label={strings.duration}
+            size="compact"
+            isLabelVisible
+            isDisabled={isBusy}
+            segments={[
+              ...SEGMENTS.map((minutes) => ({ value: String(minutes), label: strings.minutesShort(minutes) })),
+              { value: CUSTOM, label: strings.durationCustom },
+            ]}
+            value={length}
+            onChange={(value) => {
+              setLength(value);
+              setErrors(({ custom: _, ...rest }) => rest);
+            }}
+          />
+          {length === CUSTOM && (
+            <Field
+              label={strings.customMinutes}
+              inputMode="numeric"
+              hint={strings.customMinutesHint}
+              suffix={strings.minutesUnit}
+              value={custom}
+              onChange={(value) => {
+                setCustom(value);
+                setErrors(({ custom: _, ...rest }) => rest);
+              }}
+              onSubmit={create}
+              maxLength={3}
+              isRequired
+              isDisabled={isBusy}
+              {...(errors.custom === undefined ? {} : { error: errors.custom })}
+            />
+          )}
+        </>
       )}
       {isTeam &&
         (rotationItems.length === 0 && rotations.status === 'ready' ? (
@@ -322,5 +443,22 @@ export function NewPageDialog({
           />
         ))}
     </Modal>
+  );
+}
+
+/**
+ * The Team link's choice (spec 0037, AC-1353): it offers the live team pages, the workspace link among them, so with
+ * none it is off and says why. Mounted only while the dialog is open, so the pages are read only then; while they
+ * load it stays on (the server refuses a Team link with no page anyway).
+ */
+function TeamLinkRadio({ data, slug }: { readonly data: DataLayer; readonly slug: string }) {
+  const pages = useCaptureList(data.bookingPages.view(slug));
+  const hasNone =
+    pages.status === 'ready' && !pages.items.some((page) => page.kind === 'round_robin' && page.status === 'live');
+  return (
+    // In a row of short choices, like the others: only the reason it is off shows under it.
+    <Radio value="team-link" isDisabled={hasNone} {...(hasNone ? { description: rotationStrings.teamLinkNone } : {})}>
+      {rotationStrings.teamLink}
+    </Radio>
   );
 }

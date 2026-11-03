@@ -5,6 +5,7 @@ import {
   bigint,
   check,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -100,6 +101,11 @@ export const members = pgTable(
     email: text('email').notNull(),
     status: memberStatus('status').notNull().default('active'),
     role: memberRole('role').notNull().default('member'),
+    /**
+     * Their custom role (spec 0037, AC-1233), with `role` then `member`; none holds a built in role. The foreign key
+     * to `workspace_roles` (`on delete restrict`: a delete moves its holders first) is in migration 0161's SQL.
+     */
+    customRoleId: uuid('custom_role_id'),
     /** Their picture, once file storage (#32) arrives; until then none, and screens show initials (spec 0031). */
     avatarUrl: text('avatar_url'),
     /** Their time zone in this workspace, an IANA name (spec 0031, slice 7); none means the browser's. */
@@ -147,6 +153,11 @@ export const members = pgTable(
     check('members_left', sql`${t.status} = 'removed' or ${t.leftAt} is null`),
     check('members_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
     check('members_job_title', sql`char_length(${t.jobTitle}) between 1 and 60`),
+    check('members_custom_role', sql`${t.customRoleId} is null or ${t.role} = 'member'`),
+    // A role's holders: its count on the Roles page, and the move when it is deleted (AC-1238).
+    index('members_custom_role')
+      .on(t.workspaceId, t.customRoleId)
+      .where(sql`${t.customRoleId} is not null`),
   ],
 );
 

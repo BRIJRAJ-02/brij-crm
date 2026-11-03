@@ -142,6 +142,23 @@ function checkEntry(entry: BookingEntry): void {
   }
 }
 
+/**
+ * True when the page books only through a form (spec 0037, AC-1388) and this visit has no hand off to it: a token we
+ * signed (the api checks it) naming a submission whose form sends its visitors on to this very page.
+ */
+async function formOnlyShut(
+  tx: WorkspaceTx,
+  page: PageRecord,
+  link: { readonly submissionId: string } | undefined,
+): Promise<boolean> {
+  if (!page.formOnly) return false;
+  if (link === undefined) return true;
+  return (await handoffSubmission(tx, link.submissionId, page.id)) === undefined;
+}
+
+/** What a page that books only through a form answers a booking without a hand off: its closed state's words. */
+const FORM_ONLY_CLOSED = 'This page isn’t taking bookings right now.';
+
 /** The page, live and taking bookings: deleted is "no longer available", paused is closed. */
 async function livePage(tx: WorkspaceTx, entry: BookingEntry): Promise<PageRecord> {
   return liveOf(await loadPage(tx, entry.pageId));
@@ -149,7 +166,11 @@ async function livePage(tx: WorkspaceTx, entry: BookingEntry): Promise<PageRecor
 
 /** `livePage` for a page already read, so a caller never reads it twice. */
 function liveOf(page: PageRecord | undefined): PageRecord {
-  if (page === undefined || page.isDeleted) throw refuse('NOT_FOUND', 'This page is no longer available.');
+  // A managed template is not a page (spec 0037, AC-1333): it holds settings for its members' pages, and its own
+  // public link answers as a deleted page does, so nobody ever books the template.
+  if (page === undefined || page.isDeleted || page.kind === 'managed') {
+    throw refuse('NOT_FOUND', 'This page is no longer available.');
+  }
   if (page.status !== 'live') throw refuse('BOOKING_CLOSED', 'This page isn’t taking bookings right now.');
   return page;
 }
@@ -242,10 +263,13 @@ export interface PublicPictureDeps {
 export async function getPublicBookingPage(
   entry: BookingEntry,
   pictures?: PublicPictureDeps,
+  /** A verified form hand off (spec 0037, AC-1388): a page that books only through a form needs one. */
+  link?: { readonly submissionId: string },
 ): Promise<PublicBookingPage> {
   checkEntry(entry);
   const { facts, pictureUser } = await inWorkspace(entry.scope, async (tx) => {
     const page = await livePage(tx, entry);
+    const shut = await formOnlyShut(tx, page, link);
     const team = await loadTeam(tx, page);
     const path = await pagePath(tx, page);
     const facts: PublicBookingPage = {
@@ -267,6 +291,7 @@ export async function getPublicBookingPage(
       ...(team === undefined ? await shownSocials(tx, page) : {}),
       // The page's own questions (spec 0057, AC-5709); a page with none sends nothing new (AC-5704).
       ...(page.questions.length === 0 ? {} : { questions: [...publicQuestionsOf(page.questions)] }),
+      ...(shut ? { formOnly: true as const } : {}),
     };
     return { facts, pictureUser: pictures === undefined ? undefined : await shownPictureOwner(tx, page) };
   });
@@ -347,7 +372,10 @@ export async function readAddressedPage(entry: BookingEntry & { readonly handle:
   checkEntry(entry);
   return inWorkspace(entry.scope, async (tx) => {
     const page = await loadPage(tx, entry.pageId);
-    if (page === undefined || page.isDeleted) throw refuse('NOT_FOUND', 'This page is no longer available.');
+    // A managed template has no address of its own (AC-1333).
+    if (page === undefined || page.isDeleted || page.kind === 'managed') {
+      throw refuse('NOT_FOUND', 'This page is no longer available.');
+    }
     return { publicKey: page.publicKey, handle: entry.handle, slug: page.slug };
   });
 }
@@ -864,9 +892,11 @@ export async function readPublicSlots(
   const now = deps.now?.() ?? new Date();
   const from = new Date(query.from);
   const to = new Date(query.to);
-  const { page, memberIds, team } = await inWorkspace(entry.scope, async (tx) => {
+  const { page, memberIds, team, shut } = await inWorkspace(entry.scope, async (tx) => {
     const live = await livePage(tx, entry);
     checkDuration(live, query.duration);
+    // Only through a form (AC-1388): without a hand off, no times.
+    if (await formOnlyShut(tx, live, link)) return { page: live, team: undefined, memberIds: [], shut: true };
     const loaded = await loadTeam(tx, live);
     const handed =
       link === undefined || loaded?.kind !== 'round_robin'
@@ -878,8 +908,10 @@ export async function readPublicSlots(
       page: live,
       team: found,
       memberIds: found === undefined ? await membersOf(tx, live) : teamMemberIds(found),
+      shut: false,
     };
   });
+  if (shut) return { slots: [], calendar: 'ok' };
   if (team !== undefined) {
     // A team page: every member's own slots, combined (AC-734 to AC-736). Calendars first, outside the transaction.
     const busyByMember = await memberBusy(
@@ -1067,6 +1099,7 @@ export async function bookPublicSlot(
     if (again !== undefined) return { again };
     const live = liveOf(page);
     checkDuration(live, input.duration);
+    if (await formOnlyShut(tx, live, link)) throw refuse('BOOKING_CLOSED', FORM_ONLY_CLOSED);
     if (live.location.type === 'phone' && (input.phone ?? '').trim() === '') {
       throw refuseOn('VALUE_REQUIRED', 'Give a number to call you on.', 'phone');
     }
@@ -1137,6 +1170,7 @@ export async function bookPublicSlot(
             objects: { people: entry.people, companies: entry.companies },
             email: input.email,
             ...(link === undefined ? {} : { submissionId: link.submissionId }),
+            answers,
           }),
         )
       : undefined;

@@ -505,6 +505,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return { members: listed, total: listed.length };
       }),
       setRole: os.members.setRole.handler(notServed),
+      setRoles: os.members.setRoles.handler(notServed),
       removalPreview: os.members.removalPreview.handler(notServed),
       guestPreview: os.members.guestPreview.handler(notServed),
       remove: os.members.remove.handler(notServed),
@@ -612,7 +613,17 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.preferences.update.handler(notServed),
     },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
-    roles: { list: os.roles.list.handler(notServed) },
+    roles: {
+      list: os.roles.list.handler(notServed),
+      overview: os.roles.overview.handler(notServed),
+      get: os.roles.get.handler(notServed),
+      create: os.roles.create.handler(notServed),
+      update: os.roles.update.handler(notServed),
+      duplicate: os.roles.duplicate.handler(notServed),
+      delete: os.roles.delete.handler(notServed),
+      setDefault: os.roles.setDefault.handler(notServed),
+      move: os.roles.move.handler(notServed),
+    },
     scheduling: {
       delegations: {
         list: os.scheduling.delegations.list.handler(notServed),
@@ -875,12 +886,35 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.editors.list.handler(notServed),
       set: os.editors.set.handler(notServed),
     },
+    managedPages: {
+      list: os.managedPages.list.handler(notServed),
+      get: os.managedPages.get.handler(notServed),
+      create: os.managedPages.create.handler(notServed),
+      update: os.managedPages.update.handler(notServed),
+      setMembers: os.managedPages.setMembers.handler(notServed),
+      delete: os.managedPages.delete.handler(notServed),
+    },
     nav: {
       get: os.nav.get.handler(notServed),
       change: os.nav.change.handler(notServed),
     },
     routing: {
       report: os.routing.report.handler(notServed),
+      overview: os.routing.overview.handler(notServed),
+      decisions: os.routing.decisions.handler(notServed),
+      decision: os.routing.decision.handler(notServed),
+      skills: {
+        list: os.routing.skills.list.handler(notServed),
+        create: os.routing.skills.create.handler(notServed),
+        update: os.routing.skills.update.handler(notServed),
+        delete: os.routing.skills.delete.handler(notServed),
+      },
+      memberSkills: { set: os.routing.memberSkills.set.handler(notServed) },
+      settings: {
+        get: os.routing.settings.get.handler(notServed),
+        set: os.routing.settings.set.handler(notServed),
+      },
+      test: os.routing.test.handler(notServed),
     },
     audit: {
       list: os.audit.list.handler(({ input }) => {
@@ -3354,6 +3388,7 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     questions: [],
     fileToCrm: true,
     answersObjectId: null,
+    formOnly: false,
     defaultView: 'month',
     profileSection: null,
     profilePosition: 0,

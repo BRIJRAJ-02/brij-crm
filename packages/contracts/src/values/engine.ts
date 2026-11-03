@@ -75,10 +75,23 @@ export const ENGINE_REFUSAL_CODES = [
   'DELEGATION_LIMIT',
   // A guest named as a host or in a rotation (spec 0037, AC-1432): guests can't take bookings.
   'MEMBER_INVALID',
+  // Custom roles (spec 0037, AC-1228, AC-1238): a built in role's name, a permission only built in roles hold, the
+  // 21st role, and a delete moving its people to a role that can't take them.
+  'ROLE_NAME_RESERVED',
+  'PERMISSION_NOT_ALLOWED',
+  'ROLE_LIMIT',
+  'MOVE_TO_INVALID',
   // Time off (spec 0037, AC-1288): a member with 50 upcoming time off entries.
   'TIME_OFF_LIMIT',
   // Page and rotation editors (spec 0037, AC-1331): a page or rotation with 20 editors.
   'EDITOR_LIMIT',
+  // Managed booking pages (spec 0037, AC-1333): a template naming more than 200 members.
+  'MANAGED_MEMBERS_LIMIT',
+  // Routing (spec 0037, AC-1341): a booking page a published form's rule, or its After someone sends it, still books.
+  'ROUTING_IN_USE',
+  // Skills (spec 0037, AC-1382): a skill a host route names, or the workspace's 100th.
+  'SKILL_IN_USE',
+  'SKILL_LIMIT',
   // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.
   'NAV_LIMIT',
   // Domain join (spec 0031, AC-819): a domain the admin's own verified email isn't at, or a public mail domain.

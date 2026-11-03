@@ -117,6 +117,13 @@ export const AUDIT_ACTIONS = [
   // "Preview as" (spec 0032, AC-858): an admin looked at an object as a member or a team would see it. The target is
   // that member or team; `after` holds the object and the name. Stored, never listed (a look changes nothing).
   'access.previewed',
+  // Custom roles (spec 0037, AC-1231, AC-1238): a role made, changed (its name, description, permissions or data
+  // access; `after` holds the permissions added and removed) or deleted (`after.moved`, how many people moved, and
+  // where), and the role new people get changed. The target is the role.
+  'role.created',
+  'role.updated',
+  'role.deleted',
+  'role.default_changed',
   // Lists (spec 0048): made, renamed or otherwise changed (its tile, Each record once), archived and restored. The
   // target is the list; `before` and `after` hold its name.
   'list.created',
@@ -146,6 +153,14 @@ export const AUDIT_ACTIONS = [
   // Who may edit a booking page or a rotation changed (spec 0037, AC-1331): the target is the page or the rotation;
   // `after` lists the members added and removed as editors.
   'editors.changed',
+  // A managed booking page template changed (spec 0037, AC-1333 to AC-1335): the target is the template; `after`
+  // names the locks it holds and how many members were added and removed.
+  'managed_page.changed',
+  // Bookings › Routing (spec 0037, AC-1374, AC-1392): the shared settings (Won means), a skill or someone's skills,
+  // each with before and after; and a Test run that named an email, the target the workspace.
+  'routing.settings_changed',
+  'routing.skills_changed',
+  'routing.tested',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);
@@ -163,6 +178,10 @@ export const InvitationView = z.object({
   kind: z.literal('email'),
   email: z.string(),
   role: Role,
+  /** The custom role it gives (spec 0037, AC-1236), when any: `role` is then `member`. */
+  customRoleId: Uuid.optional(),
+  /** That custom role's name, said in place of `role` (the Invitations tab, the email). */
+  roleLabel: z.string().optional(),
   /** Who sent it, by their name in this workspace; empty when the system did. */
   invitedBy: z.string(),
   invitedAt: z.iso.datetime({ offset: true }),
@@ -183,6 +202,8 @@ export const InviteInput = WorkspaceScoped.extend({
     .min(1, 'Add at least one email address.')
     .max(INVITE_BATCH_MAX, `Invite at most ${String(INVITE_BATCH_MAX)} people at once.`),
   role: Role,
+  /** A custom role to give (spec 0037, AC-1236), with `role` then `member`. */
+  customRoleId: Uuid.optional(),
   mutationId: Uuid,
 });
 /** Inviting people by email. */
@@ -217,6 +238,8 @@ export const InvitePeek = z.object({
   workspaceName: z.string(),
   inviterName: z.string(),
   role: Role,
+  /** The role's name as the invitation page says it: a custom role's own name (spec 0037), else the built in one's. */
+  roleLabel: z.string().optional(),
   /** The invited address as `a***@example.com`; absent for the invite link, which names nobody. */
   invitedEmailMasked: z.string().optional(),
 });
@@ -240,6 +263,8 @@ export const InviteLinkView = z.object({
   enabled: z.boolean(),
   token: InviteToken.optional(),
   role: InviteLinkRole.optional(),
+  /** The custom role it gives (spec 0037, AC-1237), when any: `role` is then `member`. */
+  customRoleId: Uuid.optional(),
   expiresAt: z.iso.datetime({ offset: true }).optional(),
   maxUses: z.number().int().min(1).optional(),
   uses: z.number().int().min(0),
@@ -259,6 +284,8 @@ export type InviteLinkView = z.infer<typeof InviteLinkView>;
 export const SetInviteLinkInput = WorkspaceScoped.extend({
   enabled: z.boolean(),
   role: InviteLinkRole.optional(),
+  /** A custom role to give (spec 0037, AC-1237), `null` for none. */
+  customRoleId: Uuid.nullable().optional(),
   expiresInDays: z
     .union(INVITE_LINK_DAYS.map((days) => z.literal(days)))
     .nullable()

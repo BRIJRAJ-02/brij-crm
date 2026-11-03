@@ -25,6 +25,7 @@ describe('settingsNav', () => {
         'Brand',
         'Members',
         'Teams',
+        'Roles',
         'Security',
         'Webhooks',
         'Objects',
@@ -52,6 +53,7 @@ describe('settingsNav', () => {
       security: '/w/acme/settings/account/sign-in',
       members: '/w/acme/settings/members',
       teams: '/w/acme/settings/teams',
+      roles: '/w/acme/settings/roles',
       'workspace-security': '/w/acme/settings/security',
       webhooks: '/w/acme/settings/webhooks',
       objects: '/w/acme/settings/objects',
@@ -118,7 +120,7 @@ describe('visibleSettingsNav', () => {
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications', 'scheduling-access'],
-      ['general', 'brand', 'members', 'teams', 'objects', 'lists', 'jobs', 'history', 'trash'],
+      ['general', 'brand', 'members', 'teams', 'roles', 'objects', 'lists', 'jobs', 'history', 'trash'],
     ]);
   });
 

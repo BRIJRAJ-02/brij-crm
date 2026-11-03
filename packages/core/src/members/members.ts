@@ -2,7 +2,7 @@
 // screens show, a page at a time, and the owner rules for changing a member's
 // role, removing them or leaving. Every change writes its audit row in its own
 // transaction. Everything goes through the scope the access door made.
-import { and, asc, count, eq, gt, ilike, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, notInArray, or, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import {
   LAST_OWNER_MESSAGE,
@@ -10,25 +10,24 @@ import {
   MEMBERS_PAGE_MAX,
   OWNER_RULES_MESSAGE,
   PERMISSIONS,
-  ROLE_DESCRIPTIONS,
   ROLE_LABELS,
   ROLE_PERMISSIONS,
-  ROLES,
+  SET_ROLES_MAX,
   type MembersPage,
   type MemberView,
   type GuestPreview,
   type MyAccess,
   type RemovalPreview,
   type Role,
-  type RolesList,
   type SetRoleResult,
+  type SetRolesResult,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import { actorRow, type EngineScope } from '../engine/scope.ts';
-import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { checkScope } from '../access/mint.ts';
 import { can, isRole } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -38,13 +37,14 @@ import { mySchedulingReach } from '../scheduling/visible.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { REASSIGN_KIND } from './reassign.ts';
 import { countRemoval, runRemovalEffects } from './removal.ts';
-import { writeAudit, type AuditSource } from './audit.ts';
+import { writeAudit, writeAudits, type AuditSource } from './audit.ts';
 import { ensureLinkPage } from '../booking/handles.ts';
 import { checkSeats, revokeUnvouched } from './invitations.ts';
 import { countBecomingGuest, leaveSchedulingAsGuest } from './guest.ts';
+import { readCustomRole } from '../roles/roles.ts';
 import { workspaceLogoVersion } from '../brand/brand.ts';
 
-const { members, workspaces } = schema;
+const { members, workspaceRoles, workspaces } = schema;
 
 /** Whether the caller is a guest (spec 0031, slice 9): they read names, never addresses. */
 const isGuest = (scope: EngineScope): boolean =>
@@ -56,6 +56,7 @@ const VIEW_COLUMNS = {
   name: members.name,
   email: members.email,
   role: members.role,
+  customRoleId: members.customRoleId,
   joinedAt: members.createdAt,
   avatarUrl: members.avatarUrl,
   timeZone: members.timeZone,
@@ -68,6 +69,7 @@ function toView(
     readonly name: string;
     readonly email: string;
     readonly role: string;
+    readonly customRoleId: string | null;
     readonly joinedAt: string | Date;
     readonly avatarUrl: string | null;
     readonly timeZone: string | null;
@@ -79,6 +81,7 @@ function toView(
     name: row.name,
     ...(withEmail ? { email: row.email } : {}),
     role: storedRole(row.role),
+    ...(row.customRoleId === null ? {} : { customRoleId: row.customRoleId }),
     joinedAt: new Date(row.joinedAt).toISOString(),
     ...(row.avatarUrl === null ? {} : { avatarUrl: row.avatarUrl }),
     ...(row.timeZone === null ? {} : { timeZone: row.timeZone }),
@@ -173,41 +176,30 @@ export async function listMembers(
 }
 
 /**
- * The roles every role picker offers (spec 0037, AC-1439): the built in
- * roles, most power first, each with its name and one line on what it can
- * do, and `member` for new people. Custom roles (spec 0037) join here. Any
- * member may read it; what a person may grant is still the owner rules'.
- */
-export function listRoles(scope: EngineScope): RolesList {
-  checkScope(scope);
-  return {
-    roles: ROLES.map((role) => ({
-      id: role,
-      label: ROLE_LABELS[role],
-      description: ROLE_DESCRIPTIONS[role],
-      builtIn: role,
-    })),
-    defaultRole: 'member',
-  };
-}
-
-/**
  * The caller's own access (`access.mine`, spec 0009, AC-136): their role, its
- * label, their permissions and their teams (spec 0031, AC-825), from the scope the door sealed, and whose
- * scheduling they reach beyond their own (spec 0037, AC-1261), one read of the
+ * label (a custom role's own name, spec 0037, AC-1235), their permissions and their teams (spec 0031, AC-825), from
+ * the scope the door sealed, and whose scheduling they reach beyond their own (spec 0037, AC-1261), one read of the
  * reach. Only a member has a role.
  */
 export async function getMyAccess(scope: EngineScope): Promise<MyAccess> {
   checkScope(scope);
   const { principal, permissions } = scope.access;
   if (principal.kind !== 'member') throw new Error('Only a member has a role to show.');
+  const { customRoleId } = principal;
   // The workspace's logo version rides along (spec 0060): the sidebar and the tab's icon need no read of their own.
-  const [scheduling, workspaceLogo] = await Promise.all([mySchedulingReach(scope), workspaceLogoVersion(scope)]);
+  const [scheduling, custom, workspaceLogo] = await Promise.all([
+    mySchedulingReach(scope),
+    customRoleId === undefined
+      ? Promise.resolve(undefined)
+      : inWorkspace(scope, (tx) => readCustomRole(tx, scope.workspaceId, customRoleId, undefined)),
+    workspaceLogoVersion(scope),
+  ]);
   return {
     memberId: principal.memberId,
     role: principal.role,
-    roleLabel: ROLE_LABELS[principal.role],
+    roleLabel: custom?.name ?? ROLE_LABELS[principal.role],
     permissions: [...permissions],
+    ...(customRoleId === undefined ? {} : { customRoleId }),
     teamIds: [...principal.teamIds],
     ...(scheduling === undefined ? {} : { scheduling }),
     ...(workspaceLogo === undefined ? {} : { workspaceLogo }),
@@ -261,6 +253,21 @@ interface Acting {
  * doesn't know.
  */
 async function lockTarget(tx: WorkspaceTx, scope: EngineScope, memberId: string) {
+  const acting = await lockActing(tx, scope);
+  const [target] = await tx
+    .select({ ...VIEW_COLUMNS, userId: members.userId })
+    .from(members)
+    .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId), eq(members.status, 'active')))
+    .for('update');
+  if (target === undefined) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
+  return { target: { ...target, role: storedRole(target.role) }, acting };
+}
+
+/**
+ * Locks the workspace's active owners and the acting member's own row, and answers the role they act with now
+ * (the door's answer for one who is no longer a member, or holds a role the code doesn't know).
+ */
+async function lockActing(tx: WorkspaceTx, scope: EngineScope): Promise<Acting> {
   await tx
     .select({ id: members.id })
     .from(members)
@@ -284,13 +291,7 @@ async function lockTarget(tx: WorkspaceTx, scope: EngineScope, memberId: string)
     if (self === undefined || !isRole(self.role)) throw refuse('NOT_FOUND', NOT_A_MEMBER);
     acting = { role: self.role };
   }
-  const [target] = await tx
-    .select({ ...VIEW_COLUMNS, userId: members.userId })
-    .from(members)
-    .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId), eq(members.status, 'active')))
-    .for('update');
-  if (target === undefined) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
-  return { target: { ...target, role: storedRole(target.role) }, acting };
+  return acting;
 }
 
 /**
@@ -298,7 +299,8 @@ async function lockTarget(tx: WorkspaceTx, scope: EngineScope, memberId: string)
  * deleted workspace needs no owner (account deletion leaves one, spec 0033): its row is read `for share`, so a
  * restore committing meanwhile is waited for and seen, and a restore after this commits finds its owner gone.
  */
-async function keepAnOwner(tx: WorkspaceTx, scope: EngineScope, memberId: string): Promise<void> {
+async function keepAnOwner(tx: WorkspaceTx, scope: EngineScope, memberId: string | readonly string[]): Promise<void> {
+  const leaving = typeof memberId === 'string' ? [memberId] : memberId;
   const [workspace] = await tx
     .select({ deletedAt: workspaces.deletedAt })
     .from(workspaces)
@@ -313,7 +315,7 @@ async function keepAnOwner(tx: WorkspaceTx, scope: EngineScope, memberId: string
         eq(members.workspaceId, scope.workspaceId),
         eq(members.role, 'owner'),
         eq(members.status, 'active'),
-        ne(members.id, memberId),
+        notInArray(members.id, [...leaving]),
       ),
     )
     .limit(1);
@@ -352,75 +354,274 @@ function checkChangesRoles(scope: EngineScope, role: Role | undefined): void {
   if (!manages(scope, role)) throw refuse('FORBIDDEN', PERMISSIONS['members.manage'].message);
 }
 
+/** The role a change gives: a built in one, or a custom one (spec 0037, AC-1233), whose base role is `member`. */
+interface NextRole {
+  readonly role: Role;
+  readonly customRole?: { readonly id: string; readonly name: string };
+}
+
+const ROLE_GONE = "That role doesn't exist.";
+
+/** A change's role as asked: exactly one of a built in role and a custom role's id. */
+function askedRole(input: { readonly role?: Role | undefined; readonly customRoleId?: string | undefined }): {
+  readonly role?: Role;
+  readonly customRoleId?: string;
+} {
+  if (input.customRoleId !== undefined) {
+    if (input.role !== undefined) throw refuse('CONFIG_INVALID', 'Pick a role.');
+    return { customRoleId: checkId(input.customRoleId, ROLE_GONE) };
+  }
+  if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick a role.');
+  return { role: input.role };
+}
+
+/** The role asked for as it stands now, read in the change's transaction: a custom role must still exist. */
+async function nextRoleOf(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  asked: { readonly role?: Role; readonly customRoleId?: string },
+): Promise<NextRole> {
+  if (asked.customRoleId === undefined) return { role: asked.role ?? 'member' };
+  const custom = await readCustomRole(tx, workspaceId, asked.customRoleId, 'share');
+  if (custom === undefined) throw refuse('NOT_FOUND', ROLE_GONE);
+  return { role: 'member', customRole: custom };
+}
+
+/** The name of the custom role a member holds now, for the audit row's before, or undefined. */
+async function customRoleName(tx: WorkspaceTx, workspaceId: string, roleId: string | null) {
+  if (roleId === null) return undefined;
+  const [row] = await tx
+    .select({ name: workspaceRoles.name })
+    .from(workspaceRoles)
+    .where(and(eq(workspaceRoles.workspaceId, workspaceId), eq(workspaceRoles.id, roleId)));
+  return row?.name;
+}
+
 /**
- * Changes a member's role (spec 0009, AC-137): only an owner gives or takes
- * away the owner role; an admin moves members and admins between `member` and
- * `admin`; a member changes no roles, their own included. A person may change
- * their own role within these rules. Demoting the only active owner of a live
- * workspace is refused 409 `LAST_OWNER`. Answers the member with their role.
- * The actor's role is checked as the door saw it before any read, then again
- * as it is now, under lock. Open invitations they sent that the new role can't
- * vouch for are revoked with it, and counted in the answer.
+ * One member's role change inside a write that holds their row (`lockTarget`): the owner rules, the last owner, a
+ * guest's seat, leaving scheduling for a guest, the row, its audit row, the link page back for a former guest, the
+ * invitations their new role can't vouch for, and the `members` and `access` rows. Answers the member and how many
+ * invitations went. A change to the role they already hold changes nothing.
+ */
+async function changeRole(
+  context: WriteContext,
+  acting: Acting,
+  target: Awaited<ReturnType<typeof lockTarget>>['target'],
+  next: NextRole,
+  source: AuditSource | undefined,
+): Promise<{ readonly view: MemberView; readonly cancelled: number; readonly changed: boolean }> {
+  const { tx, scope } = context;
+  const { role } = next;
+  const nextCustom = next.customRole?.id ?? null;
+  checkChangesRoles(scope, acting.role);
+  checkOwnerRules(scope, acting, target, role);
+  if (target.role === role && target.customRoleId === nextCustom) {
+    return { view: toView({ ...target, role }), cancelled: 0, changed: false };
+  }
+  if (target.role === 'owner') await keepAnOwner(tx, scope, target.id);
+  // A guest takes no seat (spec 0031, AC-809), so leaving the role takes one (a custom role among them, spec 0037
+  // AC-1233); becoming one leaves scheduling, before the role is written, while the rotations still read them as a
+  // host (AC-1432).
+  if (target.role === 'guest') await checkSeats(tx, scope, 1);
+  const leavesGuest = target.role === 'guest' && role !== 'guest';
+  if (role === 'guest' && target.role !== 'guest') await leaveSchedulingAsGuest(context, target.id, source);
+  const wasName = await customRoleName(tx, scope.workspaceId, target.customRoleId);
+  await tx
+    .update(members)
+    .set({ role, customRoleId: nextCustom, ...touched(scope) })
+    .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
+  await writeAudit(
+    tx,
+    scope.workspaceId,
+    scope.actor,
+    {
+      action: 'member.role_changed',
+      targetType: 'member',
+      targetId: target.id,
+      before: {
+        role: target.role,
+        ...(target.customRoleId === null ? {} : { customRoleId: target.customRoleId }),
+        ...(wasName === undefined ? {} : { customRoleName: wasName }),
+      },
+      after: {
+        role,
+        ...(next.customRole === undefined
+          ? {}
+          : { customRoleId: next.customRole.id, customRoleName: next.customRole.name }),
+      },
+    },
+    source,
+  );
+  // A guest made a member gets the link page every member has (a kept one comes back as it was; late trap #77).
+  if (leavesGuest && target.userId !== null) {
+    await ensureLinkPage(tx, {
+      userId: target.userId,
+      workspaceId: scope.workspaceId,
+      name: target.name,
+      email: target.email,
+    });
+  }
+  // What they sent and can't send now opens nothing: revoked, and said (late trap: invitations died untold). A
+  // custom role never invites (`members.invite` is grant `admin`), so it counts as Member here.
+  const cancelled = await revokeUnvouched(tx, scope, target.id, role, source);
+  // Everyone's member list reads them again, and the relay drops the workspace's audiences (spec 0007, AC-82).
+  // Their scheduling reach changed with their role, and so may that of the delegates reaching them or holding
+  // grants they last set (spec 0037, decision 7): their own tabs read it again (AC-1274).
+  const reached = await delegatesReachedBy(tx, scope.workspaceId, [target.id]);
+  context.record({ members: [target.id], access: [...new Set([target.id, ...reached])] });
+  return { view: toView({ ...target, role, customRoleId: nextCustom }), cancelled, changed: true };
+}
+
+/**
+ * Changes a member's role (spec 0009, AC-137; spec 0037, AC-1233): to a built in `role`, or a custom role
+ * (`customRoleId`, with `role` then `member`; one that doesn't exist is NOT_FOUND). Only an owner gives or takes
+ * away the owner role; an admin moves members and admins between `member`, `admin`, `guest` and any custom role; a
+ * member changes no roles, their own included. A person may change their own role within these rules. Demoting the
+ * only active owner of a live workspace is refused 409 `LAST_OWNER`; a guest moved into any other role takes a seat
+ * (409 `SEAT_LIMIT`). Answers the member with their role. The actor's role is checked as the door saw it before any
+ * read, then again as it is now, under lock. Open invitations they sent that the new role can't vouch for are
+ * revoked with it, and counted in the answer.
  */
 export async function setMemberRole(
   scope: EngineScope,
-  input: { readonly memberId: string; readonly role: Role },
+  input: { readonly memberId: string; readonly role?: Role | undefined; readonly customRoleId?: string | undefined },
   hooks: readonly AfterWrite[] = [],
   options: MemberWriteOptions = {},
 ): Promise<SetRoleResult> {
   checkScope(scope);
   const memberId = checkId(input.memberId, MEMBER_NOT_FOUND);
-  if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick a role.');
-  const role = input.role;
+  const asked = askedRole(input);
   checkChangesRoles(scope, actingRole(scope));
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
       const { target, acting } = await lockTarget(tx, scope, memberId);
+      const next = await nextRoleOf(tx, scope.workspaceId, asked);
+      const { view, cancelled } = await changeRole(context, acting, target, next, options.source);
+      return { ...view, ...(cancelled > 0 ? { cancelledInvitations: cancelled } : {}) };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * Change role for several people at once (spec 0037, AC-1242): one role for up to 100 members, each under the same
+ * rules as `setMemberRole`, all in one transaction, so one refusal changes nobody. Batched: the owners, the actor and
+ * every target are locked once (targets in id order), the custom role names read once, one update, one audit insert
+ * (a row per member changed) and one reach read; only a guest leaving scheduling, a former guest's link page and the
+ * invitations each changed member sent run per person. Answers how many changed and the invitations cancelled.
+ */
+export async function setMemberRoles(
+  scope: EngineScope,
+  input: {
+    readonly memberIds: readonly string[];
+    readonly role?: Role | undefined;
+    readonly customRoleId?: string | undefined;
+  },
+  hooks: readonly AfterWrite[] = [],
+  options: MemberWriteOptions = {},
+): Promise<SetRolesResult> {
+  checkScope(scope);
+  checkChangesRoles(scope, actingRole(scope));
+  const ids = [...new Set(input.memberIds.map((id) => checkId(id, MEMBER_NOT_FOUND)))].sort();
+  if (ids.length === 0 || ids.length > SET_ROLES_MAX) {
+    throw refuse('CONFIG_INVALID', `Change 1 to ${String(SET_ROLES_MAX)} people at once.`);
+  }
+  const asked = askedRole(input);
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const next = await nextRoleOf(tx, scope.workspaceId, asked);
+      const acting = await lockActing(tx, scope);
       checkChangesRoles(scope, acting.role);
-      checkOwnerRules(scope, acting, target, role);
-      if (target.role === role) return toView({ ...target, role });
-      if (target.role === 'owner') await keepAnOwner(tx, scope, target.id);
-      // A guest takes no seat (spec 0031, AC-809), so leaving the role takes one; becoming one leaves scheduling,
-      // before the role is written, while the rotations still read them as a host (AC-1432).
-      if (target.role === 'guest') await checkSeats(tx, scope, 1);
-      const leavesGuest = target.role === 'guest';
-      if (role === 'guest') await leaveSchedulingAsGuest(context, target.id, options.source);
+      const read = await tx
+        .select({ ...VIEW_COLUMNS, userId: members.userId })
+        .from(members)
+        .where(and(eq(members.workspaceId, scope.workspaceId), inArray(members.id, ids), eq(members.status, 'active')))
+        .orderBy(asc(members.id))
+        .for('update');
+      if (read.length !== ids.length) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
+      const targets = read.map((row) => ({ ...row, role: storedRole(row.role) }));
+      for (const target of targets) checkOwnerRules(scope, acting, target, next.role);
+      const nextCustom = next.customRole?.id ?? null;
+      const changing = targets.filter((target) => target.role !== next.role || target.customRoleId !== nextCustom);
+      if (changing.length === 0) return { changed: 0 };
+      const leavingOwners = changing.filter((target) => target.role === 'owner').map((target) => target.id);
+      if (leavingOwners.length > 0) await keepAnOwner(tx, scope, leavingOwners);
+      // Guests take no seat (spec 0031, AC-809): each one leaving the role takes one, counted once for all.
+      const guestsLeaving = next.role === 'guest' ? [] : changing.filter((target) => target.role === 'guest');
+      await checkSeats(tx, scope, guestsLeaving.length);
+      if (next.role === 'guest') {
+        for (const target of changing) {
+          if (target.role !== 'guest') await leaveSchedulingAsGuest(context, target.id, options.source);
+        }
+      }
+      const customIds = [
+        ...new Set(changing.flatMap((target) => (target.customRoleId === null ? [] : [target.customRoleId]))),
+      ];
+      const names =
+        customIds.length === 0
+          ? new Map<string, string>()
+          : new Map(
+              (
+                await tx
+                  .select({ id: workspaceRoles.id, name: workspaceRoles.name })
+                  .from(workspaceRoles)
+                  .where(and(eq(workspaceRoles.workspaceId, scope.workspaceId), inArray(workspaceRoles.id, customIds)))
+              ).map((row) => [row.id, row.name]),
+            );
+      const changedIds = changing.map((target) => target.id);
       await tx
         .update(members)
-        .set({ role, ...touched(scope) })
-        .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
-      await writeAudit(
+        .set({ role: next.role, customRoleId: nextCustom, ...touched(scope) })
+        .where(and(eq(members.workspaceId, scope.workspaceId), inArray(members.id, changedIds)));
+      await writeAudits(
         tx,
         scope.workspaceId,
         scope.actor,
-        {
-          action: 'member.role_changed',
-          targetType: 'member',
-          targetId: target.id,
-          before: { role: target.role },
-          after: { role },
-        },
+        changing.map((target) => {
+          const wasName = target.customRoleId === null ? undefined : names.get(target.customRoleId);
+          return {
+            action: 'member.role_changed' as const,
+            targetType: 'member' as const,
+            targetId: target.id,
+            before: {
+              role: target.role,
+              ...(target.customRoleId === null ? {} : { customRoleId: target.customRoleId }),
+              ...(wasName === undefined ? {} : { customRoleName: wasName }),
+            },
+            after: {
+              role: next.role,
+              ...(next.customRole === undefined
+                ? {}
+                : { customRoleId: next.customRole.id, customRoleName: next.customRole.name }),
+            },
+          };
+        }),
         options.source,
       );
-      // A guest made a member gets the link page every member has (a kept one comes back as it was; late trap #77).
-      if (leavesGuest && target.userId !== null) {
-        await ensureLinkPage(tx, {
-          userId: target.userId,
-          workspaceId: scope.workspaceId,
-          name: target.name,
-          email: target.email,
-        });
+      // A guest made a member gets the link page every member has (a kept one comes back as it was).
+      for (const target of guestsLeaving) {
+        if (target.userId !== null) {
+          await ensureLinkPage(tx, {
+            userId: target.userId,
+            workspaceId: scope.workspaceId,
+            name: target.name,
+            email: target.email,
+          });
+        }
       }
-      // What they sent and can't send now opens nothing: revoked, and said (late trap: invitations died untold).
-      const cancelled = await revokeUnvouched(tx, scope, target.id, role, options.source);
-      // Everyone's member list reads them again, and the relay drops the workspace's audiences (spec 0007, AC-82).
-      // Their scheduling reach changed with their role, and so may that of the delegates reaching them or holding
-      // grants they last set (spec 0037, decision 7): their own tabs read it again (AC-1274).
-      const reached = await delegatesReachedBy(tx, scope.workspaceId, [target.id]);
-      context.record({ members: [target.id], access: [...new Set([target.id, ...reached])] });
-      return { ...toView({ ...target, role }), ...(cancelled > 0 ? { cancelledInvitations: cancelled } : {}) };
+      // What they sent and can't send now opens nothing: one statement each, rows only for what goes.
+      let cancelled = 0;
+      for (const target of changing) {
+        cancelled += await revokeUnvouched(tx, scope, target.id, next.role, options.source);
+      }
+      const reached = await delegatesReachedBy(tx, scope.workspaceId, changedIds);
+      context.record({ members: changedIds, access: [...new Set([...changedIds, ...reached])] });
+      return { changed: changing.length, ...(cancelled > 0 ? { cancelledInvitations: cancelled } : {}) };
     },
     hooks,
   );
@@ -618,7 +819,8 @@ export async function transferOwnership(
       if (target.role === 'guest') await checkSeats(tx, scope, 1);
       await tx
         .update(members)
-        .set({ role: 'owner', ...touched(scope) })
+        // An owner holds no custom role (spec 0037, AC-1233).
+        .set({ role: 'owner', customRoleId: null, ...touched(scope) })
         .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
       await tx
         .update(members)
@@ -634,7 +836,12 @@ export async function transferOwnership(
           action: 'workspace.ownership_transferred',
           targetType: 'member',
           targetId: target.id,
-          before: { toRole: target.role, fromRole: 'owner', from: principal.memberId },
+          before: {
+            toRole: target.role,
+            ...(target.customRoleId === null ? {} : { toCustomRoleId: target.customRoleId }),
+            fromRole: 'owner',
+            from: principal.memberId,
+          },
           after: { toRole: 'owner', fromRole: 'admin', from: principal.memberId },
         },
         options.source,

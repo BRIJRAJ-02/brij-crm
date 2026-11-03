@@ -43,13 +43,12 @@ import { actorRow } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 import { requirePermission } from './check.ts';
+import { CUSTOM_ROLE_COLUMNS, customRoleJoin, isKnownMember, memberAccess, memberRowOf } from './door.ts';
 import type { EngineScope } from './mint.ts';
 import {
   fieldLevel,
-  isRole,
   objectLevel,
   recordRule,
-  roleAccess,
   type Access,
   type AccessRules,
   type LevelRule,
@@ -58,7 +57,7 @@ import {
 import { inWorkspace } from './run.ts';
 import { workspaceRules } from './stored-rules.ts';
 
-const { accessRules, attributes, members, objects, recordRules, teamMembers, teams, views } = schema;
+const { accessRules, attributes, members, objects, recordRules, teamMembers, teams, views, workspaceRoles } = schema;
 
 const OBJECT_NOT_FOUND = "That object doesn't exist.";
 const TEAM_NOT_FOUND = "That team doesn't exist.";
@@ -384,12 +383,13 @@ async function impactOf(
   if (covered.length === 0) return none;
   const all = await workspaceRules(tx);
   // In chunks, so a role that covers tens of thousands never meets Postgres's limit on bound values.
-  const rows: { id: string; role: string }[] = [];
+  const rows: Parameters<typeof memberRowOf>[0][] = [];
   for (let at = 0; at < covered.length; at += 5000) {
     rows.push(
       ...(await tx
-        .select({ id: members.id, role: members.role })
+        .select({ id: members.id, userId: members.userId, role: members.role, ...CUSTOM_ROLE_COLUMNS })
         .from(members)
+        .leftJoin(workspaceRoles, customRoleJoin)
         .where(
           and(
             eq(members.workspaceId, scope.workspaceId),
@@ -431,16 +431,17 @@ async function impactOf(
   let people = 0;
   let gone = false;
   const lost = new Set<string>();
-  for (const row of rows) {
-    if (!isRole(row.role)) continue;
+  for (const read of rows) {
+    // A custom role holder (spec 0037) is judged with their role's data access, never as a Member.
+    const row = memberRowOf(read);
+    if (!isKnownMember(row)) continue;
     const teamIds = all.teamIdsOf(row.id);
-    const key = `${row.role}|${teamIds.join(',')}`;
+    const key = `${row.role}|${row.customRoleId ?? ''}|${teamIds.join(',')}`;
     let verdict = verdicts.get(key);
     if (verdict === undefined) {
       const rules: AccessRules = { levels: all.levels, records: all.records, teamIds, teamMemberIds: [] };
-      const principal = { kind: 'member', memberId: row.id, role: row.role, teamIds, teamMemberIds: [] } as const;
-      const was = roleAccess(principal, rules);
-      const now = roleAccess(principal, after(rules));
+      const was = memberAccess(row, rules);
+      const now = memberAccess(row, after(rules));
       let less = false;
       let objectGone = false;
       if ((LEVEL_RANK[objectLevel(now, objectId)] ?? 0) < (LEVEL_RANK[objectLevel(was, objectId)] ?? 0)) {

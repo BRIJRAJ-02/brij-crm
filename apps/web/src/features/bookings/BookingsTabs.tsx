@@ -15,7 +15,7 @@ export interface BookingsTabsProps {
   readonly slug: string;
   /** The tab the address names. */
   readonly tab: BookingsPageTab;
-  /** The tabs this member has, in order (the Roster only for someone who sees a colleague's scheduling). */
+  /** The tabs this member has, in order (the Roster only for someone who sees a colleague's scheduling, Routing only for a holder of `routing.manage`). */
   readonly tabs?: readonly BookingsPageTab[];
   /** The child route's page (an `Outlet`), drawn in the chosen tab's panel. */
   readonly children: ReactNode;

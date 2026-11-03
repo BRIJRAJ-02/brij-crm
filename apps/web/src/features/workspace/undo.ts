@@ -182,6 +182,9 @@ export const lifecycleStrings = {
   /** A delete past 500 comes back as a restore job, whose own toast says when it is done. */
   restoring: (pluralName: string) => `Restoring ${pluralName.toLowerCase()} in the background.`,
   undidCreate: (name: string) => `Undid the create of ${name}.`,
+  /** A create undone with the company its email made (spec 0059): both went to the trash, and the toast says so. */
+  removedWithCompany: (name: string, company: string) =>
+    company === '' ? `Removed ${name} and the company it added.` : `Removed ${name} and ${company}.`,
   couldNotUndoCreate: (name: string) => `Couldn’t undo the create of ${name}.`,
 } as const;
 
@@ -196,13 +199,20 @@ function reasonWords(reason: Extract<UndoResult, { kind: 'restored' }>['reason']
 /**
  * The toast after an undo of a delete or a create (AC-526, AC-541): "Restored
  * 46 people. 2 are still in the trash because a unique value is now used by
- * another record."; "Undid the create of Ada Lovelace.". Undefined for any
+ * another record."; "Undid the create of Ada Lovelace."; "Removed Jane and Acme." when the
+ * company her email made went with her. Undefined for any
  * other undo (the edit toasts cover those).
  */
 export function lifecycleUndoToast(result: UndoResult): ToastContent | undefined {
   if (result.kind === 'uncreated') {
     return result.deleted
-      ? { tone: 'success', message: lifecycleStrings.undidCreate(result.recordName) }
+      ? {
+          tone: 'success',
+          message:
+            result.companyName === undefined
+              ? lifecycleStrings.undidCreate(result.recordName)
+              : lifecycleStrings.removedWithCompany(result.recordName, result.companyName),
+        }
       : { tone: 'danger', message: lifecycleStrings.couldNotUndoCreate(result.recordName) };
   }
   if (result.kind === 'restoring') return { tone: 'success', message: lifecycleStrings.restoring(result.pluralName) };

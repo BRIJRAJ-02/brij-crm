@@ -10,7 +10,7 @@ import type { BookingPageView, DataLayer, MemberSummary, RotationView } from '@c
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
-import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
+import { emptyCaptureList, renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { HostsCard } from './HostsCard.tsx';
 import { LinksScreen } from './LinksScreen.tsx';
 import { NewPageDialog } from './NewPageDialog.tsx';
@@ -124,6 +124,8 @@ describe('Booking pages › New: Everyone on the roster', () => {
       schedules: { view: () => held({ status: 'ready' as const, schedules: [] }) },
       rotations: { view: () => rotations },
       bookingPages: { newId: () => '0199a6f2-0000-7000-8000-0000000000p1', create },
+      // The dialog mints a managed page's id up front, whether or not it offers the choice.
+      managedPages: { newId: () => '0199a6f2-0000-7000-8000-00000000mp01' },
     } as unknown as DataLayer;
     const onCreated = vi.fn();
     shown = await renderInApp(
@@ -154,10 +156,15 @@ describe('Booking pages › New: Everyone on the roster', () => {
   });
 });
 
+/** The managed pages Links also reads: none, and one view for every render (a new one would loop). */
+const noTemplates = emptyCaptureList<never>();
+
 describe('Captures › Links: the Workspace group', () => {
   const render = async (pages: readonly BookingPageView[]) => {
     const data = {
       bookingPages: { view: () => held({ status: 'ready' as const, items: pages, pendingIds: new Set<string>() }) },
+      // No managed pages here: this is about the Workspace group, and Links reads the templates too.
+      managedPages: { view: () => noTemplates, remove: vi.fn() },
     } as unknown as DataLayer;
     shown = await renderInApp(
       () => (
