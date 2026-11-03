@@ -155,6 +155,7 @@ declare
   block record;
   kept uuid[] := '{}';
   next_position smallint := 0;
+  chosen jsonb;
 begin
   if workspace is distinct from nullif(pg_catalog.current_setting('app.workspace_id', true), '')::uuid then
     raise exception using errcode = '42501', message = 'PROFILE_NOT_THIS_WORKSPACE';
@@ -203,7 +204,7 @@ begin
   where p.user_id = owner and p.workspace_id = workspace;
   -- Places are unique per person only at commit, so blocks may pass through each other's on the way.
   for block in
-    select i.id, i.kind, i.page_id, i.form_id, w.data
+    select i.id, i.kind, i.page_id, i.form_id, w.data, i.data as held_data
     from pg_catalog.jsonb_array_elements(wanted -> 'items') with ordinality e(item, at)
     cross join lateral (select (e.item ->> 'id')::uuid as id, e.item -> 'data' as data, e.item ->> 'kind' as kind) w
     join auth.profile_items i on i.id = w.id and i.user_id = owner and i.workspace_id = workspace and i.kind = w.kind
@@ -212,16 +213,26 @@ begin
     if next_position > 999 then
       exit;
     end if;
-    if pg_catalog.jsonb_typeof(block.data) = 'object' and not exists (
-      select 1 from public.crm_profile_item_images(block.data) w(image)
-      where not exists (select 1 from auth.profile_images m
-        where m.id = w.image and m.user_id = owner and m.workspace_id = workspace)
+    -- The version's fields, unless they name a picture no longer kept: then the block's own. Either way the block
+    -- is checked as a save checks it, target included, before it is put back on the page.
+    chosen := case when pg_catalog.jsonb_typeof(block.data) = 'object' and not exists (
+        select 1 from public.crm_profile_item_images(block.data) w(image)
+        where not exists (select 1 from auth.profile_images m
+          where m.id = w.image and m.user_id = owner and m.workspace_id = workspace)
+      ) then block.data else block.held_data end;
+    perform public.crm_check_profile_item(block.kind, chosen,
+      case when block.kind in ('page', 'form', 'times') then workspace end, block.page_id, block.form_id);
+    if block.kind in ('page', 'times') and not exists (
+      select 1 from public.crm_booking_owner_pages(owner, workspace, array[block.page_id]) o where o.page_id = block.page_id
     ) then
-      perform public.crm_check_profile_item(block.kind, block.data,
-        case when block.kind in ('page', 'form', 'times') then workspace end, block.page_id, block.form_id);
-      update auth.profile_items i set data = block.data where i.id = block.id;
+      raise exception using errcode = '42704', message = 'PROFILE_TARGET_MISSING';
     end if;
-    update auth.profile_items i set archived_at = null, position = next_position where i.id = block.id;
+    if block.kind = 'form' and not exists (
+      select 1 from public.crm_form_owner_forms(owner, workspace, array[block.form_id]) o where o.form_id = block.form_id
+    ) then
+      raise exception using errcode = '42704', message = 'PROFILE_TARGET_MISSING';
+    end if;
+    update auth.profile_items i set data = chosen, archived_at = null, position = next_position where i.id = block.id;
     kept := kept || block.id;
     next_position := next_position + 1;
   end loop;

@@ -22,6 +22,8 @@ import {
   readBrandLogo,
   saveBrandLogo,
   saveWorkspaceBrand,
+  discardBrandTemplate,
+  publishBrandTemplate,
 } from './brand.ts';
 import { publishLinkPage } from '../profile/link-publish.ts';
 import { pageImageFolder, readProfileLook, saveProfileAccent, saveProfileImage } from './look.ts';
@@ -259,8 +261,13 @@ describe('what a page wears', () => {
   it('keeps the workspace template, tells the pages only when it isn’t Classic, and refuses a fifth (spec 0068)', async () => {
     const ada = await person('Ada');
     expect((await readFormBrand({ scope: ada.scope })).answer).toBeUndefined();
-    const saved = await saveWorkspaceBrand(ada.scope, { accent: null, accentDark: null, template: 'night' });
-    expect(saved.template).toBe('night');
+    // A pick waits for Publish (spec 0068): the pages keep Classic until then, and Discard lets it go.
+    const saved = await saveWorkspaceBrand(ada.scope, { accent: null, accentDark: null, template: 'studio' });
+    expect(saved).toMatchObject({ template: 'classic', templateDraft: 'studio' });
+    expect((await readFormBrand({ scope: ada.scope })).answer).toBeUndefined();
+    expect(await discardBrandTemplate(ada.scope)).not.toHaveProperty('templateDraft');
+    await saveWorkspaceBrand(ada.scope, { accent: null, accentDark: null, template: 'night' });
+    expect(await publishBrandTemplate(ada.scope)).toMatchObject({ template: 'night' });
     // An accent saved later keeps the template.
     expect((await saveWorkspaceBrand(ada.scope, { accent: '#e11d48', accentDark: null })).template).toBe('night');
     expect((await readFormBrand({ scope: ada.scope })).answer?.template).toBe('night');

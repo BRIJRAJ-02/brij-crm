@@ -208,6 +208,7 @@ export async function publishBrandTemplate(scope: EngineScope): Promise<Workspac
  * template changes (AC-6816). A workspace's own read, under its row level security.
  */
 export async function workspaceHandles(scope: EngineScope): Promise<readonly string[]> {
+  requireBrandEditor(scope);
   return inWorkspace(scope, async (tx) => {
     const people = await tx
       .select({ userId: members.userId })
@@ -225,11 +226,15 @@ export async function workspaceHandles(scope: EngineScope): Promise<readonly str
 /** Lets the waiting template go: every public page keeps the one it wears. */
 export async function discardBrandTemplate(scope: EngineScope): Promise<WorkspaceBrand> {
   requireBrandEditor(scope);
+  const by = memberOf(scope);
   const row = await inWorkspace(scope, async (tx) => {
+    const was = await brandRowOf(tx, scope.workspaceId);
+    if (was?.templateDraft === null || was === undefined) return was;
     await tx
       .update(workspaceBrands)
-      .set({ templateDraft: null })
+      .set({ templateDraft: null, updatedBy: by, updatedAt: sql`now()` })
       .where(eq(workspaceBrands.workspaceId, scope.workspaceId));
+    await auditBrand(tx, scope, { brandTemplateDraft: was.templateDraft }, { brandTemplateDraft: null });
     return brandRowOf(tx, scope.workspaceId);
   });
   return toBrand(row, true);

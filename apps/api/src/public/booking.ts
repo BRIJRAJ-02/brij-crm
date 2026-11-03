@@ -637,7 +637,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       // One view per page load (its first page, with no `q` at all: a cleared search sends an empty one), never a
       // machine's or the owner's own (AC-5124), counted after the answer is made and never holding it up. Its
       // facts (`ref`, `src`, spec 0061) ride on the same read.
-      if (c.req.query('q') === undefined && position === undefined && c.req.query('draft') !== '1')
+      if (c.req.query('q') === undefined && position === undefined && !found.isDraft)
         countView(c, found.owner.userId, found.owner.workspaceId);
       return ok(look === undefined ? page : { ...page, look });
     } catch (error) {

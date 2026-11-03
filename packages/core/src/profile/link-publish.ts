@@ -46,7 +46,7 @@ function publicationOf(row: StateRow): LinkPagePublication {
 function refusalOf(error: unknown): never {
   const pg = postgresError(error);
   if (pg?.code === 'P0002' || pg?.code === '42501') throw refuse('NOT_FOUND', NO_PAGE);
-  if (pg?.code === '23505' || pg?.code === '23514' || pg?.code === '22023') {
+  if (['23505', '23514', '22023', '22P02', '42704'].includes(pg?.code ?? '')) {
     throw refuse('CONFIG_INVALID', 'That version can’t be brought back as it is. Change the page by hand instead.');
   }
   throw error;

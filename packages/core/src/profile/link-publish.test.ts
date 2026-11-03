@@ -163,6 +163,28 @@ describe('a link page’s draft', () => {
   });
 });
 
+describe('a draft’s Preview', () => {
+  it('shows the draft to its signed in owner alone; anyone else asking gets the published page', async () => {
+    const ada = await person('Ada Lovelace');
+    const bea = await person('Bea Rao');
+    await saveProfileItem(ada.scope, { id: newId(), block: link('Shop') });
+    await publishLinkPage(ada.scope);
+    await saveProfileItem(ada.scope, { id: newId(), block: link('Draft only') });
+    const read = async (viewer?: string) => {
+      const found = await enterLinkPage({ db }, ada.handle, {
+        max: 21,
+        draft: true,
+        ...(viewer === undefined ? {} : { viewer }),
+      });
+      const page = await readLinkPage(found);
+      return { isDraft: found.isDraft, titles: page.items.map((item) => ('title' in item ? item.title : item.kind)) };
+    };
+    expect(await read()).toEqual({ isDraft: false, titles: ['Shop'] });
+    expect(await read(bea.userId)).toEqual({ isDraft: false, titles: ['Shop'] });
+    expect(await read(ada.userId)).toEqual({ isDraft: true, titles: ['Shop', 'Draft only'] });
+  });
+});
+
 describe('the link page definers', () => {
   it('refuse another workspace, a non member and a block of someone else’s', async () => {
     const ada = await person('Ada Lovelace');

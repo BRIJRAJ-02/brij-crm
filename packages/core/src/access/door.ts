@@ -1425,6 +1425,8 @@ export async function enterLinkPage(
   readonly pictures: ReadonlyMap<string, { readonly width: number; readonly height: number }>;
   /** Who the page belongs to, as its owner chose to show it (3 Nov 2026): a job title, the lockup, a foot line. */
   readonly identity: Pick<PublicProfile, 'role' | 'brand' | 'footLine'>;
+  /** This is the owner's own Preview of their draft (spec 0068): never a view, never the published page. */
+  readonly isDraft: boolean;
 }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
   const reached = await shownOwner(deps.db, handle, {
@@ -1481,7 +1483,7 @@ export async function enterLinkPage(
   const identity = await deps.db.withWorkspace(owner.workspaceId, (tx) =>
     publicIdentityOf(tx, owner, isDraft ? 'draft' : 'published'),
   );
-  return { owner, rows: found.rows, pages, forms, skipped, pictures, identity };
+  return { owner, rows: found.rows, pages, forms, skipped, pictures, identity, isDraft };
 }
 
 /**
