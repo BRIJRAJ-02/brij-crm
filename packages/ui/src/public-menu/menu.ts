@@ -10,6 +10,7 @@ export { MenuList, type MenuListProps } from '../modules/MenuList/MenuList.tsx';
 export {
   ItemSheet,
   PicksSheet,
+  picksBill,
   picksTotal,
   type GuestPick,
   type MenuPhotoHref,

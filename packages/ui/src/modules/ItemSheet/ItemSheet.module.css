@@ -1,14 +1,55 @@
-/* A dish's sheet and Your picks (spec 0065, H1), inside a Modal sheet: the photo first, a big title, the price, its
-   words and allergens, then each size or option as a stacked card with its control at the end behind a dashed line,
-   and the action at the foot. Your picks: one card per pick with a stepper, then the total. */
+/* A dish's sheet and Your picks (spec 0065, H1), after the checklabs guest app: the photo first at 4:3, the name in
+   the menu's display face with the price, the words, the sizes and option groups as cards, allergens in words, then a
+   foot that stays in view (a quantity pill and the full width Add carrying the live price). Your picks: one row per
+   line (thumb, words, price, stepper), Undo after a removal, the bill, and that nothing is sent. Colours are the
+   library's own names, which the guest menu points at its look, so the sheet wears the menu's warm card. */
 @layer components {
+  .sheet {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    color: var(--text);
+  }
+
+  .sheetPhoto {
+    inline-size: 100%;
+    block-size: auto;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-xl);
+    object-fit: cover;
+    background: var(--surface-sunken);
+  }
+
+  .sheetHead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .sheetName {
+    margin: 0;
+    font: var(--text-heading);
+    font-family: var(--menu-display-face, var(--menu-face, var(--font-sans)));
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .sheetMeta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-8);
+    margin: 0;
+  }
+
   .price {
+    margin: 0;
     font: var(--text-body-strong);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
   .quiet {
+    margin: 0;
     color: var(--text-secondary);
     font: var(--text-label);
   }
@@ -18,6 +59,145 @@
     border-radius: var(--radius-full);
     background: var(--surface-sunken);
     font: var(--text-label-strong);
+  }
+
+  .sheetAbout {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+  }
+
+  .dietList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dietMark {
+    padding: var(--space-2) var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--surface-sunken);
+    color: var(--text);
+    font: var(--text-label-strong);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .groupName {
+    margin: 0;
+    padding: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .allergens {
+    margin: 0;
+    padding: var(--space-12);
+    border-radius: var(--radius-lg);
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+    font: var(--text-label);
+  }
+
+  /* The foot: stays in view at the bottom of the sheet, over the words, on the sheet's own card; the reason Add waits
+     sits over it. It spans the body's insets so its hairline runs edge to edge. */
+  .sheetActions {
+    position: sticky;
+    inset-block-end: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin-inline: calc(var(--overlay-inset) * -1);
+    margin-block-end: calc(var(--overlay-inset) * -1);
+    padding: var(--space-12) var(--overlay-inset) var(--overlay-inset);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+  }
+
+  .reason {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    text-align: center;
+  }
+
+  .actionRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  /* Add takes the rest of the row beside the quantity pill. */
+  .addSlot {
+    display: flex;
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .stepper {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-full);
+  }
+
+  .stepValue {
+    min-inline-size: var(--space-20);
+    font: var(--text-body-strong);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Your picks. */
+  .pickGroup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .picks {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pick {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding-block: var(--space-12);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .pickThumb {
+    flex: none;
+    inline-size: var(--size-toolbar);
+    block-size: var(--size-toolbar);
+    border-radius: var(--radius-lg);
+    object-fit: cover;
+    background: var(--surface-sunken);
   }
 
   .itemText {
@@ -37,139 +217,72 @@
     font: var(--text-label);
   }
 
-  /* An item's sheet: the photo first, a big title, the price, its words, then each choice as a stacked card. */
-  .sheet {
+  .undo {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-12);
-    color: var(--text);
-  }
-
-  .sheetPhoto {
-    inline-size: 100%;
-    block-size: auto;
-    aspect-ratio: 4 / 3;
-    border-radius: var(--radius-xl);
-    object-fit: cover;
-    background: var(--surface-sunken);
-  }
-
-  .sheetName {
-    margin: 0;
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
-  }
-
-  .sheetMeta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
+    justify-content: space-between;
     gap: var(--space-8);
     margin: 0;
+    padding: var(--space-4) var(--space-4) var(--space-4) var(--space-12);
+    border-radius: var(--radius-lg);
+    background: var(--surface-sunken);
+    font: var(--text-body);
+    animation: undo-in var(--duration-popover) var(--ease-out);
   }
 
-  .sheetAbout {
+  .bill {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
     margin: 0;
+  }
+
+  .billLine {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-8);
     font: var(--text-body);
   }
 
-  .allergens {
-    margin: 0;
+  .billLine[data-quiet] {
     color: var(--text-secondary);
-    font: var(--text-label);
   }
 
-  .dietList {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-6);
+  .billLine[data-total] {
+    padding-block-start: var(--space-6);
+    font: var(--text-heading);
+  }
+
+  .billLine[data-total] .price {
+    font: inherit;
+  }
+
+  .note {
     margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .dietMark {
-    padding: var(--space-2) var(--space-8);
-    border-radius: var(--radius-full);
-    background: var(--tag-green-bg);
-    color: var(--tag-green-text);
-    font: var(--text-label-strong);
-  }
-
-  .group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  .groupName {
-    display: flex;
-    justify-content: space-between;
-    inline-size: 100%;
-    margin: 0;
-    padding-block: var(--space-8) var(--space-4);
-    font: var(--text-body-strong);
-  }
-
-  /* One choice: a card with its words, and the control at the end behind a dotted line. */
-
-  .sheetActions {
-    position: sticky;
-    inset-block-end: 0;
-    display: flex;
-    gap: var(--space-8);
-    padding-block: var(--space-12) 0;
-    background: var(--surface-raised);
-  }
-
-  .stepper {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    border-radius: var(--radius-full);
-    background: var(--surface-sunken);
-  }
-
-  .stepValue {
-    min-inline-size: var(--space-16);
-    font: var(--text-body-strong);
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .picks {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .pick {
-    display: flex;
-    align-items: center;
-    gap: var(--space-12);
     padding: var(--space-12);
     border-radius: var(--radius-lg);
     background: var(--surface-sunken);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    text-align: center;
   }
 
-  .pickEnd {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: var(--space-6);
+  @keyframes undo-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+    }
   }
 
-  .total {
-    display: flex;
-    justify-content: space-between;
-    margin: 0;
-    padding-block-start: var(--space-8);
-    font: var(--text-heading);
+  @media (prefers-reduced-motion: reduce) {
+    .undo {
+      animation-name: undo-fade;
+    }
+  }
+
+  @keyframes undo-fade {
+    from {
+      opacity: 0;
+    }
   }
 }

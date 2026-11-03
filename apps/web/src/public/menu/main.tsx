@@ -98,6 +98,7 @@ function MenuPage() {
         picks.write(next);
       }}
       foot={<BookingFoot page="menu" claimHref={claimPageHref('menu')} />}
+      hasEntrance
     />
   );
 }

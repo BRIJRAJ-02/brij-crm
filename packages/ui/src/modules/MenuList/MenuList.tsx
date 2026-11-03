@@ -1,8 +1,10 @@
 // The guest menu (spec 0065, H1, AC-6528 to AC-6533): a place's published menus as a guest reads them on a phone. The
-// Warm look (after the checklabs guest app): one column a thumb reaches, the business on top with open now, a glass
-// bar that sticks with the menus and the section chips, search and dietary filters, items as rows or a photo grid,
-// a bottom sheet per item with its sizes, options, allergens in words and calories, and Your picks kept only in the
-// guest's browser. Everything comes in through props: the page's entry reads the menu and keeps the picks.
+// layout and flow follow the checklabs guest app (owner, 4 Nov 2026), rebuilt from library parts: a glass brand bar
+// stuck to the top with the logo (or the name's initial) and the section pills that follow the scroll; the header
+// (cover photo, the place as an eyebrow, the business, its line, open now); the menus, search and dietary filters;
+// each section's dishes as rows (words, then the photo with a + at its corner) or a two column photo grid; a dish's
+// sheet (a bottom sheet on a phone, a centred card on a wider screen); and Your picks behind a bar that rises once
+// there is a pick. Everything comes in through props: the page's entry reads the menu and keeps the picks.
 import {
   DIET_FILTERS,
   EU_ALLERGENS,
@@ -14,12 +16,23 @@ import {
 } from '@crm/contracts/menu';
 import type { PublicMenu, SnapshotItem, SnapshotSection, SnapshotSubsection } from '@crm/contracts';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { UNSAFE_PortalProvider } from 'react-aria';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
+import { Reveal } from '../../atoms/Reveal/Reveal.tsx';
 import { ChoiceChips } from '../../molecules/ChoiceChips/ChoiceChips.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
-import { Tabs } from '../../molecules/Tabs/Tabs.tsx';
-import { ItemSheet, PicksSheet, picksTotal, type GuestPick, type MenuPhotoHref } from '../ItemSheet/ItemSheet.tsx';
+import { SectionTabs } from '../../molecules/SectionTabs/SectionTabs.tsx';
+import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
+import {
+  ItemSheet,
+  PicksSheet,
+  pickKey,
+  picksBill,
+  type GuestPick,
+  type MenuPhotoHref,
+} from '../ItemSheet/ItemSheet.tsx';
 import { useNow } from '../../provider/context.ts';
 import styles from './MenuList.module.css';
 import { strings } from './strings.ts';
@@ -29,13 +42,13 @@ export type { GuestPick, MenuPhotoHref } from '../ItemSheet/ItemSheet.tsx';
 export interface MenuListProps {
   /** The published menu, as `GET /api/public/menu/:key` answers it. */
   readonly menu: PublicMenu;
-  /** A wide photo over the venue's name (the place's or the business's cover), when there is one. */
+  /** A wide photo at the head of the menu (the business's cover), when there is one. */
   readonly coverHref?: string;
-  /** The business's logo, when it has one. */
+  /** The business's logo, when it has one; without it the bar shows the name's first letter. */
   readonly logoHref?: string;
   /** Where each photo is served; without it no photo draws. */
   readonly photoHref?: MenuPhotoHref;
-  /** The table a QR code opened the menu at ("4"), shown in the header (H2). */
+  /** The table a QR code opened the menu at ("4"), shown in the bar (H2). */
   readonly table?: string;
   /** The picks kept in the guest's browser (AC-6530); without `onPicksChange` the menu has no picks. */
   readonly picks?: readonly GuestPick[];
@@ -44,6 +57,13 @@ export interface MenuListProps {
   readonly foot?: ReactNode;
   /** Opens this item's sheet when it mounts (a story, a link). */
   readonly openItemId?: string;
+  /** Opens Your picks when it mounts (a story). */
+  readonly isPicksOpen?: boolean;
+  /**
+   * The live page's once only entrance: the header and the first dishes rise in, a stagger apart, as the page first
+   * draws (spec 0068, AC-6803). Off in a preview, where the menu redraws as the owner types.
+   */
+  readonly hasEntrance?: boolean;
 }
 
 const lower = (text: string) =>
@@ -71,6 +91,13 @@ const sectionItems = (section: SnapshotSection): readonly string[] => [
   ...section.sections.flatMap((sub) => sub.itemIds),
 ];
 
+/** Whether a dish adds straight from its row: priced, one size at most, and no choices to make. */
+const isQuickAdd = (item: SnapshotItem) =>
+  (item.priceMinor !== undefined || item.sizes.length === 1) && item.sizes.length < 2 && item.groupIds.length === 0;
+
+/** A place in the entrance's run for the n-th thing drawn (1 to 6): the rest arrive with the sixth. */
+const placeOf = (index: number) => Math.min(6, Math.max(1, index)) as 1 | 2 | 3 | 4 | 5 | 6;
+
 /** The guest menu's page (spec 0065, H1): the bar, the venue, the menus and their dishes, and Your picks. */
 export function MenuList({
   menu,
@@ -82,6 +109,8 @@ export function MenuList({
   onPicksChange,
   foot,
   openItemId,
+  isPicksOpen = false,
+  hasEntrance = false,
 }: MenuListProps) {
   const now = new Date(useNow());
   const { place, business } = menu;
@@ -126,9 +155,13 @@ export function MenuList({
     (query.trim() === '' || lower(`${item.name} ${item.description ?? ''}`).includes(lower(query.trim())));
   const isFiltering = query.trim() !== '' || diets.size > 0;
 
-  const [open, setOpen] = useState<string | undefined>(openItemId);
-  const [picksOpen, setPicksOpen] = useState(false);
-  const opened = open === undefined ? undefined : menu.menu.items[open];
+  // The dish whose sheet is open, kept while the sheet leaves so its words stay as it goes.
+  const [opened, setOpened] = useState<{ readonly id: string; readonly isOpen: boolean } | undefined>(
+    openItemId === undefined ? undefined : { id: openItemId, isOpen: true },
+  );
+  const [picksOpen, setPicksOpen] = useState(isPicksOpen);
+  const openedItem = opened === undefined ? undefined : menu.menu.items[opened.id];
+  const open = (itemId: string) => setOpened({ id: itemId, isOpen: true });
 
   const status = openAt(place.hours, now, place.timeZone);
   const next = status.open ? undefined : nextOpening(place.hours, now, place.timeZone);
@@ -152,233 +185,321 @@ export function MenuList({
       sectionItems(section).some((id) => menu.menu.items[id]?.allergens.some((each) => each.code === code) === true),
     ),
   );
-  const pickCount = (picks ?? []).reduce((sum, pick) => sum + pick.quantity, 0);
+  const chosen = picks ?? [];
+  const pickCount = chosen.reduce((sum, pick) => sum + pick.quantity, 0);
+  const bill = picksBill(menu, chosen);
+
+  /** Adds a pick, onto the line with the same choices when there is one. */
+  const addPick = (pick: Omit<GuestPick, 'key'>) => {
+    if (onPicksChange === undefined) return;
+    const key = pickKey(pick);
+    const same = chosen.find((each) => each.key === key);
+    onPicksChange(
+      same === undefined
+        ? [...chosen, { ...pick, key }]
+        : chosen.map((each) => (each.key === key ? { ...each, quantity: each.quantity + pick.quantity } : each)),
+    );
+  };
+  /** Takes one of a plain pick (no choices) away, the line with it at its last. */
+  const removeOne = (itemId: string) => {
+    if (onPicksChange === undefined) return;
+    const key = pickKey({ itemId, optionIds: [] });
+    onPicksChange(
+      chosen.flatMap((each) =>
+        each.key !== key ? [each] : each.quantity <= 1 ? [] : [{ ...each, quantity: each.quantity - 1 }],
+      ),
+    );
+  };
+  const plainCount = (itemId: string) =>
+    chosen.find((each) => each.key === pickKey({ itemId, optionIds: [] }))?.quantity ?? 0;
+
+  // The page's overlays (the dish's sheet, Your picks) open inside this root, so they wear the menu's look too.
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const initial = Array.from(business.name.trim())[0]?.toLocaleUpperCase(locale) ?? '';
+  const entering = (node: ReactNode, place: number, display: 'block' | 'inline' = 'block') =>
+    hasEntrance ? (
+      <Reveal order={placeOf(place)} display={display}>
+        {node}
+      </Reveal>
+    ) : (
+      node
+    );
+  let drawn = 2;
 
   return (
     <div className={styles.root} data-menu-list="">
-      {/* The dark bar: the venue and the section tabs, stuck to the top; the active tab in the accent, underlined. */}
-      <div className={styles.bar} data-sticky="">
-        <div className={styles.barTop} data-name-shown={isNameShown ? '' : undefined} aria-hidden={!isNameShown}>
-          {logoHref === undefined ? null : (
-            <img className={styles.logo} src={logoHref} alt={strings.decorative} width={32} height={32} />
-          )}
-          <p className={styles.barName}>{business.name}</p>
-          {table === undefined ? null : <span className={styles.table}>{strings.table(table)}</span>}
-        </div>
-        {shownSections.length < 2 ? null : (
-          <nav aria-label={strings.sections} className={styles.tabs}>
-            {shownSections.map((section) => (
-              <a
-                key={section.id}
-                href={`#s-${section.id}`}
-                className={styles.tab}
-                aria-current={active === section.id ? 'true' : undefined}
-                data-active-chip={active === section.id ? '' : undefined}
-              >
-                {section.name}
-              </a>
-            ))}
-          </nav>
-        )}
-      </div>
-
-      <header className={styles.head}>
-        {coverHref === undefined ? null : (
-          <img className={styles.cover} src={coverHref} alt={strings.decorative} width={1200} height={400} />
-        )}
-        <h1 className={styles.name} id={headingId}>
-          {business.name}
-        </h1>
-        {business.description === undefined ? null : <p className={styles.about}>{business.description}</p>}
-        <p className={styles.facts}>
-          <span className={styles.open} data-open={status.open ? 'yes' : 'no'}>
-            <span className={styles.dot} aria-hidden="true" />
-            {status.open
-              ? status.closesAt === undefined
-                ? strings.openNow
-                : strings.openUntil(time.format(status.closesAt))
-              : next === undefined
-                ? strings.closed
-                : strings.opensAt(when(next.at))}
-          </span>
-          {address === '' ? null : (
-            <span className={styles.line}>
-              <Icon name="map-pin" size="sm" />
-              {address}
-            </span>
-          )}
-          {place.phone === undefined ? null : (
-            <a
-              className={styles.line}
-              href={`tel:${place.phone.replace(/[^0-9+]/g, '')}`}
-              aria-label={strings.call(place.phone)}
-            >
-              <Icon name="phone" size="sm" />
-              {place.phone}
-            </a>
-          )}
-        </p>
-        {menus.length > 1 ? (
-          <Tabs
-            label={strings.menus}
-            tabs={menus.map(({ menu: each }) => ({ id: each.id, label: each.name }))}
-            selectedKey={current?.menu.id ?? ''}
-            onSelectionChange={setMenuId}
-          />
-        ) : null}
-        <div className={styles.search}>
-          <Icon name="search" size="sm" />
-          <input
-            className={styles.searchInput}
-            type="search"
-            aria-label={strings.search}
-            placeholder={strings.searchPlaceholder}
-            value={query}
-            maxLength={60}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {query === '' ? null : (
-            <button
-              type="button"
-              className={styles.clear}
-              aria-label={strings.clearSearch}
-              onClick={() => setQuery('')}
-            >
-              <Icon name="x" size="sm" />
-            </button>
-          )}
-        </div>
-        {offered.length === 0 ? null : (
-          <ChoiceChips
-            label={strings.filters}
-            isLabelHidden
-            choices={offered.map((mark) => ({ id: mark, label: strings.diet[mark] }))}
-            selected={[...diets]}
-            onChange={(next) => setDiets(new Set(offered.filter((mark) => next.includes(mark))))}
-          />
-        )}
-      </header>
-
-      <main className={styles.body} aria-labelledby={headingId}>
-        {current !== undefined && !current.serving.now ? (
-          <p className={styles.notice}>
-            <Icon name="clock" size="sm" />
-            {current.serving.next === undefined ? strings.notServing : strings.servingFrom(when(current.serving.next))}
-          </p>
-        ) : null}
-        {shownSections.length === 0 ? (
-          <div className={styles.empty}>
-            <p>{isFiltering ? strings.noMatches : strings.noMenu}</p>
-            {isFiltering ? (
-              <Button
-                onPress={() => {
-                  setQuery('');
-                  setDiets(new Set());
-                }}
-              >
-                {strings.showAll}
-              </Button>
-            ) : null}
-          </div>
-        ) : (
-          shownSections.map((section) => (
-            <section
-              key={section.id}
-              id={`s-${section.id}`}
-              className={styles.section}
-              aria-labelledby={`h-${section.id}`}
-            >
-              <Section
-                section={section}
-                level={2}
-                menu={menu}
-                now={now}
-                soldOut={soldOut}
-                matches={matches}
-                photoHref={photoHref}
-                onOpen={setOpen}
-                when={when}
-              />
-              {section.sections.map((sub) =>
-                sub.itemIds.some((id) => {
-                  const item = menu.menu.items[id];
-                  return item !== undefined && matches(item);
-                }) ? (
-                  <div key={sub.id} className={styles.sub}>
-                    <Section
-                      section={sub}
-                      level={3}
-                      menu={menu}
-                      now={now}
-                      soldOut={soldOut}
-                      matches={matches}
-                      photoHref={photoHref}
-                      onOpen={setOpen}
-                      when={when}
-                    />
-                  </div>
-                ) : null,
+      <div className={styles.look} ref={setHost}>
+        <UNSAFE_PortalProvider getContainer={() => host}>
+          {/* The glass bar: the brand, the name once the heading has gone, the table, and the section pills. */}
+          <div className={styles.bar} data-sticky="">
+            <div className={styles.barTop}>
+              {logoHref === undefined ? (
+                <span className={styles.mark} aria-hidden="true">
+                  {initial}
+                </span>
+              ) : (
+                <img className={styles.logo} src={logoHref} alt={strings.decorative} width={64} height={64} />
               )}
-            </section>
-          ))
-        )}
-        {current?.menu.note === undefined ? null : <p className={styles.note}>{current.menu.note}</p>}
-        {menuAllergens.length === 0 ? null : (
-          <p className={styles.note}>{strings.allergenFooter(menuAllergens.map((code) => strings.allergen[code]))}</p>
-        )}
-      </main>
+              <p className={styles.barName} data-shown={isNameShown ? '' : undefined} aria-hidden={!isNameShown}>
+                {business.name}
+              </p>
+              {table === undefined ? null : <span className={styles.table}>{strings.table(table)}</span>}
+            </div>
+            {shownSections.length < 2 ? null : (
+              <div className={styles.barTabs}>
+                <SectionTabs
+                  label={strings.sections}
+                  sections={shownSections.map((section) => ({
+                    id: section.id,
+                    label: section.name,
+                    href: `#s-${section.id}`,
+                  }))}
+                  current={active}
+                />
+              </div>
+            )}
+          </div>
 
-      {foot === undefined ? null : <footer className={styles.foot}>{foot}</footer>}
+          <header className={styles.head}>
+            {coverHref === undefined ? null : (
+              <img className={styles.cover} src={coverHref} alt={strings.decorative} width={1200} height={400} />
+            )}
+            <div className={styles.titles}>
+              {place.name === business.name ? null : (
+                <p className={styles.eyebrow}>{entering(place.name, 1, 'inline')}</p>
+              )}
+              <h1 className={styles.name} id={headingId}>
+                {entering(business.name, 1, 'inline')}
+              </h1>
+              {business.description === undefined ? null : (
+                <p className={styles.about}>{entering(business.description, 2, 'inline')}</p>
+              )}
+            </div>
+            <p className={styles.facts}>
+              <span className={styles.openNow} data-open={status.open ? 'yes' : 'no'}>
+                <span className={styles.dot} aria-hidden="true" />
+                {status.open
+                  ? status.closesAt === undefined
+                    ? strings.openNow
+                    : strings.openUntil(time.format(status.closesAt))
+                  : next === undefined
+                    ? strings.closed
+                    : strings.opensAt(when(next.at))}
+              </span>
+              {address === '' ? null : (
+                <span className={styles.line}>
+                  <Icon name="map-pin" size="sm" />
+                  {address}
+                </span>
+              )}
+              {place.phone === undefined ? null : (
+                <a
+                  className={styles.line}
+                  href={`tel:${place.phone.replace(/[^0-9+]/g, '')}`}
+                  aria-label={strings.call(place.phone)}
+                >
+                  <Icon name="phone" size="sm" />
+                  {place.phone}
+                </a>
+              )}
+            </p>
+            {menus.length > 1 ? (
+              <SegmentedControl
+                label={strings.menus}
+                segments={menus.map(({ menu: each }) => ({ value: each.id, label: each.name }))}
+                value={current?.menu.id ?? ''}
+                onChange={setMenuId}
+                isFitted
+              />
+            ) : null}
+            <div className={styles.search}>
+              <Icon name="search" size="sm" />
+              <input
+                className={styles.searchInput}
+                type="search"
+                aria-label={strings.search}
+                placeholder={strings.searchPlaceholder}
+                value={query}
+                maxLength={60}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              {query === '' ? null : (
+                <button
+                  type="button"
+                  className={styles.clear}
+                  aria-label={strings.clearSearch}
+                  onClick={() => setQuery('')}
+                >
+                  <Icon name="x" size="sm" />
+                </button>
+              )}
+            </div>
+            {offered.length === 0 ? null : (
+              <ChoiceChips
+                label={strings.filters}
+                isLabelHidden
+                choices={offered.map((mark) => ({ id: mark, label: strings.diet[mark] }))}
+                selected={[...diets]}
+                onChange={(picked) => setDiets(new Set(offered.filter((mark) => picked.includes(mark))))}
+              />
+            )}
+          </header>
 
-      {onPicksChange === undefined || pickCount === 0 ? null : (
-        <button type="button" className={styles.picksBar} onClick={() => setPicksOpen(true)}>
-          <span className={styles.picksCount}>{pickCount}</span>
-          <span className={styles.picksLabel}>
-            {strings.picksPill(formatPrice(picksTotal(menu, picks ?? []), currency, locale))}
-          </span>
-        </button>
-      )}
+          <main className={styles.body} aria-labelledby={headingId}>
+            {current !== undefined && !current.serving.now ? (
+              <p className={styles.notice}>
+                <Icon name="clock" size="sm" />
+                {current.serving.next === undefined
+                  ? strings.notServing
+                  : strings.servingFrom(when(current.serving.next))}
+              </p>
+            ) : null}
+            {shownSections.length === 0 ? (
+              <div className={styles.empty}>
+                <p>{isFiltering ? strings.noMatches : strings.noMenu}</p>
+                {isFiltering ? (
+                  <Button
+                    onPress={() => {
+                      setQuery('');
+                      setDiets(new Set());
+                    }}
+                  >
+                    {strings.showAll}
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              shownSections.map((section) => {
+                const blocks = [
+                  section as SnapshotSubsection,
+                  ...section.sections.filter((sub) =>
+                    sub.itemIds.some((id) => {
+                      const item = menu.menu.items[id];
+                      return item !== undefined && matches(item);
+                    }),
+                  ),
+                ];
+                return (
+                  <section
+                    key={section.id}
+                    id={`s-${section.id}`}
+                    className={styles.section}
+                    aria-labelledby={`h-${section.id}`}
+                  >
+                    {blocks.map((block, index) => (
+                      <div key={block.id} className={index === 0 ? styles.block : styles.sub}>
+                        <SectionHead section={block} level={index === 0 ? 2 : 3} menu={menu} now={now} when={when} />
+                        <ul className={styles.items} data-layout={block.layout}>
+                          {block.itemIds
+                            .map((id) => menu.menu.items[id])
+                            .filter((item): item is SnapshotItem => item !== undefined && matches(item))
+                            .map((item) => {
+                              drawn += 1;
+                              const isOut = soldOut.has(item.id);
+                              const canAdd =
+                                onPicksChange !== undefined &&
+                                !isOut &&
+                                (item.priceMinor !== undefined || item.sizes.length > 0);
+                              return (
+                                <li key={item.id} className={styles.cell}>
+                                  {entering(
+                                    <ItemCard
+                                      item={item}
+                                      layout={block.layout}
+                                      price={priceLine(item, currency, locale)}
+                                      isSoldOut={isOut}
+                                      photoHref={photoHref}
+                                      onOpen={() => open(item.id)}
+                                      add={
+                                        canAdd ? (
+                                          <AddControl
+                                            item={item}
+                                            count={isQuickAdd(item) ? plainCount(item.id) : 0}
+                                            onAdd={() =>
+                                              isQuickAdd(item)
+                                                ? addPick({
+                                                    itemId: item.id,
+                                                    ...(item.sizes.length === 1 ? { size: 0 } : {}),
+                                                    optionIds: [],
+                                                    quantity: 1,
+                                                  })
+                                                : open(item.id)
+                                            }
+                                            onRemove={() => removeOne(item.id)}
+                                          />
+                                        ) : undefined
+                                      }
+                                    />,
+                                    drawn,
+                                  )}
+                                </li>
+                              );
+                            })}
+                        </ul>
+                      </div>
+                    ))}
+                  </section>
+                );
+              })
+            )}
+            {current?.menu.note === undefined ? null : <p className={styles.note}>{current.menu.note}</p>}
+            {menuAllergens.length === 0 ? null : (
+              <p className={styles.note}>
+                {strings.allergenFooter(menuAllergens.map((code) => strings.allergen[code]))}
+              </p>
+            )}
+          </main>
 
-      <Modal
-        variant="sheet"
-        title={opened?.name ?? strings.close}
-        isOpen={opened !== undefined}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setOpen(undefined);
-        }}
-      >
-        {opened === undefined ? null : (
-          <ItemSheet
-            item={opened}
-            menu={menu}
-            isSoldOut={soldOut.has(opened.id)}
-            photoHref={photoHref}
-            {...(onPicksChange === undefined
-              ? {}
-              : {
-                  onPick: (pick: Omit<GuestPick, 'key'>) => {
-                    const key = `${pick.itemId}|${String(pick.size ?? '')}|${[...pick.optionIds].sort().join(',')}`;
-                    const was = picks ?? [];
-                    const same = was.find((each) => each.key === key);
-                    onPicksChange(
-                      same === undefined
-                        ? [...was, { ...pick, key }]
-                        : was.map((each) =>
-                            each.key === key ? { ...each, quantity: each.quantity + pick.quantity } : each,
-                          ),
-                    );
-                    setOpen(undefined);
-                  },
-                })}
-          />
-        )}
-      </Modal>
+          {foot === undefined ? null : <footer className={styles.foot}>{foot}</footer>}
 
-      {onPicksChange === undefined ? null : (
-        <Modal variant="sheet" title={strings.yourPicks} isOpen={picksOpen} onOpenChange={setPicksOpen}>
-          <PicksSheet menu={menu} picks={picks ?? []} onPicksChange={onPicksChange} />
-        </Modal>
-      )}
+          {onPicksChange === undefined || pickCount === 0 ? null : (
+            <div className={styles.picksDock}>
+              <button type="button" className={styles.picksBar} onClick={() => setPicksOpen(true)}>
+                <span className={styles.picksCount}>
+                  <NumberPop value={String(pickCount)} />
+                </span>
+                <span className={styles.picksLabel}>{strings.viewPicks}</span>
+                <span className={styles.picksTotal}>
+                  <NumberPop value={formatPrice(bill.total, currency, locale)} />
+                </span>
+              </button>
+            </div>
+          )}
+
+          <Modal
+            variant="sheet-card"
+            title={openedItem?.name ?? strings.close}
+            isOpen={opened?.isOpen === true && openedItem !== undefined}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) setOpened((was) => (was === undefined ? was : { ...was, isOpen: false }));
+            }}
+          >
+            {openedItem === undefined ? null : (
+              <ItemSheet
+                key={openedItem.id}
+                item={openedItem}
+                menu={menu}
+                isSoldOut={soldOut.has(openedItem.id)}
+                photoHref={photoHref}
+                {...(onPicksChange === undefined
+                  ? {}
+                  : {
+                      onPick: (pick: Omit<GuestPick, 'key'>) => {
+                        addPick(pick);
+                        setOpened((was) => (was === undefined ? was : { ...was, isOpen: false }));
+                      },
+                    })}
+              />
+            )}
+          </Modal>
+
+          {onPicksChange === undefined ? null : (
+            <Modal variant="sheet-side" title={strings.yourPicks} isOpen={picksOpen} onOpenChange={setPicksOpen}>
+              <PicksSheet menu={menu} picks={chosen} onPicksChange={onPicksChange} photoHref={photoHref} />
+            </Modal>
+          )}
+        </UNSAFE_PortalProvider>
+      </div>
     </div>
   );
 }
@@ -398,7 +519,7 @@ function useScrolledPast(id: string): boolean {
   return isPast;
 }
 
-/** Which section is under the sticky bar now: the last whose top passed the bar (the chips follow the scroll). */
+/** Which section is under the sticky bar now: the first one in the band under the bar (the pills follow it). */
 function useScrollSpy(ids: readonly string[]): string | undefined {
   const [active, setActive] = useState<string | undefined>(ids[0]);
   const key = ids.join(',');
@@ -418,68 +539,73 @@ function useScrollSpy(ids: readonly string[]): string | undefined {
       if (element !== null) observer.observe(element);
     }
     return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for `ids`, a new array every render
   }, [key]);
-  // The active chip scrolls into the chip row's view, never the page's.
-  useEffect(() => {
-    const chip = document.querySelector<HTMLElement>('[data-active-chip]');
-    if (chip === null) return;
-    const row = chip.parentElement;
-    if (row === null) return;
-    row.scrollTo({ left: chip.offsetLeft - row.clientWidth / 2 + chip.clientWidth / 2, behavior: 'smooth' });
-  }, [active]);
-  return active;
+  return ids.includes(active ?? '') ? active : ids[0];
 }
 
-interface SectionProps {
+/** A section's or sub section's heading, its line and when it serves. */
+function SectionHead({
+  section,
+  level,
+  menu,
+  now,
+  when,
+}: {
   readonly section: SnapshotSubsection;
   readonly level: 2 | 3;
   readonly menu: PublicMenu;
   readonly now: Date;
-  readonly soldOut: ReadonlySet<string>;
-  readonly matches: (item: SnapshotItem) => boolean;
-  readonly photoHref: MenuPhotoHref | undefined;
-  readonly onOpen: (itemId: string) => void;
   readonly when: (instant: Date) => string;
-}
-
-/** A section's heading and its items, as a list or a photo grid. */
-function Section({ section, level, menu, now, soldOut, matches, photoHref, onOpen, when }: SectionProps) {
+}) {
   const Heading = level === 2 ? 'h2' : 'h3';
   const serving = servingAt(section.serving, now, menu.place.timeZone);
-  const items = section.itemIds
-    .map((id) => menu.menu.items[id])
-    .filter((item): item is SnapshotItem => item !== undefined && matches(item));
   return (
-    <>
+    <div className={styles.sectionHead}>
       <Heading className={styles.heading} data-level={level} id={`h-${section.id}`}>
         {section.name}
       </Heading>
       {section.description === undefined ? null : <p className={styles.sectionAbout}>{section.description}</p>}
       {serving.now ? null : (
         <p className={styles.sectionNote}>
+          <Icon name="clock" size="sm" />
           {serving.next === undefined ? strings.notServing : strings.servingFrom(when(serving.next))}
         </p>
       )}
-      <ul className={styles.items} data-layout={section.layout}>
-        {items.map((item) => (
-          <li key={item.id}>
-            <ItemCard
-              item={item}
-              layout={section.layout}
-              price={priceLine(item, menu.menu.currency, menu.place.locale)}
-              isSoldOut={soldOut.has(item.id)}
-              photoHref={photoHref}
-              onOpen={() => onOpen(item.id)}
-            />
-          </li>
-        ))}
-      </ul>
-    </>
+    </div>
   );
 }
 
-/** One dish as a row or a grid card: the whole card opens its sheet. */
+/** A dish's + : adds one (a dish with no choices), or opens its sheet; once picked, a small stepper takes its place. */
+function AddControl({
+  item,
+  count,
+  onAdd,
+  onRemove,
+}: {
+  readonly item: SnapshotItem;
+  readonly count: number;
+  readonly onAdd: () => void;
+  readonly onRemove: () => void;
+}) {
+  if (count === 0)
+    return (
+      <span className={styles.add}>
+        <Button variant="secondary" icon="plus" isRound label={strings.addOne(item.name)} onPress={onAdd} />
+      </span>
+    );
+  return (
+    <span className={styles.add} role="group" aria-label={strings.quantityOf(item.name)}>
+      <Button variant="ghost" icon="minus" isRound label={strings.removeOne(item.name)} onPress={onRemove} />
+      <span className={styles.addCount}>
+        <NumberPop value={String(count)} />
+      </span>
+      <Button variant="ghost" icon="plus" isRound label={strings.addAnother(item.name)} onPress={onAdd} />
+    </span>
+  );
+}
+
+/** One dish as a row or a grid card: the card opens its sheet; the + beside it adds. */
 function ItemCard({
   item,
   layout,
@@ -487,6 +613,7 @@ function ItemCard({
   isSoldOut,
   photoHref,
   onOpen,
+  add,
 }: {
   readonly item: SnapshotItem;
   readonly layout: 'list' | 'grid';
@@ -494,41 +621,41 @@ function ItemCard({
   readonly isSoldOut: boolean;
   readonly photoHref: MenuPhotoHref | undefined;
   readonly onOpen: () => void;
+  readonly add: ReactNode;
 }) {
   const photo = item.photo === undefined || photoHref === undefined ? undefined : item.photo;
   const marks = item.diet.map((mark) => strings.diet[mark]);
   return (
-    <button
-      type="button"
+    <div
       className={styles.item}
       data-layout={layout}
       data-sold-out={isSoldOut ? '' : undefined}
       data-has-photo={photo === undefined ? undefined : ''}
-      onClick={onOpen}
     >
-      {photo === undefined || photoHref === undefined ? null : (
-        <img
-          className={styles.thumb}
-          src={photoHref(photo.id, 'small', photo.version)}
-          alt={strings.decorative}
-          loading="lazy"
-          decoding="async"
-          width={400}
-          height={layout === 'grid' ? 300 : 400}
-        />
-      )}
-      <span className={styles.itemText}>
-        <span className={styles.itemLine}>
+      <button type="button" className={styles.press} onClick={onOpen}>
+        {photo === undefined || photoHref === undefined ? null : (
+          <img
+            className={styles.thumb}
+            src={photoHref(photo.id, 'small', photo.version)}
+            alt={strings.decorative}
+            loading="lazy"
+            decoding="async"
+            width={400}
+            height={layout === 'grid' ? 300 : 400}
+          />
+        )}
+        <span className={styles.itemText}>
           <span className={styles.itemName}>
             {item.name}
             {item.featured ? <span className={styles.badge}>{strings.featured}</span> : null}
             {isSoldOut ? <span className={styles.soldOut}>{strings.soldOut}</span> : null}
           </span>
+          {item.description === undefined ? null : <span className={styles.itemAbout}>{item.description}</span>}
           {price === undefined ? null : <span className={styles.price}>{price}</span>}
+          {marks.length === 0 ? null : <span className={styles.marks}>{marks.join(' · ')}</span>}
         </span>
-        {item.description === undefined ? null : <span className={styles.itemAbout}>{item.description}</span>}
-        {marks.length === 0 ? null : <span className={styles.marks}>{marks.join(' · ')}</span>}
-      </span>
-    </button>
+      </button>
+      {add}
+    </div>
   );
 }

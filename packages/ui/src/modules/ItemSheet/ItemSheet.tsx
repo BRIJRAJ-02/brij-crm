@@ -1,13 +1,26 @@
-// A dish's sheet and Your picks (spec 0065, H1, AC-6529, AC-6530, AC-6533): what a guest sees when they tap a dish
-// on the guest menu (its photo, price, words, allergens in words, sizes and option groups as stacked cards, and Add to
-// your picks) and the list of their picks with steppers and the total. Both go inside a `Modal` `sheet`, which holds
-// focus and closes on Escape; data comes in through props, and picks are the caller's to keep.
-import { choicesAllowed, formatPrice, formatPriceDelta, MENU_LIMITS, pickPrice } from '@crm/contracts/menu';
-import type { OptionGroup, PublicMenu, SnapshotItem } from '@crm/contracts';
+// A dish's sheet and Your picks (spec 0065, H1, AC-6529, AC-6530, AC-6533), after the checklabs guest app's flow: what
+// a guest sees when they tap a dish (its photo, name, price, words, sizes and option groups as cards with their price,
+// allergens in words, calories, then a foot that stays in view with the quantity and "Add to your picks" carrying the
+// live price) and the list of their picks (each line with its choices, price and stepper, Undo after a removal, the
+// total with any tax inside it and service on top). Both are the body of a `Modal` (`sheet-card`, `sheet-side`), which
+// holds focus and closes on Escape; data comes in through props, and picks are the caller's to keep.
+import {
+  choicesAllowed,
+  formatPrice,
+  formatPriceDelta,
+  formatRate,
+  MENU_LIMITS,
+  pickPrice,
+  picksTotal as billOf,
+  type PicksTotal,
+} from '@crm/contracts/menu';
+import type { OptionGroup, PublicMenu, SnapshotItem, SnapshotMenu } from '@crm/contracts';
 import { useId, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
+import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
 import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
+import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import styles from './ItemSheet.module.css';
 import { strings } from './strings.ts';
 
@@ -23,15 +36,30 @@ export interface GuestPick {
   readonly quantity: number;
 }
 
-/** The rule a group's choices follow, in words. */
-const ruleWords = (group: OptionGroup) =>
-  group.rule === 'one'
-    ? strings.chooseOne
-    : group.rule === 'up_to'
-      ? strings.chooseUpTo(group.max ?? 1)
-      : strings.chooseAny;
+/** The rule a group's choices follow, in words, with "Required" when the guest must pick. */
+const ruleWords = (group: OptionGroup) => {
+  const rule =
+    group.rule === 'one'
+      ? strings.chooseOne
+      : group.rule === 'up_to'
+        ? strings.chooseUpTo(group.max ?? 1)
+        : strings.chooseAny;
+  return (group.min ?? 0) > 0 ? `${rule} · ${strings.required}` : rule;
+};
 
-/** An item's bottom sheet (AC-6529, AC-6533): a proper dialog holding focus, closed with Escape. */
+/** Why Add waits, in one line, for the first group whose choices aren't allowed yet; undefined when none waits. */
+function waitingFor(groups: readonly OptionGroup[], chosen: ReadonlyMap<string, readonly string[]>) {
+  const group = groups.find((each) => !choicesAllowed(each, (chosen.get(each.id) ?? []).length));
+  if (group === undefined) return undefined;
+  const least = Math.max(1, group.min ?? 0);
+  return least === 1 ? strings.chooseFrom(group.name) : strings.chooseAtLeast(least, group.name);
+}
+
+/** A key for a pick: the same dish with the same choices adds to one line. */
+export const pickKey = (pick: Omit<GuestPick, 'key' | 'quantity'>) =>
+  `${pick.itemId}|${String(pick.size ?? '')}|${[...pick.optionIds].sort().join(',')}`;
+
+/** An item's sheet (AC-6529, AC-6533): the body of a `Modal` `sheet-card`. */
 export function ItemSheet({
   item,
   menu,
@@ -47,14 +75,16 @@ export function ItemSheet({
 }) {
   const { currency } = menu.menu;
   const { locale } = menu.place;
+  const price = (minor: number) => formatPrice(minor, currency, locale);
   const [size, setSize] = useState<number | undefined>(item.sizes.length > 0 ? 0 : undefined);
   const groups = item.groupIds
     .map((id) => menu.menu.groups[id])
     .filter((group): group is OptionGroup => group !== undefined);
+  // A choose one group starts on its first option, as checklabs' does, unless the guest must decide.
   const [chosen, setChosen] = useState<ReadonlyMap<string, readonly string[]>>(
     new Map(
       groups
-        .filter((group) => group.rule === 'one')
+        .filter((group) => group.rule === 'one' && (group.min ?? 0) === 0)
         .map((group) => [group.id, group.options[0] === undefined ? [] : [group.options[0].id]]),
     ),
   );
@@ -69,20 +99,22 @@ export function ItemSheet({
     .map((each) => strings.allergen[each.code]);
   const may = item.allergens.filter((each) => each.level === 'may').map((each) => strings.allergen[each.code]);
   const hasPrice = item.priceMinor !== undefined || item.sizes.length > 0;
-  const name = useId();
+  const waiting = waitingFor(groups, chosen);
+  const reasonId = useId();
   const toggle = (group: OptionGroup, optionId: string) =>
     setChosen((was) => {
-      const nextMap = new Map(was);
+      const next = new Map(was);
       const list = was.get(group.id) ?? [];
-      if (group.rule === 'one') nextMap.set(group.id, [optionId]);
+      if (group.rule === 'one') next.set(group.id, [optionId]);
       else if (list.includes(optionId))
-        nextMap.set(
+        next.set(
           group.id,
           list.filter((id) => id !== optionId),
         );
-      else if (group.rule === 'any' || list.length < (group.max ?? 1)) nextMap.set(group.id, [...list, optionId]);
-      return nextMap;
+      else if (group.rule === 'any' || list.length < (group.max ?? 1)) next.set(group.id, [...list, optionId]);
+      return next;
     });
+  const canPick = onPick !== undefined && !isSoldOut && hasPrice;
   return (
     <div className={styles.sheet}>
       {item.photo === undefined || photoHref === undefined ? null : (
@@ -90,34 +122,30 @@ export function ItemSheet({
           className={styles.sheetPhoto}
           src={photoHref(item.photo.id, 'large', item.photo.version)}
           srcSet={`${photoHref(item.photo.id, 'small', item.photo.version)} 400w, ${photoHref(item.photo.id, 'large', item.photo.version)} 1200w`}
-          sizes="(max-width: 480px) 100vw, 480px"
+          sizes="(max-width: 480px) 100vw, 448px"
           alt={strings.decorative}
           width={1200}
           height={900}
         />
       )}
-      <h2 className={styles.sheetName} id={name}>
-        {item.name}
-      </h2>
-      <p className={styles.sheetMeta}>
-        {isSoldOut ? <span className={styles.soldOut}>{strings.soldOut}</span> : null}
-        {!isSoldOut && hasPrice ? <span className={styles.price}>{formatPrice(base, currency, locale)}</span> : null}
-        {item.priceNote === undefined || hasPrice ? null : <span className={styles.price}>{item.priceNote}</span>}
-        {item.kcal === undefined ? null : <span className={styles.quiet}>{strings.kcal(item.kcal)}</span>}
-      </p>
+      <div className={styles.sheetHead}>
+        <h2 className={styles.sheetName}>{item.name}</h2>
+        <p className={styles.sheetMeta}>
+          {isSoldOut ? <span className={styles.soldOut}>{strings.soldOut}</span> : null}
+          {!isSoldOut && hasPrice ? (
+            <span className={styles.price}>
+              {item.sizes.length > 1
+                ? strings.priceFrom(price(Math.min(...item.sizes.map((s) => s.priceMinor))))
+                : price(base)}
+            </span>
+          ) : null}
+          {item.priceNote === undefined || hasPrice ? null : <span className={styles.price}>{item.priceNote}</span>}
+          {item.kcal === undefined ? null : <span className={styles.quiet}>{strings.kcal(item.kcal)}</span>}
+        </p>
+      </div>
       {item.description === undefined ? null : <p className={styles.sheetAbout}>{item.description}</p>}
-      <p className={styles.allergens}>
-        {contains.length === 0 && may.length === 0
-          ? strings.noAllergens
-          : [
-              contains.length === 0 ? '' : strings.allergensLine(contains),
-              may.length === 0 ? '' : strings.mayContainLine(may),
-            ]
-              .filter((part) => part !== '')
-              .join(' ')}
-      </p>
       {item.diet.length === 0 ? null : (
-        <ul className={styles.dietList}>
+        <ul className={styles.dietList} aria-label={strings.dietary}>
           {item.diet.map((mark) => (
             <li key={mark} className={styles.dietMark}>
               {strings.diet[mark]}
@@ -134,7 +162,7 @@ export function ItemSheet({
           isDisabled={isSoldOut}
         >
           {item.sizes.map((each, index) => (
-            <Radio key={each.name} value={String(index)} description={formatPrice(each.priceMinor, currency, locale)}>
+            <Radio key={each.name} value={String(index)} description={price(each.priceMinor)}>
               {each.name}
             </Radio>
           ))}
@@ -166,61 +194,120 @@ export function ItemSheet({
         ) : (
           <fieldset key={group.id} className={styles.group}>
             <legend className={styles.groupName}>{label}</legend>
-            {group.options.map((option) => {
-              const description = priceOf(option.priceDeltaMinor);
-              const isChosen = picked.includes(option.id);
-              return (
-                <Checkbox
-                  key={option.id}
-                  label={option.name}
-                  {...(description === undefined ? {} : { description })}
-                  isSelected={isChosen}
-                  isDisabled={isSoldOut || (group.rule === 'up_to' && !isChosen && picked.length >= (group.max ?? 1))}
-                  onChange={() => toggle(group, option.id)}
-                />
-              );
-            })}
+            <div className={styles.choices}>
+              {group.options.map((option) => {
+                const description = priceOf(option.priceDeltaMinor);
+                const isChosen = picked.includes(option.id);
+                return (
+                  <Checkbox
+                    key={option.id}
+                    label={option.name}
+                    {...(description === undefined ? {} : { description })}
+                    isSelected={isChosen}
+                    isDisabled={isSoldOut || (group.rule === 'up_to' && !isChosen && picked.length >= (group.max ?? 1))}
+                    onChange={() => toggle(group, option.id)}
+                  />
+                );
+              })}
+            </div>
           </fieldset>
         );
       })}
-      {onPick === undefined || isSoldOut || !hasPrice ? null : (
+      <p className={styles.allergens}>
+        {contains.length === 0 && may.length === 0
+          ? strings.noAllergens
+          : [
+              contains.length === 0 ? '' : strings.allergensLine(contains),
+              may.length === 0 ? '' : strings.mayContainLine(may),
+            ]
+              .filter((part) => part !== '')
+              .join(' ')}
+      </p>
+      {canPick ? (
         <div className={styles.sheetActions}>
-          <div className={styles.stepper} role="group" aria-label={strings.quantity}>
-            <Button
-              variant="ghost"
-              icon="minus"
-              label={strings.fewer}
-              isDisabled={quantity <= 1}
-              onPress={() => setQuantity((was) => Math.max(1, was - 1))}
+          {waiting === undefined ? null : (
+            <p className={styles.reason} id={reasonId} aria-live="polite">
+              {waiting}
+            </p>
+          )}
+          <div className={styles.actionRow}>
+            <Stepper
+              label={strings.quantity}
+              value={quantity}
+              onFewer={quantity <= 1 ? undefined : () => setQuantity((was) => Math.max(1, was - 1))}
+              onMore={
+                quantity >= MENU_LIMITS.quantityMax
+                  ? undefined
+                  : () => setQuantity((was) => Math.min(MENU_LIMITS.quantityMax, was + 1))
+              }
             />
-            <output className={styles.stepValue} aria-live="polite">
-              {quantity}
-            </output>
-            <Button
-              variant="ghost"
-              icon="plus"
-              label={strings.more}
-              isDisabled={quantity >= MENU_LIMITS.quantityMax}
-              onPress={() => setQuantity((was) => Math.min(MENU_LIMITS.quantityMax, was + 1))}
-            />
+            <span className={styles.addSlot}>
+              <Button
+                variant="primary"
+                size="touch"
+                isFullWidth
+                isRound
+                amount={price(total)}
+                isDisabled={waiting !== undefined}
+                {...(waiting === undefined ? {} : { 'aria-describedby': reasonId })}
+                onPress={() =>
+                  onPick({
+                    itemId: item.id,
+                    ...(size === undefined ? {} : { size }),
+                    optionIds: [...chosen.values()].flat(),
+                    quantity,
+                  })
+                }
+              >
+                {strings.addToPicks}
+              </Button>
+            </span>
           </div>
-          <Button
-            variant="primary"
-            isDisabled={!groups.every((group) => choicesAllowed(group, (chosen.get(group.id) ?? []).length))}
-            onPress={() =>
-              onPick({
-                itemId: item.id,
-                ...(size === undefined ? {} : { size }),
-                optionIds: [...chosen.values()].flat(),
-                quantity,
-              })
-            }
-          >
-            {strings.addToPicks(formatPrice(total, currency, locale))}
-          </Button>
         </div>
-      )}
+      ) : null}
     </div>
+  );
+}
+
+/** A quantity pill: one fewer, the count (its digits popping as it changes), one more. */
+function Stepper({
+  label,
+  value,
+  onFewer,
+  onMore,
+  fewerLabel = strings.fewer,
+  fewerIcon = 'minus',
+}: {
+  readonly label: string;
+  readonly value: number;
+  /** Undefined disables it. */
+  readonly onFewer: (() => void) | undefined;
+  readonly onMore: (() => void) | undefined;
+  readonly fewerLabel?: string;
+  readonly fewerIcon?: 'minus' | 'trash';
+}) {
+  return (
+    <span className={styles.stepper} role="group" aria-label={label}>
+      <Button
+        variant="ghost"
+        icon={fewerIcon}
+        label={fewerLabel}
+        isRound
+        isDisabled={onFewer === undefined}
+        {...(onFewer === undefined ? {} : { onPress: onFewer })}
+      />
+      <output className={styles.stepValue} aria-live="polite">
+        <NumberPop value={String(value)} />
+      </output>
+      <Button
+        variant="ghost"
+        icon="plus"
+        label={strings.more}
+        isRound
+        isDisabled={onMore === undefined}
+        {...(onMore === undefined ? {} : { onPress: onMore })}
+      />
+    </span>
   );
 }
 
@@ -237,83 +324,220 @@ function pickTotal(menu: PublicMenu, pick: GuestPick): number {
   return pickPrice(base, deltas, pick.quantity);
 }
 
-/** Every pick's price added up (AC-6530). */
+/** Every pick's price added up, before any service (AC-6530). */
 export const picksTotal = (menu: PublicMenu, picks: readonly GuestPick[]) =>
   picks.reduce((sum, pick) => sum + pickTotal(menu, pick), 0);
 
-/** Your picks (AC-6530): the list, the total, and that nothing is sent. */
+/** Which of the place's menus holds an item (the first that shows it), for its rates and its group in Your picks. */
+function menuOf(menu: PublicMenu, itemId: string): SnapshotMenu | undefined {
+  return menu.menu.menus.find((each) =>
+    each.sections.some(
+      (section) => section.itemIds.includes(itemId) || section.sections.some((sub) => sub.itemIds.includes(itemId)),
+    ),
+  );
+}
+
+/**
+ * Your picks added up (AC-6530): each menu's picks with that menu's rates (tax inside its prices, service on top,
+ * checklabs' rollup), summed. A guest with no rates on any menu sees the subtotal as the total.
+ */
+export function picksBill(menu: PublicMenu, picks: readonly GuestPick[]): PicksTotal {
+  const byMenu = new Map<SnapshotMenu | undefined, number>();
+  for (const pick of picks) {
+    const owner = menuOf(menu, pick.itemId);
+    byMenu.set(owner, (byMenu.get(owner) ?? 0) + pickTotal(menu, pick));
+  }
+  return [...byMenu].reduce<PicksTotal>(
+    (sum, [owner, subtotal]) => {
+      const part = billOf(subtotal, owner?.taxRate ?? 0, owner?.serviceRate ?? 0);
+      return {
+        subtotal: sum.subtotal + part.subtotal,
+        tax: sum.tax + part.tax,
+        service: sum.service + part.service,
+        total: sum.total + part.total,
+      };
+    },
+    { subtotal: 0, tax: 0, service: 0, total: 0 },
+  );
+}
+
+/** Your picks (AC-6530): the lines grouped by menu, Undo after a removal, the total, and that nothing is sent. */
 export function PicksSheet({
   menu,
   picks,
   onPicksChange,
+  photoHref,
 }: {
   readonly menu: PublicMenu;
   readonly picks: readonly GuestPick[];
   readonly onPicksChange: (picks: readonly GuestPick[]) => void;
+  readonly photoHref?: MenuPhotoHref | undefined;
 }) {
   const { currency } = menu.menu;
   const { locale } = menu.place;
-  if (picks.length === 0) return <p className={styles.quiet}>{strings.emptyPicks}</p>;
+  const price = (minor: number) => formatPrice(minor, currency, locale);
+  // The picks as they were before the last removal or Clear all, and what that was: one press puts them back.
+  const [undo, setUndo] = useState<{ readonly said: string; readonly picks: readonly GuestPick[] } | undefined>();
+  const change = (next: readonly GuestPick[], said?: string) => {
+    setUndo(said === undefined ? undefined : { said, picks });
+    onPicksChange(next);
+  };
+  const bill = picksBill(menu, picks);
+  const count = picks.reduce((sum, pick) => sum + pick.quantity, 0);
+  // Grouped under their menu's name when the picks come from more than one menu (Dinner, then Wine list).
+  const groups = new Map<string, { readonly name: string | undefined; readonly picks: GuestPick[] }>();
+  for (const pick of picks) {
+    const owner = menuOf(menu, pick.itemId);
+    const key = owner?.id ?? '';
+    const group = groups.get(key) ?? { name: owner?.name, picks: [] };
+    group.picks.push(pick);
+    groups.set(key, group);
+  }
+  const isGrouped = groups.size > 1;
+  const rates = new Set(
+    picks.flatMap((pick) => {
+      const owner = menuOf(menu, pick.itemId);
+      return owner === undefined ? [] : [`${String(owner.taxRate ?? 0)}|${String(owner.serviceRate ?? 0)}`];
+    }),
+  );
+  // One rate across every pick names its percent; mixed rates say only the amounts.
+  const [oneRate] = rates.size === 1 ? [...rates] : [];
+  const [taxRate, serviceRate] = (oneRate ?? '0|0').split('|').map(Number);
+  const undoLine =
+    undo === undefined ? null : (
+      <p className={styles.undo} role="status">
+        <span>{undo.said}</span>
+        <Button
+          variant="ghost"
+          onPress={() => {
+            onPicksChange(undo.picks);
+            setUndo(undefined);
+          }}
+        >
+          {strings.undo}
+        </Button>
+      </p>
+    );
+  if (picks.length === 0)
+    return (
+      <div className={styles.sheet}>
+        <h2 className={styles.sheetName}>{strings.yourPicks}</h2>
+        {undoLine}
+        <EmptyState title={strings.emptyPicksTitle} icon="utensils">
+          {strings.emptyPicks}
+        </EmptyState>
+      </div>
+    );
   return (
     <div className={styles.sheet}>
-      <h2 className={styles.sheetName}>{strings.yourPicks}</h2>
-      <ul className={styles.picks}>
-        {picks.map((pick) => {
-          const item = menu.menu.items[pick.itemId];
-          if (item === undefined) return null;
-          const options = item.groupIds
-            .flatMap((id) => menu.menu.groups[id]?.options ?? [])
-            .filter((option) => pick.optionIds.includes(option.id))
-            .map((option) => option.name);
-          const sizeName = pick.size === undefined ? undefined : item.sizes[pick.size]?.name;
-          const detail = [sizeName, ...options].filter((part) => part !== undefined).join(', ');
-          return (
-            <li key={pick.key} className={styles.pick}>
-              <span className={styles.itemText}>
-                <span className={styles.itemName}>{item.name}</span>
-                {detail === '' ? null : <span className={styles.itemAbout}>{detail}</span>}
-              </span>
-              <span className={styles.pickEnd}>
-                <span className={styles.price}>{formatPrice(pickTotal(menu, pick), currency, locale)}</span>
-                <span className={styles.stepper} role="group" aria-label={strings.quantityOf(item.name)}>
-                  <Button
-                    variant="ghost"
-                    icon={pick.quantity === 1 ? 'trash' : 'minus'}
-                    label={pick.quantity === 1 ? strings.removePick(item.name) : strings.fewer}
-                    onPress={() =>
-                      onPicksChange(
-                        pick.quantity === 1
-                          ? picks.filter((each) => each.key !== pick.key)
-                          : picks.map((each) =>
+      <div className={styles.sheetHead}>
+        <h2 className={styles.sheetName}>{strings.yourPicks}</h2>
+        <p className={styles.quiet}>{strings.picksCount(count)}</p>
+      </div>
+      {[...groups.values()].map((group) => (
+        <section key={group.name ?? ''} className={styles.pickGroup} aria-label={group.name ?? strings.yourPicks}>
+          {isGrouped && group.name !== undefined ? <h3 className={styles.groupName}>{group.name}</h3> : null}
+          <ul className={styles.picks}>
+            {group.picks.map((pick) => {
+              const item = menu.menu.items[pick.itemId];
+              if (item === undefined) return null;
+              const options = item.groupIds
+                .flatMap((id) => menu.menu.groups[id]?.options ?? [])
+                .filter((option) => pick.optionIds.includes(option.id))
+                .map((option) => option.name);
+              const sizeName = pick.size === undefined ? undefined : item.sizes[pick.size]?.name;
+              const detail = [sizeName, ...options].filter((part) => part !== undefined).join(', ');
+              const photo = item.photo === undefined || photoHref === undefined ? undefined : item.photo;
+              return (
+                <li key={pick.key} className={styles.pick}>
+                  {photo === undefined || photoHref === undefined ? null : (
+                    <img
+                      className={styles.pickThumb}
+                      src={photoHref(photo.id, 'small', photo.version)}
+                      alt={strings.decorative}
+                      loading="lazy"
+                      width={400}
+                      height={400}
+                    />
+                  )}
+                  <span className={styles.itemText}>
+                    <span className={styles.itemName}>{item.name}</span>
+                    {detail === '' ? null : <span className={styles.itemAbout}>{detail}</span>}
+                    <span className={styles.price}>
+                      <NumberPop value={price(pickTotal(menu, pick))} />
+                    </span>
+                  </span>
+                  <Stepper
+                    label={strings.quantityOf(item.name)}
+                    value={pick.quantity}
+                    fewerIcon={pick.quantity === 1 ? 'trash' : 'minus'}
+                    fewerLabel={pick.quantity === 1 ? strings.removePick(item.name) : strings.fewer}
+                    onFewer={() =>
+                      pick.quantity === 1
+                        ? change(
+                            picks.filter((each) => each.key !== pick.key),
+                            strings.removed(item.name),
+                          )
+                        : change(
+                            picks.map((each) =>
                               each.key === pick.key ? { ...each, quantity: each.quantity - 1 } : each,
                             ),
-                      )
+                          )
+                    }
+                    onMore={
+                      pick.quantity >= MENU_LIMITS.quantityMax
+                        ? undefined
+                        : () =>
+                            change(
+                              picks.map((each) =>
+                                each.key === pick.key ? { ...each, quantity: each.quantity + 1 } : each,
+                              ),
+                            )
                     }
                   />
-                  <output className={styles.stepValue}>{pick.quantity}</output>
-                  <Button
-                    variant="ghost"
-                    icon="plus"
-                    label={strings.more}
-                    isDisabled={pick.quantity >= MENU_LIMITS.quantityMax}
-                    onPress={() =>
-                      onPicksChange(
-                        picks.map((each) => (each.key === pick.key ? { ...each, quantity: each.quantity + 1 } : each)),
-                      )
-                    }
-                  />
-                </span>
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      <p className={styles.total}>
-        <span>{strings.picksTotal}</span>
-        <span className={styles.price}>{formatPrice(picksTotal(menu, picks), currency, locale)}</span>
-      </p>
-      <p className={styles.quiet}>{strings.picksNote}</p>
-      <Button variant="ghost" onPress={() => onPicksChange([])}>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+      {undoLine}
+      <dl className={styles.bill}>
+        {bill.service > 0 ? (
+          <div className={styles.billLine}>
+            <dt>{strings.subtotal}</dt>
+            <dd className={styles.price}>{price(bill.subtotal)}</dd>
+          </div>
+        ) : null}
+        {bill.tax > 0 ? (
+          <div className={styles.billLine} data-quiet="">
+            <dt>
+              {taxRate === undefined || taxRate === 0
+                ? strings.includesTax
+                : strings.includesTaxAt(formatRate(taxRate))}
+            </dt>
+            <dd className={styles.price}>{price(bill.tax)}</dd>
+          </div>
+        ) : null}
+        {bill.service > 0 ? (
+          <div className={styles.billLine} data-quiet="">
+            <dt>
+              {serviceRate === undefined || serviceRate === 0
+                ? strings.service
+                : strings.serviceAt(formatRate(serviceRate))}
+            </dt>
+            <dd className={styles.price}>{`+${price(bill.service)}`}</dd>
+          </div>
+        ) : null}
+        <div className={styles.billLine} data-total="">
+          <dt>{strings.picksTotal}</dt>
+          <dd className={styles.price}>
+            <NumberPop value={price(bill.total)} />
+          </dd>
+        </div>
+      </dl>
+      <p className={styles.note}>{strings.picksNote}</p>
+      <Button variant="ghost" icon="trash" onPress={() => change([], strings.cleared)}>
         {strings.clearPicks}
       </Button>
     </div>
