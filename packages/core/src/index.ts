@@ -908,6 +908,30 @@ export {
   restoreResource,
   deleteResource,
 } from './hospitality/floor.ts';
+// The Menu app (spec 0065, H1): the draft, its edits, Publish and Discard, Sold out and photos.
+export {
+  readMenuDraft,
+  saveMenu,
+  deleteMenu,
+  saveSection,
+  deleteSection,
+  saveItem,
+  deleteItem,
+  placeItem,
+  moveMenuPart,
+  saveOptionGroup,
+  deleteOptionGroup,
+  setItemSoldOut,
+  attachMenuPhoto,
+  removeMenuPhoto,
+  publishMenus,
+  discardMenuDraft,
+  menuPlaceIds,
+  requireMenuEditor,
+  menuPhotoFolder,
+  type MenuPhotoFile,
+  type MenuPublishResult,
+} from './hospitality/menu.ts';
 /** A place's hours read at an instant (spec 0065, AC-6508): pure, on the place's own wall clock. */
 export { openAt, nextOpening, rangesOn, type OpenNow } from './hospitality/hours.ts';
 /** The operator console's one write (spec 0065, AC-6502): a workspace's early access flag, behind the operator gate. */

@@ -205,6 +205,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_join_requests_of', owner: 'crm_domain_lookup' },
+      // The workspace and place a guest menu's key names (spec 0065, H1, migration 0169).
+      { name: 'crm_menu_by_key', owner: 'crm_menu_lookup' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_operator_daily', owner: 'crm_operator' },
       { name: 'crm_operator_members', owner: 'crm_operator' },
@@ -325,6 +327,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_join_requests_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_menu_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_daily', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_members', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -399,7 +402,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ]);
   });
 
-  it('lets no role but crm_booking_lookup, crm_calendar_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_operator, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_calendar_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_menu_lookup, crm_operator, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
@@ -412,6 +415,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       'crm_domain_lookup',
       'crm_form_lookup',
       'crm_invitation_lookup',
+      'crm_menu_lookup',
       'crm_operator',
       'crm_purge',
       'crm_relay',
@@ -490,6 +494,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['crm_form_by_key(text)', 'crm_form_owner_forms(uuid, uuid, uuid[])'],
       ['app', 'app'],
     ],
+    ['crm_menu_lookup', ['crm_menu_by_key'], ['crm_menu_by_key(text)'], ['app']],
     [
       'crm_invitation_lookup',
       ['crm_invitation_by_token', 'crm_invitation_open_for'],
@@ -1325,6 +1330,103 @@ describe('isolation', () => {
     // A table's seats stay between 1 and 30, the fewest never above the most.
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update resources set min_capacity = 6, max_capacity = 4`)),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+  });
+
+  it("reads none of another workspace's menus, and finds a guest menu by its key only while Menu is installed (spec 0065, H1)", async () => {
+    const a = await workspaceWithMember('menu-iso-a');
+    const b = await workspaceWithMember('menu-iso-b');
+    const keys: string[] = [];
+    for (const [index, w] of [a, b].entries()) {
+      const key = `menukey${String(index)}aaaaaaaa`;
+      keys.push(key);
+      await db.withWorkspace(w.workspaceId, async (tx) => {
+        await tx.execute(sql`insert into workspace_apps (workspace_id, app) values (${w.workspaceId}, 'menu')`);
+        const place = randomUUID();
+        const menu = randomUUID();
+        const section = randomUUID();
+        const item = randomUUID();
+        const group = randomUUID();
+        await tx.execute(
+          sql`insert into places (workspace_id, id, name, country, time_zone, locale, public_key, menu_key, position)
+            values (${w.workspaceId}, ${place}, 'Main', 'GB', 'Europe/London', 'en-GB', ${`pubmen${String(index)}aaaaaaaaa`},
+              ${key}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into menus (workspace_id, id, name, position) values (${w.workspaceId}, ${menu}, 'Dinner', 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_places (workspace_id, menu_id, place_id) values (${w.workspaceId}, ${menu}, ${place})`,
+        );
+        await tx.execute(
+          sql`insert into menu_sections (workspace_id, id, menu_id, name, position) values (${w.workspaceId}, ${section}, ${menu}, 'Mains', 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_items (workspace_id, id, name, price_minor) values (${w.workspaceId}, ${item}, 'Soup', 650)`,
+        );
+        await tx.execute(
+          sql`insert into menu_placements (workspace_id, section_id, item_id, position) values (${w.workspaceId}, ${section}, ${item}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_item_sizes (workspace_id, item_id, name, price_minor, position) values (${w.workspaceId}, ${item}, 'Bowl', 800, 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_option_groups (workspace_id, id, name, rule) values (${w.workspaceId}, ${group}, 'Bread', 'one')`,
+        );
+        await tx.execute(
+          sql`insert into menu_options (workspace_id, group_id, name, position) values (${w.workspaceId}, ${group}, 'Sourdough', 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_item_option_groups (workspace_id, item_id, group_id, position) values (${w.workspaceId}, ${item}, ${group}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_photos (workspace_id, large_path, small_path, type, version) values (${w.workspaceId}, 'a', 'b', 'image/webp', '0123456789ab')`,
+        );
+        await tx.execute(
+          sql`insert into menu_versions (workspace_id, place_id, version, snapshot) values (${w.workspaceId}, ${place}, 1, '{}'::jsonb)`,
+        );
+        await tx.execute(sql`insert into menu_drafts (workspace_id, changes) values (${w.workspaceId}, 1)`);
+      });
+    }
+    for (const table of [
+      'menus',
+      'menu_places',
+      'menu_sections',
+      'menu_items',
+      'menu_placements',
+      'menu_item_sizes',
+      'menu_option_groups',
+      'menu_options',
+      'menu_item_option_groups',
+      'menu_photos',
+      'menu_versions',
+      'menu_drafts',
+    ]) {
+      const seen = await db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ workspace_id: string }>(sql`select workspace_id from ${sql.identifier(table)}`),
+      );
+      expect(seen.rows.map((row) => row.workspace_id)).toEqual([a.workspaceId]);
+    }
+    const lookup = (key: string) =>
+      db.withWorkspace(randomUUID(), (tx) =>
+        tx.execute<{ workspace_id: string }>(sql`select workspace_id::text from crm_menu_by_key(${key})`),
+      );
+    // No early access yet: the key names nothing.
+    expect((await lookup(keys[0] ?? '')).rows).toEqual([]);
+    await owner.query(`update workspaces set early_access = '{business_apps}' where id = $1`, [a.workspaceId]);
+    expect((await lookup(keys[0] ?? '')).rows).toEqual([{ workspace_id: a.workspaceId }]);
+    // Removing Menu hides its guest page at once (AC-6504).
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(sql`update workspace_apps set removed_at = now() where app = 'menu'`),
+    );
+    expect((await lookup(keys[0] ?? '')).rows).toEqual([]);
+    expect((await lookup('no-such-key-here')).rows).toEqual([]);
+    // A price is never below zero, and an item's diet marks come from the closed list.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update menu_items set price_minor = -1`)),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update menu_items set diet = '{spicy_9}'`)),
     ).rejects.toMatchObject({ cause: { code: '23514' } });
   });
 

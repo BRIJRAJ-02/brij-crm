@@ -124,3 +124,13 @@ export {
 export { viewFacts, type ViewFacts } from './profile/sources.ts';
 export { checkProfileImage, readPageMeta, profileImageStorePath, type CheckedImage } from './profile/images.ts';
 export { isShownAt } from './profile/schedule.ts';
+
+// The guest menu (spec 0065, H1, AC-6528): a menu key's door (ids only, through `crm_menu_by_key`), the place's live
+// snapshot with Sold out over it, and its photos, only those the snapshot shows.
+export {
+  enterMenuPage,
+  readMenuPhoto,
+  readPublicMenu,
+  type MenuEntry,
+  type PublicMenuRead,
+} from './hospitality/public-menu.ts';

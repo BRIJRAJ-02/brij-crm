@@ -54,6 +54,7 @@ import { deletedWorkspaceContract, workspaceContract } from './workspace-setting
 import { profileContract } from './profile.ts';
 import { brandContract } from './workspace-brand.ts';
 import { hospitalityContract } from './hospitality.ts';
+import { menuContract } from './menu.ts';
 import { schedulingContract } from './scheduling.ts';
 
 export * from './access.ts';
@@ -128,6 +129,7 @@ export * from './profile.ts';
 export * from './workspace-brand.ts';
 export * from './brand-colour.ts';
 export * from './hospitality.ts';
+export * from './menu.ts';
 
 /**
  * The one contract the web app, the API and the worker share. Each feature
@@ -153,6 +155,8 @@ export const contract = {
   brand: brandContract,
   // The Hospitality suite's setup (spec 0065, H0): apps, the business profile, places, areas and tables.
   hospitality: hospitalityContract,
+  // The Menu app (spec 0065, H1): menus, sections, items, option groups, Publish and Sold out.
+  menu: menuContract,
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.
   workspaceSecurity: workspaceSecurityContract,
   objects: objectsContract,

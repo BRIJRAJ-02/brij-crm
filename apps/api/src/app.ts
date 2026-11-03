@@ -45,6 +45,7 @@ import { createDiskFileStore } from './storage/disk.ts';
 import { createForgetPicture, mountMyPicture } from './me-picture.ts';
 import { mountBrandLogo } from './brand-logo.ts';
 import { mountLinkPageImages } from './link-page-images.ts';
+import { mountMenuPhotos } from './menu-photos.ts';
 import { mountLinkPagePictures } from './link-page-pictures.ts';
 import { mountLogos } from './logos.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
@@ -66,6 +67,7 @@ import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry
 import { mountPublicBooking } from './public/booking.ts';
 import { mountBrandCss } from './public/brand-css.ts';
 import { mountLook } from './public/look.ts';
+import { mountPublicMenu } from './public/menu.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
 import { createPictureFetch, createPictureLoader, type PictureFetch } from './public/picture.ts';
 import { createOutsideFetch, createPinnedFetch, OUTSIDE_TIMEOUT_MS, type OutsideFetch } from './public/outside.ts';
@@ -687,6 +689,8 @@ export function createApp({
   // origin. Before the booking routes, so `/handles/<handle>/look.css` is never read as a page's slug.
   mountBrandCss(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountLook(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), auth, edgeCache });
+  // The guest menu (spec 0065, H1): a place's published snapshot, its look, logo and photos, edge cached by place.
+  mountPublicMenu(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountPublicBooking(app, {
     db,
     handoffKey: formsHandoffKey,
@@ -773,6 +777,8 @@ export function createApp({
   };
   mountBrandLogo(app, { ...imageRoutes, edgeCache });
   mountLinkPageImages(app, imageRoutes);
+  // A menu item's photo at two widths (spec 0065, AC-6527), Manage hospitality only.
+  mountMenuPhotos(app, imageRoutes);
   // A link page's pictures and its Insights download (spec 0061), the same way.
   mountLinkPagePictures(app, imageRoutes);
   // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
