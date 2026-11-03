@@ -39,19 +39,19 @@ test.describe('the form template gallery', () => {
     const gallery = page.getByRole('dialog', { name: 'Start a form' });
     await expect(gallery).toBeVisible({ timeout: 30_000 });
 
-    // Ten tiles, Blank first, each with its purpose on the tile rather than in a tooltip (AC-6323).
+    // AC-6323's twelve tiles, Blank first, each with its purpose on the tile rather than in a tooltip.
     const tiles = gallery.getByRole('group', { name: 'Start a form' }).getByRole('button');
-    await expect(tiles).toHaveCount(10);
+    await expect(tiles).toHaveCount(12);
     await expect(tiles.first()).toHaveAccessibleName('Blank form');
     await expect(
       gallery.getByText('A rating and one open question, so you hear why as well as how much.'),
     ).toBeVisible();
-    // The two templates slice 5 has to finish are not offered.
-    await expect(gallery.getByRole('button', { name: 'Lead qualification' })).toHaveCount(0);
-    await expect(gallery.getByRole('button', { name: 'Booking intake' })).toHaveCount(0);
+    // Both templates slice 5 held back are offered now: Lead qualification scores, Booking intake goes on to a page.
+    await expect(gallery.getByRole('button', { name: 'Lead qualification' })).toHaveCount(1);
+    await expect(gallery.getByRole('button', { name: 'Booking intake' })).toHaveCount(1);
 
     // Every tile keeps its preview: a real little form, not a mark in a box.
-    await expect(gallery.locator('[data-tile][data-tall]')).toHaveCount(10);
+    await expect(gallery.locator('[data-tile][data-tall]')).toHaveCount(12);
 
     // The gallery as it opens, in both themes, inside the real page. The theme change rides the colour
     // transition tokens, so the shot waits for it to finish: taken at once, dark caught the tiles mid fade with

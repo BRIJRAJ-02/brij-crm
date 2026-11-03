@@ -563,6 +563,38 @@ async function teamLinkPages(tx: WorkspaceTx, scope: EngineScope): Promise<reado
   return usable;
 }
 
+/** How many live pages the Booking intake template weighs before it settles on none: the first usable one wins. */
+const INTAKE_PAGES_WEIGHED = 20;
+
+/**
+ * The page a template that ends with Book a meeting goes on to (spec 0063, AC-6323), resolved when the draft is
+ * made, the way `filesOnto` resolves an attribute: the maker's own live personal page first, then any other live
+ * page of theirs, then the workspace's, oldest first, and only one the maker may send visitors to (the same door a
+ * form's booking route goes through, `bookingTargetProblem`). A managed template books nobody, so it is never one.
+ * Undefined when there is none: the form then thanks the visitor, as every other template does.
+ */
+async function intakeBookingPage(tx: WorkspaceTx, scope: EngineScope): Promise<string | undefined> {
+  // Only a member has pages of their own to come first; anyone else weighs the workspace's, oldest first.
+  const mine =
+    scope.actor.type === 'member' && scope.actor.id !== null
+      ? sql`${bookingPages.ownerMemberId} = ${scope.actor.id}::uuid`
+      : undefined;
+  const rows = await tx
+    .select({ id: bookingPages.id })
+    .from(bookingPages)
+    .where(and(eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt), sql`${bookingPages.kind} <> 'managed'`))
+    .orderBy(
+      ...(mine === undefined ? [] : [sql`(${mine} and ${bookingPages.kind} = 'personal') desc`, sql`(${mine}) desc`]),
+      bookingPages.createdAt,
+      bookingPages.id,
+    )
+    .limit(INTAKE_PAGES_WEIGHED);
+  for (const row of rows) {
+    if ((await bookingTargetProblem(tx, scope, row.id, 'seen')) === undefined) return row.id;
+  }
+  return undefined;
+}
+
 /**
  * The Team link's document (AC-1353): Name and Email, then "What would you like to book?" with one choice per page
  * (two pages with one title told apart by a number), one rule per choice booking that page, and the first page
@@ -725,12 +757,13 @@ export async function createFormFromTemplate(
       // The tile's name is what the person chose between; `formName` is what the form itself is called.
       const name = input.name?.trim() ?? template.formName ?? template.name;
       const objectId = await defaultObject(tx, scope.access);
+      const bookingPageId = template.endsWithBooking === true ? await intakeBookingPage(tx, scope) : undefined;
       if (objectId === undefined) {
         const kept = await insertForm(tx, scope, {
           id: input.id,
           name,
           objectId: null,
-          document: templateDocument(template, undefined),
+          document: templateDocument(template, undefined, bookingPageId),
           templateId: template.id,
         });
         return viewOf(tx, scope, kept);
@@ -753,15 +786,19 @@ export async function createFormFromTemplate(
         id: input.id,
         name,
         objectId,
-        document: templateDocument(template, {
-          objectId,
-          attributes: attributes.map((attribute) => ({
-            id: attribute.id,
-            apiSlug: attribute.apiSlug,
-            type: attribute.type,
-          })),
-          ...(match === undefined ? {} : { matchAttributeId: match.id }),
-        }),
+        document: templateDocument(
+          template,
+          {
+            objectId,
+            attributes: attributes.map((attribute) => ({
+              id: attribute.id,
+              apiSlug: attribute.apiSlug,
+              type: attribute.type,
+            })),
+            ...(match === undefined ? {} : { matchAttributeId: match.id }),
+          },
+          bookingPageId,
+        ),
         templateId: template.id,
       });
       return viewOf(tx, scope, form);

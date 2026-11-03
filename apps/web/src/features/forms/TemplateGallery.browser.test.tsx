@@ -23,6 +23,12 @@ const TEMPLATES: readonly FormTemplateSummary[] = [
     preview: { layout: 'classic', rows: ['field', 'rating', 'long'] },
   },
   {
+    id: 'booking_intake',
+    name: 'Booking intake',
+    purpose: 'Ask what the meeting is about, then send them to your calendar.',
+    preview: { layout: 'classic', rows: ['field', 'field', 'long'] },
+  },
+  {
     id: 'customer_onboarding',
     name: 'Customer onboarding',
     purpose: 'Everything you need from a new customer, asked a step at a time.',

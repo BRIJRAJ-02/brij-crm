@@ -72,6 +72,11 @@ export interface FormTemplate {
   readonly headline: string;
   readonly buttonText: string;
   readonly questions: readonly FormTemplateQuestion[];
+  /**
+   * Whether the form goes on to a booking page after it is sent (AC-6323's "ends with Book a meeting"). The page is
+   * resolved when the draft is made; with none the maker can use, the form thanks the visitor instead.
+   */
+  readonly endsWithBooking?: true;
 }
 
 /** Name and email, which every template starts with: the two answers a submission needs to become a person. */
@@ -150,12 +155,7 @@ const intro = (id: string, key: string, label: string, placeholder: string): For
   filesOnto: 'description',
 });
 
-/**
- * Every template that exists in code, by id. Two of them,
- * `lead_qualification` and `booking_intake`, are written here but held out of
- * the gallery until slice 5 of this spec lands; `OFFERED_FORM_TEMPLATE_IDS`
- * in `@crm/contracts` says what each is waiting for and how to release it.
- */
+/** Every template that exists in code, by id: the gallery offers each of them (`OFFERED_FORM_TEMPLATE_IDS`). */
 export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   blank: {
     id: 'blank',
@@ -451,9 +451,8 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     ],
   },
 
-  // Held out of the gallery until slice 5 (see `OFFERED_FORM_TEMPLATE_IDS`). It asks the right things, but the
-  // ending that makes it a *booking* intake — a Book a meeting ending the visitor lands on (AC-6315) — doesn't
-  // exist in the document yet, so picking it today would give a form that thanks the visitor and stops.
+  // Ends with Book a meeting (AC-6323): after the visitor sends it, they move on to a booking page with their name
+  // and email filled in. Which page is the workspace's, so the draft resolves it (`createFormFromTemplate`).
   booking_intake: {
     id: 'booking_intake',
     name: 'Booking intake',
@@ -462,6 +461,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     layout: 'classic',
     headline: 'Before we meet',
     buttonText: 'Continue',
+    endsWithBooking: true,
     questions: [
       ...WHO,
       COMPANY,

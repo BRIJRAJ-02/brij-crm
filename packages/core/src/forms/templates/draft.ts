@@ -3,7 +3,15 @@
 // dependencies come in as arguments and it reads nothing — no database, no
 // env — so the AC-6324 test can parse every template without a workspace and
 // the service can file them onto a real one.
-import { fitsAttribute, type AttributeType, type FormDocument, type FormQuestion, type FormStep } from '@crm/contracts';
+import {
+  BOOKING_COUNTDOWN,
+  fitsAttribute,
+  type AttributeType,
+  type FormAfter,
+  type FormDocument,
+  type FormQuestion,
+  type FormStep,
+} from '@crm/contracts';
 import type { FormTemplate, FormTemplateQuestion } from './catalog.ts';
 
 /** An attribute as the filing needs it: enough to match a slug and check the answer fits. */
@@ -69,13 +77,30 @@ function stepsOf(template: FormTemplate): FormStep[] {
 }
 
 /**
+ * What follows a send: on to `bookingPageId` for a template that ends with Book a meeting and was given a page, and
+ * otherwise the plain thank you every other template has.
+ */
+function afterOf(template: FormTemplate, bookingPageId: string | undefined): FormAfter {
+  if (template.endsWithBooking === true && bookingPageId !== undefined) {
+    return { kind: 'booking', bookingPageId, countdownSeconds: BOOKING_COUNTDOWN.default, message: '' };
+  }
+  return { kind: 'message', message: '' };
+}
+
+/**
  * The draft a template makes on one workspace: its questions filed onto the
  * target's matching standard attributes, everything else kept with the
  * submission, and the rest of the document at its defaults. With no target
  * (the member may write no object), the form keeps its submissions only and
- * files nothing, exactly as `forms.create` does.
+ * files nothing, exactly as `forms.create` does. `bookingPageId` is the page a
+ * template that ends with Book a meeting goes on to, resolved by the caller
+ * against what the maker may use; other templates ignore it.
  */
-export function templateDocument(template: FormTemplate, target: TemplateTarget | undefined): FormDocument {
+export function templateDocument(
+  template: FormTemplate,
+  target: TemplateTarget | undefined,
+  bookingPageId?: string,
+): FormDocument {
   const steps = stepsOf(template);
   return {
     questions: template.questions.map((question) => questionOf(question, target)),
@@ -95,7 +120,7 @@ export function templateDocument(template: FormTemplate, target: TemplateTarget 
     headline: template.headline,
     buttonText: template.buttonText,
     language: 'en',
-    after: { kind: 'message', message: '' },
+    after: afterOf(template, bookingPageId),
     routing: { rules: [] },
     spam: { minFillMs: 2_000, scoreThreshold: 0.3 },
   };

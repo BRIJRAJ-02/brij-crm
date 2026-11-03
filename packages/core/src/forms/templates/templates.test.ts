@@ -11,7 +11,6 @@ import {
   FORM_TEMPLATE_IDS,
   FormDocument,
   type AttributeType,
-  HELD_FORM_TEMPLATE_IDS,
   isOfferedTemplate,
   OFFERED_FORM_TEMPLATE_IDS,
   type FormTemplateId,
@@ -23,6 +22,7 @@ import { SYSTEM_ACTOR } from '../../engine/scope.ts';
 import { createWorkspace } from '../../engine/workspaces.ts';
 import type { AccessRules } from '../../access/policy.ts';
 import { rescope, testScope } from '../../testing.ts';
+import { createBookingPage, updateBookingPage } from '../../booking/pages.ts';
 import { createForm, createFormFromTemplate, listFormTemplates, publishForm, saveFormDraft } from '../forms.ts';
 import { FORM_TEMPLATES, templateDocument, type TemplateTarget } from './index.ts';
 
@@ -167,16 +167,12 @@ describe('the gallery it offers (AC-6323)', () => {
     }
   });
 
-  // This fails the moment someone adds `booking_intake` to the offered list, which is the point: it is written in
-  // code but held back until its Book a meeting ending (AC-6315) can name a booking page the workspace actually
-  // has. Releasing it means giving it that, not deleting this assertion. `lead_qualification` was released with
-  // slice 5, which gave it the points the next case checks.
-  it('does not offer the template whose ending has no booking page to name', () => {
-    const offered = new Set<string>(listFormTemplates().items.map((each) => each.id));
-    for (const held of HELD_FORM_TEMPLATE_IDS) expect(offered.has(held)).toBe(false);
-    expect(HELD_FORM_TEMPLATE_IDS).toEqual(['booking_intake']);
-    // The released one is offered, in the place AC-6323 puts it: straight after Demo request.
+  // AC-6323's twelve, in its order: Booking intake (released 3 November 2026, once its draft could name a booking
+  // page the workspace actually has) straight after Job application, Lead qualification straight after Demo request.
+  it('offers all twelve tiles, in the order AC-6323 names them', () => {
     const ids = listFormTemplates().items.map((each) => each.id);
+    expect(ids).toHaveLength(12);
+    expect(ids[ids.indexOf('job_application') + 1]).toBe('booking_intake');
     expect(ids[ids.indexOf('demo_request') + 1]).toBe('lead_qualification');
   });
 
@@ -194,9 +190,9 @@ describe('the gallery it offers (AC-6323)', () => {
     expect(created.draft.scoreFiledOn).toBeUndefined();
   });
 
-  it('refuses a held template, and anything that isn’t a template at all', async () => {
+  it('refuses anything that isn’t a template', async () => {
     const w = await workspace();
-    for (const id of ['booking_intake', 'nonsense', '', '../blank']) {
+    for (const id of ['nonsense', '', '../blank']) {
       expect(await refusalOf(createFormFromTemplate(w.scope, { id: newId(), templateId: id }))).toMatchObject([
         { code: 'CONFIG_INVALID', field: 'templateId' },
       ]);
@@ -323,5 +319,62 @@ describe('who may start a draft from one (AC-6323)', () => {
     expect(mine.name).toBe('Mine');
     expect(await one.query(sql`select name from forms`)).toEqual([{ name: 'Mine' }]);
     expect(await two.query(sql`select name from forms`)).toEqual([{ name: 'Theirs' }]);
+  });
+});
+
+describe('Booking intake ends with Book a meeting (AC-6323)', () => {
+  /** A member (booking.manage: their own pages only), with no page yet. */
+  async function bea(w: Awaited<ReturnType<typeof workspace>>) {
+    const memberId = newId();
+    await w.query(
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+          values (${w.scope.workspaceId}, ${memberId}, 'Bea', ${`${memberId}@example.com`}, 'member', 'system', 'system')`,
+    );
+    return rescope(w.scope, { actor: { type: 'member', id: memberId }, role: 'member' });
+  }
+
+  it('goes on to the maker’s own live page, before an older colleague’s they could also use', async () => {
+    const w = await workspace();
+    const colleague = await bea(w);
+    await createBookingPage(colleague, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' });
+    const mine = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' });
+    expect(created.draft.after).toEqual({ kind: 'booking', bookingPageId: mine.id, countdownSeconds: 5, message: '' });
+    // And it publishes as it stands: the page is live and the maker's to use.
+    const live = await publishForm(w.scope, { formId: created.id, expectedRevision: created.revision });
+    expect(live.status).toBe('live');
+  });
+
+  it('thanks the visitor when there is no page to go on to, and never picks one the maker can’t use', async () => {
+    const w = await workspace();
+    const none = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' });
+    expect(none.draft.after).toEqual({ kind: 'message', message: '' });
+    // A paused page is not one to send anyone to.
+    const page = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
+    expect(
+      (await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' })).draft.after.kind,
+    ).toBe('message');
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'live' } });
+    // A key that manages forms but holds no booking right may send visitors to no page at all (the door's `seen`),
+    // so its draft thanks them even with a live page in the workspace.
+    const key = testScope({
+      db,
+      workspaceId: w.scope.workspaceId,
+      actor: { type: 'api_key', id: newId() },
+      scopes: ['forms.manage', 'data.write'],
+    });
+    const hidden = await createFormFromTemplate(key, { id: newId(), templateId: 'booking_intake' });
+    expect(hidden.draft.after).toEqual({ kind: 'message', message: '' });
+    // The owner, who may use it, goes on to it.
+    const found = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' });
+    expect(found.draft.after).toMatchObject({ kind: 'booking', bookingPageId: page.id });
+  });
+
+  it('leaves every other template’s ending as the plain thank you', async () => {
+    const w = await workspace();
+    await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'demo_request' });
+    expect(created.draft.after).toEqual({ kind: 'message', message: '' });
   });
 });

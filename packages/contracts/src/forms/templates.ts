@@ -12,16 +12,13 @@ import { FORM_LAYOUTS } from './path.ts';
  * The templates the gallery offers, in the order AC-6323 names them: Blank
  * first, then one per kind of form.
  *
- * One of AC-6323's twelve is still missing on purpose. **Booking intake (ends
- * with Book a meeting)** needs a custom ending whose button names a booking
- * page (**AC-6315**), and a template cannot know one: every workspace's pages
- * are its own, and a new workspace has none. Releasing it means resolving a
- * page at draft time the way `filesOnto` resolves an attribute, and leaving
- * the button off where there is no page to send anyone to. Until then the tile
- * is held, because one that quietly drops the thing it is named after is worse
- * than one not offered yet. It is written in
- * `packages/core/src/forms/templates/catalog.ts` and covered by the AC-6324
- * test; it goes after `job_application` in this list, where AC-6323 puts it.
+ * **Booking intake (ends with Book a meeting)** was released on 3 November
+ * 2026. Its ending needs a booking page, which a template cannot know: every
+ * workspace's pages are its own and a new workspace has none. So the draft
+ * resolves one at the time it is made, the way `filesOnto` resolves an
+ * attribute: the maker's own first live personal page they can use, else the
+ * first live page of the workspace's they can use, and with none at all the
+ * form simply thanks the visitor (core's `createFormFromTemplate`).
  *
  * **Lead qualification (with score)** was released with slice 5: its three
  * choice questions carry points, so the form scores. Where that score is filed
@@ -37,16 +34,14 @@ export const OFFERED_FORM_TEMPLATE_IDS = [
   'feedback',
   'nps',
   'job_application',
+  'booking_intake',
   'newsletter',
   'support_request',
   'customer_onboarding',
 ] as const;
 
-/** The templates written in code but not offered yet; see `OFFERED_FORM_TEMPLATE_IDS` for what each one is waiting for. */
-export const HELD_FORM_TEMPLATE_IDS = ['booking_intake'] as const;
-
-/** Every template that exists in code, offered or not: what the AC-6324 test covers. */
-export const FORM_TEMPLATE_IDS = [...OFFERED_FORM_TEMPLATE_IDS, ...HELD_FORM_TEMPLATE_IDS] as const;
+/** Every template that exists in code (AC-6324): all of them are offered now. */
+export const FORM_TEMPLATE_IDS = OFFERED_FORM_TEMPLATE_IDS;
 
 /** One template that exists in code. */
 export const FormTemplateId = z.enum(FORM_TEMPLATE_IDS, { error: 'That is not one of the form templates.' });
