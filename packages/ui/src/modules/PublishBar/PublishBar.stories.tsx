@@ -49,10 +49,46 @@ export const Draft: Story = {
 /** Nothing to publish: the page is live, and Versions stays. */
 export const Live: Story = { args: { status: 'live', changes: [] } };
 
+/** Paused with nothing to publish: the bar says guests can't book it, with a pause, and never claims live. */
+export const Paused: Story = {
+  args: { status: 'live', changes: [], isPaused: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('status')).toHaveTextContent('Paused: guests can’t book this page');
+    await expect(canvas.queryByText(/Live/)).toBeNull();
+  },
+};
+
+/** Paused with changes: the count stays, and nothing says live. */
+export const PausedWithChanges: Story = {
+  args: { isPaused: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('status')).toHaveTextContent('3 changes not published');
+    await expect(canvas.queryByText(/Live/)).toBeNull();
+  },
+};
+
+/** One change: the count in the singular. */
+export const OneChange: Story = {
+  args: { changes: ['Length 30 min → 45 min'] },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('status')).toHaveTextContent('1 change not published');
+  },
+};
+
+/** Just published: a plain check and Published, Publish disabled; the caller puts the bar back to live. */
+export const Published: Story = {
+  args: { status: 'published' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('status')).toHaveTextContent('Published');
+    await expect(canvas.getByRole('button', { name: 'Published' })).toBeDisabled();
+  },
+};
+
 /** Publishing: Publish holds its place with its spinner, and Discard waits. */
 export const Publishing: Story = { args: { status: 'publishing' } };
 
-/** Refused: one line saying why, and the way to the setting to fix. */
+/** Refused: one line saying why, and the way to the setting to fix. Publish keeps its name. */
 export const Refused: Story = {
   args: {
     status: 'error',
@@ -60,23 +96,61 @@ export const Refused: Story = {
   },
   play: async ({ canvas, args }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent('Pick hours for this page.');
+    await expect(canvas.getByRole('button', { name: 'Publish' })).toBeEnabled();
     await userEvent.click(canvas.getByRole('button', { name: 'Go to Hours' }));
     await expect(args.problem?.fix?.onFix).toHaveBeenCalled();
   },
 };
 
-/** Discard asks first, and Keep them keeps them. */
+/** Refused on a phone: the reason comes first, above the status and the buttons. */
+export const RefusedPhone: Story = {
+  args: Refused.args,
+  render: (args) => (
+    <Stage width="phone">
+      <PublishBar {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const alert = canvas.getByRole('alert');
+    const status = canvas.getByRole('status');
+    await expect(alert.getBoundingClientRect().bottom).toBeLessThanOrEqual(status.getBoundingClientRect().top);
+  },
+};
+
+/** A phone's width with changes waiting: the buttons wrap under the count. */
+export const DraftPhone: Story = {
+  render: (args) => (
+    <Stage width="phone">
+      <PublishBar {...args} />
+    </Stage>
+  ),
+};
+
+/** Discard draft asks first ("Discard the draft?"), and Keep the draft keeps it. */
 export const DiscardAsks: Story = {
   play: async ({ canvasElement, args }) => {
-    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Discard' }));
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Discard draft' }));
     const dialog = within(document.body).getByRole('alertdialog');
     await settleAnimations();
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Keep them' }));
+    await expect(within(dialog).getByRole('heading', { name: 'Discard the draft?' })).toBeVisible();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Keep the draft' }));
     await expect(args.onDiscard).not.toHaveBeenCalled();
   },
 };
 
-/** Publish → Published: the check draws, the label says so, and the bar goes back to live. */
+/** Discard draft in the confirm drops the draft. */
+export const DiscardDrops: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvasElement, args }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Discard draft' }));
+    const dialog = within(document.body).getByRole('alertdialog');
+    await settleAnimations();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Discard draft' }));
+    await expect(args.onDiscard).toHaveBeenCalled();
+  },
+};
+
+/** Publish → Published: the check and Published crossfade in, Publish says so too. */
 export const PublishToPublished: Story = {
   render: function PublishToPublished(args) {
     const [status, setStatus] = useState<PublishBarStatus>('draft');

@@ -4,11 +4,9 @@
    drawn at once. */
 @layer components {
   .root {
-    /* stylelint-disable-next-line unit-disallowed-list -- the check's pace, until the artifact carries a public pace */
-    --check-pace: 500ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token */
-    --check-blur: 8px;
-    /* stylelint-disable-next-line unit-disallowed-list -- the check's small turn, as transitions.dev tunes it */
+    /* Tokens only: a dialog's pace (the longest UI motion token) and a small space step for the blur. */
+    --check-pace: var(--duration-modal);
+    --check-blur: var(--space-4);
     --check-turn: -12deg;
 
     display: inline-flex;

@@ -4,7 +4,7 @@ The moment something is done (spec 0068, AC-6806): booking confirmed, registrati
 
 ## Why a new part
 
-BookingReceipt pops its own state mark beside the host, and nothing else in the library confirms. The publish bar, the registration and the booking summary need the same moment, so it is one part.
+BookingReceipt pops its own state mark beside the host, and nothing else in the library confirms. The registration and the booking summary on public pages need the same moment, so it is one part. It is for public pages only: the dashboard (the publish bar) keeps its plain icon and words.
 
 ## States
 

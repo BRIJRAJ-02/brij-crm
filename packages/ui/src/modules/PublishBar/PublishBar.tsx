@@ -1,8 +1,6 @@
 import { useId, useState } from 'react';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
-import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
-import { SuccessCheck } from '../../atoms/SuccessCheck/SuccessCheck.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { Modal, ModalTrigger } from '../../molecules/Modal/Modal.tsx';
 import styles from './PublishBar.module.css';
@@ -36,6 +34,11 @@ export interface PublishBarProps {
   /** Each change guests don't see yet, in a plain sentence ("Length 30 min → 45 min"). */
   readonly changes: readonly string[];
   readonly problem?: PublishBarProblem;
+  /**
+   * The page is paused (guests can't book it): with nothing to publish the bar says so in place of "Live", and nothing
+   * in the bar claims the page is live.
+   */
+  readonly isPaused?: boolean;
   readonly onPublish: () => void;
   /** Drops the changes, once the person says so in Discard's confirm. */
   readonly onDiscard: () => void;
@@ -51,15 +54,17 @@ export interface PublishBarProps {
 
 /**
  * A public page's publish bar (spec 0068, AC-6811, AC-6812), at the head of its editor: how many changes guests don't
- * see yet (the count pops as it changes), the changes themselves under Changes, then Versions, Preview, Discard and
- * Publish. Publish asks nothing (it is reversible); Discard asks first. A refused Publish says why in one line with
- * the way to fix it; one that lands draws its check and says Published, and the caller puts the bar back to `live`.
- * With nothing to publish it says the page is live, and keeps Versions.
+ * see yet, the changes themselves under Changes, then Versions, Preview, Discard draft and Publish. Publish asks
+ * nothing (it is reversible); Discard draft asks first. A refused Publish says why in one line with the way to fix it,
+ * and Publish keeps its name; one that lands says Published with a plain check (the dashboard's look: an icon and words
+ * that crossfade, no public page motion), and the caller puts the bar back to `live`. With nothing to publish it says
+ * the page is live, or paused (`isPaused`), and keeps Versions.
  */
 export function PublishBar({
   status,
   changes,
   problem,
+  isPaused = false,
   onPublish,
   onDiscard,
   previewHref,
@@ -72,33 +77,41 @@ export function PublishBar({
   const listId = useId();
   const hasChanges = changes.length > 0 && status !== 'published';
   const isBusy = status === 'publishing';
+  const said = status === 'published' ? 'published' : hasChanges ? 'draft' : isPaused ? 'paused' : 'live';
   return (
     <section
       className={styles.root}
       aria-label={strings.label}
       data-status={status}
+      data-said={said}
       data-open={(isShowingChanges && hasChanges) || undefined}
     >
       <div className={styles.row}>
         <p className={styles.status} role="status">
-          {status === 'published' ? (
-            <>
-              <SuccessCheck />
-              <span>{strings.published}</span>
-            </>
-          ) : hasChanges ? (
-            <>
-              <span className={styles.dot} aria-hidden="true" />
-              <span>
-                <NumberPop value={String(changes.length)} /> {strings.notPublished(changes.length)}
-              </span>
-            </>
-          ) : (
-            <>
-              <Icon name="circle-check" size="sm" />
-              <span>{strings.live}</span>
-            </>
-          )}
+          {/* Keyed by what it says, so a change of state crossfades in (the icon and words swap, nothing moves). */}
+          <span key={said} className={styles.said} data-said={said}>
+            {said === 'published' ? (
+              <>
+                <Icon name="circle-check" size="sm" />
+                <span>{strings.published}</span>
+              </>
+            ) : said === 'draft' ? (
+              <>
+                <span className={styles.dot} aria-hidden="true" />
+                <span>{strings.notPublished(changes.length)}</span>
+              </>
+            ) : said === 'paused' ? (
+              <>
+                <Icon name="pause" size="sm" />
+                <span>{strings.paused}</span>
+              </>
+            ) : (
+              <>
+                <Icon name="circle-check" size="sm" />
+                <span>{strings.live}</span>
+              </>
+            )}
+          </span>
         </p>
         <span className={styles.actions}>
           {hasChanges && (
@@ -132,7 +145,7 @@ export function PublishBar({
                     key={one.version}
                     id={String(one.version)}
                     description={one.label}
-                    meta={one.isCurrent ? strings.current : strings.restore}
+                    meta={one.isCurrent ? (isPaused ? strings.currentPaused : strings.current) : strings.restore}
                   >
                     {strings.version(one.version)}
                   </MenuItem>
@@ -164,7 +177,7 @@ export function PublishBar({
                         onDiscard();
                       }}
                     >
-                      {strings.discardChanges}
+                      {strings.discardDraft}
                     </Button>
                   </>
                 }
@@ -175,7 +188,7 @@ export function PublishBar({
           )}
           {(hasChanges || status === 'published') && (
             <Button variant="primary" isPending={isBusy} isDisabled={status === 'published'} onPress={onPublish}>
-              {status === 'published' ? strings.published : status === 'error' ? strings.tryAgain : strings.publish}
+              {status === 'published' ? strings.published : strings.publish}
             </Button>
           )}
         </span>

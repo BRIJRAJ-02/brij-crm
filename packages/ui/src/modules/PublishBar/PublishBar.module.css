@@ -1,8 +1,10 @@
 /* PublishBar (spec 0068, AC-6811): a raised strip at the head of an editor. The status at the start (a dot in the
-   warning colour while changes wait, a check once live), the actions at the end; under them, the changes as a quiet
-   list and a refused Publish's one line. The app's own look: tokens, a card's border and radius, body type. */
+   warning colour while changes wait, a check once live or published, a pause while paused), the actions at the end;
+   under them, the changes as a quiet list and a refused Publish's one line (first, on a phone). The app's own look:
+   tokens, a card's border and radius, body type, and a plain crossfade when the status changes. */
 @layer components {
   .root {
+    container: publish-bar / inline-size;
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
@@ -35,9 +37,22 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  .root[data-status='live'] .status {
+  .root:is([data-said='live'], [data-said='paused']) .status {
     color: var(--text-secondary);
     font: var(--text-body);
+  }
+
+  .said {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    animation: publish-bar-said var(--duration-popover) var(--ease-out);
+  }
+
+  @keyframes publish-bar-said {
+    from {
+      opacity: 0;
+    }
   }
 
   .dot {
@@ -79,5 +94,14 @@
 
   .change {
     overflow-wrap: anywhere;
+  }
+
+  /* A phone's width: why Publish was refused comes first, above the status and the buttons. */
+  @container publish-bar (inline-size < 480px) {
+    .problem {
+      order: -1;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
   }
 }

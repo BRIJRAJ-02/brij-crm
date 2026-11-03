@@ -43,6 +43,15 @@ export const Unsaved: Story = {
   },
 };
 
+/** A published page's editor: Save says Save draft, since saving doesn't reach guests (Publish does). */
+export const SaveDraft: Story = {
+  args: { saveLabel: 'Save draft' },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Save draft' }));
+    await expect(args.onSave).toHaveBeenCalledTimes(1);
+  },
+};
+
 /**
  * Discard asks first, as anything that can't be taken back does: Esc and Keep editing leave the changes and put
  * focus back on Discard; Discard changes discards, once.

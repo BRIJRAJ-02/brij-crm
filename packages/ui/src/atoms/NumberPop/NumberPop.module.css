@@ -3,10 +3,9 @@
    still. Reduced motion swaps at once. */
 @layer components {
   .root {
-    /* stylelint-disable-next-line unit-disallowed-list -- the pop's stagger, until the artifact carries it */
-    --digit-stagger: 40ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token */
-    --digit-blur: 2px;
+    /* Tokens only: the stagger is a quarter of the press, the blur the smallest space step. */
+    --digit-stagger: calc(var(--duration-press) / 4);
+    --digit-blur: var(--space-2);
 
     display: inline-flex;
     font-variant-numeric: tabular-nums;

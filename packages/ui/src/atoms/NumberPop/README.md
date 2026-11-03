@@ -1,6 +1,6 @@
 # NumberPop
 
-A worded number whose changed digits pop in (spec 0068, AC-6806): prices, totals, "42 going", a count of changes not yet published. When `value` changes, the characters it shares with the last value at the start hold still, and the rest rise `space-8` out of a soft blur on the move duration, the last two one and two staggers behind (transitions.dev's number pop in). The first value is simply there.
+A worded number whose changed digits pop in (spec 0068, AC-6806): prices, totals, "42 going" on public pages (the dashboard keeps plain numbers). When `value` changes, the characters it shares with the last value at the start hold still, and the rest rise `space-8` out of a soft blur on the move duration, the last two one and two staggers behind (transitions.dev's number pop in). The first value is simply there.
 
 ## Why a new part
 

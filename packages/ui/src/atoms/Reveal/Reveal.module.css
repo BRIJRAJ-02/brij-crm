@@ -3,14 +3,11 @@
    smooth out curve. Reduced motion shows it at once. */
 @layer components {
   .root {
-    /* transitions.dev's stagger (40ms) and reveal (500ms), a quarter of the press and a modal and a half: literals
-       until the artifact carries a public page pace, as BookingFrame's. */
-    /* stylelint-disable-next-line unit-disallowed-list -- the texts reveal's stagger, until the artifact carries it */
-    --reveal-stagger: 40ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- the texts reveal's pace, until the artifact carries it */
-    --reveal-pace: 500ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token */
-    --reveal-blur: 3px;
+    /* Tokens only: the stagger is a quarter of the press, the pace a dialog's (the longest UI motion token), and the
+       blur the smallest space step. */
+    --reveal-stagger: calc(var(--duration-press) / 4);
+    --reveal-pace: var(--duration-modal);
+    --reveal-blur: var(--space-2);
 
     display: block;
     animation: reveal-in var(--reveal-pace) var(--ease-out) both;

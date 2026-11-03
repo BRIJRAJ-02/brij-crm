@@ -28,6 +28,7 @@ New (20 October 2026). Bookings › Availability and the booking page editor eac
 - `status`: `unsaved` says "Unsaved changes"; `saving` keeps every word and width in place while Save's check gives way to a spinner; `saved` says "Saved" with a check for a moment, then the bar sinks out; `error` says `error` in the danger colour and Save becomes Try again; `hidden` sends it away (after a discard).
 - `blockedReason` says why the changes can't be saved yet, in place of "Unsaved changes", and Save waits.
 - `onDiscard` adds Discard (ghost), before Save. Esc never discards, and Discard asks first (the house rule in Modal's README, 21 October 2026: what it throws away can't come back): "Discard your unsaved changes?", a danger confirm with Keep editing (ESC) and Discard changes. Only Discard changes calls `onDiscard`; Esc or Keep editing put focus back on Discard. The bar owns the confirm, so a page never wraps `onDiscard` in one of its own.
+- `saveLabel` renames Save where the page saves something more exact: a published page's editor says "Save draft", since saving there doesn't reach guests (Publish does). Left out, it says Save; a failed save still says Try again.
 - `onFocusAway` says where focus goes when Discard or Save leaves while it had focus (after a discard or a save), so it never falls to the page: the page's title. After a discard it runs once the confirm has gone.
 - The status is a polite live region, born with its first words: "Unsaved changes" arriving with your first edit stays quiet, and Saved or the failure is said.
 - ⌘S (Ctrl+S on other keyboards) saves from anywhere on the page while the bar shows, and ⌘↵ does too outside a form (a form's ⌘↵ submits that form). Inside a dialog, a popover or an open list the keys stay theirs, so they never save the page under it. Save shows the ⌘S keycap (hidden on touch only devices, as every keycap is).
@@ -35,7 +36,7 @@ New (20 October 2026). Bookings › Availability and the booking page editor eac
 
 ## States
 
-Unsaved, unsaved with a reason it can't save, saving, saved, failed, and leaving; wide and narrow; Discard's confirm open.
+Unsaved, unsaved with a reason it can't save, Save renamed (`saveLabel`), saving, saved, failed, and leaving; wide and narrow; Discard's confirm open.
 
 ## Keyboard
 
