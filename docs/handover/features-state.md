@@ -54,6 +54,15 @@ on main with it.
 | Link page layout | 0063 slices 1–4 | Arrived with `car/visual`'s 64 commits |
 | Form partials and visits (tables, API) | 0063 slices 6–7 | Both tables, all three public endpoints, the Analytics tab |
 
+## Update, 3 November evening
+
+- `car/propagated-audit` landed with `544f59588`; `car/0063-visitor` landed as `280c8b130` (rebased on main, two
+  formatting fixes and the `form.created` line now reads "made the form …"). Everything in the two sections
+  below is on main.
+- **Spec 0061 R5 is on main** (`8861ba94c`), not unbuilt as item 4 says.
+- The embed: a `handle/slug` booking frame is heard across the 308 to the apex (`8cb6793f1`); popups open at full
+  size under one shared head bar, and `/embed/*` is cached five minutes instead of an hour (`82f2b212e`).
+
 ## Built, pushed, **not landed**
 
 Two branches. Land `car/propagated-audit` first — it is the one that unblocks deploys.
