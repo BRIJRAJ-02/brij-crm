@@ -14,6 +14,7 @@
 // Leaves out: the deal step (milestone 2), collective members, and the profile's order (pages keep the
 // order they were made in until the Links list can be reordered by drag).
 import {
+  BRAND_QUICK_PICKS,
   isDataError,
   MANAGED_PARTS,
   type BookingPageSettings,
@@ -103,11 +104,13 @@ import {
   pageEditorHref,
   pageTabOf,
   publicBookingOrigin,
+  publicBookingPath,
   publicBookingUrl,
   type PageTab,
 } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
+import { EmbedCard } from './EmbedCard.tsx';
 import { SharingPanel } from './SharingPanel.tsx';
 import { sharingStrings } from './sharing-strings.ts';
 import { scheduleChoices } from './schedules.ts';
@@ -1081,6 +1084,15 @@ export function PageEditor({
                           </FieldGroup>
                         )}
                       </Card>
+                      {/* The snippet for someone else's site (spec 0062, L3), under Sharing, since it is one more
+                          way to hand the page out rather than a setting of the page. */}
+                      <EmbedCard
+                        script={data.forms.embedUrl()}
+                        publicKey={publicBookingPath(page).replace(/^\/(b\/)?/, '')}
+                        title={page.title}
+                        isLive={page.status === 'live'}
+                        quickPicks={BRAND_QUICK_PICKS}
+                      />
                       {!isWorkspace && (
                         <SocialsCardSlot
                           data={data}
