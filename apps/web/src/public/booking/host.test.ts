@@ -1,7 +1,7 @@
 // The rail's host (spec 0037, AC-1339): personal pages by name and their
 // picture when they have one, team pages stack initials under the workspace's name.
 import { describe, expect, it } from 'vitest';
-import { railHost, railTitle } from './host.ts';
+import { railBrand, railHost, railTitle } from './host.ts';
 
 describe('railHost', () => {
   it('gives a personal page exactly its host, as before team pages', () => {
@@ -53,5 +53,30 @@ describe('railHost', () => {
     expect(railTitle({ title: 'Intro call', hostName: 'Acme', team: { avatars: [], more: 0 } })).toBe(
       'Intro call with Acme',
     );
+  });
+});
+
+describe('railBrand', () => {
+  const page = { publicKey: 'abcdefghijklmnop', brand: { logo: '0123456789ab' } } as const;
+
+  it('draws the logo as decoration while there is no company page', () => {
+    expect(railBrand(page)).toStrictEqual({
+      brand: { logo: { src: '/api/public/booking/abcdefghijklmnop/logo?v=0123456789ab', alt: '' } },
+    });
+  });
+
+  it('links the company page while one is published, the logo naming the company (spec 0066, AC-6646)', () => {
+    expect(railBrand({ ...page, company: { name: 'Somewhere Nowhere', path: '/somewhere-nowhere' } })).toStrictEqual({
+      brand: {
+        logo: { src: '/api/public/booking/abcdefghijklmnop/logo?v=0123456789ab', alt: 'Somewhere Nowhere' },
+        href: '/somewhere-nowhere',
+      },
+    });
+  });
+
+  it('draws nothing without a logo, company page or not', () => {
+    expect(
+      railBrand({ publicKey: page.publicKey, company: { name: 'Somewhere Nowhere', path: '/somewhere-nowhere' } }),
+    ).toStrictEqual({});
   });
 });

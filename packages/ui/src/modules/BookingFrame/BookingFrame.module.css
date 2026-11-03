@@ -125,6 +125,18 @@
     min-inline-size: 0;
   }
 
+  /* The logo as a link to the company page (spec 0066, AC-6646): the picture's own size, a focus ring around it. */
+  .brandLink {
+    display: inline-flex;
+    align-self: flex-start;
+    border-radius: var(--radius-sm);
+  }
+
+  .brandLink:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
   /* The workspace's logo at the head of the rail (spec 0060, AC-4): a control's height, as wide as it needs up to a
      column, never cropped or stretched. */
   .brandLogo {

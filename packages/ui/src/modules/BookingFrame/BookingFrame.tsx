@@ -119,8 +119,46 @@ export interface BookingFrameProps {
 export interface PageBrand {
   /** The logo, on our own origin, and what it says (the workspace's name). */
   readonly logo?: { readonly src: string; readonly alt: string };
+  /**
+   * Where the logo leads: the company page on our own host (`/<company-handle>`, spec 0066 AC-6646), while one is
+   * published. The logo then names the company (its `alt` says where the link goes). Absent, it links nowhere.
+   */
+  readonly href?: string;
   /** The accent's custom properties, for an app preview (`brandProperties()`); the live page has a stylesheet. */
   readonly variables?: PageVariables;
+}
+
+/** A company page's path on our own host, the only place the rail's logo may lead (`/<company-handle>`). */
+const COMPANY_PATH = /^\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * The workspace's logo at the head of the rail; a link to the company page while one is published (spec 0066,
+ * AC-6646), named by the logo's `alt`. Inside a site's embed the link opens a tab of its own, never inside the frame.
+ */
+function BrandMark({
+  src,
+  alt,
+  href,
+  isEmbedded,
+  onError,
+}: {
+  readonly src: string;
+  readonly alt: string;
+  readonly href: string | undefined;
+  readonly isEmbedded: boolean;
+  readonly onError: () => void;
+}) {
+  const logo = <img className={styles.brandLogo} src={src} alt={alt} decoding="async" onError={onError} />;
+  if (href === undefined || alt === '' || !COMPANY_PATH.test(href)) return logo;
+  return (
+    <a
+      className={styles.brandLink}
+      href={href}
+      {...(isEmbedded ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+    >
+      {logo}
+    </a>
+  );
 }
 
 /** The web app's own wordmark files (apps/web/public/brand). */
@@ -191,11 +229,11 @@ export function BookingFrame({
         <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
           {/* The workspace's own logo heads the rail (spec 0060, AC-4): its mark, before the host it books with. */}
           {brandLogo !== undefined && brand?.logo !== undefined && (
-            <img
-              className={styles.brandLogo}
+            <BrandMark
               src={brandLogo}
               alt={brand.logo.alt}
-              decoding="async"
+              href={brand.href}
+              isEmbedded={isEmbedded}
               onError={() => {
                 setFailedLogo(brandLogo);
               }}
