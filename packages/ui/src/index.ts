@@ -52,6 +52,12 @@ export { RelativeTime, type RelativeTimeProps } from './atoms/RelativeTime/Relat
 export { RemoteCursor, type RemoteCursorProps } from './atoms/RemoteCursor/RemoteCursor.tsx';
 export { Separator, type SeparatorProps } from './atoms/Separator/Separator.tsx';
 export { Skeleton, type SkeletonProps, type SkeletonShape, type SkeletonWidth } from './atoms/Skeleton/Skeleton.tsx';
+/** A public page's entrance, played once on first draw (spec 0068, AC-6806). */
+export { Reveal, type RevealProps } from './atoms/Reveal/Reveal.tsx';
+/** A worded number whose changed digits pop in (spec 0068, AC-6806). */
+export { NumberPop, type NumberPopProps } from './atoms/NumberPop/NumberPop.tsx';
+/** The moment something is done: a check that draws itself (spec 0068, AC-6806). */
+export { SuccessCheck, type SuccessCheckProps } from './atoms/SuccessCheck/SuccessCheck.tsx';
 export { Spinner, type SpinnerProps } from './atoms/Spinner/Spinner.tsx';
 export { StatusDot, type StatusDotProps } from './atoms/StatusDot/StatusDot.tsx';
 /** A booking link's colour from its id, the same on its card and its bookings on the week (grey and red left out). */

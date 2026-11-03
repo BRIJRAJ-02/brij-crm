@@ -23,6 +23,7 @@ import { Disclosure, DisclosureGroup } from '../../molecules/Disclosure/Disclosu
 import { SocialLinks, type SocialLinkItem } from '../../molecules/SocialLinks/SocialLinks.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
+import { Reveal } from '../../atoms/Reveal/Reveal.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
@@ -1866,6 +1867,15 @@ export function LinkPage({
   // A page whose only block is the contact card has no rows: its card is the header's Save contact, so the list
   // draws its empty state rather than an empty group.
   const groups = blocks === undefined ? [] : groupsOf(blocks);
+  // Words that rise in once on the live page and are simply there everywhere else (a preview, a draft).
+  const entering = (words: string, order: 1 | 2 | 3) =>
+    isLive ? (
+      <Reveal order={order} display="inline">
+        {words}
+      </Reveal>
+    ) : (
+      words
+    );
   const look = lookAttributes(theme, photos);
   const drawn = theme === undefined ? undefined : drawnLook(theme);
   const variablesRef = usePageVariables(variables);
@@ -1967,11 +1977,14 @@ export function LinkPage({
                   )}
                   {/* The words beside the face in the left header, and in the column under it otherwise. */}
                   <div className={styles.who}>
-                    <h1 className={styles.name}>{person.name}</h1>
+                    {/* The person's words rise in once as the page first draws (spec 0068, AC-6803). */}
+                    <h1 className={styles.name}>{entering(person.name, 1)}</h1>
                     {person.role !== undefined && person.role !== '' && (
-                      <p className={styles.jobTitle}>{person.role}</p>
+                      <p className={styles.jobTitle}>{entering(person.role, 2)}</p>
                     )}
-                    {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
+                    {person.bio !== undefined && person.bio !== '' && (
+                      <p className={styles.bio}>{entering(person.bio, 3)}</p>
+                    )}
                     {address !== undefined && (
                       <span className={styles.address}>
                         <CopyButton
