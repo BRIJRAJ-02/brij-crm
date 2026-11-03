@@ -10,7 +10,12 @@ import {
   menuCacheTags,
   minorToDecimal,
   parsePrice,
+  formatRate,
+  parseRate,
+  picksTotal,
+  rateNote,
   servingAt,
+  servingOf,
 } from './menu-model.ts';
 
 describe('prices (AC-6532)', () => {
@@ -54,29 +59,77 @@ describe('prices (AC-6532)', () => {
   });
 });
 
-describe('serving times (AC-6528)', () => {
-  const brunch = { days: ['sat', 'sun'] as const, from: '10:00', to: '15:00' };
+describe('serving times (AC-6528), ported from checklabscms/src/lib/schedule.ts isScheduleOpen', () => {
+  const brunch = { weekly: { sat: [{ from: '10:00', to: '15:00' }], sun: [{ from: '10:00', to: '15:00' }] } };
 
   it('serves on a Saturday at 11 in the place’s zone, and not at 16, with when it starts next', () => {
     // Saturday 7 November 2026, 11:00 in London (GMT) is 11:00 UTC.
-    expect(servingAt({ ...brunch, days: [...brunch.days] }, new Date('2026-11-07T11:00:00Z'), 'Europe/London')).toEqual(
-      {
-        now: true,
-      },
-    );
-    const later = servingAt({ ...brunch, days: [...brunch.days] }, new Date('2026-11-07T16:00:00Z'), 'Europe/London');
+    expect(servingAt(brunch, new Date('2026-11-07T11:00:00Z'), 'Europe/London')).toEqual({ now: true });
+    const later = servingAt(brunch, new Date('2026-11-07T16:00:00Z'), 'Europe/London');
     expect(later.now).toBe(false);
     expect(later.next?.toISOString()).toBe('2026-11-08T10:00:00.000Z');
   });
 
   it('reads the zone, not the server’s clock: 11:00 UTC is 20:00 in Tokyo', () => {
-    expect(servingAt({ ...brunch, days: [...brunch.days] }, new Date('2026-11-07T11:00:00Z'), 'Asia/Tokyo').now).toBe(
-      false,
-    );
+    expect(servingAt(brunch, new Date('2026-11-07T11:00:00Z'), 'Asia/Tokyo').now).toBe(false);
   });
 
-  it('serves always with no serving time', () => {
+  it('none means always: no serving times, or a week with no day set (checklabs’ empty schedule)', () => {
     expect(servingAt(undefined, new Date(), 'UTC')).toEqual({ now: true });
+    expect(servingAt({ weekly: {} }, new Date(), 'UTC')).toEqual({ now: true });
+  });
+
+  it('zero windows means closed that day, and a day left out once others are set is closed too', () => {
+    const weekdays = { weekly: { mon: [{ from: '09:00', to: '17:00' }], sat: [] } };
+    // Saturday 7 November 2026, noon UTC: an empty Saturday.
+    expect(servingAt(weekdays, new Date('2026-11-07T12:00:00Z'), 'UTC').now).toBe(false);
+    // Tuesday 10 November: left out.
+    expect(servingAt(weekdays, new Date('2026-11-10T12:00:00Z'), 'UTC').now).toBe(false);
+    expect(servingAt(weekdays, new Date('2026-11-09T12:00:00Z'), 'UTC').now).toBe(true);
+  });
+
+  it('a window past midnight belongs to the day it starts on (checklabs read it on the same day)', () => {
+    const late = { weekly: { fri: [{ from: '22:00', to: '02:00' }] } };
+    // Saturday 7 November 2026, 01:00 UTC: Friday's late window, still serving.
+    expect(servingAt(late, new Date('2026-11-07T01:00:00Z'), 'UTC').now).toBe(true);
+    // Friday 6 November, 01:00: checklabs would have served here; Thursday has no late window, so we don't.
+    expect(servingAt(late, new Date('2026-11-06T01:00:00Z'), 'UTC').now).toBe(false);
+  });
+
+  it('reads the first build’s one range over days as the per day shape', () => {
+    expect(servingOf({ days: ['sat'], from: '10:00', to: '15:00' })?.weekly.sat).toEqual([
+      { from: '10:00', to: '15:00' },
+    ]);
+    expect(servingOf({ days: ['sat'], from: '10:00', to: '15:00' })?.weekly.mon).toEqual([]);
+    expect(servingOf('nonsense')).toBeUndefined();
+  });
+});
+
+describe('tax and service, ported from checklabscms/src/lib/pos/totals.ts rollupCheck', () => {
+  it('pulls the inclusive tax out of the subtotal and adds service on top', () => {
+    // 100.00 with 5% tax inside: 100 × 5 / 105 = 4.76; 12.5% service = 12.50.
+    expect(picksTotal(10_000, 500, 1250)).toEqual({ subtotal: 10_000, tax: 476, service: 1250, total: 11_250 });
+  });
+
+  it('counts a rate outside 0 to 100% as none', () => {
+    expect(picksTotal(10_000, -5, 20_000)).toEqual({ subtotal: 10_000, tax: 0, service: 0, total: 10_000 });
+  });
+
+  it('reads and writes rates in basis points, never as floats', () => {
+    expect(parseRate('12.5')).toBe(1250);
+    expect(parseRate('12,5 %')).toBe(1250);
+    expect(parseRate('5')).toBe(500);
+    expect(parseRate('100.01')).toBeUndefined();
+    expect(parseRate('abc')).toBeUndefined();
+    expect(formatRate(1250)).toBe('12.5');
+    expect(formatRate(1275)).toBe('12.75');
+    expect(formatRate(500)).toBe('5');
+  });
+
+  it('writes the foot note from the rates', () => {
+    expect(rateNote(500, 1250)).toBe('Prices include 5% tax. 12.5% service is added.');
+    expect(rateNote(0, 1000)).toBe('10% service is added.');
+    expect(rateNote(0, 0)).toBe('');
   });
 });
 

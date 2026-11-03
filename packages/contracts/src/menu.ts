@@ -5,9 +5,17 @@
 // installed. The closed lists and pure rules are in `menu-model.ts`, shared with the guest page without Zod.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { WEEK_DAYS } from './hospitality-model.ts';
-import { PlaceHours, TimeOfDay } from './hospitality.ts';
-import { ALLERGEN_LEVELS, DIET_MARKS, EU_ALLERGENS, MENU_LIMITS, OPTION_RULES, SECTION_LAYOUTS } from './menu-model.ts';
+import { hoursProblem, WEEK_DAYS } from './hospitality-model.ts';
+import { PlaceDayRanges, PlaceHours } from './hospitality.ts';
+import {
+  ALLERGEN_LEVELS,
+  DIET_MARKS,
+  EU_ALLERGENS,
+  MENU_LIMITS,
+  OPTION_RULES,
+  RATE_MAX,
+  SECTION_LAYOUTS,
+} from './menu-model.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -37,20 +45,32 @@ export const PriceDeltaMinor = z.number().int().min(-M.priceMax).max(M.priceMax)
 /** A price difference in minor units. */
 export type PriceDeltaMinor = z.infer<typeof PriceDeltaMinor>;
 
-/** A serving time (AC-6520): the days, and one range of hours that may cross midnight. */
+/**
+ * Serving times (AC-6520, AC-6521; checklabs' per day schedule): each day's windows, the place's hours rules (up to
+ * three a day, in order, the last may run past midnight). A day left out or empty doesn't serve; no serving times at
+ * all is always (`servingAt` in `menu-model.ts`).
+ */
 export const MenuServing = z
   .strictObject({
-    days: z
-      .array(z.enum(WEEK_DAYS))
-      .min(1, 'Pick at least one day.')
-      .max(7)
-      .refine((days) => new Set(days).size === days.length, { error: 'Pick each day once.' }),
-    from: TimeOfDay,
-    to: TimeOfDay,
+    weekly: z.strictObject(
+      Object.fromEntries(WEEK_DAYS.map((day) => [day, PlaceDayRanges.optional()])) as {
+        [Day in (typeof WEEK_DAYS)[number]]: z.ZodOptional<typeof PlaceDayRanges>;
+      },
+    ),
   })
-  .refine((serving) => serving.from !== serving.to, { error: 'Give the serving time a start and a different end.' });
-/** A serving time. */
+  .check((ctx) => {
+    const problem = hoursProblem({ weekly: ctx.value.weekly, exceptions: [] });
+    if (problem !== undefined) ctx.issues.push({ code: 'custom', message: problem, input: ctx.value });
+  });
+/** Serving times. */
 export type MenuServing = z.infer<typeof MenuServing>;
+
+/** A tax or service rate in basis points (1250 is 12.5%), 0 to 100%. */
+export const RateBasisPoints = z
+  .number()
+  .int('Use a rate such as 12.5.')
+  .min(0, 'A rate can’t be below zero.')
+  .max(RATE_MAX, 'Use a rate of 100% or less.');
 
 /** A dietary mark. */
 export const DietMarkName = z.enum(DIET_MARKS);
@@ -128,6 +148,9 @@ export const Menu = z.object({
   name: z.string(),
   note: z.string().optional(),
   serving: MenuServing.optional(),
+  /** The tax inside its prices and the service added, in basis points (0 when none). */
+  taxRate: z.number().int(),
+  serviceRate: z.number().int(),
   placeIds: z.array(Uuid),
   position: z.number().int(),
 });
@@ -175,6 +198,9 @@ export const SaveMenuInput = WorkspaceScoped.extend({
   placeIds: z.array(Uuid).max(20),
   /** Null clears it. */
   serving: MenuServing.nullable().optional(),
+  /** Left out keeps what is there (0 for a new menu). */
+  taxRate: RateBasisPoints.optional(),
+  serviceRate: RateBasisPoints.optional(),
   ...Write,
 });
 /** Adds or changes a menu. */
@@ -373,6 +399,9 @@ export const SnapshotMenu = z.object({
   name: z.string(),
   note: z.string().optional(),
   serving: MenuServing.optional(),
+  /** The tax inside its prices and the service added, in basis points, when set (Your picks adds them up). */
+  taxRate: z.number().int().optional(),
+  serviceRate: z.number().int().optional(),
   sections: z.array(SnapshotSection),
 });
 /** A menu as guests see it. */

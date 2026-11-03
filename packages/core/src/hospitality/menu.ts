@@ -150,7 +150,7 @@ function requireMenuReader(scope: EngineScope): void {
 
 /** A serving time as stored, or null to clear; undefined leaves it. */
 const servingValue = (serving: MenuServing | null | undefined) =>
-  serving === undefined ? {} : { serving: serving === null ? null : { ...serving, days: [...serving.days] } };
+  serving === undefined ? {} : { serving: serving === null ? null : { weekly: { ...serving.weekly } } };
 
 /** Empty text as null. */
 const blank = (value: string | undefined): string | null =>
@@ -165,6 +165,9 @@ export async function saveMenu(
     readonly note?: string;
     readonly placeIds: readonly string[];
     readonly serving?: MenuServing | null;
+    /** Basis points; left out keeps what is there. */
+    readonly taxRate?: number;
+    readonly serviceRate?: number;
   },
 ): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
@@ -179,7 +182,13 @@ export async function saveMenu(
         .where(and(eq(places.workspaceId, ws), inArray(places.id, placeIds)));
       if (found.length !== placeIds.length) throw refuse('NOT_FOUND', 'That place doesn’t exist.');
     }
-    const fields = { name: input.name, note: blank(input.note), ...servingValue(input.serving) };
+    const fields = {
+      name: input.name,
+      note: blank(input.note),
+      ...servingValue(input.serving),
+      ...(input.taxRate === undefined ? {} : { taxRate: input.taxRate }),
+      ...(input.serviceRate === undefined ? {} : { serviceRate: input.serviceRate }),
+    };
     const changed = await tx
       .update(menus)
       .set({ ...fields, updatedByMemberId: by, updatedAt: sql`now()` })

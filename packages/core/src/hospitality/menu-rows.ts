@@ -18,6 +18,8 @@ import {
   type SnapshotItem,
   type SnapshotSection,
   type SnapshotSubsection,
+  RATE_MAX,
+  servingOf as readServing,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, asc, eq } from 'drizzle-orm';
@@ -41,6 +43,9 @@ export interface MenuRow {
   readonly name: string;
   readonly note: string | null;
   readonly serving: unknown;
+  /** Kept rows from before the rates read as 0. */
+  readonly taxRate?: number;
+  readonly serviceRate?: number;
   readonly position: number;
 }
 /** A section row. */
@@ -108,6 +113,8 @@ export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promis
         name: menus.name,
         note: menus.note,
         serving: menus.serving,
+        taxRate: menus.taxRate,
+        serviceRate: menus.serviceRate,
         position: menus.position,
       })
       .from(menus)
@@ -212,13 +219,15 @@ const DIETS: ReadonlySet<string> = new Set(DIET_MARKS);
 const ALLERGENS: ReadonlySet<string> = new Set(EU_ALLERGENS);
 const LEVELS: ReadonlySet<string> = new Set(ALLERGEN_LEVELS);
 
-/** A stored serving time, or none when it isn't one (checked on the way in; read defensively). */
+/** A stored serving time, or none when it isn't one (checked on the way in; read defensively, either shape). */
 function servingOf(value: unknown): MenuServing | undefined {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const { days, from, to } = value as Record<string, unknown>;
-  if (!Array.isArray(days) || typeof from !== 'string' || typeof to !== 'string') return undefined;
-  return { days: days.filter((day): day is MenuServing['days'][number] => typeof day === 'string'), from, to };
+  const serving = readServing(value);
+  return serving === undefined ? undefined : ({ weekly: { ...serving.weekly } } as MenuServing);
 }
+
+/** A kept rate, 0 when it is missing or not a whole number in range. */
+const rateOf = (value: number | undefined): number =>
+  value !== undefined && Number.isInteger(value) && value >= 0 && value <= RATE_MAX ? value : 0;
 
 /** Stored allergens, keeping only well formed ones from the closed list. */
 function allergensOf(value: unknown): ItemAllergen[] {
@@ -287,6 +296,8 @@ export function draftOf(rows: MenuRows, context: DraftContext): MenuDraft {
       name: menu.name,
       ...(menu.note === null ? {} : { note: menu.note }),
       ...(serving === undefined ? {} : { serving }),
+      taxRate: rateOf(menu.taxRate),
+      serviceRate: rateOf(menu.serviceRate),
       placeIds: (placesOf.get(menu.id) ?? []).map((row) => row.placeId).filter((id) => known.has(id)),
       position: menu.position,
     };
@@ -386,6 +397,8 @@ export function snapshotFor(
         name: menu.name,
         ...(menu.note === null ? {} : { note: menu.note }),
         ...(serving === undefined ? {} : { serving }),
+        ...(rateOf(menu.taxRate) > 0 ? { taxRate: rateOf(menu.taxRate) } : {}),
+        ...(rateOf(menu.serviceRate) > 0 ? { serviceRate: rateOf(menu.serviceRate) } : {}),
         sections,
       };
     });
@@ -498,6 +511,8 @@ export async function restoreMenuRows(
         name: row.name,
         note: row.note,
         serving: row.serving,
+        taxRate: rateOf(row.taxRate),
+        serviceRate: rateOf(row.serviceRate),
         position: row.position,
       })),
     );

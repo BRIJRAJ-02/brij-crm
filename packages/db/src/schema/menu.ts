@@ -28,8 +28,11 @@ export const menus = pgTable(
     id: id(),
     name: text('name').notNull(),
     note: text('note'),
-    /** `{ days, from, to }`, checked by `MenuServing` in contracts; null serves whenever the place shows it. */
+    /** `{ weekly }` per day windows, checked by `MenuServing` in contracts; null serves whenever the place shows it. */
     serving: jsonb('serving'),
+    /** The tax inside the prices and the service added, in basis points (1250 is 12.5%), ported from checklabs. */
+    taxRate: integer('tax_rate').notNull().default(0),
+    serviceRate: integer('service_rate').notNull().default(0),
     position: smallint('position').notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     createdByMemberId: uuid('created_by_member_id'),
@@ -45,6 +48,8 @@ export const menus = pgTable(
     check('menus_name', sql`char_length(${t.name}) between 1 and 60`),
     check('menus_note', sql`char_length(${t.note}) <= 300`),
     check('menus_serving', sql`${t.serving} is null or jsonb_typeof(${t.serving}) = 'object'`),
+    check('menus_tax_rate', sql`${t.taxRate} between 0 and 10000`),
+    check('menus_service_rate', sql`${t.serviceRate} between 0 and 10000`),
   ],
 );
 

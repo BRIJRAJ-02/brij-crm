@@ -46,6 +46,8 @@ export const menuRouter = m.router({
         placeIds: input.placeIds,
         ...(input.note === undefined ? {} : { note: input.note }),
         ...(input.serving === undefined ? {} : { serving: input.serving }),
+        ...(input.taxRate === undefined ? {} : { taxRate: input.taxRate }),
+        ...(input.serviceRate === undefined ? {} : { serviceRate: input.serviceRate }),
       }),
     ),
   ),

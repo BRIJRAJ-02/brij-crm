@@ -20,6 +20,8 @@ CREATE TABLE "menus" (
 	"name" text NOT NULL,
 	"note" text,
 	"serving" jsonb,
+	"tax_rate" integer DEFAULT 0 NOT NULL,
+	"service_rate" integer DEFAULT 0 NOT NULL,
 	"position" smallint NOT NULL,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"created_by_member_id" uuid,
@@ -28,7 +30,9 @@ CREATE TABLE "menus" (
 	CONSTRAINT "menus_pkey" PRIMARY KEY("workspace_id","id"),
 	CONSTRAINT "menus_name" CHECK (char_length("menus"."name") between 1 and 60),
 	CONSTRAINT "menus_note" CHECK (char_length("menus"."note") <= 300),
-	CONSTRAINT "menus_serving" CHECK ("menus"."serving" is null or jsonb_typeof("menus"."serving") = 'object')
+	CONSTRAINT "menus_serving" CHECK ("menus"."serving" is null or jsonb_typeof("menus"."serving") = 'object'),
+	CONSTRAINT "menus_tax_rate" CHECK ("menus"."tax_rate" between 0 and 10000),
+	CONSTRAINT "menus_service_rate" CHECK ("menus"."service_rate" between 0 and 10000)
 );
 --> statement-breakpoint
 ALTER TABLE "menus" ADD CONSTRAINT "menus_workspace" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;

@@ -3,7 +3,7 @@
 // how they format and parse, serving times read on the place's own clock, the public paths and cache tags. The Zod
 // schemas and the contract live in `menu.ts`. A place's hours helpers ride along (`hospitality-hours.ts`), so the
 // guest page reads "open now" by the rules the server uses.
-import type { PlaceHoursShape, WeekDay } from './hospitality-model.ts';
+import { WEEK_DAYS, type PlaceHoursShape, type WeekDay } from './hospitality-model.ts';
 import { nextOpening, openAt } from './hospitality-hours.ts';
 
 export * from './hospitality-hours.ts';
@@ -107,35 +107,144 @@ export const MENU_PHOTO_WIDTHS = { large: 1200, small: 400 } as const;
 /** One kept width of a menu photo. */
 export type MenuPhotoSize = keyof typeof MENU_PHOTO_WIDTHS;
 
-/** A menu or section's serving time (AC-6520, AC-6521): the days, and one range of hours that may cross midnight. */
+/**
+ * A menu or section's serving times (AC-6520, AC-6521), ported from checklabs' per day schedule
+ * (checklabscms/src/lib/schedule.ts, `isScheduleOpen`): each day of the week holds its windows (up to three, in order,
+ * the last may run past midnight). No serving times at all means always serving; a week with no day set (`{}`) also
+ * means always, as checklabs' empty schedule did; once any day is set, a day with no windows (or left out) is a day it
+ * doesn't serve. Unlike checklabs, a window past midnight belongs to the day it starts on (Friday 22:00 to 02:00 serves
+ * in Saturday's small hours, not Friday's), the rule the place's hours use, and every reading is on the place's zone.
+ */
 export interface MenuServingShape {
-  readonly days: readonly WeekDay[];
-  readonly from: string;
-  readonly to: string;
+  readonly weekly: PlaceHoursShape['weekly'];
 }
 
-/** A serving time as hours, so the place's hours rules read it (one range on each of its days, no exceptions). */
+/** Whether serving times say anything: undefined or a week with no day set is "always" (checklabs' empty schedule). */
+export function servingIsSet(serving: MenuServingShape | undefined): serving is MenuServingShape {
+  return serving !== undefined && Object.keys(serving.weekly).length > 0;
+}
+
+/** Serving times as hours, so the place's hours rules read them (no dated exceptions). */
 export function servingHours(serving: MenuServingShape): PlaceHoursShape {
-  return {
-    weekly: Object.fromEntries(serving.days.map((day) => [day, [{ from: serving.from, to: serving.to }]])),
-    exceptions: [],
-  };
+  return { weekly: serving.weekly, exceptions: [] };
 }
 
-/** Whether something with this serving time is serving at `instant` in `zone`, and when it next starts if not. */
+/** Whether something with these serving times is serving at `instant` in `zone`, and when it next starts if not. */
 export interface ServingNow {
   readonly now: boolean;
   /** When it next starts serving, when it isn't now (within two weeks). */
   readonly next?: Date;
 }
 
-/** Whether a menu (or section) serves at `instant` on the place's clock (AC-6528); no serving time is always. */
+/** Whether a menu (or section) serves at `instant` on the place's clock (AC-6528); no serving times is always. */
 export function servingAt(serving: MenuServingShape | undefined, instant: Date, zone: string): ServingNow {
-  if (serving === undefined || serving.days.length === 0) return { now: true };
+  if (!servingIsSet(serving)) return { now: true };
   const hours = servingHours(serving);
-  if (openAt(hours, instant, zone).open) return { now: true };
+  let open: boolean;
+  try {
+    open = openAt(hours, instant, zone).open;
+  } catch {
+    // A zone the platform doesn't know reads as UTC, as checklabs' did.
+    return servingAt(serving, instant, 'UTC');
+  }
+  if (open) return { now: true };
   const next = nextOpening(hours, instant, zone);
   return next === undefined ? { now: false } : { now: false, next: next.at };
+}
+
+/**
+ * A stored serving time in either shape, as the per day one: the first build kept one range over a list of days
+ * (`{ days, from, to }`), never landed; read defensively so a draft saved then still opens. Undefined when it is
+ * neither.
+ */
+export function servingOf(value: unknown): MenuServingShape | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.weekly === 'object' && record.weekly !== null) {
+    const weekly: Partial<Record<WeekDay, readonly { from: string; to: string }[]>> = {};
+    for (const day of WEEK_DAYS) {
+      const ranges = (record.weekly as Record<string, unknown>)[day];
+      if (!Array.isArray(ranges)) continue;
+      weekly[day] = ranges
+        .filter(
+          (range): range is { from: string; to: string } =>
+            typeof range === 'object' &&
+            range !== null &&
+            typeof (range as { from?: unknown }).from === 'string' &&
+            typeof (range as { to?: unknown }).to === 'string',
+        )
+        .map((range) => ({ from: range.from, to: range.to }));
+    }
+    return { weekly };
+  }
+  if (Array.isArray(record.days) && typeof record.from === 'string' && typeof record.to === 'string') {
+    const range = { from: record.from, to: record.to };
+    return {
+      weekly: Object.fromEntries(
+        WEEK_DAYS.map((day) => [day, (record.days as unknown[]).includes(day) ? [range] : []]),
+      ),
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Tax and service rates in basis points (hundredths of a percent: 1250 is 12.5%), whole numbers so no rate is ever a
+ * float. Ported from checklabs' inclusive model (checklabscms/src/lib/pos/totals.ts, `rollupCheck`): prices as shown
+ * already hold the tax; service is added on top. Each rate is 0 to 100%.
+ */
+export const RATE_MAX = 10_000;
+
+/** A rate in basis points as a percent for people: 1250 is "12.5", 500 is "5", 1275 is "12.75". */
+export function formatRate(basisPoints: number): string {
+  const whole = Math.trunc(basisPoints / 100);
+  const fraction = String(Math.abs(basisPoints) % 100)
+    .padStart(2, '0')
+    .replace(/0+$/, '');
+  return fraction === '' ? String(whole) : `${String(whole)}.${fraction}`;
+}
+
+/** A typed percent ("12.5", "12,5 %", "5") as basis points, or undefined when it isn't one from 0 to 100. */
+export function parseRate(text: string): number | undefined {
+  const match = /^(\d{1,3})(?:[.,](\d{1,2}))?\s*%?$/.exec(text.trim());
+  if (match === null) return undefined;
+  const basisPoints = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
+  return basisPoints <= RATE_MAX ? basisPoints : undefined;
+}
+
+/**
+ * The note a menu's foot shows for its rates (AC-6520): "Prices include 5% tax. 12.5% service is added.", either
+ * half left out at 0, and nothing when both are. The editor writes it while the owner hasn't changed the note.
+ */
+export function rateNote(taxRate: number, serviceRate: number): string {
+  const parts = [
+    ...(taxRate > 0 ? [`Prices include ${formatRate(taxRate)}% tax.`] : []),
+    ...(serviceRate > 0 ? [`${formatRate(serviceRate)}% service is added.`] : []),
+  ];
+  return parts.join(' ');
+}
+
+/** A guest's picks added up (AC-6530): what they total, the tax already inside it, and the service on top. */
+export interface PicksTotal {
+  readonly subtotal: number;
+  /** The tax already inside the subtotal (shown, never added). */
+  readonly tax: number;
+  readonly service: number;
+  readonly total: number;
+}
+
+/**
+ * Ported from checklabs' `rollupCheck` (checklabscms/src/lib/pos/totals.ts), minus the tip: the tax inside an
+ * inclusive subtotal is subtotal × rate ÷ (100% + rate), service is subtotal × rate, the total is subtotal plus
+ * service. Each part rounds half up to a whole minor unit, as checklabs' `Math.round`; rates outside 0 to 100% count
+ * as 0 (checklabs' `clampPct` capped at 100; we refuse such rates on the way in).
+ */
+export function picksTotal(subtotal: number, taxRate: number, serviceRate: number): PicksTotal {
+  const base = Math.max(0, Math.round(subtotal));
+  const rate = (value: number) => (Number.isInteger(value) && value >= 0 && value <= RATE_MAX ? value : 0);
+  const tax = rate(taxRate) > 0 ? Math.round((base * rate(taxRate)) / (RATE_MAX + rate(taxRate))) : 0;
+  const service = rate(serviceRate) > 0 ? Math.round((base * rate(serviceRate)) / RATE_MAX) : 0;
+  return { subtotal: base, tax, service, total: base + service };
 }
 
 /** The digits after the point a currency prices with (its minor units: JPY 0, GBP 2, BHD 3), by Intl. */

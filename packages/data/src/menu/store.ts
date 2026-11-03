@@ -15,7 +15,15 @@ type Scoped = { workspace: string; mutationId: string };
 export interface MenuProcedures {
   readonly draft: (input: { workspace: string }, options: Options) => Promise<MenuDraft>;
   readonly saveMenu: (
-    input: Scoped & { id: string; name: string; note?: string; placeIds: string[]; serving?: MenuServing | null },
+    input: Scoped & {
+      id: string;
+      name: string;
+      note?: string;
+      placeIds: string[];
+      serving?: MenuServing | null;
+      taxRate?: number;
+      serviceRate?: number;
+    },
     options: Options,
   ) => Promise<MenuDraft>;
   readonly deleteMenu: (input: Scoped & { menuId: string }, options: Options) => Promise<MenuDraft>;
@@ -128,18 +136,31 @@ export function openMenus(given: {
         readonly note?: string;
         readonly placeIds: readonly string[];
         readonly serving?: MenuServing | null;
+        /** Basis points (1250 is 12.5%); left out keeps what is there. */
+        readonly taxRate?: number;
+        readonly serviceRate?: number;
       },
     ): Promise<DataError | undefined> =>
       edit(
         workspace,
         (draft) => {
           const was = draft.menus.find((each) => each.id === menu.id);
-          const { serving: _serving, note: _note, ...rest } = was ?? { position: draft.menus.length };
+          const {
+            serving: _serving,
+            note: _note,
+            ...rest
+          } = was ?? {
+            position: draft.menus.length,
+            taxRate: 0,
+            serviceRate: 0,
+          };
           const next = {
             ...rest,
             id: menu.id,
             name: menu.name,
             placeIds: [...menu.placeIds],
+            ...(menu.taxRate === undefined ? {} : { taxRate: menu.taxRate }),
+            ...(menu.serviceRate === undefined ? {} : { serviceRate: menu.serviceRate }),
             ...(menu.note === undefined || menu.note === '' ? {} : { note: menu.note }),
             ...(menu.serving === null
               ? {}
@@ -166,6 +187,8 @@ export function openMenus(given: {
               placeIds: [...menu.placeIds],
               ...(menu.note === undefined ? {} : { note: menu.note }),
               ...(menu.serving === undefined ? {} : { serving: menu.serving }),
+              ...(menu.taxRate === undefined ? {} : { taxRate: menu.taxRate }),
+              ...(menu.serviceRate === undefined ? {} : { serviceRate: menu.serviceRate }),
               mutationId,
             },
             options,

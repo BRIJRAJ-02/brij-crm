@@ -10,7 +10,7 @@ const ITEM = '01900000-0000-7000-8000-000000000003';
 const DRAFT: MenuDraft = {
   currency: 'GBP',
   places: [],
-  menus: [{ id: MENU, name: 'Dinner', placeIds: [], position: 0 }],
+  menus: [{ id: MENU, name: 'Dinner', placeIds: [], position: 0, taxRate: 0, serviceRate: 0 }],
   sections: [{ id: SECTION, menuId: MENU, name: 'Mains', layout: 'list', position: 0, itemIds: [ITEM] }],
   items: [
     {

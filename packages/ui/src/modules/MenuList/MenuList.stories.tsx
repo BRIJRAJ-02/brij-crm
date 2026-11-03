@@ -48,7 +48,7 @@ export function sampleMenu(): PublicMenu {
         {
           id: id(2),
           name: 'Brunch',
-          serving: { days: ['sat', 'sun'], from: '10:00', to: '15:00' },
+          serving: { weekly: { sat: [{ from: '10:00', to: '15:00' }], sun: [{ from: '10:00', to: '15:00' }] } },
           sections: [{ id: id(20), name: 'Eggs', layout: 'list', itemIds: [id(106)], sections: [] }],
         },
       ],
