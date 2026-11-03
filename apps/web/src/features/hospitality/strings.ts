@@ -49,6 +49,9 @@ export const strings = {
   } as const,
   hospitalityGroup: 'Hospitality',
   install: 'Install',
+  // Each card's button names its app, so five Installs read apart to a screen reader (walk, 4 Nov 2026).
+  installNamed: (app: string) => `Install ${app}`,
+  removeNamed: (app: string) => `Remove ${app}`,
   installing: 'Installing',
   installed: 'Installed',
   remove: 'Remove',

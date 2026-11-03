@@ -21,7 +21,11 @@ import {
   ButtonLink,
   Card,
   EmptyState,
+  Menu,
+  MenuItem,
+  MenuTrigger,
   Modal,
+  PageColumn,
   SegmentedControl,
   Select,
   Skeleton,
@@ -33,7 +37,7 @@ import {
   type TableColumn,
   type Toasts,
 } from '@crm/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { businessSettingsHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { strings } from './strings.ts';
@@ -188,6 +192,13 @@ function PlaceService({
     month: 'long',
     timeZone: 'UTC',
   }).format(new Date(`${date}T12:00:00.000Z`));
+  // The bar's date stays short, so a phone keeps the bar on one line.
+  const shortLabel = new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T12:00:00.000Z`));
   const tableList: readonly Resource[] =
     floor.status === 'ready' ? floor.value.resources.filter((each) => !each.archived) : [];
   const labelOf = (ids: readonly string[]) =>
@@ -196,14 +207,22 @@ function PlaceService({
       .filter((label) => label !== '')
       .join(' + ');
 
+  // Each visit's latest Undo toast: a newer move on the same visit replaces it, so an older Undo (back past a later
+  // move) is never offered (walk of 4 Nov 2026: Seat's Undo after Finish was refused).
+  const undoToasts = useRef(new Map<string, string>());
   /** Moves a visit, with Undo for 10 seconds back to where it was. */
   const move = async (visit: ServiceVisit, status: VisitStatus) => {
+    const before = undoToasts.current.get(visit.id);
+    if (before !== undefined) {
+      toasts.dismiss(before);
+      undoToasts.current.delete(visit.id);
+    }
     const refused = await tables.setStatus(slug, place.id, date, visit.id, status);
     if (refused !== undefined) {
       toasts.toast({ tone: 'danger', message: refused.message });
       return;
     }
-    toasts.toast(
+    const key = toasts.toast(
       {
         tone: 'success',
         message: strings.moved(visit.name, strings.status[status]),
@@ -218,6 +237,7 @@ function PlaceService({
       },
       { timeout: 10_000 },
     );
+    undoToasts.current.set(visit.id, key);
   };
 
   const isLate = (visit: ServiceVisit) =>
@@ -226,6 +246,7 @@ function PlaceService({
 
   const actionsOf = (visit: ServiceVisit) => {
     const next = LOOK[visit.status].next;
+    const canFree = visit.status === 'booked' || visit.status === 'confirmed' || visit.status === 'arrived';
     return (
       <>
         {next !== undefined && (
@@ -237,15 +258,24 @@ function PlaceService({
             {next === 'started' ? strings.seat : strings.finish}
           </Button>
         )}
-        {(visit.status === 'booked' || visit.status === 'confirmed' || visit.status === 'arrived') && (
-          <>
-            <Button size="sm" variant="ghost" onPress={() => setAsking({ visit, status: 'no_show' })}>
-              {strings.noShow}
-            </Button>
-            <Button size="sm" variant="ghost" onPress={() => setAsking({ visit, status: 'cancelled' })}>
-              {strings.cancel}
-            </Button>
-          </>
+        {canFree && (
+          // No show and Cancel ask first (AC-6565), so they sit one step away, in the row's menu.
+          <MenuTrigger>
+            <Button variant="ghost" size="sm" icon="ellipsis" label={strings.moreFor(visit.name)} />
+            <Menu
+              label={strings.moreFor(visit.name)}
+              onAction={(key) => {
+                if (key === 'no_show' || key === 'cancelled') setAsking({ visit, status: key });
+              }}
+            >
+              <MenuItem id="no_show" icon="user-x">
+                {strings.noShow}
+              </MenuItem>
+              <MenuItem id="cancelled" icon="circle-x" isDanger>
+                {strings.cancel}
+              </MenuItem>
+            </Menu>
+          </MenuTrigger>
         )}
       </>
     );
@@ -254,8 +284,6 @@ function PlaceService({
   const columns: readonly TableColumn[] = [
     { id: 'time', label: strings.time, size: 'fit' },
     { id: 'guest', label: strings.guest, isRowHeader: true, size: 'fill' },
-    { id: 'party', label: strings.party, align: 'end', size: 'fit' },
-    { id: 'table', label: strings.table, size: 'fit' },
     { id: 'status', label: strings.statusTitle, size: 'fit' },
     { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
   ];
@@ -272,13 +300,16 @@ function PlaceService({
           case 'time':
             return time(visit.start);
           case 'guest':
-            return [visit.name, visit.occasion === undefined ? '' : strings.occasion(visit.occasion), visit.note ?? '']
+            // One line a phone can hold: who, how many, where, and anything to know.
+            return [
+              visit.name,
+              strings.guestsCount(visit.party),
+              labelOf(visit.resourceIds),
+              visit.occasion === undefined ? '' : strings.occasion(visit.occasion),
+              visit.note ?? '',
+            ]
               .filter((part) => part !== '')
               .join(' · ');
-          case 'party':
-            return String(visit.party);
-          case 'table':
-            return labelOf(visit.resourceIds);
           case 'status':
             return isLate(visit) ? (
               <Badge dot="red" text={strings.late(since(visit.start, now))} />
@@ -326,7 +357,7 @@ function PlaceService({
   );
 
   const topBar = (
-    <TopBar title={strings.service} icon="table" meta={dayLabel}>
+    <TopBar title={strings.service} icon="table" meta={shortLabel}>
       {places.length > 1 && (
         <Select
           label={strings.place}
@@ -361,7 +392,7 @@ function PlaceService({
     ) : day.status === 'error' ? (
       <EmptyState icon="circle-alert" title={day.error.message} />
     ) : (
-      <>
+      <PageColumn>
         <Stats
           label={strings.coversLabel}
           items={[
@@ -372,7 +403,7 @@ function PlaceService({
         />
         {view === 'list' ? list(day.value) : tiles(day.value)}
         {day.value.truncated && <EmptyState icon="info" title={strings.truncated} />}
-      </>
+      </PageColumn>
     );
 
   return (

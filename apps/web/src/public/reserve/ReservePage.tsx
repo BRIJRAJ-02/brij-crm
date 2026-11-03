@@ -38,7 +38,7 @@ export function placeFacts(page: PublicTablePage): readonly BookingFact[] {
 }
 
 /** The first of the month of a date. */
-const monthOf = (date: string) => `${date.slice(0, 7)}-01`;
+const monthOf = (date: string) => date.slice(0, 7);
 
 /** The times of one day for a party: loading, the times, or the failure's words. */
 type Times =
@@ -95,6 +95,8 @@ export function ReservePage({
   }, [client, page.key, party, day]);
 
   const frame = {
+    // The rail heads with the business, as a booking page heads with its host; the place is the page's title.
+    host: { name: page.business.name },
     title: page.place.name,
     description: strings.goodToKnow(Math.round(page.cancelCutoffMinutes / 60)),
     facts: placeFacts(page),
@@ -271,7 +273,7 @@ export function ReservePage({
             setNotice(undefined);
           }
         }}
-        labelAside={strings.largerParty(page.partyMax, page.place.phone)}
+        labelAside={strings.largerPartyShort(page.partyMax)}
       />
       <MonthTiles
         month={month}

@@ -69,6 +69,7 @@ export const strings = {
   actions: 'Actions',
   listLabel: (day: string) => `Reservations on ${day}`,
   noReservations: (day: string) => `No reservations on ${day}`,
+  moreFor: (name: string) => `More for ${name}`,
   seat: 'Seat',
   finish: 'Finish',
   noShow: 'No show',

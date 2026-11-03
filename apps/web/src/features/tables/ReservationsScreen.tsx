@@ -11,11 +11,13 @@ import {
   Button,
   ButtonLink,
   Callout,
+  Card,
   CopyButton,
   EmptyState,
   Field,
+  FormRow,
+  PageColumn,
   Select,
-  SettingsSection,
   SetupChecklist,
   Skeleton,
   TopBar,
@@ -275,7 +277,20 @@ function SetupBody({
   const link = reservePageUrl(setup.publicKey);
   const hours = stepOf('hours');
   const tablesStep = stepOf('tables');
-  return (
+  const problemLine = problem !== undefined && (
+    <Callout tone="danger" isAnnounced>
+      {problem.message}
+      {problem.href !== undefined && (
+        <>
+          {' '}
+          <ButtonLink href={problem.href} variant="ghost">
+            {strings.fixIt}
+          </ButtonLink>
+        </>
+      )}
+    </Callout>
+  );
+  const aside = (
     <>
       <SetupChecklist
         title={live ? strings.live : strings.finishSetup}
@@ -316,82 +331,123 @@ function SetupBody({
           else void save(true);
         }}
       />
-      {problem !== undefined && (
-        <Callout tone="danger" isAnnounced>
-          {problem.message}
-          {problem.href !== undefined && (
-            <>
-              {' '}
-              <ButtonLink href={problem.href} variant="ghost">
-                {strings.fixIt}
-              </ButtonLink>
-            </>
-          )}
-        </Callout>
-      )}
-      <SettingsSection title={strings.onlineBooking} description={strings.onlineBookingText(place.name)}>
-        <Field label={strings.partyMin} inputMode="numeric" value={draft.partyMin} onChange={set('partyMin')} />
-        <Field
-          label={strings.partyMax}
-          inputMode="numeric"
-          value={draft.partyMax}
-          onChange={set('partyMax')}
-          hint={strings.partyMaxHint}
-        />
-        <Select
-          label={strings.interval}
-          items={[15, 30, 60].map((minutes) => ({ id: String(minutes), label: strings.everyMinutes(minutes) }))}
-          value={draft.step}
-          onChange={(next) => {
-            if (typeof next === 'string') set('step')(next);
-          }}
-        />
-        <Field
-          label={strings.holdSmall}
-          inputMode="numeric"
-          suffix={strings.min}
-          value={draft.minutes}
-          onChange={set('minutes')}
-          hint={strings.holdHint}
-        />
-        <Field
-          label={strings.holdFor(3)}
-          inputMode="numeric"
-          suffix={strings.min}
-          value={draft.hold3}
-          onChange={set('hold3')}
-        />
-        <Field
-          label={strings.holdFor(5)}
-          inputMode="numeric"
-          suffix={strings.min}
-          value={draft.hold5}
-          onChange={set('hold5')}
-        />
-        <Field
-          label={strings.holdFor(7)}
-          inputMode="numeric"
-          suffix={strings.min}
-          value={draft.hold7}
-          onChange={set('hold7')}
-        />
-      </SettingsSection>
-      <SettingsSection title={strings.whenTitle}>
-        <Field
-          label={strings.notice}
-          inputMode="decimal"
-          suffix={strings.hours}
-          value={draft.notice}
-          onChange={set('notice')}
-          hint={strings.noticeHint}
-        />
-        <Field
-          label={strings.window}
-          inputMode="numeric"
-          suffix={strings.days}
-          value={draft.window}
-          onChange={set('window')}
-        />
+      <Card
+        title={live ? strings.pageLive : strings.publishTitle}
+        description={live ? link : strings.publishText}
+        actions={
+          live ? (
+            <Button variant="danger" isDisabled={isSaving} onPress={() => void save(false)}>
+              {strings.unpublish}
+            </Button>
+          ) : (
+            <Button variant="primary" isDisabled={isSaving} onPress={() => void save(true)}>
+              {strings.publish}
+            </Button>
+          )
+        }
+      >
+        {problemLine}
+      </Card>
+    </>
+  );
+  return (
+    <PageColumn aside={aside} stack="aside-first">
+      <Card
+        title={strings.onlineBooking}
+        description={strings.onlineBookingText(place.name)}
+        actions={
+          <Button isDisabled={isSaving} onPress={() => void save(live)}>
+            {strings.save}
+          </Button>
+        }
+      >
+        <FormRow>
+          <Field label={strings.partyMin} inputMode="numeric" value={draft.partyMin} onChange={set('partyMin')} />
+          <Field
+            label={strings.partyMax}
+            inputMode="numeric"
+            value={draft.partyMax}
+            onChange={set('partyMax')}
+            hint={strings.partyMaxHint}
+          />
+        </FormRow>
+        <FormRow>
+          <Select
+            label={strings.interval}
+            items={[15, 30, 60].map((minutes) => ({ id: String(minutes), label: strings.everyMinutes(minutes) }))}
+            value={draft.step}
+            onChange={(next) => {
+              if (typeof next === 'string') set('step')(next);
+            }}
+          />
+          <Field
+            label={strings.holdSmall}
+            inputMode="numeric"
+            suffix={strings.min}
+            value={draft.minutes}
+            onChange={set('minutes')}
+            hint={strings.holdHint}
+          />
+        </FormRow>
+        <FormRow>
+          <Field
+            label={strings.holdFor(3)}
+            inputMode="numeric"
+            suffix={strings.min}
+            value={draft.hold3}
+            onChange={set('hold3')}
+          />
+          <Field
+            label={strings.holdFor(5)}
+            inputMode="numeric"
+            suffix={strings.min}
+            value={draft.hold5}
+            onChange={set('hold5')}
+          />
+          <Field
+            label={strings.holdFor(7)}
+            inputMode="numeric"
+            suffix={strings.min}
+            value={draft.hold7}
+            onChange={set('hold7')}
+          />
+        </FormRow>
+      </Card>
+      <Card title={strings.whenTitle}>
+        <FormRow>
+          <Field
+            label={strings.notice}
+            inputMode="decimal"
+            suffix={strings.hours}
+            value={draft.notice}
+            onChange={set('notice')}
+            hint={strings.noticeHint}
+          />
+          <Field
+            label={strings.window}
+            inputMode="numeric"
+            suffix={strings.days}
+            value={draft.window}
+            onChange={set('window')}
+          />
+        </FormRow>
+        <FormRow>
+          <Field
+            label={strings.changeCutoff}
+            inputMode="decimal"
+            suffix={strings.hours}
+            value={draft.change}
+            onChange={set('change')}
+          />
+          <Field
+            label={strings.cancelCutoff}
+            inputMode="decimal"
+            suffix={strings.hours}
+            value={draft.cancel}
+            onChange={set('cancel')}
+            hint={strings.cutoffHint}
+          />
+        </FormRow>
         <Field
           label={strings.covers}
           inputMode="numeric"
@@ -400,44 +456,7 @@ function SetupBody({
           placeholder={strings.noCap}
           hint={strings.coversHint}
         />
-        <Field
-          label={strings.changeCutoff}
-          inputMode="decimal"
-          suffix={strings.hours}
-          value={draft.change}
-          onChange={set('change')}
-        />
-        <Field
-          label={strings.cancelCutoff}
-          inputMode="decimal"
-          suffix={strings.hours}
-          value={draft.cancel}
-          onChange={set('cancel')}
-          hint={strings.cutoffHint}
-        />
-      </SettingsSection>
-      <SettingsSection
-        title={live ? strings.pageLive : strings.publishTitle}
-        description={live ? link : strings.publishText}
-        actions={
-          <>
-            <Button isDisabled={isSaving} onPress={() => void save(live)}>
-              {strings.save}
-            </Button>
-            {live ? (
-              <Button variant="danger" isDisabled={isSaving} onPress={() => void save(false)}>
-                {strings.unpublish}
-              </Button>
-            ) : (
-              <Button variant="primary" isDisabled={isSaving} onPress={() => void save(true)}>
-                {strings.publish}
-              </Button>
-            )}
-          </>
-        }
-      >
-        {null}
-      </SettingsSection>
-    </>
+      </Card>
+    </PageColumn>
   );
 }

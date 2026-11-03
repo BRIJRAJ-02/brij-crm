@@ -12,8 +12,8 @@ import {
   Button,
   Callout,
   ChoiceChips,
+  DayStrip,
   Field,
-  MonthTiles,
   SlotList,
   poweredByHref,
   type CancelOutcome,
@@ -27,7 +27,7 @@ import {
   type TableRefusal,
 } from '@crm/data/tables';
 import { useEffect, useMemo, useState } from 'react';
-import { compact, longDay, openDays, placeDate, services, shortDay, timeLabel } from './days.ts';
+import { compact, longDay, openDays, placeDate, shortDay, timeLabel } from './days.ts';
 import { placeFacts } from './ReservePage.tsx';
 import { strings } from './strings.ts';
 
@@ -211,7 +211,6 @@ function ChangePicker({
   const days = useMemo(() => openDays(page), [page]);
   const [party, setParty] = useState(visit.party);
   const [day, setDay] = useState(placeDate(visit.start, zone));
-  const [month, setMonth] = useState(`${placeDate(visit.start, zone).slice(0, 7)}-01`);
   const [time, setTime] = useState<string | undefined>();
   const [answer, setAnswer] = useState<{ readonly key: string; readonly times: readonly string[] } | undefined>();
   const times = answer?.key === `${String(party)}|${day}` ? answer.times : undefined;
@@ -256,43 +255,34 @@ function ChangePicker({
           }
         }}
       />
-      <MonthTiles
-        month={month}
-        today={page.today}
-        openDays={new Set(days)}
+      <DayStrip
+        days={days}
         value={day}
         onChange={(next) => {
           setDay(next);
           setTime(undefined);
         }}
-        onMonthChange={setMonth}
-        canPrevious={month > `${page.today.slice(0, 7)}-01`}
-        canNext={month < `${(days.at(-1) ?? page.today).slice(0, 7)}-01`}
       />
-      {times === undefined ? (
-        <SlotList heading={strings.times} slots={[]} value={undefined} onChange={setTime} isLoading />
-      ) : times.length === 0 ? (
-        <SlotList heading={strings.times} slots={[]} value={undefined} onChange={setTime} empty={strings.noTimes} />
-      ) : (
-        services(times, zone).map((group) => (
-          <SlotList
-            key={group.name}
-            heading={group.name === 'lunch' ? strings.lunch : strings.dinner}
-            layout="grid"
-            slots={group.times.map((instant) => ({
-              id: instant,
-              label: label(instant),
-              name: `${label(instant)}, ${shortDay(day, locale)}`,
-            }))}
-            value={time}
-            onChange={setTime}
-          />
-        ))
-      )}
+      <SlotList
+        heading={shortDay(day, locale)}
+        layout="grid"
+        slots={(times ?? []).map((instant) => ({
+          id: instant,
+          label: label(instant),
+          name: `${label(instant)}, ${shortDay(day, locale)}`,
+        }))}
+        value={time}
+        onChange={setTime}
+        isLoading={times === undefined}
+        empty={strings.noTimes}
+        drawKey={`${day}|${String(party)}`}
+      />
       <Button
         variant="primary"
+        size="lg"
         isFullWidth="center"
-        isDisabled={time === undefined || isSaving}
+        isDisabled={time === undefined}
+        isPending={isSaving}
         onPress={() => {
           if (time === undefined) return;
           setSaving(true);
@@ -351,6 +341,7 @@ function FindReservation({
   };
   return (
     <BookingFrame
+      host={{ name: page.business.name }}
       title={page.place.name}
       description={strings.findIntro}
       facts={placeFacts(page)}

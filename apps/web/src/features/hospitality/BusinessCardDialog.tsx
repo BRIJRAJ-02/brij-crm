@@ -8,6 +8,7 @@ import { Button, CountryPicker, CurrencyPicker, Field, FormRow, Form, Modal, Sel
 import { useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
+import { firstBusinessGuess } from './first-business.ts';
 import { strings } from './strings.ts';
 
 /** Props for the business card. */
@@ -78,9 +79,16 @@ function CardForm({
   const [kind, setKind] = useState<BusinessKind>('restaurant');
   const [addressLine, setAddressLine] = useState('');
   const [city, setCity] = useState('');
-  const [country, setCountry] = useState<string | null>(workspace?.country ?? null);
-  const [timeZone, setTimeZone] = useState(workspace?.timeZone ?? 'UTC');
-  const [currency, setCurrency] = useState<string | null>(workspace?.currency ?? null);
+  // A new workspace has no country or currency yet: the browser's region, its currency and its zone start the card.
+  const [guess] = useState(() =>
+    firstBusinessGuess(workspace, {
+      language: globalThis.navigator.languages[0],
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }),
+  );
+  const [country, setCountry] = useState<string | null>(guess.country);
+  const [timeZone, setTimeZone] = useState(guess.timeZone);
+  const [currency, setCurrency] = useState<string | null>(guess.currency);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const zones = useMemo(() => zoneItems(timeZone, new Date()), [timeZone]);
   const kinds = BUSINESS_KINDS.map((id) => ({ id, label: strings.kinds[id] }));

@@ -8,6 +8,7 @@ export const strings = {
     phone === undefined
       ? `For more than ${String(max)} guests, call the restaurant.`
       : `For more than ${String(max)} guests, call ${phone}.`,
+  largerPartyShort: (max: number) => `More than ${String(max)}? Call us`,
   chooseDay: 'Choose a day',
   lunch: 'Lunch',
   dinner: 'Dinner',

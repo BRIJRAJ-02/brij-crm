@@ -64,6 +64,12 @@ export function PlaceSections({ store, slug, place, isSaving, toasts }: PlaceSec
       if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
       return refused;
     });
+  // The hours as the last change left them: Set all days and Copy change several days in one go, before the page draws
+  // again, and each day must build on the one before, not on what was drawn (walk of 4 Nov 2026: only Sunday stuck).
+  const latest = useRef(place.hours);
+  useEffect(() => {
+    latest.current = place.hours;
+  }, [place.hours]);
   const rows = weekRows(place.hours, dayName).map((row) =>
     draft?.day === row.id ? { ...row, ranges: draft.ranges, error: draft.message } : row,
   );
@@ -82,13 +88,14 @@ export function PlaceSections({ store, slug, place, isSaving, toasts }: PlaceSec
             pastMidnightUntil={LATE_UNTIL}
             onChange={(day, ranges) => {
               if (!isWeekDay(day)) return;
-              const next = withDay(place.hours, day, ranges);
+              const next = withDay(latest.current, day, ranges);
               // Hours that don't hold together stay on screen as typed, with why, until they do.
               if (next.problem !== undefined) {
                 setDraft({ day, ranges, message: next.problem });
                 return;
               }
               setDraft(undefined);
+              latest.current = next.hours;
               void saveHours(next.hours);
             }}
           />
