@@ -86,6 +86,52 @@ export const Line: Story = {
   },
 };
 
+/**
+ * Two series on one axis (Insights, spec 0067): visits and finishes a week, each pair side by side with a surface gap,
+ * a legend naming both, and the table with a column each. Never a second axis.
+ */
+export const Paired: Story = {
+  args: {
+    kind: 'bar',
+    label: 'Visits and finishes by week',
+    pointLabel: 'Week',
+    valueLabel: 'Visits',
+    compareLabel: 'Finishes',
+    points: [
+      [120, 31],
+      [146, 40],
+      [98, 22],
+      [174, 51],
+      [160, 49],
+      [131, 30],
+    ].map(([visits = 0, finishes = 0], at) => ({
+      id: `w${String(at)}`,
+      label: `Week of ${String(at * 7 + 1)} September`,
+      axisLabel: `${String(at * 7 + 1)} Sep`,
+      value: visits,
+      valueText: String(visits),
+      compare: finishes,
+      compareText: String(finishes),
+    })),
+    formatTick: String,
+  },
+  // Its baselines are owed: they are shot only in the pinned image (`pnpm test:visual --update`), never borrowed.
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <Chart {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('list', { name: 'Legend' })).toBeVisible();
+    await expect(
+      canvas.getByRole('img', { name: /Visits and finishes by week\. Week of 1 September Visits 120, Finishes 31/ }),
+    ).toBeVisible();
+    await userEvent.click(canvas.getByRole('radio', { name: 'Table' }));
+    await expect(canvas.getByRole('columnheader', { name: 'Finishes' })).toBeVisible();
+  },
+};
+
 /** One big number. */
 export const BigNumber: Story = {
   args: {

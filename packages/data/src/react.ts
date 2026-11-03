@@ -28,6 +28,7 @@ import type { CalendarListState, CalendarsHeld, PageDestinationState } from './c
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 import type { FormAnalyticsHeld, FormAnalyticsState } from './forms/analytics.ts';
+import type { InsightRead } from './insights/store.ts';
 import type { RoutingReportHeld, RoutingReportState } from './routing/reports.ts';
 import type { PageRulesHeld } from './routing/page-rules.ts';
 import type { AutomationsHeld, AutomationsState } from './automations/store.ts';
@@ -474,6 +475,14 @@ export function useRoutingSettings(view: RoutingHeld<RoutingSettingsState>): Rou
  * submission sends no change event into this workspace, so returning to the tab is the refresh.
  */
 export function useFormAnalytics(view: FormAnalyticsHeld): FormAnalyticsState {
+  return useRetained(view);
+}
+
+/**
+ * Insights' numbers, sessions or share links (spec 0067), re-rendering when they are read again. Held while the
+ * screen shows them, so they are read again whenever the person comes back: a visit sends no change event here.
+ */
+export function useInsightRead<State>(view: InsightRead<State>): State {
   return useRetained(view);
 }
 

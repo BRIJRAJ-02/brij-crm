@@ -17,6 +17,8 @@ import { ACCESS_TABLE, type AccessEntry } from './table.ts';
 const NO_SCOPE: ReadonlySet<string> = new Set([
   // A page's unpublished changes as sentences (spec 0068, AC-6811): pure, it reads nothing.
   'diffPage',
+  // Insights (spec 0067): pure, a visit's source read from what its page sent.
+  'originOf',
   // Where a workspace's logo and a link page's photos are kept (spec 0060): pure, a path from ids.
   'brandLogoFolder',
   'pageImageFolder',
@@ -1610,6 +1612,29 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   // The Analytics tab (spec 0063, AC-6321) reads through the same `canSeeForm` Submissions uses, so a form the
   // principal can't see is absent, not locked.
   formAnalytics: refused('NOT_FOUND', (scope, world) => core.formAnalytics(scope, { formId: world.formId, range: 7 })),
+  // Insights (spec 0067): the same form named as a page is absent to the principal, in the numbers, the sessions
+  // and a share; another member's share (here, one that isn't there) is absent too.
+  readInsights: refused('NOT_FOUND', (scope, world) =>
+    core.readInsights(scope, { period: { range: '7' }, pages: { kind: 'form', pageId: world.formId } }),
+  ),
+  readInsightSessions: refused('NOT_FOUND', (scope, world) =>
+    core.readInsightSessions(scope, {
+      period: { range: '7' },
+      pages: { kind: 'form', pageId: world.formId },
+      filter: {},
+    }),
+  ),
+  createInsightShare: refused('NOT_FOUND', (scope, world) =>
+    core.createInsightShare(scope, { label: 'Client', pages: { kind: 'form', pageId: world.formId }, range: '7' }),
+  ),
+  revokeInsightShare: refused('NOT_FOUND', async (scope, world) => {
+    const made = await core.createInsightShare(world.owner, {
+      label: 'Client',
+      pages: { kind: 'form', pageId: world.formId },
+      range: '7',
+    });
+    return core.revokeInsightShare(scope, { shareId: made.share.id });
+  }),
   isSlugAvailable: refused('NOT_FOUND', (scope, world) =>
     core.isSlugAvailable(scope, { formId: world.formId, slug: 'contact-us' }),
   ),

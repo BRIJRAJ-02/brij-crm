@@ -58,6 +58,7 @@ import { needsRead, pageEnded } from './reads.ts';
 import { refusalLine } from './refusal.ts';
 import { guessCountry } from '../country.ts';
 import { oneOffHash } from './one-off.ts';
+import { landingOf } from '../landing.ts';
 import { strings } from './strings.ts';
 import {
   addDays,
@@ -304,6 +305,18 @@ export function BookingPage({
       isCurrent = false;
     };
   }, [client, publicKey, isPreview]);
+  // Insights (spec 0067, AC-6702): the view, once a visit, with the landing address's UTM tags and the referrer; never
+  // from the editor's own preview, which is the host looking at their page. An embed on a site counts.
+  const [landing] = useState(() => landingOf(globalThis.location.href));
+  useEffect(() => {
+    if (isEditorPreview) return;
+    const referrer = document.referrer === '' ? undefined : document.referrer.slice(0, 400);
+    client.event(publicKey, {
+      kind: 'view',
+      ...(landing === undefined ? {} : { landing }),
+      ...(referrer === undefined ? {} : { referrer }),
+    });
+  }, [client, publicKey, isEditorPreview, landing]);
   // A slot read can find the page deleted or paused after it loaded: then that state shows, not a retry.
   const ended = useCallback((state: 'gone' | 'closed' | 'used') => setLoaded({ state }), []);
   // Inside the editor's preview frame, the editor's unsaved draft shows over the saved page (AC-679):
@@ -913,6 +926,15 @@ function Booking({
   };
 
   const isDetails = step.step === 'details' && time !== undefined;
+  // Insights (spec 0067, AC-6702): each step this visit reached, once (a time picked, then the details), never from
+  // the editor's preview. The server keeps only the furthest, so going back sends nothing worth counting.
+  const reachedSteps = useRef(new Set<string>());
+  const reachedStep = isDetails ? 'details' : time !== undefined ? 'time' : undefined;
+  useEffect(() => {
+    if (isEditorPreview || reachedStep === undefined || reachedSteps.current.has(reachedStep)) return;
+    reachedSteps.current.add(reachedStep);
+    client.event(page.publicKey, { kind: 'step', step: reachedStep });
+  }, [client, page.publicKey, isEditorPreview, reachedStep]);
   const facts: BookingFact[] = [];
   if (isDetails) {
     const end = new Date(Date.parse(time) + duration * 60_000).toISOString();

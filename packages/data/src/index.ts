@@ -7,6 +7,11 @@
 // while a screen shows a workspace (the realtime client loads with the first).
 import { ROLES as BUILT_IN_ROLES } from '@crm/contracts/roles';
 import type {
+  InsightPages,
+  InsightPeriod,
+  InsightRange,
+  InsightSessionFilter,
+  SharedInsights,
   ActivityKind,
   BookingListItem,
   RecordsExportView,
@@ -189,6 +194,7 @@ import {
   type TeamTodayState,
 } from './home/store.ts';
 import { createFormAnalytics, type FormAnalyticsHeld } from './forms/analytics.ts';
+import { createInsightsStore } from './insights/store.ts';
 import {
   createRoutingReports,
   type RoutingReportDays,
@@ -236,6 +242,35 @@ export {
   type DuplicatePairsState,
 } from './duplicates/store.ts';
 export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contracts';
+// Insights (spec 0067).
+export type {
+  InsightBucket,
+  InsightFunnel,
+  InsightNumbers,
+  InsightPage,
+  InsightPages,
+  InsightPeriod,
+  InsightRange,
+  Insights,
+  InsightSession,
+  InsightSessionFilter,
+  InsightShare,
+  InsightShareCreated,
+  InsightSource,
+  InsightTotals,
+  PageKind,
+  SharedInsights,
+  VisitLanding,
+} from '@crm/contracts';
+// The most sessions the Insights table holds (the house cap for a list More grows).
+export { INSIGHT_SESSIONS_MAX } from './insights/store.ts';
+export type {
+  InsightNumbersState,
+  InsightRead,
+  InsightSessionsHeld,
+  InsightSessionsState,
+  InsightSharesState,
+} from './insights/store.ts';
 export type {
   DelegationGrant,
   DelegationsHeld,
@@ -2590,6 +2625,18 @@ export function createDataLayer({
   const formAnalyticsReads = createFormAnalytics({
     read: (workspace, formId, range) =>
       beforeRead(workspace).then(() => call((options) => api.forms.analytics({ workspace, formId, range }, options))),
+  });
+  // Insights (spec 0067): the numbers, sessions and share links, held while a screen shows them and read again on
+  // return, since a visitor's visit sends no change event here.
+  const insightsStore = createInsightsStore({
+    read: (workspace, period, pages) =>
+      beforeRead(workspace).then(() => call((options) => api.insights.read({ workspace, period, pages }, options))),
+    sessions: (workspace, query) =>
+      beforeRead(workspace).then(() => call((options) => api.insights.sessions({ workspace, ...query }, options))),
+    listShares: (workspace) =>
+      beforeRead(workspace).then(() => call((options) => api.insights.shares.list({ workspace }, options))),
+    createShare: (workspace, input) => call((options) => api.insights.shares.create({ workspace, ...input }, options)),
+    revokeShare: (workspace, shareId) => call((options) => api.insights.shares.revoke({ workspace, shareId }, options)),
   });
   const routingReports = createRoutingReports({
     report: (workspace, surface, days) =>
@@ -7394,6 +7441,49 @@ export function createDataLayer({
       /** Sets a booking page's own "Add events to" (`null`: the owner's default): at once, put back if refused. */
       setPageDestination: (workspace: string, pageId: string, calendarId: string | null): Promise<boolean> =>
         calendars.setPageDestination(workspace, pageId, calendarId),
+    },
+    /**
+     * Insights (spec 0067): every public page's visits, finishes, sources and sessions over a period, held while a
+     * screen shows them and read again whenever the person comes back; and the numbers only share links.
+     */
+    insights: {
+      numbers: (workspace: string, period: InsightPeriod, pages: InsightPages) =>
+        insightsStore.numbers(workspace, period, pages),
+      sessions: (workspace: string, period: InsightPeriod, pages: InsightPages, filter: InsightSessionFilter) =>
+        insightsStore.sessions(workspace, period, pages, filter),
+      shares: (workspace: string) => insightsStore.shares(workspace),
+      createShare: (
+        workspace: string,
+        input: {
+          readonly label: string;
+          readonly pages: InsightPages;
+          readonly range: InsightRange;
+          readonly expiresAt?: string;
+        },
+      ) => insightsStore.createShare(workspace, input),
+      revokeShare: (workspace: string, shareId: string) => insightsStore.revokeShare(workspace, shareId),
+      /**
+       * What a share link opens, signed in as no one (AC-6720): numbers only. A link that opens nothing (wrong,
+       * revoked, expired) rejects with NOT_FOUND.
+       */
+      shared: async (token: string): Promise<SharedInsights> => {
+        // The token rides in a header, never the address, so no request log or Referer holds it.
+        const response = await fetch(new URL('/api/public/insights', origin).href, {
+          credentials: 'omit',
+          cache: 'no-store',
+          headers: { 'x-crm-insight-share': token },
+        }).catch((error: unknown) => {
+          throw toDataError(error);
+        });
+        const answer: unknown = await response.json().catch(() => undefined);
+        if (!response.ok) {
+          throw toDataError({
+            ...(typeof answer === 'object' && answer !== null ? answer : {}),
+            status: response.status,
+          });
+        }
+        return answer as SharedInsights;
+      },
     },
     apiKeys: {
       /**

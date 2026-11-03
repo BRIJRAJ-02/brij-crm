@@ -12,8 +12,6 @@
 // access). Reading runs in a member's scope and goes through the same door
 // Submissions does: a member who may not see the form sees no numbers.
 import {
-  FORM_SOURCE_MAX,
-  normaliseSource,
   type FormAnalytics,
   type FormAnalyticsDay,
   type FormAnalyticsQuestion,
@@ -29,9 +27,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import { runWrite } from '../engine/write.ts';
 import { canSeeForm, loadForm, loadVersions } from './shared.ts';
-
-/** A daily visitor id (spec 0047, AC-1626): 32 lowercase hex digits, an HMAC the api made; never an address. */
-const VISITOR_ID = /^[0-9a-f]{32}$/u;
+import { countPageVisit, finishPageVisit, VISITOR_ID, type VisitOrigin } from '../insights/visits.ts';
 
 /** What counting one event takes. */
 export interface FormEventInput {
@@ -41,8 +37,8 @@ export interface FormEventInput {
   readonly kind: FormEventKind;
   /** Which question was reached, on a `reach`. */
   readonly questionId?: string;
-  /** Where they came from, as the page saw it; normalised here, and the server's answer is what is kept. */
-  readonly source?: { readonly utmSource?: string; readonly referrer?: string };
+  /** Where they came from, as the server read it from what the page sent (`originOf`, spec 0067). */
+  readonly origin?: VisitOrigin;
 }
 
 /** Refuses (a programming error) any scope but the one the form's own public key made. */
@@ -54,82 +50,65 @@ function checkPublicScope(scope: EngineScope, formId: string): void {
 }
 
 /**
- * Counts one beacon event (AC-6320). Today's row for this form and visitor is
- * made or moved on, in one statement:
+ * Counts one beacon event (AC-6320), since spec 0067 as a `form` page visit (`countPageVisit`):
  *
- * - `view` makes the row and nothing more; a second view the same day changes
- *   only `last_at`, so views are visitors, not page loads.
- * - `start` stamps `started_at` the first time an answer was given, and never
- *   again, so the median time is measured from the real first answer.
- * - `reach` moves `furthest_question_id` on, and only forwards: a visitor
- *   going Back never pulls the drop off bar backwards with them.
+ * - `view` makes today's row and nothing more; a second view the same day changes only `last_at`, so views are
+ *   visitors, not page loads.
+ * - `start` and `reach` move the visit to the form's `start` step, stamping `started_at` the first time, so the
+ *   time to finish is measured from the real first answer.
+ * - `reach` moves the furthest question on, and only forwards: a visitor going Back never pulls the drop off bar
+ *   backwards with them.
  *
- * Nothing here can fail a visitor's fill: the caller answers 204 whatever
- * happens, since analytics are lossy by design.
+ * Nothing here can fail a visitor's fill: the caller answers 204 whatever happens, since analytics are lossy by
+ * design.
  */
 export async function countFormEvent(scope: EngineScope, input: FormEventInput): Promise<void> {
   checkPublicScope(scope, input.formId);
   if (!VISITOR_ID.test(input.visitor)) throw new TypeError('A visitor is 32 lowercase hex digits.');
-  const source = normaliseSource(input.source ?? {}).slice(0, FORM_SOURCE_MAX);
   await runWrite(scope, async ({ tx }) => {
     const form = await loadForm(tx, input.formId);
     if (form === undefined || form.liveVersionId === null || form.status === 'draft' || form.status === 'archived') {
       return;
     }
-    const started = input.kind === 'start' ? sql`now()` : sql`null`;
-    const reached = input.kind === 'reach' && input.questionId !== undefined ? input.questionId : null;
-    // The form's own question order, so "furthest" can be compared at all: the database has no idea which of two
-    // question ids comes first, and a visitor pressing Back must not pull their drop off bar back with them.
+    // The form's own question order, so "furthest" can be compared at all.
     const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
     const order = (live?.document.questions ?? []).map((question) => question.id);
-    await tx.execute(sql`
-      insert into form_visits (workspace_id, form_id, day, visitor, version_id, source, started_at, furthest_question_id)
-      values (
-        ${scope.workspaceId}, ${input.formId}, (now() at time zone 'UTC')::date, ${input.visitor},
-        ${form.liveVersionId}, ${source}, ${started}, ${reached}
-      )
-      on conflict (workspace_id, form_id, day, visitor) do update set
-        last_at = now(),
-        -- The first answer wins: a later start never moves the clock the median is measured from.
-        started_at = coalesce(form_visits.started_at, excluded.started_at),
-        -- Forwards only (the Back case): the new question replaces the kept one just when it sits later in the
-        -- form's order. A question the live form no longer has scores 0, so it never beats one that is still there.
-        furthest_question_id = case
-          when excluded.furthest_question_id is null then form_visits.furthest_question_id
-          when form_visits.furthest_question_id is null then excluded.furthest_question_id
-          when coalesce(array_position(${sql.param(order)}::text[], excluded.furthest_question_id), 0)
-             > coalesce(array_position(${sql.param(order)}::text[], form_visits.furthest_question_id), 0)
-            then excluded.furthest_question_id
-          else form_visits.furthest_question_id
-        end
-    `);
+    await countPageVisit(tx, {
+      workspaceId: scope.workspaceId,
+      kind: 'form',
+      pageId: input.formId,
+      visitor: input.visitor,
+      step: input.kind === 'view' ? 'view' : 'start',
+      ...(input.origin === undefined ? {} : { origin: input.origin }),
+      ...(input.kind === 'reach' && input.questionId !== undefined
+        ? { detail: input.questionId, detailOrder: order }
+        : {}),
+    });
   });
 }
 
 /**
- * Marks today's visit complete when a submission is accepted (AC-6320), in
- * the submit's own transaction, so a submission that doesn't commit counts as
- * nothing. Spam and held submissions never reach here: only an accepted one
- * is a completion. A visitor who never sent a `start` beacon (an ad blocker,
- * a fast fill) still completes, with no duration to add to the median.
+ * Marks today's visit complete when a submission is accepted (AC-6320), in the submit's own transaction, so a
+ * submission that doesn't commit counts as nothing. Spam and held submissions never reach here: only an accepted
+ * one is a completion. Since spec 0067 the visit is a `form` page visit, and keeps the submission it made, so
+ * Insights can name the person to a member who may read that submission.
  */
 export async function completeFormVisit(
   tx: WorkspaceTx,
-  input: { readonly workspaceId: string; readonly formId: string; readonly visitor: string | undefined },
+  input: {
+    readonly workspaceId: string;
+    readonly formId: string;
+    readonly visitor: string | undefined;
+    readonly submissionId?: string;
+  },
 ): Promise<void> {
-  if (input.visitor === undefined || !VISITOR_ID.test(input.visitor)) return;
-  await tx.execute(sql`
-    update form_visits set
-      completed_at = now(),
-      last_at = now(),
-      duration_ms = case
-        when started_at is null then null
-        else greatest(0, (extract(epoch from (now() - started_at)) * 1000)::bigint)::integer
-      end
-    where workspace_id = ${input.workspaceId} and form_id = ${input.formId}
-      and day = (now() at time zone 'UTC')::date and visitor = ${input.visitor}
-      and completed_at is null
-  `);
+  await finishPageVisit(tx, {
+    workspaceId: input.workspaceId,
+    kind: 'form',
+    pageId: input.formId,
+    visitor: input.visitor,
+    ...(input.submissionId === undefined ? {} : { outcomeId: input.submissionId }),
+  });
 }
 
 /** One range's rows, as the counting queries hand them back. */
@@ -145,11 +124,11 @@ async function totalsIn(tx: WorkspaceTx, where: SQL): Promise<FormAnalyticsTotal
   const found = await tx.execute<TotalsRow>(sql`
     select
       count(*)::int as views,
-      count(*) filter (where started_at is not null)::int as starts,
-      count(*) filter (where completed_at is not null)::int as completions,
+      count(*) filter (where step_rank > 0)::int as starts,
+      count(*) filter (where finished_at is not null)::int as completions,
       (percentile_cont(0.5) within group (order by duration_ms)
         filter (where duration_ms is not null))::int as median_ms
-    from form_visits where ${where}
+    from page_visits where ${where}
   `);
   const row = found.rows[0];
   return {
@@ -186,16 +165,17 @@ export async function formAnalytics(scope: EngineScope, input: FormAnalyticsInpu
     const { range } = input;
     const since = sql`(now() at time zone 'UTC')::date - ${range - 1}::integer`;
     const before = sql`(now() at time zone 'UTC')::date - ${range * 2 - 1}::integer`;
-    const inRange = sql`workspace_id = ${workspaceId} and form_id = ${input.formId} and day >= ${since}`;
-    const inPrevious = sql`workspace_id = ${workspaceId} and form_id = ${input.formId}
+    const inRange = sql`workspace_id = ${workspaceId} and page_kind = 'form' and page_id = ${input.formId}
+      and day >= ${since}`;
+    const inPrevious = sql`workspace_id = ${workspaceId} and page_kind = 'form' and page_id = ${input.formId}
       and day >= ${before} and day < ${since}`;
     const [totals, previous] = await Promise.all([totalsIn(tx, inRange), totalsIn(tx, inPrevious)]);
 
     const days = await tx.execute<{ day: string; views: number; starts: number; completions: number }>(sql`
       select day::text as day, count(*)::int as views,
-        count(*) filter (where started_at is not null)::int as starts,
-        count(*) filter (where completed_at is not null)::int as completions
-      from form_visits where ${inRange} group by day order by day
+        count(*) filter (where step_rank > 0)::int as starts,
+        count(*) filter (where finished_at is not null)::int as completions
+      from page_visits where ${inRange} group by day order by day
     `);
     const byDay: FormAnalyticsDay[] = days.rows.map((row) => ({
       day: row.day,
@@ -205,9 +185,10 @@ export async function formAnalytics(scope: EngineScope, input: FormAnalyticsInpu
     }));
 
     const sources = await tx.execute<{ source: string; views: number; completions: number }>(sql`
-      select source, count(*)::int as views,
-        count(*) filter (where completed_at is not null)::int as completions
-      from form_visits where ${inRange} group by source order by views desc, source limit 20
+      select case when source = 'other' and referrer_host is not null then referrer_host else source end as source,
+        count(*)::int as views,
+        count(*) filter (where finished_at is not null)::int as completions
+      from page_visits where ${inRange} group by 1 order by views desc, 1 limit 20
     `);
     const bySource: FormAnalyticsSource[] = sources.rows.map((row) => ({
       source: row.source,
@@ -243,9 +224,9 @@ async function dropOff(
   questionIds: readonly string[],
 ): Promise<FormAnalyticsQuestion[]> {
   const found = await tx.execute<{ furthest: string | null; completed: boolean; visits: number }>(sql`
-    select furthest_question_id as furthest, completed_at is not null as completed, count(*)::int as visits
-    from form_visits where ${inRange} and (furthest_question_id is not null or completed_at is not null)
-    group by furthest_question_id, completed_at is not null
+    select furthest_detail as furthest, finished_at is not null as completed, count(*)::int as visits
+    from page_visits where ${inRange} and (furthest_detail is not null or finished_at is not null)
+    group by furthest_detail, finished_at is not null
   `);
   const positionOf = new Map(questionIds.map((id, at) => [id, at]));
   const last = questionIds.length - 1;

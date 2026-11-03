@@ -282,6 +282,19 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace turned off hooks.example.com after 3 days of failed deliveries',
   ],
   [
+    { ...base, action: 'insights.share_created', target: workspace, params: { label: 'For the client' } },
+    'Ada Lovelace shared Insights in the link For the client',
+  ],
+  [
+    {
+      ...base,
+      action: 'insights.share_revoked',
+      target: workspace,
+      params: { label: 'For the client', withMaker: true },
+    },
+    'Ada Lovelace revoked the Insights link For the client when its maker left',
+  ],
+  [
     { ...base, action: 'api_key.created', target: workspace, params: { name: 'Zapier' } },
     'Ada Lovelace made the API key Zapier',
   ],

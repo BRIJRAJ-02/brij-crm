@@ -39,6 +39,7 @@ export const strings = {
   linkPage: 'Link page',
   /** The sidebar's first row and the workspace's landing page (owner, 21 October 2026). */
   home: 'Home',
+  insights: 'Insights',
   /** The tasks page's row (spec 0019), after the sections, as timefix has it; Tasks, as the page is named (owner, 21 October 2026). */
   inbox: 'Inbox',
   tasks: 'Tasks',

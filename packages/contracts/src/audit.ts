@@ -272,6 +272,15 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   /** An API key made, revoked or brought back (parity #34): its name then. */
   entry(['api_key.created', 'api_key.revoked', 'api_key.restored'], workspace, z.strictObject({ name: z.string() })),
+  /**
+   * An Insights share link made or revoked (spec 0067): its name, and on a revoke whether it went with its maker's
+   * removal. Never its secret.
+   */
+  entry(
+    ['insights.share_created', 'insights.share_revoked'],
+    workspace,
+    z.strictObject({ label: z.string(), withMaker: z.boolean().optional() }),
+  ),
   /** Only the rules that changed are present; `sessionLengthDays: null` took the limit away. */
   entry(
     ['workspace_security.changed'],

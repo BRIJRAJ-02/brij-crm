@@ -2,6 +2,10 @@
 
 Two to five segments (equal, or each as wide as its words with `isFitted`) that switch how you see something, or pick one short value in a small form; and its Light, Dark and System preset.
 
+## Short labels
+
+A segment may carry `accessibleLabel`, its name in full, when its visible `label` is a short form (Insights' periods read 7D, 30D, 12M; screen readers hear Last 7 days, Last 30 days, Last 12 months).
+
 ## Why it exists
 
 Ported from the artifact's SegmentedControl card (version 8). Table or Board (#20, #21) and Week or Month (#52) show every option at once and change the current view. It is a React Aria `RadioGroup` underneath, so the arrow keys move between segments, and its thumb is React Aria's `SelectionIndicator`.

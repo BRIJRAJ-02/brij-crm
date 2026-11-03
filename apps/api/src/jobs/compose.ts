@@ -24,6 +24,7 @@ import { createMailer, pacedMailer } from '../mail/mailer.ts';
 import { parseSender } from '../mail/mailpit.ts';
 import { APP_RULES } from '../rules.ts';
 import { runAutomationTask } from './automation.ts';
+import { runPageRollup } from './page-rollup.ts';
 import { runBookingMail } from './booking-mail.ts';
 import { runEmail, type EmailRun, type EmailTry } from './email.ts';
 import { runnerTasks } from './graphile.ts';
@@ -92,6 +93,8 @@ export interface JobTasks {
     readonly email: (payload: unknown) => Promise<void>;
     readonly held: (counts: { readonly checked: number; readonly newlyBroken: number }) => void;
   };
+  /** Insights' rollup (spec 0067) on an open queue connection: only crm_worker lists the workspaces. */
+  readonly pageRollup: (sweep: QueueConnection) => () => Promise<unknown>;
   /** The daily cleanup's fan out on an open queue connection (only crm_worker may sweep). */
   readonly daily: (sweep: QueueConnection) => (input: DailyCleanupInput) => Promise<DailyCleanupReport>;
   /** The task identifiers these runners take: only their rows count as due. */
@@ -300,6 +303,9 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
     schedulingNotice,
     automation,
     calendarHealth,
+    // Insights' rollup (spec 0067): every five minutes, each workspace with a stale visit day, as the system.
+    pageRollup: (sweep) => () =>
+      runPageRollup({ sweep, systemScope: (workspaceId) => systemScope(db, workspaceId), log }),
     // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
     daily: (sweep) => (input) =>
       runDailyCleanup(

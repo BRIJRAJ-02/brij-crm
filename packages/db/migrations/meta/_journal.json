@@ -1212,6 +1212,13 @@
       "when": 1795508200000,
       "tag": "0172_link_page_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1795511000000,
+      "tag": "0173_page_visits",
+      "breakpoints": true
     }
   ]
 }

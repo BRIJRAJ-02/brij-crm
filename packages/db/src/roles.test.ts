@@ -482,6 +482,8 @@ describe("migration 0020's closing check: who can reach crm_relay", () => {
     'revoke select (workspace_id, id, member_id, status, health_broken_at, health_notified_at, health_reminded_at) on calendar_connections from crm_sweep',
     // Migration 0140 widened it by the automations due sweep's columns (parity #53).
     'revoke select (workspace_id, trigger_kind, enabled, deleted_at) on automations from crm_sweep',
+    // Migration 0173 widened it by the Insights rollup's listing (spec 0067).
+    'revoke select (workspace_id, day, marked_at) on page_visit_stale_days from crm_sweep',
   ];
 
   /** Runs the check after `setup`, in a transaction that is rolled back, so nothing outlives the test. */
@@ -551,6 +553,8 @@ describe("migration 0034's closing check: crm_workspace_ids and crm_sweep (spec 
     'revoke select (workspace_id, id, member_id, status, health_broken_at, health_notified_at, health_reminded_at) on calendar_connections from crm_sweep',
     // Migration 0140 widened it by the automations due sweep's columns (parity #53).
     'revoke select (workspace_id, trigger_kind, enabled, deleted_at) on automations from crm_sweep',
+    // Migration 0173 widened it by the Insights rollup's listing (spec 0067).
+    'revoke select (workspace_id, day, marked_at) on page_visit_stale_days from crm_sweep',
   ];
 
   /** Runs the check after `setup`, in a transaction that is rolled back, so nothing outlives the test. */

@@ -495,6 +495,18 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
       const host = typeof after.host === 'string' ? after.host : typeof before.host === 'string' ? before.host : '';
       return { ...base, action, target: workspace, params: { host }, changes: [] };
     }
+    case 'insights.share_created':
+    case 'insights.share_revoked':
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: {
+          label: text(after.label) ?? 'a link',
+          ...(action === 'insights.share_revoked' && after.reason === 'member_removed' ? { withMaker: true } : {}),
+        },
+        changes: [],
+      };
     case 'api_key.created':
     case 'api_key.revoked':
     case 'api_key.restored':

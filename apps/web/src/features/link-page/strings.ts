@@ -202,6 +202,7 @@ export const strings = {
   openAddress: (address: string) => `${address}, open your page`,
   /** The header's Share: it opens the QR and the address to hand on. */
   share: 'Share',
+  insights: 'Insights',
   /**
    * The one Live or Private switch at the top of the screen (spec 0058, AC-23). Its word never changes with the state,
    * so a screen reader hears "Live, switch, off" for a private page, never a double negative.

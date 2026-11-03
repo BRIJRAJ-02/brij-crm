@@ -23,6 +23,7 @@ import { skillsRemoval } from '../routing/skills.ts';
 import { recentsRemoval } from '../search/recents.ts';
 import { teamsRemoval } from '../teams/teams.ts';
 import { viewsRemoval } from '../views/manage.ts';
+import { insightSharesRemoval } from '../insights/shares.ts';
 import type { AuditSource } from './audit.ts';
 import { countUnvouched, revokeUnvouched } from './invitations.ts';
 import type { RemovalCounts, RemovalEffect } from './removal-effect.ts';
@@ -131,6 +132,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   managedMembersRemoval,
   // Spec 0037, AC-1382: the skills they held.
   skillsRemoval,
+  // Spec 0067: their Insights share links are revoked.
+  insightSharesRemoval,
 ];
 
 /**

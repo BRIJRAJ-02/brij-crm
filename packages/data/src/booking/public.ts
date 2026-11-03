@@ -88,6 +88,27 @@ export interface BookingClient {
   forget(): Promise<void>;
   /** The name and email a form's signed hand off carries for this page (spec 0023 AC-1058); empty for anything else. */
   prefill(publicKey: string, token: string): Promise<PublicPrefill>;
+  /**
+   * Counts the visit for Insights (spec 0067, AC-6702): the page was seen, or a step was reached. A beacon, lost on
+   * purpose when it can't go; the booking itself is the finish, which the server marks. Nothing comes back.
+   */
+  event(publicKey: string, body: PageBeacon): void;
+}
+
+/** What a booking page's visit beacon says (spec 0067): the server parses it again and keeps only what it allows. */
+export interface PageBeacon {
+  readonly kind: 'view' | 'step';
+  readonly step?: string;
+  readonly landing?: {
+    readonly utm_source?: string;
+    readonly utm_medium?: string;
+    readonly utm_campaign?: string;
+    readonly utm_term?: true;
+    readonly utm_content?: true;
+    readonly gclid?: true;
+    readonly fbclid?: true;
+  };
+  readonly referrer?: string;
 }
 
 /** A failure answer as a DataError: the API's code and message, its wait, and its issues. */
@@ -187,6 +208,24 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
     },
     prefill: (publicKey, token) =>
       call<PublicPrefill>(`${encodeURIComponent(publicKey)}/prefill?${new URLSearchParams({ p: token }).toString()}`),
+    event: (publicKey, body) => {
+      const url = `${base}/${encodeURIComponent(publicKey)}/events`;
+      const text = JSON.stringify(body);
+      try {
+        // A beacon survives the page closing; `text/plain` asks for no preflight. Where there is none, a keepalive post.
+        if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+          if (navigator.sendBeacon(url, new Blob([text], { type: 'text/plain' }))) return;
+        }
+        void call<unknown>(`${encodeURIComponent(publicKey)}/events`, {
+          method: 'POST',
+          headers: { 'content-type': 'text/plain' },
+          body: text,
+          keepalive: true,
+        }).catch(() => undefined);
+      } catch {
+        // A count is never worth an error on a visitor's page.
+      }
+    },
   };
 }
 

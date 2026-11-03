@@ -246,6 +246,7 @@ async function openWorker(hooks: {
       ...(cutOff === undefined ? {} : { cutOff }),
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
       daily: jobTasks.daily(opened),
+      pageRollup: jobTasks.pageRollup(opened),
     });
     queue = opened;
     return {

@@ -30,6 +30,7 @@ import { Chart } from '@crm/ui/charts';
 - Import it from `@crm/ui/charts`, a lazy entry. It is never in the first load, and a route's loader must not import it.
 - Values below zero draw as zero; the table keeps the true figure.
 - Past 12 bars the labels thin or cut with an ellipsis; the tooltip and the table hold the whole name.
+- Two series (Insights, spec 0067): give a bar chart `compareLabel` and each point `compare` and `compareText`. Each pair draws side by side with a 2px surface gap, the second in the next data colour (`dot-orange`, checked with the dataviz validator against blue: CVD ΔE 33), on the same axis, with a legend naming both at the head's start and a column each in the table. A variant, not a new chart: a second y axis is never drawn, so a rate goes in a chart of its own.
 
 ## States
 

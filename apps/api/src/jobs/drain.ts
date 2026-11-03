@@ -193,6 +193,7 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
         automation: tasks.automation,
         calendarHealth: tasks.calendarHealth,
         daily: tasks.daily(unrelayedSweep(queue)),
+        pageRollup: tasks.pageRollup(queue),
         ...(tasks.calendar === undefined ? {} : { calendar: tasks.calendar }),
         ...(options.onFault === undefined ? {} : { onFault: options.onFault }),
         onFailed: () => {

@@ -113,6 +113,7 @@ import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { checkOneOffLink, oneOffStateOf, oneOffTokenHash, useOneOffLink } from './one-off-links.ts';
 import { ensureManageToken, managePath, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { queueBookingWebhook } from '../webhooks/queue.ts';
+import { countPageVisit, finishPageVisit, type VisitOrigin } from '../insights/visits.ts';
 
 const { bookingHosts, bookingPages, bookings, members, workspaces } = schema;
 
@@ -1656,6 +1657,46 @@ export async function countPageView(entry: BookingEntry, visitor: string): Promi
       on conflict (workspace_id, page_id, day, visitor)
         do update set views = booking_page_views.views + 1, last_at = now()
     `),
+  );
+}
+
+/**
+ * Counts one Insights event of a visit to the page (spec 0067, AC-6702): the view, or a step reached (`time`,
+ * `details`), as a `booking` page visit. The caller decides it counts (not a host, not the editor's preview, not a
+ * machine) and makes the origin from what the page sent. Only the daily id is kept about the visitor.
+ */
+export async function countBookingVisit(
+  entry: BookingEntry,
+  visitor: string,
+  event: { readonly step: string; readonly origin?: VisitOrigin },
+): Promise<void> {
+  checkEntry(entry);
+  await inWorkspace(entry.scope, (tx) =>
+    countPageVisit(tx, {
+      workspaceId: entry.scope.workspaceId,
+      kind: 'booking',
+      pageId: entry.pageId,
+      visitor,
+      step: event.step,
+      ...(event.origin === undefined ? {} : { origin: event.origin }),
+    }),
+  );
+}
+
+/**
+ * Marks today's visit to the page finished by the booking it made (spec 0067, AC-6702), so Insights can name the
+ * guest to a member who may read that page's bookings. Run once the booking committed; a replay counts nothing new.
+ */
+export async function finishBookingVisit(entry: BookingEntry, visitor: string, bookingId: string): Promise<void> {
+  checkEntry(entry);
+  await inWorkspace(entry.scope, (tx) =>
+    finishPageVisit(tx, {
+      workspaceId: entry.scope.workspaceId,
+      kind: 'booking',
+      pageId: entry.pageId,
+      visitor,
+      outcomeId: bookingId,
+    }),
   );
 }
 

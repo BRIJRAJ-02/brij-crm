@@ -815,6 +815,11 @@ export {
   type FormAnalyticsInputs,
   type FormEventInput,
 } from './forms/visits.ts';
+// Insights (spec 0067): every public page's visits, their rollup, the screen's reads and the share links.
+export { originOf, type VisitOrigin } from './insights/visits.ts';
+export { readInsights, readInsightSessions } from './insights/read.ts';
+export { rollUpPageVisits } from './insights/rollup.ts';
+export { createInsightShare, listInsightShares, revokeInsightShare } from './insights/shares.ts';
 export { confirmationRows, SIGNED_WORD, tellVisitor } from './forms/confirm.ts';
 export type { CaptchaVerdict, SpamJudgement, TicketVerdict } from './forms/spam.ts';
 export { addToCrm, FORMS_FILE, FORMS_SYNC, previewSync, startSync } from './forms/filing.ts';

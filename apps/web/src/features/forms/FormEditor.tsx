@@ -71,6 +71,7 @@ import { strings as questionStrings } from '../questions/strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
+import { insightsHref } from '../insights/search.ts';
 
 /** The refusals that are fixed in Settings, not on the Form tab (spec 0063, AC-6315, AC-6316, AC-6326). */
 const IN_SETTINGS: readonly PublishProblem['code'][] = ['ENDING_INVALID', 'SCORE_FILING_INVALID'];
@@ -539,6 +540,8 @@ export function FormEditor(props: FormEditorProps) {
       <EditorActions
         // A draft has no link yet: Copy link shows from the first publish, as the forms list shows it.
         {...(isPublished ? { link: data.forms.hostedUrl(form.publicKey) } : {})}
+        // Its visits, finishes and sources (spec 0067), once it has a public address to visit.
+        {...(isPublished ? { insightsHref: insightsHref(slug, { kind: 'form', page: form.id }) } : {})}
         preview={
           <Button
             icon="eye"

@@ -43,6 +43,12 @@ export const BOOKING_LIMITS = {
   /** A link page's views (AC-5126): past 600 a minute for one page, its reads are answered but not counted. */
   viewsPerHandle: { max: 600, windowMs: 60_000 },
   /**
+   * A booking page's Insights beacons (spec 0067, AC-6702): a view and two steps a visit, so 60 a minute per address
+   * and 3,000 per page; past them, answered 204 and uncounted, as a form's events are.
+   */
+  eventsPerAddress: { max: 60, windowMs: 60_000 },
+  eventsPerPage: { max: 3_000, windowMs: 60_000 },
+  /**
    * A link block's own icon (26 Oct 2026): tighter than a picture, because a miss costs a read of a site we do not
    * run, not a read of Google. 20 a minute per address and 60 per handle cover a page of 20 links loading cold
    * twice over; the edge keeps each one for a day, so a page in normal use asks once.

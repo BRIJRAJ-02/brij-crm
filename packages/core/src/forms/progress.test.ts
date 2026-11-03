@@ -34,6 +34,7 @@ import {
   sendResumeLink,
 } from './partials.ts';
 import { completeFormVisit, countFormEvent, formAnalytics } from './visits.ts';
+import { originOf } from '../insights/visits.ts';
 import type { CaptchaVerdict } from './spam.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -551,7 +552,16 @@ describe('analytics (AC-6320, AC-6321)', () => {
     extra: { readonly questionId?: string; readonly source?: { utmSource?: string; referrer?: string } } = {},
   ) {
     const { scope, formId } = await publicScope(publicKey);
-    await countFormEvent(scope, { formId, visitor, kind, ...extra });
+    // The route's own translation (spec 0067): a UTM word as the landing's source, the referrer beside it.
+    const { source, ...rest } = extra;
+    const origin =
+      source === undefined
+        ? undefined
+        : originOf({
+            ...(source.utmSource === undefined ? {} : { landing: { utm_source: source.utmSource } }),
+            ...(source.referrer === undefined ? {} : { referrer: source.referrer }),
+          });
+    await countFormEvent(scope, { formId, visitor, kind, ...rest, ...(origin === undefined ? {} : { origin }) });
   }
 
   it('counts ten views, six starts, three completions and three left on question four', async () => {
@@ -595,9 +605,9 @@ describe('analytics (AC-6320, AC-6321)', () => {
     await event(form.publicKey, visitor, 'view');
     await event(form.publicKey, visitor, 'reach', { questionId: 'why' });
     await event(form.publicKey, visitor, 'reach', { questionId: 'budget' });
-    const rows = await w.query<{ furthest_question_id: string }>(sql`select furthest_question_id from form_visits`);
+    const rows = await w.query<{ furthest_detail: string }>(sql`select furthest_detail from page_visits`);
     // Reaching an earlier question again leaves the furthest one where it was.
-    expect(rows[0]?.furthest_question_id).toBe('why');
+    expect(rows[0]?.furthest_detail).toBe('why');
   });
 
   it('measures the median from the first answer only, so a later start never moves the clock', async () => {
@@ -606,9 +616,9 @@ describe('analytics (AC-6320, AC-6321)', () => {
     const visitor = visitorHash('median');
     await event(form.publicKey, visitor, 'view');
     await event(form.publicKey, visitor, 'start');
-    const first = await w.query<{ started_at: string }>(sql`select started_at::text from form_visits`);
+    const first = await w.query<{ started_at: string }>(sql`select started_at::text from page_visits`);
     await event(form.publicKey, visitor, 'start');
-    const again = await w.query<{ started_at: string }>(sql`select started_at::text from form_visits`);
+    const again = await w.query<{ started_at: string }>(sql`select started_at::text from page_visits`);
     expect(again[0]?.started_at).toBe(first[0]?.started_at);
   });
 
@@ -617,27 +627,35 @@ describe('analytics (AC-6320, AC-6321)', () => {
     const form = await stepsForm(w);
     const visitor = visitorHash('privacy');
     await event(form.publicKey, visitor, 'view', { source: { referrer: 'https://news.example.com/a/long/path?q=1' } });
-    const rows = await w.query<Record<string, unknown>>(sql`select * from form_visits`);
+    const rows = await w.query<Record<string, unknown>>(sql`select * from page_visits`);
     const row = rows[0] ?? {};
     // The visitor is 32 hex digits, which is the daily hash, and the column refuses anything else.
     expect(String(row.visitor)).toMatch(/^[0-9a-f]{32}$/);
-    // Only the referring host survives: no path, no query, and never a whole address.
-    expect(row.source).toBe('ref:news.example.com');
+    // Only the referring host survives: no path, no query, and never a whole address (spec 0067: Other's host).
+    expect(row.source).toBe('other');
+    expect(row.referrer_host).toBe('news.example.com');
     const asText = JSON.stringify(rows);
     expect(asText).not.toContain('/a/long/path');
     expect(asText).not.toContain('q=1');
     // And no column holds an address or anything cookie shaped.
     expect(Object.keys(row).sort()).toEqual([
-      'completed_at',
+      'campaign',
       'day',
       'duration_ms',
+      'finished_at',
       'first_at',
-      'form_id',
-      'furthest_question_id',
+      'furthest_detail',
+      'furthest_step',
+      'landing',
       'last_at',
+      'medium',
+      'outcome_id',
+      'page_id',
+      'page_kind',
+      'referrer_host',
       'source',
       'started_at',
-      'version_id',
+      'step_rank',
       'visitor',
       'workspace_id',
     ]);
@@ -663,9 +681,9 @@ describe('analytics (AC-6320, AC-6321)', () => {
     await event(form.publicKey, visitorHash('d1'), 'view', {});
     const read = await formAnalytics(w.scope, { formId: form.id, range: 7 });
     expect(read.bySource).toEqual([
-      { source: 'utm:newsletter', views: 2, completions: 0 },
+      { source: 'newsletter', views: 2, completions: 0 },
       { source: 'direct', views: 1, completions: 0 },
-      { source: 'ref:news.example.com', views: 1, completions: 0 },
+      { source: 'news.example.com', views: 1, completions: 0 },
     ]);
   });
 
@@ -675,12 +693,9 @@ describe('analytics (AC-6320, AC-6321)', () => {
     await event(form.publicKey, visitorHash('now'), 'view');
     // One view 10 days back: inside the 30 day range's previous window, outside the 7 day range entirely.
     // The version is read back rather than guessed, so the row's own foreign key holds.
-    const versions = await w.query<{ id: string }>(
-      sql`select id::text from form_versions where form_id = ${form.id} and published_at is not null limit 1`,
-    );
     await w.query(
-      sql`insert into form_visits (workspace_id, form_id, day, visitor, version_id, source)
-          values (${w.workspaceId}, ${form.id}, (now() at time zone 'UTC')::date - 10, ${visitorHash('old')}, ${versions[0]?.id ?? ''}, 'direct')`,
+      sql`insert into page_visits (workspace_id, page_kind, page_id, day, visitor, source)
+          values (${w.workspaceId}, 'form', ${form.id}, (now() at time zone 'UTC')::date - 10, ${visitorHash('old')}, 'direct')`,
     );
     const week = await formAnalytics(w.scope, { formId: form.id, range: 7 });
     expect(week.totals.views).toBe(1);
@@ -705,9 +720,7 @@ describe('analytics (AC-6320, AC-6321)', () => {
     });
     const read = await formAnalytics(w.scope, { formId: form.id, range: 7 });
     expect(read.totals.completions).toBe(1);
-    const rows = await w.query<{ visitor: string }>(
-      sql`select visitor from form_visits where completed_at is not null`,
-    );
+    const rows = await w.query<{ visitor: string }>(sql`select visitor from page_visits where finished_at is not null`);
     expect(rows.map((row) => row.visitor)).toEqual([clean]);
   });
 

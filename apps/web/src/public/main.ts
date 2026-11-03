@@ -13,6 +13,7 @@ import '@crm/ui/styles.css';
 import { createPublicFormClient, loadCaptcha, type FormEventBody } from '@crm/data/public-form';
 import { mountFormLoading, mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
 import { guessCountry } from './country.ts';
+import { landingOf } from './landing.ts';
 import { contextFromFrame, contextOfPage, hiddenOf, prefillOf } from './context.ts';
 import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
 import { brandHref, brandLogoHref, preloadImage, wearStylesheet } from './stylesheet.ts';
@@ -161,13 +162,19 @@ async function start(): Promise<void> {
     // The form's own counts (spec 0063, AC-6320), on the same ticket the submit carries: without one the
     // server counts nothing, so every beacon waits for the first ticket rather than racing it.
     const firstTicket = tickets.get(0) ?? Promise.resolve(undefined);
-    const source = sourceOf(contextNow());
-    const countIt = (body: Omit<FormEventBody, 'ticket' | 'source'>) => {
+    const visit = contextNow();
+    const source = sourceOf(visit);
+    // The landing address's UTM tags and click id presence, and the referrer beside them (spec 0067, AC-6703).
+    const landing = landingOf(visit.landing_url ?? window.location.href);
+    const referrer = visit.referrer;
+    const countIt = (body: Omit<FormEventBody, 'ticket' | 'source' | 'landing' | 'referrer'>) => {
       void firstTicket.then((ticket) => {
         client.event(address, {
           ...body,
           ...(ticket === undefined ? {} : { ticket }),
           ...(source === undefined ? {} : { source }),
+          ...(landing === undefined ? {} : { landing }),
+          ...(referrer === undefined ? {} : { referrer: referrer.slice(0, 400) }),
         });
       });
     };

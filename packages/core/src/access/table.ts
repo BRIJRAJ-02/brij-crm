@@ -562,6 +562,16 @@ export const ACCESS_TABLE = {
   postingRules: { publicForm: true },
   // A form's analytics (spec 0063, AC-6321): any member who can read the form, exactly as Submissions is read.
   formAnalytics: { data: 'read' },
+  // Insights (spec 0067): every page through its own product's rule (`canSeeForm`, the booking page list, the
+  // member's own link page), so a page the principal can't see is absent from the numbers, the sessions and a share.
+  // A session's name passes the door again per submission or booking. The share list is the member's own (all of
+  // them for `workspace.manage`); another's share answers as absent. Only the system rolls up.
+  readInsights: { data: 'read' },
+  readInsightSessions: { data: 'read' },
+  createInsightShare: { data: 'read' },
+  revokeInsightShare: { data: 'read' },
+  listInsightShares: { anyMember: true },
+  rollUpPageVisits: { system: true },
   // Save and resume, and the visit beacon (spec 0063, AC-6319, AC-6320, AC-6330): the same public form scope a
   // submission has, so each one reaches only that form's own rows and never a record. The bot checks the route
   // applies are the same ones a submit passes.

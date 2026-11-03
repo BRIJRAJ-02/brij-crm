@@ -953,6 +953,15 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       deliveries: os.webhooks.deliveries.handler(notServed),
       resend: os.webhooks.resend.handler(notServed),
     },
+    insights: {
+      read: os.insights.read.handler(notServed),
+      sessions: os.insights.sessions.handler(notServed),
+      shares: {
+        list: os.insights.shares.list.handler(notServed),
+        create: os.insights.shares.create.handler(notServed),
+        revoke: os.insights.shares.revoke.handler(notServed),
+      },
+    },
   });
   const handler = new RPCHandler(router);
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

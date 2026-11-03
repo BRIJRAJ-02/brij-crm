@@ -10,6 +10,7 @@ import * as z from 'zod';
 import { WorkspaceScoped } from '../workspaces.ts';
 import { Uuid } from '../values/ids.ts';
 import { FILL_TICKET_MAX } from './ticket.ts';
+import { VisitLanding } from '../insights.ts';
 
 /** What the beacon reports: the page was seen, the first answer was given, or a question was reached. */
 export const FORM_EVENT_KINDS = ['view', 'start', 'reach'] as const;
@@ -40,6 +41,10 @@ export const FormEventBody = z.object({
   questionId: z.string().max(40).optional(),
   /** Where the visitor came from, as the page saw it: a UTM source, else the referrer. Normalised on the server. */
   source: z.string().max(400).optional(),
+  /** The landing address's UTM tags and click id presence (spec 0067, AC-6703); parsed again on the server. */
+  landing: VisitLanding.optional(),
+  /** The page's own referrer, when `source` carried a UTM word: only its host is ever kept. */
+  referrer: z.string().max(400).optional(),
   ticket: z.string().max(FILL_TICKET_MAX).optional(),
   /** The honeypot: a filled one is counted as nothing at all. */
   company_url: z.string().max(1_000).optional(),

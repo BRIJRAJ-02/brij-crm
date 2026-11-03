@@ -20,6 +20,13 @@ export interface ChartPoint {
   readonly value: number;
   /** The value as words ("$12,400", "38"). */
   readonly valueText: string;
+  /**
+   * A second series' value at this point (bars only, with `compareLabel`): drawn beside the first in the second data
+   * colour, on the same axis ("Visits" and "Finishes" a week).
+   */
+  readonly compare?: number;
+  /** That value as words. */
+  readonly compareText?: string;
 }
 
 /** A bar chart, a line over periods, or one big number. */
@@ -34,6 +41,11 @@ export interface ChartProps {
   readonly pointLabel: string;
   /** What each value is, the table's second column and a number's label ("Value", "Deals"). */
   readonly valueLabel: string;
+  /**
+   * The second series' name ("Finishes"): with it, a bar chart draws each point's `compare` beside its value, on the
+   * same axis, and a legend names both. Never a second axis.
+   */
+  readonly compareLabel?: string;
   /** The points, in the order they are drawn. A `number` draws the first. */
   readonly points: readonly ChartPoint[];
   /** An axis tick as short text ("$10K"). */
@@ -56,6 +68,7 @@ export function Chart({
   label,
   pointLabel,
   valueLabel,
+  compareLabel,
   points,
   formatTick,
   status = 'ready',
@@ -66,13 +79,26 @@ export function Chart({
   const frame = useRef<HTMLDivElement>(null);
   const width = useChartWidth(frame);
   const isDrawn = kind !== 'number';
-  const isEmpty = isDrawn && points.every((point) => point.value === 0);
+  const isPaired = kind === 'bar' && compareLabel !== undefined;
+  const isEmpty = isDrawn && points.every((point) => point.value === 0 && (point.compare ?? 0) === 0);
   const isReady = status === 'ready';
 
   return (
     <section className={styles.root} aria-label={label} aria-busy={status === 'loading' || undefined}>
       {isReady && isDrawn && !isEmpty && (
         <div className={styles.head}>
+          {isPaired && (
+            <ul className={styles.legend} aria-label={strings.legend}>
+              <li className={styles.key}>
+                <span className={styles.swatch} data-series="value" aria-hidden="true" />
+                {valueLabel}
+              </li>
+              <li className={styles.key}>
+                <span className={styles.swatch} data-series="compare" aria-hidden="true" />
+                {compareLabel}
+              </li>
+            </ul>
+          )}
           <SegmentedControl
             label={strings.view}
             size="compact"
@@ -124,13 +150,23 @@ export function Chart({
             columns={[
               { id: 'point', label: pointLabel, isRowHeader: true },
               { id: 'value', label: valueLabel, align: 'end' },
+              ...(isPaired ? [{ id: 'compare', label: compareLabel, align: 'end' as const }] : []),
             ]}
             rows={points}
             getRowId={(point) => point.id}
-            renderCell={(point, column) => (column === 'point' ? point.label : point.valueText)}
+            renderCell={(point, column) =>
+              column === 'point' ? point.label : column === 'compare' ? (point.compareText ?? '') : point.valueText
+            }
           />
         ) : width > 0 ? (
-          <ChartPlot kind={kind} label={label} points={points} width={width} formatTick={formatTick} />
+          <ChartPlot
+            kind={kind}
+            label={label}
+            points={points}
+            width={width}
+            formatTick={formatTick}
+            {...(isPaired ? { compareLabel, valueLabel } : {})}
+          />
         ) : null}
       </div>
     </section>

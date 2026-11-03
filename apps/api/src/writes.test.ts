@@ -51,6 +51,13 @@ const READS: ReadonlySet<string> = new Set([
   // Settings › Webhooks (spec 0064): the endpoints and a page of one's log.
   'webhooks.list',
   'webhooks.deliveries',
+  // Insights (spec 0067): the numbers and sessions are reads; a share link is a definition of numbers someone may
+  // read, not CRM data, so making and revoking one store no outbox row (each writes its audit row).
+  'insights.read',
+  'insights.sessions',
+  'insights.shares.list',
+  'insights.shares.create',
+  'insights.shares.revoke',
   'workspaces.slugAvailable',
   'objects.list',
   'attributes.list',

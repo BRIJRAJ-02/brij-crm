@@ -3,6 +3,7 @@ import { attributesRouter } from './modules/attributes/router.ts';
 import { computedRouter } from './modules/computed/router.ts';
 import { auditRouter } from './modules/audit/router.ts';
 import { webhooksRouter } from './modules/webhooks/router.ts';
+import { insightsRouter } from './modules/insights/router.ts';
 import { calendarRouter } from './modules/calendar/router.ts';
 import { formsRouter } from './modules/forms/router.ts';
 import { homeRouter } from './modules/home/router.ts';
@@ -120,6 +121,7 @@ export const router = base.router({
   routing: routingRouter,
   audit: auditRouter,
   webhooks: webhooksRouter,
+  insights: insightsRouter,
   search: searchRouter,
   recents: recentsRouter,
   nav: navRouter,

@@ -2,6 +2,8 @@
 export const strings = {
   /** The chart or table switch's name. */
   view: 'View',
+  /** The two series' legend. */
+  legend: 'Legend',
   chart: 'Chart',
   table: 'Table',
   loading: 'Loading',

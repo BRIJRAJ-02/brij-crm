@@ -39,6 +39,7 @@ import {
   HANDLE_PATTERN,
   isReservedHandle,
   linkPageCacheTags,
+  PageBeaconBody,
   PublicBookInput,
   PublicCancelInput,
   PublicChatInput,
@@ -72,7 +73,10 @@ import {
 import {
   addGuests,
   bookPublicSlot,
+  countBookingVisit,
   countPageView,
+  finishBookingVisit,
+  originOf,
   cancelBooking,
   readHandoffPrefill,
   chatTurn,
@@ -86,6 +90,7 @@ import {
   countItemPress,
   countProfileBooking,
   countProfileView,
+  countLinkVisit,
   enterContactCard,
   viewFacts,
   enterLinkBlocks,
@@ -592,10 +597,18 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     });
     // Past 600 a minute for one page, reads are answered but not counted (AC-5126).
     if (!limiter(`profile:view-owner:${ownerUserId}`, BOOKING_LIMITS.viewsPerHandle).allowed) return;
+    // Insights' view of the same page (spec 0067, AC-6702), from the same two facts: `src` as the UTM source.
+    const origin = originOf({
+      ...(src === undefined || src === '' ? {} : { landing: { utm_source: src.slice(0, 100) } }),
+      ...(ref === undefined || ref === '' ? {} : { referrer: ref.slice(0, 400) }),
+      ownHosts,
+    });
     const counted = signedInAs(c)
-      .then((userId) =>
-        userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, workspaceId, visitor, facts),
-      )
+      .then(async (userId) => {
+        if (userId === ownerUserId) return;
+        await countProfileView({ db }, ownerUserId, workspaceId, visitor, facts);
+        await countLinkVisit({ db }, { userId: ownerUserId, workspaceId }, visitor, origin);
+      })
       .catch((error: unknown) => {
         log.warn('profile.view.failed', { requestId: c.get('requestId'), ...errorFields(error) });
       });
@@ -617,6 +630,9 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     // A machine's press never spends a person's budget: dropped before the limits.
     const userAgent = c.req.header('user-agent');
     if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return silent();
+    // Another site's page may not press for its visitors (spec 0067: a press finishes an Insights visit).
+    const site = c.req.header('sec-fetch-site');
+    if (site !== undefined && site !== 'same-origin') return silent();
     // The handle's budget is per address it is reached by: an old handle has its own (noted for the spec).
     const over = limited([
       [`profile:press:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.pressesPerAddress],
@@ -625,7 +641,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (over !== undefined) return silent();
     const item = (await c.req.text().catch(() => '')).trim().slice(0, 64);
     // The visitor is keyed on the handle's place; the core reads the owner and checks the block is theirs and live.
-    const visitor = visitorId(services.views.visitorKey, {
+    const { views } = services;
+    const visitor = visitorId(views.visitorKey, {
       day: utcDay(services.now?.() ?? new Date()),
       ip: c.get('clientIp'),
       userAgent,
@@ -633,7 +650,17 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     });
     const counted = signedInAs(c)
       .then((userId) =>
-        countItemPress({ db }, handle, item, visitor, userId === undefined ? {} : { signedInAs: userId }),
+        countItemPress({ db }, handle, item, visitor, {
+          ...(userId === undefined ? {} : { signedInAs: userId }),
+          // The visit its view counted (spec 0067): keyed on the page's owner, as `profileVisitor` keys it.
+          pageVisitor: (ownerUserId) =>
+            visitorId(views.visitorKey, {
+              day: utcDay(services.now?.() ?? new Date()),
+              ip: c.get('clientIp'),
+              userAgent,
+              place: `profile:${ownerUserId}`,
+            }),
+        }),
       )
       .catch((error: unknown) => {
         log.warn('profile.press.failed', { requestId: c.get('requestId'), ...errorFields(error) });
@@ -1234,6 +1261,69 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   });
 
+  // Insights beacons (spec 0067, AC-6702): the page was seen, or a time or the details step was reached. Always 204,
+  // whatever happened, so a blocked, flooded or malformed beacon never shows a visitor an error and never says
+  // whether it counted. A machine, a read another site made (`sec-fetch-site`), and the page's own host count nothing.
+  app.use(
+    '/public/booking/:publicKey/events',
+    bodyLimit({ maxSize: 2_048, onError: (c) => c.body(null, 204, { 'cache-control': 'no-store' }) }),
+  );
+  app.post('/public/booking/:publicKey/events', async (c) => {
+    const silent = () => c.body(null, 204, { 'cache-control': 'no-store' });
+    const key = c.req.param('publicKey');
+    const userAgent = c.req.header('user-agent');
+    if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return silent();
+    const site = c.req.header('sec-fetch-site');
+    if (site !== undefined && site !== 'same-origin') return silent();
+    if (!/^[A-Za-z0-9_-]{16}$/u.test(key)) return silent();
+    const over = limited([
+      [`booking:event:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.eventsPerAddress],
+      [`booking:event-page:${key}`, BOOKING_LIMITS.eventsPerPage],
+    ]);
+    if (over !== undefined) return silent();
+    let raw: unknown;
+    try {
+      raw = JSON.parse(await c.req.text());
+    } catch {
+      return silent();
+    }
+    const body = PageBeaconBody.safeParse(raw);
+    if (!body.success) return silent();
+    const { views } = services;
+    try {
+      const entry = await enterBookingPage({ db }, key);
+      const userId = await signedInAs(c);
+      if (userId !== undefined && (await isPageHost(entry, userId))) return silent();
+      const counted = countBookingVisit(
+        entry,
+        visitorId(views.visitorKey, {
+          day: utcDay(services.now?.() ?? new Date()),
+          ip: c.get('clientIp'),
+          userAgent,
+          place: entry.pageId,
+        }),
+        {
+          step: body.data.kind === 'view' ? 'view' : (body.data.step ?? 'view'),
+          ...(body.data.kind === 'view'
+            ? {
+                origin: originOf({
+                  ...(body.data.landing === undefined ? {} : { landing: body.data.landing }),
+                  ...(body.data.referrer === undefined ? {} : { referrer: body.data.referrer }),
+                  ownHosts,
+                }),
+              }
+            : {}),
+        },
+      ).catch((error: unknown) => {
+        log.warn('booking.visit.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+      });
+      views.keepAlive(counted);
+    } catch {
+      // An unknown page counts nothing, and says so to nobody.
+    }
+    return silent();
+  });
+
   app.get('/public/booking/:publicKey/connect', async (c) => {
     const key = c.req.param('publicKey');
     const given = c.req.query('return');
@@ -1421,6 +1511,25 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       );
       // The records it made reach screens live: wake the relay once the write committed.
       if (!booked.replayed) wakeRelay();
+      // Today's Insights visit is finished by this booking (spec 0067, AC-6702), in the background, once: a replay
+      // made nothing new. Keyed as the page's beacons are, so it finishes the visit they counted.
+      const userAgent = c.req.header('user-agent');
+      if (!booked.replayed && services.views !== undefined && userAgent !== undefined && !isMachine(userAgent)) {
+        services.views.keepAlive(
+          finishBookingVisit(
+            entry,
+            visitorId(services.views.visitorKey, {
+              day: utcDay(services.now?.() ?? new Date()),
+              ip: c.get('clientIp'),
+              userAgent,
+              place: entry.pageId,
+            }),
+            booked.bookingId,
+          ).catch((error: unknown) => {
+            log.warn('booking.visit.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+          }),
+        );
+      }
       // A booking made from a link page (spec 0061, AC-6119): counted in the background once, only when that page
       // holds this booking page as a live block; nothing about it is stored on the booking.
       const via = input.data.via?.handle.toLowerCase();

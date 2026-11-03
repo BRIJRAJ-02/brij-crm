@@ -49,6 +49,7 @@ import { notesContract } from './notes.ts';
 import { tasksContract } from './tasks.ts';
 import { usageContract } from './usage.ts';
 import { reportsContract } from './reports.ts';
+import { insightsContract } from './insights.ts';
 import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
 import { deletedWorkspaceContract, workspaceContract } from './workspace-settings.ts';
@@ -122,6 +123,7 @@ export * from './teams.ts';
 export * from './usage.ts';
 export * from './view-model.ts';
 export * from './reports.ts';
+export * from './insights.ts';
 export * from './views.ts';
 export * from './values/index.ts';
 export * from './workspaces.ts';
@@ -187,6 +189,8 @@ export const contract = {
   views: viewsContract,
   // Saved reports (the reports lane, spec 0050 reserved): a chart's definition, shared with the workspace.
   reports: reportsContract,
+  // Insights (spec 0067): every public page's visits, finishes, sources and sessions, and numbers only share links.
+  insights: insightsContract,
   trash: trashContract,
   tasks: tasksContract,
   notes: notesContract,

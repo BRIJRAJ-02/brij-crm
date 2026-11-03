@@ -24,6 +24,7 @@
 import {
   countFormEvent,
   enterPublicForm,
+  originOf,
   isRefusal,
   postingRules,
   savePartial,
@@ -114,6 +115,8 @@ function refusalAnswer(error: unknown): Response {
  */
 export function mountFormProgress(app: Hono<{ Variables: Variables }>, deps: FormProgressDeps): void {
   const now = deps.now ?? (() => new Date());
+  // Our own host: a referrer from it is Direct (spec 0067, AC-6703).
+  const ownHosts = URL.canParse(deps.publicOrigin) ? [new URL(deps.publicOrigin).hostname] : [];
 
   /** The visitor's hashed address, for the limits, and 'unknown' when there is none. */
   const addressOf = (c: Context<{ Variables: Variables }>): string =>
@@ -334,7 +337,11 @@ export function mountFormProgress(app: Hono<{ Variables: Variables }>, deps: For
             }),
             kind: body.kind,
             ...(body.questionId === undefined ? {} : { questionId: body.questionId }),
-            ...(body.source === undefined ? {} : { source: sourceOf(body.source) }),
+            origin: originOf({
+              ...originInput(body.source, body.referrer),
+              ...(body.landing === undefined ? {} : { landing: body.landing }),
+              ownHosts,
+            }),
           }),
         );
       } catch {
@@ -346,12 +353,19 @@ export function mountFormProgress(app: Hono<{ Variables: Variables }>, deps: For
 }
 
 /**
- * What the page said about where the visitor came from, as the two parts
- * `normaliseSource` takes. The page sends `utm:<word>` or the referrer; the
- * server normalises it again, so the stored value is always the server's.
+ * What the page said about where the visitor came from, as `originOf` takes it (spec 0067): `utm:<word>` is a UTM
+ * source, anything else the referrer, and a separate `referrer` wins. The server classifies it again, so the stored
+ * value is always the server's.
  */
-function sourceOf(given: string): { readonly utmSource?: string; readonly referrer?: string } {
-  const trimmed = given.trim();
-  if (trimmed.startsWith('utm:')) return { utmSource: trimmed.slice(4) };
-  return { referrer: trimmed };
+function originInput(
+  given: string | undefined,
+  referrer: string | undefined,
+): { readonly landing?: { readonly utm_source: string }; readonly referrer?: string } {
+  const trimmed = (given ?? '').trim();
+  const utm = trimmed.startsWith('utm:') ? trimmed.slice(4) : undefined;
+  const seen = referrer ?? (utm === undefined && trimmed !== '' ? trimmed : undefined);
+  return {
+    ...(utm === undefined || utm === '' ? {} : { landing: { utm_source: utm } }),
+    ...(seen === undefined ? {} : { referrer: seen }),
+  };
 }
