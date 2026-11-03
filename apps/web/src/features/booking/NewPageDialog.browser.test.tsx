@@ -9,6 +9,7 @@ import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { NewPageDialog } from './NewPageDialog.tsx';
+import { strings as rotationStrings } from './rotation-strings.ts';
 import { strings } from './strings.ts';
 
 let shown: InApp | undefined;
@@ -48,12 +49,12 @@ const MADE = {
   updatedAt: '2026-10-31T09:00:00.000Z',
 } as unknown as BookingPageView;
 
-async function render() {
+async function render(rotationList: readonly RotationView[] = []) {
   const create = vi.fn(() => Promise.resolve(MADE));
   const data = {
     preferences: { of: () => held({ status: 'loading' as const }) },
     rotations: {
-      view: () => held({ status: 'ready' as const, items: [] as RotationView[], pendingIds: new Set<string>() }),
+      view: () => held({ status: 'ready' as const, items: rotationList, pendingIds: new Set<string>() }),
     },
     bookingPages: { newId: () => MADE.id, create },
     // The dialog mints a managed page's id up front, whether or not it offers the choice (no `onManaged` here).
@@ -61,7 +62,7 @@ async function render() {
   } as unknown as DataLayer;
   const onCreated = vi.fn();
   shown = await renderInApp(
-    () => <NewPageDialog data={data} slug="acme" isOpen onClose={() => undefined} onCreated={onCreated} />,
+    () => <NewPageDialog data={data} slug="acme" canBookTeams isOpen onClose={() => undefined} onCreated={onCreated} />,
     { data, pattern: '/w/$slug/captures/links', at: '/w/acme/captures/links' },
   );
   return { create, onCreated };
@@ -127,5 +128,26 @@ describe('New booking page', () => {
     await expect.element(page.getByRole('heading', { name: strings.readyTitle })).toBeVisible();
     await userEvent.keyboard('{Escape}');
     await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(MADE));
+  });
+
+  it('books the workspace’s only round robin group without asking to pick it', async () => {
+    const SALES = {
+      id: '0199a6f2-0000-7000-8000-0000000000r1',
+      name: 'Sales team',
+      strategy: 'fair',
+      windowDays: 30,
+      pages: 0,
+    } as unknown as RotationView;
+    const { create } = await render([SALES]);
+    await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Sales intro');
+    await userEvent.click(page.getByRole('radio', { name: new RegExp(rotationStrings.bookRotation) }), { force: true });
+    // The picker shows it chosen.
+    await expect.element(page.getByLabelText(rotationStrings.rotation).getByText('Sales team')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: strings.createPage }));
+    expect(page.getByText(rotationStrings.rotationRequired).elements()).toEqual([]);
+    expect(create).toHaveBeenCalledWith(
+      'acme',
+      expect.objectContaining({ kind: 'round_robin', hosts: { fixed: [], rotations: [SALES.id] } }),
+    );
   });
 });

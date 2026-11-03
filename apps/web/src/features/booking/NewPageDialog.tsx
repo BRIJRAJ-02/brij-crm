@@ -108,6 +108,9 @@ export function NewPageDialog({
         }))
       : [];
   const isTeam = canBookTeams && who === 'rotation';
+  // The group the page books: the one picked, else the workspace's only group, so a team with one needn't pick it.
+  const onlyRotation = rotationItems.length === 1 ? rotationItems[0]?.id : undefined;
+  const pickedRotation = rotationId ?? onlyRotation ?? null;
   const isWorkspace = canBookTeams && who === 'everyone' && !isLinkOnly;
   // No group yet: Manage round robin opens in a new tab, so what is typed here stays (flow walks B8), and the
   // groups are read again when this tab is back in front.
@@ -214,7 +217,7 @@ export function NewPageDialog({
       ...(minutes === undefined ? { custom: strings.customMinutesInvalid } : {}),
     };
     setErrors(found);
-    const missingRotation = isTeam && rotationId === null;
+    const missingRotation = isTeam && pickedRotation === null;
     setRotationError(missingRotation ? rotationStrings.rotationRequired : undefined);
     if (minutes === undefined || Object.keys(found).length > 0 || missingRotation) return;
     setBusy(true);
@@ -229,8 +232,8 @@ export function NewPageDialog({
           ...(isTeam || isWorkspace ? { durations: [minutes] } : { durations: [minutes], scheduleId: null }),
           ...(isLinkOnly ? { isPrivate: true } : {}),
         },
-        ...(isTeam && rotationId !== null
-          ? { kind: 'round_robin' as const, hosts: { fixed: [], rotations: [rotationId] } }
+        ...(isTeam && pickedRotation !== null
+          ? { kind: 'round_robin' as const, hosts: { fixed: [], rotations: [pickedRotation] } }
           : {}),
         ...(isWorkspace ? { kind: 'round_robin' as const, scope: 'workspace' as const } : {}),
       })
@@ -435,7 +438,7 @@ export function NewPageDialog({
             // eslint-disable-next-line jsx-a11y-x/no-autofocus
             autoFocus={focusGroups}
             items={rotationItems}
-            value={rotationId}
+            value={pickedRotation}
             onChange={setRotationId}
             isRequired
             isDisabled={isBusy}
