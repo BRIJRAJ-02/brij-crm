@@ -134,6 +134,10 @@ describe('Settings › Business › Page', () => {
     const { store, calls } = await editorOf({ ...BASE, suggestedHandle: 'somewhere-nowhere' });
     await show(store);
     await expect.element(page.getByRole('textbox', { name: 'Page address' })).toHaveValue('somewhere-nowhere');
+    // The note says where the address came from, not to pick one the field already holds.
+    await expect
+      .element(page.getByText('We started it from your business’s name. Claim it, or change it first.'))
+      .toBeVisible();
     const claim = page.getByRole('button', { name: 'Claim' });
     await expect.element(claim).toHaveAttribute('data-variant', 'secondary');
     await userEvent.click(claim);
@@ -178,6 +182,10 @@ describe('Settings › Business › Page', () => {
     const { toasts, said } = recordingToasts();
     await show(store, toasts);
     await expect.element(page.getByRole('textbox', { name: 'Photo 3 description' })).toBeInTheDocument();
+    // Every row has both arrows, the end ones disabled, so the rows line up.
+    await expect.element(page.getByRole('button', { name: 'Move photo 1 earlier' })).toBeDisabled();
+    await expect.element(page.getByRole('button', { name: 'Move photo 3 later' })).toBeDisabled();
+    await expect.element(page.getByRole('button', { name: 'Move photo 2 later' })).toBeEnabled();
     // A thumbnail in each photo's row.
     expect(document.querySelectorAll(`img[src*="/api/business/page/photos/${PHOTO(2).id}"]`).length).toBeGreaterThan(0);
     await userEvent.click(page.getByRole('button', { name: 'Remove photo 2' }));

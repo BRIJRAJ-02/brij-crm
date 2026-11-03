@@ -263,6 +263,30 @@ describe('Settings › Business and a place’s tables', () => {
     await expect.poll(() => document.body.textContent).toMatch(/2:00\s?am/i);
   });
 
+  it('draws a place’s page without React warning of a key used twice', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf();
+    const warnings: string[] = [];
+    const was = console.error;
+    console.error = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(' '));
+    };
+    try {
+      shown = await renderInApp(
+        () => <FloorScreen store={store} slug="acme" place={BUSINESS.places[0] as never} toasts={toasts} />,
+        {
+          data: {},
+          pattern: '/w/$slug/settings/business/places/$placeId',
+          at: `/w/acme/settings/business/places/${PLACE}`,
+        },
+      );
+      await expect.element(page.getByRole('heading', { name: 'Opening hours' })).toBeInTheDocument();
+    } finally {
+      console.error = was;
+    }
+    expect(warnings.filter((warning) => warning.includes('same key'))).toEqual([]);
+  });
+
   it('adds T7 to T16 in one go, and takes a table offline at once', async () => {
     await page.viewport(1280, 900);
     const { store, calls } = storeOf();

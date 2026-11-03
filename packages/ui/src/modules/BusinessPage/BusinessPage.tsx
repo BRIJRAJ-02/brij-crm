@@ -290,7 +290,7 @@ export function BusinessPage(props: BusinessPageProps) {
             name={name}
             {...(logo === undefined ? { hue: 'ink' as const } : { src: logo, fit: 'contain' as const })}
             shape="square"
-            size="xl"
+            size="title"
             isDecorative
           />
           <div className={styles.titles}>

@@ -407,7 +407,7 @@ function AddressSection({
       >
         {view.handle === undefined && (
           <Callout tone="info" title={words.firstAddress}>
-            {words.firstAddressText}
+            {view.suggestedHandle === undefined ? words.firstAddressText : words.suggestedAddressText}
           </Callout>
         )}
         <Form id={formId} onSubmit={claim} label={words.address} isBusy={isBusy}>
@@ -597,12 +597,21 @@ function PhotoRow({
         onBlur={alt.onBlur}
         after={
           <>
-            {at > 0 && (
-              <Button variant="ghost" icon="arrow-up" label={words.moveUp(at + 1)} onPress={() => onMove(-1)} />
-            )}
-            {at < count - 1 && (
-              <Button variant="ghost" icon="arrow-down" label={words.moveDown(at + 1)} onPress={() => onMove(1)} />
-            )}
+            {/* Both arrows on every row, the end ones disabled, so every row's field and buttons line up. */}
+            <Button
+              variant="ghost"
+              icon="arrow-up"
+              label={words.moveUp(at + 1)}
+              isDisabled={at === 0}
+              onPress={() => onMove(-1)}
+            />
+            <Button
+              variant="ghost"
+              icon="arrow-down"
+              label={words.moveDown(at + 1)}
+              isDisabled={at >= count - 1}
+              onPress={() => onMove(1)}
+            />
             <Button variant="ghost" icon="trash" label={words.removePhoto(at + 1)} onPress={onRemove} />
           </>
         }

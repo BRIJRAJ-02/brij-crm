@@ -31,6 +31,7 @@ export const pageStrings = {
   copyAddress: 'Copy address',
   firstAddress: 'Choose an address first',
   firstAddressText: 'Pick a short address for your page, such as your business’s name.',
+  suggestedAddressText: 'We started it from your business’s name. Claim it, or change it first.',
   /** Publish needs. */
   fixFirst: 'Before you publish',
   fixInBusiness: 'Open Business',
@@ -48,7 +49,7 @@ export const pageStrings = {
   photoTitle: (place: number) => `Photo ${String(place)}`,
   photoLeads: 'Leads the page',
   photoAlt: (place: number) => `Photo ${String(place)} description`,
-  photoAltPlaceholder: 'What it shows, for people who can’t see it',
+  photoAltPlaceholder: 'Describe the photo',
   photoRemoved: 'Photo removed.',
   undo: 'Undo',
   moveUp: (place: number) => `Move photo ${String(place)} earlier`,

@@ -8,6 +8,7 @@ import { Button, CountryPicker, CurrencyPicker, Field, FormRow, Form, Modal, Sel
 import { useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
+import { browserTimeZone, startingZone } from './starting-zone.ts';
 import { strings } from './strings.ts';
 
 /** Props for the business card. */
@@ -79,7 +80,9 @@ function CardForm({
   const [addressLine, setAddressLine] = useState('');
   const [city, setCity] = useState('');
   const [country, setCountry] = useState<string | null>(workspace?.country ?? null);
-  const [timeZone, setTimeZone] = useState(workspace?.timeZone ?? 'UTC');
+  // A new workspace's zone is the default UTC, which almost no restaurant keeps: start from this browser's own zone
+  // then, so the hours and "Open now" read on the place's clock from the first try.
+  const [timeZone, setTimeZone] = useState(() => startingZone(workspace?.timeZone, browserTimeZone()));
   const [currency, setCurrency] = useState<string | null>(workspace?.currency ?? null);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const zones = useMemo(() => zoneItems(timeZone, new Date()), [timeZone]);
