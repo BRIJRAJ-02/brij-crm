@@ -25,7 +25,7 @@ import {
   PublicTableTimesQuery,
   type ErrorCode,
 } from '@crm/contracts';
-import { outboxHook, type BusyReader, type SlotCache } from '@crm/core';
+import { outboxHook, type BusyReader, type ManageLinkKey, type SlotCache } from '@crm/core';
 import {
   enterTablePage,
   guestCancel,
@@ -73,6 +73,8 @@ export interface PublicTableServices {
   readonly db: Database;
   readonly busy: BusyReader & { readonly fresh?: BusyReader };
   readonly slotCache: SlotCache;
+  /** The key manage tokens derive from (the booking pages' and the worker's), so emails write the same link. */
+  readonly linkKey: ManageLinkKey;
   readonly limiter: PublicLimiter;
   readonly now?: () => Date;
   /** The calendar file's facts: the UID's domain, the public origin and the sending address. */
@@ -137,6 +139,7 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
   const deps = {
     busy: services.busy,
     slotCache: services.slotCache,
+    linkKey: services.linkKey,
     ...(services.now === undefined ? {} : { now: services.now }),
     log,
   };

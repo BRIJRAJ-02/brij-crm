@@ -99,3 +99,66 @@ $$;
 -- moved a reservation, naming the places, so open Service lists and floors read their day again. Enum values are only
 -- ever added, and nothing in this migration uses it, so it runs inside its transaction.
 ALTER TYPE "public"."outbox_kind" ADD VALUE 'visits';
+--> statement-breakpoint
+-- Puts a reservation's guest email on Graphile Worker's queue (spec 0066 B7 lite; spec 0065 AC-6555), as
+-- crm_enqueue_booking_mail does for bookings, owned by the same crm_queue. It reads the visit under the caller's
+-- workspace setting (row level security still applies, crm_queue bypasses nothing) and builds the queue row itself, so
+-- the caller chooses only the kind: task crm_visit_mail, payload the workspace and visit ids and the kind, 5 attempts.
+-- `confirmed`, `changed` and `cancelled` run now. `reminder_24h` and `reminder_2h` run that long before the visit
+-- starts, keyed by visit and kind with job_key_mode 'replace', so a change replaces them; one whose time has passed
+-- is not queued, and one left for a cancelled visit finds it cancelled and sends nothing. Only a visit with an email.
+-- Answers whether it queued.
+grant crm_queue to current_user with inherit false, set true;
+--> statement-breakpoint
+grant select (workspace_id, id, status, starts_at, client_email) on appointments to crm_queue;
+--> statement-breakpoint
+create function crm_enqueue_visit_mail(appointment_id uuid, kind text)
+  returns boolean
+  language sql
+  volatile
+  security definer
+  set search_path = pg_catalog, pg_temp
+as $function$
+  with visit as (
+    select a.workspace_id, a.id,
+      case crm_enqueue_visit_mail.kind
+        when 'reminder_24h' then a.starts_at - interval '24 hours'
+        when 'reminder_2h' then a.starts_at - interval '2 hours'
+        else pg_catalog.now()
+      end as run_at
+    from public.appointments a
+    where a.id = crm_enqueue_visit_mail.appointment_id
+      and a.workspace_id = nullif(pg_catalog.current_setting('app.workspace_id', true), '')::uuid
+      and a.client_email is not null
+      and crm_enqueue_visit_mail.kind in ('confirmed', 'changed', 'cancelled', 'reminder_24h', 'reminder_2h')
+  ),
+  added as materialized (
+    select graphile_worker.add_job(
+      identifier => 'crm_visit_mail',
+      payload => pg_catalog.json_build_object(
+        'workspaceId', visit.workspace_id, 'appointmentId', visit.id, 'kind', crm_enqueue_visit_mail.kind
+      ),
+      run_at => visit.run_at,
+      max_attempts => 5,
+      job_key => case when crm_enqueue_visit_mail.kind like 'reminder_%'
+        then 'crm-visit:' || visit.workspace_id::text || ':' || visit.id::text || ':' || crm_enqueue_visit_mail.kind
+      end,
+      job_key_mode => 'replace'
+    ) as queued
+    from visit
+    where crm_enqueue_visit_mail.kind not like 'reminder_%' or visit.run_at > pg_catalog.now()
+  )
+  select count(*) = 1 from added;
+$function$;
+--> statement-breakpoint
+revoke all on function crm_enqueue_visit_mail(uuid, text) from public;
+--> statement-breakpoint
+grant execute on function crm_enqueue_visit_mail(uuid, text) to crm_app;
+--> statement-breakpoint
+grant create on schema public to crm_queue;
+--> statement-breakpoint
+alter function crm_enqueue_visit_mail(uuid, text) owner to crm_queue;
+--> statement-breakpoint
+revoke create on schema public from crm_queue;
+--> statement-breakpoint
+revoke crm_queue from current_user;

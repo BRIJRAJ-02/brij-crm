@@ -42,6 +42,14 @@ export {
   type CalendarSyncInput,
   type CalendarSyncOutcome,
 } from './calendar/sync.ts';
+// A reservation's guest emails (spec 0066 B7 lite): what each queued kind sends, read as the system by the worker.
+export {
+  prepareVisitMail,
+  VISIT_MAIL_KINDS,
+  type PreparedVisitMail,
+  type VisitMailDeps,
+  type VisitMailKind,
+} from './visits/mail.ts';
 // Booking emails (spec 0025, milestone 2): what each queued kind sends, read as the system by the worker's task.
 export {
   markGuestsTold,

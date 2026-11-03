@@ -132,8 +132,11 @@ const FRESH_MS = 1_000;
 const valueOf = <Value>(state: HospitalityHeldState<Value>, fallback: Value): Value =>
   state.status === 'ready' ? state.value : fallback;
 
-/** One held copy of `Value`, read with `load`, with a change laid over it while it is on its way. */
-function holder<Value>(load: () => Promise<Value>, now: () => number) {
+/**
+ * One held copy of `Value`, read with `load`, with a change laid over it while it is on its way (changes go out in
+ * order; a refusal puts back what was there). Table seating's store holds its setup and days the same way.
+ */
+export function holder<Value>(load: () => Promise<Value>, now: () => number) {
   let state: HospitalityHeldState<Value> = { status: 'loading' };
   let reading: Promise<Value> | undefined;
   let readAt: number | undefined;

@@ -185,6 +185,7 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
         log,
         concurrency: DRAIN_CONCURRENCY,
         bookingMail: tasks.bookingMail,
+        visitMail: tasks.visitMail,
         ...(tasks.email === undefined ? {} : { email: tasks.email }),
         notificationEmail: tasks.notificationEmail,
         schedulingNotice: tasks.schedulingNotice,

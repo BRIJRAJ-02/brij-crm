@@ -237,6 +237,7 @@ async function openWorker(hooks: {
       onFailed: hooks.onFailed,
       ...(jobTasks.calendar === undefined ? {} : { calendar: jobTasks.calendar }),
       bookingMail: jobTasks.bookingMail,
+      visitMail: jobTasks.visitMail,
       ...(jobTasks.email === undefined ? {} : { email: jobTasks.email }),
       notificationEmail: jobTasks.notificationEmail,
       schedulingNotice: jobTasks.schedulingNotice,

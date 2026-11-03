@@ -21,13 +21,15 @@ import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
 import type { BusyReader } from '../booking/calendar.ts';
 import { matchVisitor } from '../booking/visitor.ts';
-import { checkId } from '../engine/ids.ts';
+import { checkId, newId } from '../engine/ids.ts';
+import type { ManageLinkKey } from '../booking/tokens.ts';
 import { inputInvalid, isRefusal, postgresError, refuse, type RefusalError } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { auditSetup, installedHospitalityApps } from '../hospitality/gate.ts';
 import { addDays, placeDateOf, wallToInstant } from '../hospitality/hours.ts';
 import { calendarBusy, loadVisitInputs, withCalendarBusy, type AskedItem, type VisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
+import { queueVisitMail, visitManageToken } from './mail.ts';
 import { planVisit, type PlanInput, type PlannedStart, type PlanStats } from './planner.ts';
 
 const { appointmentHolds, appointmentItems, appointments, objects } = schema;
@@ -98,6 +100,11 @@ export interface VisitDeps {
   readonly slotCache?: SlotCache;
   readonly now?: () => Date;
   readonly log?: VisitLog;
+  /**
+   * The key a visit's manage token derives from (the booking pages' key, shared with the worker), so its emails can
+   * write the link again without storing the token. Without it (tests) the token is random.
+   */
+  readonly linkKey?: ManageLinkKey;
 }
 
 /** Refuses APP_NOT_INSTALLED unless Appointments or Table seating is installed (the engine's apps). */
@@ -529,7 +536,8 @@ export async function placeVisit(
   ].map((id) => ({ id, memberId: first.inputs.links.get(id) }));
 
   // 3. Under the locks: read again, plan the chosen start narrowed to its allocation, insert.
-  const manage = newManageToken();
+  const newVisitId = newId();
+  const manage = deps.linkKey === undefined ? newManageToken() : visitManageToken(deps.linkKey, newVisitId);
   let written: BookedVisit;
   try {
     const { result } = await runWrite(
@@ -570,6 +578,7 @@ export async function placeVisit(
             .insert(appointments)
             .values({
               workspaceId: scope.workspaceId,
+              id: newVisitId,
               placeId,
               clientName: client.name,
               clientEmail: client.email ?? null,
@@ -631,6 +640,10 @@ export async function placeVisit(
         }
         await auditSetup(tx, scope, 'visit.created', { appointmentId, placeId, source: input.source });
         context.record({ visits: [placeId] });
+        // The guest's confirmation and reminders (only a visit with an email is queued).
+        if (client.email !== undefined) {
+          await queueVisitMail(tx, appointmentId, ['confirmed', 'reminder_24h', 'reminder_2h']);
+        }
         // 4. The client's Person, by email only, in a savepoint: a refusal keeps the visit.
         let personRecordId: string | undefined;
         if (client.email !== undefined) {

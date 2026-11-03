@@ -319,6 +319,8 @@ import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/pict
 import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 import type { HospitalityStore } from './hospitality/store.ts';
+import type { TablesStore } from './tables/store.ts';
+export type { TablesStore } from './tables/store.ts';
 export type { HospitalityHeld, HospitalityHeldState, HospitalityStore, ResourceChange } from './hospitality/store.ts';
 // The Hospitality suite's setup (spec 0065, H0): the shapes Settings › Apps and Business show.
 export type {
@@ -1671,6 +1673,9 @@ export function createDataLayer({
     void hospitality?.then((made) => {
       made.clear();
     });
+    void tables?.then((made) => {
+      made.clear();
+    });
     socialLinks?.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
@@ -2290,6 +2295,12 @@ export function createDataLayer({
   // (Host away) read again, once for a burst, spread over 100 to 400 ms as schedules are. The event names nobody, so
   // every tab of the workspace hears it; only what a screen holds reads.
   const timeOffDue = new Set<string>();
+  // A place's visits changed (spec 0066 B7): every held day of those places reads again, once the store is loaded.
+  router.on('visits', (workspace, event) => {
+    void tables?.then((made) => {
+      made.placesChanged(workspace, event.placeIds);
+    });
+  });
   router.on('time_off', (workspace) => {
     if (timeOffDue.has(workspace)) return;
     timeOffDue.add(workspace);
@@ -2809,6 +2820,7 @@ export function createDataLayer({
   let brand: Promise<BrandStore> | undefined;
   // Settings › Apps and Business (spec 0065): the Hospitality setup, loaded with the first screen that asks.
   let hospitality: Promise<HospitalityStore> | undefined;
+  let tables: Promise<TablesStore> | undefined;
   /** An image to or from one of our own upload routes, for the workspace `x-crm-workspace` names (spec 0060). */
   const sendImage = async (
     path: string,
@@ -5898,6 +5910,17 @@ export function createDataLayer({
      * place's floor. The store loads on first use; installing or removing an app reads the sidebar again, so its
      * Hospitality section follows.
      */
+    /**
+     * Table seating (spec 0066 B7 lite): a place's setup and Publish, its Service day and the status moves. The store
+     * loads on first use; a `visits` event reads every held day of the place again, and a shown day reads again every
+     * minute while live updates are paused or off.
+     */
+    tables: {
+      load: (): Promise<TablesStore> =>
+        (tables ??= import('./tables/store.ts').then(({ openTables }) =>
+          openTables({ api: api.tables, call, mintId, isLive: () => liveStatus === 'live' }),
+        )),
+    },
     hospitality: {
       load: (): Promise<HospitalityStore> =>
         (hospitality ??= import('./hospitality/store.ts').then(({ openHospitality }) =>

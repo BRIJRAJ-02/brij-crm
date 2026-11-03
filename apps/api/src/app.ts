@@ -756,6 +756,7 @@ export function createApp({
     db,
     busy: bookingBusy,
     slotCache: visitSlots,
+    linkKey,
     wakeRelay,
     limiter: services.bookingLimiter ?? createMemoryLimiter(),
     ics: {

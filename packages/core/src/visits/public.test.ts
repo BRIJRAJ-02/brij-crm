@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { PublicReserveInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { enterTablePage } from '../access/table-door.ts';
 import { NO_CALENDAR } from '../booking/calendar.ts';
@@ -14,8 +15,10 @@ import { rollingWeek } from '../../test/dates-kit.ts';
 import { addResource, visitWorkspace } from '../../test/visits-kit.ts';
 import { guestCancel, guestChange, guestIcs, guestReserve, guestTimes, guestVisit, readTablePage } from './public.ts';
 import { getTableSetup, saveTableSetup } from './table-service.ts';
+import { prepareVisitMail, visitManageToken } from './mail.ts';
+import { systemScope } from '../access/door.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-visits-public-tests' });
@@ -174,5 +177,61 @@ describe('the manage page (AC-6555)', () => {
     expect(cancelled).toMatchObject({ cancelled: true, visit: { status: 'cancelled' } });
     expect((await guestCancel(entry, deps, { guest })).cancelled).toBe(false);
     expect(await guestTimes(entry, deps, { party: 2, date: DAY })).toContain(at('20:00'));
+  });
+});
+
+describe('the guest’s emails (AC-6555)', () => {
+  const KEY = Buffer.alloc(32, 9);
+  const keyed = { ...deps, linkKey: KEY };
+  const queued = (appointmentId: string) =>
+    testQuery<{ kind: string; key: string | null }>(
+      ownerUrl,
+      `select payload->>'kind' as kind, key from graphile_worker._private_jobs j
+       join graphile_worker._private_tasks t on t.id = j.task_id
+       where t.identifier = 'crm_visit_mail' and payload->>'appointmentId' = $1 order by j.id`,
+      [appointmentId],
+    );
+
+  it('queues the confirmation and reminders, words them with the code and a manage link on the public origin', async () => {
+    const { w, key } = await restaurant();
+    const entry = await enterTablePage({ db }, key);
+    const made = await guestReserve(entry, keyed, reserve(at('18:00')));
+    const id = made.booked.appointmentId;
+    // The derived token is the one the guest was given, and the one an email writes days later.
+    expect(made.manageToken).toBe(visitManageToken(KEY, id).token);
+    expect((await queued(id)).map((row) => row.kind)).toEqual(['confirmed', 'reminder_24h', 'reminder_2h']);
+    const links = {
+      appOrigin: 'https://app.timefix.com',
+      publicOrigin: 'https://timefix.com',
+      linkKey: KEY,
+      organizerEmail: 'reservations@timefix.com',
+    };
+    const prepared = await prepareVisitMail(systemScope(db, w.workspaceId), links, {
+      appointmentId: id,
+      kind: 'confirmed',
+    });
+    const [mail] = prepared.messages;
+    expect(mail?.subject).toBe('Your table at Somewhere Nowhere is booked');
+    expect(mail?.rows).toContainEqual({ label: 'Reservation code', value: made.visit.lookupCode });
+    expect(mail?.button?.url).toBe(`https://timefix.com/r/${key}/manage#${made.manageToken ?? ''}`);
+    expect(mail?.ics?.method).toBe('REQUEST');
+
+    // A change queues `changed` and replaces the reminders; a cancel queues `cancelled`, and the reminders skip.
+    await guestChange(entry, keyed, { guest: { token: made.manageToken ?? '' }, start: at('20:00') });
+    await guestCancel(entry, keyed, { guest: { token: made.manageToken ?? '' } });
+    const kinds = (await queued(id)).map((row) => row.kind);
+    expect(kinds.filter((kind) => kind === 'reminder_24h')).toHaveLength(1);
+    expect(kinds).toEqual(expect.arrayContaining(['changed', 'cancelled']));
+    const reminder = await prepareVisitMail(systemScope(db, w.workspaceId), links, {
+      appointmentId: id,
+      kind: 'reminder_24h',
+    });
+    expect(reminder.skipped).toBe('status cancelled');
+    const cancelled = await prepareVisitMail(systemScope(db, w.workspaceId), links, {
+      appointmentId: id,
+      kind: 'cancelled',
+    });
+    expect(cancelled.messages[0]?.ics?.method).toBe('CANCEL');
+    expect(cancelled.messages[0]?.button).toBeUndefined();
   });
 });

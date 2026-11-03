@@ -14,6 +14,7 @@ import { addDays, placeDateOf, wallToInstant } from '../hospitality/hours.ts';
 import { VISIT_TAKEN_MESSAGE, type SlotCache, type VisitDeps, type VisitTakenError } from './book.ts';
 import { calendarBusy, loadVisitInputs, withCalendarBusy, type AskedItem, type VisitInputs } from './load.ts';
 import { lockVisit, type LockedStaff } from './locks.ts';
+import { queueVisitMail } from './mail.ts';
 import { planVisit, type PlanInput } from './planner.ts';
 
 const DAY = 86_400_000;
@@ -221,6 +222,8 @@ export async function moveVisit(
       `);
         await auditSetup(tx, scope, 'visit.moved', { appointmentId: row.id, placeId: row.place_id });
         context.record({ visits: [row.place_id] });
+        // The guest hears of it, and the reminders move with it (replaced, so the old ones never fire).
+        await queueVisitMail(tx, row.id, ['changed', 'reminder_24h', 'reminder_2h']);
         return {
           appointmentId: row.id,
           start: plan.start.toISOString(),
@@ -290,6 +293,7 @@ export async function cancelVisit(
         to: 'cancelled',
       });
       context.record({ visits: [found.place_id] });
+      await queueVisitMail(tx, input.appointmentId, ['cancelled']);
       return { appointmentId: input.appointmentId, cancelled: true, placeId: found.place_id };
     },
     hooks,

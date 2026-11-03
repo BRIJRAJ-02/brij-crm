@@ -13,7 +13,8 @@
     "./forms": "./src/forms/builder.ts",
     "./imports": "./src/imports/index.ts",
     "./booking": "./src/booking/public.ts",
-    "./booking/manage": "./src/booking/manage.ts"
+    "./booking/manage": "./src/booking/manage.ts",
+    "./tables": "./src/tables/guest.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
