@@ -729,6 +729,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       saveSetup: os.tables.saveSetup.handler(notServed),
       day: os.tables.day.handler(notServed),
       setStatus: os.tables.setStatus.handler(notServed),
+      setNotify: os.tables.setNotify.handler(notServed),
+      freeTables: os.tables.freeTables.handler(notServed),
+      walkIn: os.tables.walkIn.handler(notServed),
     },
     hospitality: {
       apps: os.hospitality.apps.handler(notServed),

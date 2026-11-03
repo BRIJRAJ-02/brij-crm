@@ -8,6 +8,7 @@
 // The manage link's token is never stored: like a booking's, it is an HMAC of the visit's id under the key the api and
 // the worker share, so a reminder days later writes the same link. The visit keeps only its SHA-256.
 import { createHash, createHmac } from 'node:crypto';
+import { customRolePermissions, ROLE_PERMISSIONS, type Permission } from '@crm/contracts';
 import { zoneDisplay } from '@crm/contracts/zones';
 import { sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
@@ -23,12 +24,23 @@ export const VISIT_MAIL_KINDS = ['confirmed', 'changed', 'cancelled', 'reminder_
 /** One kind of reservation email. */
 export type VisitMailKind = (typeof VISIT_MAIL_KINDS)[number];
 
-/** A visit's manage token (32 URL safe characters) and the hash its row keeps. */
+/**
+ * The link key's version a new visit's token is made under. The version is part of what the HMAC signs, so when the
+ * link key is rotated, the next version signs new tokens while a lookup can still recompute an older visit's token
+ * under its own version and key. Booking pages' tokens (`booking/tokens.ts`) are left as they are.
+ */
+export const VISIT_LINK_KEY_VERSION = 1;
+
+/** A visit's manage token (32 URL safe characters) and the hash its row keeps, under link key version `version`. */
 export function visitManageToken(
   key: ManageLinkKey,
   appointmentId: string,
+  version: number = VISIT_LINK_KEY_VERSION,
 ): { readonly token: string; readonly hash: string } {
-  const token = createHmac('sha256', key).update(`visit-manage:${appointmentId}`).digest('base64url').slice(0, 32);
+  const token = createHmac('sha256', key)
+    .update(`visit-manage:v${String(version)}:${appointmentId}`)
+    .digest('base64url')
+    .slice(0, 32);
   return { token, hash: createHash('sha256').update(token).digest('hex') };
 }
 
@@ -82,6 +94,12 @@ interface MailRow extends Record<string, unknown> {
   readonly time_zone: string;
   readonly public_key: string;
   readonly business: string | null;
+  readonly source: string;
+  readonly place_id: string;
+  readonly party_note: string | null;
+  readonly occasion: string | null;
+  readonly client_phone: string | null;
+  readonly slug: string;
 }
 
 /** "Monday 9 November, 6:00 PM, London time (GMT)". */
@@ -141,8 +159,10 @@ export async function prepareVisitMail(
       tx.execute<MailRow>(sql`
         select a.id::text, a.status, a.starts_at, a.ends_at, a.updated_at, a.party_size, a.client_name, a.client_email,
           a.lookup_code, p.name as place_name, p.address_line, p.city, p.postcode, p.phone, p.time_zone, p.public_key,
-          (select b.name from business_profiles b where b.workspace_id = a.workspace_id) as business
+          (select b.name from business_profiles b where b.workspace_id = a.workspace_id) as business,
+          a.source, a.place_id::text, a.note as party_note, a.occasion, a.client_phone, w.slug
         from appointments a join places p on p.workspace_id = a.workspace_id and p.id = a.place_id
+          join workspaces w on w.id = a.workspace_id
         where a.id = ${input.appointmentId}::uuid
       `),
     )
@@ -199,5 +219,73 @@ export async function prepareVisitMail(
     why: `You made a reservation at ${business}.`,
     ics: { filename: 'reservation.ics', content: ics, method: cancelled ? 'CANCEL' : 'REQUEST' },
   };
-  return { messages: [mail], stamp: new Date(row.updated_at).getTime() };
+  // A new online reservation also tells the staff who asked for it (the guest's own email goes first, so each
+  // message's place in the list, and so its send key, stays the same on a retry).
+  const staff =
+    input.kind === 'confirmed' && row.source === 'online'
+      ? await inWorkspace(scope, (tx) => alertRecipients(tx, row.place_id))
+      : [];
+  return {
+    messages: [mail, ...staff.map((to) => staffMail(row, to, when, deps.appOrigin))],
+    stamp: new Date(row.updated_at).getTime(),
+  };
+}
+
+const OCCASIONS: Readonly<Record<string, string>> = {
+  birthday: 'Birthday',
+  anniversary: 'Anniversary',
+  date: 'Date night',
+  business: 'Business',
+  other: 'Occasion',
+};
+
+/** The staff's email of a new online reservation: who, when, how many, and a button to the Service screen. */
+function staffMail(row: MailRow, to: string, when: string, appOrigin: string): BookingMail {
+  const party = `${String(row.party_size)} ${row.party_size === 1 ? 'guest' : 'guests'}`;
+  return {
+    to,
+    subject: `New reservation: ${row.client_name}, ${party}`,
+    preview: `${when} · ${party} · ${row.place_name}`,
+    heading: 'New reservation',
+    intro: `${row.client_name} reserved a table for ${String(row.party_size)} at ${row.place_name}.`,
+    rows: [
+      { label: 'When', value: when },
+      { label: 'Guests', value: String(row.party_size) },
+      { label: 'Name', value: row.client_name },
+      ...(row.client_phone === null ? [] : [{ label: 'Phone', value: row.client_phone }]),
+      ...(row.occasion === null ? [] : [{ label: 'Occasion', value: OCCASIONS[row.occasion] ?? 'Occasion' }]),
+      ...(row.party_note === null ? [] : [{ label: 'Note', value: row.party_note }]),
+      { label: 'Reservation code', value: row.lookup_code },
+    ],
+    button: { label: 'Open Service', url: `${appOrigin}/w/${encodeURIComponent(row.slug)}/service` },
+    why: `You get this because new reservation emails are on for you at ${row.place_name}. Turn them off in Reservations.`,
+  };
+}
+
+/**
+ * Who gets a new reservation email at a place: active members who can Run service (their role's permissions, a
+ * custom role's kept to those it may hold) and whose choice for the place is on (no choice: on for the owner only).
+ */
+async function alertRecipients(tx: WorkspaceTx, placeId: string): Promise<readonly string[]> {
+  const rows = (
+    await tx.execute<{ email: string; role: string; custom: string[] | null; has_custom: boolean }>(sql`
+      select m.email, m.role::text as role, cr.permissions as custom, m.custom_role_id is not null as has_custom
+      from members m
+      left join workspace_roles cr on cr.workspace_id = m.workspace_id and cr.id = m.custom_role_id
+      left join reservation_alerts ra on ra.workspace_id = m.workspace_id and ra.place_id = ${placeId}::uuid
+        and ra.member_id = m.id
+      where m.status = 'active' and coalesce(ra.enabled, m.role = 'owner')
+      order by m.id
+    `)
+  ).rows;
+  const builtIn = ROLE_PERMISSIONS as Readonly<Record<string, readonly Permission[]>>;
+  return rows
+    .filter((row) =>
+      row.has_custom
+        ? row.role === 'member' &&
+          row.custom !== null &&
+          customRolePermissions(row.custom).includes('hospitality.service')
+        : (builtIn[row.role] ?? []).includes('hospitality.service'),
+    )
+    .map((row) => row.email);
 }

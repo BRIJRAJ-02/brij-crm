@@ -16,6 +16,11 @@ import { addResource, visitWorkspace } from '../../test/visits-kit.ts';
 import { guestCancel, guestChange, guestIcs, guestReserve, guestTimes, guestVisit, readTablePage } from './public.ts';
 import { getTableSetup, saveTableSetup } from './table-service.ts';
 import { prepareVisitMail, visitManageToken } from './mail.ts';
+import { cancelVisit, moveVisit } from './move.ts';
+import { placeVisit } from './book.ts';
+import { readTableService, setReservationAlert } from './table-service.ts';
+import { inWorkspace } from '../access/run.ts';
+import { addMember } from '../../test/visits-kit.ts';
 import { systemScope } from '../access/door.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
@@ -105,7 +110,37 @@ describe('the reservation page (AC-6550, AC-6551)', () => {
     expect(await code(guestReserve(entry, deps, { ...reserve(at('18:00')), party: 9 }))).toBe('INPUT:party');
     const email = `four-${randomUUID().slice(0, 8)}@example.com`;
     for (const time of ['18:00', '19:30', '21:00']) await guestReserve(entry, deps, reserve(at(time), email));
-    expect(await code(guestReserve(entry, deps, reserve(`${week.tuesday}T18:00:00.000Z`, email)))).toBe('INPUT:email');
+    // Generic, so the page never says whether an email already has reservations here.
+    let over: unknown;
+    try {
+      await guestReserve(entry, deps, reserve(`${week.tuesday}T18:00:00.000Z`, email));
+    } catch (error) {
+      over = error;
+    }
+    expect(isRefusal(over) ? [over.refusal.code, over.refusal.message] : over).toEqual([
+      'CONFLICT',
+      'We couldn’t take this reservation online. Please call the restaurant.',
+    ]);
+  });
+
+  it('counts the upcoming limit again under the place lock, past a first count that missed a parallel reservation', async () => {
+    const { w } = await restaurant();
+    const service = await inWorkspace(w.owner, (tx) => readTableService(tx, w.placeId));
+    if (service === undefined) throw new Error('No table service.');
+    const email = `race-${randomUUID().slice(0, 8)}@example.com`;
+    const book = (start: string) =>
+      placeVisit(w.owner, deps, {
+        placeId: w.placeId,
+        items: [{ serviceId: service.serviceId, variantId: service.variantId }],
+        party: 2,
+        start,
+        client: { name: 'Grace Hopper', email },
+        source: 'online',
+        idempotencyKey: randomUUID(),
+        perEmail: { max: 1, message: 'Over.' },
+      });
+    await book(at('18:00'));
+    expect(await code(book(at('21:00')))).toBe('CONFLICT');
   });
 
   it('keeps a ticked marketing box as a consent on the guest’s Person, and nothing when unticked', async () => {
@@ -120,10 +155,35 @@ describe('the reservation page (AC-6550, AC-6551)', () => {
     ).rows;
     expect(rows).toEqual([
       {
-        purpose: 'marketing',
+        purpose: 'marketing_email',
         source_id: ticked.booked.appointmentId,
         wording: 'Send me news and offers from Somewhere Nowhere.',
       },
+    ]);
+  });
+
+  it('never lets a ticked box override a withdrawal the Person already has', async () => {
+    const { w, key } = await restaurant();
+    const entry = await enterTablePage({ db }, key);
+    const email = `opted-${randomUUID().slice(0, 8)}@example.com`;
+    const first = await guestReserve(entry, deps, { ...reserve(at('18:00'), email), marketing: true });
+    const person = first.booked.personRecordId ?? '';
+    // They withdrew afterwards (a preference link, the CRM): the latest row for the purpose says no.
+    await w.sql(sql`
+      insert into consent_records (workspace_id, record_id, purpose, granted, wording, wording_version, source_type)
+      values (${w.workspaceId}::uuid, ${person}::uuid, 'marketing_email', false, 'Withdrawn.', 1, 'member')
+    `);
+    // Someone types their email on the page and ticks the box: no grant is stored over the withdrawal.
+    const again = await guestReserve(entry, deps, { ...reserve(at('21:00'), email), marketing: true });
+    expect(again.booked.personRecordId).toBe(person);
+    const rows = (
+      await w.sql<{ granted: boolean; source_type: string }>(
+        sql`select granted, source_type from consent_records where record_id = ${person}::uuid order by at, id`,
+      )
+    ).rows;
+    expect(rows).toEqual([
+      { granted: true, source_type: 'appointment' },
+      { granted: false, source_type: 'member' },
     ]);
   });
 });
@@ -160,7 +220,7 @@ describe('the manage page (AC-6555)', () => {
   });
 
   it('changes time and party within the cutoff, then refuses past it, and cancels once', async () => {
-    const { key } = await restaurant();
+    const { w, key } = await restaurant();
     const entry = await enterTablePage({ db }, key);
     const made = await guestReserve(entry, deps, reserve(at('18:00')));
     const guest = { token: made.manageToken ?? '' };
@@ -173,6 +233,26 @@ describe('the manage page (AC-6555)', () => {
     const late = { busy: NO_CALENDAR.busy, now: () => new Date(at('18:30')) };
     expect(await code(guestChange(entry, late, { guest, start: at('21:30') }))).toBe('BOOKING_CLOSED');
     expect(await code(guestCancel(entry, late, { guest }))).toBe('BOOKING_CLOSED');
+    // The cutoff holds under the lock too, against the locked row: a change that passed the first check while another
+    // moved the visit closer is still refused.
+    expect(
+      await code(
+        moveVisit(w.owner, late, {
+          appointmentId: changed.appointmentId,
+          start: at('21:00'),
+          online: true,
+          cutoff: { minutes: 120, message: 'Too late.' },
+        }),
+      ),
+    ).toBe('BOOKING_CLOSED');
+    expect(
+      await code(
+        cancelVisit(w.owner, late, {
+          appointmentId: changed.appointmentId,
+          cutoff: { minutes: 120, message: 'Too late.' },
+        }),
+      ),
+    ).toBe('BOOKING_CLOSED');
     const cancelled = await guestCancel(entry, deps, { guest, reason: 'Plans changed' });
     expect(cancelled).toMatchObject({ cancelled: true, visit: { status: 'cancelled' } });
     expect((await guestCancel(entry, deps, { guest })).cancelled).toBe(false);
@@ -199,6 +279,9 @@ describe('the guest’s emails (AC-6555)', () => {
     const id = made.booked.appointmentId;
     // The derived token is the one the guest was given, and the one an email writes days later.
     expect(made.manageToken).toBe(visitManageToken(KEY, id).token);
+    // The key's version is signed: a rotated key's version 2 makes a different token, and version 1 stays computable.
+    expect(visitManageToken(KEY, id, 2).token).not.toBe(made.manageToken);
+    expect(visitManageToken(KEY, id, 1).token).toBe(made.manageToken);
     expect((await queued(id)).map((row) => row.kind)).toEqual(['confirmed', 'reminder_24h', 'reminder_2h']);
     const links = {
       appOrigin: 'https://app.timefix.com',
@@ -210,8 +293,13 @@ describe('the guest’s emails (AC-6555)', () => {
       appointmentId: id,
       kind: 'confirmed',
     });
-    const [mail] = prepared.messages;
+    const [mail, staff] = prepared.messages;
     expect(mail?.subject).toBe('Your table at Somewhere Nowhere is booked');
+    // The owner hears of a new online reservation by default, with a link to the Service screen.
+    expect(prepared.messages).toHaveLength(2);
+    expect(staff).toMatchObject({ to: 'ada@example.com', subject: 'New reservation: Grace Hopper, 2 guests' });
+    expect(staff?.button?.url).toMatch(/^https:\/\/app\.timefix\.com\/w\/visits-[^/]+\/service$/);
+    expect(staff?.ics).toBeUndefined();
     expect(mail?.rows).toContainEqual({ label: 'Reservation code', value: made.visit.lookupCode });
     expect(mail?.button?.url).toBe(`https://timefix.com/r/${key}/manage#${made.manageToken ?? ''}`);
     expect(mail?.ics?.method).toBe('REQUEST');
@@ -233,5 +321,43 @@ describe('the guest’s emails (AC-6555)', () => {
     });
     expect(cancelled.messages[0]?.ics?.method).toBe('CANCEL');
     expect(cancelled.messages[0]?.button).toBeUndefined();
+  });
+});
+
+describe('the staff’s new reservation email (spec 0066 B7 lite)', () => {
+  const links = {
+    appOrigin: 'https://app.timefix.com',
+    linkKey: Buffer.alloc(32, 9),
+    organizerEmail: 'reservations@timefix.com',
+  };
+
+  it('goes to members who can Run service and chose it, the owner by default, never for a desk booking', async () => {
+    const { w, key } = await restaurant();
+    const entry = await enterTablePage({ db }, key);
+    // A plain member who switched it on still can't Run service: never emailed.
+    const plain = await addMember(w, 'Pat');
+    await w.sql(sql`
+      insert into reservation_alerts (workspace_id, place_id, member_id, enabled)
+      values (${w.workspaceId}::uuid, ${w.placeId}::uuid, ${plain}::uuid, true)
+    `);
+    const made = await guestReserve(entry, deps, reserve(at('18:00')));
+    const scope = systemScope(db, w.workspaceId);
+    const first = await prepareVisitMail(scope, links, { appointmentId: made.booked.appointmentId, kind: 'confirmed' });
+    expect(first.messages.map((mail) => mail.to).slice(1)).toEqual(['ada@example.com']);
+    // The owner turns it off: only the guest's confirmation goes.
+    await setReservationAlert(w.owner, { placeId: w.placeId, on: false });
+    expect((await getTableSetup(w.owner, { placeId: w.placeId })).notifyMe).toBe(false);
+    const second = await prepareVisitMail(scope, links, {
+      appointmentId: made.booked.appointmentId,
+      kind: 'confirmed',
+    });
+    expect(second.messages).toHaveLength(1);
+    // A reminder never carries a staff email.
+    await setReservationAlert(w.owner, { placeId: w.placeId, on: true });
+    const reminder = await prepareVisitMail(scope, links, {
+      appointmentId: made.booked.appointmentId,
+      kind: 'reminder_24h',
+    });
+    expect(reminder.messages).toHaveLength(1);
   });
 });

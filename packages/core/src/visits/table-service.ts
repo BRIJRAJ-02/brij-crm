@@ -88,6 +88,8 @@ export interface TableSetup {
   readonly ready: boolean;
   /** The guest page's address key: timefix.com/r/<publicKey>. */
   readonly publicKey: string;
+  /** Whether the reader gets an email for each new online reservation here (no choice yet: on for the owner). */
+  readonly notifyMe: boolean;
 }
 
 const DEFAULT_RULES: TableRules = {
@@ -264,8 +266,27 @@ async function placeFacts(tx: WorkspaceTx, placeId: string) {
   return { hours: place.hours, zone: place.time_zone, publicKey: place.public_key, tables };
 }
 
+/** Whether `memberId` gets new reservation emails at the place: their choice, else on for the owner only. */
+async function notifyOf(tx: WorkspaceTx, placeId: string, memberId: string | undefined): Promise<boolean> {
+  if (memberId === undefined) return false;
+  const [row] = (
+    await tx.execute<{ on: boolean }>(sql`
+      select coalesce(
+        (select ra.enabled from reservation_alerts ra where ra.place_id = ${placeId}::uuid and ra.member_id = m.id),
+        m.role = 'owner'
+      ) as on
+      from members m where m.id = ${memberId}::uuid and m.status = 'active'
+    `)
+  ).rows;
+  return row?.on === true;
+}
+
+/** The reading member, when a member reads. */
+const readerOf = (scope: EngineScope): string | undefined =>
+  scope.access.principal.kind === 'member' ? scope.access.principal.memberId : undefined;
+
 /** The setup as read in the caller's transaction. */
-async function readSetup(tx: WorkspaceTx, placeId: string): Promise<TableSetup> {
+async function readSetup(tx: WorkspaceTx, placeId: string, reader: string | undefined): Promise<TableSetup> {
   const facts = await placeFacts(tx, placeId);
   const row = await tableServiceOf(tx, placeId);
   const rules = row === undefined ? DEFAULT_RULES : rulesOf(row);
@@ -278,6 +299,7 @@ async function readSetup(tx: WorkspaceTx, placeId: string): Promise<TableSetup> 
     steps,
     ready: row !== undefined && steps.every((step) => step.done),
     publicKey: facts.publicKey,
+    notifyMe: await notifyOf(tx, placeId, reader),
   };
 }
 
@@ -287,7 +309,7 @@ export async function getTableSetup(scope: EngineScope, input: { readonly placeI
   const placeId = checkId(input.placeId, 'That place doesn’t exist.');
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
-    return readSetup(tx, placeId);
+    return readSetup(tx, placeId, readerOf(scope));
   });
 }
 
@@ -351,9 +373,35 @@ export async function saveTableSetup(
       );
       await auditSetup(tx, scope, 'table_service.updated', { placeId, serviceId: row.id });
     }
-    return readSetup(tx, placeId);
+    return readSetup(tx, placeId, by);
   });
   deps.slotCache?.purge(placeId);
+  return result;
+}
+
+/**
+ * Turns the reader's new reservation emails at a place on or off (Run service: they come to whoever runs the floor).
+ * Audited. Answers the state now.
+ */
+export async function setReservationAlert(
+  scope: EngineScope,
+  input: { readonly placeId: string; readonly on: boolean },
+): Promise<{ readonly placeId: string; readonly notifyMe: boolean }> {
+  requirePermission(scope, 'hospitality.service');
+  const memberId = hospitalityMember(scope);
+  const placeId = checkId(input.placeId, 'That place doesn’t exist.');
+  if (typeof input.on !== 'boolean') throw inputInvalid('on', 'Choose on or off.');
+  const { result } = await runWrite(scope, async ({ tx }) => {
+    await requireApp(tx, scope.workspaceId, 'table_seating');
+    await placeFacts(tx, placeId);
+    await tx.execute(sql`
+      insert into reservation_alerts (workspace_id, place_id, member_id, enabled)
+      values (${scope.workspaceId}::uuid, ${placeId}::uuid, ${memberId}::uuid, ${input.on})
+      on conflict (workspace_id, place_id, member_id) do update set enabled = excluded.enabled, updated_at = now()
+    `);
+    await auditSetup(tx, scope, 'reservation_alert.set', { placeId, on: String(input.on) });
+    return { placeId, notifyMe: input.on };
+  });
   return result;
 }
 

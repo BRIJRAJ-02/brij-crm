@@ -284,6 +284,10 @@ export const ACCESS_TABLE = {
   saveTableSetup: { permission: 'hospitality.manage' },
   listServiceDay: { permission: 'hospitality.service' },
   setVisitStatus: { permission: 'hospitality.service' },
+  // The reader's own new reservation emails, and walk ins seated now: whoever runs the floor.
+  setReservationAlert: { permission: 'hospitality.service' },
+  freeTables: { permission: 'hospitality.service' },
+  seatWalkIn: { permission: 'hospitality.service' },
   readBrandLogo: { anyMember: true },
   saveWorkspaceBrand: { permission: 'workspace.manage' },
   requireBrandEditor: { permission: 'workspace.manage' },

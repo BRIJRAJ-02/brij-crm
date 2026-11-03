@@ -200,6 +200,8 @@ export const TableSetupView = z.object({
   ready: z.boolean(),
   /** The guest page's address key (the place's public key). */
   publicKey: z.string(),
+  /** Whether the member reading it gets an email for each new online reservation here (the owner's default is on). */
+  notifyMe: z.boolean(),
 });
 /** A place's Table setup. */
 export type TableSetupView = z.infer<typeof TableSetupView>;
@@ -263,9 +265,54 @@ export const VisitStatusMoved = z.object({ id: Uuid, status: VisitStatus });
 /** A status move's answer. */
 export type VisitStatusMoved = z.infer<typeof VisitStatusMoved>;
 
+/** The reader's new reservation emails at a place, on or off (Run service). */
+export const SetTableNotifyInput = WorkspaceScoped.extend({ placeId: Uuid, on: z.boolean(), mutationId: Uuid });
+/** The reader's new reservation emails at a place. */
+export type SetTableNotifyInput = z.infer<typeof SetTableNotifyInput>;
+
+/** The new reservation emails' state after a change. */
+export const TableNotifySet = z.object({ placeId: Uuid, notifyMe: z.boolean() });
+/** The new reservation emails' state after a change. */
+export type TableNotifySet = z.infer<typeof TableNotifySet>;
+
+/** A walk in's party at a place: which tables would seat it now. */
+export const FreeTablesInput = WorkspaceScoped.extend({ placeId: Uuid, party: PartySize });
+/** A walk in's party at a place. */
+export type FreeTablesInput = z.infer<typeof FreeTablesInput>;
+
+/** One table, or tables joined, free from now for the party's whole hold: their ids, "T1 + T2", and the seats. */
+export const FreeTable = z.object({
+  resourceIds: z.array(Uuid).readonly(),
+  label: z.string(),
+  seats: z.number().int(),
+});
+/** One free table, or tables joined. */
+export type FreeTable = z.infer<typeof FreeTable>;
+
+/** The tables free now for a party, best fit first (the engine's order: smallest single, then joins). */
+export const FreeTablesView = z.object({
+  tables: z.array(FreeTable).readonly(),
+  /** How long the party would hold the table, in minutes. */
+  holdMinutes: z.number().int(),
+});
+/** The tables free now for a party. */
+export type FreeTablesView = z.infer<typeof FreeTablesView>;
+
+/** Seats a walk in now at the tables chosen; the name is optional ("Walk in" when left out). */
+export const WalkInInput = WorkspaceScoped.extend({
+  placeId: Uuid,
+  party: PartySize,
+  resourceIds: z.array(Uuid).min(1, 'Pick a table.').max(3, 'Join at most 3 tables.'),
+  name: z.string().trim().max(VISIT_LIMITS.clientNameMax, 'Use 120 characters or fewer.').optional(),
+  mutationId: Uuid,
+});
+/** Seats a walk in. */
+export type WalkInInput = z.infer<typeof WalkInInput>;
+
 /**
  * Table seating's staff side. `setup` and `saveSetup` are `hospitality.manage`'s; `day` and `setStatus` are Run
- * service's (`hospitality.service`), which reaches table reservations only. Each refuses `APP_NOT_INSTALLED` without
+ * service's (`hospitality.service`), which reaches table reservations only, as do `setNotify` (the reader's own new
+ * reservation emails), `freeTables` and `walkIn` (seat a party that walked in, now). Each refuses `APP_NOT_INSTALLED` without
  * Table seating.
  */
 export const tablesContract = {
@@ -273,4 +320,7 @@ export const tablesContract = {
   saveSetup: oc.input(SaveTableSetupInput).output(TableSetupView),
   day: oc.input(ServiceDayInput).output(ServiceDayView),
   setStatus: oc.input(SetVisitStatusInput).output(VisitStatusMoved),
+  setNotify: oc.input(SetTableNotifyInput).output(TableNotifySet),
+  freeTables: oc.input(FreeTablesInput).output(FreeTablesView),
+  walkIn: oc.input(WalkInInput).output(VisitStatusMoved),
 };

@@ -938,6 +938,7 @@ export {
   getTableSetup,
   saveTableSetup,
   listServiceDay,
+  setReservationAlert,
   setVisitStatus,
   setupSteps,
   tableRulesProblem,
@@ -948,6 +949,7 @@ export {
   type TableRules,
   type TableSetup,
 } from './visits/table-service.ts';
+export { freeTables, seatWalkIn, WALK_IN_TAKEN, type FreeTable, type FreeTables } from './visits/walk-in.ts';
 /** The operator console's one write (spec 0065, AC-6502): a workspace's early access flag, behind the operator gate. */
 export { setEarlyAccess } from './operator/early-access.ts';
 // The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.

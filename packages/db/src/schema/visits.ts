@@ -644,3 +644,32 @@ export const appointmentHolds = pgTable(
     ),
   ],
 );
+
+/**
+ * A member's new reservation emails at a place (spec 0066 B7 lite): on or off. No row means the default, on for the
+ * workspace's owner and off for everyone else; only a member who can Run service is ever emailed.
+ */
+export const reservationAlerts = pgTable(
+  'reservation_alerts',
+  {
+    workspaceId: workspaceId(),
+    placeId: uuid('place_id').notNull(),
+    memberId: uuid('member_id').notNull(),
+    enabled: boolean('enabled').notNull(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'reservation_alerts_pkey', columns: [t.workspaceId, t.placeId, t.memberId] }),
+    foreignKey({
+      name: 'reservation_alerts_place',
+      columns: [t.workspaceId, t.placeId],
+      foreignColumns: [places.workspaceId, places.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'reservation_alerts_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }).onDelete('cascade'),
+    index('reservation_alerts_member').on(t.workspaceId, t.memberId),
+  ],
+);

@@ -320,7 +320,7 @@ import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 import type { HospitalityStore } from './hospitality/store.ts';
 import type { TablesStore } from './tables/store.ts';
-export type { TablesStore } from './tables/store.ts';
+export type { TablesStore, WalkIn } from './tables/store.ts';
 export type { HospitalityHeld, HospitalityHeldState, HospitalityStore, ResourceChange } from './hospitality/store.ts';
 // The Hospitality suite's setup (spec 0065, H0): the shapes Settings › Apps and Business show.
 export type {
@@ -346,6 +346,8 @@ export type {
 } from '@crm/contracts';
 // Table seating (spec 0066 B7 lite): the setup, the Service day and a reservation's status.
 export type {
+  FreeTable,
+  FreeTablesView,
   ServiceDayView,
   ServiceVisit,
   TableRules,

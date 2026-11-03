@@ -115,3 +115,66 @@ describe('the Service day', () => {
     release();
   });
 });
+
+describe('walk ins and new reservation emails (spec 0066 B7 lite)', () => {
+  it('seats a walk in, then reads the held day again; a refusal changes nothing and comes back', async () => {
+    let reads = 0;
+    let seated = false;
+    const store = setUp({
+      day: () => {
+        reads += 1;
+        return Promise.resolve(DAY);
+      },
+      walkIn: (input) => {
+        if (seated) return Promise.reject(dataError('SLOT_TAKEN', 'That table was just taken. Pick another.'));
+        seated = true;
+        expect(input).toMatchObject({ party: 3, resourceIds: ['t1'], name: 'Ada' });
+        return Promise.resolve({ id: VISIT, status: 'started' as const });
+      },
+    });
+    const release = store.day('ws', PLACE, DAY.date).retain();
+    await flush();
+    const before = reads;
+    expect(await store.walkIn('ws', PLACE, DAY.date, { party: 3, resourceIds: ['t1'], name: ' Ada ' })).toBeUndefined();
+    expect(reads).toBe(before + 1);
+    const refused = await store.walkIn('ws', PLACE, DAY.date, { party: 3, resourceIds: ['t1'] });
+    expect(refused?.code).toBe('SLOT_TAKEN');
+    expect(reads).toBe(before + 1);
+    release();
+  });
+
+  it('shows the new reservation email switch at once, and puts it back when refused', async () => {
+    const setup = {
+      placeId: PLACE,
+      rules: {
+        minutes: 90,
+        holds: [],
+        partyMin: 1,
+        partyMax: 8,
+        stepMinutes: 15,
+        noticeMinutes: 120,
+        windowDays: 60,
+        changeCutoffMinutes: 120,
+        cancelCutoffMinutes: 120,
+        online: true,
+      },
+      saved: true,
+      steps: [],
+      ready: true,
+      publicKey: 'AAAAAAAAAAAAAAAA',
+      notifyMe: true,
+    };
+    const answer = deferred<{ placeId: string; notifyMe: boolean }>();
+    const store = setUp({ setup: () => Promise.resolve(setup), setNotify: () => answer.promise });
+    const held = store.setup('ws', PLACE);
+    held.retain();
+    await flush();
+    const sent = store.setNotify('ws', PLACE, false);
+    const now = held.getSnapshot();
+    expect(now.status === 'ready' && now.value.notifyMe).toBe(false);
+    answer.reject(dataError('FORBIDDEN', 'You can’t run service here.'));
+    expect((await sent)?.code).toBe('FORBIDDEN');
+    const after = held.getSnapshot();
+    expect(after.status === 'ready' && after.value.notifyMe).toBe(true);
+  });
+});

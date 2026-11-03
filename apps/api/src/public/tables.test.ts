@@ -180,7 +180,9 @@ describe('a reservation page from an empty workspace (spec 0066 B7 lite)', () =>
     );
     expect(rows.map((row) => row.item_ids)).toEqual([[placeId], [placeId]]);
 
-    const ics = await guest(`${key}/manage/${manageToken}/ics`);
+    // The calendar file is POSTed with the token in the body, never in an address a log or history keeps.
+    expect((await guest(`${key}/manage/${manageToken}/ics`)).status).not.toBe(200);
+    const ics = await guest(`${key}/ics`, { method: 'POST', body: { guest: { token: manageToken } } });
     expect(ics.headers.get('content-type')).toContain('text/calendar');
     expect(await ics.text()).toContain('Table for 4 at Somewhere');
 
@@ -203,5 +205,107 @@ describe('a reservation page from an empty workspace (spec 0066 B7 lite)', () =>
     expect(statuses.slice(0, 10).every((status) => status === 404)).toBe(true);
     expect(statuses[10]).toBe(429);
     expect((await guest('AAAAAAAAAAAAAAAA')).status).toBe(404);
+  });
+
+  it('keeps a reservation made before the app went: view, cancel and the calendar file work; times, reserve and change refuse', async () => {
+    const { m, placeId, key, rules } = await somewhere();
+    await m.client.tables.saveSetup({
+      workspace: m.slug,
+      placeId,
+      rules: { ...rules, online: true },
+      mutationId: newId(),
+    });
+    const made = (await (await guest(`${key}/reserve`, { method: 'POST', body: reservation() })).json()) as {
+      manageToken: string;
+    };
+    await m.client.hospitality.remove({ workspace: m.slug, app: 'table_seating', mutationId: newId() });
+    const token = { guest: { token: made.manageToken } };
+    expect((await guest(`${key}/visit`, { method: 'POST', body: token })).status).toBe(200);
+    expect((await guest(`${key}/ics`, { method: 'POST', body: token })).status).toBe(200);
+    expect(await (await guest(key)).json()).toMatchObject({ taking: false });
+    const times = await guest(`${key}/times?party=2&date=${MONDAY}`);
+    expect(await times.json()).toMatchObject({ code: 'BOOKING_CLOSED' });
+    const again = await guest(`${key}/reserve`, {
+      method: 'POST',
+      body: reservation({ start: `${MONDAY}T21:00:00.000Z`, email: 'ada@example.com' }),
+    });
+    expect(await again.json()).toMatchObject({ code: 'BOOKING_CLOSED' });
+    const change = await guest(`${key}/change`, {
+      method: 'POST',
+      body: { ...token, start: `${MONDAY}T20:00:00.000Z` },
+    });
+    expect(await change.json()).toMatchObject({ code: 'BOOKING_CLOSED' });
+    const cancelled = await guest(`${key}/cancel`, { method: 'POST', body: token });
+    expect(await cancelled.json()).toMatchObject({ visit: { status: 'cancelled' } });
+  });
+
+  it('refuses a fourth upcoming reservation for one email generically, without saying what exists', async () => {
+    const { m, placeId, key, rules } = await somewhere();
+    await m.client.tables.saveSetup({
+      workspace: m.slug,
+      placeId,
+      rules: { ...rules, online: true },
+      mutationId: newId(),
+    });
+    for (const at of ['18:00', '19:30', '21:00']) {
+      const made = await guest(`${key}/reserve`, {
+        method: 'POST',
+        body: reservation({ start: `${MONDAY}T${at}:00.000Z`, party: 1 }),
+      });
+      expect(made.status).toBe(200);
+    }
+    const fourth = await guest(`${key}/reserve`, {
+      method: 'POST',
+      body: reservation({ start: `${MONDAY}T21:30:00.000Z`, party: 1 }),
+    });
+    expect(fourth.status).toBe(409);
+    expect(await fourth.json()).toMatchObject({
+      code: 'CONFLICT',
+      message: 'We couldn’t take this reservation online. Please call the restaurant.',
+    });
+  });
+
+  it('gives a change or cancel by code its own bucket, apart from the lookups', async () => {
+    const { key } = await somewhere();
+    const ip = newIp();
+    const lookup = { guest: { code: 'ABCDEFGH', email: 'grace@navy.example' } };
+    for (let index = 0; index < 10; index += 1) await guest(`${key}/visit`, { method: 'POST', ip, body: lookup });
+    expect((await guest(`${key}/visit`, { method: 'POST', ip, body: lookup })).status).toBe(429);
+    // The lookups are spent; a cancel by code still reaches the reservation check (none here: 404, not 429).
+    expect((await guest(`${key}/cancel`, { method: 'POST', ip, body: lookup })).status).toBe(404);
+  });
+});
+
+describe('walk ins and new reservation emails on the staff side (spec 0066 B7 lite)', () => {
+  it('lists the free tables for a party, seats a walk in now, and refuses the same table twice', async () => {
+    const { m, placeId, rules } = await somewhere();
+    await m.client.tables.saveSetup({ workspace: m.slug, placeId, rules, mutationId: newId() });
+    const free = await m.client.tables.freeTables({ workspace: m.slug, placeId, party: 3 });
+    expect(free.tables.map((table) => table.label)).toEqual(['T1']);
+    expect(free.holdMinutes).toBe(105);
+    const tableIds = free.tables[0]?.resourceIds ?? [];
+    const seated = await m.client.tables.walkIn({
+      workspace: m.slug,
+      placeId,
+      party: 3,
+      resourceIds: [...tableIds],
+      mutationId: newId(),
+    });
+    expect(seated.status).toBe('started');
+    expect((await m.client.tables.freeTables({ workspace: m.slug, placeId, party: 3 })).tables).toEqual([]);
+    await expect(
+      m.client.tables.walkIn({ workspace: m.slug, placeId, party: 2, resourceIds: [...tableIds], mutationId: newId() }),
+    ).rejects.toMatchObject({ code: 'SLOT_TAKEN' });
+  });
+
+  it('turns the reader’s new reservation emails off and on, on for the owner by default', async () => {
+    const { m, placeId, rules } = await somewhere();
+    await m.client.tables.saveSetup({ workspace: m.slug, placeId, rules, mutationId: newId() });
+    expect((await m.client.tables.setup({ workspace: m.slug, placeId })).notifyMe).toBe(true);
+    expect(await m.client.tables.setNotify({ workspace: m.slug, placeId, on: false, mutationId: newId() })).toEqual({
+      placeId,
+      notifyMe: false,
+    });
+    expect((await m.client.tables.setup({ workspace: m.slug, placeId })).notifyMe).toBe(false);
   });
 });

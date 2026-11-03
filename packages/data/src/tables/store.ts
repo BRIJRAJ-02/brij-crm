@@ -5,8 +5,16 @@
 // and the refusal comes back to the screen. Every write at a place (a guest's reservation, change or cancel too)
 // stores a `visits` change event naming the place: each held day of that place reads again, once for a burst. Where
 // live updates are off (a host without the relay), a held day also reads again every minute while it is shown.
-import type { ServiceDayView, ServiceVisit, TableRules, TableSetupView, VisitStatus } from '@crm/contracts';
-import type { DataError } from '../errors.ts';
+import type {
+  FreeTablesView,
+  ServiceDayView,
+  ServiceVisit,
+  TableNotifySet,
+  TableRules,
+  TableSetupView,
+  VisitStatus,
+} from '@crm/contracts';
+import { toDataError, type DataError } from '../errors.ts';
 import { holder, type HospitalityHeld } from '../hospitality/store.ts';
 
 type Options = { signal?: AbortSignal };
@@ -24,6 +32,31 @@ export interface TablesProcedures {
     input: Scoped & { appointmentId: string; status: VisitStatus; mutationId: string },
     options: Options,
   ) => Promise<{ id: string; status: VisitStatus }>;
+  readonly setNotify: (
+    input: Scoped & { placeId: string; on: boolean; mutationId: string },
+    options: Options,
+  ) => Promise<TableNotifySet>;
+  readonly freeTables: (
+    input: Scoped & { placeId: string; party: number },
+    options: Options,
+  ) => Promise<FreeTablesView>;
+  readonly walkIn: (
+    input: Scoped & {
+      placeId: string;
+      party: number;
+      resourceIds: string[];
+      name?: string;
+      mutationId: string;
+    },
+    options: Options,
+  ) => Promise<{ id: string; status: VisitStatus }>;
+}
+
+/** A walk in as the Service screen seats it: the party, the tables picked (one, or up to 3 joined), a name if given. */
+export interface WalkIn {
+  readonly party: number;
+  readonly resourceIds: readonly string[];
+  readonly name?: string;
 }
 
 /** How often a shown day reads again when nothing live tells it to (Vercel has no relay). */
@@ -146,6 +179,57 @@ export function openTables(given: {
           return (day: ServiceDayView) => withStatus(day, moved.id, moved.status, new Date(now()).toISOString());
         },
       ),
+    /**
+     * The reader's new reservation emails at a place, on or off: shown at once on the held setup; refused, it goes
+     * back and the refusal comes back.
+     */
+    setNotify: (workspace: string, placeId: string, on: boolean): Promise<DataError | undefined> =>
+      setupOf(workspace, placeId).change(
+        (view) => ({ ...view, notifyMe: on }),
+        async () => {
+          const set = await call((options) => api.setNotify({ workspace, placeId, on, mutationId: mintId() }, options));
+          return (view: TableSetupView) => ({ ...view, notifyMe: set.notifyMe });
+        },
+      ),
+    /**
+     * The tables free now for a walk in's party, best fit first, read fresh each time (never held: the floor moves
+     * by the minute). Throws the DataError on a refusal.
+     */
+    freeTables: (workspace: string, placeId: string, party: number): Promise<FreeTablesView> =>
+      call((options) => api.freeTables({ workspace, placeId, party }, options)),
+    /**
+     * Seats a walk in now. The held day of `date` (the place's today) reads again once the server answers, so the
+     * party shows Seated on the list and the floor; refused (SLOT_TAKEN when the table went meanwhile), nothing
+     * changed and the refusal comes back.
+     */
+    walkIn: async (
+      workspace: string,
+      placeId: string,
+      date: string,
+      walkIn: WalkIn,
+    ): Promise<DataError | undefined> => {
+      try {
+        await call((options) =>
+          api.walkIn(
+            {
+              workspace,
+              placeId,
+              party: walkIn.party,
+              resourceIds: [...walkIn.resourceIds],
+              ...(walkIn.name === undefined || walkIn.name.trim() === '' ? {} : { name: walkIn.name.trim() }),
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+      } catch (error) {
+        return toDataError(error);
+      }
+      await dayOf(workspace, placeId, date)
+        .read()
+        .catch(() => undefined);
+      return undefined;
+    },
     /** A `visits` change event: every held day of these places reads again (each read is permission checked). */
     placesChanged(workspace: string, placeIds: readonly string[]) {
       for (const [key, held] of days) {

@@ -37,6 +37,7 @@ export {
   appointmentHolds,
   appointmentItems,
   appointments,
+  reservationAlerts,
   serviceCategories,
   servicePlaces,
   serviceResources,
