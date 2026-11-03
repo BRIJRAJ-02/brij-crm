@@ -2023,6 +2023,62 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookingPages.delete({ workspace: m.slug, pageId: page.id, mutationId });
     return [];
   },
+  // Publish (spec 0068): a page's draft, its publish, discard and restore are settings too: no outbox row.
+  'bookingPages.saveDraft': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.saveDraft({
+      workspace: m.slug,
+      pageId: page.id,
+      settings: { title: 'Hi' },
+      mutationId,
+    });
+    return [];
+  },
+  'bookingPages.publish': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.saveDraft({
+      workspace: m.slug,
+      pageId: page.id,
+      settings: { title: 'Hi' },
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.publish({ workspace: m.slug, pageId: page.id, mutationId });
+    return [];
+  },
+  'bookingPages.discard': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.discard({ workspace: m.slug, pageId: page.id, mutationId });
+    return [];
+  },
+  'bookingPages.restore': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.restore({ workspace: m.slug, pageId: page.id, version: 1, mutationId });
+    return [];
+  },
   // The profile's order (owner ask A102): settings too, so no outbox row; one poke.
   'bookingPages.reorderProfile': async (m, mutationId) => {
     const page = await m.client.bookingPages.create({
@@ -3162,6 +3218,10 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'routing.test': 2,
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
+  'bookingPages.saveDraft': 2,
+  'bookingPages.publish': 3,
+  'bookingPages.discard': 2,
+  'bookingPages.restore': 2,
   'profile.saveTheme': 2,
   'profile.saveQrStyle': 2,
   'profile.fetchThumbnail': 3,

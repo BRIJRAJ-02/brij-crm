@@ -295,6 +295,14 @@ export {
 } from './modules/LinkPage/LinkPage.tsx';
 /** One of the four templates every public page wears (spec 0068): Classic, Studio, Night or Split. */
 export type { PageTemplate } from './lib/page-template.ts';
+/** A public page's publish bar (spec 0068, AC-6811, AC-6812): changes not published, Changes, Versions and Publish. */
+export {
+  PublishBar,
+  type PublishBarProblem,
+  type PublishBarProps,
+  type PublishBarStatus,
+  type PublishBarVersion,
+} from './modules/PublishBar/PublishBar.tsx';
 /** Titled sections, each a Card, that move as wholes: a profile's sections in Settings › Profile (owner ask A102). */
 export { SectionList, type SectionListProps, type SectionListSection } from './modules/SectionList/SectionList.tsx';
 export {

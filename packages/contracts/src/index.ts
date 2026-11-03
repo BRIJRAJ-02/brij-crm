@@ -68,6 +68,7 @@ export * from './duplicates.ts';
 export * from './booking/index.ts';
 export * from './booking/blocks.ts';
 export * from './booking/pages.ts';
+export * from './booking/publish.ts';
 export * from './booking/schedules.ts';
 export * from './booking/time-off.ts';
 export * from './booking/limits.ts';

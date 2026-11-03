@@ -835,6 +835,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       delete: os.bookingPages.delete.handler(notServed),
       reorderProfile: os.bookingPages.reorderProfile.handler(notServed),
       attributes: os.bookingPages.attributes.handler(notServed),
+      saveDraft: os.bookingPages.saveDraft.handler(notServed),
+      publish: os.bookingPages.publish.handler(notServed),
+      discard: os.bookingPages.discard.handler(notServed),
+      versions: os.bookingPages.versions.handler(notServed),
+      restore: os.bookingPages.restore.handler(notServed),
     },
     home: {
       teamToday: os.home.teamToday.handler(notServed),

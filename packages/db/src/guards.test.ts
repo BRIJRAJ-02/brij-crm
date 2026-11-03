@@ -1285,6 +1285,34 @@ describe('isolation', () => {
     }
   });
 
+  it("reads none of another workspace's page versions, never lets the app rewrite one, and refuses a stray kind (spec 0068)", async () => {
+    const a = await workspaceWithMember('versions-iso-a');
+    const b = await workspaceWithMember('versions-iso-b');
+    const pageId = randomUUID();
+    for (const w of [a, b]) {
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into page_versions (workspace_id, page_kind, page_id, version, snapshot, published_by_member_id) values (${w.workspaceId}, 'booking', ${pageId}, 1, '{"title":"Intro"}'::jsonb, ${w.memberId})`,
+        ),
+      );
+    }
+    const seen = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ workspace_id: string }>(sql`select workspace_id from page_versions`),
+    );
+    expect(seen.rows.map((row) => row.workspace_id)).toEqual([a.workspaceId]);
+    // A version is what guests saw: the app may not rewrite its settings.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update page_versions set snapshot = '{}'::jsonb`)),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into page_versions (workspace_id, page_kind, page_id, version, snapshot) values (${a.workspaceId}, 'menu', ${pageId}, 2, '{}'::jsonb)`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+  });
+
   it('refuses a row written into another workspace', async () => {
     const a = await workspaceWithMember('delta');
     const b = await workspaceWithMember('epsilon');

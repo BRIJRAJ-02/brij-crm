@@ -15,6 +15,8 @@ import { ACCESS_TABLE, type AccessEntry } from './table.ts';
 
 /** Exported functions that take no scope: the door, pure helpers, the bootstrap (which mints its own) and the runner. */
 const NO_SCOPE: ReadonlySet<string> = new Set([
+  // A page's unpublished changes as sentences (spec 0068, AC-6811): pure, it reads nothing.
+  'diffPage',
   // Where a workspace's logo and a link page's photos are kept (spec 0060): pure, a path from ids.
   'brandLogoFolder',
   'pageImageFolder',

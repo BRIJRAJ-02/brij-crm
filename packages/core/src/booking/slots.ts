@@ -15,6 +15,7 @@ import {
   RoutingRules,
   WEEKDAYS,
   type BookingAvailability,
+  type BookingPageDraft,
   type BookingPageSettings,
   type RoutingRule,
 } from '@crm/contracts';
@@ -24,6 +25,7 @@ import { FREE_BUSY_MAX_DAYS } from '../calendar/events.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { LimitCheck } from '../scheduling/limits.ts';
 import { blockedTime } from './blocks.ts';
+import { draftOf } from './drafts.ts';
 import type { BusyReader } from './calendar.ts';
 import { computeSlots, type BookedSpan, type DateOverride, type Span, type WeeklyRule } from './engine.ts';
 
@@ -65,6 +67,12 @@ export interface PageRecord extends BookingPageSettings {
   readonly pausedReason?: 'host_removed';
   /** A round robin page's routing rules (spec 0043, AC-1608); a stored list that doesn't parse reads as none. */
   readonly routingRules?: readonly RoutingRule[];
+  /**
+   * The changes not yet published (spec 0068, AC-6810), checked by the shared schema; absent with none. Nothing that
+   * books reads it: the settings above are what guests see, and the editor's views lay this over them.
+   */
+  readonly draft?: BookingPageDraft;
+  readonly draftChangedAt?: Date;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -147,6 +155,9 @@ export function pageOf(
     formOnly: row.kind === 'round_robin' && row.formOnly,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
+    ...(row.draft === null || row.draftChangedAt === null
+      ? {}
+      : { draft: draftOf(row.draft), draftChangedAt: row.draftChangedAt }),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

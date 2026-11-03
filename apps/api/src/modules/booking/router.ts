@@ -1,4 +1,10 @@
+import { BOOKING_DRAFT_KEYS, linkPageCacheTags } from '@crm/contracts';
 import {
+  discardBookingPageDraft,
+  listBookingPageVersions,
+  publishBookingPage,
+  restoreBookingPageVersion,
+  saveBookingPageDraft,
   bookAsHost,
   listEditors,
   setEditors,
@@ -64,12 +70,28 @@ import {
 } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
-import { log } from '../../log.ts';
+import { errorFields, log } from '../../log.ts';
 import { member } from '../../orpc.ts';
 
 // Booking pages (spec 0025), inside a workspace: the door has let in an active member, and `context.scope` is theirs.
 // The services check `booking.manage` and whose page it is. A page is settings, not CRM data: its writes store no
 // outbox row, but still go through `commitWrite`, the one write path.
+/**
+ * Lets go of the edge's copies of an owner's link page and the pages under it (spec 0068, AC-6816), once a change
+ * guests see has committed. A purge that fails is logged, never the write's answer: the copies run out within the hour.
+ */
+async function forgetLinkPage(
+  context: { readonly edgeCache: { readonly forget: (tags: readonly string[]) => Promise<void> } },
+  handle: string | undefined,
+): Promise<void> {
+  if (handle === undefined) return;
+  try {
+    await context.edgeCache.forget(linkPageCacheTags(handle));
+  } catch (error) {
+    log.warn('booking.publish.purge_failed', errorFields(error));
+  }
+}
+
 export const bookingPagesRouter = member.bookingPages.router({
   list: member.bookingPages.list.handler(async ({ context }) => [...(await listBookingPages(context.scope))]),
   get: member.bookingPages.get.handler(({ context, input }) => getBookingPage(context.scope, { pageId: input.pageId })),
@@ -93,19 +115,52 @@ export const bookingPagesRouter = member.bookingPages.router({
       throw withInputFields(error, { ID_TAKEN: 'id' });
     }
   }),
-  update: member.bookingPages.update.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+  update: member.bookingPages.update.handler(async ({ context, input }) => {
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       updateBookingPage(context.scope, {
         pageId: input.pageId,
         settings: input.settings,
         ...(input.hosts === undefined ? {} : { hosts: input.hosts }),
         ...(input.routing === undefined ? {} : { routing: input.routing }),
       }),
-    ),
-  ),
+    );
+    // A save of what guests see goes live at once outside the draft (spec 0068): the link page's copies go too.
+    if (BOOKING_DRAFT_KEYS.some((key) => input.settings[key] !== undefined))
+      await forgetLinkPage(context, saved.handle);
+    return saved;
+  }),
   delete: member.bookingPages.delete.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       deleteBookingPage(context.scope, { pageId: input.pageId }),
+    ),
+  ),
+  // Publish (spec 0068, AC-6810 to AC-6816): the editor's changes go into the page's draft, and guests see them only
+  // once Publish writes them, checked as a save is and kept as a version.
+  saveDraft: member.bookingPages.saveDraft.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      saveBookingPageDraft(context.scope, { pageId: input.pageId, settings: input.settings }),
+    ),
+  ),
+  publish: member.bookingPages.publish.handler(async ({ context, input }) => {
+    const published = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      publishBookingPage(context.scope, { pageId: input.pageId }),
+    );
+    // Once committed, the edge's copies of the owner's link page and its pages are let go (AC-6816): the page's title
+    // and length show there.
+    await forgetLinkPage(context, published.handle);
+    return published;
+  }),
+  discard: member.bookingPages.discard.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      discardBookingPageDraft(context.scope, { pageId: input.pageId }),
+    ),
+  ),
+  versions: member.bookingPages.versions.handler(({ context, input }) =>
+    listBookingPageVersions(context.scope, { pageId: input.pageId }),
+  ),
+  restore: member.bookingPages.restore.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      restoreBookingPageVersion(context.scope, { pageId: input.pageId, version: input.version }),
     ),
   ),
   // The caller's own pages in their profile's new order (owner ask A102), one write: Settings › Profile's drag.

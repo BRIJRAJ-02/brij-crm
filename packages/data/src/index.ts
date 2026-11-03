@@ -64,7 +64,9 @@ import type {
   BookingsTab,
   BookingHosts,
   PublicSlots,
+  BookingPageDraft,
   BookingPageSettings,
+  PageVersionList,
   BookingPageView,
   BookingView,
   AttributeOption,
@@ -493,7 +495,11 @@ export type {
   CalendarEventItem,
   MeetingListItem,
   MeetingSource,
+  BookingPageDraft,
   BookingPageSettings,
+  PagePublication,
+  PageVersionList,
+  PageVersionView,
   BookingPageView,
   BookingView,
   BookingAssignment,
@@ -702,6 +708,7 @@ export { opensInline, RECORD_FILE_ACCEPT, RECORD_FILE_MAX_BYTES } from '@crm/con
 // The link page's look (spec 0054): the default and the named starting points are values the editor presses, not
 // only types, so they come through the one data layer like every other shape a screen uses.
 export {
+  BOOKING_DRAFT_KEYS,
   DEFAULT_PAGE_THEME,
   PAGE_TEMPLATES,
   PAGE_THEME_PRESETS,
@@ -4312,6 +4319,44 @@ export function createDataLayer({
             },
           );
       },
+      /**
+       * Changes the page's draft (spec 0068, AC-6810): the drafted settings given, shown in the list at once, put back on
+       * a refusal; guests see none of it until `publish`. The answer names what is not yet published (`publication`).
+       */
+      saveDraft: (workspace: string, pageId: string, settings: BookingPageDraft): Promise<BookingPageView> =>
+        bookingPageLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.bookingPages.saveDraft({ workspace, pageId, settings, mutationId: mintId() }, options),
+            ).then(settings.scheduleId === undefined ? (page: BookingPageView) => page : usedBy(workspace)),
+          ...shownPatch(bookingPageLists.items(workspace), pageId, (page) => ({ ...page, ...settings })),
+          land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
+        }),
+      /**
+       * Publishes the page's draft (AC-6811): its answer, the page as guests now see it, lands in the list. A broken
+       * page is refused with the setting to fix (`data.refusals[0].field`) and nothing changes.
+       */
+      publish: (workspace: string, pageId: string): Promise<BookingPageView> =>
+        bookingPageLists.write(workspace, {
+          send: () => call((options) => api.bookingPages.publish({ workspace, pageId, mutationId: mintId() }, options)),
+          land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
+        }),
+      /** Drops the page's draft (AC-6811); the screen asks first. */
+      discard: (workspace: string, pageId: string): Promise<BookingPageView> =>
+        bookingPageLists.write(workspace, {
+          send: () => call((options) => api.bookingPages.discard({ workspace, pageId, mutationId: mintId() }, options)),
+          land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
+        }),
+      /** The page's last 20 published versions, newest first (AC-6812); read when the menu opens, never held. */
+      versions: (workspace: string, pageId: string): Promise<PageVersionList> =>
+        call((options) => api.bookingPages.versions({ workspace, pageId }, options)),
+      /** Brings a version back as the page's draft (AC-6812), to look at and publish. */
+      restore: (workspace: string, pageId: string, version: number): Promise<BookingPageView> =>
+        bookingPageLists.write(workspace, {
+          send: () =>
+            call((options) => api.bookingPages.restore({ workspace, pageId, version, mutationId: mintId() }, options)),
+          land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
+        }),
       /**
        * A copy of a page the list holds, titled `title`: first in the list at
        * once (pending until the server made it), gone again on a refusal. The

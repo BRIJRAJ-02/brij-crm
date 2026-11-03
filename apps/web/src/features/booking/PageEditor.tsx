@@ -14,6 +14,7 @@
 // Leaves out: the deal step (milestone 2), collective members, and the profile's order (pages keep the
 // order they were made in until the Links list can be reordered by drag).
 import {
+  BOOKING_DRAFT_KEYS,
   BRAND_QUICK_PICKS,
   isDataError,
   MANAGED_PARTS,
@@ -46,6 +47,9 @@ import {
   Modal,
   PreviewFrame,
   PreviewLayout,
+  PublishBar,
+  type PublishBarStatus,
+  type PublishBarVersion,
   Popover,
   Radio,
   RadioGroup,
@@ -115,6 +119,7 @@ import { SharingPanel } from './SharingPanel.tsx';
 import { sharingStrings } from './sharing-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
+import { publishStrings } from './publish-strings.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
 import { strings as socialsStrings } from './socials-strings.ts';
@@ -176,6 +181,9 @@ const STEPS: SelectItem[] = [
 ];
 
 /** The tab each setting sits on, for a refusal that names its field. */
+/** How long "Published" stays in the bar before it says the page is live. */
+const PUBLISHED_MS = 1600;
+
 const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   slug: 'page',
   profileSection: 'page',
@@ -303,6 +311,13 @@ export function PageEditor({
   const [isSlugLeft, setSlugLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
+  // Publish (spec 0068, AC-6810 to AC-6812): Save keeps the guest facing settings as the page's draft, and the bar at
+  // the head says what guests don't see yet until Publish. What stays instant (AC-6813) is saved as before.
+  const [publishing, setPublishing] = useState<PublishBarStatus | undefined>(undefined);
+  const [publishProblem, setPublishProblem] = useState<
+    { readonly message: string; readonly field?: string } | undefined
+  >(undefined);
+  const [versions, setVersions] = useState<readonly PublishBarVersion[] | undefined>(undefined);
   // The route shows its cached read first and reads again behind it (and again on any live change), so a newer
   // read arrives as a new `loaded`: the handle just claimed in Profile (owner, 23 Oct 2026: Copy link kept giving
   // /b/<key>), a pause from the Links card, the editor's own last save. The editor takes it unless it is older
@@ -601,7 +616,7 @@ export function PageEditor({
       ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: one.attributeId }), list),
     ];
     setDraft((current) => ({ ...current, questions: unfile(current.questions) }));
-    data.bookingPages.update(slug, page.id, { questions: unfile(savedQuestions.current) }).then(
+    sendSettings({ questions: unfile(savedQuestions.current) }).then(
       (next) => {
         setPage(next);
         setDraft((current) => draftAfterSave(settingsOf(next), current));
@@ -616,11 +631,84 @@ export function PageEditor({
     );
   };
 
+  /**
+   * Sends a change: what guests see goes into the page's draft (spec 0068, AC-6810), anything instant (AC-6813: the
+   * status, the address, the profile, privacy, filing) is saved as it always was. One answer, the page as it stands.
+   */
+  const sendSettings = async (patch: Partial<BookingPageSettings>) => {
+    const drafted = Object.fromEntries(
+      Object.entries(patch).filter(([key]) => (BOOKING_DRAFT_KEYS as readonly string[]).includes(key)),
+    );
+    const instant = Object.fromEntries(
+      Object.entries(patch).filter(([key]) => !(BOOKING_DRAFT_KEYS as readonly string[]).includes(key)),
+    );
+    let next = page;
+    if (Object.keys(instant).length > 0) next = await data.bookingPages.update(slug, page.id, instant);
+    if (Object.keys(drafted).length > 0) next = await data.bookingPages.saveDraft(slug, page.id, drafted);
+    return next;
+  };
+  /** The page as the server answered a publish, discard or restore: the draft follows, the person's own edits kept. */
+  const takePage = (next: typeof page) => {
+    setPage(next);
+    setDraft((current) => draftAfterSave(settingsOf(next), current));
+    setVersions(undefined);
+  };
+  const publish = () => {
+    setPublishing('publishing');
+    setPublishProblem(undefined);
+    data.bookingPages.publish(slug, page.id).then(
+      (next) => {
+        takePage(next);
+        setPublishing('published');
+        // "Published" stays a moment, then the bar says the page is live.
+        setTimeout(() => setPublishing(undefined), PUBLISHED_MS);
+      },
+      (error: unknown) => {
+        setPublishing('error');
+        const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        setPublishProblem({
+          message: isDataError(error) ? error.message : strings.somethingWrong,
+          ...(field === undefined ? {} : { field }),
+        });
+      },
+    );
+  };
+  const discardDraft = () => {
+    data.bookingPages
+      .discard(slug, page.id)
+      .then(takePage, () => toasts.toast({ tone: 'danger', message: publishStrings.discardFailed }));
+  };
+  const readVersions = () => {
+    data.bookingPages.versions(slug, page.id).then(
+      (list) =>
+        setVersions(
+          list.versions.map((one) => ({
+            version: one.version,
+            isCurrent: one.isCurrent,
+            label: publishStrings.versionLabel(one.publishedBy, new Date(one.publishedAt)),
+          })),
+        ),
+      () => toasts.toast({ tone: 'danger', message: publishStrings.versionsFailed }),
+    );
+  };
+  const restore = (version: number) => {
+    data.bookingPages.restore(slug, page.id, version).then(
+      (next) => {
+        takePage(next);
+        toasts.toast({ tone: 'success', message: publishStrings.restored(version) });
+      },
+      () => toasts.toast({ tone: 'danger', message: publishStrings.restoreFailed }),
+    );
+  };
+  const changes = page.publication?.changes ?? [];
+  const publishStatus: PublishBarStatus = publishing ?? (changes.length > 0 ? 'draft' : 'live');
+  const problemTab = publishProblem?.field === undefined ? undefined : FIELD_TABS[publishProblem.field];
+
   const save = (patch: Partial<BookingPageSettings>) => {
     if (isSaving || Object.keys(patch).length === 0) return;
     setSaving(true);
     setFailure(undefined);
-    data.bookingPages.update(slug, page.id, patch).then(
+    sendSettings(patch).then(
       (next) => {
         setSaving(false);
         setPage(next);
@@ -887,6 +975,34 @@ export function PageEditor({
                   }
                   notices={
                     <>
+                      {/* What guests don't see yet, and Publish (spec 0068, AC-6811): the page's own, so not on a
+                          page the reader can't change. */}
+                      {!isLocked && (
+                        <PublishBar
+                          status={publishStatus}
+                          changes={changes}
+                          {...(publishProblem === undefined
+                            ? {}
+                            : {
+                                problem: {
+                                  message: publishProblem.message,
+                                  ...(problemTab === undefined
+                                    ? {}
+                                    : {
+                                        fix: {
+                                          label: publishStrings.goTo(tabLabel[problemTab]),
+                                          onFix: () => onTabChange(problemTab),
+                                        },
+                                      }),
+                                },
+                              })}
+                          onPublish={publish}
+                          onDiscard={discardDraft}
+                          {...(versions === undefined ? {} : { versions })}
+                          onVersions={readVersions}
+                          onRestore={restore}
+                        />
+                      )}
                       {page.status === 'paused' && <Callout tone="info">{strings.pausedNote}</Callout>}
                       {isLocked && (
                         <Callout tone="info" title={strings.readOnlyTitle}>
