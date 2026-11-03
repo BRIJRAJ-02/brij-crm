@@ -156,6 +156,8 @@ export const strings = {
   photoRemoveText: 'Your page goes back to its plain background.',
   coverRemoveText: 'Your page goes back to the centred header.',
   photoUnreadable: 'That picture couldn’t be read. Try a JPEG, PNG or WebP.',
+  /** The page already has exactly this photo in this crop (spec 0068): nothing was sent to the draft. */
+  samePhoto: 'Same photo. Nothing changed.',
   addForm: 'Timefix form',
   addFormText: 'One of your forms, as a row people press',
   newForm: 'Add a form',

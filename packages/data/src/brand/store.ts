@@ -110,7 +110,7 @@ export type ImageSend = (
   path: string,
   workspace: string,
   body?: Blob,
-) => Promise<{ readonly version?: string; readonly removed?: boolean }>;
+) => Promise<{ readonly version?: string; readonly removed?: boolean; readonly same?: boolean }>;
 
 /** A read this recent serves a new holder as it is: the route's loader and the screen it opens hold it together. */
 const FRESH_MS = 1_000;
@@ -414,16 +414,26 @@ export function openBrand(given: {
       ),
     /**
      * A cover or photo ground (AC-10, AC-13): the bytes, already cropped and drawn again by the screen. Answers the
-     * refusal, or undefined once it landed and the look names the new version.
+     * refusal, `'same'` when the page already has exactly this photo (the same picture in the same crop: nothing was
+     * stored and nothing changed, spec 0068), or undefined once it landed and the look names the new version.
      */
-    uploadPhoto: (workspace: string, slot: PageImageSlot, image: Blob): Promise<DataError | undefined> =>
-      lookOf(workspace).change(
+    uploadPhoto: async (
+      workspace: string,
+      slot: PageImageSlot,
+      image: Blob,
+    ): Promise<DataError | 'same' | undefined> => {
+      // What the server said of the photo, filled in by the send below once it answers.
+      const answered = { isSame: false };
+      const refused = await lookOf(workspace).change(
         (look) => look,
         async () => {
-          const { version } = await send(`/api/me/link-page/${slot}`, workspace, image);
+          const { version, same } = await send(`/api/me/link-page/${slot}`, workspace, image);
+          answered.isSame = same === true;
           return (look) => withField(look, slot, version);
         },
-      ),
+      );
+      return refused ?? (answered.isSame ? 'same' : undefined);
+    },
     /** Takes a cover or photo ground off the page (the screen asks first). Answers the refusal, or undefined. */
     removePhoto: (workspace: string, slot: PageImageSlot): Promise<DataError | undefined> =>
       lookOf(workspace).change(

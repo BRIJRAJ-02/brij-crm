@@ -141,10 +141,16 @@ function imageOf(path: string | null, type: string | null, version: string | nul
 /**
  * A link page's accent and photos (AC-14): its owner's own accent, else their workspace's brand, and the cover and
  * photo ground they uploaded. `owner` is what the handle door answered, so this reads only that page's workspace.
+ * `published` (the default) is what guests see (spec 0068, AC-6810); `draft` is the owner's unpublished look, which
+ * a caller asks for only once the door has found the signed in viewer to be the page's owner.
  */
-export async function readHandleLook(deps: { readonly db: Database }, owner: HandleOwner): Promise<PageLook> {
+export async function readHandleLook(
+  deps: { readonly db: Database },
+  owner: HandleOwner,
+  which: 'draft' | 'published' = 'published',
+): Promise<PageLook> {
   return deps.db.withWorkspace(owner.workspaceId, async (tx: WorkspaceTx) => {
-    const own = await lookRowOf(tx, owner.userId, owner.workspaceId, 'published');
+    const own = await lookRowOf(tx, owner.userId, owner.workspaceId, which);
     const brand = await brandRowOf(tx, owner.workspaceId);
     const accents = accentsOf(own, brand);
     const cover = imageOf(own?.cover_path ?? null, own?.cover_type ?? null, own?.cover_version ?? null);

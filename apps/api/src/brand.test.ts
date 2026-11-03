@@ -17,6 +17,8 @@ const { ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
+/** The app's own `request`, before `publishingReads` wraps it: a guest's read of what is really published. */
+let rawRequest: (path: string, init: RequestInit) => Response | Promise<Response>;
 const kept = new Map<string, { body: Uint8Array; contentType: string }>();
 const store: FileStore = {
   put: (pathname, body, contentType) => {
@@ -59,6 +61,7 @@ beforeAll(() => {
       },
     },
   ));
+  rawRequest = app.request.bind(app);
   // Spec 0068: reads of a link page see it as its owner would have published it.
   app = publishingReads(app, inject('testDatabase').adminUrl);
 });
@@ -84,6 +87,17 @@ function send(
       ...(init.type === undefined ? {} : { 'content-type': init.type }),
     },
     ...(init.body === undefined ? {} : { body: init.body }),
+  });
+}
+
+/** A read through the edge as `send` makes it, without publishing the page first: what guests really get. */
+async function read(path: string, cookie?: string): Promise<Response> {
+  return rawRequest(path, {
+    headers: {
+      [EDGE_HEADER]: TEST_EDGE_SECRET,
+      'x-forwarded-for': newIp(),
+      ...(cookie === undefined ? {} : { cookie }),
+    },
   });
 }
 
@@ -369,5 +383,78 @@ describe('a link page’s look', () => {
       body: JPEG,
     });
     expect(theirs.status).toBe(404);
+  });
+});
+
+describe('a drafted cover (spec 0068, AC-6810)', () => {
+  /** A page with a handle, published once with no cover, then a cover uploaded into its draft. */
+  async function drafted() {
+    const owner = await memberWithWorkspace(app);
+    const handle = `ada-${newId().slice(-8)}`;
+    await owner.client.profile.update({ workspace: owner.slug, handle, mutationId: newId() });
+    await owner.client.profile.publish({ workspace: owner.slug, mutationId: newId() });
+    const uploaded = await send('/api/me/link-page/cover', {
+      method: 'POST',
+      cookie: owner.cookie,
+      workspace: owner.slug,
+      type: 'image/jpeg',
+      body: JPEG,
+    });
+    expect(uploaded.status).toBe(200);
+    const { version } = (await uploaded.json()) as { version: string };
+    expect((await owner.client.profile.look({ workspace: owner.slug })).cover).toBe(version);
+    return { owner, handle, version };
+  }
+
+  it('answers its owner the drafted cover, kept by their browser alone, so the editor can draw and crop it', async () => {
+    const { owner, handle, version } = await drafted();
+    const own = await read(`/api/public/profiles/${handle}/cover?v=${version}`, owner.cookie);
+    expect(own.status).toBe(200);
+    expect(own.headers.get('cache-control')).toBe('private, max-age=3600');
+    // Their own Preview (`?draft=1`) names the draft's cover, and its stylesheet answers them at the draft's version.
+    const preview = (await (await read(`/api/public/handles/${handle}?draft=1`, owner.cookie)).json()) as {
+      look?: { version?: string; cover?: string };
+    };
+    expect(preview.look?.cover).toBe(version);
+    const sheet = await read(`/api/public/handles/${handle}/look.css?v=${preview.look?.version ?? ''}`, owner.cookie);
+    expect(sheet.status).toBe(200);
+    expect(sheet.headers.get('cache-control')).toBe('private, max-age=3600');
+    expect(await sheet.text()).toContain(`/cover?v=${version}`);
+  });
+
+  it('never answers a guest, or anyone else signed in, the draft: only what was published', async () => {
+    const { owner, handle, version } = await drafted();
+    const stranger = await memberWithWorkspace(app);
+    for (const cookie of [undefined, stranger.cookie]) {
+      expect((await read(`/api/public/profiles/${handle}/cover?v=${version}`, cookie)).status).toBe(404);
+      const page = (await (await read(`/api/public/handles/${handle}?draft=1`, cookie)).json()) as {
+        look?: { cover?: string };
+      };
+      expect(page.look?.cover).toBeUndefined();
+    }
+    // Published, the cover is everyone's, and the edge may keep it.
+    await owner.client.profile.publish({ workspace: owner.slug, mutationId: newId() });
+    const shown = await read(`/api/public/profiles/${handle}/cover?v=${version}`);
+    expect(shown.status).toBe(200);
+    expect(shown.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=3600');
+  });
+
+  it('takes the same photo again as no change, storing nothing and saying so', async () => {
+    const { owner, version } = await drafted();
+    const changes = async () => (await owner.client.profile.publication({ workspace: owner.slug })).changes;
+    const before = await changes();
+    expect(before).toContain('Cover photo added');
+    const files = kept.size;
+    const again = await send('/api/me/link-page/cover', {
+      method: 'POST',
+      cookie: owner.cookie,
+      workspace: owner.slug,
+      type: 'image/jpeg',
+      body: JPEG,
+    });
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ version, same: true });
+    expect(kept.size).toBe(files);
+    expect(await changes()).toEqual(before);
   });
 });

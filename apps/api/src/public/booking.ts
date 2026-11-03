@@ -721,7 +721,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       // The page's blocks and its own accent and photos (spec 0060, AC-14) side by side; a look that won't read is none.
       const [page, look] = await Promise.all([
         readLinkPage(found, search === undefined ? {} : { search }),
-        handleLookAnswer({ db }, found.owner),
+        handleLookAnswer({ db }, found.owner, found.isDraft ? 'draft' : 'published'),
       ]);
       // One view per page load (its first page, with no `q` at all: a cleared search sends an empty one), never a
       // machine's or the owner's own (AC-5124), counted after the answer is made and never holding it up. Its

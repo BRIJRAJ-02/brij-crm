@@ -6,7 +6,7 @@ import type { ProfileItem, ProfileItems } from '@crm/contracts';
 import { dataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { refusalSummary } from '../refusals.ts';
-import { blockLimit, checkBlock, createLinkPageStore, type LinkPageApi } from './store.ts';
+import { blockLimit, checkBlock, createLinkPageStore, openLinkPage, type LinkPageApi } from './store.ts';
 
 /** A promise and its resolve and reject, for answering a call by hand. */
 function deferred<T>() {
@@ -331,5 +331,49 @@ describe('checkBlock', () => {
         website: 'Use a web address, like timefix.com.',
       },
     });
+  });
+});
+
+describe('Publish’s bar hears each draft write land (spec 0068, AC-6811)', () => {
+  /** The editor's store over a theme save that answers when `land` is called. */
+  function opened() {
+    let land: (() => void) | undefined;
+    const profile = {
+      saveTheme: (input: { readonly theme: unknown }) =>
+        new Promise((resolve) => {
+          land = () => resolve(input.theme);
+        }),
+    };
+    const store = openLinkPage({
+      profile: profile as unknown as Parameters<typeof openLinkPage>[0]['profile'],
+      call: (run) => run({}),
+      mintId: () => '0192f0a0-0000-7000-8000-000000000009',
+      notify: () => undefined,
+      summary: () => '',
+      origin: 'https://app.example',
+      signup: { workspaces: () => Promise.resolve([]), make: () => Promise.reject(new Error('unused')) },
+    });
+    return { store, land: () => land?.() };
+  }
+
+  it('tells the bar once the look’s save has landed, never before it', async () => {
+    const { store, land } = opened();
+    let heard = 0;
+    const stop = store.publication.onChange(() => {
+      heard += 1;
+    });
+    const saving = store.saveTheme('acme', { template: 'studio' } as never);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(heard).toBe(0);
+    land();
+    await saving;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(heard).toBe(1);
+    // A write another store made (the brand look's photos) is reported by the screen, and a bar that left hears none.
+    store.publication.changed();
+    expect(heard).toBe(2);
+    stop();
+    store.publication.changed();
+    expect(heard).toBe(2);
   });
 });

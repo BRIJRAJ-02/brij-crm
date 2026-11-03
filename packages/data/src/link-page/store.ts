@@ -973,6 +973,18 @@ export function openLinkPage(given: {
     summary: given.summary,
   };
   const store = createLinkPageStore(deps);
+  // Publish's bar (spec 0068, AC-6811) reads where the page stands once a draft write has landed, never on a timer
+  // guessed to outlast the save: a write here settles, then every bar listening reads again. Writes the screen makes
+  // through other stores (the brand look's colour and photos, who the page is from) say so with `changed()`.
+  const draftListeners = new Set<() => void>();
+  const changed = (): void => {
+    for (const listener of draftListeners) listener();
+  };
+  /** `write` as it was, with the bars told once it settles, landed or refused. */
+  const landing = <T>(write: Promise<T>): Promise<T> => {
+    void write.then(changed, changed);
+    return write;
+  };
   // Spec 0061 (R4): pictures, a link's own site picture, Insights by period and the share QR's style.
   const reach = createReach({
     api: {
@@ -997,13 +1009,15 @@ export function openLinkPage(given: {
     /** Reads them now (the route's loader); rejects with the refusal. */
     read: (workspace: string): Promise<void> => store.read(workspace).then(() => undefined),
     /** Adds or edits a block: `shown` at once, idempotent on `id`. Answers whether it landed. */
-    save: store.save,
+    save: (workspace: string, id: string, block: ProfileBlock, shown: ProfileItem): Promise<boolean> =>
+      landing(store.save(workspace, id, block, shown)),
     /** The whole order of the live blocks. */
-    order: store.order,
+    order: (workspace: string, ids: readonly string[]): Promise<boolean> => landing(store.order(workspace, ids)),
     /** Archives a block, or restores it to the end. */
-    archive: store.archive,
+    archive: (workspace: string, id: string, archived: boolean): Promise<boolean> =>
+      landing(store.archive(workspace, id, archived)),
     /** Deletes a block for good (the screen asks first). */
-    remove: store.remove,
+    remove: (workspace: string, id: string): Promise<boolean> => landing(store.remove(workspace, id)),
     /** The booking pages the person may still place, from every workspace, read fresh each time. */
     pageChoices: store.pageChoices,
     /** A block as typed, checked as the server will: each field's problem, or the block to send. */
@@ -1027,9 +1041,11 @@ export function openLinkPage(given: {
      * toast: the control that changed is where the reason belongs.
      */
     saveTheme: (workspace: string, theme: PageTheme): Promise<PageTheme> =>
-      deps.api.saveTheme({ workspace, theme, mutationId: deps.mintId() }).catch((error: unknown) => {
-        throw toDataError(error);
-      }),
+      landing(
+        deps.api.saveTheme({ workspace, theme, mutationId: deps.mintId() }).catch((error: unknown) => {
+          throw toDataError(error);
+        }),
+      ),
     /**
      * Whether search engines may show the page (spec 0055, AC-5506). The switch moves before this answers and goes
      * back on a refusal, as the look does, so the reason belongs on the control rather than in a toast.
@@ -1055,7 +1071,7 @@ export function openLinkPage(given: {
     ): Promise<{ readonly shareImage?: string }> => store.setShareImage(workspace, image),
     /** Brings one link in bio page across (spec 0055, AC-5524): the rows land hidden, for a person to turn on. */
     importLinks: (workspace: string, id: string, url: string): Promise<ProfileLinkImport> =>
-      store.importLinks(workspace, id, url),
+      landing(store.importLinks(workspace, id, url)),
     /**
      * Publish for the page (spec 0068, AC-6810 to AC-6812): every edit above is a draft until Publish. Where it
      * stands, Publish, Discard (the screen asks first), the last 20 versions and Restore, each answering where the
@@ -1063,6 +1079,18 @@ export function openLinkPage(given: {
      * blocks are read again, since the rows changed under the store.
      */
     publication: {
+      /**
+       * Runs `listener` each time a draft write settles: the blocks, the look, and any write a screen reports with
+       * `changed()`. The bar reads where the page stands then. Answers the unsubscribe.
+       */
+      onChange: (listener: () => void): (() => void) => {
+        draftListeners.add(listener);
+        return () => {
+          draftListeners.delete(listener);
+        };
+      },
+      /** A draft write made through another store (the brand look, who the page is from) has landed. */
+      changed,
       read: (workspace: string): Promise<LinkPagePublication> =>
         call((options) => profile.publication({ workspace }, options)).catch((error: unknown) => {
           throw toDataError(error);

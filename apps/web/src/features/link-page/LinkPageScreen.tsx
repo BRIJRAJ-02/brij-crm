@@ -505,6 +505,8 @@ function Blocks({
     setLookRefusal(undefined);
     void brand.saveAccent(slug, accent, accentDark).then((refused) => {
       if (refused !== undefined) setLookRefusal(refused);
+      // The page's colour is drafted (spec 0068): Publish's bar reads where the page stands now.
+      else linkPage.publication.changed();
     });
   };
   // A photo picked, or the one there cropped again (spec 0068, AC-6809): the cover in its 3:1 frame, the
@@ -523,8 +525,11 @@ function Blocks({
             return undefined;
           },
         )
-        .then((refused) => {
-          if (refused !== undefined) setLookRefusal(refused);
+        .then((answer) => {
+          if (answer === 'same') toasts.toast({ tone: 'info', message: strings.samePhoto });
+          else if (answer !== undefined) setLookRefusal(answer);
+          // The photos are drafted (spec 0068): Publish's bar reads where the page stands now.
+          else linkPage.publication.changed();
         })
         .finally(() => {
           setSending(undefined);
@@ -535,6 +540,7 @@ function Blocks({
     setLookRefusal(undefined);
     void brand.removePhoto(slug, slot).then((refused) => {
       if (refused !== undefined) setLookRefusal(refused);
+      else linkPage.publication.changed();
     });
   };
   // Whether search engines may show the page (spec 0055, AC-5506), the same shape as the look above: shown the
@@ -1015,15 +1021,7 @@ function Blocks({
   const Editor = editing === undefined ? undefined : BLOCK_KINDS[editing.kind].Editor;
   // Publish (spec 0068, AC-6810 to AC-6812): every edit here is a draft until Publish; the bar heads both views.
   const publishBar = (
-    <LinkPublishBar
-      linkPage={linkPage}
-      slug={slug}
-      address={publicProfileUrl(handle)}
-      isPaused={!isLive}
-      blocks={state}
-      look={theme}
-      profile={profile}
-    />
+    <LinkPublishBar linkPage={linkPage} slug={slug} address={publicProfileUrl(handle)} isPaused={!isLive} />
   );
   // What the page opens on: the page as something to hand out, the phone beside it showing exactly what a visitor
   // gets. Everything that changes the page is one press away, under Edit page (the owner, 27 October 2026).
@@ -1156,7 +1154,17 @@ function Blocks({
           ...(sending === undefined ? {} : { sending }),
         }}
       />
-      <IdentityCard data={data} slug={slug} jobTitle={profile.jobTitle} identity={identity} onSaved={setIdentity} />
+      <IdentityCard
+        data={data}
+        slug={slug}
+        jobTitle={profile.jobTitle}
+        identity={identity}
+        onSaved={(saved) => {
+          setIdentity(saved);
+          // Who the page is from is drafted (spec 0068): Publish's bar reads where the page stands now.
+          linkPage.publication.changed();
+        }}
+      />
       <SharingCard
         indexable={indexable}
         {...(shareImage === undefined ? {} : { shareImage })}

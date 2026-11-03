@@ -82,6 +82,14 @@ describe('the brand store', () => {
     expect(back.status === 'ready' && back.value.accent).toBe('#1f5fd6');
   });
 
+  it('says Same photo when the page already has exactly the photo sent (spec 0068)', async () => {
+    const { store } = setup({ send: () => Promise.resolve({ version: 'abcdefabcdef', same: true }) });
+    const look = store.look('acme');
+    look.retain();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await store.uploadPhoto('acme', 'cover', new Blob(['x'], { type: 'image/jpeg' }))).toBe('same');
+  });
+
   it('reads a page’s look with the workspace accent it follows, and names a new photo once it lands', async () => {
     const { store, sent } = setup();
     const look = store.look('acme');

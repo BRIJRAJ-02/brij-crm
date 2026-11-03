@@ -5,13 +5,14 @@
 //   checks in the logo's order (`brand-logo.ts`): the type allowlist, 4 MB, the first bytes, the metadata taken out,
 //   ten an hour per person, then the private store under `profile-images/<user>/<workspace>/<random id>.<ext>`. The
 //   browser has already cropped a cover to 3:1. The page then points at it, and the photo it replaced is deleted.
+//   The photo the draft already has (the same version) is stored nowhere: the answer carries `same: true`.
 // - `DELETE` on the same addresses: the photo goes from the page and the store.
 // The owner is the session's own identity, never an input, so nobody reaches another person's page. Visitors read
 // the photos through the handle's own routes (`public/look.ts`). The global Origin check refuses a write from
 // anywhere but the app. Nothing here logs a photo or its path.
 import { randomUUID } from 'node:crypto';
 import { UPLOAD_WORKSPACE_HEADER, type PageImageSlot } from '@crm/contracts';
-import { pageImageFolder, saveProfileImage } from '@crm/core';
+import { pageImageFolder, readProfileLook, saveProfileImage } from '@crm/core';
 import type { Context, Hono } from 'hono';
 import {
   checkedUpload,
@@ -42,6 +43,13 @@ export function mountLinkPageImages(app: Hono<{ Variables: ImageVariables }>, de
       }
       const image = await checkedUpload(c, errorResponse);
       if (image instanceof Response) return image;
+      // The same picture in the same crop is the same bytes, so the same version (spec 0068): the draft already
+      // has it, so nothing is stored and nothing changes, and the answer says so (`same`) for the editor to say.
+      const current = await readProfileLook(scope).catch(() => undefined);
+      if (current?.[slot] === image.version) {
+        log.info('link_page.image.same', { requestId: c.get('requestId'), slot });
+        return c.json({ version: image.version, same: true });
+      }
       const stored = `${pageImageFolder(session.user.id, scope.workspaceId)}${randomUUID()}.${image.extension}`;
       try {
         await files.put(stored, image.bytes, image.type);

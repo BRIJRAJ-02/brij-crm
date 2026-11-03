@@ -2854,7 +2854,7 @@ export function createDataLayer({
     path: string,
     workspace: string,
     body?: Blob,
-  ): Promise<{ readonly version?: string; readonly removed?: boolean }> => {
+  ): Promise<{ readonly version?: string; readonly removed?: boolean; readonly same?: boolean }> => {
     const response = await fetch(new URL(path, origin).href, {
       method: body === undefined ? 'DELETE' : 'POST',
       headers: {
@@ -2872,6 +2872,7 @@ export function createDataLayer({
     return {
       ...(typeof fields.version === 'string' ? { version: fields.version } : {}),
       ...(typeof fields.removed === 'boolean' ? { removed: fields.removed } : {}),
+      ...(fields.same === true ? { same: true } : {}),
     };
   };
   // Settings › Account › Profile: whether the person's picture shows on their public pages, read with the profile.

@@ -27,6 +27,7 @@ import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import type { AddableKind } from './registry.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
 import { HeaderActions } from './LinkPageScreen.tsx';
+import { LinkPublishBar } from './LinkPublishBar.tsx';
 import { LiveSwitch, useLinkPageLive } from './private-page.tsx';
 
 let shown: InApp | undefined;
@@ -356,6 +357,31 @@ describe('Design’s four templates (spec 0068, AC-6802, AC-6804, AC-6805)', () 
     const kept = onChange.mock.lastCall?.[0] as Record<string, unknown> | undefined;
     expect(kept?.template).toBe('classic');
     expect(kept).not.toHaveProperty('moved');
+  });
+});
+
+describe('Publish’s bar (spec 0068, AC-6811)', () => {
+  it('shows a template pick as a draft as soon as its save lands, with no reload and no timer', async () => {
+    // The server's answer: nothing to publish until the look's save lands, then the template change.
+    let changes: readonly string[] = [];
+    const listeners = new Set<() => void>();
+    const linkPage = {
+      publication: {
+        read: vi.fn(() => Promise.resolve({ changes: [...changes] })),
+        onChange: (listener: () => void) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        changed: () => undefined,
+      },
+    } as unknown as LinkPageStore;
+    await render({}, () => <LinkPublishBar linkPage={linkPage} slug="acme" address="/ada" isPaused={false} />);
+    await expect.element(page.getByText('Live: guests see this page')).toBeVisible();
+    // The save lands (the store says so), long after any read a timer would have made.
+    changes = ['Template Classic → Studio'];
+    for (const listener of listeners) listener();
+    await expect.element(page.getByText('1 change not published')).toBeVisible();
+    expect(linkPage.publication.read).toHaveBeenCalledTimes(2);
   });
 });
 
