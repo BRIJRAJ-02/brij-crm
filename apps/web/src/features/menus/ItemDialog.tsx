@@ -6,7 +6,7 @@
 import type { ItemAllergen, ItemFields, MenuDraft, MenuItem, MenuStore } from '@crm/data';
 import { DIET_MARKS, EU_ALLERGENS, MENU_LIMITS, minorToDecimal, parsePrice } from '@crm/data/menu';
 import { Button, Callout, ChoiceChips, Field, FileDrop, Form, Switch, type Toasts } from '@crm/ui';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { DrawerForm } from './drawer.tsx';
 import { draftPhotoHref, prepareMenuPhoto } from './photo.ts';
 import { strings } from './strings.ts';
@@ -65,9 +65,20 @@ export function ItemDialog({
   );
   const [problems, setProblems] = useState<Readonly<Record<string, string>>>({});
   const [isSaving, setSaving] = useState(false);
-  // A new dish's photo waits for the dish, then goes up with it.
+  // A chosen photo waits for Save (a new dish's for the dish itself), so Cancel or Discard leaves the dish as it was.
   const [pendingPhoto, setPendingPhoto] = useState<File>();
+  // Its preview is a local object URL, let go when another photo replaces it or the drawer closes.
+  const [pendingSrc, setPendingSrc] = useState<string>();
+  const pendingSrcRef = useRef<string | undefined>(undefined);
+  useEffect(
+    () => () => {
+      if (pendingSrcRef.current !== undefined) URL.revokeObjectURL(pendingSrcRef.current);
+    },
+    [],
+  );
   const live = draft.items.find((each) => each.id === id);
+  // Run service alone reads a dish here and changes nothing (UX review should-fix 14).
+  const isReadOnly = !draft.canEdit;
   const isDirty =
     pendingPhoto !== undefined ||
     name !== (item?.name ?? newName ?? '') ||
@@ -145,12 +156,15 @@ export function ItemDialog({
     }
   };
 
-  // A dish not saved yet keeps its photo until Save makes the dish (walk, 4 Nov 2026: it was dropped before).
+  // Every dish keeps a chosen photo until Save (walk, 4 Nov 2026; UX review should-fix 8).
   const choosePhoto = (files: readonly File[]) => {
     const file = files[0];
     if (file === undefined) return;
-    if (live === undefined) setPendingPhoto(file);
-    else void upload(file);
+    if (pendingSrcRef.current !== undefined) URL.revokeObjectURL(pendingSrcRef.current);
+    const src = URL.createObjectURL(file);
+    pendingSrcRef.current = src;
+    setPendingSrc(src);
+    setPendingPhoto(file);
   };
 
   const photoField = (
@@ -160,31 +174,42 @@ export function ItemDialog({
       typesText={pendingPhoto === undefined ? strings.photoTypes : strings.photoAfterSave}
       maxSize={MENU_LIMITS.photoMaxBytes}
       onFiles={choosePhoto}
-      {...(live?.photo === undefined
-        ? {}
-        : { preview: { src: draftPhotoHref(slug, live.photo.id, 'small', live.photo.version), alt: '' } })}
+      isReadOnly={isReadOnly}
+      {...(pendingSrc !== undefined
+        ? { preview: { src: pendingSrc, alt: '' } }
+        : live?.photo === undefined
+          ? {}
+          : { preview: { src: draftPhotoHref(slug, live.photo.id, 'small', live.photo.version), alt: '' } })}
     />
   );
 
   return (
     <DrawerForm
       title={item?.name ?? (name === '' ? strings.dish : name)}
-      isDirty={isDirty}
+      isDirty={!isReadOnly && isDirty}
       isBusy={isSaving}
       onClose={onClose}
       actions={
-        <>
-          <Button slot="close" isDisabled={isSaving}>
-            {strings.cancel}
+        isReadOnly ? (
+          <Button variant="primary" slot="close">
+            {strings.close}
           </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={isSaving}>
-            {strings.save}
-          </Button>
-        </>
+        ) : (
+          <>
+            <Button slot="close" isDisabled={isSaving}>
+              {strings.cancel}
+            </Button>
+            <Button variant="primary" type="submit" form={formId} isPending={isSaving}>
+              {strings.save}
+            </Button>
+          </>
+        )
       }
     >
-      <Form id={formId} onSubmit={() => void save()}>
+      <Form id={formId} onSubmit={() => (isReadOnly ? undefined : void save())}>
+        {isReadOnly ? <Callout tone="info">{strings.readOnlyDish}</Callout> : null}
         <Field
+          isReadOnly={isReadOnly}
           label={strings.dishName}
           value={name}
           onChange={setName}
@@ -194,6 +219,7 @@ export function ItemDialog({
         />
         {photoField}
         <Field
+          isReadOnly={isReadOnly}
           label={strings.price}
           value={price}
           onChange={setPrice}
@@ -204,6 +230,7 @@ export function ItemDialog({
         />
         {price.trim() === '' && sizes.length === 0 ? (
           <Field
+            isReadOnly={isReadOnly}
             label={strings.priceNote}
             value={priceNote}
             onChange={setPriceNote}
@@ -211,12 +238,28 @@ export function ItemDialog({
             maxLength={MENU_LIMITS.priceNoteMax}
           />
         ) : null}
-        <Field label={strings.kcal} value={kcal} onChange={setKcal} inputMode="numeric" error={problems.kcal} />
-        <Field label={strings.description} value={description} onChange={setDescription} isMultiline maxLength={400} />
+        <Field
+          isReadOnly={isReadOnly}
+          label={strings.kcal}
+          value={kcal}
+          onChange={setKcal}
+          inputMode="numeric"
+          error={problems.kcal}
+        />
+        <Field
+          isReadOnly={isReadOnly}
+          label={strings.description}
+          value={description}
+          onChange={setDescription}
+          isMultiline
+          maxLength={400}
+        />
         {sizes.map((size, index) => (
           <Field
+            isReadOnly={isReadOnly}
             key={size.key}
             label={`${strings.sizeName} ${String(index + 1)}`}
+            labelAside={strings.andPrice}
             value={size.name}
             onChange={(value) =>
               setSizes((was) => was.map((each) => (each.key === size.key ? { ...each, name: value } : each)))
@@ -224,8 +267,10 @@ export function ItemDialog({
             error={problems[`size-${size.key}`]}
             after={
               <Field
-                label={strings.sizePrice}
+                isReadOnly={isReadOnly}
+                label={strings.sizePriceIn(currency)}
                 isLabelHidden
+                prefix={currency}
                 value={size.price}
                 inputMode="decimal"
                 onChange={(value) =>
@@ -234,16 +279,18 @@ export function ItemDialog({
               />
             }
             suffix={
-              <Button
-                variant="ghost"
-                icon="x"
-                label={strings.removeSize}
-                onPress={() => setSizes((was) => was.filter((each) => each.key !== size.key))}
-              />
+              isReadOnly ? undefined : (
+                <Button
+                  variant="ghost"
+                  icon="x"
+                  label={strings.removeSize}
+                  onPress={() => setSizes((was) => was.filter((each) => each.key !== size.key))}
+                />
+              )
             }
           />
         ))}
-        {sizes.length >= MENU_LIMITS.sizesPerItem ? null : (
+        {isReadOnly || sizes.length >= MENU_LIMITS.sizesPerItem ? null : (
           <Button
             icon="plus"
             onPress={() => {
@@ -256,13 +303,16 @@ export function ItemDialog({
           </Button>
         )}
         {draft.groups.length === 0 ? (
-          // A button here would leave the drawer and what was typed in it: Options is where groups are made.
-          <Callout tone="info">{strings.groupsLater}</Callout>
+          isReadOnly ? null : (
+            // A button here would leave the drawer and what was typed in it: Options is where groups are made.
+            <Callout tone="info">{strings.groupsLater}</Callout>
+          )
         ) : (
           <ChoiceChips
             label={strings.groups}
             choices={draft.groups.map((group) => ({ id: group.id, label: group.name }))}
             selected={groupIds}
+            isDisabled={isReadOnly}
             onChange={(next) => setGroupIds(next.slice(0, MENU_LIMITS.groupsPerItem))}
           />
         )}
@@ -270,6 +320,7 @@ export function ItemDialog({
           label={strings.contains}
           choices={EU_ALLERGENS.map((code) => ({ id: code, label: strings.allergens[code] }))}
           selected={contains}
+          isDisabled={isReadOnly}
           onChange={setContains}
         />
         <ChoiceChips
@@ -279,12 +330,14 @@ export function ItemDialog({
             label: strings.allergens[code],
           }))}
           selected={may}
+          isDisabled={isReadOnly}
           onChange={setMay}
         />
         <ChoiceChips
           label={strings.diet}
           choices={DIET_MARKS.map((mark) => ({ id: mark, label: strings.diets[mark] }))}
           selected={diet}
+          isDisabled={isReadOnly}
           onChange={(next) => {
             // One spice level at most, as the server refuses two: the newest wins.
             const spicy = next.filter((mark) => mark.startsWith('spicy_'));
@@ -296,7 +349,7 @@ export function ItemDialog({
             );
           }}
         />
-        <Switch label={strings.featured} isSelected={featured} onChange={setFeatured} />
+        <Switch label={strings.featured} isSelected={featured} onChange={setFeatured} isReadOnly={isReadOnly} />
       </Form>
     </DrawerForm>
   );

@@ -17,6 +17,7 @@ import {
   MenuTrigger,
   SectionList,
   SegmentedControl,
+  Skeleton,
   SuggestionList,
   suggestionOptionId,
   type LinkRow,
@@ -25,6 +26,7 @@ import {
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { Open } from './MenusScreen.tsx';
 import { draftPhotoHref } from './photo.ts';
+import { useIsNarrow } from './narrow.ts';
 import { strings } from './strings.ts';
 
 type Said = (refused: { readonly message: string } | undefined) => void;
@@ -46,6 +48,37 @@ export function priceLine(item: Dish, currency: string, locale: string): string 
     return item.sizes.map((size) => `${size.name} ${formatPrice(size.priceMinor, currency, locale)}`).join(' · ');
   }
   return item.priceNote ?? strings.noPrice;
+}
+
+/** The tile a dish row's photo stands in while the list loads: every dish row has a leading photo or letter. */
+export const dishLeadingLoading = <Skeleton shape="circle" size="sm" />;
+
+/**
+ * Sold out on or off from a dish's row (AC-6526): live for guests at once, so the toast says so, with Undo (UX review
+ * should-fix 9).
+ */
+export function flipSoldOut(
+  store: MenuStore,
+  slug: string,
+  item: Dish,
+  soldOut: boolean,
+  toasts: Toasts,
+  said: Said,
+): void {
+  void store.setSoldOut(slug, item.id, soldOut).then((refused) => {
+    if (refused !== undefined) {
+      said(refused);
+      return;
+    }
+    toasts.toast({
+      tone: 'success',
+      message: soldOut ? strings.soldOutToast(item.name) : strings.backOnToast(item.name),
+      action: {
+        label: strings.undo,
+        onAction: () => void store.setSoldOut(slug, item.id, !soldOut).then(said),
+      },
+    });
+  });
 }
 
 /** Whether a dish has no price, sizes or price note (Publish refuses it while it is on a menu). */
@@ -116,7 +149,7 @@ export function StructureTab({
         emptyState={
           <EmptyState
             icon="list"
-            title={strings.emptySection}
+            title={strings.noSections}
             actions={
               draft.canEdit ? (
                 <Button variant="primary" icon="plus" onPress={() => onOpen({ kind: 'section', menuId })}>
@@ -199,6 +232,8 @@ function SectionBody({
   readonly toasts: Toasts;
 }) {
   const items = new Map(draft.items.map((item) => [item.id, item]));
+  // At a phone's width a sold out row says so by its off switch and quiet title, so its name keeps the room.
+  const isNarrow = useIsNarrow();
   const locale = draft.places[0]?.locale ?? 'en-GB';
   const menuNames = (itemId: string) =>
     draft.sections
@@ -220,66 +255,75 @@ function SectionBody({
         },
       });
     });
-  const rows = section.itemIds
-    .map((id) => items.get(id))
-    .filter((item): item is Dish => item !== undefined)
-    .map((item): LinkRow => ({
-      id: item.id,
-      title: item.name,
-      address: priceLine(item, draft.currency, locale),
-      chips: [
-        ...item.diet.slice(0, 2).map((mark) => strings.diets[mark]),
-        ...(menuNames(item.id).length === 0 ? [] : [strings.alsoOn(menuNames(item.id).join(', '))]),
-      ],
-      leading: (
-        <Avatar
-          name={item.name}
-          id={item.id}
-          size="sm"
-          isDecorative
-          {...(item.photo === undefined
-            ? {}
-            : { src: draftPhotoHref(slug, item.photo.id, 'small', item.photo.version) })}
-        />
-      ),
-      ...(item.soldOut
-        ? { badge: strings.soldOutBadge, isOff: true }
-        : isUnpriced(item)
-          ? { badge: strings.noPriceBadge }
-          : {}),
-      toggle: {
-        label: strings.available(item.name),
-        isSelected: !item.soldOut,
-        onChange: (isAvailable) => void store.setSoldOut(slug, item.id, !isAvailable).then(said),
-      },
-      ...(draft.canEdit
-        ? {
-            actions: (
-              <MenuTrigger>
-                <Button variant="ghost" icon="ellipsis" label={strings.moreFor(item.name)} />
-                <Menu
-                  label={strings.moreFor(item.name)}
-                  onAction={(key) => {
-                    if (key === 'edit') onOpen({ kind: 'item', item });
-                    else if (key === 'remove') takeOut(item);
-                    else if (key === 'delete') onOpen({ kind: 'deleteItem', item });
-                  }}
-                >
-                  <MenuItem id="edit" icon="pencil">
-                    {strings.editDish}
-                  </MenuItem>
-                  <MenuItem id="remove" icon="x">
-                    {strings.removeFromSection}
-                  </MenuItem>
-                  <MenuItem id="delete" icon="trash" isDanger>
-                    {strings.deleteDish}
-                  </MenuItem>
-                </Menu>
-              </MenuTrigger>
-            ),
-          }
+  const placed = section.itemIds.map((id) => items.get(id)).filter((item): item is Dish => item !== undefined);
+  const rows = placed.map((item, index): LinkRow => ({
+    id: item.id,
+    title: item.name,
+    address: priceLine(item, draft.currency, locale),
+    chips: [
+      ...item.diet.slice(0, 2).map((mark) => strings.diets[mark]),
+      ...(menuNames(item.id).length === 0 ? [] : [strings.alsoOn(menuNames(item.id).join(', '))]),
+    ],
+    leading: (
+      <Avatar
+        name={item.name}
+        id={item.id}
+        size="sm"
+        isDecorative
+        {...(item.photo === undefined ? {} : { src: draftPhotoHref(slug, item.photo.id, 'small', item.photo.version) })}
+      />
+    ),
+    ...(item.soldOut
+      ? { ...(isNarrow ? {} : { badge: strings.soldOutBadge }), isOff: true }
+      : isUnpriced(item)
+        ? { badge: strings.noPriceBadge }
         : {}),
-    }));
+    toggle: {
+      label: strings.available(item.name),
+      isSelected: !item.soldOut,
+      onChange: (isAvailable) => flipSoldOut(store, slug, item, !isAvailable, toasts, said),
+    },
+    ...(draft.canEdit
+      ? {
+          actions: (
+            <MenuTrigger>
+              <Button variant="ghost" icon="ellipsis" label={strings.moreFor(item.name)} />
+              <Menu
+                label={strings.moreFor(item.name)}
+                onAction={(key) => {
+                  if (key === 'edit') onOpen({ kind: 'item', item });
+                  else if (key === 'up') void store.move(slug, 'placement', item.id, index - 1, section.id).then(said);
+                  else if (key === 'down')
+                    void store.move(slug, 'placement', item.id, index + 1, section.id).then(said);
+                  else if (key === 'remove') takeOut(item);
+                  else if (key === 'delete') onOpen({ kind: 'deleteItem', item });
+                }}
+              >
+                <MenuItem id="edit" icon="pencil">
+                  {strings.editDish}
+                </MenuItem>
+                {index > 0 ? (
+                  <MenuItem id="up" icon="arrow-up">
+                    {strings.moveUp}
+                  </MenuItem>
+                ) : null}
+                {index < placed.length - 1 ? (
+                  <MenuItem id="down" icon="arrow-down">
+                    {strings.moveDown}
+                  </MenuItem>
+                ) : null}
+                <MenuItem id="remove" icon="x">
+                  {strings.removeFromSection}
+                </MenuItem>
+                <MenuItem id="delete" icon="trash" isDanger>
+                  {strings.deleteDish}
+                </MenuItem>
+              </Menu>
+            </MenuTrigger>
+          ),
+        }
+      : {}),
+  }));
   return (
     <>
       {draft.canEdit ? (
@@ -309,6 +353,7 @@ function SectionBody({
         }}
         searchLabel={strings.searchDishes}
         isToolbarHidden
+        leadingLoading={dishLeadingLoading}
         {...(draft.canEdit
           ? {
               rowOrder: LinkListRowOrder,

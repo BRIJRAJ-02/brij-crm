@@ -35,7 +35,8 @@ through the same component.
   table a QR code named (`table`); and SectionTabs, whose fill slides to the section under the bar as the page scrolls.
 - The header: `coverHref` (a 3:1 photo) when there is one, the place's name as an eyebrow, the business as the h1 and
   its line, open now, the address and phone, then the menus (serving now first; the rest say "Serving from 18:00"),
-  search and the dietary chips.
+  search (the library's Field, `variant="search"`, wearing the look through the root's token remap, with a clear
+  button once something is typed) and the dietary chips.
 - A dish row: its name (Popular, Sold out), two lines of its words, its price and its marks, then an 88px photo at the
   end with a + on its corner (or the + at the row's end without a photo). A grid card: the photo first at 4:3, the +
   on its corner. Two columns on a phone, three in a column 480px or wider. A sold out dish keeps its place, dimmed,

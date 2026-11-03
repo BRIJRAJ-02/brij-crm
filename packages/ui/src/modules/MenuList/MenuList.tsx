@@ -22,6 +22,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
 import { Reveal } from '../../atoms/Reveal/Reveal.tsx';
 import { ChoiceChips } from '../../molecules/ChoiceChips/ChoiceChips.tsx';
+import { Field } from '../../molecules/Field/Field.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { SectionTabs } from '../../molecules/SectionTabs/SectionTabs.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
@@ -207,18 +208,22 @@ export function MenuList({
         : chosen.map((each) => (each.key === key ? { ...each, quantity: each.quantity + pick.quantity } : each)),
     );
   };
+  /** A dish's plain pick: no options, and its one size when it has one. */
+  const plainPick = (itemId: string) => {
+    const sizeId = menu.menu.items[itemId]?.sizes[0]?.id;
+    return { itemId, ...(sizeId === undefined ? {} : { sizeId }), optionIds: [] };
+  };
   /** Takes one of a plain pick (no choices) away, the line with it at its last. */
   const removeOne = (itemId: string) => {
     if (onPicksChange === undefined) return;
-    const key = pickKey({ itemId, optionIds: [] });
+    const key = pickKey(plainPick(itemId));
     onPicksChange(
       chosen.flatMap((each) =>
         each.key !== key ? [each] : each.quantity <= 1 ? [] : [{ ...each, quantity: each.quantity - 1 }],
       ),
     );
   };
-  const plainCount = (itemId: string) =>
-    chosen.find((each) => each.key === pickKey({ itemId, optionIds: [] }))?.quantity ?? 0;
+  const plainCount = (itemId: string) => chosen.find((each) => each.key === pickKey(plainPick(itemId)))?.quantity ?? 0;
 
   // The page's overlays (the dish's sheet, Your picks) open inside this root, so they wear the menu's look too.
   const [host, setHost] = useState<HTMLDivElement | null>(null);
@@ -319,28 +324,29 @@ export function MenuList({
                 isFitted
               />
             ) : null}
-            <div className={styles.search}>
-              <Icon name="search" size="sm" />
-              <input
-                className={styles.searchInput}
-                type="search"
-                aria-label={strings.search}
-                placeholder={strings.searchPlaceholder}
-                value={query}
-                maxLength={60}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-              {query === '' ? null : (
-                <button
-                  type="button"
-                  className={styles.clear}
-                  aria-label={strings.clearSearch}
-                  onClick={() => setQuery('')}
-                >
-                  <Icon name="x" size="sm" />
-                </button>
-              )}
-            </div>
+            <Field
+              variant="search"
+              type="search"
+              label={strings.search}
+              isLabelHidden
+              placeholder={strings.searchPlaceholder}
+              value={query}
+              maxLength={60}
+              onChange={setQuery}
+              {...(query === ''
+                ? {}
+                : {
+                    suffix: (
+                      <Button
+                        variant="ghost"
+                        icon="x"
+                        isRound
+                        label={strings.clearSearch}
+                        onPress={() => setQuery('')}
+                      />
+                    ),
+                  })}
+            />
             {offered.length === 0 ? null : (
               <ChoiceChips
                 label={strings.filters}
@@ -424,12 +430,7 @@ export function MenuList({
                                             count={isQuickAdd(item) ? plainCount(item.id) : 0}
                                             onAdd={() =>
                                               isQuickAdd(item)
-                                                ? addPick({
-                                                    itemId: item.id,
-                                                    ...(item.sizes.length === 1 ? { size: 0 } : {}),
-                                                    optionIds: [],
-                                                    quantity: 1,
-                                                  })
+                                                ? addPick({ ...plainPick(item.id), quantity: 1 })
                                                 : open(item.id)
                                             }
                                             onRemove={() => removeOne(item.id)}

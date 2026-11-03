@@ -166,6 +166,7 @@ export function GroupDrawer({
         />
         <SegmentedControl
           label={strings.groupRule}
+          isLabelVisible
           segments={[
             { value: 'one', label: strings.ruleOne },
             { value: 'up_to', label: strings.ruleUpTo },
@@ -193,6 +194,8 @@ export function GroupDrawer({
           <Field
             key={option.key}
             label={`${strings.optionName} ${String(index + 1)}`}
+            // The price beside it is named on the row's own line, its currency in its box (UX review 15).
+            labelAside={strings.andPriceChange}
             value={option.name}
             maxLength={MENU_LIMITS.optionNameMax}
             onChange={(value) =>
@@ -201,8 +204,9 @@ export function GroupDrawer({
             {...(problems[`option-${option.key}`] === undefined ? {} : { error: problems[`option-${option.key}`] })}
             after={
               <Field
-                label={strings.optionPrice}
+                label={strings.optionPriceIn(draft.currency)}
                 isLabelHidden
+                prefix={draft.currency}
                 placeholder="0.00"
                 value={option.price}
                 inputMode="decimal"

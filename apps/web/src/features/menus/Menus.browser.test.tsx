@@ -117,6 +117,7 @@ const DRAFT: MenuDraft = {
   ],
   changes: 3,
   photos: 0,
+  hidden: false,
   canEdit: true,
 };
 
@@ -212,7 +213,9 @@ describe('the Menus editor', () => {
         at: '/w/acme/menus',
       },
     );
-    await expect.element(page.getByText('Set up your menu')).toBeInTheDocument();
+    // With the hours, a menu and dishes in, the checklist folds to its one step left, Publish, with Review.
+    await expect.element(page.getByText('One setup step left: Publish it')).toBeInTheDocument();
+    await expect.element(page.getByRole('button', { name: /Review/ }).first()).toBeInTheDocument();
     // The dish Publish would refuse says so on its row, and on the Dishes tab, before Publish is pressed.
     await expect.element(page.getByText('No price').first()).toBeVisible();
     await expect.element(page.getByRole('switch', { name: 'Oysters available' }).first()).toBeInTheDocument();

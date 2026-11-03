@@ -219,56 +219,6 @@
     text-decoration: none;
   }
 
-  .search {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    min-block-size: var(--size-toolbar);
-    padding-inline: var(--space-16) var(--space-8);
-    border: var(--border-width-hairline) solid var(--look-line);
-    border-radius: var(--radius-full);
-    background: var(--look-card);
-    color: var(--look-quiet);
-  }
-
-  .search:focus-within {
-    border-color: var(--look-accent);
-  }
-
-  .searchInput {
-    flex: 1;
-    min-inline-size: 0;
-    border: 0;
-    background: transparent;
-    color: var(--look-text);
-    font: var(--text-body);
-    outline: none;
-  }
-
-  .searchInput::placeholder {
-    color: var(--look-quiet);
-  }
-
-  .searchInput::-webkit-search-cancel-button {
-    display: none;
-  }
-
-  .clear {
-    display: inline-grid;
-    place-items: center;
-    inline-size: var(--size-input);
-    block-size: var(--size-input);
-    border: 0;
-    border-radius: var(--radius-full);
-    background: transparent;
-    color: var(--look-quiet);
-  }
-
-  .clear:focus-visible {
-    outline: none;
-    box-shadow: var(--shadow-focus);
-  }
-
   .body {
     container-type: inline-size;
     display: flex;

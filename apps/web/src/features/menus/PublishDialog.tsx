@@ -7,7 +7,7 @@ import type { MenuDraft, MenuPlace, MenuStore } from '@crm/data';
 import { Button, ButtonLink, Callout, CopyButton, Modal, QrCode, SetupChecklist } from '@crm/ui';
 import { useState } from 'react';
 import { publicMenuUrl } from '../booking/links.ts';
-import { homelessMenus, unpricedDishes, type publishBlocker } from './preview.ts';
+import { goingLive, homelessMenus, unpricedDishes, type publishBlocker } from './preview.ts';
 import { strings } from './strings.ts';
 
 /** Where a Fix takes the person. */
@@ -48,6 +48,7 @@ export function PublishDialog({
   const unpriced = unpricedDishes(draft);
   const homeless = homelessMenus(draft);
   const link = place === undefined ? undefined : publicMenuUrl(place.menuKey);
+  const live = goingLive(draft);
 
   // An open check's title says exactly what to fix (the checklist folds to its title when one step is left).
   const checks = [
@@ -76,6 +77,8 @@ export function PublishDialog({
       action: strings.fixIt,
     },
   ];
+
+  const isReady = checks.every((check) => check.isDone) && live.length > 0;
 
   const publish = async () => {
     setPublishing(true);
@@ -142,17 +145,27 @@ export function PublishDialog({
         </>
       ) : (
         <>
-          {strings.reviewLine}
-          <SetupChecklist
-            title={isLive && draft.changes === 0 ? strings.nothingToPublish : strings.changes(draft.changes)}
-            steps={checks}
-            onAction={(id) => {
-              if (id === 'hours') onFix({ kind: 'hours' });
-              else if (id === 'dishes') onFix({ kind: 'dishes' });
-              else if (id === 'prices' && unpriced[0] !== undefined) onFix({ kind: 'item', itemId: unpriced[0].id });
-              else if (id === 'places' && homeless[0] !== undefined) onFix({ kind: 'menu', menuId: homeless[0].id });
-            }}
-          />
+          {isReady ? strings.readyLine : strings.reviewLine}
+          {isReady ? (
+            // Every check passes: say what goes live, keeping the count of changes in view (UX review must-fix 4).
+            <Callout
+              tone="success"
+              title={isLive && draft.changes === 0 ? strings.nothingToPublish : strings.changes(draft.changes)}
+            >
+              {strings.goesLive(live)}
+            </Callout>
+          ) : (
+            <SetupChecklist
+              title={isLive && draft.changes === 0 ? strings.nothingToPublish : strings.changes(draft.changes)}
+              steps={checks}
+              onAction={(id) => {
+                if (id === 'hours') onFix({ kind: 'hours' });
+                else if (id === 'dishes') onFix({ kind: 'dishes' });
+                else if (id === 'prices' && unpriced[0] !== undefined) onFix({ kind: 'item', itemId: unpriced[0].id });
+                else if (id === 'places' && homeless[0] !== undefined) onFix({ kind: 'menu', menuId: homeless[0].id });
+              }}
+            />
+          )}
           {refusal === undefined ? null : <Callout tone="danger">{refusal}</Callout>}
         </>
       )}

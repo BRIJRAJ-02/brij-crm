@@ -28,6 +28,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { publicMenuUrl } from '../booking/links.ts';
+import { useIsNarrow } from './narrow.ts';
 import { businessSettingsHref, placeTablesHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DishesTab } from './DishesTab.tsx';
@@ -62,6 +63,7 @@ export type Open =
   | { readonly kind: 'group'; readonly groupId?: string }
   | { readonly kind: 'discard' }
   | { readonly kind: 'publish' }
+  | { readonly kind: 'hide' }
   | { readonly kind: 'deleteMenu'; readonly menuId: string; readonly name: string }
   | { readonly kind: 'deleteSection'; readonly sectionId: string; readonly name: string }
   | { readonly kind: 'deleteItem'; readonly item: Dish }
@@ -102,6 +104,24 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   const [placeId, setPlaceId] = useState<string | undefined>();
   const [open, setOpen] = useState<Open>();
   const [justPublished, setJustPublished] = useState(false);
+  const isNarrow = useIsNarrow();
+  // Put away from its own menu, the setup checklist stays away in this browser (UI state, never the server's).
+  const setupKey = `crm.menus.setup-hidden.${slug}`;
+  const [isSetupHidden, setSetupHidden] = useState(() => {
+    try {
+      return globalThis.localStorage.getItem(setupKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const hideSetup = () => {
+    setSetupHidden(true);
+    try {
+      globalThis.localStorage.setItem(setupKey, '1');
+    } catch {
+      // Blocked storage: hidden for this visit.
+    }
+  };
   const router = useRouter();
   const navigate = useNavigate();
   const go = (next: Partial<MenusView>) =>
@@ -206,15 +226,60 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       isDone: draft.sections.some((section) => section.itemIds.length > 0),
       action: strings.add,
     },
-    { id: 'publish', title: strings.stepPublish, detail: strings.stepPublishDetail, isDone: isLive },
     {
-      id: 'share',
-      title: strings.stepShare,
-      detail: isLive ? strings.stepShareDetail : strings.stepShareLater,
-      isDone: false,
-      ...(isLive ? { action: strings.copyLink } : {}),
+      id: 'publish',
+      title: strings.stepPublish,
+      detail: strings.stepPublishDetail,
+      isDone: isLive,
+      ...(draft.canEdit ? { action: strings.reviewStep } : {}),
     },
   ];
+
+  // Live or Hidden (after checklabs' menu switch): hiding asks first, showing again is at once.
+  const setHidden = (hidden: boolean) =>
+    void store.setHidden(slug, hidden).then((refused) => {
+      if (refused !== undefined) said(refused);
+      else
+        toasts.toast({ tone: hidden ? 'info' : 'success', message: hidden ? strings.hiddenToast : strings.shownToast });
+    });
+  const statusText = !isLive ? strings.statusDraft : draft.hidden ? strings.statusHidden : strings.statusLive;
+  // At a phone's width the bar keeps the title, Live or Hidden, More and Publish; the count waits in the review.
+  const changesBadge =
+    isLive && draft.changes > 0 && !isNarrow ? (
+      <Badge tone="neutral" text={strings.changesShort(draft.changes)} />
+    ) : null;
+  const status =
+    isLive && draft.canEdit ? (
+      <>
+        <MenuTrigger>
+          <Button variant="ghost" icon={draft.hidden ? 'eye-off' : 'eye'} iconRight="chevron-down">
+            {statusText}
+          </Button>
+          <Menu
+            label={strings.visibility}
+            selectionMode="single"
+            selectedKeys={[draft.hidden ? 'hidden' : 'live']}
+            onSelectionChange={(keys) => {
+              if (keys.has('hidden') && !draft.hidden) setOpen({ kind: 'hide' });
+              else if (keys.has('live') && draft.hidden) setHidden(false);
+            }}
+          >
+            <MenuItem id="live" icon="eye" description={strings.visibilityLive}>
+              {strings.statusLive}
+            </MenuItem>
+            <MenuItem id="hidden" icon="eye-off" description={strings.visibilityHidden}>
+              {strings.statusHidden}
+            </MenuItem>
+          </Menu>
+        </MenuTrigger>
+        {changesBadge}
+      </>
+    ) : (
+      <>
+        <Badge tone={isLive && !draft.hidden ? 'accent' : 'neutral'} text={statusText} />
+        {changesBadge}
+      </>
+    );
 
   const actions =
     draft.menus.length === 0 && !isLive ? undefined : (
@@ -224,6 +289,10 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
           <Menu
             label={strings.more}
             onAction={(key) => {
+              if (key === 'new') {
+                newMenu();
+                return;
+              }
               if (place === undefined) return;
               if (key === 'open') globalThis.open(publicMenuUrl(place.menuKey), '_blank', 'noopener');
               else if (key === 'copy') void copyLink(publicMenuUrl(place.menuKey));
@@ -231,6 +300,11 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
               else if (key === 'discard') setOpen({ kind: 'discard' });
             }}
           >
+            {isNarrow && draft.canEdit && draft.menus.length > 0 && draft.menus.length < 30 ? (
+              <MenuItem id="new" icon="plus">
+                {strings.newMenu}
+              </MenuItem>
+            ) : null}
             {isLive && place !== undefined ? (
               <>
                 <MenuItem id="open" icon="external-link">
@@ -255,11 +329,11 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
           <Button
             variant="primary"
             animateLabel
-            labelReserve={strings.reviewPublish}
+            labelReserve={isNarrow ? strings.published : strings.reviewPublish}
             isDisabled={draft.changes === 0 && isLive}
             onPress={() => setOpen({ kind: 'publish' })}
           >
-            {justPublished ? strings.published : strings.reviewPublish}
+            {justPublished ? strings.published : isNarrow ? strings.publish : strings.reviewPublish}
           </Button>
         ) : null}
       </>
@@ -329,16 +403,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       currentPage="menus"
       page={{
         topBar: (
-          <TopBar
-            title={strings.title}
-            icon="utensils"
-            meta={
-              <Badge
-                tone={isLive ? 'accent' : 'neutral'}
-                text={`${isLive ? strings.statusLive : strings.statusDraft}${draft.changes > 0 && isLive ? ` · ${strings.changesShort(draft.changes)}` : ''}`}
-              />
-            }
-          >
+          <TopBar title={strings.title} {...(isNarrow ? {} : { icon: 'utensils' as const })} meta={status}>
             {actions}
           </TopBar>
         ),
@@ -347,14 +412,15 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
             <PreviewLayout
               previewShare="wide"
               notices={
-                !isLive ? (
+                !isLive && !isSetupHidden ? (
                   <SetupChecklist
                     title={strings.setup}
                     steps={steps}
+                    onHide={hideSetup}
                     onAction={(id) => {
                       if (id === 'hours') router.history.push(hoursHref);
                       else if (id === 'menu') newMenu();
-                      else if (id === 'share' && place !== undefined) void copyLink(publicMenuUrl(place.menuKey));
+                      else if (id === 'publish') setOpen({ kind: 'publish' });
                       else if (id === 'items' && current !== undefined) {
                         const section = draft.sections.find((each) => each.menuId === current.id);
                         setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
@@ -388,7 +454,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   onSelectionChange={(id) => go({ menu: id })}
                   end={
                     <>
-                      {draft.canEdit && draft.menus.length < 30 ? (
+                      {draft.canEdit && !isNarrow && draft.menus.length < 30 ? (
                         <Button icon="plus" onPress={newMenu}>
                           {strings.newMenu}
                         </Button>
@@ -409,14 +475,15 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                           },
                           {
                             id: 'dishes',
-                            label: strings.tabDishes,
+                            // Every dish of the workspace, not this menu's (UX review should-fix 12).
+                            label: strings.tabAllDishes,
                             icon: 'utensils',
                             count: draft.items.length,
                             ...(unpriced.length === 0 ? {} : { alert: strings.needsPrice(unpriced.length) }),
                           },
                           {
                             id: 'options',
-                            label: strings.tabOptions,
+                            label: strings.tabAllOptions,
                             icon: 'sliders-horizontal',
                             count: draft.groups.length,
                           },
@@ -439,7 +506,14 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                           />
                         </TabPanel>
                         <TabPanel id="dishes">
-                          <DishesTab store={store} slug={slug} draft={draft} onOpen={setOpen} said={said} />
+                          <DishesTab
+                            store={store}
+                            slug={slug}
+                            draft={draft}
+                            onOpen={setOpen}
+                            said={said}
+                            toasts={toasts}
+                          />
                         </TabPanel>
                         <TabPanel id="options">
                           <OptionsTab draft={draft} onOpen={setOpen} />
@@ -518,6 +592,31 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                 }}
               />
             ) : null}
+            <Modal
+              variant="confirm"
+              tone="danger"
+              title={strings.hideQuestion}
+              isOpen={open?.kind === 'hide'}
+              onOpenChange={(isOpen) => {
+                if (!isOpen) setOpen(undefined);
+              }}
+              actions={
+                <>
+                  <Button slot="close">{strings.keepLive}</Button>
+                  <Button
+                    variant="danger-solid"
+                    onPress={() => {
+                      setOpen(undefined);
+                      setHidden(true);
+                    }}
+                  >
+                    {strings.hideMenu}
+                  </Button>
+                </>
+              }
+            >
+              {strings.hideLine}
+            </Modal>
             <Modal
               variant="confirm"
               tone="danger"

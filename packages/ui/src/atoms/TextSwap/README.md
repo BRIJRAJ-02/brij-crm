@@ -1,8 +1,8 @@
 # TextSwap
 
 Words that change in place (spec 0068, AC-6806): Publish → Published, Book → Booked, Add → Added. When `children`
-changes, the old words rise `space-4` out into a soft blur in `duration-exit`, then the new words rise `space-4` in
-from below out of the same blur in `duration-popover` (transitions.dev's text states swap). The first value is simply
+changes, the old words rise `space-4` out and fade in `duration-exit`, then the new words rise `space-4` in
+from below and fade in, in `duration-popover` (transitions.dev's text states swap). The first value is simply
 there.
 
 ## Why a new part
@@ -29,7 +29,7 @@ need it too. One part keeps every swap the same.
 
 ## States
 
-Still (the first value), swapping, and reduced motion (a plain crossfade, no movement or blur).
+Still (the first value), swapping, and reduced motion (a plain crossfade, no movement). No blur: the artifact has no blur token yet.
 
 ## Keyboard
 

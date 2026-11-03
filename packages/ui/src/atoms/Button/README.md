@@ -38,7 +38,7 @@ Ported from the design system artifact's Button card. Every pressable control in
 - `isIconMark` on an icon only Button draws its Lucide icon as a mark among brand marks: at the marks' size (`size-icon`) and in the text colour, as the black marks are (a person's website among their social links). Why not a plain ghost icon: at `size-icon-sm` in `text-secondary` it read as a quieter, lesser link beside the brands.
 - `relations` on an external ButtonLink adds link types beside `noopener noreferrer`: `me` for a person's own profile, `nofollow` for a link a visitor didn't write.
 - `labelReserve` on any Button keeps room for a second label it may swap to.
-- `animateLabel` draws a changed label through TextSwap: the old words rise out into a soft blur and the new ones rise in (spec 0068, AC-6806: Publish → Published). Pair it with `labelReserve` so the width never changes. Reduced motion crossfades.
+- `animateLabel` draws a changed label through TextSwap: the old words rise out and fade, and the new ones rise in (spec 0068, AC-6806: Publish → Published). Pair it with `labelReserve` so the width never changes. Reduced motion crossfades.
 - `amount` puts a worded amount after the label ("Add to your picks · £9.50", spec 0065): its changed digits pop in through NumberPop, it sits at the end of a full width button, and screen readers hear it in the name after a " · ". Why a prop: `children` is a string, and a price that pops is part of the button, not beside it.
 - `CopyButton` takes `isDisabled` when there is nothing to copy yet (a form never published, a row still on its way), so a row of actions keeps its shape.
 
@@ -86,4 +86,4 @@ Held, a button eases to `--scale-press`. The token is 1, so nothing in the app s
 - The keycaps no longer read as part of the name, and the primary's keycap is edged instead of filled, so its text holds 4.5:1 (on the `on-accent-kbd` fill it was 3.3:1).
 - The SplitButton divider on the primary uses `on-accent-kbd`, as the artifact does.
 
-A label that changes after the first paint resolves in over `--label-swap` (a 2px blur and a fade, a fade alone under reduced motion). The property is registered at 0s, so nothing moves in the app; the public booking page sets it on BookingFrame's root.
+A label that changes after the first paint resolves in over `--label-swap` (a rise and a fade, a fade alone under reduced motion; no blur until the artifact has a blur token). The property is registered at 0s, so nothing moves in the app; the public booking page sets it on BookingFrame's root.

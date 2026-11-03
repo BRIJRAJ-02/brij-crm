@@ -3,12 +3,13 @@
 // Main task: find a dish and change it, or mark it sold out for tonight.
 // Leaves out: where a dish sits and in what order (Structure), and option groups (Options).
 import type { MenuDraft, MenuItem as Dish, MenuStore } from '@crm/data';
-import { Avatar, Button, EmptyState, LinkList, type LinkRow } from '@crm/ui';
+import { Avatar, Button, EmptyState, LinkList, type LinkRow, type Toasts } from '@crm/ui';
 import { useState } from 'react';
 import type { Open } from './MenusScreen.tsx';
 import { draftPhotoHref } from './photo.ts';
+import { useIsNarrow } from './narrow.ts';
 import { strings } from './strings.ts';
-import { isUnpriced, priceLine } from './StructureTab.tsx';
+import { dishLeadingLoading, flipSoldOut, isUnpriced, priceLine } from './StructureTab.tsx';
 
 /** All the workspace's dishes. */
 export function DishesTab({
@@ -17,14 +18,18 @@ export function DishesTab({
   draft,
   onOpen,
   said,
+  toasts,
 }: {
   readonly store: MenuStore;
   readonly slug: string;
   readonly draft: MenuDraft;
   readonly onOpen: (open: Open) => void;
   readonly said: (refused: { readonly message: string } | undefined) => void;
+  readonly toasts: Toasts;
 }) {
   const [query, setQuery] = useState('');
+  // At a phone's width a sold out row says so by its off switch and quiet title, so its name keeps the room.
+  const isNarrow = useIsNarrow();
   const locale = draft.places[0]?.locale ?? 'en-GB';
   const placements = (item: Dish) => draft.sections.filter((section) => section.itemIds.includes(item.id)).length;
   const typed = query.trim().toLowerCase();
@@ -48,14 +53,14 @@ export function DishesTab({
         />
       ),
       ...(item.soldOut
-        ? { badge: strings.soldOutBadge, isOff: true }
+        ? { ...(isNarrow ? {} : { badge: strings.soldOutBadge }), isOff: true }
         : isUnpriced(item)
           ? { badge: strings.noPriceBadge }
           : {}),
       toggle: {
         label: strings.available(item.name),
         isSelected: !item.soldOut,
-        onChange: (isAvailable) => void store.setSoldOut(slug, item.id, !isAvailable).then(said),
+        onChange: (isAvailable) => flipSoldOut(store, slug, item, !isAvailable, toasts, said),
       },
     }));
   return (
@@ -64,9 +69,11 @@ export function DishesTab({
       rows={rows}
       onOpen={(id) => {
         const item = draft.items.find((each) => each.id === id);
-        if (item !== undefined && draft.canEdit) onOpen({ kind: 'item', item });
+        // Run service opens it read only (UX review should-fix 14).
+        if (item !== undefined) onOpen({ kind: 'item', item });
       }}
       searchLabel={strings.searchDishes}
+      leadingLoading={dishLeadingLoading}
       query={query}
       onQueryChange={setQuery}
       actions={
