@@ -23,7 +23,7 @@ import { BusinessLocation } from './BusinessLocation.tsx';
 import { BusinessMenu, type BusinessMenuSection } from './BusinessMenu.tsx';
 import styles from './BusinessPage.module.css';
 import { businessAction, BusinessReserve, type BusinessReserveState } from './BusinessReserve.tsx';
-import { openStatus, placeLocale } from './hours.ts';
+import { currentSection, openStatus, placeLocale } from './hours.ts';
 import { strings } from './strings.ts';
 
 export { BusinessGallery, type BusinessGalleryProps, type BusinessPhotoItem } from './BusinessGallery.tsx';
@@ -102,8 +102,9 @@ interface Section {
 }
 
 /**
- * Which section the reader is in: the last whose top has passed under the tabs. Watched with an
- * IntersectionObserver on each section's top edge, so scrolling costs nothing.
+ * Which section the reader is in: the last whose top has passed under the tabs, or the last section once the page
+ * is scrolled to its end (where the last sections can never reach the tabs). Watched with an IntersectionObserver on
+ * each section's top edge, and a passive scroll listener for the end.
  */
 function useCurrentSection(
   ids: readonly string[],
@@ -135,6 +136,19 @@ function useCurrentSection(
       .filter((section): section is HTMLElement => section !== null);
     if (sections.length === 0 || typeof IntersectionObserver === 'undefined') return undefined;
     const passed = new Set<string>();
+    // At the page's end the last sections can never reach the tabs, so the last one is current there.
+    const atEnd = () =>
+      globalThis.innerHeight + globalThis.scrollY >= document.documentElement.scrollHeight - END_SLACK_PX;
+    const pick = () => {
+      if (performance.now() - chosenAt.current < CHOSEN_HOLD_MS) return;
+      setCurrent(
+        currentSection(
+          sections.map((section) => section.id),
+          passed,
+          atEnd(),
+        ),
+      );
+    };
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -142,16 +156,19 @@ function useCurrentSection(
           if (entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0) + 1) passed.add(entry.target.id);
           else passed.delete(entry.target.id);
         }
-        if (performance.now() - chosenAt.current < CHOSEN_HOLD_MS) return;
-        const last = [...sections].reverse().find((section) => passed.has(section.id));
-        setCurrent(last?.id ?? sections[0]?.id);
+        pick();
       },
       // The line is just under the sticky tabs: a section is current once its heading reaches them.
       { rootMargin: `-${String(barHeight)}px 0px 0px 0px`, threshold: [0, 1] },
     );
     for (const section of sections) observer.observe(section);
+    // Reaching the end (and leaving it) crosses no section's edge, so a passive scroll listener notices it.
+    globalThis.addEventListener('scroll', pick, { passive: true });
+    // Already at the end when the watch starts (a reload there, or a scroll while the tabs were being measured).
+    if (globalThis.scrollY > 0 && atEnd()) pick();
     return () => {
       observer.disconnect();
+      globalThis.removeEventListener('scroll', pick);
     };
   }, [key, barHeight]);
   const choose = (id: string) => {
@@ -163,6 +180,9 @@ function useCurrentSection(
 
 /** How long a pressed tab stays current while the page scrolls to its section. */
 const CHOSEN_HOLD_MS = 1200;
+
+/** How near the page's end counts as the end, in CSS pixels (a fractional scroll never quite reaches it). */
+const END_SLACK_PX = 2;
 
 /**
  * The section tabs (AC-6641): links to each section, the current one underlined by an indicator that slides between

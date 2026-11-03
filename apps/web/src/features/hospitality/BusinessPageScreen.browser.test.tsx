@@ -101,8 +101,12 @@ function recordingToasts() {
   return { toasts, said };
 }
 
-async function show(store: Awaited<ReturnType<typeof editorOf>>['store'], toasts: Toasts = createToasts()) {
-  await page.viewport(1280, 900);
+async function show(
+  store: Awaited<ReturnType<typeof editorOf>>['store'],
+  toasts: Toasts = createToasts(),
+  width = 1280,
+) {
+  await page.viewport(width, 900);
   // The settings frame's bar slot, so the page's TopBar (Publish, Discard) draws as it does in the app.
   const bar = document.createElement('div');
   document.body.prepend(bar);
@@ -212,6 +216,22 @@ describe('Settings › Business › Page', () => {
     await expect
       .element(dialog.getByRole('button', { name: 'Discard changes' }))
       .toHaveAttribute('data-variant', 'danger-solid');
+  });
+
+  it('keeps Publish in view on a phone, with View page and Discard as icons', async () => {
+    const { store } = await editorOf({
+      ...BASE,
+      handle: 'somewhere',
+      hasChanges: true,
+      changes: ['About changed'],
+      published: { at: '2026-11-03T10:00:00.000Z', version: 1 },
+    });
+    await show(store, createToasts(), 390);
+    const publish = page.getByRole('button', { name: 'Publish' });
+    await expect.element(publish).toBeVisible();
+    const box = publish.element().getBoundingClientRect();
+    expect(box.right).toBeLessThanOrEqual(390);
+    await expect.element(page.getByRole('button', { name: 'Discard changes' })).toBeVisible();
   });
 
   it('leads to Brand for the logo and colours', async () => {

@@ -111,3 +111,16 @@ export function weekRows(hours: PlaceHoursShape, now: number, zone: string, loca
 export function zoneCity(zone: string): string {
   return (zone.split('/').at(-1) ?? zone).replaceAll('_', ' ');
 }
+
+/**
+ * The section tabs' current section: the last whose top has passed under the tabs, or the last of all once the page
+ * is scrolled to its end, where the last sections can never reach the tabs; the first before any has passed.
+ */
+export function currentSection(
+  ids: readonly string[],
+  passed: ReadonlySet<string>,
+  isAtEnd: boolean,
+): string | undefined {
+  if (isAtEnd) return ids.at(-1);
+  return [...ids].reverse().find((id) => passed.has(id)) ?? ids[0];
+}

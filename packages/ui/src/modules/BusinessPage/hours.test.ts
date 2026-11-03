@@ -1,7 +1,7 @@
 // The business page's hours in words (spec 0066, AC-6641): open now and until when, when it opens next, and the
 // week's rows with today marked, all on the place's own clock.
 import { describe, expect, it } from 'vitest';
-import { openStatus, placeLocale, wallTime, weekRows, zoneCity } from './hours.ts';
+import { currentSection, openStatus, placeLocale, wallTime, weekRows, zoneCity } from './hours.ts';
 
 const HOURS = {
   weekly: {
@@ -90,5 +90,14 @@ describe('zoneCity', () => {
     // An unknown country keeps the visitor's own.
     expect(placeLocale('en-US', undefined)).toBe('en-US');
     expect(placeLocale('en-US', 'gb!')).toBe('en-US');
+  });
+
+  it('makes the last tab current at the page’s end, where its section never reaches the tabs', () => {
+    const ids = ['about', 'hours', 'location'];
+    expect(currentSection(ids, new Set(), false)).toBe('about');
+    expect(currentSection(ids, new Set(['about']), false)).toBe('about');
+    expect(currentSection(ids, new Set(['about', 'hours']), false)).toBe('hours');
+    // Scrolled to the end with only About past the tabs: Location is where the reader is.
+    expect(currentSection(ids, new Set(['about']), true)).toBe('location');
   });
 });

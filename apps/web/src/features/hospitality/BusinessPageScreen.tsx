@@ -233,12 +233,15 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
       actions={
         <>
           {address !== undefined && view.published !== undefined && (
-            <ButtonLink href={address} isExternal icon="external-link" label={words.viewNewTab}>
+            // On a phone the bar keeps Publish in view: View page and Discard drop their words for their icons.
+            <ButtonLink href={address} isExternal icon="external-link" label={words.viewNewTab} isLabelCollapsible>
               {words.view}
             </ButtonLink>
           )}
           {view.published !== undefined && view.hasChanges && (
-            <Button onPress={() => setDiscarding(true)}>{words.discard}</Button>
+            <Button icon="undo-2" label={words.discard} isLabelCollapsible onPress={() => setDiscarding(true)}>
+              {words.discard}
+            </Button>
           )}
           <Button
             variant="primary"
