@@ -18,7 +18,7 @@ import { PROFILE_INSIGHT_DAYS } from './booking/link-page-rules.ts';
 import { PageTheme } from './booking/page-theme.ts';
 import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
-import { checkSocialLink, socialLinkProblem } from './values/social.ts';
+import { checkSocialLink, checkWebLink, socialLinkProblem } from './values/social.ts';
 import { SOCIAL_LINK_NAMES, SOCIAL_LINK_NETWORKS, SOCIAL_LINKS_MAX } from './values/social-networks.ts';
 import { BrandHex, ImageVersion } from './workspace-brand.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -66,6 +66,66 @@ export const PublicBio = z
   .regex(/^[^\r\n]*$/, { error: 'Keep your bio to one line.' });
 /** A person's one line bio. */
 export type PublicBio = z.infer<typeof PublicBio>;
+
+/** The most characters a link page's own foot line takes (3 Nov 2026). */
+export const FOOT_LINE_MAX = 80;
+
+/**
+ * A link page's own foot line (3 Nov 2026): one line of the owner's, drawn above "Powered by Timefix", never in its
+ * place. Empty clears it.
+ */
+export const FootLine = z
+  .string()
+  .trim()
+  .max(FOOT_LINE_MAX, `Keep the line to ${String(FOOT_LINE_MAX)} characters.`)
+  .regex(/^[^\r\n]*$/, { error: 'Keep the line to one line.' });
+/** A link page's own foot line. */
+export type FootLine = z.infer<typeof FootLine>;
+
+/** The most characters a link page's site address takes. */
+export const PROFILE_SITE_MAX = 200;
+
+/**
+ * A link page's site address (3 Nov 2026), checked: a bare domain gets `https://`, and only an `https` link with a
+ * host and no name or password is kept; anything else answers a sentence. The editor and the server both run it.
+ */
+export function checkProfileSite(
+  draft: string,
+): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly message: string } {
+  const text = draft.trim();
+  const refused = { ok: false, message: 'Use a link that starts with https://, like https://acme.com.' } as const;
+  if (text.length > PROFILE_SITE_MAX) return { ok: false, message: 'Keep the link to 200 characters.' };
+  const link = checkWebLink(text);
+  if (!link.ok) return refused;
+  let url: URL;
+  try {
+    url = new URL(link.value);
+  } catch {
+    return refused;
+  }
+  if (url.protocol !== 'https:' || url.hostname === '' || !url.hostname.includes('.')) return refused;
+  if (url.username !== '' || url.password !== '')
+    return { ok: false, message: 'Take the name and password out of the link.' };
+  if (url.href.length > PROFILE_SITE_MAX) return { ok: false, message: 'Keep the link to 200 characters.' };
+  return { ok: true, value: url.href };
+}
+
+/**
+ * A link page's site address (3 Nov 2026): the workspace's logo and name at the top of the page link to it. Empty
+ * clears it, and with it the lockup.
+ */
+export const ProfileSite = z
+  .string()
+  .max(2_048, { error: 'Keep the link to 200 characters.' })
+  .transform((draft, ctx) => {
+    if (draft.trim() === '') return '';
+    const checked = checkProfileSite(draft);
+    if (checked.ok) return checked.value;
+    ctx.issues.push({ code: 'custom', message: checked.message, input: draft });
+    return z.NEVER;
+  });
+/** A link page's site address. */
+export type ProfileSite = z.infer<typeof ProfileSite>;
 
 /** A network a person's social link names, or their website. */
 export const SocialLinkNetwork = z.enum(SOCIAL_LINK_NETWORKS, { error: 'Pick one of the networks.' });
@@ -160,6 +220,12 @@ export const MyProfile = z.object({
   theme: PageTheme.optional(),
   /** Whether search engines may show their link page (spec 0055, AC-5506); absent with no handle. */
   indexable: z.boolean().optional(),
+  /** Whether their job title shows under their name on their link page and booking pages (3 Nov 2026); absent with no handle. */
+  showJobTitle: z.boolean().optional(),
+  /** Their link page's site address, which the workspace's logo and name link to (3 Nov 2026); absent when none. */
+  site: z.string().optional(),
+  /** Their link page's own line above "Powered by Timefix" (3 Nov 2026); absent when none. */
+  footLine: z.string().optional(),
   /**
    * Whether their link page is public (27 Oct 2026; spec 0058, AC-23); absent with no handle. A page made with a
    * membership is private, seen only by its owner, until they claim its handle or open it; then their Live or
@@ -222,6 +288,12 @@ export const UpdateMyProfileInput = WorkspaceScoped.extend({
   pictureHidden: z.boolean().optional(),
   /** Their whole set of social links, in order, replacing the one held: an empty list removes them all. */
   socials: SocialLinks.optional(),
+  /** True shows their job title under their name on their link page and booking pages; false keeps it to the team. */
+  showJobTitle: z.boolean().optional(),
+  /** Their link page's site address; empty clears it. */
+  site: ProfileSite.optional(),
+  /** Their link page's own line above "Powered by Timefix"; empty clears it. */
+  footLine: FootLine.optional(),
   mutationId: Uuid,
 });
 /** A change to the caller's own profile. */

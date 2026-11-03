@@ -406,9 +406,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
     case 'member.profile_updated': {
       const target = memberTarget();
-      const known = (['name', 'timeZone', 'jobTitle', 'handle', 'bio', 'socials'] as const).filter(
-        (field) => has(after, field) || has(before, field),
-      );
+      const known = (
+        ['name', 'timeZone', 'jobTitle', 'handle', 'bio', 'socials', 'showJobTitle', 'site', 'footLine'] as const
+      ).filter((field) => has(after, field) || has(before, field));
       // A deleted account's own values went with it (AC-4610): the fields stay named, their values don't.
       const forgotten = target.person.kind === 'member' && target.person.state === 'deleted';
       // Social links (booking socials, 25 Oct 2026) are stored as their list of links.
@@ -417,11 +417,13 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
           ? undefined
           : field === 'timeZone'
             ? zone(value)
-            : field === 'socials'
-              ? Array.isArray(value)
-                ? { kind: 'list', items: [...strings(value)] }
-                : undefined
-              : plain(value);
+            : field === 'showJobTitle'
+              ? flag(value)
+              : field === 'socials'
+                ? Array.isArray(value)
+                  ? { kind: 'list', items: [...strings(value)] }
+                  : undefined
+                : plain(value);
       return {
         ...base,
         action,

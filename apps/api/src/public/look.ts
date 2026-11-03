@@ -3,13 +3,21 @@
 //   GET /api/public/handles/:handle/look.css?v=   its accent (its own, else its workspace's) and photo `url()`s
 //   GET /api/public/profiles/:handle/cover?v=     its cover photo
 //   GET /api/public/profiles/:handle/ground?v=    its photo ground
+//   GET /api/public/profiles/:handle/logo?v=      its workspace's logo, while the page has a site for it to link to
 // The photos sit under `profiles`, as the picture does, since `cover` is a valid page slug. Each enters through the
 // handle's own door (`findHandleOwner`), so a private page answers exactly as a handle nobody holds, to everyone but
 // its owner, whose own copy is kept by their browser alone. Only the current version answers; the rest is 404
 // `no-store`. An hour in the browser and at the edge, filed under the page's cache tag so its Private switch deletes
 // it at once. Mounted before the booking routes, so `look.css` is never read as a page's slug.
-import { HANDLE_PATTERN, linkPageCacheTags } from '@crm/contracts';
-import { findHandleOwner, lookStylesheet, readHandleLook, type HandleOwner, type PageLook } from '@crm/core/public';
+import { brandCacheTags, HANDLE_PATTERN, linkPageCacheTags } from '@crm/contracts';
+import {
+  findHandleOwner,
+  findLockupLogo,
+  lookStylesheet,
+  readHandleLook,
+  type HandleOwner,
+  type PageLook,
+} from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import type { Auth } from '../auth/auth.ts';
@@ -113,4 +121,37 @@ export function mountLook(app: Hono<{ Variables: Variables }>, deps: LookDeps): 
       return pictureResponse(loaded, found.owner.isShown ? LOOK_CACHE_CONTROL : PRIVATE_PICTURE_CACHE_CONTROL);
     });
   }
+
+  // The lockup's logo (3 Nov 2026): the workspace's brand kit logo, through the page's own door, and only while the
+  // page has a site address, so it serves nothing the page doesn't draw. Filed under the page's tag and the
+  // workspace's brand tag, so a Private switch or a new logo deletes the edge's copy at once.
+  app.get('/public/profiles/:handle/logo', async (c) => {
+    const handle = c.req.param('handle');
+    if (!HANDLE_PATTERN.test(handle)) return nothingHere();
+    for (const [name, rule] of [
+      [`look:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.picturesPerAddress],
+      [`look-handle:logo:${handle}`, BOOKING_LIMITS.picturesPerTarget],
+    ] as const) {
+      const decision = deps.limiter(name, rule);
+      if (!decision.allowed) return uncached('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
+    }
+    let found: Awaited<ReturnType<typeof findLockupLogo>>;
+    try {
+      const viewer = await viewerOf(c);
+      found = await findLockupLogo({ db: deps.db }, handle, viewer === undefined ? {} : { viewer });
+    } catch (error) {
+      if (toApiError(error).expected) return nothingHere();
+      throw error;
+    }
+    const { owner, logo } = found;
+    if (logo === undefined || !asksFor(c, logo.version)) return nothingHere();
+    if (owner.isShown)
+      deps.edgeCache?.tag([...linkPageCacheTags(owner.handle, handle), ...brandCacheTags(owner.workspaceId)]);
+    const loaded = await loadStoredImage(deps.files, logo.path, logo.type);
+    if (loaded === undefined) {
+      log.warn('look.logo.missed', { requestId: c.get('requestId') });
+      return nothingHere();
+    }
+    return pictureResponse(loaded, owner.isShown ? LOOK_CACHE_CONTROL : PRIVATE_PICTURE_CACHE_CONTROL);
+  });
 }

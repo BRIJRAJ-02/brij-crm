@@ -129,6 +129,15 @@ export const WithSocials: Story = {
   },
 };
 
+/** A host who shows their job title (3 Nov 2026): a quiet line between their name and the meeting's title. */
+export const WithRole: Story = {
+  args: { host: { name: 'Ada Lovelace', role: 'Head of partnerships' } },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Head of partnerships')).toBeVisible();
+  },
+};
+
 /**
  * List over the month (25 October 2026): the month stays underneath, hidden and inert, and sets the card's size, so
  * switching views moves nothing; the views crossfade.

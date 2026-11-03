@@ -19,6 +19,7 @@ export {
   listSitemapHandles,
   enterShareImage,
   findHandleOwner,
+  findLockupLogo,
   readHandleOffer,
   type BookingEntry,
   type HandleOwner,

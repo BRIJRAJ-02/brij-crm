@@ -53,6 +53,7 @@ import { DraftLook } from './draft-look.tsx';
 import { preparePhoto } from './photo-prep.ts';
 import { ClaimLink } from './ClaimLink.tsx';
 import { BlockEditorFrame } from './editors.tsx';
+import { IdentityCard, identityOf, type PageIdentity } from './IdentityCard.tsx';
 import { SharingCard } from './SharingCard.tsx';
 import { SocialsCardSlot } from '../booking/socials-slot.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -520,6 +521,8 @@ function Blocks({
   const [switched, setSwitched] = useState<boolean | undefined>(undefined);
   const [indexableRefusal, setIndexableRefusal] = useState<DataError | undefined>(undefined);
   const indexable = switched ?? profile.indexable ?? true;
+  // Who the page is from (3 Nov 2026), as last saved, so the phone follows a change before the profile is read again.
+  const [identity, setIdentity] = useState<PageIdentity>(() => identityOf(profile));
   const chooseIndexable = (next: boolean) => {
     const was = indexable;
     setSwitched(next);
@@ -884,8 +887,14 @@ function Blocks({
         name: profile.name.trim() || handle,
         id: handle,
         bio: profile.bio,
+        ...(identity.showJobTitle && profile.jobTitle !== undefined ? { role: profile.jobTitle } : {}),
         ...(profile.image === undefined || profile.pictureHidden === true ? {} : { image: profile.image }),
       }}
+      // The lockup's name and link as a visitor sees them; its logo is the Brand kit's, which the phone leaves out.
+      {...(identity.site === '' || profile.workspaceName === undefined
+        ? {}
+        : { brand: { name: profile.workspaceName, href: identity.site } })}
+      {...(identity.footLine === '' ? {} : { footLine: identity.footLine })}
       {...(state.status === 'ready' ? { blocks: previewBlocks } : {})}
       theme={theme}
       {...(theme.layout === undefined ? {} : { pageLayout: theme.layout })}
@@ -1104,6 +1113,7 @@ function Blocks({
           ...(sending === undefined ? {} : { sending }),
         }}
       />
+      <IdentityCard data={data} slug={slug} jobTitle={profile.jobTitle} identity={identity} onSaved={setIdentity} />
       <SharingCard
         indexable={indexable}
         {...(shareImage === undefined ? {} : { shareImage })}

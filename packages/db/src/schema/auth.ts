@@ -395,12 +395,28 @@ export const publicProfiles = auth.table(
      * bytes, null for the plain code. Written only by `crm_save_profile_qr_style`.
      */
     qrStyle: jsonb('qr_style'),
+    /**
+     * Who the page belongs to (3 Nov 2026): whether the owner's job title shows under their name, the https address
+     * the workspace's logo and name link to, and one line of their own above "Powered by Timefix". Written only by
+     * `crm_save_profile_identity`, read by `crm_profile_identity`.
+     */
+    showJobTitle: boolean('show_job_title').notNull().default(false),
+    siteUrl: text('site_url'),
+    footLine: text('foot_line'),
     updatedAt: updatedAt(),
   },
   (t) => [
     primaryKey({ name: 'public_profiles_pkey', columns: [t.userId, t.workspaceId] }),
     uniqueIndex('public_profiles_handle').on(t.handle),
     check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
+    check(
+      'public_profiles_site',
+      sql`${t.siteUrl} is null or (char_length(${t.siteUrl}) between 12 and 200 and ${t.siteUrl} ~ '^https://[^/?#@[:space:][:cntrl:]]+[.][^/?#@[:space:][:cntrl:]]+([/?#][^[:space:][:cntrl:]]*)?$')`,
+    ),
+    check(
+      'public_profiles_foot_line',
+      sql`${t.footLine} is null or (char_length(${t.footLine}) between 1 and 80 and ${t.footLine} !~ '[[:cntrl:]]' and ${t.footLine} = btrim(${t.footLine}))`,
+    ),
     check(
       'public_profiles_theme',
       // Postgres refuses a subquery in a check constraint, so "no key but these ten" is the ten taken away leaving

@@ -56,6 +56,9 @@ const PROFILE_FIELDS = {
   handle: 'public handle',
   bio: 'bio',
   socials: 'social links',
+  showJobTitle: 'job title on their page',
+  site: 'company site',
+  footLine: 'closing line',
 } as const;
 const WORKSPACE_FIELDS = { name: 'name', timeZone: 'time zone', address: 'address' } as const;
 const LINK_FIELDS = { role: 'role', expires: 'expiry', uses: 'number of uses' } as const;

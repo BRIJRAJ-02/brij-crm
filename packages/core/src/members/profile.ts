@@ -9,7 +9,9 @@
 // `booking/socials.ts`.
 import {
   BIO_MAX,
+  FOOT_LINE_MAX,
   JOB_TITLE_MAX,
+  checkProfileSite,
   handleProblem,
   profileSharePath,
   type MyProfile,
@@ -33,6 +35,7 @@ import { checkedSocialLinks, sameSocialLinks, saveSocialLinks, socialLinksOfUser
 import { touched } from '../engine/definitions.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { identityOf, saveIdentity, type ProfileIdentity } from '../profile/identity.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 
 const { members, workspaces } = schema;
@@ -101,6 +104,9 @@ async function readProfile(
   // The person's choice; a member with no identity of their own has none to make.
   const pictureHidden = userId === undefined ? undefined : await isPictureHidden(tx, userId);
   const socials = userId === undefined ? undefined : await socialLinksOfUser(tx, userId);
+  // Who their link page belongs to (3 Nov 2026): read with the page, so none without a handle.
+  const identity =
+    userId === undefined || held === undefined ? undefined : await identityOf(tx, userId, scope.workspaceId);
   // The person's link pages in their other workspaces (spec 0056, AC-5618), as ids. Not named here: a workspace's
   // name belongs to the directory, which is global identity, and a member handler has none (`orpc.ts`'s door takes
   // it away). The browser already holds every workspace it belongs to, from `me.get`, so it names these itself.
@@ -127,6 +133,13 @@ async function readProfile(
     ...(pictureHidden === undefined ? {} : { pictureHidden }),
     ...(socials === undefined ? {} : { socials: [...socials] }),
     ...(held === undefined ? {} : { theme: held.theme, indexable: held.indexable, isPublic: held.isShown }),
+    ...(identity === undefined
+      ? {}
+      : {
+          showJobTitle: identity.showJobTitle,
+          ...(identity.site === undefined ? {} : { site: identity.site }),
+          ...(identity.footLine === undefined ? {} : { footLine: identity.footLine }),
+        }),
     // The picture a pasted link to their page shows instead of the drawn card (AC-5511): the path our own origin
     // serves it from, so the editor draws exactly what a visitor's link preview will.
     ...(held?.shareImageVersion === undefined
@@ -155,7 +168,16 @@ export async function updateMyMemberProfile(
   scope: EngineScope,
   input: Pick<
     UpdateMyProfileInput,
-    'name' | 'timeZone' | 'jobTitle' | 'handle' | 'bio' | 'pictureHidden' | 'socials'
+    | 'name'
+    | 'timeZone'
+    | 'jobTitle'
+    | 'handle'
+    | 'bio'
+    | 'pictureHidden'
+    | 'socials'
+    | 'showJobTitle'
+    | 'site'
+    | 'footLine'
   > = {},
   extras: ProfileExtras = {},
   hooks: readonly AfterWrite[] = [],
@@ -244,6 +266,60 @@ export async function updateMyMemberProfile(
           await saveSocialLinks(tx, userId, socials);
           before.socials = held.map((link) => link.href);
           after.socials = socials.map((link) => link.href);
+        }
+      }
+      // Who their link page belongs to (3 Nov 2026): the person's choices on this workspace's page, in schema auth,
+      // written whole through the one definer. The contract checks the address and the line; checked again here.
+      if (input.showJobTitle !== undefined || input.site !== undefined || input.footLine !== undefined) {
+        const held: ProfileIdentity = {
+          showJobTitle: now.showJobTitle ?? false,
+          ...(now.site === undefined ? {} : { site: now.site }),
+          ...(now.footLine === undefined ? {} : { footLine: now.footLine }),
+        };
+        // The contract checks the address at the boundary; a caller in core gets the same check, and what is kept
+        // is always the checked form (`ada.dev` becomes `https://ada.dev/`), never the words as typed.
+        const typed = input.site?.trim();
+        let site = held.site;
+        if (typed !== undefined) {
+          if (typed === '') site = undefined;
+          else {
+            const checked = checkProfileSite(typed);
+            if (!checked.ok) throw refuseOn('CONFIG_INVALID', checked.message, 'site');
+            site = checked.value;
+          }
+        }
+        const foot =
+          input.footLine === undefined
+            ? held.footLine
+            : input.footLine.trim() === ''
+              ? undefined
+              : input.footLine.trim();
+        if (foot !== undefined && (foot.length > FOOT_LINE_MAX || /[\r\n]/.test(foot))) {
+          throw refuseOn('CONFIG_INVALID', `Keep the line to ${String(FOOT_LINE_MAX)} characters.`, 'footLine');
+        }
+        const show = input.showJobTitle ?? held.showJobTitle;
+        if (show !== held.showJobTitle || site !== held.site || foot !== held.footLine) {
+          const userId = selfUserId(scope);
+          if (userId === undefined || now.handle === undefined) {
+            throw refuseOn('VALUE_REQUIRED', 'Pick a handle first.', 'handle');
+          }
+          await saveIdentity(tx, userId, scope.workspaceId, {
+            showJobTitle: show,
+            ...(site === undefined ? {} : { site }),
+            ...(foot === undefined ? {} : { footLine: foot }),
+          });
+          if (show !== held.showJobTitle) {
+            before.showJobTitle = held.showJobTitle;
+            after.showJobTitle = show;
+          }
+          if (site !== held.site) {
+            before.site = held.site ?? null;
+            after.site = site ?? null;
+          }
+          if (foot !== held.footLine) {
+            before.footLine = held.footLine ?? null;
+            after.footLine = foot ?? null;
+          }
         }
       }
       // A handle its owner claims is live at once, as on Linktree (spec 0058, AC-23): a new one, or the one made for

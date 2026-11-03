@@ -5918,6 +5918,12 @@ export function createDataLayer({
           readonly bio?: string;
           /** Their whole set of social links, in order. */
           readonly socials?: readonly SocialLink[];
+          /** Whether their job title shows on their link page and booking pages (3 Nov 2026). */
+          readonly showJobTitle?: boolean;
+          /** Their link page's site address, which the workspace's logo and name link to; empty clears it. */
+          readonly site?: string;
+          /** Their link page's own line above "Powered by Timefix"; empty clears it. */
+          readonly footLine?: string;
         },
       ): Promise<MyProfile> {
         const { socials, ...rest } = change;

@@ -527,6 +527,80 @@
     overflow-wrap: anywhere;
   }
 
+  /* Their job title, under the name and above the bio: a label's size, in the page's own text colour. */
+  .jobTitle {
+    margin: 0;
+    inline-size: 100%;
+    color: var(--page-text);
+    font: var(--text-label-strong);
+    font-family: var(--page-body-face);
+    letter-spacing: var(--tracking-label);
+    overflow-wrap: anywhere;
+  }
+
+  /* The company the page belongs to (3 Nov 2026): its logo and name, above the person, linking to its site. A small
+     pill in the page's own card colours, so it reads as one deliberate mark and the person stays the subject: a
+     label's size, centred over the hero, or at its edge in the left one. */
+  .lockup {
+    display: inline-flex;
+    align-self: center;
+    align-items: center;
+    gap: var(--space-8);
+    max-inline-size: 100%;
+    margin: 0;
+    padding: var(--space-4) var(--space-12);
+    border: var(--page-card-border-width) solid var(--page-card-border);
+    border-radius: var(--radius-full);
+    background: var(--page-card);
+    color: var(--page-card-text);
+    font: var(--text-label-strong);
+    font-family: var(--page-body-face);
+    letter-spacing: var(--tracking-label);
+    text-decoration: none;
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .root[data-page-header='left'] .lockup {
+    align-self: flex-start;
+  }
+
+  .lockup[href]:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .lockup[href]:hover {
+      background: var(--page-card-hover);
+    }
+  }
+
+  .lockupLogo {
+    flex: none;
+    block-size: var(--size-tile);
+    inline-size: auto;
+    max-inline-size: var(--size-column-narrow);
+    object-fit: contain;
+  }
+
+  .lockupName {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The owner's own line, above "Powered by Timefix" and never in its place. */
+  .footLine {
+    margin: 0;
+    color: var(--page-text-quiet);
+    font: var(--text-label);
+    font-family: var(--page-body-face);
+    letter-spacing: var(--tracking-label);
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
   .summary {
     margin: 0;
     padding-inline: var(--space-4);

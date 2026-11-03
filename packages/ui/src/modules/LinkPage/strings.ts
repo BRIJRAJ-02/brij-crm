@@ -24,6 +24,8 @@ export const strings = {
   inside: (count: number) => (count === 1 ? '1 link inside' : `${String(count)} links inside`),
   /** A site icon names nothing a reader needs: the title beside it already says where the link goes. */
   siteIconAlt: '',
+  /** A company's logo beside its name in the lockup: decoration, since the name is the link's words. */
+  lockupLogoAlt: '',
   /** A link's thumbnail (spec 0061, AC-6101) is decoration too: the title beside or under it names the link. */
   thumbAlt: '',
   /** The banner's landmark name (AC-6112). */

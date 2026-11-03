@@ -278,6 +278,7 @@ export {
   type LinkPageMediaProvider,
   type LinkPageNotice,
   type LinkPagePicture,
+  type LinkPageBrand,
   type LinkPagePerson,
   type LinkPagePhotos,
   type LinkPageProps,

@@ -158,6 +158,15 @@
     overflow-wrap: anywhere;
   }
 
+  /* The host's job title (3 Nov 2026): a quiet label between their name and the meeting's title. */
+  .hostRole {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    overflow-wrap: anywhere;
+  }
+
   .title {
     margin: 0;
     color: var(--text-secondary);

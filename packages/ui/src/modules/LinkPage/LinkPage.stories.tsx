@@ -146,6 +146,47 @@ export const Default: Story = {
   },
 };
 
+/**
+ * Who the page belongs to (3 Nov 2026): the company's name above the person, linking to its site in a new tab, the
+ * person's job title under their name, and their own line above the foot.
+ */
+export const Identity: Story = {
+  args: {
+    person: { ...PERSON, role: 'Head of partnerships' },
+    brand: { name: 'Timefix', href: 'https://www.timefix.com/' },
+    footLine: 'Replies within a day, Monday to Friday.',
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={anishBlocks()} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    const lockup = canvas.getByRole('link', { name: /^Timefix/ });
+    await expect(lockup).toHaveAttribute('href', 'https://www.timefix.com/');
+    await expect(lockup).toHaveAttribute('target', '_blank');
+    await expect(lockup).toHaveAccessibleName(/opens in a new tab/);
+    await expect(canvas.getByText('Head of partnerships')).toBeVisible();
+    await expect(canvas.getByText('Replies within a day, Monday to Friday.')).toBeVisible();
+  },
+};
+
+/** A lockup whose address isn't https draws the name alone, with no link. */
+export const IdentityUnlinked: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { person: PERSON, brand: { name: 'Timefix', href: 'javascript:alert(1)' } },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={[]} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Timefix')).toBeVisible();
+    await expect(canvas.queryByRole('link', { name: /^Timefix/ })).toBeNull();
+  },
+};
+
 /** While the page loads: the face, the name and five block shaped places, so nothing moves when they arrive. */
 export const Loading: Story = {};
 

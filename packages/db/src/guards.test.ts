@@ -215,6 +215,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_place_profile_page', owner: 'crm_handle' },
       { name: 'crm_profile_counts', owner: 'crm_handle' },
       { name: 'crm_profile_handles_of', owner: 'crm_handle' },
+      // Who the page is from (3 Nov 2026, migration 0164).
+      { name: 'crm_profile_identity', owner: 'crm_handle' },
       // A link page's pictures: its owner's, a visitor's while a live block uses one, and the unused (spec 0061).
       { name: 'crm_profile_image_of', owner: 'crm_handle' },
       { name: 'crm_profile_image_public', owner: 'crm_handle' },
@@ -234,6 +236,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_profile_accent', owner: 'crm_handle' },
+      { name: 'crm_save_profile_identity', owner: 'crm_handle' },
       { name: 'crm_save_profile_image', owner: 'crm_handle' },
       { name: 'crm_save_profile_indexable', owner: 'crm_handle' },
       { name: 'crm_save_profile_item', owner: 'crm_handle' },
@@ -332,6 +335,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_place_profile_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_handles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_identity', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_image_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_image_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_images_unused', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -348,6 +352,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it checks the workspace and the membership, and raises PROFILE_MISSING (spec 0060).
       { name: 'crm_save_profile_accent', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      // A plpgsql body: it raises PROFILE_NOT_THIS_WORKSPACE, PROFILE_NOT_MEMBER and PROFILE_MISSING (migration 0164).
+      { name: 'crm_save_profile_identity', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: as crm_save_profile_accent, and answers the path it replaced (spec 0060).
       { name: 'crm_save_profile_image', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_save_profile_indexable', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -603,6 +609,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_qr_style',
         'crm_profile_qr_style',
         'crm_sitemap_handles',
+        'crm_profile_identity',
+        'crm_save_profile_identity',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',
@@ -649,10 +657,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_qr_style(uuid, uuid, jsonb)',
         'crm_profile_qr_style(uuid, uuid)',
         'crm_sitemap_handles(text, integer)',
+        'crm_profile_identity(uuid, uuid)',
+        'crm_save_profile_identity(uuid, uuid, boolean, text, text)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 44 }, () => 'app'),
+      Array.from({ length: 46 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2445,6 +2455,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth.public_profiles.cover_path UPDATE',
       'auth.public_profiles.cover_type UPDATE',
       'auth.public_profiles.cover_version UPDATE',
+      // Who the page is from (3 Nov 2026, migration 0164): three columns, only through crm_save_profile_identity.
+      'auth.public_profiles.foot_line UPDATE',
       'auth.public_profiles.ground_path UPDATE',
       'auth.public_profiles.ground_type UPDATE',
       'auth.public_profiles.ground_version UPDATE',
@@ -2460,7 +2472,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth.public_profiles.share_image UPDATE',
       'auth.public_profiles.share_image_type UPDATE',
       'auth.public_profiles.share_image_version UPDATE',
+      'auth.public_profiles.show_job_title UPDATE',
       'auth.public_profiles.shown_at UPDATE',
+      'auth.public_profiles.site_url UPDATE',
       // The look of their page (spec 0054, migration 0105): one more column, and only through
       // crm_save_profile_theme. This line is the whole of what that spec widened.
       'auth.public_profiles.theme UPDATE',

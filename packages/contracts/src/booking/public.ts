@@ -85,6 +85,8 @@ export const PublicBookingPage = z.object({
    * "Show my social links" on, absent when there are none. A team page names no host, so never has them (AC-754).
    */
   socials: z.array(PublicSocialLink).optional(),
+  /** A personal page's host's job title, only while they show it (3 Nov 2026). A team page names no host (AC-754). */
+  hostRole: z.string().optional(),
   /**
    * The page's own questions, drawn after the note (spec 0057, AC-5709): what rendering needs (key, label, type,
    * choices, required, show when), never where an answer is filed. Absent on a page that asks none (AC-5704).
@@ -119,6 +121,14 @@ export function bookingPicturePath(publicKey: string, version: string): string {
  */
 export function profilePicturePath(handle: string, version: string): string {
   return `/api/public/profiles/${encodeURIComponent(handle)}/picture?v=${encodeURIComponent(version)}`;
+}
+
+/**
+ * A link page's workspace logo, as our origin serves it: `GET /api/public/profiles/:handle/logo?v=` (3 Nov 2026),
+ * answered only while the page has a site address for the lockup to link to.
+ */
+export function profileLogoPath(handle: string, version: string): string {
+  return `/api/public/profiles/${encodeURIComponent(handle)}/logo?v=${encodeURIComponent(version)}`;
 }
 
 /**
@@ -171,6 +181,15 @@ export const PublicProfile = z.object({
   /** The person's picture on our own origin (`/api/public/profiles/<handle>/picture?v=`), when the account has one. */
   image: z.string().optional(),
   bio: z.string(),
+  /** Their job title, under their name, only while they show it (3 Nov 2026). */
+  role: z.string().optional(),
+  /**
+   * Their workspace's lockup at the top of the page (3 Nov 2026): its name, the logo's path on our own origin when
+   * the brand kit has one, and the site both link to. Absent until the owner sets a site address.
+   */
+  brand: z.object({ name: z.string(), site: z.string(), logo: z.string().optional() }).optional(),
+  /** The owner's own line, drawn above "Powered by Timefix" and never in its place (3 Nov 2026). */
+  footLine: z.string().optional(),
   /** Their social links, in their order, absent when there are none (booking socials, 25 Oct 2026). */
   socials: z.array(PublicSocialLink).optional(),
   items: z.array(PublicProfileItem),

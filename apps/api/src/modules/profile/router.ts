@@ -88,7 +88,7 @@ export const profileRouter = member.profile.router({
   get: member.profile.get.handler(async ({ context }) => getMyProfile(context.scope, await extrasOf(context))),
   update: member.profile.update.handler(async ({ context, input }) => {
     const extras = await extrasOf(context);
-    return commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       updateMyMemberProfile(
         context.scope,
         {
@@ -99,12 +99,20 @@ export const profileRouter = member.profile.router({
           ...(input.bio === undefined ? {} : { bio: input.bio }),
           ...(input.pictureHidden === undefined ? {} : { pictureHidden: input.pictureHidden }),
           ...(input.socials === undefined ? {} : { socials: input.socials }),
+          ...(input.showJobTitle === undefined ? {} : { showJobTitle: input.showJobTitle }),
+          ...(input.site === undefined ? {} : { site: input.site }),
+          ...(input.footLine === undefined ? {} : { footLine: input.footLine }),
         },
         extras,
         hooks,
         sourceOf(context),
       ),
     );
+    // Who the page belongs to is drawn from the edge's copy of it, so a change there deletes that copy at once.
+    const identityChanged =
+      input.showJobTitle !== undefined || input.site !== undefined || input.footLine !== undefined;
+    if (identityChanged && saved.handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(saved.handle));
+    return saved;
   }),
   // The link page (spec 0051): the caller's own blocks, in every workspace the same, never another person's.
   items: member.profile.items.handler(({ context }) =>

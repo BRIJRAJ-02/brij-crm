@@ -237,6 +237,17 @@ export interface LinkPagePerson {
   readonly id: string;
   readonly image?: string;
   readonly bio?: string;
+  /** Their job title, under their name, when they show it. */
+  readonly role?: string;
+}
+
+/** Who the page belongs to, above the person: the company's logo and name, linking to its site. */
+export interface LinkPageBrand {
+  readonly name: string;
+  /** The company's own site; an address `safeHref` refuses draws the lockup with no link. */
+  readonly href: string;
+  /** The logo, on the page's own origin; the name stands alone without one. */
+  readonly logo?: string;
 }
 
 /** Props for LinkPage. */
@@ -245,6 +256,10 @@ export interface LinkPageProps {
   readonly person?: LinkPagePerson;
   /** Missing while the page loads: block shaped skeletons hold their places. */
   readonly blocks?: readonly LinkPageBlock[];
+  /** The company the page belongs to, drawn above the person; nothing when absent. */
+  readonly brand?: LinkPageBrand;
+  /** One line of the owner's, drawn above `foot` and never in its place. */
+  readonly footLine?: string;
   /**
    * The page's own address, shown under the bio as a pill that copies it: the label is the address a visitor reads
    * ("timefix.com/ada"), the value what the clipboard gets (the whole address, scheme and all).
@@ -1704,9 +1719,35 @@ function ThumbnailLook({ theme, variables, detail }: LinkPageThumbnailProps) {
   );
 }
 
+/**
+ * The company a page belongs to, above the person: its logo and name together, one link to its site. The logo is
+ * decoration beside the name, which is the link's words, so it is read once. The site opens in a new tab, as every
+ * outside link on the page does; an address that isn't an https one draws the lockup with no link.
+ */
+function Lockup({ brand }: { readonly brand: LinkPageBrand }) {
+  const logo = safeImageSrc(brand.logo);
+  const href = safeHref(brand.href);
+  const content = (
+    <>
+      {logo !== undefined && <img className={styles.lockupLogo} src={logo} alt={strings.lockupLogoAlt} />}
+      <span className={styles.lockupName}>{brand.name}</span>
+    </>
+  );
+  return href === undefined || href.startsWith('/') || !/^https:/i.test(href) ? (
+    <p className={styles.lockup}>{content}</p>
+  ) : (
+    <a className={styles.lockup} href={href} target="_blank" rel="noopener noreferrer">
+      {content}
+      <VisuallyHidden>{strings.newTab}</VisuallyHidden>
+    </a>
+  );
+}
+
 export function LinkPage({
   person,
   blocks,
+  brand,
+  footLine,
   address,
   share,
   walletHref,
@@ -1848,6 +1889,7 @@ export function LinkPage({
       >
         <div className={styles.column} ref={columnRef}>
           {banner !== undefined && !bannerClosed && <Banner block={banner} onPress={onPress} onClose={closeBanner} />}
+          {brand !== undefined && <Lockup brand={brand} />}
           <header className={styles.hero} aria-busy={person === undefined || undefined}>
             {person === undefined ? (
               <>
@@ -1886,6 +1928,7 @@ export function LinkPage({
                 {/* The words beside the face in the left header, and in the column under it otherwise. */}
                 <div className={styles.who}>
                   <h1 className={styles.name}>{person.name}</h1>
+                  {person.role !== undefined && person.role !== '' && <p className={styles.jobTitle}>{person.role}</p>}
                   {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
                   {address !== undefined && (
                     <span className={styles.address}>
@@ -1967,6 +2010,7 @@ export function LinkPage({
             </div>
           )}
           {after}
+          {footLine !== undefined && footLine !== '' && <p className={styles.footLine}>{footLine}</p>}
           {foot}
         </div>
         {hasNotice && (

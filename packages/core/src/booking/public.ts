@@ -64,6 +64,7 @@ import { faviconSources, faviconVersion } from './favicon.ts';
 import { isMediaRef, mediaFrameSrc } from '../profile/embeds.ts';
 import { isPictureHidden } from './picture-choice.ts';
 import { publicSocialsOf } from './socials.ts';
+import { identityOf, jobTitleOf } from '../profile/identity.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseAll, refuseOn } from '../engine/refusals.ts';
@@ -289,6 +290,7 @@ export async function getPublicBookingPage(
       // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
       ...(path.startsWith('/b/') ? {} : { path }),
       ...(team === undefined ? await shownSocials(tx, page) : {}),
+      ...(team === undefined ? await shownRole(tx, page, entry.scope.workspaceId) : {}),
       // The page's own questions (spec 0057, AC-5709); a page with none sends nothing new (AC-5704).
       ...(page.questions.length === 0 ? {} : { questions: [...publicQuestionsOf(page.questions)] }),
       ...(shut ? { formOnly: true as const } : {}),
@@ -312,6 +314,23 @@ async function shownSocials(
   if (owner === undefined) return {};
   const socials = await publicSocialsOf(tx, owner);
   return socials.length === 0 ? {} : { socials: [...socials] };
+}
+
+/**
+ * The host's job title on a page (3 Nov 2026): a personal page's owner's, while they show it on their link page. A
+ * team page, or a kind yet to come, names no member (AC-754).
+ */
+async function shownRole(
+  tx: WorkspaceTx,
+  page: PageRecord,
+  workspaceId: string,
+): Promise<{ readonly hostRole?: string }> {
+  const owner = page.kind === 'personal' ? (page.ownerUserId ?? undefined) : undefined;
+  if (owner === undefined) return {};
+  const identity = await identityOf(tx, owner, workspaceId);
+  if (identity?.showJobTitle !== true) return {};
+  const role = await jobTitleOf(tx, owner, workspaceId);
+  return role === undefined ? {} : { hostRole: role };
 }
 
 /**
@@ -679,6 +698,8 @@ export async function readLinkPage(
     readonly skipped?: ReadonlySet<string>;
     /** The pictures the blocks name that a visitor may load, with their sizes (spec 0061, `linkImageSizes`). */
     readonly pictures?: PictureSizes;
+    /** Who the page belongs to, as its owner chose to show it (3 Nov 2026). */
+    readonly identity?: Pick<PublicProfile, 'role' | 'brand' | 'footLine'>;
   },
   query: { readonly search?: string } = {},
 ): Promise<PublicProfile> {
@@ -778,6 +799,8 @@ export async function readLinkPage(
     // origin serves it, under the current handle.
     ...withPicture(found.owner),
     bio: found.owner.bio,
+    // Their job title, their workspace's lockup and their own foot line, each only as they chose to show it.
+    ...found.identity,
     // Their social links: the row of icons under the bio, their own set, never a block.
     ...(found.owner.socials.length === 0 ? {} : { socials: [...found.owner.socials] }),
     items,

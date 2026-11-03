@@ -408,9 +408,22 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
         name: profile.name,
         id: current,
         bio: profile.bio,
+        // Their job title, only while they show it (3 Nov 2026).
+        ...(profile.role === undefined ? {} : { role: profile.role }),
         // Our own origin's copy of their account picture; the initials show if it fails.
         ...(profile.image === undefined ? {} : { image: profile.image }),
       }}
+      // The company the page belongs to, linking to the site its owner set, and their own line above the foot.
+      {...(profile.brand === undefined
+        ? {}
+        : {
+            brand: {
+              name: profile.brand.name,
+              href: profile.brand.site,
+              ...(profile.brand.logo === undefined ? {} : { logo: profile.brand.logo }),
+            },
+          })}
+      {...(profile.footLine === undefined ? {} : { footLine: profile.footLine })}
       // The page's own address, as a visitor reads it, with a press to copy it.
       address={{ label: addressOf(current), value: `${globalThis.location.origin}/${current}` }}
       share={

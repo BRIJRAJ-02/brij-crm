@@ -8,13 +8,18 @@ import { strings } from './strings.ts';
 
 /**
  * The rail's host. A personal page gets `{ name }`, `image` when the host has a picture (initials if it fails), and
- * `socials` when the page shows the host's social links (booking socials, 25 Oct 2026).
+ * `socials` when the page shows the host's social links (booking socials, 25 Oct 2026), and `role` when the host
+ * shows their job title (3 Nov 2026).
  */
-export function railHost(page: Pick<PublicBookingPage, 'hostName' | 'hostImage' | 'team' | 'socials'>): BookingHost {
+export function railHost(
+  page: Pick<PublicBookingPage, 'hostName' | 'hostImage' | 'hostRole' | 'team' | 'socials'>,
+): BookingHost {
   if (page.team === undefined) {
     return {
       name: page.hostName,
       ...(page.hostImage === undefined ? {} : { image: page.hostImage }),
+      // Their job title, only while they show it (3 Nov 2026).
+      ...(page.hostRole === undefined ? {} : { role: page.hostRole }),
       ...(page.socials === undefined || page.socials.length === 0 ? {} : { socials: page.socials }),
     };
   }

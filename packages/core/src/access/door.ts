@@ -30,9 +30,11 @@ import {
   SLUG_PATTERN,
   TWO_FACTOR_REQUIRED_MESSAGE,
   type PreviewAs,
+  type PublicProfile,
   type PublicSocialLink,
 } from '@crm/contracts';
 import { publicSocialsOf } from '../booking/socials.ts';
+import { lockupLogoOf, publicIdentityOf } from '../profile/identity.ts';
 import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
 import { requirePermission } from './check.ts';
@@ -1399,6 +1401,8 @@ export async function enterLinkPage(
   readonly skipped: ReadonlySet<string>;
   /** The pictures the shown blocks name that a visitor may load, with their sizes (spec 0061, AC-6126). */
   readonly pictures: ReadonlyMap<string, { readonly width: number; readonly height: number }>;
+  /** Who the page belongs to, as its owner chose to show it (3 Nov 2026): a job title, the lockup, a foot line. */
+  readonly identity: Pick<PublicProfile, 'role' | 'brand' | 'footLine'>;
 }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
   const owner = await shownOwner(deps.db, handle, {
@@ -1431,7 +1435,28 @@ export async function enterLinkPage(
     owner,
     rows.flatMap((row) => imageIdsOf(row.data)),
   );
-  return { owner, rows: found.rows, pages, forms, skipped, pictures };
+  // Read in the owner's own workspace, under its row level security: their job title and its name are its own.
+  const identity = await deps.db.withWorkspace(owner.workspaceId, (tx) => publicIdentityOf(tx, owner));
+  return { owner, rows: found.rows, pages, forms, skipped, pictures, identity };
+}
+
+/**
+ * The workspace logo a link page's lockup draws (3 Nov 2026), through the page's own door: a private page answers
+ * nothing to anyone but its owner, and a page with no site address has no lockup, so no logo either. Exported only
+ * from `@crm/core/public`.
+ */
+export async function findLockupLogo(
+  deps: { readonly db: Database },
+  handle: string,
+  options: LinkPageViewer = {},
+): Promise<{
+  readonly owner: HandleOwner;
+  readonly logo?: { readonly path: string; readonly type: string; readonly version: string };
+}> {
+  const owner = await shownOwner(deps.db, handle, options);
+  if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
+  const logo = await deps.db.withWorkspace(owner.workspaceId, (tx) => lockupLogoOf(tx, owner));
+  return logo === undefined ? { owner } : { owner, logo };
 }
 
 /**

@@ -25,6 +25,8 @@ export interface BookingHost {
   /** The host: the line above the meeting. A team page's is the workspace, named in its title instead. */
   readonly name: string;
   readonly image?: string;
+  /** The host's job title, under their name, when they show it (3 Nov 2026); never on a team page. */
+  readonly role?: string;
   /** A team page's hosts (spec 0037, AC-1339): their faces stack in place of the one picture. */
   readonly team?: BookingTeam;
   /** The host's social links (booking socials, 25 Oct 2026), the last line of their block; never on a team page. */
@@ -254,6 +256,9 @@ export function BookingFrame({
               <div className={styles.names} data-team={host.team === undefined ? undefined : ''}>
                 {/* A team page's title already names the workspace ("Intro call with Acme"). */}
                 {host.team === undefined && <p className={styles.host}>{host.name}</p>}
+                {host.team === undefined && host.role !== undefined && host.role !== '' && (
+                  <p className={styles.hostRole}>{host.role}</p>
+                )}
                 <h1 className={styles.title}>{title}</h1>
               </div>
               {description !== undefined && description !== '' && <p className={styles.description}>{description}</p>}
