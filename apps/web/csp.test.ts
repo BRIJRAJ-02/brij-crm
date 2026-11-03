@@ -145,8 +145,8 @@ describe('media frames (spec 0061, AC-6107)', () => {
     );
   });
 
-  it('serves the embed script cached for an hour, to any site', () => {
-    expect(sent('/embed/(.*)', 'Cache-Control')).toMatch(/^public, max-age=3600/);
+  it('serves the embed script cached for five minutes, so a fix reaches sites the same hour', () => {
+    expect(sent('/embed/(.*)', 'Cache-Control')).toMatch(/^public, max-age=300,/);
     expect(sent('/embed/(.*)', 'Cross-Origin-Resource-Policy')).toBe('cross-origin');
   });
 });

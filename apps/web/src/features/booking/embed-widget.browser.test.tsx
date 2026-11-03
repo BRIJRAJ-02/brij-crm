@@ -84,4 +84,25 @@ describe('the embed script', () => {
     expect(new Set(lifts).size).toBe(2);
     expect(lifts).toContain('0px');
   });
+
+  it('opens a corner button panel at full size, with the button words above the page and Close beside them', async () => {
+    holder({
+      'data-timefix-booking': 'ada/intro',
+      'data-timefix-mode': 'floating',
+      'data-timefix-text': 'Book a call',
+    });
+    await run();
+    const fab = [...document.querySelectorAll('div')]
+      .map((host) => host.shadowRoot?.querySelector('button.fab'))
+      .find((button): button is HTMLButtonElement => button instanceof HTMLButtonElement);
+    fab?.click();
+    const panel = [...document.querySelectorAll('div')]
+      .map((host) => host.shadowRoot?.querySelector('.veil:not([hidden]) .panel'))
+      .find((found): found is HTMLElement => found instanceof HTMLElement);
+    expect(panel).toBeDefined();
+    // The grow from the button used to outweigh the open state, so the panel stayed at 88% of its size.
+    await expect.poll(() => panel && getComputedStyle(panel).transform, { timeout: 2000 }).toBe('none');
+    expect(panel?.querySelector('.hd span')?.textContent).toBe('Book a call');
+    expect(panel?.querySelector('.hd button[aria-label="Close"]')).not.toBeNull();
+  });
 });

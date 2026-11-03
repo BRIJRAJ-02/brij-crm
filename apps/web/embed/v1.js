@@ -179,7 +179,7 @@
     'iframe{display:block;box-sizing:border-box;inline-size:100%;max-inline-size:100%;min-inline-size:0;block-size:var(--tfx-min,360px);' +
     'border:0;margin:0;padding:0;background:transparent;opacity:0;transition:opacity 160ms ease-out}' +
     '[data-ready] iframe{opacity:1}' +
-    '.sk{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;padding:24px;box-sizing:border-box}' +
+    '.sk{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;gap:12px;padding:24px;box-sizing:border-box}' +
     '.sk i{display:block;block-size:12px;border-radius:6px;background:var(--tfx-sk);animation:tfx-pulse 1.2s ease-in-out infinite alternate}' +
     '.sk i:nth-child(1){inline-size:60%;block-size:20px}.sk i:nth-child(2n){block-size:32px}.sk i:last-child{inline-size:100%;block-size:36px}' +
     '[data-ready] .sk{display:none}' +
@@ -191,7 +191,7 @@
     'background:rgba(15,18,25,.55);opacity:0;transition:opacity 240ms ease-out;overscroll-behavior:contain}' +
     '.veil:not([data-open]){transition-duration:120ms}' +
     '.veil[hidden]{display:none}.veil[data-open]{opacity:1}' +
-    '.panel{position:relative;box-sizing:border-box;inline-size:min(560px,calc(100% - 32px));max-block-size:calc(100% - 64px);' +
+    '.panel{position:relative;box-sizing:border-box;display:flex;flex-direction:column;inline-size:min(560px,calc(100% - 32px));max-block-size:calc(100% - 64px);' +
     'overflow:hidden;border-radius:12px;background:var(--tfx-bg);box-shadow:0 24px 64px rgba(0,0,0,.28);' +
     'transform-origin:var(--tfx-ox,50%) var(--tfx-oy,50%);' +
     'transform:scale(.98);transition:transform 240ms ease-out}' +
@@ -206,15 +206,23 @@
     'border-start-end-radius:0;border-end-end-radius:0;border-start-start-radius:16px;border-end-start-radius:16px;' +
     'transform:translateX(16px) scale(.99)}' +
     '.veil[data-side][data-open] .panel{transform:none}' +
-    '.veil[data-side] .panel iframe{block-size:100%;max-block-size:none}' +
+    '.veil[data-side] .panel iframe{flex:1;min-block-size:0;block-size:auto;max-block-size:none}' +
     // Until the page inside posts its height, a dialog opened at a flat 480px was shorter than almost every form
     // and booking page, so the first thing a visitor saw was a scrollbar, and then a jump when the real height
     // arrived. 70dvh opens near the room it has, and the transition eases to the measured height rather than
     // snapping. The reduced motion block below turns that transition off with the rest.
-    '.panel iframe{opacity:1;max-block-size:calc(100dvh - 64px);block-size:var(--tfx-h,70dvh);' +
+    '.panel iframe{opacity:1;max-block-size:calc(100dvh - 112px);block-size:var(--tfx-h,70dvh);' +
     'transition:block-size 200ms ease-out}' +
-    '.x{position:absolute;inset-block-start:8px;inset-inline-end:8px;z-index:1;display:grid;place-items:center;inline-size:32px;block-size:32px;' +
-    'padding:0;border:0;border-radius:8px;background:var(--tfx-bg);color:var(--tfx-fg);cursor:pointer}' +
+    // A bar above the page holds its name and Close. Close used to float over the page's own top corner, where a
+    // form's long heading ran under it, and a booking page and a form each framed it differently; the bar gives
+    // both the same head and keeps Close off whatever the page puts there (3 November 2026).
+    '.hd{flex:none;display:flex;align-items:center;gap:8px;block-size:48px;box-sizing:border-box;padding:0 8px 0 20px;' +
+    'border-block-end:1px solid var(--tfx-line);font:600 15px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--tfx-fg)}' +
+    '.hd span{flex:1;min-inline-size:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.panel .sk{inset-block-start:48px}' +
+    '.x{flex:none;display:grid;place-items:center;inline-size:32px;block-size:32px;' +
+    'padding:0;border:0;border-radius:8px;background:transparent;color:var(--tfx-fg);cursor:pointer;transition:background 120ms ease-out}' +
+    '.x:hover{background:var(--tfx-sk)}' +
     '.x:focus-visible,.fab:focus-visible,.off a:focus-visible{outline:2px solid #fff;outline-offset:2px;box-shadow:0 0 0 4px #111318}' +
     '.off{position:absolute;inset:0;display:grid;place-items:center;padding:24px;box-sizing:border-box;' +
     'font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--tfx-fg)}.off a{color:inherit}' +
@@ -227,13 +235,16 @@
     '.fab:has(.mark){display:inline-flex;align-items:center;gap:8px}' +
     '.mark{display:grid;place-items:center;flex:none}' +
     '@media (max-width:640px){.panel{inline-size:100%;block-size:100dvh;max-block-size:none;border-radius:0}' +
-    '.panel iframe{block-size:100%;max-block-size:none}' +
+    '.panel iframe{flex:1;min-block-size:0;block-size:auto;max-block-size:none}' +
     // A 390px wide "side" panel is the whole screen pretending to be a panel, so on a phone it is a sheet that
     // rises from the bottom instead, which is where a thumb is and which no longer claims to be beside anything.
     '.veil[data-side]{align-items:flex-end;justify-content:center}' +
     '.veil[data-side] .panel{inline-size:100%;block-size:92dvh;border-radius:16px 16px 0 0;transform:translateY(16px)}' +
     '.veil[data-side][data-open] .panel{transform:none}' +
     '.veil[data-grow] .panel{transform:translateY(16px)}}' +
+    // Open always lands at rest. The grow rules above have the same weight as `[data-open]` and come later, so
+    // they won: the middle panel stayed at 88% of its size and a phone's sat 16px low with its foot off screen.
+    '.veil[data-open][data-grow] .panel{transform:none}' +
     '@media (prefers-reduced-motion:reduce){.veil,.panel,iframe{transition:opacity 160ms ease-out}' +
     '.veil .panel,.veil[data-side] .panel,.veil[data-grow] .panel{transform:none}.sk i{animation:none}}';
 
@@ -253,6 +264,8 @@
       (dark ? '#e7e9ee' : '#1f2329') +
       ';--tfx-sk:' +
       (dark ? '#2a2e36' : '#eceef2') +
+      ';--tfx-line:' +
+      (dark ? '#2a2e36' : '#e6e8ec') +
       '}';
     root.appendChild(style);
     return { host: host, root: root };
@@ -371,12 +384,25 @@
     close.setAttribute('aria-label', 'Close');
     close.innerHTML =
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    var head = document.createElement('div');
+    head.className = 'hd';
+    var label = document.createElement('span');
+    // The words on the button that opened it, so what you pressed is what the panel is called.
+    label.textContent = cut(
+      element.getAttribute('data-timefix-title') ||
+        element.getAttribute('data-timefix-text') ||
+        element.textContent.trim() ||
+        made.frame.title,
+      60,
+    );
+    head.appendChild(label);
+    head.appendChild(close);
     var start = document.createElement('span');
     var end = document.createElement('span');
     start.tabIndex = 0;
     end.tabIndex = 0;
     panel.appendChild(start);
-    panel.appendChild(close);
+    panel.appendChild(head);
     panel.appendChild(made.frame);
     var skeleton = document.createElement('div');
     skeleton.className = 'sk';
