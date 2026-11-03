@@ -2,8 +2,11 @@
 // Zod, so the engine and the browser's data layer (Settings › Apps and Settings › Business) run the same checks and
 // agree on the result. The Zod schemas and the contract live in `hospitality.ts`.
 
-/** The Hospitality apps a workspace installs (AC-6501), in the order the Apps page lists them. */
-export const HOSPITALITY_APPS = ['menu', 'menu_qr', 'table_seating'] as const;
+/**
+ * The business apps a workspace installs (AC-6501), in the order the Apps page lists them. Spec 0066 adds
+ * Appointments (services, staff and the visit engine) and Events (classes and events, B8).
+ */
+export const HOSPITALITY_APPS = ['menu', 'menu_qr', 'table_seating', 'appointments', 'events'] as const;
 /** One Hospitality app. */
 export type HospitalityApp = (typeof HOSPITALITY_APPS)[number];
 
@@ -12,6 +15,8 @@ export const APP_NEEDS: Readonly<Record<HospitalityApp, readonly HospitalityApp[
   menu: [],
   menu_qr: ['menu'],
   table_seating: [],
+  appointments: [],
+  events: [],
 };
 
 /** The apps that need `app`, so removing it removes them too (AC-6505). */

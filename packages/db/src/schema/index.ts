@@ -34,6 +34,22 @@ export { memberPreferences } from './preferences.ts';
 export { workspaceBrands } from './brand.ts';
 export { areas, businessProfiles, places, resources, workspaceApps } from './hospitality.ts';
 export {
+  appointmentHolds,
+  appointmentItems,
+  appointments,
+  serviceCategories,
+  servicePlaces,
+  serviceResources,
+  services,
+  serviceStaff,
+  serviceVariants,
+  serviceVariantStaff,
+  staff,
+  staffBlocks,
+  staffPlaces,
+  staffTimeOff,
+} from './visits.ts';
+export {
   attendeeMatch,
   attendeeResponse,
   calendarAccessRole,

@@ -372,7 +372,7 @@ export const consentRecords = pgTable(
     check('consent_records_version', sql`${t.wordingVersion} >= 1`),
     check(
       'consent_records_source',
-      sql`${t.sourceType} in ('submission', 'member', 'site') and (${t.sourceType} <> 'submission' or (${t.sourceId} is not null and ${t.questionId} is not null))`,
+      sql`${t.sourceType} in ('submission', 'member', 'site', 'appointment', 'event_registration') and (${t.sourceType} <> 'submission' or (${t.sourceId} is not null and ${t.questionId} is not null))`,
     ),
     check('consent_records_question', sql`${t.questionId} ~ '^[a-z0-9][a-z0-9_-]{0,39}$'`),
   ],

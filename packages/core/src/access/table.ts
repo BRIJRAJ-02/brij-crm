@@ -273,6 +273,10 @@ export const ACCESS_TABLE = {
   archiveResource: { permission: 'hospitality.manage' },
   restoreResource: { permission: 'hospitality.manage' },
   deleteResource: { permission: 'hospitality.manage' },
+  // The visit engine (spec 0066, B0): the desk's offered times and booking, everyone's calendar's permission. B2 adds a
+  // guest's entry in front of the same services.
+  visitTimes: { permission: 'services.calendar' },
+  bookVisit: { permission: 'services.calendar' },
   readBrandLogo: { anyMember: true },
   saveWorkspaceBrand: { permission: 'workspace.manage' },
   requireBrandEditor: { permission: 'workspace.manage' },

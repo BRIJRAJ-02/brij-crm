@@ -112,6 +112,12 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'appInstalled',
   'requireApp',
   'requireAnyApp',
+  // The visit engine (spec 0066, B0): the pure planner and its earliest day search, the slot cache factory, and the
+  // refusal's reader.
+  'planVisit',
+  'earliestStart',
+  'createSlotCache',
+  'isVisitTaken',
   // Pure: a country's likely locale, and a place's hours read at an instant (spec 0065).
   'localeForCountry',
   'openAt',

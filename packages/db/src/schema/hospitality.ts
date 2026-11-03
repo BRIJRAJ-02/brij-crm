@@ -47,7 +47,7 @@ export const workspaceApps = pgTable(
       foreignColumns: [members.workspaceId, members.id],
     }),
     index('workspace_apps_installed_by').on(t.workspaceId, t.installedByMemberId),
-    check('workspace_apps_app', sql`${t.app} in ('menu', 'menu_qr', 'table_seating')`),
+    check('workspace_apps_app', sql`${t.app} in ('menu', 'menu_qr', 'table_seating', 'appointments', 'events')`),
     check('workspace_apps_plan', sql`${t.plan} is null or char_length(${t.plan}) between 1 and 40`),
   ],
 );
