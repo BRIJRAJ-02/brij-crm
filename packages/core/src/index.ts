@@ -152,6 +152,7 @@ export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
 export {
   deleteWorkspace,
+  countSubmissionsBeyond,
   getWorkspaceSettings,
   restoreWorkspace,
   updateWorkspace,

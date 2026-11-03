@@ -21,8 +21,8 @@
 //    id; a second run of the day finds them notified and writes nothing.
 // 1f. `views` (spec 0047): booking page view rows past a year.
 // 1f3. `submissions` (spec 0023, AC-1054): form submissions older than the workspace keeps them (Settings ›
-//    Workspace › General, 12 or 24 months; none keeps them forever), and spam past 30 days whatever the setting,
-//    with their raw answers, `limit` a batch, oldest first. Never the records they made, nor one still being filed.
+//    Workspace › General, 12 or 24 months; none keeps them forever), and spam 30 days after it became spam
+//    whatever the setting, with their raw answers, `limit` a step, oldest first, one cutoff a statement. Never the records they made, nor one still being filed.
 //    Their links to those records and their notices go with them (the foreign keys cascade); their files wait for
 //    the `uploads` phase, which removes the ones whose submission is gone.
 // 1g. `profile_counts` (spec 0051, AC-5128): link page views and presses past
@@ -461,30 +461,67 @@ async function oldFormVisits(context: WriteContext, at: Checkpoint, limit: numbe
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
+/** Since when a submission has been spam: when it was caught or marked (`spam.spamAt`), else when it arrived. */
+const SPAM_SINCE = sql`coalesce((s.spam ->> 'spamAt')::timestamptz, s.received_at)`;
+
 /**
- * Phase 1f3 (spec 0023, AC-1054): submissions older than the workspace keeps them, and spam older than 30 days
- * whatever it keeps, `limit` a batch, oldest first by `form_submissions_by_received`. One still being filed
- * (`received`, `processing`) is never taken, nor one a filing holds (`skip locked`), so the cleanup and a filing
- * never cross; the records a submission made stay, only its links to them and its notices go with it. A second run
- * finds nothing older than it took.
+ * One batch of spam past its 30 days (spec 0023, AC-1054), counted from when it became spam, whatever the workspace
+ * keeps. `received_at` bounds it too (a submission is spam no earlier than it arrived), so the walk is a range of
+ * `form_submissions_spam`, never the workspace's whole history. Exported for its EXPLAIN test.
  */
-async function oldSubmissions(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
-  const removed = await context.tx.execute(sql`
+export function spamSweepStatement(workspaceId: string, limit: number) {
+  return sql`
     delete from form_submissions where (workspace_id, id) in (
       select s.workspace_id, s.id from form_submissions s
-      join workspaces w on w.id = s.workspace_id
-      where s.workspace_id = ${context.scope.workspaceId}
-        and s.state not in ('received', 'processing')
-        and (
-          (s.state = 'spam' and s.received_at < now() - make_interval(days => ${SPAM_SUBMISSIONS_KEPT_DAYS}::integer))
-          or (w.keep_submissions_months is not null
-            and s.received_at < now() - make_interval(months => w.keep_submissions_months::integer))
-        )
+      where s.workspace_id = ${workspaceId} and s.state = 'spam'
+        and s.received_at < now() - make_interval(days => ${SPAM_SUBMISSIONS_KEPT_DAYS}::integer)
+        and ${SPAM_SINCE} < now() - make_interval(days => ${SPAM_SUBMISSIONS_KEPT_DAYS}::integer)
       order by s.received_at, s.id limit ${limit}
       for update of s skip locked
     )
-  `);
-  const count = removed.rowCount ?? 0;
+  `;
+}
+
+/**
+ * One batch of submissions older than the workspace keeps them (12 or 24 months), never one still being filed: a
+ * range of `form_submissions_by_received` up to one cutoff. Exported for its EXPLAIN test.
+ */
+export function retentionSweepStatement(workspaceId: string, months: number, limit: number) {
+  return sql`
+    delete from form_submissions where (workspace_id, id) in (
+      select s.workspace_id, s.id from form_submissions s
+      where s.workspace_id = ${workspaceId}
+        and s.received_at < now() - make_interval(months => ${months}::integer)
+        and s.state not in ('received', 'processing')
+      order by s.received_at, s.id limit ${limit}
+      for update of s skip locked
+    )
+  `;
+}
+
+/**
+ * Phase 1f3 (spec 0023, AC-1054): spam past its 30 days whatever the workspace keeps, then, only where it keeps
+ * submissions 12 or 24 months, those older than that; `limit` a step between them, oldest first. Each is its own
+ * statement with one cutoff, so a workspace that keeps everything reads only its spam. One still being filed
+ * (`received`, `processing`) is never taken, nor one a filing holds (`skip locked`); the records a submission made
+ * stay, only its links to them and its notices go with it. A second run finds nothing older than it took.
+ */
+async function oldSubmissions(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const { tx, scope } = context;
+  const spam = await tx.execute(spamSweepStatement(scope.workspaceId, limit));
+  let count = spam.rowCount ?? 0;
+  if (count < limit) {
+    const [kept] = await tx
+      .execute<{ months: number | null }>(
+        sql`select keep_submissions_months::integer as months from workspaces where id = ${scope.workspaceId}`,
+      )
+      .then((result) => result.rows);
+    const months = kept?.months;
+    if (months === 12 || months === 24) {
+      const old = await tx.execute(retentionSweepStatement(scope.workspaceId, months, limit - count));
+      count += old.rowCount ?? 0;
+    }
+  }
   const totals = plus(at.totals, { submissions: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
@@ -828,12 +865,12 @@ async function orphanUploads(
       (u.submission_id is null and u.created_at < now() - ${UPLOAD_WAIT}::interval)
       or (u.submission_id is not null and not exists (
         select 1 from form_submissions s where s.workspace_id = u.workspace_id and s.id = u.submission_id))
-      -- One our spam check caught keeps its files 30 days (SPAM_FILES_KEPT_DAYS), from when it arrived, which is when
-      -- it was caught; one a member marked as spam keeps them.
+      -- One our spam check caught keeps its files 30 days (SPAM_FILES_KEPT_DAYS), from when it became spam (spamAt,
+      -- else when it arrived, which is when it was caught); one a member marked keeps them until the submission goes.
       or exists (
         select 1 from form_submissions s where s.workspace_id = u.workspace_id and s.id = u.submission_id
           and s.state = 'spam' and coalesce(s.spam ->> 'marked', 'false') <> 'true'
-          and s.received_at < now() - ${SPAM_WAIT}::interval)
+          and coalesce((s.spam ->> 'spamAt')::timestamptz, s.received_at) < now() - ${SPAM_WAIT}::interval)
     )
     order by u.created_at limit ${UPLOADS_BATCH}
     for update skip locked

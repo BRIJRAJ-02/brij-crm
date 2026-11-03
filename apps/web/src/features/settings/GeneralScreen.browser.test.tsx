@@ -51,7 +51,13 @@ function layer(answer?: Answer) {
   });
   const get = vi.fn(() => Promise.resolve(saved));
   const data = {
-    workspace: { get, update, delete: vi.fn(() => new Promise(() => undefined)) },
+    workspace: {
+      get,
+      update,
+      // Three submissions are older than 12 months (AC-1054's confirm counts them).
+      submissionsBeyond: vi.fn(() => Promise.resolve({ count: 3, isAtLeast: false })),
+      delete: vi.fn(() => new Promise(() => undefined)),
+    },
     workspaces: { slugAvailable: (slug: string) => Promise.resolve(slug !== TAKEN) },
     workspaceLogo: { subscribe: () => () => undefined, src: () => undefined },
   } as unknown as DataLayer;
@@ -388,23 +394,54 @@ describe('saving at once', () => {
 });
 
 describe('keeping submissions (spec 0023, AC-1054)', () => {
-  it('keeps them forever until 12 or 24 months is picked, saved at once with Undo back to forever', async () => {
-    const { update, raised } = await renderGeneral();
-    const keep = page.getByRole('button', { name: new RegExp(strings.keepSubmissions) });
-    await expect.element(keep).toHaveTextContent(strings.keepChoices.forever);
-    await userEvent.click(keep);
-    await userEvent.click(page.getByRole('option', { name: strings.keepChoices['12'] }));
+  const keepSelect = () => page.getByRole('button', { name: new RegExp(strings.keepSubmissions) });
+  const pick = async (choice: '12' | '24' | 'forever') => {
+    await userEvent.click(keepSelect());
+    await userEvent.click(page.getByRole('option', { name: strings.keepChoices[choice] }));
+  };
+
+  it('asks first when it gets shorter, saying how many go tonight, and Cancel keeps it as it was', async () => {
+    const { update } = await renderGeneral();
+    await expect.element(keepSelect()).toHaveTextContent(strings.keepChoices.forever);
+    await pick('12');
+    const dialog = page.getByRole('alertdialog', { name: strings.shortenTitle(12) });
+    await expect.element(dialog).toBeVisible();
+    await expect.element(dialog.getByText(/3 submissions older than 12 months will be deleted tonight/)).toBeVisible();
+    await userEvent.click(dialog.getByRole('button', { name: /Cancel/ }));
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
+    await expect.element(keepSelect()).toHaveTextContent(strings.keepChoices.forever);
+    // Confirmed, it saves, with Undo back to forever.
+    await pick('12');
+    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: strings.shortenAction }));
     await vi.waitFor(() => {
       expect(update).toHaveBeenCalledWith('acme', { keepSubmissionsMonths: 12 });
     });
-    await expect.element(keep).toHaveTextContent(strings.keepChoices['12']);
-    const savedToast = raised.find((each) => each.message === strings.keepChanged(12));
-    expect(savedToast).toBeDefined();
-    savedToast?.action?.onAction();
+    await expect.element(keepSelect()).toHaveTextContent(strings.keepChoices['12']);
+  });
+
+  it('saves at once with Undo when it gets longer, since nothing is deleted', async () => {
+    const { update, raised } = await renderGeneral();
+    await pick('12');
+    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: strings.shortenAction }));
+    await expect.element(keepSelect()).toHaveTextContent(strings.keepChoices['12']);
+    await expect.element(page.getByRole('alertdialog', { name: strings.shortenTitle(12) })).not.toBeInTheDocument();
+    await pick('24');
+    await vi.waitFor(() => {
+      expect(update).toHaveBeenLastCalledWith('acme', { keepSubmissionsMonths: 24 });
+    });
+    await pick('forever');
     await vi.waitFor(() => {
       expect(update).toHaveBeenLastCalledWith('acme', { keepSubmissionsMonths: null });
     });
-    await expect.element(keep).toHaveTextContent(strings.keepChoices.forever);
+    // Neither longer choice asked anything: three saves, one confirm.
+    expect(update).toHaveBeenCalledTimes(3);
+    const savedToast = raised.find((each) => each.message === strings.keepChanged(undefined));
+    expect(savedToast).toBeDefined();
+    savedToast?.action?.onAction();
+    await vi.waitFor(() => {
+      expect(update).toHaveBeenLastCalledWith('acme', { keepSubmissionsMonths: 24 });
+    });
   });
 
   it('is locked for a member', async () => {

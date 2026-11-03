@@ -28,6 +28,25 @@ export const strings = {
   keepSubmissionsText: 'Older ones are deleted nightly. People and companies they made stay. Spam goes after 30 days.',
   keepChoices: { forever: 'Forever', '12': '12 months', '24': '24 months' },
   /** The choice saved: undefined is forever. */
+  /** A shorter retention's confirm: it deletes tonight, so it says how many first. */
+  shortenTitle: (months: 12 | 24) => `Keep submissions for ${String(months)} months?`,
+  shortenText: (
+    months: 12 | 24,
+    beyond: { readonly count: number; readonly isAtLeast: boolean } | 'counting' | 'unknown',
+  ) => {
+    const stay = 'People and companies they made stay.';
+    if (beyond === 'counting') return `Counting submissions older than ${String(months)} months…`;
+    if (beyond === 'unknown') return `Submissions older than ${String(months)} months will be deleted tonight. ${stay}`;
+    if (beyond.count === 0)
+      return `None are older than ${String(months)} months yet. Older ones will be deleted nightly.`;
+    const many = beyond.isAtLeast
+      ? `More than ${beyond.count.toLocaleString('en')} submissions`
+      : beyond.count === 1
+        ? '1 submission'
+        : `${beyond.count.toLocaleString('en')} submissions`;
+    return `${many} older than ${String(months)} months will be deleted tonight. ${stay}`;
+  },
+  shortenAction: 'Delete older ones',
   keepChanged: (months: 12 | 24 | undefined) =>
     months === undefined ? 'Submissions are kept forever.' : `Submissions are kept for ${String(months)} months.`,
   copyAddress: 'Copy address',

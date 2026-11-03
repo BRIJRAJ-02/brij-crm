@@ -109,6 +109,8 @@ export const AuditValue = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('time'), at: At }),
   z.strictObject({ kind: z.literal('zone'), zone: z.string() }),
   z.strictObject({ kind: z.literal('list'), items: z.array(z.string()) }),
+  /** No end: a setting that keeps something for ever (form submissions, AC-1054), worded by the screen. */
+  z.strictObject({ kind: z.literal('forever') }),
 ]);
 /** One value in a change. */
 export type AuditValue = z.infer<typeof AuditValue>;

@@ -15,7 +15,13 @@ import { createForm } from '../forms/forms.ts';
 import { purgeWorkspace } from './purge.ts';
 import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
-import { deleteWorkspace, getWorkspaceSettings, restoreWorkspace, updateWorkspace } from './settings.ts';
+import {
+  countSubmissionsBeyond,
+  deleteWorkspace,
+  getWorkspaceSettings,
+  restoreWorkspace,
+  updateWorkspace,
+} from './settings.ts';
 
 const { appUrl, identityUrl, ownerUrl, workerUrl } = inject('testDatabase');
 let db: Database;
@@ -221,6 +227,47 @@ describe('Workspace › General (AC-822)', () => {
         actor_member_id: t.ids[1],
       },
     ]);
+  });
+
+  it('counts the submissions a shorter retention would delete, for workspace.manage only (spec 0023, AC-1054)', async () => {
+    const t = await team(['member']);
+    const formId = newId();
+    const versionId = newId();
+    await testQuery(
+      ownerUrl,
+      `insert into forms (workspace_id, id, name, public_key, signing_secret, created_by_type, updated_by_type)
+       values ($1, $2, 'Contact us', $3, 'secret', 'system', 'system')`,
+      [t.workspaceId, formId, `k${newId().replaceAll('-', '')}`],
+    );
+    await testQuery(
+      ownerUrl,
+      `insert into form_versions (workspace_id, id, form_id, number, document, published_at, published_by_type, created_by_type, updated_by_type)
+       values ($1, $2, $3, 1, '{}', now(), 'system', 'system', 'system')`,
+      [t.workspaceId, versionId, formId],
+    );
+    // 13, 20 and 30 months old, one of the 30 still being filed; and one a month old.
+    for (const [days, state] of [
+      [396, 'processed'],
+      [610, 'failed'],
+      [913, 'processed'],
+      [913, 'received'],
+      [30, 'processed'],
+    ] as const) {
+      await testQuery(
+        ownerUrl,
+        `insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, state, answers, received_at, processed_at)
+         values ($1, $2, $3, $4, $5, '{}', now() - make_interval(days => $6::integer),
+                 case when $5 = 'processed' then now() else null end)`,
+        [t.workspaceId, formId, versionId, newId(), state, days],
+      );
+    }
+    const owner = t.as(t.owner, 'owner');
+    expect(await countSubmissionsBeyond(owner, 12)).toEqual({ count: 3, isAtLeast: false });
+    expect(await countSubmissionsBeyond(owner, 24)).toEqual({ count: 1, isAtLeast: false });
+    expect(await refusalOf(countSubmissionsBeyond(t.as(t.ids[0] ?? '', 'member'), 12))).toEqual({
+      code: 'FORBIDDEN',
+      message: PERMISSIONS['workspace.manage'].message,
+    });
   });
 });
 

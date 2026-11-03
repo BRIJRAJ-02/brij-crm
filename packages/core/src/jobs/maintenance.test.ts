@@ -15,13 +15,19 @@ import { deleteRecord } from '../engine/deletion.ts';
 import { newId } from '../engine/ids.ts';
 import { createImport, stageImportRows } from '../imports/service.ts';
 import { deleteNote, saveNote } from '../notes/notes.ts';
+import { markSubmissionSpam } from '../forms/submissions.ts';
 import { createTask, deleteTask } from '../tasks/tasks.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord } from '../engine/records.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { maintenanceKey, runDailyCleanup, type DailySweep } from './daily.ts';
 import { jobKinds } from './kinds/index.ts';
-import { MAINTENANCE_DAILY, maintenanceDaily } from './kinds/maintenance-daily.ts';
+import {
+  MAINTENANCE_DAILY,
+  maintenanceDaily,
+  retentionSweepStatement,
+  spamSweepStatement,
+} from './kinds/maintenance-daily.ts';
 import { kindContractProblems, type AnyKind } from './registry.ts';
 import { getJob } from './service.ts';
 import { fakeClock, jobTestKit } from '../../test/jobs-kit.ts';
@@ -496,21 +502,39 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(job.result).toMatchObject({ cleanup: { formVisits: 2 } });
   });
 
-  /** A submission `days` old in `state`, with `mark` as its one answer so the test can tell them apart. */
+  /**
+   * A submission `days` old in `state`, with `mark` as its one answer so the test can tell them apart; `spamDays`
+   * stamps when it became spam that many days ago, and `marked` says a member marked it.
+   */
   async function submission(
     workspaceId: string,
     form: { formId: string; versionId: string },
     mark: string,
     days: number,
     state: string,
+    spam: { readonly spamDays?: number; readonly marked?: boolean } = {},
   ) {
     const [row] = await testQuery<{ id: string }>(
       ownerUrl,
-      `insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, state, answers, received_at, processed_at)
-       values ($1, $2, $3, $4, $5, jsonb_build_object('mark', $6::text), now() - make_interval(days => $7::integer),
+      `insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, state, answers, spam, received_at, processed_at)
+       values ($1, $2, $3, $4, $5, jsonb_build_object('mark', $6::text),
+               case when $8::integer is null then '{}'::jsonb
+                    else jsonb_build_object('verdict', 'spam', 'marked', $9::boolean,
+                                            'spamAt', now() - make_interval(days => $8::integer)) end,
+               now() - make_interval(days => $7::integer),
                case when $5 = 'processed' then now() else null end)
        returning id`,
-      [workspaceId, form.formId, form.versionId, newId(), state, mark, days],
+      [
+        workspaceId,
+        form.formId,
+        form.versionId,
+        newId(),
+        state,
+        mark,
+        days,
+        spam.spamDays ?? null,
+        spam.marked ?? false,
+      ],
     );
     if (row === undefined) throw new Error('No submission.');
     return row.id;
@@ -523,7 +547,7 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
       [workspaceId],
     ).then((rows) => rows.map((row) => row.mark));
 
-  it('deletes submissions past the workspace’s retention and spam past 30 days, never the records they made (spec 0023, AC-1054)', async () => {
+  it('deletes submissions past the workspace’s retention and spam 30 days after it became spam, never the records they made (spec 0023, AC-1054)', async () => {
     const t = await team([]);
     const other = await team([]);
     const form = await formFor(t.workspaceId);
@@ -549,29 +573,37 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     // Still being filed: never taken, however old.
     await submission(t.workspaceId, form, 'e-in-flight', 420, 'received');
     await submission(t.workspaceId, form, 'f-failed-old', 400, 'failed');
+    // Held and waiting for review are past retention like any other; a newer held one stays.
+    await submission(t.workspaceId, form, 'i-held-old', 400, 'held');
+    await submission(t.workspaceId, form, 'j-review-old', 400, 'needs_review');
+    await submission(t.workspaceId, form, 'k-held-new', 30, 'held');
+    // Marked spam by a member: counted from the marking, not from when it arrived.
+    await submission(t.workspaceId, form, 'l-marked-recently', 200, 'spam', { spamDays: 10, marked: true });
+    await submission(t.workspaceId, form, 'm-marked-old', 60, 'spam', { spamDays: 35, marked: true });
     // Another workspace, kept forever: only its old spam goes, and never by this workspace's run.
     await submission(other.workspaceId, otherForm, 'g-forever', 900, 'processed');
     await submission(other.workspaceId, otherForm, 'h-spam-old', 40, 'spam');
 
     const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
     expect(outcomes.at(-1)).toBe('succeeded');
-    expect(await marksLeft(t.workspaceId)).toEqual(['b-recent', 'd-spam-new', 'e-in-flight']);
+    const kept = ['b-recent', 'd-spam-new', 'e-in-flight', 'k-held-new', 'l-marked-recently'];
+    expect(await marksLeft(t.workspaceId)).toEqual(kept);
     // The person the old submission made is still there; only the link to it went with the submission.
-    const [kept] = await testQuery<{ count: number }>(
+    const [still] = await testQuery<{ count: number }>(
       ownerUrl,
       'select count(*)::int as count from records where workspace_id = $1 and id = $2',
       [t.workspaceId, ada],
     );
-    expect(kept?.count).toBe(1);
+    expect(still?.count).toBe(1);
     const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
-    expect(job.result).toMatchObject({ cleanup: { submissions: 3 } });
+    expect(job.result).toMatchObject({ cleanup: { submissions: 6 } });
     // Untouched by another workspace's run.
     expect(await marksLeft(other.workspaceId)).toEqual(['g-forever', 'h-spam-old']);
 
     // A second run the next day finds nothing new to take.
     const again = await cleanUp(t.workspaceId, '2026-10-16');
     expect(again.outcomes.at(-1)).toBe('succeeded');
-    expect(await marksLeft(t.workspaceId)).toEqual(['b-recent', 'd-spam-new', 'e-in-flight']);
+    expect(await marksLeft(t.workspaceId)).toEqual(kept);
     const second = await getJob(systemScope(db, t.workspaceId), registry(), again.jobId);
     expect(second.result).toMatchObject({ cleanup: { submissions: 0 } });
 
@@ -579,6 +611,55 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     const { outcomes: forever } = await cleanUp(other.workspaceId, '2026-10-15');
     expect(forever.at(-1)).toBe('succeeded');
     expect(await marksLeft(other.workspaceId)).toEqual(['g-forever']);
+  });
+
+  it('keeps a long filed submission a member marks as spam today for its 30 days, then deletes it (spec 0023, AC-1054)', async () => {
+    const t = await team([]);
+    const form = await formFor(t.workspaceId);
+    // Marking answers the submission's view, which reads its form's document: one that parses.
+    await testQuery(ownerUrl, `update form_versions set document = '{"questions":[],"targets":{}}' where id = $1`, [
+      form.versionId,
+    ]);
+    const id = await submission(t.workspaceId, form, 'old-marked-today', 300, 'processed');
+    await markSubmissionSpam(t.owner, { submissionId: id });
+    const [stamped] = await testQuery<{ spam_at: string | null }>(
+      ownerUrl,
+      `select spam ->> 'spamAt' as spam_at from form_submissions where id = $1`,
+      [id],
+    );
+    expect(stamped?.spam_at).not.toBeNull();
+    await cleanUp(t.workspaceId, '2026-10-15');
+    expect(await marksLeft(t.workspaceId)).toEqual(['old-marked-today']);
+    // Thirty one days on.
+    await testQuery(
+      ownerUrl,
+      `update form_submissions set spam = spam || jsonb_build_object('spamAt', now() - interval '31 days') where id = $1`,
+      [id],
+    );
+    await cleanUp(t.workspaceId, '2026-10-16');
+    expect(await marksLeft(t.workspaceId)).toEqual([]);
+  });
+
+  it('walks an index for both sweeps, never the whole table (spec 0023, AC-1054)', async () => {
+    const t = await team([]);
+    for (const [statement, index] of [
+      [spamSweepStatement(t.workspaceId, 500), 'form_submissions_spam'],
+      [retentionSweepStatement(t.workspaceId, 12, 500), 'form_submissions_by_received'],
+    ] as const) {
+      const plan = await db.withWorkspace(t.workspaceId, async (tx) => {
+        // A handful of rows would make a sequential scan the cheapest plan; switched off, the planner shows whether
+        // an index can bound the walk at all.
+        await tx.execute(sql`set local enable_seqscan = off`);
+        await tx.execute(sql`set local enable_bitmapscan = off`);
+        const found = await tx.execute<{ 'QUERY PLAN': unknown }>(sql`explain (format json) ${statement}`);
+        const json = found.rows[0]?.['QUERY PLAN'];
+        return (Array.isArray(json) ? (json[0] as { Plan?: unknown }) : undefined)?.Plan;
+      });
+      const nodes = planNodes(plan);
+      const scans = nodes.filter((node) => node['Relation Name'] === 'form_submissions');
+      expect(scans.map((node) => node['Node Type'])).not.toContain('Seq Scan');
+      expect(scans.map((node) => node['Index Name'])).toContain(index);
+    }
   });
 
   it('makes the link page a membership’s own transaction didn’t make, once (26 Oct 2026)', async () => {
@@ -867,3 +948,11 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(after.done).toBe(before.done);
   });
 });
+
+/** Every node of an `explain (format json)` plan, depth first. */
+function planNodes(node: unknown): Record<string, unknown>[] {
+  if (typeof node !== 'object' || node === null) return [];
+  const here = node as Record<string, unknown>;
+  const children = Array.isArray(here.Plans) ? here.Plans.flatMap(planNodes) : [];
+  return [here, ...children];
+}

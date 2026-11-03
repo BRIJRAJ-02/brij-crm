@@ -583,7 +583,8 @@ export async function markSubmissionSpam(
         .set({
           state: 'spam',
           processedAt: null,
-          spam: sql`${formSubmissions.spam} || '{"verdict":"spam","marked":true}'::jsonb`,
+          // When it became spam: the cleanup counts its 30 days from here, not from when it arrived (AC-1054).
+          spam: sql`${formSubmissions.spam} || jsonb_build_object('verdict', 'spam', 'marked', true, 'spamAt', now())`,
           updatedAt: sql`now()`,
         })
         .where(eq(formSubmissions.id, row.id));
@@ -629,7 +630,10 @@ export async function resolveSubmission(
         .update(formSubmissions)
         .set({
           state: notSpam ? 'received' : 'spam',
-          spam: sql`${formSubmissions.spam} || ${JSON.stringify(resolved)}::jsonb`,
+          spam: notSpam
+            ? sql`${formSubmissions.spam} || ${JSON.stringify(resolved)}::jsonb`
+            : // When it became spam, for the cleanup's 30 days (AC-1054).
+              sql`${formSubmissions.spam} || ${JSON.stringify(resolved)}::jsonb || jsonb_build_object('spamAt', now())`,
           updatedAt: sql`now()`,
         })
         .where(eq(formSubmissions.id, row.id));

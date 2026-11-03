@@ -286,6 +286,10 @@ export const formSubmissions = pgTable(
       .where(sql`${t.answersHash} is not null`),
     // The daily cleanup's walk (spec 0023, AC-1054): submissions by when they arrived, oldest first.
     index('form_submissions_by_received').on(t.workspaceId, t.receivedAt, t.id),
+    // Its spam alone, for spam's 30 days whatever the workspace keeps.
+    index('form_submissions_spam')
+      .on(t.workspaceId, t.receivedAt, t.id)
+      .where(sql`${t.state} = 'spam'`),
     // The ones still to look at.
     index('form_submissions_open')
       .on(t.workspaceId, t.state)

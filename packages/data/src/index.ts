@@ -136,6 +136,7 @@ import type {
   DeletedWorkspace,
   MyProfile,
   SocialLink,
+  SubmissionsBeyond,
   WorkspaceSettings,
 } from '@crm/contracts';
 import type { GlobalSearch } from './search/global.ts';
@@ -681,6 +682,7 @@ export type {
   PublicSocialLink,
   SocialLink,
   SocialLinkNetwork,
+  SubmissionsBeyond,
   WorkspaceSettings,
 } from '@crm/contracts';
 export type { ActivityKind } from '@crm/contracts';
@@ -5753,6 +5755,12 @@ export function createDataLayer({
     workspace: {
       get: (workspace: string): Promise<WorkspaceSettings> =>
         call((options) => api.workspace.get({ workspace }, options)),
+      /**
+       * How many submissions keeping them `months` would delete tonight (AC-1054), for a shorter retention's confirm:
+       * exact, or at least `count` when `isAtLeast`. Refusals: `FORBIDDEN`.
+       */
+      submissionsBeyond: (workspace: string, months: 12 | 24): Promise<SubmissionsBeyond> =>
+        call((options) => api.workspace.submissionsBeyond({ workspace, months }, options)),
       /**
        * Renames it, changes its time zone, its default currency or country
        * (`null` takes one back to the language's region's), how long it keeps

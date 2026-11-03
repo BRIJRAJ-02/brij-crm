@@ -11,8 +11,10 @@
 // address the workspace's own.
 import {
   namesMatch,
+  SUBMISSIONS_BEYOND_CAP,
   WORKSPACE_PURGE_DAYS,
   type DeletedWorkspace,
+  type SubmissionsBeyond,
   type UpdateWorkspaceInput,
   type WorkspaceSettings,
 } from '@crm/contracts';
@@ -108,6 +110,32 @@ async function liveRow(tx: WorkspaceTx, scope: EngineScope, lock: boolean) {
 export async function getWorkspaceSettings(scope: EngineScope): Promise<WorkspaceSettings> {
   checkScope(scope);
   return inWorkspace(scope, async (tx) => toSettings(await liveRow(tx, scope, false)));
+}
+
+/**
+ * How many submissions keeping them `months` would delete tonight (spec 0023, AC-1054), for the confirm a shorter
+ * retention asks first: those older than that and not still being filed, as the cleanup takes them, counted up to
+ * `SUBMISSIONS_BEYOND_CAP` from `form_submissions_by_received` (`workspace.manage`).
+ */
+export async function countSubmissionsBeyond(scope: EngineScope, months: 12 | 24): Promise<SubmissionsBeyond> {
+  requirePermission(scope, 'workspace.manage');
+  return inWorkspace(scope, async (tx) => {
+    const [row] = await tx
+      .execute<{ count: number }>(
+        sql`select count(*)::int as count from (
+              select 1 from form_submissions
+              where workspace_id = ${scope.workspaceId}
+                and received_at < now() - make_interval(months => ${months}::integer)
+                and state not in ('received', 'processing')
+              limit ${SUBMISSIONS_BEYOND_CAP + 1}
+            ) found`,
+      )
+      .then((result) => result.rows);
+    const count = row?.count ?? 0;
+    return count > SUBMISSIONS_BEYOND_CAP
+      ? { count: SUBMISSIONS_BEYOND_CAP, isAtLeast: true }
+      : { count, isAtLeast: false };
+  });
 }
 
 /** What a settings change did: the settings now, and whether the name changed (the directory's copy follows). */

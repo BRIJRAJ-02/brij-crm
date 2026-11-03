@@ -1,4 +1,5 @@
 import {
+  countSubmissionsBeyond,
   deleteWorkspace,
   getWorkspaceSettings,
   updateWorkspace,
@@ -96,6 +97,9 @@ export async function tellMembersRestored(
 /** The open workspace's own settings, and the owner's delete. */
 export const workspaceRouter = member.workspace.router({
   get: member.workspace.get.handler(({ context }) => getWorkspaceSettings(context.scope)),
+  submissionsBeyond: member.workspace.submissionsBeyond.handler(({ context, input }) =>
+    countSubmissionsBeyond(context.scope, input.months),
+  ),
   update: member.workspace.update.handler(async ({ context, input }) => {
     const updated = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       updateWorkspace(

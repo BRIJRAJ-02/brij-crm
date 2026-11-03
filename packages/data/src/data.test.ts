@@ -547,6 +547,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     workspace: {
       get: os.workspace.get.handler(notServed),
       update: os.workspace.update.handler(notServed),
+      submissionsBeyond: os.workspace.submissionsBeyond.handler(notServed),
       delete: os.workspace.delete.handler(notServed),
     },
     brand: {

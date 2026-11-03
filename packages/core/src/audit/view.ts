@@ -253,8 +253,8 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
   };
   const flag = (value: unknown): AuditValue | undefined =>
     typeof value === 'boolean' ? { kind: 'flag', on: value } : undefined;
-  // How long submissions are kept (AC-1054): a number of months, or `null` stored for forever.
-  const keptFor = (value: unknown): AuditValue => count(value) ?? { kind: 'text', text: 'forever' };
+  // How long submissions are kept (AC-1054): a number of months, or `null` stored for forever, which the screen words.
+  const keptFor = (value: unknown): AuditValue => count(value) ?? { kind: 'forever' };
   const change = (
     field: AuditChange['field'],
     was: AuditValue | undefined,

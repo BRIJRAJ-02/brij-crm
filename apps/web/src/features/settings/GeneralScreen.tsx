@@ -2,10 +2,10 @@
 // Purpose: Settings › Workspace › General (spec 0031, AC-822, AC-823): the workspace's name, web address, time zone,
 // the currency and country new money and phone fields start in, and how long form submissions are kept (AC-1054).
 // Main task: rename it (saved when the field is left or on Enter, with Undo), change its address (its own dialog), or
-// pick its time zone, currency, country or how long submissions are kept (saved at once, with Undo); owners can
-// delete it.
+// pick its time zone, currency, country or how long submissions are kept (saved at once, with Undo; a shorter
+// retention asks first, saying how many it deletes tonight); owners can delete it.
 // Leaves out: a Save bar and a leave check (each change saves on its own), the logo upload (Brand holds it, spec 0060; a row here links there), and members (their own page).
-import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
+import { isDataError, type DataLayer, type SubmissionsBeyond, type WorkspaceSettings } from '@crm/data';
 import { useWorkspaceLogo } from '@crm/data/react';
 import {
   Avatar,
@@ -19,6 +19,7 @@ import {
   Field,
   focusLater,
   InfoTip,
+  Modal,
   Select,
   SettingsRow,
   SettingsSection,
@@ -115,6 +116,11 @@ export function GeneralScreen({
   const [zoneBusy, setZoneBusy] = useState(false);
   const [regionBusy, setRegionBusy] = useState(false);
   const [keepBusy, setKeepBusy] = useState(false);
+  // A shorter retention waiting for its confirm (it deletes tonight), and how many it would take once counted.
+  const [shorten, setShorten] = useState<{ readonly next: 12 | 24; readonly was: 12 | 24 | null } | undefined>(
+    undefined,
+  );
+  const [beyond, setBeyond] = useState<SubmissionsBeyond | 'counting' | 'unknown'>('counting');
   const [isChanging, setChanging] = useState(false);
   // A fresh address dialog per opening, so its field starts from the address again.
   const [opened, setOpened] = useState(0);
@@ -505,12 +511,52 @@ export function GeneralScreen({
               onChange={(choice) => {
                 const next = monthsOf(choice);
                 const was = settings.keepSubmissionsMonths ?? null;
-                if (next !== undefined && next !== was) setKeep(next, was, true);
+                if (next === undefined || next === was) return;
+                // Keeping them longer deletes nothing, so it saves at once; shorter deletes tonight, so it asks first.
+                if (next === null || (was !== null && next > was)) {
+                  setKeep(next, was, true);
+                  return;
+                }
+                setBeyond('counting');
+                setShorten({ next, was });
+                data.workspace
+                  .submissionsBeyond(slug, next)
+                  .then((found) => {
+                    setBeyond(found);
+                  })
+                  .catch(() => {
+                    setBeyond('unknown');
+                  });
               }}
             />
           </SettingsRow>
         </Card>
       </SettingsSection>
+      <Modal
+        title={strings.shortenTitle(shorten?.next ?? 12)}
+        variant="confirm"
+        tone="danger"
+        isOpen={shorten !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setShorten(undefined);
+        }}
+        actions={
+          <>
+            <Button slot="close">{strings.cancel}</Button>
+            <Button
+              variant="danger-solid"
+              onPress={() => {
+                if (shorten !== undefined) setKeep(shorten.next, shorten.was, true);
+                setShorten(undefined);
+              }}
+            >
+              {strings.shortenAction}
+            </Button>
+          </>
+        }
+      >
+        {strings.shortenText(shorten?.next ?? 12, beyond)}
+      </Modal>
       {mayDelete && (
         <SettingsSection title={strings.danger}>
           <Card>

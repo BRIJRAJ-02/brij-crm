@@ -84,6 +84,7 @@ const READS: ReadonlySet<string> = new Set([
   'joinRequests.list',
   // Slice 7: Workspace › General, Account › Profile, and a deleted workspace as its owner sees it.
   'workspace.get',
+  'workspace.submissionsBeyond',
   'profile.get',
   // The link page's own accent and photos (spec 0060): a read of schema auth through a definer.
   'profile.look',

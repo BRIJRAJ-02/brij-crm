@@ -78,6 +78,19 @@ export const UpdateWorkspaceInput = WorkspaceScoped.extend({
 /** A change to the workspace's settings. */
 export type UpdateWorkspaceInput = z.infer<typeof UpdateWorkspaceInput>;
 
+/** The most submissions a shorter retention's count names exactly; past it, the answer says at least this many. */
+export const SUBMISSIONS_BEYOND_CAP = 10_000;
+
+/** How many submissions a shorter retention would delete (spec 0023, AC-1054): asked before the confirm. */
+export const SubmissionsBeyondInput = WorkspaceScoped.extend({ months: KeepSubmissionsMonths });
+/** How many submissions a shorter retention would delete. */
+export type SubmissionsBeyondInput = z.infer<typeof SubmissionsBeyondInput>;
+
+/** That many, exactly, or at least `SUBMISSIONS_BEYOND_CAP` when `isAtLeast`. */
+export const SubmissionsBeyond = z.object({ count: z.number().int().min(0), isAtLeast: z.boolean() });
+/** How many submissions a shorter retention would delete. */
+export type SubmissionsBeyond = z.infer<typeof SubmissionsBeyond>;
+
 /** Deleting the workspace: the owner types its name to confirm (AC-823, the owner, 21 October 2026). */
 export const DeleteWorkspaceInput = WorkspaceScoped.extend({
   confirmName: z.string().max(200, { error: 'Type the workspace’s name to confirm.' }),
@@ -99,12 +112,14 @@ export type DeletedWorkspace = z.infer<typeof DeletedWorkspace>;
  * The open workspace's settings. `get` answers any member, by its address or
  * one it held before (the answer's `slug` is the current one); `update` needs
  * `workspace.manage` and refuses 409 `SLUG_TAKEN` on `slug` for an address
- * another workspace holds or held; `delete` is owners only (`workspace.delete`) and
+ * another workspace holds or held; `submissionsBeyond` (`workspace.manage`) counts the submissions a retention of that
+ * many months would delete, capped at `SUBMISSIONS_BEYOND_CAP`; `delete` is owners only (`workspace.delete`) and
  * refuses 422 `CONFIRM_MISMATCH` unless `confirmName` is the workspace's name.
  */
 export const workspaceContract = {
   get: oc.input(WorkspaceScoped).output(WorkspaceSettings),
   update: oc.input(UpdateWorkspaceInput).output(WorkspaceSettings),
+  submissionsBeyond: oc.input(SubmissionsBeyondInput).output(SubmissionsBeyond),
   delete: oc.input(DeleteWorkspaceInput).output(DeletedWorkspace),
 };
 
