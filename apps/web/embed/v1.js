@@ -668,12 +668,20 @@
   }
 
   window.addEventListener('message', function (event) {
-    if (event.origin !== ORIGIN) return;
     var data = event.data;
     if (!data || typeof data !== 'object' || data.timefix !== 1 || typeof data.type !== 'string') return;
     for (var i = 0; i < frames.length; i += 1) {
       var entry = frames[i];
       if (entry.frame.contentWindow !== event.source) continue;
+      // Not `event.origin !== ORIGIN`. A booking page given as `handle/slug` is built on the app host, which
+      // answers 308 to the apex, so the page that loads is on a different origin than this script — and every
+      // message it sent was dropped: the skeleton never cleared and the dialog never closed itself after a
+      // booking (reported 3 November 2026). The frame is one we made and pointed at our own address, and only
+      // its own window can be `event.source`, so that identity is the guard. The origin is pinned to whatever
+      // the frame first speaks from and any later change is refused, so a frame navigated somewhere else
+      // cannot start talking to us halfway through.
+      if (entry.from === undefined) entry.from = event.origin;
+      else if (entry.from !== event.origin) return;
       // A hidden frame (a closed dialog) measures nothing: its last height stands.
       if (data.type === 'height' && typeof data.height === 'number' && isFinite(data.height) && data.height > 0) {
         entry.height(Math.max(0, Math.min(Math.ceil(data.height), MAX_HEIGHT)));
