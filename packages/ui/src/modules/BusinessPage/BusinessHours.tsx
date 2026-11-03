@@ -11,11 +11,14 @@ export interface BusinessHoursProps {
   readonly hours: PlaceHoursShape;
   /** The place's time zone: the hours are its wall clock's. */
   readonly timeZone: string;
+  /** The language and clock style to read times in (the place's, `placeLocale`); the visitor's when absent. */
+  readonly locale?: string;
 }
 
 /** The week's hours as a description list, today first in weight and marked "Today". */
-export function BusinessHours({ hours, timeZone }: BusinessHoursProps) {
-  const { locale, timeZone: visitorZone } = useFormatSettings();
+export function BusinessHours({ hours, timeZone, locale: given }: BusinessHoursProps) {
+  const { locale: visitorLocale, timeZone: visitorZone } = useFormatSettings();
+  const locale = given ?? visitorLocale;
   const now = useNow();
   const rows = weekRows(hours, now, timeZone, locale);
   return (

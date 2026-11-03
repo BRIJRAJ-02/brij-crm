@@ -1,7 +1,8 @@
 // Brief
 // Purpose: a business's public page at /<company-handle> and /<company-handle>/<place-slug> (spec 0066, B4 lite): what
 // it is, whether it is open, its menu, hours and where it is, and the way to reserve.
-// Main task: a guest decides to go, and reserves (or, until the reservation flow lands, calls or gets directions).
+// Main task: a guest decides to go, and reserves (or, until the reservation flow lands, calls to book, else gets
+// directions: never a dead end).
 // Leaves out: booking itself (the reservation flow's own page), reviews (B6), services and team (B1), events (B8).
 //
 // It draws the shell's copy at once when there is a recent one (boot.ts), and reads the page again behind it, so an
@@ -119,7 +120,8 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
   const directions = directionsLinks(place);
   return (
     <BusinessPage
-      name={shown.places.length > 1 ? `${shown.name} ${place.name}` : shown.name}
+      name={shown.name}
+      {...(shown.places.length > 1 ? { placeName: place.name } : {})}
       kind={kindWord(shown.kind)}
       description={shown.description}
       about={shown.about}
@@ -128,7 +130,8 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
         : {})}
       photos={shown.gallery}
       amenities={shown.amenities}
-      place={place}
+      // A place with no phone of its own takes the business's, so Call to book reaches somebody.
+      place={{ ...place, phone: place.phone ?? shown.phone }}
       places={shown.places.map((each) => ({
         name: each.name,
         href: `/${encodeURIComponent(shown.handle)}/${encodeURIComponent(each.slug)}`,

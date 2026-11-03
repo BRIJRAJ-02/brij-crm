@@ -1,6 +1,7 @@
-// The business page (spec 0066, B4 lite) and its block parts: a restaurant with its gallery, menu, Reserve coming
-// soon, amenities, hours and location; a page with no photos and no menu; several places; Reserve open; loading; and
-// each part alone. The stories' clock is Thursday 8 October 2026, 14:30 in London.
+// The business page (spec 0066, B4 lite) and its block parts: a restaurant with its gallery, menu, Call to book (until
+// online reservations open), amenities, hours and location; Directions with no phone; no panel without Table seating;
+// several places; Reserve open; loading; and each part alone. The stories' clock is Thursday 8 October 2026, 14:30 in
+// London, the place's own zone; its times read in its country's clock style whatever the browser's.
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { settleAnimations } from '../../workbench/animations.ts';
@@ -13,6 +14,7 @@ import {
   BusinessMenu,
   BusinessPage,
   BusinessReserve,
+  businessAction,
   type BusinessPagePlace,
   type BusinessPhotoItem,
 } from './BusinessPage.tsx';
@@ -45,6 +47,7 @@ const PLACE: BusinessPagePlace = {
   city: 'Bengaluru',
   postcode: '560038',
   phone: '+91 80 4567 8901',
+  country: 'GB',
   timeZone: 'Europe/London',
   hours: {
     weekly: {
@@ -116,7 +119,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A restaurant: the gallery, the open status, the menu, Reserve coming soon, About, hours and location. */
+/**
+ * A restaurant: the gallery, the open status, the menu, About, hours and location. Online reservations aren't open, so
+ * the page's one action is Call to book, in the panel and the phone's bar, never a disabled button. No logo: the
+ * name's initials stand in.
+ */
 export const Restaurant: Story = {
   parameters: { crm: { preview: true, screenshot: false } },
   play: async ({ canvasElement }) => {
@@ -126,22 +133,65 @@ export const Restaurant: Story = {
     // Thursday 14:30 in London: between lunch and dinner, so it opens again at 18:00.
     await expect(canvas.getAllByText('Opens at 18:00').length).toBeGreaterThan(0);
     await expect(canvas.getByRole('navigation', { name: 'Sections' })).toBeVisible();
-    await expect(canvas.getAllByRole('button', { name: 'Reserve a table' })[0]).toBeDisabled();
+    await expect(canvas.queryByRole('button', { name: 'Reserve a table' })).toBeNull();
+    await expect(canvas.queryByText('Coming soon')).toBeNull();
+    for (const call of canvas.getAllByRole('link', { name: 'Call to book' })) {
+      await expect(call).toHaveAttribute('href', 'tel:+918045678901');
+    }
+    // The gallery's tiles say what each photo shows.
+    await expect(canvas.getAllByRole('button', { name: 'Open photo 1 of 6: The bar at dusk' }).length).toBeGreaterThan(
+      0,
+    );
+    // Times in the place's clock style (London: 24 hour) whatever the browser's.
+    await expect(canvas.getAllByText('12:00 – 23:00').length).toBeGreaterThan(0);
+  },
+};
+
+/** Reservations not open and no phone: Directions is the action, never a dead end. */
+export const DirectionsOnly: Story = {
+  args: { place: { ...PLACE, phone: undefined } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('link', { name: 'Call to book' })).toBeNull();
+    const directions = canvas.getAllByRole('link', { name: 'Directions in Google Maps (opens in a new tab)' });
+    await expect(directions.length).toBeGreaterThan(0);
+  },
+};
+
+/** A place in Bengaluru: its hours read on a 12 hour clock, as people there read them. */
+export const TwelveHourClock: Story = {
+  args: { place: { ...PLACE, country: 'IN' } },
+  play: async ({ canvasElement }) => {
+    await expect((await within(canvasElement).findAllByText(/12:00\s?pm – 11:00\s?pm/i)).length).toBeGreaterThan(0);
   },
 };
 
 /** No photos, no menu, no amenities: the header leads, and the tabs hold Hours and Location. */
 export const Plain: Story = {
   args: { photos: [], menu: undefined, amenities: [], about: undefined, reserve: undefined },
+  play: async ({ canvasElement }) => {
+    // Without Table seating there is no action to carry, so no side panel and no phone bar.
+    await expect(within(canvasElement).queryByRole('complementary')).toBeNull();
+  },
 };
 
-/** Several places: the picker links each, the one shown marked. */
+/** Several places: the place on its own line under the name, and the other places after Location. */
 export const SeveralPlaces: Story = {
   args: {
+    placeName: 'Indiranagar',
     places: [
       { name: 'Indiranagar', href: '/somewhere-nowhere/indiranagar', isCurrent: true },
       { name: 'Koramangala', href: '/somewhere-nowhere/koramangala', isCurrent: false },
     ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await settleAnimations();
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Somewhere Nowhere' })).toBeVisible();
+    await expect(canvas.getByText('Indiranagar', { selector: 'p' })).toBeVisible();
+    const others = canvas.getByRole('region', { name: 'Other places' });
+    await expect(within(others).getByRole('link', { name: 'Koramangala' })).toBeVisible();
+    await expect(within(others).queryByRole('link', { name: 'Indiranagar' })).toBeNull();
   },
 };
 
@@ -178,13 +228,17 @@ export const Gallery: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(
-      within(canvasElement).getAllByRole('button', { name: 'Open photo 1 of 6' })[0] as HTMLElement,
+      within(canvasElement).getAllByRole('button', { name: 'Open photo 1 of 6: The bar at dusk' })[0] as HTMLElement,
     );
     const viewer = await body.findByRole('dialog');
     await settleAnimations();
-    await expect(within(viewer).getByText('Photo 1 of 6')).toBeVisible();
+    // The heading says what the photo shows; its place is said once, in the status the viewer announces politely.
+    await expect(within(viewer).getByRole('heading', { name: 'The bar at dusk' })).toBeVisible();
+    await expect(within(viewer).getByRole('status')).toHaveTextContent('Photo 1 of 6');
+    await expect(within(viewer).getAllByText(/Photo 1 of 6/).length).toBe(1);
     await userEvent.keyboard('{ArrowRight}');
-    await waitFor(() => expect(within(viewer).getByText('Photo 2 of 6')).toBeVisible());
+    await waitFor(() => expect(within(viewer).getByRole('status')).toHaveTextContent('Photo 2 of 6'));
+    await expect(within(viewer).getByRole('heading', { name: 'The terrace' })).toBeVisible();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(body.queryByRole('dialog')).toBeNull());
   },
@@ -222,12 +276,18 @@ export const Menu: Story = {
   ),
 };
 
-/** Reserve a table, coming soon and open. */
+/** The page's one action: Reserve a table once open; until then Call to book, or Directions with no phone. */
 export const Reserve: Story = {
-  render: () => (
-    <Stage direction="column">
-      <BusinessReserve state={{ kind: 'soon' }} />
-      <BusinessReserve state={{ kind: 'open', href: '/somewhere-nowhere/reserve' }} />
-    </Stage>
-  ),
+  render: () => {
+    const actions = [
+      businessAction({ kind: 'open', href: '/somewhere-nowhere/reserve' }, PLACE.phone, DIRECTIONS.google),
+      businessAction({ kind: 'soon' }, PLACE.phone, DIRECTIONS.google),
+      businessAction({ kind: 'soon' }, undefined, DIRECTIONS.google),
+    ];
+    return (
+      <Stage direction="column">
+        {actions.map((action) => action !== undefined && <BusinessReserve key={action.kind} action={action} />)}
+      </Stage>
+    );
+  },
 };

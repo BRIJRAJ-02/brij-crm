@@ -32,21 +32,21 @@ export const strings = {
   websiteNewTab: 'Website (opens in a new tab)',
   /** Reserve a table. */
   reserve: 'Reserve a table',
-  comingSoon: 'Coming soon',
-  reserveSoon: 'Online reservations are coming soon. Call to book a table.',
+  /** Until online reservations open: the place's phone. */
+  callToBook: 'Call to book',
   /** The gallery. */
   photos: 'Photos',
   seeAllPhotos: (count: number) => `See all ${String(count)} photos`,
   photoOf: (index: number, count: number) => `Photo ${String(index)} of ${String(count)}`,
-  openPhoto: (index: number, count: number) => `Open photo ${String(index)} of ${String(count)}`,
+  /** A gallery tile's name: its place, then what it shows when the business described it. */
+  openPhoto: (index: number, count: number, description?: string) =>
+    `Open photo ${String(index)} of ${String(count)}${description === undefined || description === '' ? '' : `: ${description}`}`,
   previousPhoto: 'Previous photo',
   nextPhoto: 'Next photo',
   noPhotos: 'No photos yet',
   /** The places picker. */
   otherPlaces: 'Other places',
   viewPlace: (name: string) => `View ${name}`,
-  /** The logo beside the name, which the name already says: decorative. */
-  logoAlt: '',
   /** Loading. */
   loading: 'Loading the page',
 } as const;

@@ -1,7 +1,7 @@
 // The business page's hours in words (spec 0066, AC-6641): open now and until when, when it opens next, and the
 // week's rows with today marked, all on the place's own clock.
 import { describe, expect, it } from 'vitest';
-import { openStatus, weekRows, zoneCity } from './hours.ts';
+import { openStatus, placeLocale, wallTime, weekRows, zoneCity } from './hours.ts';
 
 const HOURS = {
   weekly: {
@@ -79,5 +79,16 @@ describe('zoneCity', () => {
   it('names a zone by its city', () => {
     expect(zoneCity('Asia/Kolkata')).toBe('Kolkata');
     expect(zoneCity('America/New_York')).toBe('New York');
+  });
+
+  it('reads times in the place country’s clock style, in the visitor’s language', () => {
+    // A visitor whose browser says en-US sees a London place on a 24 hour clock, a Bengaluru one on a 12 hour one.
+    expect(wallTime('18:00', placeLocale('en-US', 'GB'))).toBe('18:00');
+    expect(wallTime('18:00', placeLocale('en-GB', 'IN'))).toMatch(/^6:00\s?pm$/i);
+    expect(wallTime('18:00', placeLocale('en-GB', 'US'))).toMatch(/^6:00\s?PM$/i);
+    expect(placeLocale('en-US', 'GB').startsWith('en-GB')).toBe(true);
+    // An unknown country keeps the visitor's own.
+    expect(placeLocale('en-US', undefined)).toBe('en-US');
+    expect(placeLocale('en-US', 'gb!')).toBe('en-US');
   });
 });

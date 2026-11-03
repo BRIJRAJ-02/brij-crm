@@ -88,7 +88,7 @@ export function BusinessGallery({ photos, name, isLoading = false }: BusinessGal
             className={styles.tile}
             data-shot="mosaic"
             data-first={index === 0 || undefined}
-            aria-label={strings.openPhoto(index + 1, count)}
+            aria-label={strings.openPhoto(index + 1, count, shot.alt)}
             onClick={() => {
               setOpen(index);
             }}
@@ -116,7 +116,7 @@ export function BusinessGallery({ photos, name, isLoading = false }: BusinessGal
             <button
               type="button"
               className={styles.tile}
-              aria-label={strings.openPhoto(index + 1, count)}
+              aria-label={strings.openPhoto(index + 1, count, shot.alt)}
               onClick={() => {
                 setOpen(index);
               }}
@@ -158,6 +158,7 @@ export function BusinessGallery({ photos, name, isLoading = false }: BusinessGal
       <Viewer
         photos={shots}
         label={label}
+        title={(index) => shots[index]?.alt ?? name}
         at={open}
         onMove={setOpen}
         onClose={(at) => {
@@ -176,18 +177,22 @@ export function BusinessGallery({ photos, name, isLoading = false }: BusinessGal
 }
 
 /**
- * The viewer: the library's Modal holding one photo large, its place beside its name, Previous and Next in the
- * footer. The arrow keys move while it is open, and a swipe across the photo does too.
+ * The viewer: the library's Modal holding one photo large, what it shows as the heading and its place ("Photo 2 of 6")
+ * as the status beside it, which the Modal announces politely as the photo changes; Previous and Next in the footer.
+ * The arrow keys move while it is open, and a swipe across the photo does too.
  */
 function Viewer({
   photos,
   label,
+  title,
   at,
   onMove,
   onClose,
 }: {
   readonly photos: readonly BusinessPhotoItem[];
   readonly label: (index: number) => string;
+  /** The dialog's heading: what the photo shows, or the business's name; its place is the status beside it. */
+  readonly title: (index: number) => string;
   readonly at: number | undefined;
   readonly onMove: (index: number) => void;
   readonly onClose: (at: number) => void;
@@ -216,7 +221,7 @@ function Viewer({
   if (photo === undefined) return null;
   return (
     <Modal
-      title={label(shown)}
+      title={title(shown)}
       variant="window"
       isWide
       status={strings.photoOf(shown + 1, count)}

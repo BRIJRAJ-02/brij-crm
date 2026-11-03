@@ -5,7 +5,25 @@ import { WEEK_DAYS, type PlaceHoursShape, type WeekDay } from '@crm/contracts/ho
 import { nextOpening, openAt, rangesOn, weekDayOf } from '@crm/contracts/hospitality-hours';
 import { strings } from './strings.ts';
 
-/** A wall time `HH:MM` in the visitor's language ("18:00", "6:00 PM"). */
+/**
+ * The locale a place's times read in: the visitor's language, with the place's country's own clock style ("18:00" for a
+ * place in London, "6:00 pm" for one in Bengaluru), whatever the visitor's browser would use. The clock style is the
+ * country's main language's (`und-IN` is `hi-IN`, a 12 hour clock); an unknown or missing country keeps the visitor's.
+ */
+export function placeLocale(visitor: string, country: string | undefined): string {
+  if (country === undefined || !/^[A-Z]{2}$/.test(country)) return visitor;
+  try {
+    // The country's main language, without its script (`en-Latn-GB` falls back to `en`'s 12 hour clock; `en-GB` is 24).
+    const native = `${new Intl.Locale('und', { region: country }).maximize().language}-${country}`;
+    const hourCycle = new Intl.DateTimeFormat(native, { hour: 'numeric' }).resolvedOptions().hourCycle;
+    const language = new Intl.Locale(visitor).language;
+    return new Intl.Locale(language, { region: country, ...(hourCycle === undefined ? {} : { hourCycle }) }).toString();
+  } catch {
+    return visitor;
+  }
+}
+
+/** A wall time `HH:MM` in the given locale ("18:00", "6:00 PM"). */
 export function wallTime(time: string, locale: string): string {
   const [hours = 0, minutes = 0] = time.split(':').map(Number);
   return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(

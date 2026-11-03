@@ -43,11 +43,11 @@
     animation-delay: calc(var(--duration-press) * 0.75);
   }
 
-  .logo {
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
-    border-radius: var(--radius-md);
-    object-fit: cover;
+  /* The name and, for a business with several places, the place on its own line under it. */
+  .titles {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
   }
 
   .name {
@@ -55,6 +55,13 @@
     font: var(--text-note-title);
     letter-spacing: var(--tracking-note-title);
     text-wrap: balance;
+  }
+
+  .placeName {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    color: var(--text-secondary);
   }
 
   .facts {
@@ -119,6 +126,9 @@
   }
 
   .directions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
     color: var(--link);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
@@ -290,10 +300,6 @@
     transition: background-color var(--duration-hover) var(--ease-hover);
   }
 
-  .placeLink[aria-current] {
-    border-color: var(--text);
-  }
-
   .placeLink:focus-visible {
     outline: none;
     box-shadow: var(--shadow-focus);
@@ -326,13 +332,9 @@
     letter-spacing: var(--tracking-heading);
   }
 
-  .panelWhere {
-    display: flex;
-    gap: var(--space-6);
-    margin: 0;
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
-    color: var(--text-secondary);
+  /* Directions under the panel's action: a quiet link, centred under the button. */
+  .panelCard > .directions {
+    align-self: center;
   }
 
   /* A phone's bar at the foot of the screen: the name and whether it is open, and Reserve. */
@@ -390,7 +392,7 @@
 
   /* A laptop and up: the panel beside the sections, stuck under the tabs, and no bar. */
   @media (width >= 1024px) {
-    .body {
+    .body[data-panel] {
       grid-template-columns: minmax(0, 1fr) var(--size-panel);
     }
 

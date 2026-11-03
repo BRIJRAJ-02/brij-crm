@@ -84,6 +84,7 @@ export {
   type BusinessPageProps,
   type BusinessPhotoItem,
   type BusinessReserveProps,
+  type BusinessReserveState,
 } from '../modules/BusinessPage/BusinessPage.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
