@@ -80,7 +80,6 @@ export async function insertPlace(
   id: string,
   fields: PlaceFields,
   by: string,
-  hours: PlaceHours | typeof EMPTY_HOURS = EMPTY_HOURS,
 ): Promise<void> {
   checkZone(fields.timeZone);
   await lockKey(tx, `places:${scope.workspaceId}`);
@@ -98,7 +97,7 @@ export async function insertPlace(
     workspaceId: scope.workspaceId,
     id,
     ...placeColumns(fields),
-    hours,
+    hours: EMPTY_HOURS,
     publicKey: newKey(),
     menuKey: newKey(),
     position,

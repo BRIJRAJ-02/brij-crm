@@ -2,25 +2,6 @@
 // country or currency yet and keeps its zone at UTC, so the business card starts from the browser instead: its
 // region, that region's currency, and its zone. Pure, so the guesses are tested; the person can change each one.
 
-import type { PlaceHours } from '@crm/data';
-
-/** Lunch and dinner, each a named service window, Tuesday to Sunday: a restaurant's usual week, and Monday off. */
-const SERVICES = [
-  { from: '12:00', to: '15:00', name: 'Lunch' },
-  { from: '18:00', to: '22:00', name: 'Dinner' },
-] as const;
-
-/**
- * A new place's first opening hours (spec 0068, foolproof: reservations and the menu work from the first click),
- * lunch 12:00 to 15:00 and dinner 18:00 to 22:00, Tuesday to Sunday. The person changes them under Business.
- */
-export const FIRST_HOURS: PlaceHours = {
-  weekly: Object.fromEntries(
-    (['tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map((day) => [day, SERVICES.map((range) => ({ ...range }))]),
-  ),
-  exceptions: [],
-};
-
 /** The currency most places in a region price in, for the regions Timefix sells to first; others start empty. */
 const CURRENCY_OF: Readonly<Record<string, string>> = {
   GB: 'GBP',

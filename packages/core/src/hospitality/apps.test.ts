@@ -186,20 +186,6 @@ describe('the business and its places (AC-6507, AC-6508)', () => {
     });
   });
 
-  it('opens the first place with the hours the business card brings', async () => {
-    const w = await workspace();
-    const lunchDinner = [
-      { from: '12:00', to: '15:00', name: 'Lunch' },
-      { from: '18:00', to: '22:00', name: 'Dinner' },
-    ];
-    await installApp(w.owner, {
-      app: 'table_seating',
-      business: { ...CARD, place: { ...CARD.place, hours: { weekly: { tue: lunchDinner }, exceptions: [] } } },
-    });
-    const business = await getBusiness(w.owner);
-    expect(business.places[0]?.hours).toEqual({ weekly: { tue: lunchDinner }, exceptions: [] });
-  });
-
   it('saves the profile, adds places up to 20 and stores checked hours', async () => {
     const w = await workspace();
     await installApp(w.owner, { app: 'table_seating', business: CARD });

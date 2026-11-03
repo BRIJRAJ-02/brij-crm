@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FIRST_HOURS, firstBusinessGuess, regionOf } from './first-business.ts';
+import { firstBusinessGuess, regionOf } from './first-business.ts';
 
 describe('the first install’s guesses', () => {
   it('starts a new workspace from the browser: region, its currency, its zone', () => {
@@ -25,13 +25,5 @@ describe('the first install’s guesses', () => {
       currency: null,
       timeZone: 'UTC',
     });
-  });
-
-  it('opens a new place for lunch and dinner, Tuesday to Sunday', () => {
-    expect(FIRST_HOURS.weekly.mon).toBeUndefined();
-    expect(FIRST_HOURS.weekly.sat).toEqual([
-      { from: '12:00', to: '15:00', name: 'Lunch' },
-      { from: '18:00', to: '22:00', name: 'Dinner' },
-    ]);
   });
 });

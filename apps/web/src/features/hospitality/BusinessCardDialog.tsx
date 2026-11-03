@@ -8,7 +8,7 @@ import { Button, CountryPicker, CurrencyPicker, Field, FormRow, Form, Modal, Sel
 import { useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
-import { FIRST_HOURS, firstBusinessGuess } from './first-business.ts';
+import { firstBusinessGuess } from './first-business.ts';
 import { strings } from './strings.ts';
 
 /** Props for the business card. */
@@ -115,7 +115,6 @@ function CardForm({
         timeZone,
         ...(addressLine.trim() === '' ? {} : { addressLine: addressLine.trim() }),
         ...(city.trim() === '' ? {} : { city: city.trim() }),
-        hours: FIRST_HOURS,
       },
       currency,
     }).then(
