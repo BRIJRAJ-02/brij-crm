@@ -156,6 +156,9 @@ export const AUDIT_ACTIONS = [
   // A managed booking page template changed (spec 0037, AC-1333 to AC-1335): the target is the template; `after`
   // names the locks it holds and how many members were added and removed.
   'managed_page.changed',
+  // A member's own page overwritten by its template's locked parts (spec 0037, AC-1334): one entry on that
+  // page, so its owner opening History sees why their hours or limits changed under them.
+  'managed_page.propagated',
   // Bookings › Routing (spec 0037, AC-1374, AC-1392): the shared settings (Won means), a skill or someone's skills,
   // each with before and after; and a Test run that named an email, the target the workspace.
   'routing.settings_changed',

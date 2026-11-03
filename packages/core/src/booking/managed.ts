@@ -146,7 +146,7 @@ async function propagateLocked(tx: WorkspaceTx, scope: EngineScope, template: Te
   if (locked.includes('hours')) sets.push(sql`schedule_id = null`, sql`hours_mode = 'mine'`);
   if (sets.length === 0) return;
   const by = actorRow(scope.actor);
-  await tx.execute(sql`
+  const changed = await tx.execute<{ id: string }>(sql`
     update booking_pages p
     set ${sql.join(sets, sql`, `)},
       updated_at = now(), updated_by_type = ${by.type}, updated_by_id = ${by.id}::uuid,
@@ -154,7 +154,19 @@ async function propagateLocked(tx: WorkspaceTx, scope: EngineScope, template: Te
     from booking_pages t
     where t.workspace_id = ${scope.workspaceId}::uuid and t.id = ${template.id}::uuid
       and p.workspace_id = t.workspace_id and p.template_id = t.id and p.deleted_at is null
+    returning p.id
   `);
+  // One entry per page that changed, on that page (AC-1334). The template's own entry says the template was
+  // edited; it does not reach the owner who opens History on their page and finds their hours rewritten with
+  // nothing saying why. Each row names the parts that were overwritten, so the answer is in the line itself.
+  for (const page of changed.rows) {
+    await writeAudit(tx, scope.workspaceId, scope.actor, {
+      action: 'managed_page.propagated',
+      targetType: 'booking_page',
+      targetId: page.id,
+      after: { templateId: template.id, name: template.title, locked },
+    });
+  }
 }
 
 /** A member's first name in the slug alphabet, for `<template slug>-<first name>` (the Value sourcing table). */

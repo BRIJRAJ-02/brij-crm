@@ -405,6 +405,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     bookingPage,
     z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
   ),
+  /** A member's page rewritten by its template (spec 0037, AC-1334): which parts were locked stays in the row. */
+  entry(['managed_page.propagated'], bookingPage, NoParams),
   /** Bookings › Routing (spec 0037): its settings or skills changed, or a Test run; what changed stays in the row. */
   entry(['routing.settings_changed', 'routing.skills_changed', 'routing.tested'], workspace, NoParams),
 ]);
