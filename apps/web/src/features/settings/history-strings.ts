@@ -310,6 +310,8 @@ const SENTENCES: SentenceTemplates = {
   'editors.changed': (entry, w) => actor(`changed who can edit ${w.thing(entry.target)}`),
   // A managed page (spec 0037, AC-1333 to AC-1335): what changed is said by the counts when people moved, since
   // that is the change with a consequence — a page was made or deleted for each of them.
+  // On the member's own page, not the template: this is the line that explains a change they did not make.
+  'managed_page.propagated': (entry, w) => actor(`updated ${w.thing(entry.target)} from its managed page`),
   'managed_page.changed': (entry, w) =>
     entry.params.added === 0 && entry.params.removed === 0
       ? actor(`changed the ${w.thing(entry.target)} managed page`)

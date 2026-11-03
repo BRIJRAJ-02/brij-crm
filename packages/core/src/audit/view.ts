@@ -795,6 +795,10 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     }
     // A managed page template (spec 0037, AC-1333 to AC-1335): the target is the template page, and how many
     // members were added and removed. The counts are written as numbers, not lists, so no member id is listed here.
+    // The owner's own page, rewritten by its template. No params: what matters is that it happened and to which
+    // page, and the parts are in the row for anyone reading it closely.
+    case 'managed_page.propagated':
+      return { ...base, action, target: thing('booking_page', names.bookingPages), params: {}, changes: [] };
     case 'managed_page.changed': {
       const count = (value: unknown) =>
         typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;

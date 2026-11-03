@@ -25,7 +25,14 @@ import { createForm, publishForm, saveFormDraft, setFormTarget } from './forms.t
 import { processSubmission } from './process.ts';
 import { getPublicForm, submitForm } from './public.ts';
 import { confirmationRows, SIGNED_WORD } from './confirm.ts';
-import { dropPartial, partialTokenHash, resumePartial, savePartial, resumeLinkTarget } from './partials.ts';
+import {
+  dropPartial,
+  partialTokenHash,
+  resumePartial,
+  savePartial,
+  resumeLinkTarget,
+  sendResumeLink,
+} from './partials.ts';
 import { completeFormVisit, countFormEvent, formAnalytics } from './visits.ts';
 import type { CaptchaVerdict } from './spam.ts';
 
@@ -191,6 +198,51 @@ describe('save and resume (AC-6319)', () => {
     // And no record: a partial reaches the CRM nowhere.
     const people = await w.query<{ n: number }>(sql`select count(*)::int as n from records`);
     expect(people[0]?.n).toBe(0);
+    const emails = await w.query<{ n: number }>(sql`select count(*)::int as n from emails`);
+    expect(emails[0]?.n).toBe(0);
+  });
+
+  // "Email me the link" (AC-6319). Nothing drove this service until now, and behind that silence it threw a
+  // ZodError on every call while the email it queued could never render — two independent faults, both
+  // invisible because no test referenced it. These cases are the coverage, not the fix: they call it for real
+  // and read the row it queues, so a param that the email's own schema refuses fails here.
+  it('queues one resume email to the address the form already holds, keyed by the day', async () => {
+    const w = await workspace();
+    const form = await stepsForm(w);
+    const { scope, formId } = await publicScope(form.publicKey);
+    const saved = await savePartial(scope, {
+      formId,
+      answers: { name: 'Asha Rao', email: 'asha@example.com' },
+      stepId: 's2',
+    });
+
+    expect(await sendResumeLink(scope, { formId, resumeToken: saved.resumeToken })).toEqual({ sent: true });
+
+    const rows = await w.query<{ to_address: string; kind: string; key: string; params: unknown }>(
+      sql`select to_address, kind, key, params from emails`,
+    );
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row?.to_address).toBe('asha@example.com');
+    // The key takes ids, counts and times and no free text, so the day goes in as digits: one link a day.
+    expect(row?.key).toMatch(/\d{8}/u);
+    // A path, never a whole address: every email link is joined to the app's own origin, and a full URL in a
+    // param is refused by the guard at render. This is the fault that made the feature unusable.
+    const params = row?.params as { readonly resumePath?: unknown };
+    expect(params.resumePath).toBe(`/f/${form.publicKey}?resume=${saved.resumeToken}`);
+    expect(String(params.resumePath)).not.toContain('://');
+  });
+
+  it('sends nothing, and says why, when the form holds no email answer to send it to', async () => {
+    const w = await workspace();
+    const form = await stepsForm(w);
+    const { scope, formId } = await publicScope(form.publicKey);
+    const saved = await savePartial(scope, { formId, answers: { name: 'Asha Rao' }, stepId: 's2' });
+
+    expect(await sendResumeLink(scope, { formId, resumeToken: saved.resumeToken })).toEqual({
+      sent: false,
+      reason: 'no-email',
+    });
     const emails = await w.query<{ n: number }>(sql`select count(*)::int as n from emails`);
     expect(emails[0]?.n).toBe(0);
   });

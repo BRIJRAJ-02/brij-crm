@@ -97,6 +97,7 @@ export const AUDIT_KINDS = {
     'rotation.changed',
     'editors.changed',
     'managed_page.changed',
+    'managed_page.propagated',
     'routing.settings_changed',
     'routing.skills_changed',
     'routing.tested',
