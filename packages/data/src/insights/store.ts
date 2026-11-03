@@ -20,6 +20,12 @@ import type {
 } from '@crm/contracts';
 import { toDataError } from '../errors.ts';
 
+/**
+ * The most sessions a table holds (500, the house cap for a list More grows, as Bookings' meetings): past it More
+ * stops and the screen says to filter.
+ */
+export const INSIGHT_SESSIONS_MAX = 500;
+
 /** How soon after an answer coming back to the page reads again. Try again always reads. */
 export const INSIGHTS_RETURN_GAP_MS = 30_000;
 
@@ -47,6 +53,8 @@ export type InsightSessionsState =
       readonly status: 'ready';
       readonly items: readonly InsightSession[];
       readonly hasMore: boolean;
+      /** More would go past `INSIGHT_SESSIONS_MAX`: the table says to filter instead. */
+      readonly isCapped: boolean;
       readonly isLoadingMore: boolean;
       readonly isRefreshing: boolean;
     };
@@ -254,6 +262,7 @@ export function createInsightsStore(deps: InsightsDeps) {
           status: 'ready',
           items: page.items,
           hasMore: page.nextCursor !== undefined,
+          isCapped: false,
           isLoadingMore: false,
           isRefreshing: false,
         };
@@ -266,7 +275,7 @@ export function createInsightsStore(deps: InsightsDeps) {
     let loadingMore = false;
     const more = () => {
       const current = read.get();
-      if (loadingMore || current.status !== 'ready' || cursor === undefined) return;
+      if (loadingMore || current.status !== 'ready' || cursor === undefined || current.isCapped) return;
       loadingMore = true;
       read.set({ ...current, isLoadingMore: true });
       deps
@@ -278,10 +287,16 @@ export function createInsightsStore(deps: InsightsDeps) {
             cursor = page.nextCursor;
             // A row already shown (a visit that moved on since) is kept where it is, never twice.
             const seen = new Set(now.items.map((item) => item.id));
+            const items = [...now.items, ...page.items.filter((item) => !seen.has(item.id))].slice(
+              0,
+              INSIGHT_SESSIONS_MAX,
+            );
+            const isCapped = items.length >= INSIGHT_SESSIONS_MAX && page.nextCursor !== undefined;
             read.set({
               ...now,
-              items: [...now.items, ...page.items.filter((item) => !seen.has(item.id))],
-              hasMore: page.nextCursor !== undefined,
+              items,
+              hasMore: page.nextCursor !== undefined && !isCapped,
+              isCapped,
               isLoadingMore: false,
             });
           },

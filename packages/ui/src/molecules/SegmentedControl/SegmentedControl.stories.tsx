@@ -242,3 +242,27 @@ export const VisibleLabel: Story = {
 export const VisibleLabelDisabled: Story = {
   args: { ...VisibleLabel.args, isDisabled: true },
 };
+
+/** Short labels for the eye, their names in full for a screen reader (Insights' periods). */
+export const ShortLabels: Story = {
+  // Its baselines are owed: they are shot only in the pinned image (`pnpm test:visual --update`), never borrowed.
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <SegmentedControl
+        label="Period"
+        size="compact"
+        defaultValue="30"
+        segments={[
+          { value: '7', label: '7D', accessibleLabel: 'Last 7 days' },
+          { value: '30', label: '30D', accessibleLabel: 'Last 30 days' },
+          { value: '365', label: '12M', accessibleLabel: 'Last 12 months' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('radio', { name: 'Last 30 days' })).toBeChecked();
+    await expect(canvas.getByText('12M')).toBeVisible();
+  },
+};

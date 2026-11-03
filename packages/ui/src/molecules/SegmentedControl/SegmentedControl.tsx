@@ -27,6 +27,11 @@ export interface Segment {
    * readers as `aria-keyshortcuts`. The screen handles the key and lists it in its shortcut help.
    */
   readonly kbd?: string;
+  /**
+   * Its name in full when the label is a short form (Insights' "7D" is "Last 7 days"): screen readers hear this, the
+   * eye reads `label`.
+   */
+  readonly accessibleLabel?: string;
 }
 
 /** Props for SegmentedControl. */
@@ -155,6 +160,14 @@ export function SegmentedControl({
                   {segment.label}
                 </span>
                 <VisuallyHidden>{segment.label}</VisuallyHidden>
+              </>
+            ) : segment.accessibleLabel !== undefined && segment.hue === undefined ? (
+              // A short form for the eye, its name in full for a screen reader.
+              <>
+                <span className={styles.label} aria-hidden="true">
+                  {segment.label}
+                </span>
+                <VisuallyHidden>{segment.accessibleLabel}</VisuallyHidden>
               </>
             ) : segment.hue === undefined ? (
               <span className={styles.label}>{segment.label}</span>

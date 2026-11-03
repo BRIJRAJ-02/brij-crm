@@ -5,6 +5,7 @@
 // Main task: see whether a page is working and which source brings people who finish, then share the numbers.
 // Leaves out: live updates (a visit sends no change event; the page reads again on return), per product panels
 //   (menus, QR codes, reservations and events come with those products), and goals and alerts.
+import { INSIGHT_SESSIONS_MAX } from '@crm/data';
 import type {
   DataLayer,
   InsightPage,
@@ -225,7 +226,11 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
           const { from: _from, to: _to, ...rest } = search;
           go({ ...rest, range: found });
         }}
-        segments={RANGES.map((each) => ({ value: each, label: strings.rangeShort[each] }))}
+        segments={RANGES.map((each) => ({
+          value: each,
+          label: strings.rangeShort[each],
+          accessibleLabel: strings.rangeFull[each],
+        }))}
       />
       <DateRangePicker
         label={strings.customPeriod}
@@ -480,7 +485,11 @@ function Sessions({
   return (
     <Card
       title={strings.sessions}
-      footerNote={strings.sessionsHint}
+      footerNote={
+        sessions.status === 'ready' && sessions.isCapped
+          ? strings.sessionsCapped(INSIGHT_SESSIONS_MAX)
+          : strings.sessionsHint
+      }
       {...(sessions.status === 'ready' && sessions.hasMore
         ? {
             footer: (

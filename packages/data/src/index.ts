@@ -255,6 +255,8 @@ export type {
   SharedInsights,
   VisitLanding,
 } from '@crm/contracts';
+// The most sessions the Insights table holds (the house cap for a list More grows).
+export { INSIGHT_SESSIONS_MAX } from './insights/store.ts';
 export type {
   InsightNumbersState,
   InsightRead,
