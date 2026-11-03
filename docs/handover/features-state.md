@@ -70,6 +70,10 @@ on main with it.
 - In an embed the booking details step is as tall as the details: what it covers leaves the layout, so the
   popup shrinks after the calendar (`321245b2c`).
 
+- **Consent** (spec 0023, AC-1053) is built: a Consent question kept as an insert-only consent record on the
+  person (migration `0165`), required on a site's own submit too, only a tick writes a record, and the
+  Newsletter and Job application templates ask for it. Item 1 under "Not built" is done.
+
 ## Built, pushed, **not landed**
 
 Two branches. Land `car/propagated-audit` first — it is the one that unblocks deploys.
