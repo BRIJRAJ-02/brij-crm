@@ -277,6 +277,8 @@ export const ACCESS_TABLE = {
   // guest's entry in front of the same services.
   visitTimes: { permission: 'services.calendar' },
   bookVisit: { permission: 'services.calendar' },
+  // Linking a staff profile to a member, refused while their visits and meetings overlap.
+  linkStaffMember: { permission: 'services.manage' },
   readBrandLogo: { anyMember: true },
   saveWorkspaceBrand: { permission: 'workspace.manage' },
   requireBrandEditor: { permission: 'workspace.manage' },

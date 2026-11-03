@@ -3,6 +3,7 @@
 // read through the `BusyReader`, the host's confirmed bookings read from
 // Postgres, then the pure engine. Shared by the public slots read and the
 // booking's recheck under the host lock.
+import { appointmentSpans } from '../visits/busy.ts';
 import { and, asc, eq, gt, inArray, lt, ne } from 'drizzle-orm';
 import {
   BookingDefaultView,
@@ -273,6 +274,12 @@ export async function memberBookings(
       blockEnd: row.blockEnd ?? row.endsAt,
       countsToLimit: row.pageId === pageId,
     });
+  }
+  // One person, two engines (spec 0066, AC-6606): a staff profile linked to the member holds their time with each live
+  // appointment hold, so every reader of member busy (slots, rechecks, moves, round robin, routing) sees it. It
+  // blocks only, and never counts toward a page's daily limit.
+  for (const span of await appointmentSpans(tx, memberIds, from, to)) {
+    found.get(span.memberId)?.push({ start: span.start, end: span.end, countsToLimit: false });
   }
   return found;
 }

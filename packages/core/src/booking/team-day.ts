@@ -9,6 +9,7 @@
 // read from it (AC-770). A booking is as Bookings shows it to this reader (`booking/seen.ts`, AC-771, AC-1262); a
 // block's label and time off's reason only to the member and Manage over them (AC-772, AC-1286). Issues are derived
 // here, nothing stored (AC-1436). It writes nothing.
+import { appointmentSpans } from '../visits/busy.ts';
 import { sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import {
@@ -326,6 +327,9 @@ export async function readTeamDay(
             `)
           ).rows;
 
+    // Client visits of members linked to a staff profile (spec 0066, AC-6606): busy, never the client or service.
+    const visits = await appointmentSpans(tx, ids, from, to);
+
     const clip = (start: number, end: number): Ms => ({
       start: Math.max(start, from.getTime()),
       end: Math.min(end, to.getTime()),
@@ -382,6 +386,13 @@ export async function readTeamDay(
               startsAt: iso(span.starts_at),
               endsAt: iso(span.ends_at),
             }))),
+        ...visits
+          .filter((visit) => visit.memberId === row.id)
+          .map((visit): TeamDayItem => ({
+            kind: 'busy',
+            startsAt: visit.start.toISOString(),
+            endsAt: visit.end.toISOString(),
+          })),
       ];
       columns.push({
         memberId: row.id,
@@ -414,6 +425,9 @@ export async function readTeamDay(
         })),
         calendar: [
           ...busy.map((span) => ({ start: Date.parse(iso(span.starts_at)), end: Date.parse(iso(span.ends_at)) })),
+          ...visits
+            .filter((visit) => visit.memberId === row.id)
+            .map((visit) => ({ start: visit.start.getTime(), end: visit.end.getTime() })),
           ...(row.id === me
             ? [...own.events.filter((event) => !event.allDay), ...own.busy].map((span) => ({
                 start: Date.parse(span.startsAt),
