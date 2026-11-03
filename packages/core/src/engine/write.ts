@@ -204,6 +204,8 @@ export interface Change {
    * Team week, Availability and Bookings' Host away flags read again in every tab. Never published by id.
    */
   readonly timeOff: readonly string[];
+  /** Places whose visits the write made, changed or moved (spec 0066 B7): one `visits` row naming them. */
+  readonly visits: readonly string[];
   /** Automations whose definition or run outcomes the write changed (parity #53): one `automations` outbox row. */
   readonly automations: readonly string[];
   /**
@@ -370,6 +372,7 @@ const LIST_KEYS = [
   'meetings',
   'schedules',
   'timeOff',
+  'visits',
   'automations',
   'nav',
   'comments',
@@ -506,6 +509,7 @@ export async function runWrite<T>(
           meetings: [] as MeetingChange[],
           schedules: [] as string[],
           timeOff: [] as string[],
+          visits: [] as string[],
           automations: [] as string[],
           nav: [] as string[],
           comments: [] as CommentChange[],
@@ -552,6 +556,7 @@ export async function runWrite<T>(
             append(collected.meetings, part.meetings);
             append(collected.schedules, part.schedules);
             append(collected.timeOff, part.timeOff);
+            append(collected.visits, part.visits);
             append(collected.automations, part.automations);
             append(collected.nav, part.nav);
             append(collected.comments, part.comments);
@@ -612,6 +617,7 @@ export async function runWrite<T>(
           meetings: [...collected.meetings],
           schedules: [...new Set(collected.schedules)],
           timeOff: [...new Set(collected.timeOff)],
+          visits: [...new Set(collected.visits)],
           automations: [...new Set(collected.automations)],
           ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
           nav: [...new Set(collected.nav)],

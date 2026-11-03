@@ -35,7 +35,7 @@ describe('vercel.json (handle addresses)', () => {
     const sources = config.rewrites.map((rule) => rule.source);
     expect(sources).toContain(PROFILE_SOURCE);
     expect(sources).toContain(PAGE_SOURCE);
-    expect(sources.indexOf(PAGE_SOURCE)).toBeLessThan(sources.indexOf('/((?!api/|api$|f/|b/|embed/).*)'));
+    expect(sources.indexOf(PAGE_SOURCE)).toBeLessThan(sources.indexOf('/((?!api/|api$|f/|b/|r/|embed/).*)'));
     expect(config.headers.map((rule) => rule.source)).toEqual(
       expect.arrayContaining([APP_HEADER_SOURCE, HANDLE_HEADER_SOURCE]),
     );
@@ -48,6 +48,8 @@ describe('vercel.json (handle addresses)', () => {
     ['/ada-lovelace/30min', '/api/handle'],
     ['/ada/30min-2', '/api/handle'],
     ['/b/AbCdEfGhIjKlMnOp', '/book.html'],
+    ['/r/AbCdEfGhIjKlMnOp', '/reserve.html'],
+    ['/r/AbCdEfGhIjKlMnOp/manage', '/reserve.html'],
     ['/f/contact', '/form.html'],
     ['/', '/index.html'],
     ['/sign-in', '/index.html'],
@@ -108,6 +110,8 @@ describe('the public booking host', () => {
     '/ada/30min/',
     '/b/AbCdEfGhIjKlMnOp',
     '/b/AbCdEfGhIjKlMnOp/manage',
+    '/r/AbCdEfGhIjKlMnOp',
+    '/r/AbCdEfGhIjKlMnOp/manage',
     '/f/contact',
     '/embed/v1.js',
     '/embed.js',
@@ -155,8 +159,14 @@ describe('the public booking host', () => {
   });
 
   it('keeps every path vercel.json sends to the booking or form bundle', () => {
-    for (const pathname of ['/ada', '/ada-lovelace/30min', '/b/AbCdEfGhIjKlMnOp', '/f/contact']) {
-      expect(['/book.html', '/form.html', '/api/handle']).toContain(destinationOf(pathname));
+    for (const pathname of [
+      '/ada',
+      '/ada-lovelace/30min',
+      '/b/AbCdEfGhIjKlMnOp',
+      '/f/contact',
+      '/r/AbCdEfGhIjKlMnOp',
+    ]) {
+      expect(['/book.html', '/form.html', '/reserve.html', '/api/handle']).toContain(destinationOf(pathname));
       expect(servedOnPublicHost(pathname), pathname).toBe(true);
     }
   });

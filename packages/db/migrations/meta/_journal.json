@@ -1177,6 +1177,13 @@
       "when": 1795510000000,
       "tag": "0172_visits_engine",
       "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1795600000000,
+      "tag": "0173_table_service_door",
+      "breakpoints": true
     }
   ]
 }

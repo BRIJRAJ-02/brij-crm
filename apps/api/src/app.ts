@@ -10,6 +10,7 @@ import {
   enterWorkspace,
   jobKinds,
   NO_CALENDAR,
+  createSlotCache,
   twoFactorRequiredBy,
   type BookingCalendar,
   type JobRegistry,
@@ -64,6 +65,7 @@ import type { Mailer } from './mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
+import { mountPublicTables } from './public/tables.ts';
 import { mountBrandCss } from './public/brand-css.ts';
 import { mountLook } from './public/look.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
@@ -146,7 +148,10 @@ const RUNS_ON = (work: Promise<unknown>): void => {
  * and a company's domain in its logo's path (a workspace's data, spec 0059) as `:domain`.
  */
 export function redactedPath(path: string): string {
-  return path.replace(/(\/public\/booking\/manage\/)[^/]+/, '$1:token').replace(/^(\/api\/logos\/)[^/]+/, '$1:domain');
+  return path
+    .replace(/(\/public\/booking\/manage\/)[^/]+/, '$1:token')
+    .replace(/(\/public\/tables\/[^/]+\/manage\/)[^/]+/, '$1:token')
+    .replace(/^(\/api\/logos\/)[^/]+/, '$1:domain');
 }
 
 /** The route an error report names: a sign in route by its Better Auth path (`auth /sign-in/email-otp`), else the path. */
@@ -331,6 +336,8 @@ export function createApp({
   const isFreeDomain = calendar?.isFreeDomain ?? createFreeDomains();
   // Home's metrics (spec 0041): each workspace's figures, kept a minute in this process.
   const homeMetrics = createHomeMetricsCache();
+  // The visit engine's offered times (spec 0066): 30 seconds per place and day, purged by any write at the place.
+  const visitSlots = createSlotCache();
   // Free and busy and the event writes (spec 0024): one service, so a member's change forgets its kept answers.
   const calendarEvents =
     calendar === undefined
@@ -467,6 +474,8 @@ export function createApp({
     const origin = c.get('origin');
     // A public booking page's own writes (book, chat, the guest page's changes) from the booking origin.
     if (origin === bookingOrigin && c.req.path.startsWith('/api/public/booking/')) return next();
+    // A reservation page's own writes (reserve, change, cancel; spec 0066 B7) from the same public origin.
+    if (origin === bookingOrigin && c.req.path.startsWith('/api/public/tables/')) return next();
     // A link page's press beacon (spec 0051, AC-5125), from the public origin the page is served on; that one route.
     if (origin === bookingOrigin && LINK_PAGE_PRESS.test(c.req.path) && c.req.method === 'POST') return next();
     if (!origin || !allowedOrigins.has(origin)) {
@@ -515,6 +524,7 @@ export function createApp({
         isFreeDomain,
         bookingCalendar: booking,
         homeMetrics,
+        visitSlots,
         bookingLinkKey: linkKey,
         rules,
         mailer,
@@ -739,6 +749,21 @@ export function createApp({
     edgeCache,
     // A link page's pictures (spec 0061), from the same private store its photos are kept in.
     ...(pictureFiles === undefined ? {} : { files: pictureFiles }),
+  });
+
+  // Table seating's guest page (spec 0066 B7 lite): a place's public key, no session; writes passed the Origin check.
+  mountPublicTables(app, {
+    db,
+    busy: bookingBusy,
+    slotCache: visitSlots,
+    wakeRelay,
+    limiter: services.bookingLimiter ?? createMemoryLimiter(),
+    ics: {
+      uidDomain: new URL(env.APP_URL).hostname,
+      publicOrigin: bookingOrigin,
+      organizerEmail: senderAddress(env.MAIL_FROM) ?? `bookings@${new URL(env.APP_URL).hostname}`,
+    },
+    ...(services.now === undefined ? {} : { now: services.now }),
   });
 
   // The marketing site's beacon (spec 0047, AC-1627): only from SITE_ORIGINS, 60 a minute per address.

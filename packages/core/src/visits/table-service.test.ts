@@ -67,10 +67,22 @@ describe('setup (B7 lite)', () => {
     const saved = await saveTableSetup(w.owner, { placeId: w.placeId, rules: first.rules });
     expect(saved.saved).toBe(true);
     expect(saved.ready).toBe(true);
+    // Saved off line: guests see nothing until Publish.
+    expect(saved.rules.online).toBe(false);
+    expect(saved.publicKey).toMatch(/^[A-Za-z0-9_-]{16}$/);
     // Saving again updates the one service, never a second.
     await saveTableSetup(w.owner, { placeId: w.placeId, rules: { ...first.rules, partyMax: 12 } });
     const again = await getTableSetup(w.owner, { placeId: w.placeId });
     expect(again.serviceId).toBe(saved.serviceId);
+    // Publish refuses a broken page, with the one line fix.
+    await expect(
+      saveTableSetup(w.owner, { placeId: w.placeId, rules: { ...first.rules, partyMax: 12, online: true } }),
+    ).rejects.toMatchObject({
+      refusal: {
+        code: 'CONFLICT',
+        message: 'No table seats 12. Add a larger table, join tables, or lower the largest party.',
+      },
+    });
     expect(again.steps[1]).toEqual({
       step: 'tables',
       done: false,
@@ -111,7 +123,10 @@ describe('the Service list and status moves (AC-6560, AC-6561)', () => {
     const w = await visitWorkspace(db);
     const t1 = await addResource(w, 'T1', { min: 1, max: 4 });
     const setup = await getTableSetup(w.owner, { placeId: w.placeId });
-    const saved = await saveTableSetup(w.owner, { placeId: w.placeId, rules: { ...setup.rules, noticeMinutes: 0 } });
+    const saved = await saveTableSetup(w.owner, {
+      placeId: w.placeId,
+      rules: { ...setup.rules, noticeMinutes: 0, partyMax: 4, online: true },
+    });
     const variantId = (
       await w.sql<{ id: string }>(
         sql`select id::text from service_variants where service_id = ${saved.serviceId ?? ''}::uuid`,

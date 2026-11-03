@@ -306,6 +306,8 @@ export interface VisitBookInput {
   };
   readonly source: AppointmentSource;
   readonly idempotencyKey: string;
+  /** A consent the client ticked (news and offers), kept on their Person with the words they were shown. */
+  readonly consent?: { readonly purpose: string; readonly wording: string } | undefined;
 }
 
 /** A booked visit: its id, whether it was a retry, the keys the client keeps, and its items. */
@@ -628,6 +630,7 @@ export async function placeVisit(
           throw error;
         }
         await auditSetup(tx, scope, 'visit.created', { appointmentId, placeId, source: input.source });
+        context.record({ visits: [placeId] });
         // 4. The client's Person, by email only, in a savepoint: a refusal keeps the visit.
         let personRecordId: string | undefined;
         if (client.email !== undefined) {
@@ -647,6 +650,15 @@ export async function placeVisit(
                 .update(appointments)
                 .set({ personRecordId })
                 .where(and(eq(appointments.workspaceId, scope.workspaceId), eq(appointments.id, appointmentId)));
+              // A ticked consent (spec 0023 records, source `appointment`): ticking is a grant, never a withdrawal.
+              if (input.consent !== undefined) {
+                await tx.execute(sql`
+                  insert into consent_records
+                    (workspace_id, record_id, purpose, granted, wording, wording_version, source_type, source_id)
+                  values (${scope.workspaceId}::uuid, ${personRecordId}::uuid, ${input.consent.purpose}, true,
+                    ${input.consent.wording.slice(0, 2000)}, 1, 'appointment', ${appointmentId}::uuid)
+                `);
+              }
             }
           }
         }

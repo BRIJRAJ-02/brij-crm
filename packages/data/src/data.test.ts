@@ -724,6 +724,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setEarlyAccess: os.operator.setEarlyAccess.handler(notServed),
     },
     // The Hospitality setup (spec 0065) is driven against its own fake in `hospitality/store.test.ts`.
+    tables: {
+      setup: os.tables.setup.handler(notServed),
+      saveSetup: os.tables.saveSetup.handler(notServed),
+      day: os.tables.day.handler(notServed),
+      setStatus: os.tables.setStatus.handler(notServed),
+    },
     hospitality: {
       apps: os.hospitality.apps.handler(notServed),
       install: os.hospitality.install.handler(notServed),

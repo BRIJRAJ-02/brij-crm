@@ -40,7 +40,7 @@ import { setRequestScope } from './monitoring/sentry.ts';
 import type { SignedOutNotice } from './realtime/signed-out.ts';
 import type { RealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
-import type { WebhookKey, WebhookUrlProblem } from '@crm/core';
+import type { SlotCache, WebhookKey, WebhookUrlProblem } from '@crm/core';
 import type { WebhookSender } from './jobs/webhook-deliver.ts';
 
 /** What every procedure receives. */
@@ -110,6 +110,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   bookingCalendar: BookingCalendar;
   /** Home's metrics (spec 0041): each workspace's figures, kept a minute per workspace and week in this process. */
   homeMetrics: HomeMetricsCache;
+  /** The visit engine's offered times cache (spec 0066), shared with the public table routes: writes purge it. */
+  visitSlots: SlotCache;
   /** The key a booking's guest page token derives from (`booking-link.ts`): Book someone in, Copy guest link. */
   bookingLinkKey: ManageLinkKey;
   /** The one way to send email (spec 0005): invitations (spec 0031) go through it. */

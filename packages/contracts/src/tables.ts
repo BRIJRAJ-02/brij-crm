@@ -1,0 +1,276 @@
+// Table seating (spec 0066 B7 lite; spec 0065 AC-6550 to AC-6565): the guest's reservation page at
+// timefix.com/r/<key> (public, no session) and the staff's setup, Service list and status moves (the RPC contract).
+// One schema per shape, the type beside it under the same name.
+import { oc } from '@orpc/contract';
+import * as z from 'zod';
+import { PlaceHours } from './hospitality.ts';
+import { Timestamp } from './values/attribute-values.ts';
+import { Uuid } from './values/ids.ts';
+import { APPOINTMENT_STATUSES, LOOKUP_PATTERN, VISIT_LIMITS } from './visits-model.ts';
+import { WorkspaceScoped } from './workspaces.ts';
+
+/** A place date on its own wall clock, `YYYY-MM-DD`. */
+export const PlaceDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a day.');
+/** A place date. */
+export type PlaceDate = z.infer<typeof PlaceDate>;
+
+/** A party size as a guest or the desk asks for it. */
+export const PartySize = z
+  .number()
+  .int('Choose a whole number of guests.')
+  .min(VISIT_LIMITS.partyMin, 'Choose at least 1 guest.')
+  .max(VISIT_LIMITS.partyMax, 'Choose at most 100 guests.');
+/** A party size. */
+export type PartySize = z.infer<typeof PartySize>;
+
+/** The occasions a guest may mark (0065 AC-6551; the competitor pass adds date night). */
+export const TABLE_OCCASIONS = ['birthday', 'anniversary', 'date', 'business', 'other'] as const;
+/** One occasion. */
+export const TableOccasion = z.enum(TABLE_OCCASIONS, { error: 'Pick an occasion.' });
+/** One occasion. */
+export type TableOccasion = z.infer<typeof TableOccasion>;
+
+/** A visit status on the wire. */
+export const VisitStatus = z.enum(APPOINTMENT_STATUSES);
+/** A visit status. */
+export type VisitStatus = z.infer<typeof VisitStatus>;
+
+/** The reservation rules a guest's flow reads, and the setup screen edits (0065 AC-6550). */
+export const TableRules = z.object({
+  minutes: z.number().int(),
+  holds: z
+    .array(z.object({ size: z.number().int(), minutes: z.number().int() }))
+    .max(VISIT_LIMITS.holdSizes)
+    .readonly(),
+  partyMin: z.number().int(),
+  partyMax: z.number().int(),
+  stepMinutes: z.number().int(),
+  noticeMinutes: z.number().int(),
+  windowDays: z.number().int(),
+  coversCap: z.number().int().optional(),
+  changeCutoffMinutes: z.number().int(),
+  cancelCutoffMinutes: z.number().int(),
+  online: z.boolean(),
+});
+/** The reservation rules. */
+export type TableRules = z.infer<typeof TableRules>;
+
+// ---- The guest's page (public) ----
+
+/** A reservation page's facts: the place, whether it takes reservations now, the party range and the days. */
+export const PublicTablePage = z.object({
+  key: z.string(),
+  business: z.object({ name: z.string() }),
+  place: z.object({
+    name: z.string(),
+    addressLine: z.string().optional(),
+    city: z.string().optional(),
+    postcode: z.string().optional(),
+    phone: z.string().optional(),
+    timeZone: z.string(),
+  }),
+  /** False while Table seating is off or its setup isn't published: the page says so and offers the phone. */
+  taking: z.boolean(),
+  partyMin: z.number().int(),
+  partyMax: z.number().int(),
+  windowDays: z.number().int(),
+  cancelCutoffMinutes: z.number().int(),
+  changeCutoffMinutes: z.number().int(),
+  hours: PlaceHours,
+  /** Today on the place's wall clock. */
+  today: PlaceDate,
+});
+/** A reservation page's facts. */
+export type PublicTablePage = z.infer<typeof PublicTablePage>;
+
+/** The times query: a party on one place date. */
+export const PublicTableTimesQuery = z.object({
+  party: z.coerce.number().pipe(PartySize),
+  date: PlaceDate,
+});
+/** The times query. */
+export type PublicTableTimesQuery = z.infer<typeof PublicTableTimesQuery>;
+
+/** The offered starts of a day, ISO instants in order. */
+export const PublicTableTimes = z.object({ date: PlaceDate, times: z.array(Timestamp) });
+/** The offered starts of a day. */
+export type PublicTableTimes = z.infer<typeof PublicTableTimes>;
+
+const GuestName = z
+  .string()
+  .trim()
+  .min(1, 'Give your name.')
+  .max(VISIT_LIMITS.clientNameMax, 'Use 120 characters or fewer.');
+const GuestEmail = z.email({ error: 'Give an email address like name@example.com.' }).trim().toLowerCase().max(254);
+const GuestPhone = z.string().trim().min(5, 'Give a phone number we can call.').max(VISIT_LIMITS.clientPhoneMax);
+const GuestNote = z.string().trim().max(VISIT_LIMITS.noteMax, 'Use 500 characters or fewer.');
+
+/** A guest's reservation (0065 AC-6551): the party, the time, who they are, and the bot checks' fields. */
+export const PublicReserveInput = z.object({
+  idempotencyKey: Uuid,
+  party: PartySize,
+  start: Timestamp,
+  name: GuestName,
+  email: GuestEmail,
+  phone: GuestPhone,
+  note: GuestNote.optional(),
+  occasion: TableOccasion.optional(),
+  /** News and offers from the business: unticked by default, separate from the reservation, stored as a consent. */
+  marketing: z.boolean().default(false),
+  timeZone: z.string().max(64).optional(),
+  company_url: z.string().max(200).optional(),
+  startedAt: z.number().int().nonnegative().optional(),
+});
+/** A guest's reservation. */
+export type PublicReserveInput = z.infer<typeof PublicReserveInput>;
+
+/** A reservation as its guest sees it: never another guest, a table or why a time isn't offered. */
+export const PublicTableVisit = z.object({
+  lookupCode: z.string(),
+  status: VisitStatus,
+  start: Timestamp,
+  end: Timestamp,
+  party: z.number().int(),
+  name: z.string(),
+  occasion: TableOccasion.optional(),
+  note: z.string().optional(),
+  /** Until when the guest may change or cancel it here; absent once it can't be. */
+  changeUntil: Timestamp.optional(),
+  cancelUntil: Timestamp.optional(),
+});
+/** A reservation as its guest sees it. */
+export type PublicTableVisit = z.infer<typeof PublicTableVisit>;
+
+/** The answer to a reservation: the visit, and the manage link's token (shown once, kept by the page). */
+export const PublicReserved = z.object({ visit: PublicTableVisit, manageToken: z.string().optional() });
+/** The answer to a reservation. */
+export type PublicReserved = z.infer<typeof PublicReserved>;
+
+/** A lookup code as typed: any case, spaces and dashes allowed. */
+export const LookupCode = z
+  .string()
+  .trim()
+  .transform((typed) => typed.replace(/[\s-]/g, '').toUpperCase())
+  .pipe(z.string().regex(LOOKUP_PATTERN, 'Use the 8 letters and numbers from your confirmation.'));
+
+/** Finding a reservation without the link: the code from the confirmation and the email it was made with. */
+export const PublicTableLookupInput = z.object({ code: LookupCode, email: GuestEmail });
+/** Finding a reservation by code and email. */
+export type PublicTableLookupInput = z.infer<typeof PublicTableLookupInput>;
+
+/** Who the guest is on the manage page: the link's token, or the code with the email. */
+export const GuestKey = z.union([
+  z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'This link doesn’t open a reservation.') }),
+  PublicTableLookupInput,
+]);
+/** Who the guest is. */
+export type GuestKey = z.infer<typeof GuestKey>;
+
+/** A guest's change: a new time, a new party size, or both. */
+export const PublicTableChangeInput = z.object({ guest: GuestKey, start: Timestamp, party: PartySize.optional() });
+/** A guest's change. */
+export type PublicTableChangeInput = z.infer<typeof PublicTableChangeInput>;
+
+/** A guest's cancel, with an optional reason. */
+export const PublicTableCancelInput = z.object({
+  guest: GuestKey,
+  reason: z.string().trim().max(VISIT_LIMITS.cancelReasonMax).optional(),
+});
+/** A guest's cancel. */
+export type PublicTableCancelInput = z.infer<typeof PublicTableCancelInput>;
+
+// ---- The staff's side (RPC) ----
+
+/** One step of the setup checklist, with its one line fix. */
+export const TableSetupStep = z.object({
+  step: z.enum(['hours', 'tables', 'rules']),
+  done: z.boolean(),
+  fix: z.string().optional(),
+});
+/** One setup step. */
+export type TableSetupStep = z.infer<typeof TableSetupStep>;
+
+/** A place's Table setup: the rules (defaults until saved), the checklist, and whether guests can reserve now. */
+export const TableSetupView = z.object({
+  placeId: Uuid,
+  serviceId: Uuid.optional(),
+  rules: TableRules,
+  saved: z.boolean(),
+  steps: z.array(TableSetupStep).readonly(),
+  ready: z.boolean(),
+  /** The guest page's address key (the place's public key). */
+  publicKey: z.string(),
+});
+/** A place's Table setup. */
+export type TableSetupView = z.infer<typeof TableSetupView>;
+
+/** One place's input. */
+export const TablePlaceInput = WorkspaceScoped.extend({ placeId: Uuid });
+/** One place's input. */
+export type TablePlaceInput = z.infer<typeof TablePlaceInput>;
+
+/** Saving the rules; `online: true` is Publish, refused with the one line fix while a step isn't done. */
+export const SaveTableSetupInput = WorkspaceScoped.extend({ placeId: Uuid, rules: TableRules, mutationId: Uuid });
+/** Saving the rules. */
+export type SaveTableSetupInput = z.infer<typeof SaveTableSetupInput>;
+
+/** One reservation on the Service list and floor. */
+export const ServiceVisit = z.object({
+  id: Uuid,
+  start: Timestamp,
+  end: Timestamp,
+  name: z.string(),
+  party: z.number().int(),
+  status: VisitStatus,
+  resourceIds: z.array(Uuid).readonly(),
+  note: z.string().optional(),
+  occasion: z.string().optional(),
+  phone: z.string().optional(),
+  lookupCode: z.string(),
+  seatedAt: Timestamp.optional(),
+  source: z.string(),
+});
+/** One reservation on the Service list. */
+export type ServiceVisit = z.infer<typeof ServiceVisit>;
+
+/** A place's day. */
+export const ServiceDayView = z.object({
+  date: PlaceDate,
+  zone: z.string(),
+  visits: z.array(ServiceVisit).readonly(),
+  covers: z.object({ booked: z.number().int(), seated: z.number().int(), toCome: z.number().int() }),
+  truncated: z.boolean(),
+});
+/** A place's day. */
+export type ServiceDayView = z.infer<typeof ServiceDayView>;
+
+/** A place's day input. */
+export const ServiceDayInput = WorkspaceScoped.extend({ placeId: Uuid, date: PlaceDate });
+/** A place's day input. */
+export type ServiceDayInput = z.infer<typeof ServiceDayInput>;
+
+/** A status move (seat, finish, no show, cancel, or Undo back). */
+export const SetVisitStatusInput = WorkspaceScoped.extend({
+  appointmentId: Uuid,
+  status: VisitStatus,
+  mutationId: Uuid,
+});
+/** A status move. */
+export type SetVisitStatusInput = z.infer<typeof SetVisitStatusInput>;
+
+/** A status move's answer. */
+export const VisitStatusMoved = z.object({ id: Uuid, status: VisitStatus });
+/** A status move's answer. */
+export type VisitStatusMoved = z.infer<typeof VisitStatusMoved>;
+
+/**
+ * Table seating's staff side. `setup` and `saveSetup` are `hospitality.manage`'s; `day` and `setStatus` are Run
+ * service's (`hospitality.service`), which reaches table reservations only. Each refuses `APP_NOT_INSTALLED` without
+ * Table seating.
+ */
+export const tablesContract = {
+  setup: oc.input(TablePlaceInput).output(TableSetupView),
+  saveSetup: oc.input(SaveTableSetupInput).output(TableSetupView),
+  day: oc.input(ServiceDayInput).output(ServiceDayView),
+  setStatus: oc.input(SetVisitStatusInput).output(VisitStatusMoved),
+};

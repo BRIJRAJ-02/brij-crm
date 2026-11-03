@@ -39,9 +39,9 @@ export const CARD_PATH = /^\/api\/public\/handles\/[a-z0-9][a-z0-9-]{1,38}[a-z0-
  */
 export const STRIP_PATH = /^\/api\/public\/handles\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]\/pass-strip\.png$/;
 
-/** public-paths.ts's PUBLIC_HOST_PATH: the handle addresses, /b/, /f/, /embed/, the built files and /api/public/. */
+/** public-paths.ts's PUBLIC_HOST_PATH: the handle addresses, /b/, /f/, /r/, /embed/, the built files and /api/public/. */
 export const PUBLIC_HOST_PATH = new RegExp(
-  `^(?:/(?:b|f|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:embed\\.js|favicon\\.ico|layers\\.css|theme-boot\\.js)|/(?:robots\\.txt|sitemap-handles\\.xml)|/${HANDLE}(?:/${SLUG})?/?)$`,
+  `^(?:/(?:b|f|r|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:embed\\.js|favicon\\.ico|layers\\.css|theme-boot\\.js)|/(?:robots\\.txt|sitemap-handles\\.xml)|/${HANDLE}(?:/${SLUG})?/?)$`,
 );
 
 /** public-paths.ts's CRAWL_FILES: the public origin's crawl files, each answered by the API (spec 0061, AC-6123). */

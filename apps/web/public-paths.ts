@@ -28,7 +28,7 @@ export const PAGE_SOURCE = `/(${HANDLE_SEGMENT})/(${SLUG_SEGMENT})`;
 export const HANDLE_HEADER_SOURCE = `/(${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?)`;
 
 /** vercel.json's app policy source: every path but the API, the public pages (hosted forms, booking pages) and the embed script. */
-export const APP_HEADER_SOURCE = `/((?!api/|api$|f/|b/[^/]+$|embed/|${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?$).*)`;
+export const APP_HEADER_SOURCE = `/((?!api/|api$|f/|b/[^/]+$|r/[^/]+(?:/manage)?$|embed/|${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?$).*)`;
 
 /**
  * The share card's own path, `/api/public/handles/<handle>/card.png` (spec 0055, AC-5510). It sits under the public
@@ -58,12 +58,12 @@ const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * What the public booking origin serves (BOOKING_PUBLIC_ORIGIN, timefix.com; 22 Oct 2026): the handle addresses,
- * `/b/…`, `/f/…`, `/embed/…`, the built files (`/assets/…`, `/brand/…` and `TOP_LEVEL_FILES`, `/layers.css` among them) and the public API,
+ * `/b/…`, `/f/…`, `/r/…` (a place's reservation page, spec 0066 B7), `/embed/…`, the built files (`/assets/…`, `/brand/…` and `TOP_LEVEL_FILES`, `/layers.css` among them) and the public API,
  * `/api/public/…`. Nothing else belongs on that host. middleware.ts holds the same pattern written out (it can't
  * import this file), and middleware.test.ts keeps the two equal.
  */
 export const PUBLIC_HOST_PATH = new RegExp(
-  `^(?:/(?:b|f|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:${TOP_LEVEL_FILES.map(literal).join('|')})|/(?:robots\\.txt|sitemap-handles\\.xml)|/${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?/?)$`,
+  `^(?:/(?:b|f|r|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:${TOP_LEVEL_FILES.map(literal).join('|')})|/(?:robots\\.txt|sitemap-handles\\.xml)|/${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?/?)$`,
 );
 
 /**

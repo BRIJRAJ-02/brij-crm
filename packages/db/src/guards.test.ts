@@ -264,6 +264,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
       // A deleted account's handles freed after their 90 days (late trap #73, migration 0126).
       { name: 'crm_sweep_released_handles', owner: 'crm_handle' },
+      // The workspace and place a reservation page's key names (spec 0066 B7 lite, migration 0173).
+      { name: 'crm_table_place_by_key', owner: 'crm_table_lookup' },
       // The link pages that carry a form, for a webhook's link_page.signup (spec 0064, slice 3).
       { name: 'crm_webhook_form_handles', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
@@ -390,6 +392,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it answers how many held handles it freed.
       { name: 'crm_sweep_released_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_table_place_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_webhook_form_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -399,7 +402,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ]);
   });
 
-  it('lets no role but crm_booking_lookup, crm_calendar_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_operator, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_calendar_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_operator, crm_purge, crm_relay, crm_search, crm_sweep, crm_table_lookup and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
@@ -417,6 +420,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       'crm_relay',
       'crm_search',
       'crm_sweep',
+      'crm_table_lookup',
     ]);
   });
 
@@ -490,6 +494,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['crm_form_by_key(text)', 'crm_form_owner_forms(uuid, uuid, uuid[])'],
       ['app', 'app'],
     ],
+    ['crm_table_lookup', ['crm_table_place_by_key'], ['crm_table_place_by_key(text)'], ['app']],
     [
       'crm_invitation_lookup',
       ['crm_invitation_by_token', 'crm_invitation_open_for'],
@@ -1326,6 +1331,40 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update resources set min_capacity = 6, max_capacity = 4`)),
     ).rejects.toMatchObject({ cause: { code: '23514' } });
+  });
+
+  it('finds a reservation page by its place key only while the workspace is live with business apps, saying whether Table seating is installed (spec 0066 B7)', async () => {
+    const a = await workspaceWithMember('table-door-a');
+    const key = `tblkey${randomUUID().slice(0, 10)}`;
+    const place = randomUUID();
+    await db.withWorkspace(a.workspaceId, async (tx) => {
+      await tx.execute(
+        sql`insert into places (workspace_id, id, name, country, time_zone, locale, public_key, menu_key, position)
+          values (${a.workspaceId}, ${place}, 'Main', 'GB', 'Europe/London', 'en-GB', ${key}, ${`mnu${key.slice(3)}`}, 0)`,
+      );
+    });
+    const lookup = (each: string) =>
+      db.withWorkspace(randomUUID(), (tx) =>
+        tx.execute<{ workspace_id: string; place_id: string; installed: boolean }>(
+          sql`select workspace_id::text, place_id::text, installed from crm_table_place_by_key(${each})`,
+        ),
+      );
+    // No early access yet: the key names nothing.
+    expect((await lookup(key)).rows).toEqual([]);
+    await owner.query(`update workspaces set early_access = '{business_apps}' where id = $1`, [a.workspaceId]);
+    expect((await lookup(key)).rows).toEqual([{ workspace_id: a.workspaceId, place_id: place, installed: false }]);
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(sql`insert into workspace_apps (workspace_id, app) values (${a.workspaceId}, 'table_seating')`),
+    );
+    expect((await lookup(key)).rows[0]?.installed).toBe(true);
+    // Removing the app keeps the place found (a guest's manage link), but not installed.
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(sql`update workspace_apps set removed_at = now() where app = 'table_seating'`),
+    );
+    expect((await lookup(key)).rows[0]?.installed).toBe(false);
+    await owner.query(`update workspaces set deleted_at = now() where id = $1`, [a.workspaceId]);
+    expect((await lookup(key)).rows).toEqual([]);
+    expect((await lookup('no-such-key-here')).rows).toEqual([]);
   });
 
   it('switches early access through crm_set_early_access only, keeping the closed list (spec 0065, AC-6502)', async () => {

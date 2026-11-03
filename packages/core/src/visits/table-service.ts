@@ -25,7 +25,7 @@ import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkId, newId } from '../engine/ids.ts';
 import { inputInvalid, postgresError, refuse } from '../engine/refusals.ts';
-import { runWrite } from '../engine/write.ts';
+import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import { addDays, wallToInstant } from '../hospitality/hours.ts';
 import { requireVisitApp, type SlotCache } from './book.ts';
@@ -86,6 +86,8 @@ export interface TableSetup {
   readonly steps: readonly SetupStep[];
   /** True when every step is done: Publish may go ahead. */
   readonly ready: boolean;
+  /** The guest page's address key: timefix.com/r/<publicKey>. */
+  readonly publicKey: string;
 }
 
 const DEFAULT_RULES: TableRules = {
@@ -98,7 +100,8 @@ const DEFAULT_RULES: TableRules = {
   windowDays: TABLE_DEFAULTS.windowDays,
   changeCutoffMinutes: TABLE_DEFAULTS.changeCutoffMinutes,
   cancelCutoffMinutes: TABLE_DEFAULTS.cancelCutoffMinutes,
-  online: true,
+  // Off line until Publish (spec 0068, foolproof): a first save never shows a half set up page to guests.
+  online: false,
 };
 
 /** What is wrong with a set of rules, as one sentence on its field, or undefined (checklabs' policy ranges). */
@@ -218,11 +221,20 @@ const rulesOf = (row: ServiceRow): TableRules => ({
   online: row.online,
 });
 
+/** The place's Table service as the guest's door reads it: its ids and rules, or undefined before the first save. */
+export async function readTableService(
+  tx: WorkspaceTx,
+  placeId: string,
+): Promise<{ readonly serviceId: string; readonly variantId: string; readonly rules: TableRules } | undefined> {
+  const row = await tableServiceOf(tx, placeId);
+  return row === undefined ? undefined : { serviceId: row.id, variantId: row.variant_id, rules: rulesOf(row) };
+}
+
 /** The place's hours and live tables, as the checklist reads them; NOT_FOUND for a place that isn't there. */
 async function placeFacts(tx: WorkspaceTx, placeId: string) {
   const [place] = (
-    await tx.execute<{ hours: PlaceHoursShape; time_zone: string }>(
-      sql`select hours, time_zone from places where id = ${placeId}::uuid`,
+    await tx.execute<{ hours: PlaceHoursShape; time_zone: string; public_key: string }>(
+      sql`select hours, time_zone, public_key from places where id = ${placeId}::uuid`,
     )
   ).rows;
   if (place === undefined) throw refuse('NOT_FOUND', 'That place doesn’t exist.');
@@ -249,7 +261,7 @@ async function placeFacts(tx: WorkspaceTx, placeId: string) {
     online: row.online,
     busy: [],
   }));
-  return { hours: place.hours, zone: place.time_zone, tables };
+  return { hours: place.hours, zone: place.time_zone, publicKey: place.public_key, tables };
 }
 
 /** The setup as read in the caller's transaction. */
@@ -265,6 +277,7 @@ async function readSetup(tx: WorkspaceTx, placeId: string): Promise<TableSetup> 
     saved: row !== undefined,
     steps,
     ready: row !== undefined && steps.every((step) => step.done),
+    publicKey: facts.publicKey,
   };
 }
 
@@ -297,8 +310,15 @@ export async function saveTableSetup(
   const holds = JSON.stringify([...rules.holds].sort((a, b) => a.size - b.size));
   const { result } = await runWrite(scope, async ({ tx }) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
-    await placeFacts(tx, placeId);
+    const facts = await placeFacts(tx, placeId);
     await lockVisit(tx, scope.workspaceId, placeId, []);
+    // Publish refuses a page that would be broken (spec 0068): the first step not done, as its one line fix.
+    if (rules.online) {
+      const missing = setupSteps(facts.hours, facts.tables, rules).find((step) => !step.done);
+      if (missing !== undefined) {
+        throw Object.assign(refuse('CONFLICT', missing.fix ?? 'Finish the setup first.'), { step: missing.step });
+      }
+    }
     const row = await tableServiceOf(tx, placeId);
     const columns = sql`hold_by_size = ${holds}::jsonb, party_min = ${rules.partyMin}, party_max = ${rules.partyMax},
       step_min = ${rules.stepMinutes}, notice_min = ${rules.noticeMinutes}, window_days = ${rules.windowDays},
@@ -541,6 +561,7 @@ export async function setVisitStatus(
   scope: EngineScope,
   input: { readonly appointmentId: string; readonly status: string },
   deps: { readonly now?: () => Date; readonly slotCache?: SlotCache } = {},
+  hooks: readonly AfterWrite[] = [],
 ): Promise<{ readonly id: string; readonly status: AppointmentStatus }> {
   const calendar = can(scope.access, 'services.calendar');
   if (!calendar) requirePermission(scope, 'hospitality.service');
@@ -548,54 +569,57 @@ export async function setVisitStatus(
   if (!isStatus(input.status)) throw inputInvalid('status', 'Pick a status.');
   const status = input.status;
   const now = (deps.now?.() ?? new Date()).toISOString();
-  const { result } = await runWrite(scope, async ({ tx }) => {
-    const [found] = (
-      await tx.execute<{ place_id: string; table_only: boolean }>(sql`
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const [found] = (
+        await tx.execute<{ place_id: string; table_only: boolean }>(sql`
         select a.place_id::text, ${TABLE_ONLY} as table_only from appointments a where a.id = ${id}::uuid
       `)
-    ).rows;
-    if (found === undefined || (!found.table_only && !calendar)) {
-      throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
-    }
-    if (found.table_only) await requireApp(tx, scope.workspaceId, 'table_seating');
-    else await requireVisitApp(tx, scope.workspaceId);
-    const people = (
-      await tx.execute<{ id: string; member_id: string | null }>(sql`
+      ).rows;
+      if (found === undefined || (!found.table_only && !calendar)) {
+        throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
+      }
+      if (found.table_only) await requireApp(tx, scope.workspaceId, 'table_seating');
+      else await requireVisitApp(tx, scope.workspaceId);
+      const people = (
+        await tx.execute<{ id: string; member_id: string | null }>(sql`
         select distinct s.id::text, s.member_id::text from appointment_holds h
         join staff s on s.workspace_id = h.workspace_id and s.id = h.staff_id
         where h.appointment_id = ${id}::uuid
       `)
-    ).rows.map((row) => ({ id: row.id, memberId: row.member_id ?? undefined }));
-    await lockVisit(tx, scope.workspaceId, found.place_id, people);
-    const [row] = (
-      await tx.execute<{ status: AppointmentStatus; place_id: string }>(sql`
+      ).rows.map((row) => ({ id: row.id, memberId: row.member_id ?? undefined }));
+      await lockVisit(tx, scope.workspaceId, found.place_id, people);
+      const [row] = (
+        await tx.execute<{ status: AppointmentStatus; place_id: string }>(sql`
         select status, place_id::text from appointments where id = ${id}::uuid for update
       `)
-    ).rows;
-    if (row === undefined) throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
-    if (row.status === status) return { id, status, placeId: row.place_id };
-    if (!MOVES[row.status].includes(status)) throw refuse('CONFLICT', 'That reservation can’t move to that status.');
-    const live = status !== 'no_show' && status !== 'cancelled';
-    const rehold = live && !HOLDING.includes(row.status) && row.status !== 'completed';
-    if (rehold && !(await stillFree(tx, scope.workspaceId, id, row.place_id))) {
-      throw refuse('SLOT_TAKEN', 'That time was given to someone else meanwhile.');
-    }
-    try {
-      if (status === 'completed') {
-        // Finishing frees what is left of the hold at once (a table back online).
-        await tx.execute(sql`
+      ).rows;
+      if (row === undefined) throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
+      if (row.status === status) return { id, status, placeId: row.place_id };
+      if (!MOVES[row.status].includes(status)) throw refuse('CONFLICT', 'That reservation can’t move to that status.');
+      const live = status !== 'no_show' && status !== 'cancelled';
+      const rehold = live && !HOLDING.includes(row.status) && row.status !== 'completed';
+      if (rehold && !(await stillFree(tx, scope.workspaceId, id, row.place_id))) {
+        throw refuse('SLOT_TAKEN', 'That time was given to someone else meanwhile.');
+      }
+      try {
+        if (status === 'completed') {
+          // Finishing frees what is left of the hold at once (a table back online).
+          await tx.execute(sql`
           update appointment_holds set during = tstzrange(lower(during), greatest(lower(during) + interval '1 minute', ${now}::timestamptz), '[)')
           where appointment_id = ${id}::uuid and upper(during) > ${now}::timestamptz
         `);
-      } else {
-        await tx.execute(sql`update appointment_holds set live = ${live} where appointment_id = ${id}::uuid`);
+        } else {
+          await tx.execute(sql`update appointment_holds set live = ${live} where appointment_id = ${id}::uuid`);
+        }
+      } catch (error) {
+        if (postgresError(error)?.code === '23P01')
+          throw refuse('SLOT_TAKEN', 'That table was given to someone else meanwhile.');
+        throw error;
       }
-    } catch (error) {
-      if (postgresError(error)?.code === '23P01')
-        throw refuse('SLOT_TAKEN', 'That table was given to someone else meanwhile.');
-      throw error;
-    }
-    await tx.execute(sql`
+      await tx.execute(sql`
       update appointments set status = ${status}, updated_at = now(),
         arrived_at = case when ${status} = 'arrived' then ${now}::timestamptz else arrived_at end,
         seated_at = case when ${status} = 'started' then coalesce(seated_at, ${now}::timestamptz)
@@ -604,9 +628,12 @@ export async function setVisitStatus(
         cancelled_at = case when ${status} = 'cancelled' then ${now}::timestamptz when ${live} then null else cancelled_at end
       where id = ${id}::uuid
     `);
-    await auditSetup(tx, scope, 'visit.status', { appointmentId: id, from: row.status, to: status });
-    return { id, status, placeId: row.place_id };
-  });
+      await auditSetup(tx, scope, 'visit.status', { appointmentId: id, from: row.status, to: status });
+      context.record({ visits: [row.place_id] });
+      return { id, status, placeId: row.place_id };
+    },
+    hooks,
+  );
   deps.slotCache?.purge(result.placeId);
   return { id: result.id, status: result.status };
 }

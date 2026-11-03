@@ -156,13 +156,20 @@ function uploadSourceMaps(): Plugin[] {
 /** The public booking pages' addresses (spec 0025): `/b/<publicKey>` and its `/manage`, served book.html as Vercel does. */
 const BOOKING_PATH = /^\/b\/[^/?#]+(?:\/manage)?\/?(?:[?#].*)?$/;
 
+/** A place's reservation page (spec 0066 B7 lite): `/r/<key>` and its `/manage`, served reserve.html as Vercel does. */
+const RESERVE_PATH = /^\/r\/[^/?#]+(?:\/manage)?\/?(?:[?#].*)?$/;
+
 /**
  * Serves book.html for `/b/<publicKey>`, and for a handle address `/<handle>` or `/<handle>/<slug>` (22 Oct 2026),
  * locally, as vercel.json's rewrites do when deployed.
  */
 function publicBookingPage(): Plugin {
   const rewrite = (url: string | undefined): string | undefined =>
-    url !== undefined && (BOOKING_PATH.test(url) || HANDLE_PATH.test(url.replace(/[?#].*$/, ''))) ? '/book.html' : url;
+    url !== undefined && RESERVE_PATH.test(url)
+      ? '/reserve.html'
+      : url !== undefined && (BOOKING_PATH.test(url) || HANDLE_PATH.test(url.replace(/[?#].*$/, '')))
+        ? '/book.html'
+        : url;
   return {
     name: 'crm:public-booking-page',
     configureServer(server) {
@@ -254,7 +261,7 @@ export default defineConfig({
     layerOrder(),
     // Inter preloaded by its built name on every entry, so a cold first visit paints in it from the start
     // (never fallback, then Inter): the app, the hosted form and the public booking page all draw with it.
-    preloadFonts(FIRST_SCREEN_FONTS, ['/index.html', '/form.html', '/book.html']),
+    preloadFonts(FIRST_SCREEN_FONTS, ['/index.html', '/form.html', '/book.html', '/reserve.html']),
     // Live updates' socket must be one vercel.json's CSP allows.
     realtimeCsp(),
     // A web DSN must be on Sentry's EU ingest and allowed by the same CSP; both checks run on every build.
@@ -296,6 +303,7 @@ export default defineConfig({
         index: path.join(import.meta.dirname, 'index.html'),
         form: path.join(import.meta.dirname, 'form.html'),
         book: path.join(import.meta.dirname, 'book.html'),
+        reserve: path.join(import.meta.dirname, 'reserve.html'),
       },
     },
   },
