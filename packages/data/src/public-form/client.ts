@@ -5,11 +5,11 @@
 // small. With reCAPTCHA on (optional everywhere), it also loads Google's
 // script and asks it for a token. Every answer is a plain union a screen
 // switches on; nothing throws for an answer the endpoint gives on purpose.
-import type { FillTicket, PublicForm, SubmitBody, SubmitNext } from '@crm/contracts/forms';
+import type { FillTicket, FormEventBody, PublicForm, SubmitBody, SubmitNext } from '@crm/contracts/forms';
 import type { FetchLike } from '../fetch.ts';
 
 /** Where a submission came from, as the hosted page sends it beside the answers (`SubmitBody.context`). */
-export type { SubmitContext } from '@crm/contracts/forms';
+export type { FormEventBody, SubmitContext } from '@crm/contracts/forms';
 
 /** What reading a form answered. */
 export type FormLoad =
@@ -66,6 +66,13 @@ export interface PublicFormClient {
    * submit goes without one.
    */
   ticket(address: string): Promise<string | undefined>;
+  /**
+   * Tells the form's own counts what the visitor did (spec 0063, AC-6320): the page was seen, the first
+   * answer was given, or a question was reached. Lossy by design — it returns nothing, never throws and is
+   * never awaited, so a blocked beacon costs the visitor nothing. The body goes as `text/plain`, which asks
+   * for no preflight, exactly as `sendBeacon` sends it; the server reads the text and checks the origin.
+   */
+  event(address: string, body: FormEventBody): void;
 }
 
 const path = (address: string) => `/api/public/forms/${encodeURIComponent(address)}`;
@@ -179,6 +186,26 @@ export function createPublicFormClient(
         return isObject(body) && typeof body.ticket === 'string' ? (body as FillTicket).ticket : undefined;
       } catch {
         return undefined;
+      }
+    },
+    event(address, body) {
+      const url = `${base}${path(address)}/events`;
+      const text = JSON.stringify(body);
+      try {
+        // A beacon survives the page being closed, which `fetch` without `keepalive` does not: the last
+        // question a visitor reached is reported as they leave. Where there is none, or it refuses (its own
+        // queue is full), a keepalive post says the same thing.
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon(url, new Blob([text], { type: 'text/plain' }))) {
+          return;
+        }
+        void call(url, {
+          method: 'POST',
+          headers: { 'content-type': 'text/plain' },
+          body: text,
+          keepalive: true,
+        }).catch(() => undefined);
+      } catch {
+        // A count is never worth an error on a visitor's page.
       }
     },
     async submit(address, body) {

@@ -49,3 +49,6 @@ export type {
   JumpTarget,
 } from './document.ts';
 export type { RouteHosts } from './routing.ts';
+// The beacon's body (spec 0063, AC-6320), as a type only: the hosted page builds the object and the
+// server parses it, so the schema itself stays out of the page's bundle.
+export type { FormEventBody, FormEventKind } from './visits.ts';

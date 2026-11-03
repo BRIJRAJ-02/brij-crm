@@ -10,7 +10,7 @@
 // closing the script's dialog (frame.ts). Every submit carries where it came
 // from (`context`); the address's own parameters prefill questions by key.
 import '@crm/ui/styles.css';
-import { createPublicFormClient, loadCaptcha } from '@crm/data/public-form';
+import { createPublicFormClient, loadCaptcha, type FormEventBody } from '@crm/data/public-form';
 import { mountFormLoading, mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
 import { guessCountry } from './country.ts';
 import { contextFromFrame, contextOfPage, hiddenOf, prefillOf } from './context.ts';
@@ -64,6 +64,15 @@ const loading = mountFormLoading(root, mode, 'unknown');
 // The loading card has a height of its own, so a site's frame is sized to it at once rather than clipping it
 // until the form arrives.
 let stopHeight = postHeight(root.lastElementChild);
+
+/**
+ * Where the visit came from, for the by source table (AC-6321): the UTM source the address carries, else the
+ * site that linked here. The server cuts it to a host or a word; a visit with neither is Direct, which it
+ * reads as the absence of this rather than a value of its own.
+ */
+function sourceOf(context: ReturnType<typeof contextNow>): string | undefined {
+  return context.utm_source ?? context.referrer;
+}
 
 /** Where this visit came from: the site's page an embed passed along, or this page itself. */
 function contextNow() {
@@ -128,6 +137,20 @@ async function start(): Promise<void> {
     // A fill ticket per round (the spam checks): asked for as the page loads, and for the next round as one is
     // sent, so the server's clock times the filling. Without one the submit still goes.
     const tickets = new Map<number, Promise<string | undefined>>([[0, client.ticket(address)]]);
+    // The form's own counts (spec 0063, AC-6320), on the same ticket the submit carries: without one the
+    // server counts nothing, so every beacon waits for the first ticket rather than racing it.
+    const firstTicket = tickets.get(0) ?? Promise.resolve(undefined);
+    const source = sourceOf(contextNow());
+    const countIt = (body: Omit<FormEventBody, 'ticket' | 'source'>) => {
+      void firstTicket.then((ticket) => {
+        client.event(address, {
+          ...body,
+          ...(ticket === undefined ? {} : { ticket }),
+          ...(source === undefined ? {} : { source }),
+        });
+      });
+    };
+    countIt({ kind: 'view' });
     const drawn = mountHostedForm(root, form, {
       mode,
       countryGuess: guessCountry(),
@@ -150,6 +173,9 @@ async function start(): Promise<void> {
         await wearStylesheet(document, brandHref('forms', form.key, form.brand?.version));
         drawn.update(form);
         return true;
+      },
+      onCount: (count) => {
+        countIt(count.kind === 'start' ? { kind: 'start' } : { kind: 'reach', questionId: count.questionId });
       },
       onSubmit: async (submission): Promise<HostedSubmitOutcome> => {
         const idempotencyKey = keys.get(submission.round) ?? crypto.randomUUID();

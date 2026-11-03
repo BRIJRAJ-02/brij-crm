@@ -45,6 +45,12 @@ export type HostedSubmitOutcome =
   | { readonly kind: 'failed' }
   | { readonly kind: 'offline' };
 
+/**
+ * What the form's own counts are told (spec 0063, AC-6320): the first answer was given, or a question was
+ * reached. `view` is not here — the page itself knows it was seen, and says so before this ever runs.
+ */
+export type HostedFormCount = { readonly kind: 'start' } | { readonly kind: 'reach'; readonly questionId: string };
+
 /** What the state needs from the page. */
 export interface HostedFormSettings {
   readonly form: PublicForm;
@@ -65,6 +71,12 @@ export interface HostedFormSettings {
   readonly onStale?: (() => Promise<boolean>) | undefined;
   /** Told the keys a refusal named, before their errors show: a step layout goes to the first one's step. */
   readonly onRefused?: (keys: readonly string[]) => void;
+  /**
+   * Told what the visitor did, for the form's own counts (spec 0063, AC-6320). Each thing is said once:
+   * `start` on the first answer, `reach` the first time a question is on screen. Never in the builder's
+   * preview, and never awaited — a count is a side note, not a step in filling the form in.
+   */
+  readonly onCount?: ((count: HostedFormCount) => void) | undefined;
 }
 
 type Answers = Readonly<Record<string, unknown>>;
@@ -130,6 +142,11 @@ export interface HostedFormState {
   readonly sendAnother: () => void;
   /** Goes to an address the form sends visitors to (a redirect, a booking page); nothing in a preview. */
   readonly goTo: (url: string) => void;
+  /**
+   * Says these questions are on the visitor's screen now, for the drop off bar (AC-6321). A layout calls it
+   * with what it has just drawn; each question counts once, so calling it on every render is right.
+   */
+  readonly reached: (questionIds: readonly string[]) => void;
   /** Moves focus to the first control of a question. */
   readonly focus: (key: string) => void;
 }
@@ -253,6 +270,7 @@ export function useHostedForm({
   onUpload,
   onRemoveUpload,
   onStale,
+  onCount,
   now,
   onRefused,
 }: HostedFormSettings): {
@@ -282,6 +300,16 @@ export function useHostedForm({
   const [focusTarget, setFocusTarget] = useState<'heading' | undefined>(undefined);
   const container = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  // What has already been counted, so each thing is said once however often it is drawn. A ref, not state:
+  // counting must never be a reason to render, and a count that arrives twice would be a wrong number.
+  const counted = useRef<Set<string>>(new Set());
+  const count = (event: HostedFormCount) => {
+    if (preview || onCount === undefined) return;
+    const token = event.kind === 'start' ? 'start' : `reach:${event.questionId}`;
+    if (counted.current.has(token)) return;
+    counted.current.add(token);
+    onCount(event);
+  };
   const isClosed = form.status === 'paused' || view.kind === 'closed';
 
   useEffect(() => {
@@ -332,6 +360,9 @@ export function useHostedForm({
     setHints((current) => without(current, question.key));
     if (!isBlank(answerOf(question, value)) && !touched.has(question.key)) {
       setTouched((current) => new Set([...current, question.key]));
+      // The form was started the moment one question holds an answer. A prefilled one is not a start: those
+      // arrive in `firstAnswers`, which never goes through here.
+      count({ kind: 'start' });
     }
     // A shown error clears the moment it stops being true (the answer passes, or now fails for another
     // reason, which focus leaving will say); a new one never appears while typing.
@@ -556,6 +587,9 @@ export function useHostedForm({
     sendAnother,
     goTo: (url) => {
       if (!preview) onRedirect?.(url);
+    },
+    reached: (questionIds) => {
+      for (const questionId of questionIds) count({ kind: 'reach', questionId });
     },
     focus,
   };

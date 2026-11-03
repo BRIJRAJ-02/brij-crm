@@ -18,9 +18,11 @@ import {
 import styles from './HostedForm.module.css';
 import { BookingView, useLoadedBooking } from './BookingView.tsx';
 import type { HostedRemoveUpload, HostedUpload } from './files.ts';
+import { useEffect } from 'react';
 import { Question } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
 import {
+  type HostedFormCount,
   useHostedForm,
   type HostedFormMode,
   type HostedSubmission,
@@ -55,6 +57,8 @@ export interface HostedFormProps {
   readonly onRedirect?: (url: string) => void;
   /** Reads the form again and draws its new version in place, the answers kept; answers whether it could. */
   readonly onStale?: () => Promise<boolean>;
+  /** Told what the visitor did, for the form's own counts (spec 0063, AC-6320); see `HostedFormCount`. */
+  readonly onCount?: ((count: HostedFormCount) => void) | undefined;
   /** The clock, for the fill time (tests pass their own). */
   readonly now?: () => number;
   /** The Timefix wordmark under the form; the web app serves these two by default. */
@@ -84,6 +88,7 @@ export function HostedForm({
   onUpload,
   onRemoveUpload,
   onStale,
+  onCount,
   now = Date.now,
   logo = TIMEFIX_LOGO,
   brand,
@@ -98,10 +103,19 @@ export function HostedForm({
     onUpload,
     onRemoveUpload,
     onStale,
+    onCount,
     now,
   });
   const { words, preview } = state;
   const loadedBooking = useLoadedBooking();
+  // Classic puts every shown question on screen at once, so they are all reached the moment the form is.
+  // An answer that hides a later one leaves it uncounted, which is what the drop off bar should show.
+  const onScreen = form.questions
+    .filter((question) => state.shown.has(question.key) && question.answerType !== 'hidden')
+    .map((question) => question.id);
+  useEffect(() => {
+    if (state.view.kind === 'form' && !state.isClosed) state.reached(onScreen);
+  });
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
   else if (state.view.kind === 'booking') {
