@@ -8,6 +8,7 @@ export const publishStrings = {
   restored: (version: number) => `Version ${String(version)} is your draft. Publish to put it back.`,
   restoreFailed: 'That version couldn’t be brought back. Try again.',
   versionsFailed: 'The versions couldn’t be read. Try again.',
+  publishFailed: 'That didn’t publish. Try again.',
   discardFailed: 'The changes couldn’t be discarded. Try again.',
   /** Save while drafted settings are among the unsaved ones: they wait for Publish. */
   saveDraft: 'Save draft',

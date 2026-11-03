@@ -14,7 +14,7 @@ import { newId } from '../engine/ids.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
-import { rescope, testScope } from '../testing.ts';
+import { rescope, testScope, publishLinkPageForTest, publishPageOwnerForTest } from '../testing.ts';
 import {
   brandLogoFolder,
   clearBrandLogo,
@@ -23,10 +23,27 @@ import {
   saveBrandLogo,
   saveWorkspaceBrand,
 } from './brand.ts';
+import { publishLinkPage } from '../profile/link-publish.ts';
 import { pageImageFolder, readProfileLook, saveProfileAccent, saveProfileImage } from './look.ts';
-import { brandStylesheet, lookStylesheet, readBookingBrand, readFormBrand, readHandleLook } from './public.ts';
+import {
+  brandStylesheet,
+  lookStylesheet,
+  readBookingBrand as liveReadBookingBrand,
+  readFormBrand,
+  readHandleLook as liveReadHandleLook,
+} from './public.ts';
 
-const { appUrl, ownerUrl } = inject('testDatabase');
+const { appUrl, ownerUrl, adminUrl } = inject('testDatabase');
+// Spec 0068: a link page's edits are a draft until Publish. A visitor's read here is of the page as its owner
+// would have published it just before, which is what these tests were written against.
+const readHandleLook = async (...args: Parameters<typeof liveReadHandleLook>) => {
+  await publishLinkPageForTest(adminUrl, args[1].handle);
+  return liveReadHandleLook(...args);
+};
+const readBookingBrand = async (...args: Parameters<typeof liveReadBookingBrand>) => {
+  await publishPageOwnerForTest(adminUrl, args[0].pageId);
+  return liveReadBookingBrand(...args);
+};
 let db: Database;
 
 beforeAll(() => {
@@ -199,7 +216,10 @@ describe('what a page wears', () => {
     expect(lookStylesheet(look, handle)).toBe(
       `:root{--page-cover-image:url("/api/public/profiles/${handle}/cover?v=${cover.version}")}\n`,
     );
-    expect(await saveProfileImage(ada.scope, { slot: 'cover' })).toEqual({ previous: cover.path });
+    // Guests still see that cover (spec 0068: the change waits for Publish), so the store keeps it until Publish lets
+    // it go.
+    expect(await saveProfileImage(ada.scope, { slot: 'cover' })).toEqual({});
+    expect((await publishLinkPage(ada.scope)).forget).toEqual([cover.path]);
     await expect(
       saveProfileImage(ada.scope, {
         slot: 'ground',

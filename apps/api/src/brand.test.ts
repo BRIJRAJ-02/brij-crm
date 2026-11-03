@@ -11,6 +11,7 @@ import { memberWithWorkspace, refusal } from '../test/workspace.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from './edge.ts';
 import type { FileStore } from './storage/blob.ts';
 import { APP_URL, TEST_EDGE_SECRET } from './testing.ts';
+import { publishingReads } from '../test/published-reads.ts';
 
 const { ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -58,6 +59,8 @@ beforeAll(() => {
       },
     },
   ));
+  // Spec 0068: reads of a link page see it as its owner would have published it.
+  app = publishingReads(app, inject('testDatabase').adminUrl);
 });
 afterAll(async () => {
   await identity.close();

@@ -103,7 +103,7 @@ export async function readBookingBrand(entry: BookingEntry): Promise<PageBrand> 
     const brand = await brandRowOf(tx, entry.scope.workspaceId);
     const own =
       page.kind === 'personal' && page.ownerUserId !== null
-        ? await lookRowOf(tx, page.ownerUserId, entry.scope.workspaceId)
+        ? await lookRowOf(tx, page.ownerUserId, entry.scope.workspaceId, 'published')
         : undefined;
     return pageBrandOf(accentsOf(own, brand), brand);
   });
@@ -144,7 +144,7 @@ function imageOf(path: string | null, type: string | null, version: string | nul
  */
 export async function readHandleLook(deps: { readonly db: Database }, owner: HandleOwner): Promise<PageLook> {
   return deps.db.withWorkspace(owner.workspaceId, async (tx: WorkspaceTx) => {
-    const own = await lookRowOf(tx, owner.userId, owner.workspaceId);
+    const own = await lookRowOf(tx, owner.userId, owner.workspaceId, 'published');
     const brand = await brandRowOf(tx, owner.workspaceId);
     const accents = accentsOf(own, brand);
     const cover = imageOf(own?.cover_path ?? null, own?.cover_type ?? null, own?.cover_version ?? null);

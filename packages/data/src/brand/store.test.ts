@@ -12,9 +12,12 @@ function setup(over: { save?: () => Promise<never>; send?: ImageSend } = {}) {
         Promise.resolve({
           ...(input.accent === null ? {} : { accent: input.accent }),
           ...(input.accentDark === null ? {} : { accentDark: input.accentDark }),
-          template: input.template ?? 'classic',
+          template: 'classic' as const,
+          ...(input.template === undefined || input.template === 'classic' ? {} : { templateDraft: input.template }),
           canEdit: true,
         }),
+      publishTemplate: () => Promise.resolve({ accent: '#1f5fd6', template: 'studio' as const, canEdit: true }),
+      discardTemplate: () => Promise.resolve({ accent: '#1f5fd6', template: 'classic' as const, canEdit: true }),
     },
     profile: {
       look: () => Promise.resolve({ cover: '0123456789ab' }),
@@ -32,6 +35,22 @@ function setup(over: { save?: () => Promise<never>; send?: ImageSend } = {}) {
   });
   return { store, sent };
 }
+
+describe('the workspace template (spec 0068)', () => {
+  it('waits as a draft until Publish, and Discard lets it go', async () => {
+    const { store } = setup();
+    await store.readKit('acme');
+    const held = () => {
+      const state = store.kit('acme').getSnapshot();
+      return state.status === 'ready' ? state.value : undefined;
+    };
+    expect(await store.saveTemplate('acme', 'studio')).toBeUndefined();
+    expect(held()).toMatchObject({ template: 'classic', templateDraft: 'studio' });
+    expect(await store.publishTemplate('acme')).toBeUndefined();
+    expect(held()).toMatchObject({ template: 'studio' });
+    expect(held()).not.toHaveProperty('templateDraft');
+  });
+});
 
 describe('the brand store', () => {
   it('draws no variables for no accent, and the guard’s for a hex', () => {
@@ -92,6 +111,8 @@ describe('the brand store', () => {
       brand: {
         get: () => Promise.resolve({ accent: '#1f5fd6', template: 'classic' as const, canEdit: true }),
         save: () => new Promise((resolve) => answers.push(resolve)),
+        publishTemplate: () => Promise.reject(new Error('unused')),
+        discardTemplate: () => Promise.reject(new Error('unused')),
       },
       profile: { look: () => Promise.resolve({}), saveAccent: () => Promise.reject(new Error('unused')) },
       call: (run) => run({}),

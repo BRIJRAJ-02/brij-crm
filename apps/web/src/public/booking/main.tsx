@@ -76,7 +76,8 @@ guardPreloadErrors({
 // What the handle address's shell already read (boot.ts): only a handle address's shell carries one.
 const boot = path === null ? readBoot(document) : undefined;
 // The profile the shell read, when it is recent enough to draw before the page's own read lands.
-const initialProfile = freshProfile(boot, Date.now());
+// A draft's Preview (spec 0068, `?draft=1`) never draws the shell's copy, which is the published page.
+const initialProfile = address.searchParams.get('draft') === '1' ? undefined : freshProfile(boot, Date.now());
 
 const embed = embedOf({
   search: address.search,

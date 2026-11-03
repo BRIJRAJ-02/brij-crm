@@ -4,7 +4,7 @@
 // sitemap and robots (AC-6123).
 import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { createApp } from './app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from './edge.ts';
 import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from './testing.ts';
@@ -12,6 +12,7 @@ import { createMailpitMailer } from './mail/mailpit.ts';
 import { MAILPIT_URL, newIp, testConnections } from '../test/sign-in.ts';
 import { memberWithWorkspace } from '../test/workspace.ts';
 import type { FileStore } from './storage/blob.ts';
+import { publishingReads } from '../test/published-reads.ts';
 
 let db: Database;
 let identity: IdentityStore;
@@ -58,6 +59,8 @@ beforeAll(() => {
     },
     env,
   });
+  // Spec 0068: reads of a link page see it as its owner would have published it.
+  app = publishingReads(app, inject('testDatabase').adminUrl);
 });
 afterAll(async () => {
   await identity.close();

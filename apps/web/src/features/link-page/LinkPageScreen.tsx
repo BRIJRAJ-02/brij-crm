@@ -49,6 +49,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { AppearanceCard, type PhotoSlot } from './AppearanceCard.tsx';
+import { LinkPublishBar } from './LinkPublishBar.tsx';
 import { DraftLook } from './draft-look.tsx';
 import { preparePhoto } from './photo-prep.ts';
 import { ClaimLink } from './ClaimLink.tsx';
@@ -995,11 +996,23 @@ function Blocks({
   }
 
   const Editor = editing === undefined ? undefined : BLOCK_KINDS[editing.kind].Editor;
+  // Publish (spec 0068, AC-6810 to AC-6812): every edit here is a draft until Publish; the bar heads both views.
+  const publishBar = (
+    <LinkPublishBar
+      linkPage={linkPage}
+      slug={slug}
+      address={publicProfileUrl(handle)}
+      isPaused={!isLive}
+      blocks={state}
+      look={theme}
+      profile={profile}
+    />
+  );
   // What the page opens on: the page as something to hand out, the phone beside it showing exactly what a visitor
   // gets. Everything that changes the page is one press away, under Edit page (the owner, 27 October 2026).
   if (!isEditing) {
     return (
-      <PreviewLayout preview={preview} previewShare="wide">
+      <PreviewLayout preview={preview} previewShare="wide" notices={publishBar}>
         <LinkPageOverview
           data={data}
           slug={slug}
@@ -1022,7 +1035,7 @@ function Blocks({
     );
   }
   return (
-    <PreviewLayout preview={preview} previewShare="wide">
+    <PreviewLayout preview={preview} previewShare="wide" notices={publishBar}>
       {/* What is on the page comes first (its blocks, the archived ones, the social links), then how it looks:
           content is what the editor is opened for (flow walks, 29 October 2026: L2). */}
       <Card

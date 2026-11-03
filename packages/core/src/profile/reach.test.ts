@@ -9,12 +9,12 @@ import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import type { ProfileBlock } from '@crm/contracts';
 import {
-  countProfileBooking,
+  countProfileBooking as liveCountProfileBooking,
   countProfileView,
-  enterContactCard,
-  enterLinkImage,
-  enterLinkPage,
-  enterTimesBlock,
+  enterContactCard as liveEnterContactCard,
+  enterLinkImage as liveEnterLinkImage,
+  enterLinkPage as liveEnterLinkPage,
+  enterTimesBlock as liveEnterTimesBlock,
 } from '../access/door.ts';
 import { readLinkPage } from '../booking/public.ts';
 import { createBookingPage } from '../booking/pages.ts';
@@ -22,7 +22,7 @@ import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
-import { testScope } from '../testing.ts';
+import { testScope, publishLinkPageForTest } from '../testing.ts';
 import { profileImageStorePath } from './images.ts';
 import {
   addProfileImage,
@@ -36,6 +36,28 @@ import {
 } from './items.ts';
 
 const { appUrl, ownerUrl, adminUrl } = inject('testDatabase');
+// Spec 0068: a link page's edits are a draft until Publish. A visitor's read here is of the page as its owner
+// would have published it just before, which is what these tests were written against.
+const enterLinkPage = async (...args: Parameters<typeof liveEnterLinkPage>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveEnterLinkPage(...args);
+};
+const enterLinkImage = async (...args: Parameters<typeof liveEnterLinkImage>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveEnterLinkImage(...args);
+};
+const enterContactCard = async (...args: Parameters<typeof liveEnterContactCard>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveEnterContactCard(...args);
+};
+const countProfileBooking = async (...args: Parameters<typeof liveCountProfileBooking>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveCountProfileBooking(...args);
+};
+const enterTimesBlock = async (...args: Parameters<typeof liveEnterTimesBlock>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveEnterTimesBlock(...args);
+};
 let db: Database;
 
 beforeAll(() => {

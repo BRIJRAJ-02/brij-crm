@@ -19,6 +19,7 @@ import {
   Modal,
   MonthTiles,
   PreviewLayout,
+  PublishBar,
   SegmentedControl,
   SettingsRow,
   Skeleton,
@@ -27,6 +28,7 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { BRAND_LOGO_PICK_MAX_BYTES, BRAND_PHOTO_TYPES, preparePhoto } from '../link-page/photo-prep.ts';
 import { strings as pageStrings } from '../link-page/strings.ts';
 import { strings } from './brand-strings.ts';
@@ -77,6 +79,9 @@ const TEMPLATES: readonly { readonly id: PageTemplate; readonly name: string }[]
   { id: 'split', name: strings.templateSplit },
 ];
 
+/** A template's name, as the picker says it. */
+const nameOf = (template: PageTemplate): string => TEMPLATES.find((one) => one.id === template)?.name ?? template;
+
 /** Which page the preview shows. */
 type PreviewPage = 'booking' | 'form';
 
@@ -97,12 +102,37 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
   const wearing: PageBrand = {
     ...(logoSrc === undefined ? {} : { logo: { src: logoSrc, alt: strings.logoAlt } }),
     ...(colours === undefined ? {} : { variables: colours.variables }),
-    ...(kit === undefined ? {} : { template: kit.template }),
+    // The template as picked (spec 0068): a pick waiting for Publish shows here before any public page wears it.
+    ...(kit === undefined ? {} : { template: kit.templateDraft ?? kit.template }),
+  };
+  const chosen = kit === undefined ? undefined : (kit.templateDraft ?? kit.template);
+  // The preview crossfades to the new template: the browser's own view transition, an opacity fade of the old
+  // picture into the new (none under reduced motion, or where the browser has none).
+  const crossfade = (change: () => void) => {
+    const reduced = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || typeof document.startViewTransition !== 'function') change();
+    else document.startViewTransition(() => flushSync(change));
   };
   const chooseTemplate = (template: PageTemplate) => {
     setRefusal(undefined);
-    void brand.saveTemplate(slug, template).then((refused) => {
+    crossfade(() => {
+      void brand.saveTemplate(slug, template).then((refused) => {
+        if (refused !== undefined) setRefusal(refused.message);
+      });
+    });
+  };
+  const publishTemplate = () => {
+    setRefusal(undefined);
+    void brand.publishTemplate(slug).then((refused) => {
       if (refused !== undefined) setRefusal(refused.message);
+    });
+  };
+  const discardTemplate = () => {
+    setRefusal(undefined);
+    crossfade(() => {
+      void brand.discardTemplate(slug).then((refused) => {
+        if (refused !== undefined) setRefusal(refused.message);
+      });
     });
   };
   const month = useMemo(() => {
@@ -143,8 +173,8 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
     shown === 'booking' ? (
       // A sketch of a booking page, inert: the kit's logo heads its rail and its colour marks the chosen day. The day's
       // times are left out, as a phone shows them once a day is picked, so the whole page and its foot fit the phone.
-      // A new template remounts it, so the switch crossfades in (spec 0068).
-      <div inert key={kit?.template}>
+      // A new template crossfades in through the page's view transition (`crossfade` above).
+      <div inert>
         <BookingFrame
           isCompact
           brand={wearing}
@@ -166,7 +196,7 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
         </BookingFrame>
       </div>
     ) : (
-      <HostedFormPreview key={kit?.template} form={SAMPLE_FORM} brand={wearing} />
+      <HostedFormPreview form={SAMPLE_FORM} brand={wearing} />
     );
   return (
     <SettingsPage title={strings.title} fillsView>
@@ -210,7 +240,7 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
                   showsDescription
                   keepsPicture
                   pictureSize="large"
-                  value={kit.template}
+                  value={chosen ?? kit.template}
                   tiles={TEMPLATES.map((template) => ({
                     id: template.id,
                     name: template.name,
@@ -233,11 +263,23 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
                   }))}
                   onChange={(picked) => {
                     const found = TEMPLATES.find((template) => template.id === picked);
-                    if (found !== undefined && found.id !== kit.template) chooseTemplate(found.id);
+                    if (found !== undefined && found.id !== chosen) chooseTemplate(found.id);
                   }}
                 />
               )}
             </SettingsRow>
+            {/* A template waits for Publish (owner, 4 Nov 2026): every public page changes at once when it goes. */}
+            {kit?.templateDraft !== undefined && canEdit && (
+              <>
+                <Callout tone="info">{strings.templatePublishNote}</Callout>
+                <PublishBar
+                  status="draft"
+                  changes={[strings.templateChange(nameOf(kit.template), nameOf(kit.templateDraft))]}
+                  onPublish={publishTemplate}
+                  onDiscard={discardTemplate}
+                />
+              </>
+            )}
             <SettingsRow title={strings.logo} description={strings.logoText} control="field">
               {kit === undefined ? (
                 <Skeleton shape="field" />

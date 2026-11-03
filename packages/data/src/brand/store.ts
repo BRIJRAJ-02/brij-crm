@@ -86,6 +86,14 @@ interface BrandProcedures {
     },
     options: { signal?: AbortSignal },
   ) => Promise<WorkspaceBrand>;
+  readonly publishTemplate: (
+    input: { workspace: string; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<WorkspaceBrand>;
+  readonly discardTemplate: (
+    input: { workspace: string; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<WorkspaceBrand>;
 }
 
 /** The two profile procedures this store calls. */
@@ -291,13 +299,13 @@ export function openBrand(given: {
       );
     },
     /**
-     * Saves the workspace's template (spec 0068, AC-6804), the accent pair kept as it is. Shown at once; answers the
-     * refusal, or undefined once it landed.
+     * Picks the workspace's template (spec 0068, AC-6804), the accent pair kept as it is. It waits for Publish
+     * (`publishTemplate`): the kit's `templateDraft` until then, the live one picked again clearing it. Shown at
+     * once; answers the refusal, or undefined once it landed.
      */
     saveTemplate: (workspace: string, template: PageTemplate): Promise<DataError | undefined> => {
-      looks.delete(workspace);
       return kitOf(workspace).change(
-        (kit) => ({ ...kit, template }),
+        (kit) => withField(kit, 'templateDraft', template === kit.template ? undefined : template),
         async () => {
           const held = kitOf(workspace).held.getSnapshot();
           const kit = held.status === 'ready' ? held.value : undefined;
@@ -317,6 +325,34 @@ export function openBrand(given: {
         },
       );
     },
+    /**
+     * Puts the waiting template live on every public page (spec 0068). Shown at once; answers the refusal, or
+     * undefined once it landed.
+     */
+    publishTemplate: (workspace: string): Promise<DataError | undefined> => {
+      // Their page's copy names the workspace's template too, so it is read again when next held.
+      looks.delete(workspace);
+      return kitOf(workspace).change(
+        (kit) => withField({ ...kit, template: kit.templateDraft ?? kit.template }, 'templateDraft', undefined),
+        async () => {
+          const saved = await call((options) =>
+            given.brand.publishTemplate({ workspace, mutationId: given.mintId() }, options),
+          );
+          return () => saved;
+        },
+      );
+    },
+    /** Lets the waiting template go: every public page keeps the one it wears. */
+    discardTemplate: (workspace: string): Promise<DataError | undefined> =>
+      kitOf(workspace).change(
+        (kit) => withField(kit, 'templateDraft', undefined),
+        async () => {
+          const saved = await call((options) =>
+            given.brand.discardTemplate({ workspace, mutationId: given.mintId() }, options),
+          );
+          return () => saved;
+        },
+      ),
     /**
      * The workspace's logo (AC-2): the bytes as the request body, already drawn again by the screen. Answers the
      * refusal, or undefined once it landed and the kit names the new version.

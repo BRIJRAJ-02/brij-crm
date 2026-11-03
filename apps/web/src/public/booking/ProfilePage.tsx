@@ -187,11 +187,15 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
   // What this view carries from the page (AC-6116): the referring site's host and the `utm_source`, read once,
   // before anything the page does can change the address. Nothing else about the visitor is read or sent.
   const [facts] = useState(() =>
-    viewFactsOf({
-      referrer: document.referrer,
-      search: globalThis.location.search,
-      origin: globalThis.location.origin,
-    }),
+    // The owner's own Preview of their draft (spec 0068, `?draft=1`): no view is counted, and the server answers the
+    // draft only to the signed in owner.
+    new URLSearchParams(globalThis.location.search).get('draft') === '1'
+      ? { draft: true }
+      : viewFactsOf({
+          referrer: document.referrer,
+          search: globalThis.location.search,
+          origin: globalThis.location.origin,
+        }),
   );
   // The tab's session, and all this page keeps in it (AC-6127): a closed banner and the continued notices.
   const visit = useMemo(() => visitStorage(), []);

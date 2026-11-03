@@ -182,6 +182,13 @@ export {
   saveQrStyle,
   type ResolvedMedia,
 } from './profile/items.ts';
+export {
+  discardLinkDraft,
+  listLinkPageVersions,
+  publishLinkPage,
+  readLinkPagePublication,
+  restoreLinkPageVersion,
+} from './profile/link-publish.ts';
 // Link page blocks and reach (spec 0061): media links, picture checks, view facts and scheduled blocks, for the api's
 // signed in routes (the public ones take them from `@crm/core/public`).
 export {
@@ -205,6 +212,9 @@ export {
   saveBrandLogo,
   saveWorkspaceBrand,
   type StoredLogo,
+  discardBrandTemplate,
+  publishBrandTemplate,
+  workspaceHandles,
 } from './brand/brand.ts';
 export {
   pageImageFolder,

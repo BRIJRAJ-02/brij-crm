@@ -203,6 +203,8 @@ export interface HandleClient {
        */
       readonly ref?: string;
       readonly src?: string;
+      /** The owner's own Preview of their draft (spec 0068): answered only to the signed in owner, else ignored. */
+      readonly draft?: boolean;
     },
   ): Promise<PublicProfile>;
   /**
@@ -245,10 +247,11 @@ export function createHandleClient(options: PublicClientOptions & { readonly bea
         // The view's facts ride on the view read alone (AC-6116): a search and a further page carry none.
         ...(isView && query.ref !== undefined ? { ref: query.ref } : {}),
         ...(isView && query.src !== undefined ? { src: query.src } : {}),
+        ...(query.draft === true ? { draft: '1' } : {}),
       }).toString();
       return call<PublicProfile>(
         `${encodeURIComponent(handle)}${search === '' ? '' : `?${search}`}`,
-        isView ? { credentials: 'same-origin' } : {},
+        isView || query.draft === true ? { credentials: 'same-origin' } : {},
       );
     },
     times: (handle, itemId, tz, signal) =>

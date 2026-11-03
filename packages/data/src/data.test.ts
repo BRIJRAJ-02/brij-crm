@@ -552,6 +552,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     brand: {
       get: os.brand.get.handler(notServed),
       save: os.brand.save.handler(notServed),
+      publishTemplate: os.brand.publishTemplate.handler(notServed),
+      discardTemplate: os.brand.discardTemplate.handler(notServed),
     },
     deletedWorkspace: {
       deleted: os.deletedWorkspace.deleted.handler(notServed),
@@ -579,6 +581,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       orderItems: os.profile.orderItems.handler(notServed),
       archiveItem: os.profile.archiveItem.handler(notServed),
       deleteItem: os.profile.deleteItem.handler(notServed),
+      publication: os.profile.publication.handler(notServed),
+      publish: os.profile.publish.handler(notServed),
+      discard: os.profile.discard.handler(notServed),
+      versions: os.profile.versions.handler(notServed),
+      restore: os.profile.restore.handler(notServed),
     },
     joinRequests: {
       domains: os.joinRequests.domains.handler(notServed),

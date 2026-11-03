@@ -408,5 +408,8 @@ async function pageShell(handle: string, slug: string, deps: ShellDeps): Promise
     body: publicKey === undefined ? body : withBoot(body, { kind: 'page', publicKey, ...found }),
     status: 200,
     outcome: 'page',
+    // Filed under its owner's handle (spec 0068, AC-6816): a page's Publish and a template's Publish both let go of
+    // the handle's copies, so the booking page's facts here never outlive what guests should see.
+    tags: linkPageCacheTags(handle, found.handle),
   };
 }

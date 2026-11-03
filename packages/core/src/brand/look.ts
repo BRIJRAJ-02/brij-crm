@@ -29,11 +29,22 @@ export interface LookRow extends Record<string, unknown> {
   readonly ground_version: string | null;
 }
 
-/** `owner`'s look columns in `workspace`, or undefined: no page there, or not an active member of it. */
-export async function lookRowOf(tx: WorkspaceTx, owner: string, workspace: string): Promise<LookRow | undefined> {
+/**
+ * `owner`'s look columns in `workspace`, or undefined: no page there, or not an active member of it. `published`
+ * reads them as guests see them (spec 0068, AC-6810: the last Publish); the owner's Design panel reads the draft.
+ */
+export async function lookRowOf(
+  tx: WorkspaceTx,
+  owner: string,
+  workspace: string,
+  which: 'draft' | 'published' = 'draft',
+): Promise<LookRow | undefined> {
   const found = await tx.execute<LookRow>(
-    sql`select accent, accent_dark, cover_path, cover_type, cover_version, ground_path, ground_type, ground_version
-        from crm_profile_look(${owner}::uuid, ${workspace}::uuid)`,
+    which === 'published'
+      ? sql`select accent, accent_dark, cover_path, cover_type, cover_version, ground_path, ground_type, ground_version
+          from crm_profile_look_public(${owner}::uuid, ${workspace}::uuid)`
+      : sql`select accent, accent_dark, cover_path, cover_type, cover_version, ground_path, ground_type, ground_version
+          from crm_profile_look(${owner}::uuid, ${workspace}::uuid)`,
   );
   return found.rows[0];
 }
@@ -128,7 +139,13 @@ export async function saveProfileImage(
         sql`select crm_save_profile_image(${owner}::uuid, ${scope.workspaceId}::uuid, ${slot}, ${image?.path ?? null}, ${image?.type ?? null}, ${image?.version ?? null}) as previous`,
       );
       await showLinkPage(tx, owner, scope.workspaceId);
-      return saved.rows[0]?.previous ?? undefined;
+      const replaced = saved.rows[0]?.previous ?? undefined;
+      // A photo guests still see (spec 0068: the change waits for Publish) stays in the store until it is replaced
+      // there too.
+      const live = replaced === undefined ? undefined : await lookRowOf(tx, owner, scope.workspaceId, 'published');
+      return replaced !== undefined && (live?.cover_path === replaced || live?.ground_path === replaced)
+        ? undefined
+        : replaced;
     } catch (error) {
       return definerRefusal(error);
     }

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { FormDocument, RoutingRule, SubmitBody } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterBookingPage, enterLinkPage, enterPublicForm } from '../access/door.ts';
+import { enterBookingPage, enterLinkPage as liveEnterLinkPage, enterPublicForm } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -16,12 +16,18 @@ import { submitForm } from '../forms/public.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
 import { archiveProfileItem, importProfileLinks, readProfileItems, saveProfileItem } from '../profile/items.ts';
-import { testScope } from '../testing.ts';
+import { testScope, publishLinkPageForTest } from '../testing.ts';
 import { createBookingPage } from './pages.ts';
 import { readLinkPage } from './public.ts';
 import { workspaceAddressProblem } from './workspace-addresses.ts';
 
-const { appUrl, ownerUrl } = inject('testDatabase');
+const { appUrl, ownerUrl, adminUrl } = inject('testDatabase');
+// Spec 0068: a link page's edits are a draft until Publish. A visitor's read here is of the page as its owner
+// would have published it just before, which is what these tests were written against.
+const enterLinkPage = async (...args: Parameters<typeof liveEnterLinkPage>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveEnterLinkPage(...args);
+};
 let db: Database;
 
 const ORIGIN = 'https://timefix.test';

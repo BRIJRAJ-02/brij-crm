@@ -16,6 +16,8 @@ import {
 } from './booking/link-page.ts';
 import { PROFILE_INSIGHT_DAYS } from './booking/link-page-rules.ts';
 import { PageTheme } from './booking/page-theme.ts';
+import { PageVersionList } from './booking/publish.ts';
+import { Timestamp } from './values/attribute-values.ts';
 import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
 import { checkSocialLink, checkWebLink, socialLinkProblem } from './values/social.ts';
@@ -423,6 +425,18 @@ export const SaveQrStyleInput = WorkspaceScoped.extend({ style: ProfileQrStyle.n
 export type SaveQrStyleInput = z.infer<typeof SaveQrStyleInput>;
 
 /**
+ * Where a person's link page stands against what guests see (spec 0068, AC-6811): each change not published yet in a
+ * plain sentence ("Template Classic → Studio", "Added “Shop”"), empty when guests see the page as it is; and when it
+ * was last published, absent for a page never published.
+ */
+export const LinkPagePublication = z.object({
+  changes: z.array(z.string()),
+  publishedAt: Timestamp.optional(),
+});
+/** Where a person's link page stands. */
+export type LinkPagePublication = z.infer<typeof LinkPagePublication>;
+
+/**
  * The profile procedures: any active member, for themself only. The link page's (spec 0051) act on the caller's own
  * account in every workspace: the owner is the session's, never an input, and no role reaches another person's.
  */
@@ -483,4 +497,17 @@ export const profileContract = {
   show: oc
     .input(WorkspaceScoped.extend({ mutationId: Uuid, live: z.boolean().optional() }))
     .output(z.object({ isPublic: z.boolean() })),
+  /**
+   * Publish for the caller's own link page (spec 0068, AC-6810 to AC-6812): its edits are a draft until Publish.
+   * `publication` reads where it stands; `publish` puts the draft live, keeping a version; `discard` puts the page
+   * back to what guests see; `versions` lists the last 20; `restore` makes one the draft. Pausing, the handle, the
+   * share picture and indexing stay instant (AC-6813).
+   */
+  publication: oc.input(WorkspaceScoped).output(LinkPagePublication),
+  publish: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(LinkPagePublication),
+  discard: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(LinkPagePublication),
+  versions: oc.input(WorkspaceScoped).output(PageVersionList),
+  restore: oc
+    .input(WorkspaceScoped.extend({ mutationId: Uuid, version: z.number().int().min(1) }))
+    .output(LinkPagePublication),
 };

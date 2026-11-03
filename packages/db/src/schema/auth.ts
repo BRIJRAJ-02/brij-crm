@@ -403,12 +403,22 @@ export const publicProfiles = auth.table(
     showJobTitle: boolean('show_job_title').notNull().default(false),
     siteUrl: text('site_url'),
     footLine: text('foot_line'),
+    /**
+     * What guests see (spec 0068, AC-6810): the page's drafted columns by name and its live blocks, as the last Publish
+     * left them. The rows above are the draft. Written only by `crm_publish_link_page`; null until first published.
+     */
+    published: jsonb('published'),
+    publishedAt: timestamptz('published_at'),
     updatedAt: updatedAt(),
   },
   (t) => [
     primaryKey({ name: 'public_profiles_pkey', columns: [t.userId, t.workspaceId] }),
     uniqueIndex('public_profiles_handle').on(t.handle),
     check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
+    check(
+      'public_profiles_published',
+      sql`(${t.published} is null) = (${t.publishedAt} is null) and (${t.published} is null or (jsonb_typeof(${t.published}) = 'object' and jsonb_typeof(${t.published} -> 'items') = 'array'))`,
+    ),
     check(
       'public_profiles_site',
       sql`${t.siteUrl} is null or (char_length(${t.siteUrl}) between 12 and 200 and ${t.siteUrl} ~ '^https://[^/?#@[:space:][:cntrl:]]+[.][^/?#@[:space:][:cntrl:]]+([/?#][^[:space:][:cntrl:]]*)?$')`,

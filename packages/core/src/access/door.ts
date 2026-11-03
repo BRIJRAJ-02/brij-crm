@@ -1010,6 +1010,14 @@ export interface LinkPageViewer {
 }
 
 /**
+ * The draft of a link page (spec 0068, AC-6811's Preview): asked for by a signed in viewer, answered only when the
+ * viewer is the page's owner; anyone else, and a request with no viewer, is answered the published page as ever.
+ */
+export interface LinkPageDraftAsk {
+  readonly draft?: boolean;
+}
+
+/**
  * The person `handle` names, for their link page and what hangs off it (its blocks, contact card, picture, share
  * image, pass and press counts), or undefined (27 Oct 2026). A page made with a membership is private until its
  * owner edits it or shares its link, and a private page answers exactly as a handle nobody holds does, to everyone
@@ -1023,6 +1031,19 @@ async function shownOwner(
   const owner = await handleOwner(db, handle, options.withSocials === true ? { withSocials: true } : {});
   if (owner === undefined) return undefined;
   return owner.isShown || (options.viewer !== undefined && owner.userId === options.viewer) ? owner : undefined;
+}
+
+/** The owner as their draft has them (spec 0068): the bio and look their editor last saved, not the published. */
+async function draftOwner(db: Database, owner: HandleOwner): Promise<HandleOwner> {
+  const draft = await db.withWorkspace(owner.workspaceId, async (tx) => {
+    const found = await tx.execute<{ bio: string; theme: unknown }>(
+      sql`select bio, theme from crm_public_profiles_of(${`{${owner.userId}}`}::uuid[], ${owner.workspaceId}::uuid)`,
+    );
+    return found.rows[0];
+  });
+  return draft === undefined
+    ? owner
+    : { ...owner, bio: draft.bio, theme: PageTheme.safeParse(draft.theme).data ?? DEFAULT_PAGE_THEME };
 }
 
 /**
@@ -1388,7 +1409,8 @@ export async function enterLinkPage(
     readonly after?: ProfileCursor;
     readonly max: number;
     readonly publicOrigins?: readonly string[];
-  } & LinkPageViewer,
+  } & LinkPageViewer &
+    LinkPageDraftAsk,
 ): Promise<{
   readonly owner: HandleOwner;
   readonly rows: readonly LinkPageRow[];
@@ -1405,17 +1427,37 @@ export async function enterLinkPage(
   readonly identity: Pick<PublicProfile, 'role' | 'brand' | 'footLine'>;
 }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
-  const owner = await shownOwner(deps.db, handle, {
+  const reached = await shownOwner(deps.db, handle, {
     withSocials: true,
     ...(query.viewer === undefined ? {} : { viewer: query.viewer }),
   });
-  if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
+  if (reached === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
-  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
-    tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
-    ),
-  );
+  // The owner's own Preview of their draft (spec 0068): the rows their editor writes, in their own workspace.
+  const isDraft = query.draft === true && query.viewer !== undefined && query.viewer === reached.userId;
+  const owner = isDraft ? await draftOwner(deps.db, reached) : reached;
+  const found = isDraft
+    ? await deps.db.withWorkspace(owner.workspaceId, async (tx) => {
+        const all = await tx.execute<LinkPageRow & { readonly archived_at: unknown }>(
+          sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id, archived_at from crm_profile_items(${owner.userId}::uuid, ${owner.workspaceId}::uuid)`,
+        );
+        const rows = all.rows
+          .filter((row) => row.archived_at === null)
+          .sort((one, other) => one.position - other.position || (one.id < other.id ? -1 : 1))
+          .filter(
+            (row) =>
+              after === undefined ||
+              row.position > after.position ||
+              (row.position === after.position && row.id > after.id),
+          )
+          .map(({ archived_at: _archived, ...row }) => row);
+        return { rows: rows.slice(0, Math.max(1, Math.min(query.max, 61))) };
+      })
+    : await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+        tx.execute<LinkPageRow>(
+          sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
+        ),
+      );
   const rows = await withinWorkspace(deps, owner, found.rows, query.publicOrigins ?? []);
   const shown = new Set(rows.map((row) => row.id));
   const skipped = new Set(found.rows.flatMap((row) => (shown.has(row.id) ? [] : [row.id])));
@@ -1436,7 +1478,9 @@ export async function enterLinkPage(
     rows.flatMap((row) => imageIdsOf(row.data)),
   );
   // Read in the owner's own workspace, under its row level security: their job title and its name are its own.
-  const identity = await deps.db.withWorkspace(owner.workspaceId, (tx) => publicIdentityOf(tx, owner));
+  const identity = await deps.db.withWorkspace(owner.workspaceId, (tx) =>
+    publicIdentityOf(tx, owner, isDraft ? 'draft' : 'published'),
+  );
   return { owner, rows: found.rows, pages, forms, skipped, pictures, identity };
 }
 

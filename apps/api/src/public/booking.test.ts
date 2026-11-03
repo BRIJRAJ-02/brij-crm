@@ -16,6 +16,7 @@ import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace, tag } from '../../test/workspace.ts';
 import { BOT_REFUSED } from './booking.ts';
 import { createMemoryLimiter } from './limits.ts';
+import { publishingReads } from '../../test/published-reads.ts';
 
 /** Whole days, in milliseconds. */
 const DAY_MS = 86_400_000;
@@ -63,6 +64,8 @@ beforeAll(() => {
     },
     env,
   });
+  // Spec 0068: reads of a link page see it as its owner would have published it.
+  app = publishingReads(app, inject('testDatabase').adminUrl);
 });
 afterAll(async () => {
   await identity.close();
@@ -658,14 +661,21 @@ describe('page views for the operator console (spec 0047, AC-1625)', () => {
   it('takes a press from the public origin the page is served on, but no other, and no view another site makes', async () => {
     const PUBLIC = 'https://book.example';
     const env = { ...testEnv(), BOOKING_PUBLIC_ORIGIN: PUBLIC };
-    const onPublic = createApp({
-      services: {
-        ...testServices(env, { db, identity, mailer: createMailpitMailer({ url: MAILPIT_URL, from: env.MAIL_FROM }) }),
-        bookingCalendar: calendar,
-        bookingLimiter: createMemoryLimiter(),
-      },
-      env,
-    });
+    const onPublic = publishingReads(
+      createApp({
+        services: {
+          ...testServices(env, {
+            db,
+            identity,
+            mailer: createMailpitMailer({ url: MAILPIT_URL, from: env.MAIL_FROM }),
+          }),
+          bookingCalendar: calendar,
+          bookingLimiter: createMemoryLimiter(),
+        },
+        env,
+      }),
+      inject('testDatabase').adminUrl,
+    );
     const m = await memberWithWorkspace(app);
     const handle = `beacon-${newId().slice(-8)}`;
     await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });

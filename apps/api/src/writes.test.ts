@@ -97,6 +97,9 @@ const READS: ReadonlySet<string> = new Set([
   'profile.formChoices',
   // Add to Wallet (spec 0055): the address to save their own page from, made and never stored.
   'profile.walletLink',
+  // Publish for the link page (spec 0068): where it stands, and its versions.
+  'profile.publication',
+  'profile.versions',
   // The share QR's style (spec 0061, AC-6124): a read of schema auth through a definer.
   'profile.qrStyle',
   'deletedWorkspace.deleted',
@@ -211,6 +214,8 @@ const READS: ReadonlySet<string> = new Set([
   // Booking pages (spec 0025).
   'bookingPages.list',
   'bookingPages.get',
+  // A page's published versions (spec 0068, AC-6812).
+  'bookingPages.versions',
   // Where a page's answers may be filed (spec 0057): People and its attributes as this reader may write them.
   'bookingPages.attributes',
   // Managed booking pages (spec 0037, AC-1333): the templates the reader may change, and one of them.
@@ -842,6 +847,25 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'profile.setIndexable': async (m, mutationId) => {
     const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
     await m.client.profile.setIndexable({ workspace: m.slug, indexable: false, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  // Publish for the link page (spec 0068): the published snapshot and its versions, no record changes, so no outbox
+  // row of its own beyond the handle's claim. Discard and Restore need a published page first.
+  'profile.publish': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.publish({ workspace: m.slug, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  'profile.discard': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.publish({ workspace: m.slug, mutationId: newId() });
+    await m.client.profile.discard({ workspace: m.slug, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  'profile.restore': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.publish({ workspace: m.slug, mutationId: newId() });
+    await m.client.profile.restore({ workspace: m.slug, version: 1, mutationId });
     return [{ kind: 'members', item_ids: [me.memberId] }];
   },
   // Sharing the link page makes it public (27 Oct 2026): one column in schema auth, no outbox row of its own.
@@ -3228,6 +3252,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'profile.saveAccent': 2,
   'profile.setIndexable': 2,
   'profile.show': 2,
+  'profile.publish': 2,
+  'profile.discard': 3,
+  'profile.restore': 3,
   'profile.setShareImage': 2,
   'profile.orderItems': 2,
   'profile.archiveItem': 2,

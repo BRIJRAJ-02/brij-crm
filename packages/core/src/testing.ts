@@ -3,6 +3,7 @@
 // Lint allows this import only in tests and scripts.
 import { KEY_SCOPES, type Role } from '@crm/contracts';
 import type { Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import type { DoorSession } from './access/door.ts';
 import { mintScope, type EngineScope } from './access/mint.ts';
 import { keyAccess, NO_RULES, roleAccess, SYSTEM_ACCESS, type Access, type AccessRules } from './access/policy.ts';
@@ -114,4 +115,30 @@ export { createFakeCalendarProvider, type FakeCalendar } from './calendar/fake.t
  */
 export function signedInNow(secondFactor = false): DoorSession {
   return { verifiedAt: new Date(), hasSecondFactor: () => Promise.resolve(secondFactor) };
+}
+
+/**
+ * Publishes the link page a handle names (spec 0068: a link page's edits are a draft until Publish), as its owner's
+ * Publish would, for a test that reads the page as a visitor right after editing it. Through a superuser on the test
+ * database, since the rows reader is crm_handle's alone; never in production code.
+ */
+export async function publishLinkPageForTest(adminUrl: string, handle: string): Promise<void> {
+  await testQuery(
+    adminUrl,
+    `update auth.public_profiles p
+     set published = public.crm_link_page_rows(p.user_id, p.workspace_id), published_at = now()
+     where (p.user_id, p.workspace_id) in (select h.user_id, h.workspace_id from auth.public_handles h where h.handle = $1)`,
+    [handle],
+  );
+}
+
+/** `publishLinkPageForTest` for the owner of a booking page: their personal pages wear their published look. */
+export async function publishPageOwnerForTest(adminUrl: string, pageId: string): Promise<void> {
+  await testQuery(
+    adminUrl,
+    `update auth.public_profiles p
+     set published = public.crm_link_page_rows(p.user_id, p.workspace_id), published_at = now()
+     where (p.user_id, p.workspace_id) in (select b.owner_user_id, b.workspace_id from public.booking_pages b where b.id = $1)`,
+    [pageId],
+  );
 }

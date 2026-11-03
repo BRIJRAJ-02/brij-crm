@@ -11,7 +11,8 @@ import {
   type WorkspaceBrand,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { publicProfilesOf } from '../booking/handles.ts';
 import { requirePermission } from '../access/check.ts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
@@ -19,7 +20,7 @@ import { inWorkspace } from '../access/run.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import { writeAudit } from '../members/audit.ts';
 
-const { workspaceBrands } = schema;
+const { members, workspaceBrands } = schema;
 
 /** The kit's row as the services read it. */
 export interface BrandRow {
@@ -30,6 +31,8 @@ export interface BrandRow {
   readonly logoVersion: string | null;
   /** The workspace's template (spec 0068, AC-6804); the column's check holds it to the four. */
   readonly template: string;
+  /** A template picked and not published yet (spec 0068). */
+  readonly templateDraft: string | null;
 }
 
 /** The template a kit row wears: its own when it is one of the four, else Classic (and Classic with no row). */
@@ -47,6 +50,7 @@ export async function brandRowOf(tx: WorkspaceTx, workspaceId: string): Promise<
       logoType: workspaceBrands.logoType,
       logoVersion: workspaceBrands.logoVersion,
       template: workspaceBrands.template,
+      templateDraft: workspaceBrands.templateDraft,
     })
     .from(workspaceBrands)
     .where(eq(workspaceBrands.workspaceId, workspaceId));
@@ -59,6 +63,9 @@ function toBrand(row: BrandRow | undefined, canEdit: boolean): WorkspaceBrand {
     ...(typeof row?.accentDark === 'string' ? { accentDark: row.accentDark } : {}),
     ...(typeof row?.logoVersion === 'string' ? { logo: { version: row.logoVersion } } : {}),
     template: templateOf(row),
+    ...(isPageTemplate(row?.templateDraft) && row.templateDraft !== templateOf(row)
+      ? { templateDraft: row.templateDraft }
+      : {}),
     canEdit,
   };
 }
@@ -150,16 +157,15 @@ export async function saveWorkspaceBrand(
   const template = input.template;
   const row = await inWorkspace(scope, async (tx) => {
     const was = await brandRowOf(tx, scope.workspaceId);
+    // A template waits for Publish (owner, 4 Nov 2026): the pick is the draft, and the live one back again is none.
+    const draft = template === undefined ? {} : { templateDraft: template === templateOf(was) ? null : template };
     await tx
       .insert(workspaceBrands)
-      .values({ workspaceId: scope.workspaceId, accent, accentDark, updatedBy: by, ...(template ? { template } : {}) })
+      .values({ workspaceId: scope.workspaceId, accent, accentDark, updatedBy: by, ...draft })
       .onConflictDoUpdate({
         target: workspaceBrands.workspaceId,
-        set: { accent, accentDark, updatedBy: by, updatedAt: sql`now()`, ...(template ? { template } : {}) },
+        set: { accent, accentDark, updatedBy: by, updatedAt: sql`now()`, ...draft },
       });
-    if (template !== undefined && templateOf(was) !== template) {
-      await auditBrand(tx, scope, { brandTemplate: templateOf(was) }, { brandTemplate: template });
-    }
     if ((was?.accent ?? null) !== accent || (was?.accentDark ?? null) !== accentDark) {
       await auditBrand(
         tx,
@@ -168,6 +174,62 @@ export async function saveWorkspaceBrand(
         { brandAccent: accent, brandAccentDark: accentDark },
       );
     }
+    return brandRowOf(tx, scope.workspaceId);
+  });
+  return toBrand(row, true);
+}
+
+/**
+ * Puts the waiting template live (spec 0068, owner 4 Nov 2026): every public page wears it from the next read, and
+ * the change is audited. With none waiting, the kit answers as it is. The caller purges every public page's edge
+ * copies once this commits.
+ */
+export async function publishBrandTemplate(scope: EngineScope): Promise<WorkspaceBrand> {
+  requireBrandEditor(scope);
+  const by = memberOf(scope);
+  const row = await inWorkspace(scope, async (tx) => {
+    const was = await brandRowOf(tx, scope.workspaceId);
+    const next = was?.templateDraft;
+    if (!isPageTemplate(next)) return was;
+    await tx
+      .update(workspaceBrands)
+      .set({ template: next, templateDraft: null, updatedBy: by, updatedAt: sql`now()` })
+      .where(eq(workspaceBrands.workspaceId, scope.workspaceId));
+    if (next !== templateOf(was)) {
+      await auditBrand(tx, scope, { brandTemplate: templateOf(was) }, { brandTemplate: next });
+    }
+    return brandRowOf(tx, scope.workspaceId);
+  });
+  return toBrand(row, true);
+}
+
+/**
+ * The handles of the workspace's active members' link pages, for purging every public page's edge copies after the
+ * template changes (AC-6816). A workspace's own read, under its row level security.
+ */
+export async function workspaceHandles(scope: EngineScope): Promise<readonly string[]> {
+  return inWorkspace(scope, async (tx) => {
+    const people = await tx
+      .select({ userId: members.userId })
+      .from(members)
+      .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.status, 'active')));
+    const held = await publicProfilesOf(
+      tx,
+      scope.workspaceId,
+      people.map((one) => one.userId),
+    );
+    return [...held.values()].map((one) => one.handle);
+  });
+}
+
+/** Lets the waiting template go: every public page keeps the one it wears. */
+export async function discardBrandTemplate(scope: EngineScope): Promise<WorkspaceBrand> {
+  requireBrandEditor(scope);
+  const row = await inWorkspace(scope, async (tx) => {
+    await tx
+      .update(workspaceBrands)
+      .set({ templateDraft: null })
+      .where(eq(workspaceBrands.workspaceId, scope.workspaceId));
     return brandRowOf(tx, scope.workspaceId);
   });
   return toBrand(row, true);

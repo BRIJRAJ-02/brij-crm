@@ -45,6 +45,11 @@ export const WorkspaceBrand = z.object({
   logo: z.object({ version: ImageVersion }).optional(),
   /** The template every public page wears (spec 0068, AC-6804); Classic until an owner or admin picks another. */
   template: z.enum(PAGE_TEMPLATES),
+  /**
+   * A template picked in Settings › Brand and not published yet (owner, 4 Nov 2026): every public page keeps
+   * `template` until Publish. Absent when nothing waits.
+   */
+  templateDraft: z.enum(PAGE_TEMPLATES).optional(),
   canEdit: z.boolean(),
 });
 /** A workspace's brand kit. */
@@ -133,4 +138,10 @@ export const UPLOAD_WORKSPACE_HEADER = 'x-crm-workspace';
 export const brandContract = {
   get: oc.input(WorkspaceScoped).output(WorkspaceBrand),
   save: oc.input(SaveBrandInput).output(WorkspaceBrand),
+  /**
+   * The template picked in Settings › Brand goes live on every public page (spec 0068: it waits for Publish), or is
+   * let go. `workspace.manage`, as a save is.
+   */
+  publishTemplate: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(WorkspaceBrand),
+  discardTemplate: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(WorkspaceBrand),
 };

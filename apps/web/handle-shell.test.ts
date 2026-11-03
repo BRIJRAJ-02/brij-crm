@@ -388,12 +388,12 @@ describe('the edge cache tags', () => {
     expect(answer.tags).toEqual(['link-page:anish']);
   });
 
-  it('files nothing for a miss or a booking page, which the switch doesn’t touch', async () => {
+  it('files nothing for a miss, and a booking page under its owner’s handle, so a Publish lets it go (spec 0068)', async () => {
     const missed = await shellFor('/anish', deps({ readProfile: () => Promise.reject(new Error('down')) }));
     expect(missed.tags).toBeUndefined();
     const booking = await shellFor('/anish/intro', deps({ readPage: () => Promise.resolve(page) }));
     expect(booking.outcome).toBe('page');
-    expect(booking.tags).toBeUndefined();
+    expect(booking.tags).toEqual(['link-page:anish']);
   });
 });
 

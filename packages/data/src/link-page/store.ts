@@ -7,7 +7,9 @@
 // list is refused by the server and read again.
 import type {
   FetchedThumbnail,
+  LinkPagePublication,
   PageTheme,
+  PageVersionList,
   ProfileBlock,
   ProfileQrStyle,
   ProfileCounts,
@@ -233,6 +235,23 @@ interface ProfileProcedures {
     input: { workspace: string; id: string; mutationId: string },
     options: { signal?: AbortSignal },
   ) => Promise<{ readonly id: string }>;
+  readonly publication: (
+    input: { workspace: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<LinkPagePublication>;
+  readonly publish: (
+    input: { workspace: string; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<LinkPagePublication>;
+  readonly discard: (
+    input: { workspace: string; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<LinkPagePublication>;
+  readonly versions: (input: { workspace: string }, options: { signal?: AbortSignal }) => Promise<PageVersionList>;
+  readonly restore: (
+    input: { workspace: string; mutationId: string; version: number },
+    options: { signal?: AbortSignal },
+  ) => Promise<LinkPagePublication>;
 }
 
 /** A read this recent serves a new holder as it is: the route's loader and the screen it opens hold it together. */
@@ -1037,6 +1056,46 @@ export function openLinkPage(given: {
     /** Brings one link in bio page across (spec 0055, AC-5524): the rows land hidden, for a person to turn on. */
     importLinks: (workspace: string, id: string, url: string): Promise<ProfileLinkImport> =>
       store.importLinks(workspace, id, url),
+    /**
+     * Publish for the page (spec 0068, AC-6810 to AC-6812): every edit above is a draft until Publish. Where it
+     * stands, Publish, Discard (the screen asks first), the last 20 versions and Restore, each answering where the
+     * page stands after it; a refusal comes back as a DataError for the bar to say. After Discard or Restore the
+     * blocks are read again, since the rows changed under the store.
+     */
+    publication: {
+      read: (workspace: string): Promise<LinkPagePublication> =>
+        call((options) => profile.publication({ workspace }, options)).catch((error: unknown) => {
+          throw toDataError(error);
+        }),
+      publish: (workspace: string): Promise<LinkPagePublication> =>
+        call((options) => profile.publish({ workspace, mutationId: given.mintId() }, options)).catch(
+          (error: unknown) => {
+            throw toDataError(error);
+          },
+        ),
+      discard: async (workspace: string): Promise<LinkPagePublication> => {
+        const answer = await call((options) =>
+          profile.discard({ workspace, mutationId: given.mintId() }, options),
+        ).catch((error: unknown) => {
+          throw toDataError(error);
+        });
+        await store.read(workspace).catch(() => undefined);
+        return answer;
+      },
+      versions: (workspace: string): Promise<PageVersionList> =>
+        call((options) => profile.versions({ workspace }, options)).catch((error: unknown) => {
+          throw toDataError(error);
+        }),
+      restore: async (workspace: string, version: number): Promise<LinkPagePublication> => {
+        const answer = await call((options) =>
+          profile.restore({ workspace, mutationId: given.mintId(), version }, options),
+        ).catch((error: unknown) => {
+          throw toDataError(error);
+        });
+        await store.read(workspace).catch(() => undefined);
+        return answer;
+      },
+    },
     /** Signed out: forgets the copy, and the figures and code style beside it. */
     clear: (): void => {
       store.clear();
