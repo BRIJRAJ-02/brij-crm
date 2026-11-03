@@ -40,15 +40,6 @@
     gap: var(--space-8);
   }
 
-  .today {
-    padding: 0 var(--space-6);
-    border-radius: var(--radius-full);
-    background: var(--accent-soft);
-    color: var(--link);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
-  }
-
   .ranges {
     display: flex;
     flex-direction: column;

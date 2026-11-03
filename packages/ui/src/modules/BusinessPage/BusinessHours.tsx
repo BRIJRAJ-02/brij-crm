@@ -1,6 +1,7 @@
 // The business page's opening hours (spec 0066, AC-6641): the week from Monday, each day's ranges in the visitor's
 // language, today marked, closed days said so. Times are the place's own; a visitor in another zone is told whose.
 import type { PlaceHoursShape } from '@crm/contracts/hospitality';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
 import styles from './BusinessHours.module.css';
 import { weekRows, zoneCity } from './hours.ts';
@@ -28,7 +29,7 @@ export function BusinessHours({ hours, timeZone, locale: given }: BusinessHoursP
           <div key={row.day} className={styles.row} data-today={row.isToday || undefined}>
             <dt className={styles.day}>
               {row.name}
-              {row.isToday && <span className={styles.today}>{strings.today}</span>}
+              {row.isToday && <Badge text={strings.today} tone="accent" />}
             </dt>
             <dd className={styles.ranges}>
               {row.ranges.length === 0 ? (

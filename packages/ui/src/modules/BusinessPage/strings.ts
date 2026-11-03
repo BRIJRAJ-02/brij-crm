@@ -27,9 +27,7 @@ export const strings = {
   googleMaps: 'Google Maps',
   appleMaps: 'Apple Maps',
   directionsNewTab: (app: string) => `Directions in ${app} (opens in a new tab)`,
-  call: (phone: string) => `Call ${phone}`,
   website: 'Website',
-  websiteNewTab: 'Website (opens in a new tab)',
   /** Reserve a table. */
   reserve: 'Reserve a table',
   /** Until online reservations open: the place's phone. */

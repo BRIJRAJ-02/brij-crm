@@ -28,6 +28,7 @@ import {
   Card,
   ChoiceChips,
   CopyButton,
+  EditorStatus,
   EmptyState,
   Field,
   FileDrop,
@@ -360,12 +361,17 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
   );
 }
 
-/** "Live · 2 changes not published", "Not published yet". */
+/** "Published Nov 4", "2 changes not published", "Not published yet", with its dot. */
 function PublishStatus({ view }: { readonly view: BusinessPageView }) {
   const { locale } = useFormatSettings();
-  if (view.published === undefined) return <>{words.notPublished}</>;
+  // The editors' one status (a StatusDot with a short word on a phone), as the Form and Page editors show theirs.
+  if (view.published === undefined) return <EditorStatus tone="draft" text={words.notPublished} />;
   const date = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(new Date(view.published.at));
-  return <>{view.hasChanges ? words.changes(view.changes.length || 1) : words.publishedOn(date)}</>;
+  return view.hasChanges ? (
+    <EditorStatus tone="changed" text={words.changes(view.changes.length || 1)} />
+  ) : (
+    <EditorStatus tone="live" text={words.publishedOn(date)} />
+  );
 }
 
 /** The page's address: claimed at once, copied once it has one. */

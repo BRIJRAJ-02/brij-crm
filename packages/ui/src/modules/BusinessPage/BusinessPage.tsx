@@ -12,6 +12,8 @@ import { AMENITY_LABELS, type BusinessAmenity } from '@crm/contracts/business-pa
 import type { PlaceHoursShape } from '@crm/contracts/hospitality';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { Link } from '../../atoms/Link/Link.tsx';
+import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
@@ -247,9 +249,8 @@ function OpenLine({ place, locale }: { readonly place: BusinessPagePlace; readon
   const now = useNow();
   const status = openStatus(place.hours, now, place.timeZone, locale);
   return (
-    <span className={styles.open} data-open={status.isOpen || undefined}>
-      <span className={styles.dot} aria-hidden />
-      <span className={styles.state}>{status.state}</span>
+    <span className={styles.open}>
+      <StatusDot hue={status.isOpen ? 'green' : 'gray'}>{status.state}</StatusDot>
       {status.detail !== undefined && <span className={styles.detail}>{status.detail}</span>}
     </span>
   );
@@ -329,9 +330,9 @@ export function BusinessPage(props: BusinessPageProps) {
               <Icon name="map-pin" />
               <span>{address}</span>
               {directions !== undefined && (
-                <a className={styles.directions} href={directions.google} target="_blank" rel="noopener noreferrer">
+                <Link href={directions.google} weight="strong" opensInNewTab>
                   {strings.directions}
-                </a>
+                </Link>
               )}
             </p>
           )}
@@ -393,10 +394,9 @@ export function BusinessPage(props: BusinessPageProps) {
                 <ul className={styles.places}>
                   {others.map((other) => (
                     <li key={other.href}>
-                      <a className={styles.placeLink} href={safeHref(other.href)}>
-                        <Icon name="map-pin" />
+                      <Link href={other.href} icon="map-pin" weight="strong">
                         {other.name}
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -411,10 +411,11 @@ export function BusinessPage(props: BusinessPageProps) {
                 <OpenLine place={place} locale={locale} />
                 <BusinessReserve action={action} />
                 {directions !== undefined && action.kind !== 'directions' && (
-                  <a className={styles.directions} href={directions.google} target="_blank" rel="noopener noreferrer">
-                    <Icon name="map-pin" />
-                    {strings.directions}
-                  </a>
+                  <p className={styles.panelLink}>
+                    <Link href={directions.google} icon="map-pin" weight="strong" opensInNewTab>
+                      {strings.directions}
+                    </Link>
+                  </p>
                 )}
               </div>
             </aside>

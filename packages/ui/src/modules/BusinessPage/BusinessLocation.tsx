@@ -3,6 +3,7 @@
 // hole in the page's policy.
 import { ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { Link } from '../../atoms/Link/Link.tsx';
 import styles from './BusinessLocation.module.css';
 import { strings } from './strings.ts';
 
@@ -38,24 +39,16 @@ export function BusinessLocation({ lines, phone, directions, website }: Business
         <ul className={styles.contact}>
           {phone !== undefined && (
             <li>
-              <a className={styles.link} href={telOf(phone)} aria-label={strings.call(phone)}>
-                <Icon name="phone" />
+              <Link href={telOf(phone)} icon="phone" weight="strong">
                 {phone}
-              </a>
+              </Link>
             </li>
           )}
           {website !== undefined && (
             <li>
-              <a
-                className={styles.link}
-                href={website}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={strings.websiteNewTab}
-              >
-                <Icon name="globe" />
+              <Link href={website} icon="globe" weight="strong" opensInNewTab>
                 {strings.website}
-              </a>
+              </Link>
             </li>
           )}
         </ul>

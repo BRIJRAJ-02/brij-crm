@@ -113,7 +113,7 @@ const meta = {
       <BusinessPage {...args} />
     </Stage>
   ),
-  parameters: { layout: 'fullscreen', crm: { screenshot: false } },
+  parameters: { layout: 'fullscreen' },
 } satisfies Meta<typeof BusinessPage>;
 
 export default meta;
@@ -125,7 +125,7 @@ type Story = StoryObj<typeof meta>;
  * name's initials stand in.
  */
 export const Restaurant: Story = {
-  parameters: { crm: { preview: true, screenshot: false } },
+  parameters: { crm: { preview: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await settleAnimations();

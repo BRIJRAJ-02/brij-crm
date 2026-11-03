@@ -85,27 +85,6 @@
     color: var(--text-secondary);
   }
 
-  .dot {
-    inline-size: var(--space-8);
-    block-size: var(--space-8);
-    border-radius: var(--radius-full);
-    background: var(--text-tertiary);
-  }
-
-  .open[data-open] .dot {
-    background: var(--success);
-  }
-
-  .state {
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-    color: var(--text);
-  }
-
-  .open[data-open] .state {
-    color: var(--success);
-  }
-
   .description {
     margin: 0;
     max-inline-size: var(--size-column-max);
@@ -123,28 +102,6 @@
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     color: var(--text-secondary);
-  }
-
-  .directions {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-6);
-    color: var(--link);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-    text-decoration: none;
-    border-radius: var(--radius-sm);
-  }
-
-  .directions:focus-visible {
-    outline: none;
-    box-shadow: var(--shadow-focus);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .directions:hover {
-      text-decoration: underline;
-    }
   }
 
   /* The section tabs: stuck under the top, on the page's own ground, sideways on a phone. */
@@ -286,31 +243,6 @@
     list-style: none;
   }
 
-  .placeLink {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-6);
-    padding: var(--space-6) var(--space-12);
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-full);
-    color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-    text-decoration: none;
-    transition: background-color var(--duration-hover) var(--ease-hover);
-  }
-
-  .placeLink:focus-visible {
-    outline: none;
-    box-shadow: var(--shadow-focus);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .placeLink:hover {
-      background: var(--surface-hover);
-    }
-  }
-
   .panel {
     display: none;
   }
@@ -333,8 +265,9 @@
   }
 
   /* Directions under the panel's action: a quiet link, centred under the button. */
-  .panelCard > .directions {
-    align-self: center;
+  .panelLink {
+    margin: 0;
+    text-align: center;
   }
 
   /* A phone's bar at the foot of the screen: the name and whether it is open, and Reserve. */
