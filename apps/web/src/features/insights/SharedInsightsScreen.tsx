@@ -16,7 +16,7 @@ export function SharedInsightsScreen({ shared }: { readonly shared: SharedInsigh
       <TopBar
         title={shared.label}
         icon="chart-line"
-        meta={`${strings.sharedBy(shared.workspaceName)} · ${strings.ranges[shared.range]} · ${shared.pageNames.join(', ')}`}
+        meta={`${strings.sharedBy(shared.workspaceName)} · ${strings.ranges[shared.range]}`}
       />
       <PageColumn>
         <InsightsBody numbers={shared.numbers} />

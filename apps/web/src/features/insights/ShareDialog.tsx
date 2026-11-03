@@ -59,7 +59,7 @@ export function ShareDialog({ data, slug, pages, range, onClose }: ShareDialogPr
 
   const make = () => {
     if (label.trim() === '') {
-      setError(strings.shareNamePlaceholder);
+      setError(strings.shareNameRequired);
       return;
     }
     setMaking(true);

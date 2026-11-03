@@ -61,7 +61,10 @@ export function ChartPlot({ kind, label, points, width, formatTick, compareLabel
   const widest = Math.max(0, ...points.map((point) => (point.axisLabel ?? point.label).length));
   const fits = charsThatFit(slot - 6);
   // A line keeps at least 8 characters of a label (see the x labels below), so its step is worked out on those.
-  const step = labelStep(count, slot, Math.min(widest, kind === 'bar' ? fits : Math.max(fits, 8)));
+  // Labels keep a floor of characters (a bar's 6, a line's 8), so a narrow plot thins its labels rather than cutting
+  // each to a letter.
+  const floor = kind === 'bar' ? Math.max(fits, 6) : Math.max(fits, 8);
+  const step = labelStep(count, slot, Math.min(widest, floor));
   const biggest = values.indexOf(Math.max(...values));
 
   const move = (event: PointerEvent<SVGSVGElement>) => {
@@ -174,7 +177,7 @@ export function ChartPlot({ kind, label, points, width, formatTick, compareLabel
         {points.map((point, index) =>
           index % step === 0 ? (
             <text key={point.id} className={styles.xlabel} x={centre(index)} y={PLOT_HEIGHT - 12} textAnchor="middle">
-              {cutLabel(point.axisLabel ?? point.label, kind === 'bar' ? fits : Math.max(fits, 8))}
+              {cutLabel(point.axisLabel ?? point.label, floor)}
             </text>
           ) : null,
         )}

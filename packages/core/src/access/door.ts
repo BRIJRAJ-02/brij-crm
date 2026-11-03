@@ -1717,7 +1717,13 @@ export async function countItemPress(
   if (!(await isMemberThere(deps.db, owner))) return;
   // A link page's finish is a press of one of its links (AC-6702).
   await deps.db.withWorkspace(owner.workspaceId, (tx) =>
-    finishPageVisit(tx, { workspaceId: owner.workspaceId, kind: 'link', pageId: owner.userId, visitor: pageVisitor }),
+    finishPageVisit(tx, {
+      workspaceId: owner.workspaceId,
+      kind: 'link',
+      pageId: owner.userId,
+      visitor: pageVisitor,
+      onlyCounted: true,
+    }),
   );
 }
 

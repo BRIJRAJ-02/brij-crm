@@ -568,6 +568,9 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     // A machine's press never spends a person's budget: dropped before the limits.
     const userAgent = c.req.header('user-agent');
     if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return silent();
+    // Another site's page may not press for its visitors (spec 0067: a press finishes an Insights visit).
+    const site = c.req.header('sec-fetch-site');
+    if (site !== undefined && site !== 'same-origin') return silent();
     // The handle's budget is per address it is reached by: an old handle has its own (noted for the spec).
     const over = limited([
       [`profile:press:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.pressesPerAddress],

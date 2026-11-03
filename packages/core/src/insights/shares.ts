@@ -29,7 +29,7 @@ import { writeAudit, type AuditSource } from '../members/audit.ts';
 import { insightNumbers, resolvePeriod, type CoveredPage } from './numbers.ts';
 import { pickPages, visiblePages } from './read.ts';
 
-const { insightShares, workspaces } = schema;
+const { insightShares, members, workspaces } = schema;
 
 type Row = typeof insightShares.$inferSelect;
 
@@ -89,7 +89,8 @@ export async function listInsightShares(scope: EngineScope): Promise<{ readonly 
       .select()
       .from(insightShares)
       .where(seesAll(scope) ? undefined : eq(insightShares.createdByMemberId, caller))
-      .orderBy(desc(insightShares.createdAt))
+      // Live links first, so a long tail of revoked ones never hides a live link from the admin who'd revoke it.
+      .orderBy(sql`${insightShares.revokedAt} is not null`, desc(insightShares.createdAt))
       .limit(INSIGHT_SHARES_MAX),
   );
   return { shares: rows.map((row) => toView(row, caller)) };
@@ -233,6 +234,12 @@ export async function readInsightShare(
     ) {
       throw missing();
     }
+    // A link lives only while its maker is an active member: a removed person's links stop opening with them.
+    const [maker] = await tx
+      .select({ status: members.status })
+      .from(members)
+      .where(eq(members.id, row.createdByMemberId));
+    if (maker?.status !== 'active') throw missing();
     const pages = pagesOf(row.pages);
     const range = row.range as InsightRange;
     const period = await resolvePeriod(tx, workspaceId, pages, { range }, now);
@@ -241,12 +248,12 @@ export async function readInsightShare(
     });
     // The pages by name: only what the link already names, read under the workspace's own row security.
     const names = await tx.execute<{ name: string }>(sql`
-      select f.name from forms f where f.id = any(${`{${pages
+      select f.name from forms f where f.status <> 'archived' and f.id = any(${`{${pages
         .filter((p) => p.kind === 'form')
         .map((p) => p.id)
         .join(',')}}`}::uuid[])
       union all
-      select b.title from booking_pages b where b.id = any(${`{${pages
+      select b.title from booking_pages b where b.deleted_at is null and b.id = any(${`{${pages
         .filter((p) => p.kind === 'booking')
         .map((p) => p.id)
         .join(',')}}`}::uuid[])

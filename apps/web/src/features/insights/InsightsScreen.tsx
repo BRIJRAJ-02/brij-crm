@@ -202,6 +202,7 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
               filter={filter}
               onFilter={setFilter}
               onMore={() => sessionsView.more()}
+              onSessionsRetry={() => sessionsView.reload()}
               onRetry={() => view.reload()}
               slug={slug}
               onLonger={() => go({ ...search, range: '90' })}
@@ -224,6 +225,7 @@ function Body({
   filter,
   onFilter,
   onMore,
+  onSessionsRetry,
   onRetry,
   onLonger,
   onPickKind,
@@ -234,6 +236,7 @@ function Body({
   readonly filter: InsightSessionFilter;
   readonly onFilter: (next: InsightSessionFilter) => void;
   readonly onMore: () => void;
+  readonly onSessionsRetry: () => void;
   readonly onRetry: () => void;
   readonly onLonger: () => void;
   readonly onPickKind: () => void;
@@ -301,7 +304,14 @@ function Body({
         sourcesAside={<OtherSites insights={insights} />}
         onPickKind={onPickKind}
       />
-      <Sessions insights={insights} sessions={sessions} filter={filter} onFilter={onFilter} onMore={onMore} />
+      <Sessions
+        insights={insights}
+        sessions={sessions}
+        filter={filter}
+        onFilter={onFilter}
+        onMore={onMore}
+        onSessionsRetry={onSessionsRetry}
+      />
     </>
   );
 }
@@ -331,12 +341,14 @@ function Sessions({
   filter,
   onFilter,
   onMore,
+  onSessionsRetry,
 }: {
   readonly insights: Insights;
   readonly sessions: InsightSessionsState;
   readonly filter: InsightSessionFilter;
   readonly onFilter: (next: InsightSessionFilter) => void;
   readonly onMore: () => void;
+  readonly onSessionsRetry: () => void;
 }) {
   const { locale, timeZone } = useFormatSettings();
   const [open, setOpen] = useState<InsightSession | undefined>(undefined);
@@ -420,7 +432,7 @@ function Sessions({
         }
       />
       {sessions.status === 'error' ? (
-        <EmptyState tone="error" layout="row" title={sessions.message} />
+        <EmptyState tone="error" layout="row" title={sessions.message} onRetry={onSessionsRetry} />
       ) : (
         <Table
           label={strings.sessions}
@@ -477,9 +489,9 @@ function SessionDetails({ session, onClose }: { readonly session: InsightSession
       ? []
       : [
           {
-            term: 'Email',
+            term: strings.email,
             description: session.person.email,
-            copy: { value: session.person.email, label: 'Copy email' },
+            copy: { value: session.person.email, label: strings.copyEmail },
           },
         ]),
     { term: strings.page, description: session.pageName },
@@ -487,8 +499,11 @@ function SessionDetails({ session, onClose }: { readonly session: InsightSession
     ...(landing === undefined
       ? []
       : [
-          ...(['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const).flatMap((key) =>
+          ...(['utm_source', 'utm_medium', 'utm_campaign'] as const).flatMap((key) =>
             landing[key] === undefined ? [] : [{ term: key, description: landing[key] }],
+          ),
+          ...(['utm_term', 'utm_content'] as const).flatMap((key) =>
+            landing[key] === true ? [{ term: key, description: strings.present }] : [],
           ),
           ...(landing.gclid === true ? [{ term: 'gclid', description: strings.clickId }] : []),
           ...(landing.fbclid === true ? [{ term: 'fbclid', description: strings.clickId }] : []),

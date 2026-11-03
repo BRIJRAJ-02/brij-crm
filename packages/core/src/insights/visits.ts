@@ -103,6 +103,11 @@ export interface PageVisitFinish {
   /** The submission or booking the finish made. */
   readonly outcomeId?: string;
   readonly origin?: VisitOrigin;
+  /**
+   * Only finish a visit already counted today, never make one: a link page's press, which any page could send, so
+   * it can't make a finished visit out of nothing.
+   */
+  readonly onlyCounted?: boolean;
 }
 
 /**
@@ -113,6 +118,17 @@ export interface PageVisitFinish {
  */
 export async function finishPageVisit(tx: WorkspaceTx, finish: PageVisitFinish): Promise<void> {
   if (finish.visitor === undefined || !VISITOR_ID.test(finish.visitor)) return;
+  if (finish.onlyCounted === true) {
+    await tx.execute(sql`
+      update page_visits set
+        finished_at = now(),
+        last_at = now(),
+        duration_ms = greatest(0, (extract(epoch from (now() - coalesce(started_at, first_at))) * 1000)::bigint)::integer
+      where workspace_id = ${finish.workspaceId} and page_kind = ${finish.kind} and page_id = ${finish.pageId}
+        and day = (now() at time zone 'UTC')::date and visitor = ${finish.visitor} and finished_at is null
+    `);
+    return;
+  }
   const source = finish.origin?.source ?? { source: 'direct' };
   const landing = finish.origin?.landing;
   await tx.execute(sql`

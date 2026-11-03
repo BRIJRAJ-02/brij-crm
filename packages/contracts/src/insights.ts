@@ -71,8 +71,9 @@ export const VisitLanding = z.strictObject({
   utm_source: z.string().max(100).optional(),
   utm_medium: z.string().max(100).optional(),
   utm_campaign: z.string().max(100).optional(),
-  utm_term: z.string().max(100).optional(),
-  utm_content: z.string().max(100).optional(),
+  /** Presence only: an email tool may put the recipient's address or an id in these two. */
+  utm_term: z.literal(true).optional(),
+  utm_content: z.literal(true).optional(),
   gclid: z.literal(true).optional(),
   fbclid: z.literal(true).optional(),
 });
@@ -80,7 +81,9 @@ export const VisitLanding = z.strictObject({
 export type VisitLanding = z.infer<typeof VisitLanding>;
 
 /** The UTM tags this reads, in the order a session shows them. */
-const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const;
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign'] as const;
+/** The tags kept only as being there. */
+const PRESENCE_KEYS = ['utm_term', 'utm_content', 'gclid', 'fbclid'] as const;
 
 /**
  * The landing parameters from a page's own address (`location.search`): the UTM tags cut to 100 characters, and a
@@ -98,8 +101,7 @@ export function readLanding(search: string): VisitLanding | undefined {
     const value = params.get(key)?.trim();
     if (value !== undefined && value !== '') landing[key] = value.slice(0, 100);
   }
-  if ((params.get('gclid') ?? '') !== '') landing.gclid = true;
-  if ((params.get('fbclid') ?? '') !== '') landing.fbclid = true;
+  for (const key of PRESENCE_KEYS) if ((params.get(key) ?? '') !== '') landing[key] = true;
   const parsed = VisitLanding.safeParse(landing);
   return parsed.success && Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
 }

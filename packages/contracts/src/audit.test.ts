@@ -23,6 +23,9 @@ describe('the kinds of change', () => {
     expect(AUDIT_NOT_LISTED).toEqual([
       'member.preferences_changed',
       'booking_page.profile_reordered',
+      // Insights share links (spec 0067): stored, their History sentence owed.
+      'insights.share_created',
+      'insights.share_revoked',
       // A preview (spec 0032, AC-858) is stored and never listed.
       'access.previewed',
       'record.duplicate_dismissed',

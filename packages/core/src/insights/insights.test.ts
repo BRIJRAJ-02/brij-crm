@@ -22,7 +22,7 @@ import { countFormEvent } from '../forms/visits.ts';
 import { readInsights, readInsightSessions } from './read.ts';
 import { rollUpPageVisits } from './rollup.ts';
 import { createInsightShare, listInsightShares, readInsightShare, revokeInsightShare } from './shares.ts';
-import { originOf } from './visits.ts';
+import { countPageVisit, finishPageVisit, originOf } from './visits.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -257,6 +257,40 @@ describe('the Insights numbers (AC-6711 to AC-6714, AC-6730)', () => {
   });
 });
 
+describe('a finish that may only end a counted visit (a link page’s press)', () => {
+  it('finishes today’s counted visit, and makes nothing from nothing', async () => {
+    const w = await workspace();
+    const page = newId();
+    await db.withWorkspace(w.workspaceId, async (tx) => {
+      await finishPageVisit(tx, {
+        workspaceId: w.workspaceId,
+        kind: 'link',
+        pageId: page,
+        visitor: visitorHash('stranger'),
+        onlyCounted: true,
+      });
+      await countPageVisit(tx, {
+        workspaceId: w.workspaceId,
+        kind: 'link',
+        pageId: page,
+        visitor: visitorHash('seen'),
+        step: 'view',
+      });
+      await finishPageVisit(tx, {
+        workspaceId: w.workspaceId,
+        kind: 'link',
+        pageId: page,
+        visitor: visitorHash('seen'),
+        onlyCounted: true,
+      });
+    });
+    const rows = await w.query<{ visitor: string; finished: boolean }>(
+      sql`select visitor, finished_at is not null as finished from page_visits`,
+    );
+    expect(rows).toEqual([{ visitor: visitorHash('seen'), finished: true }]);
+  });
+});
+
 describe('sessions (AC-6715)', () => {
   it('names a finished visitor to a member who may read the submission, and nobody else', async () => {
     const w = await workspace();
@@ -393,6 +427,22 @@ describe('share links (AC-6720)', () => {
       'insights.share_created',
       'insights.share_revoked',
     ]);
+  });
+
+  it('stops opening once its maker is no longer an active member, and hides deleted pages’ names', async () => {
+    const w = await workspace();
+    const form = await liveForm(w);
+    await pastVisit(w, form.id, 'one', 1);
+    const made = await createInsightShare(w.scope, { label: 'Client', pages: {}, range: '30' });
+    expect((await readInsightShare({ db }, made.token)).pageNames).toEqual(['Enquiry']);
+    await w.query(sql`update forms set status = 'archived', archived_at = now() where id = ${form.id}`);
+    expect((await readInsightShare({ db }, made.token)).pageNames).toEqual([]);
+    // Another owner first: the last one can't go.
+    await w.query(
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${w.workspaceId}, ${newId()}, 'Grace', 'grace@example.com', 'owner', 'system', 'system')`,
+    );
+    await w.query(sql`update members set status = 'removed' where email = 'ada@example.com'`);
+    expect(await refusalOf(readInsightShare({ db }, made.token))).toMatchObject([{ code: 'NOT_FOUND' }]);
   });
 
   it('refuses an expiry in the past, and a page the maker can’t see', async () => {
