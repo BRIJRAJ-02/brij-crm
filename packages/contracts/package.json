@@ -52,6 +52,8 @@
     "./emails": "./src/emails.ts",
     "./brand": "./src/brand.ts",
     "./hospitality": "./src/hospitality-model.ts",
+    "./hospitality-hours": "./src/hospitality-hours.ts",
+    "./business-page": "./src/business-page-model.ts",
     "./brand-colour": "./src/brand-colour.ts",
     "./computed": "./src/computed-rules.ts",
     "./formula": "./src/formula/index.ts"

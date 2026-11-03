@@ -117,6 +117,8 @@ const READS: ReadonlySet<string> = new Set([
   'hospitality.apps',
   'hospitality.business',
   'hospitality.resources',
+  // The business page's editor (spec 0066, B4 lite).
+  'businessPage.page',
   // The roles every role picker offers (spec 0037, AC-1439), and the Roles page's reads (job J9).
   'roles.list',
   'roles.overview',
@@ -3062,6 +3064,12 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'hospitality.archiveResource': 3,
   'hospitality.restoreResource': 4,
   'hospitality.deleteResource': 3,
+  // The business page (spec 0066): installed first (and its address and hours before a publish).
+  'businessPage.claimHandle': 2,
+  'businessPage.save': 2,
+  'businessPage.setPlaceSlug': 2,
+  'businessPage.publish': 4,
+  'businessPage.discard': 2,
   // Webhooks (spec 0064): the endpoint made first (and a test event before a resend).
   'webhooks.update': 2,
   'webhooks.rotateSecret': 2,
@@ -3478,6 +3486,68 @@ Object.assign(WRITES, {
     const { placeId } = await hospitalityOf(m);
     const [one] = await tablesAt(m, placeId);
     await m.client.hospitality.deleteResource({ workspace: m.slug, placeId, resourceId: one, mutationId });
+    return [{ kind: 'nav' }];
+  },
+});
+
+/** A business with its page's address claimed and its place's hours set, so it can publish (spec 0066, B4). */
+async function businessPageOf(m: Member): Promise<{ readonly placeId: string }> {
+  const { placeId } = await hospitalityOf(m);
+  await m.client.businessPage.claimHandle({
+    workspace: m.slug,
+    handle: `biz-${m.workspace.id.slice(-12)}`,
+    mutationId: newId(),
+  });
+  await m.client.hospitality.updatePlace({
+    workspace: m.slug,
+    placeId,
+    place: {
+      name: 'Somewhere',
+      addressLine: '1 Example Street',
+      city: 'London',
+      country: 'GB',
+      timeZone: 'Europe/London',
+    },
+    hours: { weekly: { mon: [{ from: '09:00', to: '17:00' }] }, exceptions: [] },
+    mutationId: newId(),
+  });
+  return { placeId };
+}
+
+// The business page's editor (spec 0066, B4 lite): no record changes and no outbox row of its own; the rows are the
+// install's `nav`.
+Object.assign(WRITES, {
+  'businessPage.claimHandle': async (m: Member, mutationId: string) => {
+    await hospitalityOf(m);
+    await m.client.businessPage.claimHandle({
+      workspace: m.slug,
+      handle: `biz-${m.workspace.id.slice(-12)}`,
+      mutationId,
+    });
+    return [{ kind: 'nav' }];
+  },
+  'businessPage.save': async (m: Member, mutationId: string) => {
+    await hospitalityOf(m);
+    await m.client.businessPage.save({
+      workspace: m.slug,
+      draft: { gallery: [], amenities: ['wifi'], hiddenPlaces: [] },
+      mutationId,
+    });
+    return [{ kind: 'nav' }];
+  },
+  'businessPage.setPlaceSlug': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    await m.client.businessPage.setPlaceSlug({ workspace: m.slug, placeId, slug: 'indiranagar', mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'businessPage.publish': async (m: Member, mutationId: string) => {
+    await businessPageOf(m);
+    await m.client.businessPage.publish({ workspace: m.slug, mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'businessPage.discard': async (m: Member, mutationId: string) => {
+    await hospitalityOf(m);
+    await m.client.businessPage.discard({ workspace: m.slug, mutationId });
     return [{ kind: 'nav' }];
   },
 });

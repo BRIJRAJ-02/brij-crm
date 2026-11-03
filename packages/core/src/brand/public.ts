@@ -114,6 +114,15 @@ export async function readFormBrand(entry: { readonly scope: EngineScope }): Pro
   });
 }
 
+/**
+ * A business page's brand (spec 0066, AC-6643): its workspace's accent and logo, in the caller's transaction, which
+ * the business handle's own entry opened in that workspace.
+ */
+export async function businessBrandOf(tx: WorkspaceTx, workspaceId: string): Promise<PageBrand> {
+  const brand = await brandRowOf(tx, workspaceId);
+  return pageBrandOf(accentsOf(undefined, brand), brand);
+}
+
 /** One photo of a link page: where the store keeps it, its checked type, and the version its path carries. */
 export interface LookImage {
   readonly path: string;

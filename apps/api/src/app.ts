@@ -65,6 +65,8 @@ import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
 import { mountBrandCss } from './public/brand-css.ts';
+import { mountPublicBusiness } from './public/business.ts';
+import { mountBusinessPagePhotos } from './business-page-photos.ts';
 import { mountLook } from './public/look.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
 import { createPictureFetch, createPictureLoader, type PictureFetch } from './public/picture.ts';
@@ -687,6 +689,8 @@ export function createApp({
   // origin. Before the booking routes, so `/handles/<handle>/look.css` is never read as a page's slug.
   mountBrandCss(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountLook(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), auth, edgeCache });
+  // The business page (spec 0066, B4 lite): the published page, its pictures and its brand, by the business handle.
+  mountPublicBusiness(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountPublicBooking(app, {
     db,
     handoffKey: formsHandoffKey,
@@ -775,6 +779,8 @@ export function createApp({
   mountLinkPageImages(app, imageRoutes);
   // A link page's pictures and its Insights download (spec 0061), the same way.
   mountLinkPagePictures(app, imageRoutes);
+  // The business page's gallery pictures (spec 0066, B4 lite), the same way.
+  mountBusinessPagePhotos(app, imageRoutes);
   // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
   mountLogos(app, { auth, logos: logoFetch, limiter: createMemoryLimiter() });
 

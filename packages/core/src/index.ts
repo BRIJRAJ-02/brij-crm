@@ -910,6 +910,33 @@ export {
 } from './hospitality/floor.ts';
 /** A place's hours read at an instant (spec 0065, AC-6508): pure, on the place's own wall clock. */
 export { openAt, nextOpening, rangesOn, type OpenNow } from './hospitality/hours.ts';
+/** The business page's editor (spec 0066, B4 lite): its address, draft, places' slugs, photos and Publish. */
+export {
+  addBusinessPhoto,
+  businessPhotoFolder,
+  businessPhotoPath,
+  claimBusinessHandle,
+  discardBusinessPage,
+  getBusinessPage,
+  publishBusinessPage,
+  readBusinessPhoto,
+  saveBusinessPage,
+  setPlaceSlug,
+  type BusinessPageChange,
+  type BusinessPagePublished,
+} from './hospitality/business-page.ts';
+/** The public business page's reads (spec 0066, B4 lite): no session, the handle is the only key. */
+export {
+  businessPhotoSrc,
+  enterBusinessPage,
+  listSitemapBusinesses,
+  NO_MENUS,
+  publicBusinessBrand,
+  publicBusinessPhoto,
+  publishedBusinessHandle,
+  type BusinessPageEntry,
+  type MenuSource,
+} from './hospitality/public-page.ts';
 /** The operator console's one write (spec 0065, AC-6502): a workspace's early access flag, behind the operator gate. */
 export { setEarlyAccess } from './operator/early-access.ts';
 // The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.

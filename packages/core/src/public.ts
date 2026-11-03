@@ -124,3 +124,5 @@ export {
 export { viewFacts, type ViewFacts } from './profile/sources.ts';
 export { checkProfileImage, readPageMeta, profileImageStorePath, type CheckedImage } from './profile/images.ts';
 export { isShownAt } from './profile/schedule.ts';
+/** The business pages search engines may list (spec 0066, AC-6644), for sitemap-handles.xml. */
+export { listSitemapBusinesses } from './hospitality/public-page.ts';

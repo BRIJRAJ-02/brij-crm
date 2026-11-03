@@ -171,9 +171,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_address', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_profile_pages', owner: 'crm_booking_lookup' },
+      // The business branch of the handle lookup (spec 0066, B4, migration 0175).
+      { name: 'crm_business_handle_owner', owner: 'crm_handle' },
       { name: 'crm_calendar_account_shared', owner: 'crm_calendar_lookup' },
       // The calendar health sweep's read across workspaces, ids and counts only (spec 0037, migration 0134).
       { name: 'crm_calendar_health_candidates', owner: 'crm_sweep' },
+      { name: 'crm_claim_business_handle', owner: 'crm_handle' },
       { name: 'crm_claim_workspace_address', owner: 'crm_address' },
       { name: 'crm_count_item_press', owner: 'crm_handle' },
       // A booking made from a link page (spec 0061, AC-6119).
@@ -205,6 +208,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_join_requests_of', owner: 'crm_domain_lookup' },
+      // A published business listed for search engines, or not (spec 0066, AC-6644).
+      { name: 'crm_list_business', owner: 'crm_handle' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_operator_daily', owner: 'crm_operator' },
       { name: 'crm_operator_members', owner: 'crm_operator' },
@@ -258,6 +263,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
+      { name: 'crm_sitemap_businesses', owner: 'crm_handle' },
       // The handles search engines may list (spec 0061, AC-6123).
       { name: 'crm_sitemap_handles', owner: 'crm_handle' },
       { name: 'crm_social_links_of', owner: 'crm_handle' },
@@ -293,8 +299,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_address', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_profile_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_business_handle_owner', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_calendar_account_shared', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_calendar_health_candidates', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it raises the unique violation a taken address is refused with, and the 20 handle cap.
+      { name: 'crm_claim_business_handle', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises the unique violation a taken address is refused with.
       { name: 'crm_claim_workspace_address', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_count_item_press', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -325,6 +334,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_join_requests_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it checks the workspace and the handle before it writes the listing.
+      { name: 'crm_list_business', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_daily', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_members', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -384,6 +395,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_set_public_profile_live', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it checks the workspace and the membership before it writes.
       { name: 'crm_show_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_sitemap_businesses', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_sitemap_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_social_links_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it answers how many rows past the year it removed.
@@ -620,6 +632,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_sitemap_handles',
         'crm_profile_identity',
         'crm_save_profile_identity',
+        // The business page (spec 0066, B4, migration 0175): the business branch of the handle lookup, its claim, its
+        // listing for search engines and the sitemap's read of the listings.
+        'crm_business_handle_owner',
+        'crm_claim_business_handle',
+        'crm_list_business',
+        'crm_sitemap_businesses',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',
@@ -668,10 +686,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_sitemap_handles(text, integer)',
         'crm_profile_identity(uuid, uuid)',
         'crm_save_profile_identity(uuid, uuid, boolean, text, text)',
+        'crm_business_handle_owner(text)',
+        'crm_claim_business_handle(uuid, text)',
+        'crm_list_business(uuid, text, text[], boolean)',
+        'crm_sitemap_businesses(text, integer)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 46 }, () => 'app'),
+      Array.from({ length: 50 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -1326,6 +1348,116 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update resources set min_capacity = 6, max_capacity = 4`)),
     ).rejects.toMatchObject({ cause: { code: '23514' } });
+  });
+
+  it("reads none of another workspace's business page, photos or place slugs, and keeps business handles apart (spec 0066, B4)", async () => {
+    const a = await workspaceWithMember('biz-iso-a');
+    const b = await workspaceWithMember('biz-iso-b');
+    const tag = randomUUID().slice(0, 8);
+    for (const [index, w] of [a, b].entries()) {
+      await db.withWorkspace(w.workspaceId, async (tx) => {
+        const place = randomUUID();
+        const photo = randomUUID();
+        await tx.execute(
+          sql`insert into places (workspace_id, id, name, country, time_zone, locale, public_key, menu_key, position)
+            values (${w.workspaceId}, ${place}, 'Main', 'IN', 'Asia/Kolkata', 'en-IN', ${`bp${String(index)}${tag}aaaaa`},
+              ${`bm${String(index)}${tag}aaaaa`}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into place_slugs (workspace_id, slug, place_id) values (${w.workspaceId}, 'main', ${place})`,
+        );
+        await tx.execute(
+          sql`insert into place_pages (workspace_id, place_id, slug) values (${w.workspaceId}, ${place}, 'main')`,
+        );
+        await tx.execute(
+          sql`insert into business_photos (workspace_id, id, path, type, bytes, width, height)
+            values (${w.workspaceId}, ${photo}, ${`business-page/${w.workspaceId}/${photo}.jpg`}, 'image/jpeg', 10, 4, 3)`,
+        );
+        const claimed = await tx.execute<{ handle: string }>(
+          sql`select crm_claim_business_handle(${w.workspaceId}::uuid, ${`biz-${String(index)}-${tag}`}) as handle`,
+        );
+        await tx.execute(
+          sql`insert into business_pages (workspace_id, handle) values (${w.workspaceId}, ${claimed.rows[0]?.handle ?? null})`,
+        );
+      });
+    }
+    for (const table of ['business_pages', 'business_photos', 'place_pages', 'place_slugs']) {
+      const seen = await db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ workspace_id: string }>(sql`select workspace_id from ${sql.identifier(table)}`),
+      );
+      expect(seen.rows.map((row) => row.workspace_id)).toEqual([a.workspaceId]);
+    }
+    // A picture's path is always its own workspace's folder and its own id.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into business_photos (workspace_id, id, path, type, bytes, width, height)
+            values (${a.workspaceId}, ${randomUUID()}, ${`business-page/${b.workspaceId}/x.jpg`}, 'image/jpeg', 10, 4, 3)`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+    // A reserved second segment is never a place's slug.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into place_slugs (workspace_id, slug, place_id) select workspace_id, 'reserve', place_id from place_pages`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+    // Another workspace's business handle, or one claimed for another workspace, is refused.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`select crm_claim_business_handle(${a.workspaceId}::uuid, ${`biz-1-${tag}`})`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23505' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`select crm_claim_business_handle(${b.workspaceId}::uuid, ${`biz-x-${tag}`})`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    // Its own handle again is its own; the lookup names the business's workspace and never a person's handle.
+    const again = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ handle: string }>(
+        sql`select crm_claim_business_handle(${a.workspaceId}::uuid, ${`biz-0-${tag}`}) as handle`,
+      ),
+    );
+    expect(again.rows).toEqual([{ handle: `biz-0-${tag}` }]);
+    const owner = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute<{ workspace_id: string }>(
+        sql`select workspace_id::text from crm_business_handle_owner(${`biz-0-${tag}`})`,
+      ),
+    );
+    expect(owner.rows).toEqual([{ workspace_id: a.workspaceId }]);
+    const person = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute(sql`select user_id from crm_handle_owner(${`biz-0-${tag}`})`),
+    );
+    expect(person.rows).toEqual([]);
+    // Listing is for the transaction's own workspace and its own handle only; the sitemap reads only listings.
+    const listedElsewhere = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ listed: boolean }>(
+        sql`select crm_list_business(${a.workspaceId}::uuid, ${`biz-1-${tag}`}, '{}'::text[], true) as listed`,
+      ),
+    );
+    expect(listedElsewhere.rows).toEqual([{ listed: false }]);
+    const listed = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ listed: boolean }>(
+        sql`select crm_list_business(${a.workspaceId}::uuid, ${`biz-0-${tag}`}, '{main}'::text[], true) as listed`,
+      ),
+    );
+    expect(listed.rows).toEqual([{ listed: true }]);
+    const sitemap = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute<{ handle: string; places: string[] }>(
+        sql`select handle, places from crm_sitemap_businesses(null, 50000)`,
+      ),
+    );
+    expect(sitemap.rows).toContainEqual({ handle: `biz-0-${tag}`, places: ['main'] });
+    expect(sitemap.rows.map((row) => row.handle)).not.toContain(`biz-1-${tag}`);
+    // The app reads the listings only through those definers.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`select * from auth.business_listings`)),
+    ).rejects.toMatchObject({
+      cause: { code: '42501' },
+    });
   });
 
   it('switches early access through crm_set_early_access only, keeping the closed list (spec 0065, AC-6502)', async () => {
@@ -2230,6 +2362,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
   const AUTH_TABLES = [
     'account',
     'activity_day',
+    // The business pages listed for search engines (spec 0066, AC-6644, migration 0175).
+    'business_listings',
     'known_device',
     'link_imports',
     'operator_event',
@@ -2272,6 +2406,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     // And a link page's block, which may name a booking page by its workspace and id (migration 0098): never read
     // for access, since whether a visitor sees the page is still the booking lookup's call.
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
+      // A business listed for search engines names its workspace (spec 0066, migration 0175).
+      'business_listings',
       // A link page's bookings, pictures and views by fact (spec 0061, migration 0147).
       'profile_booking_days',
       'profile_images',
@@ -2409,6 +2545,11 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by (table_name || ' ' || privilege_type) collate "C"
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
+      // The business pages listed for search engines (spec 0066, migration 0175), through crm_handle's functions only.
+      'business_listings DELETE',
+      'business_listings INSERT',
+      'business_listings SELECT',
+      'business_listings UPDATE',
       // A link in bio page brought across (spec 0055, migration 0109): read to see whether this import was
       // already made, and insert to make one. Never update or delete, so an import once made is what it was.
       'link_imports INSERT',

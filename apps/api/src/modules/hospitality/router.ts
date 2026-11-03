@@ -16,6 +16,7 @@ import {
   updatePlace,
   updateResource,
 } from '@crm/core';
+import { businessCacheTags } from '@crm/contracts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -47,23 +48,31 @@ export const hospitalityRouter = h.router({
     ),
   ),
   business: h.business.handler(({ context }) => getBusiness(context.scope)),
-  saveBusiness: h.saveBusiness.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => saveBusiness(context.scope, input.profile)),
-  ),
+  saveBusiness: h.saveBusiness.handler(async ({ context, input }) => {
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      saveBusiness(context.scope, input.profile),
+    );
+    // The business page reads its name, kind and contact live (spec 0066, B4): its edge copies go.
+    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId));
+    return saved;
+  }),
   createPlace: h.createPlace.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       createPlace(context.scope, { id: input.id, place: input.place }),
     ),
   ),
-  updatePlace: h.updatePlace.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+  updatePlace: h.updatePlace.handler(async ({ context, input }) => {
+    const place = await commitWrite(context, { mutationId: input.mutationId }, () =>
       updatePlace(context.scope, {
         placeId: input.placeId,
         ...(input.place === undefined ? {} : { place: input.place }),
         ...(input.hours === undefined ? {} : { hours: input.hours }),
       }),
-    ),
-  ),
+    );
+    // A place's address and hours show on the business page live (spec 0066, B4): its edge copies go.
+    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId, [input.placeId]));
+    return place;
+  }),
   resources: h.resources.handler(({ context, input }) => listResources(context.scope, { placeId: input.placeId })),
   saveArea: h.saveArea.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>

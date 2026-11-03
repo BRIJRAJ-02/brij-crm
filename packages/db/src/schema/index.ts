@@ -33,6 +33,7 @@ export { notificationKind, notifications, notificationSettings } from './notific
 export { memberPreferences } from './preferences.ts';
 export { workspaceBrands } from './brand.ts';
 export { areas, businessProfiles, places, resources, workspaceApps } from './hospitality.ts';
+export { businessPages, businessPhotos, placePages, placeSlugs } from './business-pages.ts';
 export {
   attendeeMatch,
   attendeeResponse,
