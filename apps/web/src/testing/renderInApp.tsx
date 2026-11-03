@@ -3,7 +3,7 @@
 // time zone, toasts) and a router whose root context holds the data layer and
 // the toasts, at one address. The data layer is a fake holding just what the
 // screen under test calls; tests reach the page through `vitest/browser`.
-import type { DataLayer } from '@crm/data';
+import type { CaptureListView, DataLayer } from '@crm/data';
 import { createToasts, UiProvider, type Toasts } from '@crm/ui';
 import {
   createMemoryHistory,
@@ -150,4 +150,21 @@ export function deferred<T>(): {
     reject = fail;
   });
   return { promise, resolve, reject };
+}
+
+/**
+ * A held list with nothing in it, for a part of the data layer a screen reads but the test isn't about: Links
+ * reads `managedPages.view` on every render, so a fake without one takes the whole screen down.
+ */
+export function emptyCaptureList<T>(): CaptureListView<T> {
+  // One snapshot object for the life of the view: a fresh one each call would make useSyncExternalStore
+  // re-render for ever.
+  const snapshot = { status: 'ready', items: [] as readonly T[], pendingIds: new Set<string>() } as const;
+  return {
+    subscribe: () => () => undefined,
+    getSnapshot: () => snapshot,
+    retain: () => () => undefined,
+    ready: () => Promise.resolve(),
+    reload: () => undefined,
+  };
 }

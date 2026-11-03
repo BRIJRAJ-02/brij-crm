@@ -205,6 +205,9 @@ const READS: ReadonlySet<string> = new Set([
   'bookingPages.get',
   // Where a page's answers may be filed (spec 0057): People and its attributes as this reader may write them.
   'bookingPages.attributes',
+  // Managed booking pages (spec 0037, AC-1333): the templates the reader may change, and one of them.
+  'managedPages.list',
+  'managedPages.get',
   'bookings.list',
   'bookings.listAll',
   'bookings.meetings',
@@ -599,6 +602,17 @@ async function sharedViewOf(m: Member, name = 'Pipeline'): Promise<string> {
     mutationId: newId(),
   });
   return id;
+}
+
+/** A managed page template to change in the case below (spec 0037, AC-1333): one write of its own. */
+async function newTemplate(m: Member) {
+  return m.client.managedPages.create({
+    workspace: m.slug,
+    id: newId(),
+    title: 'Intro',
+    timeZone: 'UTC',
+    mutationId: newId(),
+  });
 }
 
 const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly Partial<OutboxRow>[]>> = {
@@ -1965,6 +1979,45 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookingPages.reorderProfile({ workspace: m.slug, pageIds: [page.id], mutationId });
     return [];
   },
+  // Managed booking pages (spec 0037, AC-1333 to AC-1336): templates and the member pages made from them are
+  // settings, not CRM data, so no outbox row; still one poke per write.
+  'managedPages.create': async (m, mutationId) => {
+    await m.client.managedPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId,
+    });
+    return [];
+  },
+  'managedPages.update': async (m, mutationId) => {
+    const template = await newTemplate(m);
+    await m.client.managedPages.update({
+      workspace: m.slug,
+      templateId: template.id,
+      settings: { description: 'Hello' },
+      mutationId,
+    });
+    return [];
+  },
+  // Adding the caller themselves makes their own member page in the same write (AC-1335), still one poke.
+  'managedPages.setMembers': async (m, mutationId) => {
+    const template = await newTemplate(m);
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    await m.client.managedPages.setMembers({
+      workspace: m.slug,
+      templateId: template.id,
+      memberIds: [me],
+      mutationId,
+    });
+    return [];
+  },
+  'managedPages.delete': async (m, mutationId) => {
+    const template = await newTemplate(m);
+    await m.client.managedPages.delete({ workspace: m.slug, templateId: template.id, mutationId });
+    return [];
+  },
   // The default schedule's hours (spec 0035): the first save stores "Working hours", one `schedules` row.
   'bookings.setHours': async (m, mutationId) => {
     const { availability } = await m.client.bookings.hours({ workspace: m.slug, timeZone: 'UTC' });
@@ -3018,6 +3071,10 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'calendar.destination.dismissNotice': 2,
   'calendar.pageDestination.set': 3,
   'bookingPages.update': 2,
+  // A template made first, then the case's own write (spec 0037, AC-1333).
+  'managedPages.update': 2,
+  'managedPages.setMembers': 2,
+  'managedPages.delete': 2,
   'rotations.create': 1,
   'bookings.reassign': 3,
   'rotations.adjust': 2,

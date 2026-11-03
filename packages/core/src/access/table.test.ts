@@ -288,6 +288,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'readImportedPage',
   // A new membership's link page (26 Oct 2026): the editor's path, pure, for the approval email.
   'linkPageEditPath',
+  // Which part of a managed page a member may not write (spec 0037, AC-1334): the locks and the settings in,
+  // the first locked key out. Pure, it reads nothing.
+  'lockedPartOfWrite',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -844,6 +847,31 @@ describe('the walk: a principal without the access is refused', () => {
           (await refusalOf(core.listEditors(scope, { resourceType: 'booking_page', resourceId: link.id }))).code,
         ).toBe('NOT_FOUND');
       }
+    },
+  );
+
+  // Managed booking pages (spec 0037, AC-1333 to AC-1336): a template is the workspace's, so a member who neither
+  // holds booking.admin nor edits it meets it as absent, and lists none of them.
+  it.each(entries.filter(([, entry]) => 'managedPage' in entry).map(([name]) => name))(
+    '%s answers a member who neither administers booking nor edits the template as absent',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
+      expect(await refusalOf(Promise.resolve().then(() => service(name)(key, { templateId: core.newId() })))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS['booking.manage'].message,
+      });
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      const template = await core.createManagedPage(owner, { id: core.newId(), title: 'Intro', timeZone: 'UTC' });
+      if (name === 'listManagedPages') {
+        expect((await core.listManagedPages(scope)).templates).toEqual([]);
+        return;
+      }
+      expect((await refusalOf(service(name)(scope, { templateId: template.id, memberIds: [] }))).code).toBe(
+        'NOT_FOUND',
+      );
+      // The owner, who holds booking.admin, reads the same template.
+      expect((await core.getManagedPage(owner, { templateId: template.id })).id).toBe(template.id);
     },
   );
 
