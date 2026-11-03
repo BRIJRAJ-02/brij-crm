@@ -78,7 +78,8 @@ export const FootLine = z
   .string()
   .trim()
   .max(FOOT_LINE_MAX, `Keep the line to ${String(FOOT_LINE_MAX)} characters.`)
-  .regex(/^[^\r\n]*$/, { error: 'Keep the line to one line.' });
+  // No control character of any kind (a tab, a NUL), not only line breaks: the column's check refuses them all.
+  .regex(/^[^\p{Cc}]*$/u, { error: 'Keep the line to one line of plain text.' });
 /** A link page's own foot line. */
 export type FootLine = z.infer<typeof FootLine>;
 
@@ -103,7 +104,9 @@ export function checkProfileSite(
   } catch {
     return refused;
   }
-  if (url.protocol !== 'https:' || url.hostname === '' || !url.hostname.includes('.')) return refused;
+  // A host with a dot and a name after its last one: `https://com.` would pass a bare `includes('.')` and then be
+  // refused by the column's check, as a 500 rather than this sentence.
+  if (url.protocol !== 'https:' || !/\.[^.]+$/.test(url.hostname)) return refused;
   if (url.username !== '' || url.password !== '')
     return { ok: false, message: 'Take the name and password out of the link.' };
   if (url.href.length > PROFILE_SITE_MAX) return { ok: false, message: 'Keep the link to 200 characters.' };

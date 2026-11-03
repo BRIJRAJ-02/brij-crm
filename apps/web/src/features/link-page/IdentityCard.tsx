@@ -39,36 +39,44 @@ export interface IdentityCardProps {
 type Part = keyof PageIdentity;
 
 /**
- * Who the page is from. The switch saves the moment it moves, as every switch on this screen does; each field saves
- * when it is left or Enter is pressed, and only when it changed. A refusal stays on its own field (or under the
- * switch) until the next try, and the field keeps what was typed so it can be put right.
+ * Who the page is from. The switch moves and saves the moment it is pressed, as every switch on this screen does, and
+ * goes back if refused; each field saves when it is left or Enter is pressed, and only when it changed. A refusal
+ * stays on its own field (or, for the switch, in the card's foot, as Sharing does) until the next try, and the field keeps what was typed so it can be put right.
  */
 export function IdentityCard({ data, slug, jobTitle, identity, onSaved }: IdentityCardProps) {
   const [site, setSite] = useState(identity.site);
   const [footLine, setFootLine] = useState(identity.footLine);
+  // The switch shows its new place the moment it is pressed, and goes back if the save is refused.
+  const [switched, setSwitched] = useState<boolean | undefined>(undefined);
   const [problems, setProblems] = useState<Partial<Record<Part, string>>>({});
   const save = (part: Part, value: boolean | string) => {
     if (identity[part] === value) return;
     setProblems((held) => ({ ...held, [part]: undefined }));
+    if (part === 'showJobTitle' && typeof value === 'boolean') setSwitched(value);
     data.profile.update(slug, { [part]: value }).then(
       (saved) => {
         const kept = identityOf(saved);
         if (part === 'site') setSite(kept.site);
         if (part === 'footLine') setFootLine(kept.footLine);
+        if (part === 'showJobTitle') setSwitched(undefined);
         onSaved(kept);
       },
       (error: unknown) => {
+        if (part === 'showJobTitle') setSwitched(undefined);
         setProblems((held) => ({ ...held, [part]: isDataError(error) ? error.message : strings.identityFailed }));
       },
     );
   };
   const hasTitle = jobTitle !== undefined && jobTitle !== '';
   return (
-    <Card title={strings.identity} description={strings.identityText}>
+    <Card
+      title={strings.identity}
+      {...(problems.showJobTitle === undefined ? {} : { footerNote: problems.showJobTitle })}
+    >
       <Switch
         label={strings.showJobTitle}
-        description={problems.showJobTitle ?? (hasTitle ? jobTitle : strings.noJobTitle)}
-        isSelected={identity.showJobTitle}
+        description={jobTitle !== undefined && jobTitle !== '' ? strings.jobTitleShown(jobTitle) : strings.noJobTitle}
+        isSelected={switched ?? identity.showJobTitle}
         isDisabled={!hasTitle && !identity.showJobTitle}
         onChange={(next) => save('showJobTitle', next)}
       />

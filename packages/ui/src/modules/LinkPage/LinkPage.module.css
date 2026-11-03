@@ -527,12 +527,13 @@
     overflow-wrap: anywhere;
   }
 
-  /* Their job title, under the name and above the bio: a label's size, in the page's own text colour. */
+  /* Their job title, under the name and above the bio: a quiet label, as the booking page draws it, so it never
+     competes with the name. */
   .jobTitle {
     margin: 0;
     inline-size: 100%;
-    color: var(--page-text);
-    font: var(--text-label-strong);
+    color: var(--page-text-quiet);
+    font: var(--text-label);
     font-family: var(--page-body-face);
     letter-spacing: var(--tracking-label);
     overflow-wrap: anywhere;
@@ -558,6 +559,14 @@
     letter-spacing: var(--tracking-label);
     text-decoration: none;
     transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  /* With no address it links nowhere, so it drops the pill's edge and fill rather than look pressable. */
+  .lockup:not([href]) {
+    padding-inline: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--page-text-quiet);
   }
 
   .root[data-page-header='left'] .lockup {
@@ -1454,7 +1463,8 @@
     }
 
     .block:focus-visible,
-    .bannerLink:focus-visible {
+    .bannerLink:focus-visible,
+    .lockup[href]:focus-visible {
       outline: var(--border-width-thick) solid Highlight;
     }
   }

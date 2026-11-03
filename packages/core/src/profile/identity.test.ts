@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { enterBookingPage, enterLinkPage, findLockupLogo } from '../access/door.ts';
+import { setLinkPageLive } from '../booking/handles.ts';
 import { createBookingPage } from '../booking/pages.ts';
 import { getPublicBookingPage, readLinkPage } from '../booking/public.ts';
 import { newId } from '../engine/ids.ts';
@@ -128,16 +129,19 @@ describe('who a link page is from', () => {
       'javascript:alert(1)',
       'https://ada:secret@northwind.com',
       'localhost',
+      'https://com.',
     ]) {
       expect(await refusalOf(updateMyMemberProfile(ada.scope, { site })), site).toEqual({
         code: 'CONFIG_INVALID',
         field: 'site',
       });
     }
-    expect(await refusalOf(updateMyMemberProfile(ada.scope, { footLine: 'x'.repeat(81) }))).toEqual({
-      code: 'CONFIG_INVALID',
-      field: 'footLine',
-    });
+    for (const footLine of ['x'.repeat(81), 'a\tb', 'a\u0000b']) {
+      expect(await refusalOf(updateMyMemberProfile(ada.scope, { footLine })), JSON.stringify(footLine)).toEqual({
+        code: 'CONFIG_INVALID',
+        field: 'footLine',
+      });
+    }
     const profile = await getMyProfile(ada.scope);
     expect(profile.site).toBeUndefined();
     expect(profile.footLine).toBeUndefined();
@@ -154,6 +158,36 @@ describe('who a link page is from', () => {
         tx.execute(sql`update auth.public_profiles set foot_line = 'x' where user_id = ${ada.userId}::uuid`),
       ),
     ).rejects.toMatchObject({ cause: { code: '42501' } });
+  });
+
+  it('tells a visitor nothing of it while the page is Private, and its owner still everything', async () => {
+    const ada = await person('Ada Lovelace');
+    const stranger = randomUUID();
+    await db.withWorkspace(ada.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into workspace_brands (workspace_id, logo_path, logo_type, logo_version, updated_by)
+            values (${ada.workspaceId}, ${`logos/${ada.workspaceId}/${randomUUID()}.png`}, 'image/png', 'abcdef012345', ${ada.memberId})`,
+      ),
+    );
+    await updateMyMemberProfile(ada.scope, { site: 'https://northwind.com', footLine: 'Replies within a day.' });
+    await db.withWorkspace(ada.workspaceId, (tx) => setLinkPageLive(tx, ada.userId, ada.workspaceId, false));
+    for (const viewer of [undefined, stranger]) {
+      const options = viewer === undefined ? {} : { viewer };
+      expect(await refusalOf(findLockupLogo({ db }, ada.handle, options))).toEqual({
+        code: 'NOT_FOUND',
+        field: undefined,
+      });
+      expect(await refusalOf(enterLinkPage({ db }, ada.handle, { max: 21, ...options }))).toEqual({
+        code: 'NOT_FOUND',
+        field: undefined,
+      });
+    }
+    const own = await enterLinkPage({ db }, ada.handle, { max: 21, viewer: ada.userId }).then((found) =>
+      readLinkPage(found),
+    );
+    expect(own.brand?.name).toBe('Northwind');
+    expect(own.footLine).toBe('Replies within a day.');
+    expect((await findLockupLogo({ db }, ada.handle, { viewer: ada.userId })).logo?.version).toBe('abcdef012345');
   });
 
   it('is written for one’s own page only, never another workspace’s', async () => {

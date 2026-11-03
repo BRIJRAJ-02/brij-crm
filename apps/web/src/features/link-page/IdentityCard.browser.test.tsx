@@ -56,7 +56,7 @@ describe('who the page is from', () => {
   it('saves the switch at once, with the title it will show beside it', async () => {
     const update = vi.fn((_slug: string, _change: object) => Promise.resolve(profile({ showJobTitle: true })));
     const saved = await render(update, 'Head of partnerships');
-    await expect.element(page.getByText('Head of partnerships')).toBeVisible();
+    await expect.element(page.getByText('Head of partnerships, here and on your booking pages')).toBeVisible();
     // The switch's input is visually hidden under its track, as React Aria draws it.
     await userEvent.click(page.getByRole('switch', { name: 'Show my job title' }), { force: true });
     expect(update).toHaveBeenCalledWith('acme', { showJobTitle: true });

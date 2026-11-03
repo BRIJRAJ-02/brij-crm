@@ -146,6 +146,11 @@ export const Default: Story = {
   },
 };
 
+/** A stand in wordmark, wide on purpose, so the lockup's cap on a logo's width is drawn. */
+const LOGO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60"><circle cx="30" cy="30" r="24" fill="#e8590c"/><rect x="66" y="18" width="160" height="24" rx="6" fill="#e8590c"/></svg>',
+)}`;
+
 /**
  * Who the page belongs to (3 Nov 2026): the company's name above the person, linking to its site in a new tab, the
  * person's job title under their name, and their own line above the foot.
@@ -153,7 +158,7 @@ export const Default: Story = {
 export const Identity: Story = {
   args: {
     person: { ...PERSON, role: 'Head of partnerships' },
-    brand: { name: 'Timefix', href: 'https://www.timefix.com/' },
+    brand: { name: 'Timefix', href: 'https://www.timefix.com/', logo: LOGO },
     footLine: 'Replies within a day, Monday to Friday.',
   },
   render: (args) => (

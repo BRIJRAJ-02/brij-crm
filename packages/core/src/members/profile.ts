@@ -33,7 +33,7 @@ import {
 import { isPictureHidden, savePictureHidden } from '../booking/picture-choice.ts';
 import { checkedSocialLinks, sameSocialLinks, saveSocialLinks, socialLinksOfUser } from '../booking/socials.ts';
 import { touched } from '../engine/definitions.ts';
-import { refuse, refuseOn } from '../engine/refusals.ts';
+import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { identityOf, saveIdentity, type ProfileIdentity } from '../profile/identity.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
@@ -294,8 +294,11 @@ export async function updateMyMemberProfile(
             : input.footLine.trim() === ''
               ? undefined
               : input.footLine.trim();
-        if (foot !== undefined && (foot.length > FOOT_LINE_MAX || /[\r\n]/.test(foot))) {
+        if (foot !== undefined && foot.length > FOOT_LINE_MAX) {
           throw refuseOn('CONFIG_INVALID', `Keep the line to ${String(FOOT_LINE_MAX)} characters.`, 'footLine');
+        }
+        if (foot !== undefined && /\p{Cc}/u.test(foot)) {
+          throw refuseOn('CONFIG_INVALID', 'Keep the line to one line of plain text.', 'footLine');
         }
         const show = input.showJobTitle ?? held.showJobTitle;
         if (show !== held.showJobTitle || site !== held.site || foot !== held.footLine) {
@@ -303,10 +306,22 @@ export async function updateMyMemberProfile(
           if (userId === undefined || now.handle === undefined) {
             throw refuseOn('VALUE_REQUIRED', 'Pick a handle first.', 'handle');
           }
+          // The checks above match the columns' own, so this catch is the last word for anything they ever miss:
+          // a refusal on the field rather than an unexpected error.
           await saveIdentity(tx, userId, scope.workspaceId, {
             showJobTitle: show,
             ...(site === undefined ? {} : { site }),
             ...(foot === undefined ? {} : { footLine: foot }),
+          }).catch((error: unknown) => {
+            const pg = postgresError(error);
+            if (pg?.code === '23514' || pg?.code === '22021') {
+              throw refuseOn(
+                'CONFIG_INVALID',
+                'That isn’t something the page can show.',
+                input.site === undefined ? 'footLine' : 'site',
+              );
+            }
+            throw error;
           });
           if (show !== held.showJobTitle) {
             before.showJobTitle = held.showJobTitle;
