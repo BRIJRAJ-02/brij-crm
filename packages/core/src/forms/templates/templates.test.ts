@@ -319,7 +319,7 @@ describe('who may start a draft from one (AC-6323)', () => {
     const theirs = await createFormFromTemplate(two.scope, { id, templateId: 'newsletter', name: 'Theirs' });
     expect(theirs.id).toBe(id);
     expect(theirs.name).toBe('Theirs');
-    expect(theirs.draft.questions.map((each) => each.key)).toEqual(['name', 'email']);
+    expect(theirs.draft.questions.map((each) => each.key)).toEqual(['name', 'email', 'marketing']);
     expect(mine.name).toBe('Mine');
     expect(await one.query(sql`select name from forms`)).toEqual([{ name: 'Mine' }]);
     expect(await two.query(sql`select name from forms`)).toEqual([{ name: 'Theirs' }]);

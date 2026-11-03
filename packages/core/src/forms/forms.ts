@@ -48,6 +48,7 @@ import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
 import { withdrawSubmissionNotices } from '../notifications/notify.ts';
 import { brandRowOf } from '../brand/brand.ts';
+import { stampConsentVersions } from './consent.ts';
 import {
   canSeeForm,
   fileable,
@@ -996,9 +997,12 @@ export async function publishForm(
         });
       }
       const by = actorRow(scope.actor);
+      // Each Consent question goes live with the version of its words (AC-1053): changed words, a new version.
+      const stamped = stampConsentVersions(draft.document, was?.document);
       await tx
         .update(formVersions)
         .set({
+          ...(stamped === draft.document ? {} : { document: stamped }),
           publishedAt: sql`now()`,
           publishedByType: by.type,
           publishedById: by.id,

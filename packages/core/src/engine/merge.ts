@@ -222,6 +222,7 @@ async function countAttached(
         + ${bounded(sql`from meeting_records where record_id = ${id}`)}
         + ${bounded(sql`from meeting_attendees where person_record_id = ${id}`)}
         + ${bounded(sql`from form_submission_records where record_id = ${id}`)}
+        + ${bounded(sql`from consent_records where record_id = ${id}`)}
         + ${bounded(sql`from form_submissions where main_record_id = ${id}`)}
         + ${bounded(sql`from bookings where person_record_id = ${id}`)}
         + ${bounded(sql`from bookings where company_record_id = ${id}`)}
@@ -1098,6 +1099,8 @@ async function moveAttached(
     )
   `);
   await tx.execute(sql`delete from form_submission_records where record_id = ${merge}`);
+  // Consents are a history, never merged away: every row moves onto the person kept (spec 0023, AC-579).
+  await tx.execute(sql`update consent_records set record_id = ${keep} where record_id = ${merge}`);
   await tx.execute(sql`update meeting_attendees set person_record_id = ${keep} where person_record_id = ${merge}`);
   await tx.execute(sql`update form_submissions set main_record_id = ${keep} where main_record_id = ${merge}`);
   await tx.execute(sql`update bookings set person_record_id = ${keep} where person_record_id = ${merge}`);

@@ -44,9 +44,16 @@ export function labelOf(question: PublicQuestion, words: FormStrings, read?: (te
   return read === undefined ? question.label : read(question.label);
 }
 
-/** "(optional)" after an optional question's label; a tick box or a yes or no is never marked, since blank is an answer. */
+/**
+ * "(optional)" after an optional question's label; a tick box, a consent or a yes or no is never marked, since blank
+ * is an answer.
+ */
 export function asideOf(question: PublicQuestion, words: FormStrings): string | undefined {
-  const marked = question.required || question.answerType === 'checkbox' || question.answerType === 'yes_no';
+  const marked =
+    question.required ||
+    question.answerType === 'checkbox' ||
+    question.answerType === 'yes_no' ||
+    question.answerType === 'consent';
   return marked ? undefined : words.optional;
 }
 
@@ -62,7 +69,9 @@ export function answerOf(question: PublicQuestion, value: unknown): unknown {
     if (phone === undefined || phone.national.trim() === '') return undefined;
     return { number: toE164(phone.country, phone.national), country: phone.country };
   }
-  if (question.answerType === 'checkbox' || question.answerType === 'yes_no') return value === true;
+  if (question.answerType === 'checkbox' || question.answerType === 'yes_no' || question.answerType === 'consent') {
+    return value === true;
+  }
   // A date and time is the moment the visitor's own clock reads it as, with their zone (spec 0063).
   if (question.answerType === 'datetime') {
     if (typeof value !== 'string' || value === '') return undefined;
@@ -201,7 +210,9 @@ export function Question({
           ))}
         </RadioGroup>
       );
+    // A consent is a tick box whose words are its exact wording (spec 0023, AC-1053), kept with the answer.
     case 'checkbox':
+    case 'consent':
       return (
         <Checkbox label={label} name={question.key} isSelected={value === true} onChange={onChange} {...errorProps} />
       );

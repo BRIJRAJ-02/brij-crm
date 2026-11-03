@@ -15,6 +15,14 @@ export const strings = {
   pageHolder: 'A booking page',
   question: 'Question',
   questionPlaceholder: 'What do you want to ask?',
+  /** A Consent question's label: the exact words beside its tick box (spec 0023, AC-1053). */
+  consentWording: 'Wording',
+  consentWordingHint: 'Shown beside the tick box, word for word, and kept with each answer.',
+  consentPlaceholder: 'I agree to get emails from Acme.',
+  consentPurpose: 'For',
+  /** A consent's card line: where its answer goes instead of a field. */
+  consentKept: 'Kept as consent',
+  consentPurposes: { marketing_email: 'Marketing emails', terms: 'Terms and privacy' },
   untitledQuestion: 'Untitled question',
   answerType: 'Answer type',
   choices: 'Choices',
@@ -114,6 +122,7 @@ export const strings = {
     hidden: 'Hidden',
     signature: 'Signature',
     ranking: 'Ranking',
+    consent: 'Consent',
   } satisfies Record<AnswerType, string>,
 
   // An answer as a panel shows it

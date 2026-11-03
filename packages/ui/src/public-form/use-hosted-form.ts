@@ -493,8 +493,15 @@ export function useHostedForm({
   };
 
   const blur = (question: PublicQuestion, event: FocusEvent<HTMLElement>) => {
-    // A tick box or a yes or no is never blank, so it waits for submit: tabbing past one says nothing.
-    if (preview || question.answerType === 'checkbox' || question.answerType === 'yes_no') return;
+    // A tick box, a consent or a yes or no is never blank, so it waits for submit: tabbing past one says nothing.
+    if (
+      preview ||
+      question.answerType === 'checkbox' ||
+      question.answerType === 'yes_no' ||
+      question.answerType === 'consent'
+    ) {
+      return;
+    }
     const next = event.relatedTarget;
     if (next instanceof Node && event.currentTarget.contains(next)) return;
     if (intoItsPopover(next)) return;

@@ -25,7 +25,7 @@ import type {
 } from '@crm/contracts';
 
 /** The templates' version, moved whenever a template's questions change, so a report can say which one made a form. */
-export const FORM_TEMPLATES_VERSION = 1;
+export const FORM_TEMPLATES_VERSION = 2;
 
 /** One question a template asks, before it knows a workspace's attribute ids. */
 export interface FormTemplateQuestion {
@@ -310,6 +310,15 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
         answerType: 'file',
         required: false,
       },
+      // A person applying hands over their details: they agree to how they are kept (spec 0023, AC-1053).
+      {
+        id: 'privacy',
+        key: 'privacy',
+        label: 'I agree to my details being kept to consider my application.',
+        answerType: 'consent',
+        required: true,
+        options: { purpose: 'terms' },
+      },
     ],
   },
 
@@ -321,7 +330,18 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     layout: 'classic',
     headline: 'Get the monthly note',
     buttonText: 'Subscribe',
-    questions: WHO,
+    // Marketing email needs the person's say so, in words they saw (spec 0023, AC-1053).
+    questions: [
+      ...WHO,
+      {
+        id: 'marketing',
+        key: 'marketing',
+        label: 'Send me the monthly note. I can unsubscribe at any time.',
+        answerType: 'consent',
+        required: true,
+        options: { purpose: 'marketing_email' },
+      },
+    ],
   },
 
   support_request: {

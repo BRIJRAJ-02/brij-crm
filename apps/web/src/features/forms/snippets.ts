@@ -149,7 +149,7 @@ export function ownFormHtml(form: OwnForm, script: string): string {
     if (question.answerType === 'signature' || question.answerType === 'ranking') {
       return [`  <!-- ${escapeHtml(strings.ownFormHostedOnly(question.label))} -->`];
     }
-    if (question.answerType === 'checkbox' || question.answerType === 'yes_no') {
+    if (question.answerType === 'checkbox' || question.answerType === 'yes_no' || question.answerType === 'consent') {
       return [
         '  <div>',
         `    <input type="checkbox" id="${id}" name="${name}" value="yes"${required}>`,

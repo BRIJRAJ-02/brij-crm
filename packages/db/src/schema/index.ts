@@ -51,6 +51,7 @@ export {
   meetingStatus,
 } from './calendar.ts';
 export {
+  consentRecords,
   formPartials,
   formPublicKeys,
   formSubmissionRecords,

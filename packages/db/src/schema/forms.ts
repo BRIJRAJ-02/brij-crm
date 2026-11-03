@@ -333,6 +333,47 @@ export const formSubmissionRecords = pgTable(
 );
 
 /**
+ * A consent a person gave or refused (spec 0023, AC-1053, AC-578): the purpose, the answer, the exact words and their
+ * version, where it came from (a submission, a member, a site) and when. Only ever inserted: a withdrawal is a new
+ * row, so a person's latest row for a purpose is their answer (AC-579). Migration 0165 holds the table.
+ */
+export const consentRecords = pgTable(
+  'consent_records',
+  {
+    workspaceId: workspaceId(),
+    id: uuid('id')
+      .notNull()
+      .default(sql`uuidv7()`),
+    recordId: uuid('record_id').notNull(),
+    purpose: text('purpose').notNull(),
+    granted: boolean('granted').notNull(),
+    wording: text('wording').notNull(),
+    wordingVersion: integer('wording_version').notNull(),
+    sourceType: text('source_type').notNull(),
+    sourceId: uuid('source_id'),
+    at: timestamptz('at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'consent_records_pkey', columns: [t.workspaceId, t.id] }),
+    // No `on delete` action: the purge deletes these rows first, with the record's other links.
+    foreignKey({
+      name: 'consent_records_record',
+      columns: [t.workspaceId, t.recordId],
+      foreignColumns: [records.workspaceId, records.id],
+    }),
+    index('consent_records_by_record').on(t.workspaceId, t.recordId, t.purpose, t.at.desc()),
+    index('consent_records_by_source').on(t.workspaceId, t.sourceType, t.sourceId),
+    check('consent_records_purpose', sql`${t.purpose} ~ '^[a-z][a-z0-9_]{0,39}$'`),
+    check('consent_records_wording', sql`char_length(${t.wording}) between 1 and 2000`),
+    check('consent_records_version', sql`${t.wordingVersion} >= 1`),
+    check(
+      'consent_records_source',
+      sql`${t.sourceType} in ('submission', 'member', 'site') and (${t.sourceType} <> 'submission' or ${t.sourceId} is not null)`,
+    ),
+  ],
+);
+
+/**
  * A file a visitor uploaded to a public form (#32): kept in the blob store under `pathname`, bound here to its
  * workspace and form, and to its submission once one takes it (`submission_id`). Unguessable ids, never listed.
  * `submission_id` and `form_id` carry no foreign key on purpose: a deleted submission or form must leave the row

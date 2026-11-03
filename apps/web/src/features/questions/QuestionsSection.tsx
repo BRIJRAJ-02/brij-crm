@@ -103,6 +103,7 @@ const TYPE_ICONS = {
   hidden: 'eye-off',
   signature: 'pen',
   ranking: 'arrow-down-wide-narrow',
+  consent: 'shield-check',
 } as const satisfies Record<AnswerType, IconName>;
 
 /** Props for the questions section. */
@@ -321,11 +322,14 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       ? {}
       : {
           filed:
-            question.filedOn === undefined || isFilingOff
-              ? planned.has(question.id)
-                ? strings.willCreateShort(planned.get(question.id) ?? '')
-                : strings.notFiledShort
-              : filedLine(question, objectName, attributes),
+            // A consent is never filed onto a field: it is kept as a consent record on the person.
+            question.answerType === 'consent'
+              ? strings.consentKept
+              : question.filedOn === undefined || isFilingOff
+                ? planned.has(question.id)
+                  ? strings.willCreateShort(planned.get(question.id) ?? '')
+                  : strings.notFiledShort
+                : filedLine(question, objectName, attributes),
         }),
     ...(question.showWhen === undefined
       ? {}
@@ -690,6 +694,7 @@ function QuestionEditor({
   }, [isJustAdded]);
 
   const isChoice = CHOICE_TYPES.includes(question.answerType);
+  const isConsent = question.answerType === 'consent';
   const choices = question.choices ?? [];
   const fitting = fittingAttributes(attributes, question.answerType);
   const usedBy = new Map(
@@ -702,8 +707,10 @@ function QuestionEditor({
     <>
       <Field
         ref={labelRef}
-        label={strings.question}
-        placeholder={strings.questionPlaceholder}
+        // A consent's label is its exact wording, shown beside the tick box (spec 0023, AC-1053).
+        label={isConsent ? strings.consentWording : strings.question}
+        placeholder={isConsent ? strings.consentPlaceholder : strings.questionPlaceholder}
+        {...(isConsent ? { hint: strings.consentWordingHint } : {})}
         value={question.label}
         maxLength={200}
         isReadOnly={isReadOnly}
@@ -760,7 +767,8 @@ function QuestionEditor({
           }}
         />
       )}
-      {isFiling && (
+      {/* A consent is never filed onto a field: it becomes a consent record on the person. */}
+      {isFiling && !isConsent && (
         <Select
           label={strings.whereItGoes}
           info={
@@ -1061,6 +1069,21 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
             }}
           />
         </>
+      );
+    case 'consent':
+      return (
+        <Select
+          label={strings.consentPurpose}
+          items={[
+            { id: 'marketing_email', label: strings.consentPurposes.marketing_email },
+            { id: 'terms', label: strings.consentPurposes.terms },
+          ]}
+          value={options.purpose ?? 'marketing_email'}
+          isReadOnly={isReadOnly}
+          onChange={(purpose) => {
+            if (purpose === 'marketing_email' || purpose === 'terms') onChange({ options: { purpose } });
+          }}
+        />
       );
     case 'hidden':
       return (

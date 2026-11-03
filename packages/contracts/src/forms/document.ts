@@ -9,6 +9,7 @@
 import * as z from 'zod';
 import {
   ANSWER_TYPES,
+  CONSENT_PURPOSES,
   CHOICE_TYPES,
   FORM_CHOICES_MAX,
   FORM_QUESTIONS_MAX,
@@ -61,6 +62,14 @@ export const FormQuestionOptions = z.strictObject({
   max: z.number().int().min(1).max(FORM_CHOICES_MAX).optional(),
   other: z.boolean().optional(),
   default: z.string().trim().max(200, { error: 'Keep the value to 200 characters.' }).optional(),
+  /** A consent's purpose (AC-1053); absent reads as `marketing_email`. */
+  purpose: z.enum(CONSENT_PURPOSES).optional(),
+  /**
+   * A consent's wording version (AC-1053): 1 when first published, and one more each time it is published with
+   * different words, so every consent record names the exact words its person agreed to. Publish sets it; the
+   * builder never does.
+   */
+  wordingVersion: z.number().int().min(1).max(1_000_000).optional(),
 });
 /** What a question's type may set beyond its choices. */
 export type FormQuestionOptions = z.infer<typeof FormQuestionOptions>;

@@ -321,6 +321,36 @@ export const TabThroughIsQuiet: Story = {
   },
 };
 
+/**
+ * A Consent question (spec 0023, AC-1053): a tick box whose words are its exact wording, never marked "(optional)",
+ * and a required one holds Send until it is ticked.
+ */
+export const Consent: Story = {
+  args: {
+    form: {
+      ...LEAD,
+      questions: [
+        ...LEAD.questions.slice(0, 2),
+        {
+          id: 'marketing',
+          key: 'marketing',
+          label: 'Send me the monthly note. I can unsubscribe at any time.',
+          answerType: 'consent',
+          required: true,
+        },
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('checkbox', { name: 'Send me the monthly note. I can unsubscribe at any time.' });
+    await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(canvas.getByText('Tick this to go on.')).toBeInTheDocument());
+    await userEvent.click(box);
+    await waitFor(() => expect(canvas.queryByText('Tick this to go on.')).not.toBeInTheDocument());
+    await expect(box).toBeChecked();
+  },
+};
+
 /** A form that asks for no email or phone thanks without promising to write back. */
 export const ThanksWithoutAddress: Story = {
   parameters: { crm: { screenshot: false } },

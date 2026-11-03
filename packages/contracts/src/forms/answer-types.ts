@@ -34,9 +34,19 @@ export const ANSWER_TYPES = [
   // Spec 0063, batch two (AC-6307).
   'signature',
   'ranking',
+  // Spec 0023, AC-1053: a checkbox showing its exact wording, kept as a consent record on the person.
+  'consent',
 ] as const;
 /** One answer type. */
 export type AnswerType = (typeof ANSWER_TYPES)[number];
+
+/**
+ * What a consent is given for (spec 0023, AC-1053): marketing email, or the terms and privacy policy. It names the
+ * consent record's purpose, so a person's latest record for one purpose answers whether they agreed to it.
+ */
+export const CONSENT_PURPOSES = ['marketing_email', 'terms'] as const;
+/** What a consent is given for. */
+export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 
 /** The types answered by picking from the question's own choices. */
 export const CHOICE_TYPES: readonly AnswerType[] = ['dropdown', 'choice', 'multi_select', 'ranking'];
@@ -61,7 +71,7 @@ export const BOOKING_ANSWER_TYPES: readonly AnswerType[] = [
 ];
 
 /** The types answered yes or no (a boolean). */
-export const BOOLEAN_TYPES: readonly AnswerType[] = ['checkbox', 'yes_no'];
+export const BOOLEAN_TYPES: readonly AnswerType[] = ['checkbox', 'yes_no', 'consent'];
 
 /** The types that take no placeholder: their control shows no empty box to hint inside. */
 export const NO_PLACEHOLDER_TYPES: readonly AnswerType[] = [
@@ -81,6 +91,7 @@ export const NO_PLACEHOLDER_TYPES: readonly AnswerType[] = [
   'hidden',
   'signature',
   'ranking',
+  'consent',
 ];
 
 /** The attribute types each answer type may be filed onto (spec 0023, Answer types). */
@@ -113,6 +124,8 @@ export const FILES_ONTO: Readonly<Record<AnswerType, readonly AttributeType[]>> 
   signature: ['file'],
   // Read as "1. A, 2. B"; the whole order stays on the submission.
   ranking: ['text', 'long_text'],
+  // Never filed onto a field: its answer, wording and version become a consent record on the person (AC-1053).
+  consent: [],
 };
 
 /** Whether an answer of `answerType` may be filed onto an attribute of `attributeType` (AC-658). */

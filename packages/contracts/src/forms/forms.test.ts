@@ -75,6 +75,23 @@ describe('checkAnswers (spec 0023, AC-553, AC-556, AC-660)', () => {
     });
   });
 
+  it('holds a required consent until it is ticked, and keeps an optional one left as a refusal (AC-1053)', () => {
+    const consent = {
+      language: 'en' as const,
+      questions: [
+        { key: 'marketing', answerType: 'consent' as const, required: true },
+        { key: 'terms', answerType: 'consent' as const, required: false },
+      ],
+    };
+    const left = checkAnswers(consent, { marketing: false });
+    expect(left.ok).toBe(false);
+    if (!left.ok) expect(left.fields).toEqual({ marketing: 'Tick this to go on.' });
+    expect(checkAnswers(consent, { marketing: 'yes' })).toEqual({
+      ok: true,
+      answers: { marketing: true, terms: false },
+    });
+  });
+
   it('refuses a short phone number rather than dropping it as empty, and takes the code alone as empty (QA Q82)', () => {
     const answers = { name: 'Ada', email: 'ada@example.com', terms: true };
     const short = checkAnswers(form, { ...answers, phone: { number: '+112', country: 'US' } });

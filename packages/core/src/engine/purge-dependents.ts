@@ -71,6 +71,8 @@ export const PURGE_DEPENDENTS: readonly PurgeDependent[] = Object.freeze([
       sql`update meeting_attendees set person_record_id = null, match = 'unknown' where person_record_id = any(${ids})`,
   ),
   removing('form_submission_records', (ids) => sql`delete from form_submission_records where record_id = any(${ids})`),
+  // A person erased takes their consents with them (spec 0023, AC-575).
+  removing('consent_records', (ids) => sql`delete from consent_records where record_id = any(${ids})`),
   // Held with no foreign key, so nothing refuses a purge that forgot them: cleared here, each through its index.
   removing(
     'form_submissions',

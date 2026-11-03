@@ -40,6 +40,7 @@ import { copyFiledFile, type RecordFileStore } from '../records/files.ts';
 import { newId } from '../engine/ids.ts';
 import { tellTeam } from './notify.ts';
 import { tellVisitor } from './confirm.ts';
+import { isPeopleObject, recordConsents } from './consent.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -1033,6 +1034,16 @@ export async function processSubmission(
       ),
   });
   await settle(tx, submission.id, filed);
+  // Each Consent question answered becomes a consent record on the person, in this same transaction (AC-1053).
+  if (filed.kind === 'filed' && (await isPeopleObject(tx, target.objectId))) {
+    await recordConsents(tx, {
+      workspaceId: context.scope.workspaceId,
+      recordId: filed.recordId,
+      submissionId: submission.id,
+      document,
+      answers: answersOf(submission.answers),
+    });
+  }
   await tellTeam(context, rules, submission.id);
   await tellVisitor(context, submission.id);
 }

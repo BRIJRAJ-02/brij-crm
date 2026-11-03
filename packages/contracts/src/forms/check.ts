@@ -335,6 +335,7 @@ function checkOne(
     }
     case 'checkbox':
     case 'yes_no':
+    case 'consent':
       return { value: raw === true || raw === 'yes' || raw === 'true' };
     case 'phone': {
       // A site's own form posts the number as typed: taken when it is international (+ and the code).
@@ -396,9 +397,10 @@ export function checkAnswers(
     // a visitor can't see it to answer it.
     const raw = question.answerType === 'hidden' && isBlank(given) ? question.options?.default : given;
     if (question.answerType === 'hidden' && isBlank(raw)) return undefined;
-    if (question.answerType === 'checkbox' || question.answerType === 'yes_no') {
+    if (question.answerType === 'checkbox' || question.answerType === 'yes_no' || question.answerType === 'consent') {
       const ticked = raw === true || raw === 'yes' || raw === 'true';
-      if (question.answerType === 'checkbox' && question.required && !ticked) {
+      // A required consent blocks the submit until it is ticked, as a required checkbox does (AC-1053).
+      if (question.answerType !== 'yes_no' && question.required && !ticked) {
         fields[question.key] = words.requiredCheckbox;
         return undefined;
       }
