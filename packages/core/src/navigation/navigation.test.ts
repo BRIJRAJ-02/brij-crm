@@ -97,7 +97,7 @@ describe('the sidebar', { timeout: 120_000 }, () => {
     const before = await readNav(w.bea);
     expect(before).toMatchObject({
       items: [],
-      sections: { order: ['favourites', 'records', 'lists', 'scheduling'], folded: [] },
+      sections: { order: ['favourites', 'records', 'lists', 'scheduling', 'hospitality'], folded: [] },
       rail: false,
       version: 0,
       favourites: [],

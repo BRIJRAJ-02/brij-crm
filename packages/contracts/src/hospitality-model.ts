@@ -1,0 +1,176 @@
+// `@crm/contracts/hospitality` (spec 0065, H0): the Hospitality suite's closed lists, limits and pure rules, with no
+// Zod, so the engine and the browser's data layer (Settings › Apps and Settings › Business) run the same checks and
+// agree on the result. The Zod schemas and the contract live in `hospitality.ts`.
+
+/** The Hospitality apps a workspace installs (AC-6501), in the order the Apps page lists them. */
+export const HOSPITALITY_APPS = ['menu', 'menu_qr', 'table_seating'] as const;
+/** One Hospitality app. */
+export type HospitalityApp = (typeof HOSPITALITY_APPS)[number];
+
+/** The apps an app needs installed first (AC-6505): Menu QR opens the Menu, so it needs it. */
+export const APP_NEEDS: Readonly<Record<HospitalityApp, readonly HospitalityApp[]>> = {
+  menu: [],
+  menu_qr: ['menu'],
+  table_seating: [],
+};
+
+/** The apps that need `app`, so removing it removes them too (AC-6505). */
+export function appsNeeding(app: HospitalityApp): readonly HospitalityApp[] {
+  return HOSPITALITY_APPS.filter((other) => APP_NEEDS[other].includes(app));
+}
+
+/** The flags Timefix opens per workspace from the operator console (AC-6502). A closed list. */
+export const EARLY_ACCESS_FLAGS = ['hospitality'] as const;
+/** One early access flag. */
+export type EarlyAccessFlag = (typeof EARLY_ACCESS_FLAGS)[number];
+
+/** What a business is (AC-6506). */
+export const BUSINESS_KINDS = ['restaurant', 'cafe', 'bar', 'bakery', 'other'] as const;
+/** What a business is. */
+export type BusinessKind = (typeof BUSINESS_KINDS)[number];
+
+/** The days of a weekly pattern, Monday first. */
+export const WEEK_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+/** One day of a weekly pattern. */
+export type WeekDay = (typeof WEEK_DAYS)[number];
+
+/** The rules settled by the cross check (spec 0065, Limits), in one place. */
+export const HOSPITALITY_LIMITS = {
+  places: 20,
+  areasPerPlace: 12,
+  tablesPerPlace: 300,
+  /** Tables one bulk add makes. */
+  tablesPerAdd: 100,
+  joinsPerTable: 10,
+  rangesPerDay: 3,
+  exceptions: 100,
+  guestsMin: 1,
+  guestsMax: 30,
+  labelMax: 12,
+  areaNameMax: 40,
+  placeNameMax: 80,
+  businessNameMax: 80,
+  descriptionMax: 160,
+  noteMax: 60,
+  rangeNameMax: 24,
+  links: 10,
+} as const;
+
+/** One opening range: `HH:MM` to `HH:MM`, crossing midnight when `to` is not after `from` (AC-6508). */
+export interface HoursRangeShape {
+  readonly from: string;
+  readonly to: string;
+  /** Lunch, Dinner: what the reservation page groups its times by (Rules settled: Hours). */
+  readonly name?: string | undefined;
+}
+
+/** A dated exception: closed, or other ranges, with an optional note ("Private event"). */
+export interface HoursExceptionShape {
+  readonly date: string;
+  readonly closed?: boolean | undefined;
+  readonly ranges?: readonly HoursRangeShape[] | undefined;
+  readonly note?: string | undefined;
+}
+
+/** A place's opening hours: a weekly pattern and dated exceptions. */
+export interface PlaceHoursShape {
+  readonly weekly: { readonly [Day in WeekDay]?: readonly HoursRangeShape[] | undefined };
+  readonly exceptions: readonly HoursExceptionShape[];
+}
+
+/** Hours with nothing open: a new place starts closed until someone sets its week. */
+export const EMPTY_HOURS: PlaceHoursShape = { weekly: {}, exceptions: [] };
+
+const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** Minutes after midnight of `HH:MM`, or undefined when it isn't one. */
+export function hoursMinutesOf(time: string): number | undefined {
+  const match = TIME.exec(time);
+  if (match === null) return undefined;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/** A range's start and end in minutes from the start of its own day; the end passes 1440 when it crosses midnight. */
+export function spanOf(range: HoursRangeShape): { readonly start: number; readonly end: number } | undefined {
+  const start = hoursMinutesOf(range.from);
+  const to = hoursMinutesOf(range.to);
+  if (start === undefined || to === undefined || start === to) return undefined;
+  return { start, end: to > start ? to : to + 1440 };
+}
+
+/** What is wrong with one day's ranges, or undefined: at most 3, each a real range, in order, none overlapping. */
+export function rangesProblem(ranges: readonly HoursRangeShape[]): string | undefined {
+  if (ranges.length > HOSPITALITY_LIMITS.rangesPerDay) {
+    return `A day takes up to ${String(HOSPITALITY_LIMITS.rangesPerDay)} opening times.`;
+  }
+  let previousEnd = -1;
+  for (const range of ranges) {
+    const span = spanOf(range);
+    if (span === undefined) return 'Give each opening time a start and a different end, such as 12:00 to 15:00.';
+    if (span.start < previousEnd) return 'Opening times can’t overlap. Put them in order through the day.';
+    previousEnd = span.end;
+  }
+  // Only the last range may cross midnight, and nothing may run into the next day past the first range's start.
+  if (ranges.slice(0, -1).some((range) => (spanOf(range)?.end ?? 0) > 1440)) {
+    return 'Only the last opening time of a day can run past midnight.';
+  }
+  return undefined;
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * What is wrong with a place's hours, or undefined (AC-6508): each day's ranges as `rangesProblem` says, a range
+ * that runs past midnight never past the next day's first opening, every exception a real date at most once, closed
+ * or with ranges, and at most 100 of them.
+ */
+export function hoursProblem(hours: PlaceHoursShape): string | undefined {
+  for (const [index, day] of WEEK_DAYS.entries()) {
+    const ranges = hours.weekly[day] ?? [];
+    const problem = rangesProblem(ranges);
+    if (problem !== undefined) return problem;
+    const last = ranges.at(-1);
+    const next = hours.weekly[WEEK_DAYS[(index + 1) % 7] ?? 'mon']?.[0];
+    const lastSpan = last === undefined ? undefined : spanOf(last);
+    const nextSpan = next === undefined ? undefined : spanOf(next);
+    if (lastSpan !== undefined && nextSpan !== undefined && lastSpan.end - 1440 > nextSpan.start) {
+      return 'A late opening time runs into the next day’s first one.';
+    }
+  }
+  if (hours.exceptions.length > HOSPITALITY_LIMITS.exceptions) {
+    return `A place takes up to ${String(HOSPITALITY_LIMITS.exceptions)} special days.`;
+  }
+  const seen = new Set<string>();
+  for (const exception of hours.exceptions) {
+    if (!DATE.test(exception.date) || Number.isNaN(Date.parse(`${exception.date}T00:00:00Z`))) {
+      return 'Give each special day a date.';
+    }
+    if (seen.has(exception.date)) return 'Each date can have only one special day.';
+    seen.add(exception.date);
+    if (exception.closed === true && (exception.ranges?.length ?? 0) > 0) {
+      return 'A special day is either closed or has its own hours.';
+    }
+    if (exception.closed !== true && (exception.ranges?.length ?? 0) === 0) {
+      return 'Mark a special day closed, or give it its hours.';
+    }
+    const problem = rangesProblem(exception.ranges ?? []);
+    if (problem !== undefined) return problem;
+  }
+  return undefined;
+}
+
+/** A table label typed into Add tables: letters and digits, spaces inside, up to 12 characters ("T4", "Bar 2"). */
+export const TABLE_LABEL_PATTERN = /^[\p{L}\p{N}](?:[\p{L}\p{N} ._/-]*[\p{L}\p{N}])?$/u;
+
+/**
+ * The labels "T1 to T10" makes (AC-6509): `prefix` followed by each number from `from` to `to`, or undefined when
+ * the run is empty, over the one add's limit, or makes a label that isn't one.
+ */
+export function tableLabels(prefix: string, from: number, to: number): readonly string[] | undefined {
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) return undefined;
+  if (to - from + 1 > HOSPITALITY_LIMITS.tablesPerAdd) return undefined;
+  const labels = Array.from({ length: to - from + 1 }, (_, index) => `${prefix}${String(from + index)}`);
+  return labels.every((label) => label.length <= HOSPITALITY_LIMITS.labelMax && TABLE_LABEL_PATTERN.test(label))
+    ? labels
+    : undefined;
+}

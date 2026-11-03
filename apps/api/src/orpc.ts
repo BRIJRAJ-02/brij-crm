@@ -321,11 +321,11 @@ export const requireMember = os
 /** How recently a super admin's session must have proved itself (spec 0047, AC-1618). */
 export const OPERATOR_FRESH_MS = 12 * 60 * 60 * 1000;
 
-/** The id an operator read names, when it names one: the person or the booking page. */
+/** The id an operator call names, when it names one: the person, the booking page, or the workspace (a switch). */
 function operatorTarget(input: unknown): { readonly target?: string; readonly period?: string; readonly q?: string } {
   if (typeof input !== 'object' || input === null) return {};
   const fields = input as Record<string, unknown>;
-  const target = [fields['userId'], fields['pageId']].find((value) => typeof value === 'string');
+  const target = [fields['userId'], fields['pageId'], fields['workspaceId']].find((value) => typeof value === 'string');
   const period = fields['period'];
   const q = fields['q'];
   return {

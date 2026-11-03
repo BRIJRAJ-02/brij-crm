@@ -1163,6 +1163,13 @@
       "when": 1795504000000,
       "tag": "0165_consent_records",
       "breakpoints": true
+    },
+    {
+      "idx": 168,
+      "version": "7",
+      "when": 1795506000000,
+      "tag": "0168_hospitality_apps",
+      "breakpoints": true
     }
   ]
 }

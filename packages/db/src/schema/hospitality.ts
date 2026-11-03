@@ -1,0 +1,216 @@
+// The Hospitality suite's setup (spec 0065, H0, migration 0168_hospitality_apps): which apps a workspace installed,
+// its business profile, its places with opening hours, and each place's areas and tables. Tenant tables under forced
+// row level security with the plain workspace policy; every index leads with workspace_id, but the places' two public
+// keys, which a guest page finds before the workspace is known (H1, H3), so they are unique everywhere.
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  check,
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  smallint,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { id, timestamptz, workspaceId } from './common.ts';
+import { members, workspaces } from './workspaces.ts';
+
+/**
+ * One app a workspace installed (AC-6503): removal sets `removed_at` and keeps every row of the app; installing again
+ * clears it. `plan` stays null until per app billing (#38, #42).
+ */
+export const workspaceApps = pgTable(
+  'workspace_apps',
+  {
+    workspaceId: workspaceId(),
+    app: text('app').notNull(),
+    installedAt: timestamptz('installed_at').notNull().defaultNow(),
+    installedByMemberId: uuid('installed_by_member_id'),
+    removedAt: timestamptz('removed_at'),
+    plan: text('plan'),
+  },
+  (t) => [
+    primaryKey({ name: 'workspace_apps_pkey', columns: [t.workspaceId, t.app] }),
+    foreignKey({
+      name: 'workspace_apps_workspace',
+      columns: [t.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'workspace_apps_installed_by',
+      columns: [t.workspaceId, t.installedByMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    index('workspace_apps_installed_by').on(t.workspaceId, t.installedByMemberId),
+    check('workspace_apps_app', sql`${t.app} in ('menu', 'menu_qr', 'table_seating')`),
+    check('workspace_apps_plan', sql`${t.plan} is null or char_length(${t.plan}) between 1 and 40`),
+  ],
+);
+
+/** The business profile (AC-6507): one per workspace, made by the first install's card. */
+export const businessProfiles = pgTable(
+  'business_profiles',
+  {
+    workspaceId: workspaceId(),
+    name: text('name').notNull(),
+    kind: text('kind').notNull(),
+    description: text('description'),
+    phone: text('phone'),
+    email: text('email'),
+    website: text('website'),
+    /** The person socials model's link list, at business level: `[{ network, href }]`. */
+    links: jsonb('links')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    createdByMemberId: uuid('created_by_member_id'),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+    updatedByMemberId: uuid('updated_by_member_id'),
+  },
+  (t) => [
+    primaryKey({ name: 'business_profiles_pkey', columns: [t.workspaceId] }),
+    foreignKey({
+      name: 'business_profiles_workspace',
+      columns: [t.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete('cascade'),
+    check('business_profiles_name', sql`char_length(${t.name}) between 1 and 80`),
+    check('business_profiles_kind', sql`${t.kind} in ('restaurant', 'cafe', 'bar', 'bakery', 'other')`),
+    check('business_profiles_description', sql`char_length(${t.description}) <= 160`),
+    check('business_profiles_phone', sql`char_length(${t.phone}) <= 40`),
+    check('business_profiles_email', sql`char_length(${t.email}) <= 254`),
+    check('business_profiles_website', sql`char_length(${t.website}) <= 2048`),
+    check('business_profiles_links', sql`jsonb_typeof(${t.links}) = 'array' and jsonb_array_length(${t.links}) <= 10`),
+  ],
+);
+
+/** A place (location) of the business (AC-6508), with its opening hours as one checked `PlaceHours` document. */
+export const places = pgTable(
+  'places',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    name: text('name').notNull(),
+    addressLine: text('address_line'),
+    city: text('city'),
+    postcode: text('postcode'),
+    country: text('country').notNull(),
+    timeZone: text('time_zone').notNull(),
+    locale: text('locale').notNull(),
+    phone: text('phone'),
+    hours: jsonb('hours')
+      .notNull()
+      .default(sql`'{"weekly":{},"exceptions":[]}'::jsonb`),
+    /** The reservation page's key (H3) and the guest menu's (H1): 16 URL safe characters each. */
+    publicKey: text('public_key').notNull(),
+    menuKey: text('menu_key').notNull(),
+    position: smallint('position').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    createdByMemberId: uuid('created_by_member_id'),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+    updatedByMemberId: uuid('updated_by_member_id'),
+  },
+  (t) => [
+    primaryKey({ name: 'places_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({ name: 'places_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
+      'cascade',
+    ),
+    uniqueIndex('places_public_key').on(t.publicKey),
+    uniqueIndex('places_menu_key').on(t.menuKey),
+    index('places_order').on(t.workspaceId, t.position),
+    check('places_name', sql`char_length(${t.name}) between 1 and 80`),
+    check(
+      'places_address',
+      sql`char_length(${t.addressLine}) <= 200 and char_length(${t.city}) <= 100
+      and char_length(${t.postcode}) <= 20`,
+    ),
+    check('places_country', sql`${t.country} ~ '^[A-Z]{2}$'`),
+    check('places_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
+    check('places_locale', sql`${t.locale} ~ '^[a-z]{2,3}(-[A-Z]{2})?$'`),
+    check('places_phone', sql`char_length(${t.phone}) <= 40`),
+    check(
+      'places_hours',
+      sql`jsonb_typeof(${t.hours}) = 'object' and ${t.hours} ? 'weekly' and ${t.hours} ? 'exceptions'`,
+    ),
+    check('places_public_key', sql`${t.publicKey} ~ '^[A-Za-z0-9_-]{16}$'`),
+    check('places_menu_key', sql`${t.menuKey} ~ '^[A-Za-z0-9_-]{16}$'`),
+    check('places_position', sql`${t.position} between 0 and 19`),
+  ],
+);
+
+/** An area of a place (Inside, Terrace, Bar; up to 12, AC-6509). */
+export const areas = pgTable(
+  'areas',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    placeId: uuid('place_id').notNull(),
+    name: text('name').notNull(),
+    position: smallint('position').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    createdByMemberId: uuid('created_by_member_id'),
+  },
+  (t) => [
+    primaryKey({ name: 'areas_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'areas_place',
+      columns: [t.workspaceId, t.placeId],
+      foreignColumns: [places.workspaceId, places.id],
+    }).onDelete('cascade'),
+    uniqueIndex('areas_name').on(t.workspaceId, t.placeId, sql`lower(${t.name})`),
+    check('areas_name_length', sql`char_length(${t.name}) between 1 and 40`),
+  ],
+);
+
+/**
+ * A table of a place (AC-6509; `place_tables`, as `tables` would read as SQL's own word). Its label is unique among
+ * the place's live tables, ignoring case; an archived table leaves online fitting and keeps its holds (Rules settled:
+ * Tables with future reservations). `joins` are other tables of the same place, at most 10.
+ */
+export const placeTables = pgTable(
+  'place_tables',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    placeId: uuid('place_id').notNull(),
+    areaId: uuid('area_id'),
+    label: text('label').notNull(),
+    minGuests: smallint('min_guests').notNull(),
+    maxGuests: smallint('max_guests').notNull(),
+    online: boolean('online').notNull().default(true),
+    position: integer('position').notNull(),
+    joins: uuid('joins')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    archivedAt: timestamptz('archived_at'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    createdByMemberId: uuid('created_by_member_id'),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+    updatedByMemberId: uuid('updated_by_member_id'),
+  },
+  (t) => [
+    primaryKey({ name: 'place_tables_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'place_tables_place',
+      columns: [t.workspaceId, t.placeId],
+      foreignColumns: [places.workspaceId, places.id],
+    }).onDelete('cascade'),
+    uniqueIndex('place_tables_label')
+      .on(t.workspaceId, t.placeId, sql`lower(${t.label})`)
+      .where(sql`${t.archivedAt} is null`),
+    index('place_tables_order').on(t.workspaceId, t.placeId, t.position),
+    index('place_tables_area').on(t.workspaceId, t.areaId),
+    check('place_tables_label_length', sql`char_length(${t.label}) between 1 and 12`),
+    check(
+      'place_tables_guests',
+      sql`${t.minGuests} between 1 and 30 and ${t.maxGuests} between 1 and 30 and ${t.minGuests} <= ${t.maxGuests}`,
+    ),
+    check('place_tables_joins', sql`cardinality(${t.joins}) <= 10 and not (${t.id} = any(${t.joins}))`),
+  ],
+);

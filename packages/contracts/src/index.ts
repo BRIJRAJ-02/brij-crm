@@ -53,6 +53,7 @@ import { workspacesContract } from './workspaces.ts';
 import { deletedWorkspaceContract, workspaceContract } from './workspace-settings.ts';
 import { profileContract } from './profile.ts';
 import { brandContract } from './workspace-brand.ts';
+import { hospitalityContract } from './hospitality.ts';
 import { schedulingContract } from './scheduling.ts';
 
 export * from './access.ts';
@@ -126,6 +127,7 @@ export * from './workspace-settings.ts';
 export * from './profile.ts';
 export * from './workspace-brand.ts';
 export * from './brand-colour.ts';
+export * from './hospitality.ts';
 
 /**
  * The one contract the web app, the API and the worker share. Each feature
@@ -149,6 +151,8 @@ export const contract = {
   profile: profileContract,
   // A workspace's brand kit (spec 0060): any member reads it, owners and admins save it.
   brand: brandContract,
+  // The Hospitality suite's setup (spec 0065, H0): apps, the business profile, places, areas and tables.
+  hospitality: hospitalityContract,
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.
   workspaceSecurity: workspaceSecurityContract,
   objects: objectsContract,

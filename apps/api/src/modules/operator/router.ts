@@ -5,6 +5,7 @@ import {
   operatorSite,
   operatorUser,
   operatorUsers,
+  setEarlyAccess,
   type OperatorDeps,
 } from '@crm/core';
 import { operator, type RequestContext } from '../../orpc.ts';
@@ -27,4 +28,18 @@ export const operatorRouter = operator.operator.router({
   pages: operator.operator.pages.handler(({ context, input }) => operatorPages(deps(context), input.period)),
   page: operator.operator.page.handler(({ context, input }) => operatorPage(deps(context), input)),
   site: operator.operator.site.handler(({ context, input }) => operatorSite(deps(context), input.period)),
+  // The console's one write (spec 0065, AC-6502): the gate logged the attempt before it ran; once the switch is
+  // made, its before and after join the log as a row of their own.
+  setEarlyAccess: operator.operator.setEarlyAccess.handler(async ({ context, input }) => {
+    const change = await setEarlyAccess({ db: context.db }, input);
+    await context.identity.logOperatorEvent({
+      userId: context.user.id,
+      action: 'operator.earlyAccessChanged',
+      target: input.workspaceId,
+      requestId: context.requestId,
+      before: { earlyAccess: change.before },
+      after: { earlyAccess: change.after },
+    });
+    return change;
+  }),
 });

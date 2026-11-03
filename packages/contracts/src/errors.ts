@@ -136,6 +136,11 @@ export const ERROR_MAP = {
   CONFLICT: CONFLICT,
   INVALID: UNPROCESSABLE,
   MERGE_TOO_LARGE: UNPROCESSABLE,
+  // The Hospitality suite (spec 0065): an app that isn't installed is a 403 (AC-6504); Menu QR without Menu, and a
+  // first install with no business card, are conflicts the Apps page answers by asking.
+  APP_NOT_INSTALLED: { status: 403 },
+  APP_NEEDED: CONFLICT,
+  BUSINESS_NEEDED: CONFLICT,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,

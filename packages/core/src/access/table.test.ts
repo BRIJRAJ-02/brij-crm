@@ -106,6 +106,17 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'operatorPages',
   'operatorPage',
   'operatorSite',
+  // Its one write (spec 0065, AC-6502), behind the same gate, through crm_operator's one definer.
+  'setEarlyAccess',
+  // The Hospitality gate (spec 0065, AC-6504): it takes the caller's transaction, inside a service the door let in.
+  'appInstalled',
+  'requireApp',
+  'requireAnyApp',
+  // Pure: a country's likely locale, and a place's hours read at an instant (spec 0065).
+  'localeForCountry',
+  'openAt',
+  'nextOpening',
+  'rangesOn',
   'periodDays',
   // The team change's audience: read inside the change's own transaction, after its door (spec 0031, AC-825).
   'membersAffectedByTeamChange',

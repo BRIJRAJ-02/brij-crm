@@ -961,6 +961,9 @@ export const operatorEvent = auth.table(
     /** The users list's search as typed, when there was one: who looked whom up is what this log answers. */
     q: text('q'),
     requestId: text('request_id').notNull(),
+    /** A write's state before and after it (spec 0065, AC-6502: a workspace's early access flags). Reads have none. */
+    before: jsonb('before'),
+    after: jsonb('after'),
   },
   (t) => [
     index('operator_event_at').on(t.at),

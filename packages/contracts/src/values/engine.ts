@@ -125,6 +125,11 @@ export const ENGINE_REFUSAL_CODES = [
   'CONFLICT',
   'INVALID',
   'MERGE_TOO_LARGE',
+  // The Hospitality suite (spec 0065, AC-6504 to AC-6506): an app's procedure while it isn't installed, an app
+  // installed without the one it needs, and a first install without its business card.
+  'APP_NOT_INSTALLED',
+  'APP_NEEDED',
+  'BUSINESS_NEEDED',
 ] as const;
 
 /** One of the engine's refusal codes. */

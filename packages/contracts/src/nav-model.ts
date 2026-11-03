@@ -14,7 +14,7 @@
 // is pruned (AC-940).
 
 /** The sections that fold, reorder and hold items, in their default order. */
-export const NAV_SECTIONS = ['favourites', 'records', 'lists', 'scheduling'] as const;
+export const NAV_SECTIONS = ['favourites', 'records', 'lists', 'scheduling', 'hospitality'] as const;
 /** One of the sidebar's sections. */
 export type NavSectionKey = (typeof NAV_SECTIONS)[number];
 
@@ -32,8 +32,13 @@ export const NAV_TOP_PAGES = ['linkPage', 'inbox', 'tasks', 'notes'] as const;
  * view). A stored choice for a page no longer here is skipped on read and dropped on the next write.
  */
 export const NAV_SCHEDULING_PAGES = ['bookings', 'roster', 'captures'] as const;
+/**
+ * The Hospitality section's pages (spec 0065, AC-6510; Rules settled: Navigation), in their default order: Menus
+ * (Menu), QR codes (Menu QR), Reservations and Service (Table seating). Only the installed apps' pages show.
+ */
+export const NAV_HOSPITALITY_PAGES = ['menus', 'qr', 'reservations', 'service'] as const;
 /** Every page the sidebar may store a choice for. Fixed items (Trash, Settings) are never stored. */
-export const NAV_PAGES = [...NAV_TOP_PAGES, ...NAV_SCHEDULING_PAGES] as const;
+export const NAV_PAGES = [...NAV_TOP_PAGES, ...NAV_SCHEDULING_PAGES, ...NAV_HOSPITALITY_PAGES] as const;
 /** A page the sidebar stores choices for. */
 export type NavPage = (typeof NAV_PAGES)[number];
 
@@ -122,6 +127,8 @@ export interface NavUniverse {
   readonly lists: readonly string[];
   /** The Scheduling pages the member's role may open (none for a guest). */
   readonly scheduling: readonly NavPage[];
+  /** The Hospitality pages of the installed apps, for a member who may run or set them up (spec 0065). */
+  readonly hospitality: readonly NavPage[];
   /** `view:<id>` and `record:<id>` of starred items that resolve. */
   readonly favourites: ReadonlySet<string>;
 }
@@ -132,6 +139,7 @@ export const EMPTY_NAV_UNIVERSE: NavUniverse = {
   records: [],
   lists: [],
   scheduling: [],
+  hospitality: [],
   favourites: new Set(),
 };
 
@@ -149,7 +157,8 @@ export function sectionOf(item: { readonly kind: NavItemKind; readonly id: strin
     case 'list':
       return 'lists';
     case 'page':
-      return (NAV_TOP_PAGES as readonly string[]).includes(item.id) ? 'top' : 'scheduling';
+      if ((NAV_TOP_PAGES as readonly string[]).includes(item.id)) return 'top';
+      return (NAV_HOSPITALITY_PAGES as readonly string[]).includes(item.id) ? 'hospitality' : 'scheduling';
   }
 }
 
@@ -168,6 +177,8 @@ function defaultsOf(universe: NavUniverse, section: NavSectionKey | 'top'): read
       return universe.top.map(page);
     case 'scheduling':
       return universe.scheduling.map(page);
+    case 'hospitality':
+      return universe.hospitality.map(page);
     case 'records':
       return universe.records.map((id) => ({ kind: 'object', id, hidden: false }));
     case 'lists':
@@ -188,7 +199,11 @@ function resolves(universe: NavUniverse, item: NavItemPref): boolean {
     case 'list':
       return universe.lists.includes(item.id);
     case 'page':
-      return universe.top.includes(item.id as NavPage) || universe.scheduling.includes(item.id as NavPage);
+      return (
+        universe.top.includes(item.id as NavPage) ||
+        universe.scheduling.includes(item.id as NavPage) ||
+        universe.hospitality.includes(item.id as NavPage)
+      );
   }
 }
 

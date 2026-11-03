@@ -72,6 +72,8 @@ export const PERMISSION_POWERS: Record<Permission, string> = {
   'schedule.manage': 'Manage everyone’s scheduling',
   'schedule.manage.team': 'Manage their teams’ scheduling',
   'routing.manage': 'Set up routing',
+  'hospitality.manage': 'Set up the Hospitality apps',
+  'hospitality.service': 'Run service',
 };
 
 /** One group of powers, as a person thinks about them rather than as the code names them. */
@@ -103,6 +105,7 @@ export const PERMISSION_AREAS: readonly PermissionArea[] = [
       'routing.manage',
     ],
   },
+  { id: 'hospitality', title: 'Hospitality', permissions: ['hospitality.manage', 'hospitality.service'] },
   {
     id: 'people',
     title: 'People and access',

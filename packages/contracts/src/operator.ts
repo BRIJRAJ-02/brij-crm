@@ -5,6 +5,7 @@
 // factor, a recent sign in), never a workspace role.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { EarlyAccessChange, EarlyAccessFlagName, SetEarlyAccessInput } from './hospitality.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Uuid } from './values/ids.ts';
 
@@ -130,6 +131,8 @@ export const OperatorUserWorkspace = z.object({
   recordsMade: z.number().int().nonnegative(),
   bookingsHosted: z.number().int().nonnegative(),
   pagesOwned: z.number().int().nonnegative(),
+  /** What Timefix opened early for the workspace (spec 0065, AC-6502): the Hospitality apps today. */
+  earlyAccess: z.array(EarlyAccessFlagName),
 });
 /** One workspace a person is in. */
 export type OperatorUserWorkspace = z.infer<typeof OperatorUserWorkspace>;
@@ -270,6 +273,11 @@ export const operatorContract = {
   pages: oc.input(OperatorPeriodInput).output(OperatorPages),
   page: oc.input(OperatorPageInput).output(OperatorPageDetail),
   site: oc.input(OperatorPeriodInput).output(OperatorSite),
+  /**
+   * The console's one write (spec 0065, AC-6502): a workspace's early access flag on or off, kept with its before
+   * and after in the console's log. `NOT_FOUND` for a workspace that isn't there.
+   */
+  setEarlyAccess: oc.input(SetEarlyAccessInput).output(EarlyAccessChange),
 };
 
 /** What the marketing site's beacon sends (AC-1627): the path, the referring site's host, and `utm_source`. */

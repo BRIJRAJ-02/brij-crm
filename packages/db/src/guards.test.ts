@@ -93,6 +93,10 @@ describe('every tenant table', () => {
             // form takes an address one held while it still finds that one.
             row.index === 'form_public_keys_key' ||
             row.index === 'booking_pages_public_key' ||
+            // A place's reservation page and guest menu keys find it before the workspace is known (spec 0065, H1
+            // and H3), so they are unique everywhere.
+            row.index === 'places_public_key' ||
+            row.index === 'places_menu_key' ||
             // `/<handle>/<slug>` and a profile's pages are found before the workspace is known (22 Oct 2026), read
             // only through crm_booking_lookup's crm_booking_page_by_address and crm_booking_profile_pages.
             row.index === 'booking_pages_owner_slug' ||
@@ -249,6 +253,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
       // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
+      // The operator console's one write (spec 0065, AC-6502, migration 0168).
+      { name: 'crm_set_early_access', owner: 'crm_operator' },
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
@@ -373,6 +379,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         atomic: true,
       },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_set_early_access', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it checks the workspace and the membership before it writes, as the one below does.
       { name: 'crm_set_public_profile_live', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it checks the workspace and the membership before it writes.
@@ -528,6 +535,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_daily',
         'crm_operator_pages',
         'crm_operator_page_days',
+        'crm_set_early_access',
       ],
       [
         'crm_operator_workspaces(uuid[])',
@@ -536,8 +544,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_daily(date, date)',
         'crm_operator_pages(date, date, uuid, uuid)',
         'crm_operator_page_days(date, date, uuid, uuid)',
+        'crm_set_early_access(uuid, text, boolean)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_handle',
@@ -767,12 +776,16 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       forms: ['id', 'workspace_id'],
       members: ['id', 'role', 'status', 'user_id', 'workspace_id'],
       records: ['created_at', 'created_by_member_id', 'deleted_at', 'object_id', 'workspace_id'],
-      workspaces: ['created_at', 'deleted_at', 'id', 'name', 'slug'],
+      workspaces: ['created_at', 'deleted_at', 'early_access', 'id', 'name', 'slug'],
     };
     expect(columns.rows).toEqual(
-      Object.entries(granted)
-        .flatMap(([table, names]) => names.map((name) => ({ column: `${table}.${name}`, privilege: 'SELECT' })))
-        .sort((a, b) => (a.column < b.column ? -1 : a.column > b.column ? 1 : 0)),
+      [
+        ...Object.entries(granted).flatMap(([table, names]) =>
+          names.map((name) => ({ column: `${table}.${name}`, privilege: 'SELECT' })),
+        ),
+        // The console's one write (spec 0065, AC-6502): a workspace's early access flags, and nothing else.
+        { column: 'workspaces.early_access', privilege: 'UPDATE' },
+      ].sort((a, b) => (a.column < b.column ? -1 : a.column > b.column ? 1 : a.privilege < b.privilege ? -1 : 1)),
     );
     // Not a value, a note's body, a task's text, an answer or a visitor: Postgres refuses the column itself.
     for (const [table, column] of [
@@ -1283,6 +1296,56 @@ describe('isolation', () => {
         ),
       ).rejects.toMatchObject({ cause: { code: '23514' } });
     }
+  });
+
+  it("reads none of another workspace's apps, places or tables (spec 0065)", async () => {
+    const a = await workspaceWithMember('hosp-iso-a');
+    const b = await workspaceWithMember('hosp-iso-b');
+    for (const [index, w] of [a, b].entries()) {
+      await db.withWorkspace(w.workspaceId, async (tx) => {
+        await tx.execute(sql`insert into workspace_apps (workspace_id, app) values (${w.workspaceId}, 'menu')`);
+        const place = randomUUID();
+        await tx.execute(
+          sql`insert into places (workspace_id, id, name, country, time_zone, locale, public_key, menu_key, position)
+            values (${w.workspaceId}, ${place}, 'Main', 'GB', 'Europe/London', 'en-GB', ${`pubkey${String(index)}aaaaaaaaa`},
+              ${`menkey${String(index)}aaaaaaaaa`}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into place_tables (workspace_id, place_id, label, min_guests, max_guests, position)
+            values (${w.workspaceId}, ${place}, 'T1', 2, 4, 0)`,
+        );
+      });
+    }
+    for (const table of ['workspace_apps', 'places', 'place_tables']) {
+      const seen = await db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ workspace_id: string }>(sql`select workspace_id from ${sql.identifier(table)}`),
+      );
+      expect(seen.rows.map((row) => row.workspace_id)).toEqual([a.workspaceId]);
+    }
+    // A table's seats stay between 1 and 30, the fewest never above the most.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update place_tables set min_guests = 6, max_guests = 4`)),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+  });
+
+  it('switches early access through crm_set_early_access only, keeping the closed list (spec 0065, AC-6502)', async () => {
+    const a = await workspaceWithMember('early-a');
+    const call = (flag: string, on: boolean) =>
+      db.withWorkspace(randomUUID(), (tx) =>
+        tx.execute<{ before: string[]; after: string[] }>(
+          sql`select before, after from crm_set_early_access(${a.workspaceId}::uuid, ${flag}, ${on})`,
+        ),
+      );
+    expect((await call('hospitality', true)).rows).toEqual([{ before: [], after: ['hospitality'] }]);
+    expect((await call('hospitality', true)).rows).toEqual([{ before: ['hospitality'], after: ['hospitality'] }]);
+    expect((await call('billing', true)).rows).toEqual([]);
+    expect((await call('hospitality', false)).rows).toEqual([{ before: ['hospitality'], after: [] }]);
+    // The app may not write the column itself.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`update workspaces set early_access = '{hospitality}' where id = ${a.workspaceId}`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
   });
 
   it('refuses a row written into another workspace', async () => {

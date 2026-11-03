@@ -893,6 +893,25 @@ export { recordsImport } from './imports/kind.ts';
 export { recordsImportUndo } from './imports/undo.ts';
 /** Records exports (spec 0040): a view's records as CSV, on the submissions export's rows, chunks and download. */
 export { getRecordsExport, recordsExport, startRecordsExport, type RecordsExportRecord } from './exports/records.ts';
+// The Hospitality suite's setup (spec 0065, H0): the apps and their one gate, the business, its places and floors.
+export { listApps, installApp, removeApp } from './hospitality/apps.ts';
+export { appInstalled, requireApp, requireAnyApp, APP_NOT_INSTALLED_MESSAGE } from './hospitality/gate.ts';
+export { getBusiness, saveBusiness, createPlace, updatePlace, localeForCountry } from './hospitality/places.ts';
+export {
+  readFloor,
+  saveArea,
+  deleteArea,
+  addTables,
+  updateTable,
+  moveTable,
+  archiveTable,
+  restoreTable,
+  deleteTable,
+} from './hospitality/floor.ts';
+/** A place's hours read at an instant (spec 0065, AC-6508): pure, on the place's own wall clock. */
+export { openAt, nextOpening, rangesOn, type OpenNow } from './hospitality/hours.ts';
+/** The operator console's one write (spec 0065, AC-6502): a workspace's early access flag, behind the operator gate. */
+export { setEarlyAccess } from './operator/early-access.ts';
 // The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.
 export {
   operatorOverview,
