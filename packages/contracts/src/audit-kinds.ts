@@ -101,6 +101,12 @@ export const AUDIT_KINDS = {
     'routing.settings_changed',
     'routing.skills_changed',
     'routing.tested',
+    'booking_page.published',
+    'booking_page.draft_discarded',
+    'booking_page.version_restored',
+    'link_page.published',
+    'link_page.draft_discarded',
+    'link_page.version_restored',
   ],
 } as const satisfies Record<AuditKindName, readonly AuditAction[]>;
 

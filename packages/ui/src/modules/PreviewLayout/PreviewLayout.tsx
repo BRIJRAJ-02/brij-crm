@@ -97,6 +97,11 @@ export interface PreviewFrameProps {
    * it changes and once the frame loads, so the page can show unsaved edits.
    */
   readonly draft?: unknown;
+  /**
+   * Where it sits: `phone` (the default) fills the phone PreviewLayout draws; `page` stands alone in a tab of its
+   * own, the window's full height, for a draft opened to look at as a guest would (spec 0068, AC-6811).
+   */
+  readonly size?: 'phone' | 'page';
 }
 
 /** How far an arrow key, or a wheel's line, moves the page, in its own pixels: a browser's step. */
@@ -324,7 +329,7 @@ function useFrameScroll(frame: RefObject<HTMLIFrameElement | null>) {
  * phone scrolls the page, and while the page runs past the phone's foot, the screen takes one tab stop (a region named
  * "Phone preview") where the arrows, Page Up and Down, Space, Home and End scroll it.
  */
-export function PreviewFrame({ src, title, version, draft }: PreviewFrameProps) {
+export function PreviewFrame({ src, title, version, draft, size }: PreviewFrameProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const { ref, onLoad, screen } = useFrameScroll(frame);
   const post = () => {
@@ -333,7 +338,7 @@ export function PreviewFrame({ src, title, version, draft }: PreviewFrameProps) 
   };
   useEffect(post);
   return (
-    <div ref={ref} className={styles.viewport} {...screen}>
+    <div ref={ref} className={styles.viewport} data-size={size === 'page' ? 'page' : undefined} {...screen}>
       {/* A picture of the page, not a second copy to use: nothing in it takes focus or a press. */}
       <iframe
         key={version ?? ''}

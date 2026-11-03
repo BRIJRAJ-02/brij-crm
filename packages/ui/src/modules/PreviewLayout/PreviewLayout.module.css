@@ -242,6 +242,11 @@
     background: var(--surface-subtle);
   }
 
+  /* Standing alone in its own tab (a draft's Preview): the window's full height, the page at its own width. */
+  .viewport[data-size='page'] {
+    block-size: 100dvb;
+  }
+
   /* While the page is long, a finger over the phone drags the page, not the sheet around it. */
   .viewport[data-long] {
     touch-action: none;

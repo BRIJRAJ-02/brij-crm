@@ -13,9 +13,18 @@ import {
 export type DraftedPageKind = 'booking' | 'link';
 
 /** A stored draft as the services read it: checked by the shared schema, anything that doesn't parse read as none. */
-export function draftOf(stored: unknown): BookingPageDraft {
+export function draftOf(stored: unknown, pageId?: string): BookingPageDraft {
   if (stored === null || stored === undefined) return {};
-  return BookingPageDraft.safeParse(stored).data ?? {};
+  const parsed = BookingPageDraft.safeParse(stored);
+  if (parsed.success) return parsed.data;
+  // Read as none, so the page still opens, but said: a draft an older build wrote badly would otherwise vanish
+  // without a trace. Only where it broke, never the values.
+  console.warn('booking page draft unreadable', {
+    code: 'DRAFT_UNREADABLE',
+    ...(pageId === undefined ? {} : { pageId }),
+    paths: parsed.error.issues.map((issue) => issue.path.join('.')),
+  });
+  return {};
 }
 
 /** What guests see of a booking page: its drafted settings as they are published. */

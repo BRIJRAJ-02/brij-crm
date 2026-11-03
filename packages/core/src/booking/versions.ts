@@ -8,6 +8,9 @@ import type { EngineScope } from '../access/mint.ts';
 
 const { pageVersions } = schema;
 
+/** The kinds of page that keep versions here so far: booking pages and link pages. */
+export type VersionedPageKind = 'booking' | 'link';
+
 /** The member a version names, or null for anyone else (an API key, the system). */
 export function publisherOf(scope: EngineScope): string | null {
   const { principal } = scope.access;
@@ -24,17 +27,18 @@ export async function keepVersion(
   pageId: string,
   snapshot: object,
   now: Date,
+  kind: VersionedPageKind = 'booking',
 ): Promise<number> {
   const [last] = await tx
     .select({ version: pageVersions.version })
     .from(pageVersions)
-    .where(and(eq(pageVersions.pageKind, 'booking'), eq(pageVersions.pageId, pageId)))
+    .where(and(eq(pageVersions.pageKind, kind), eq(pageVersions.pageId, pageId)))
     .orderBy(desc(pageVersions.version))
     .limit(1);
   const version = (last?.version ?? 0) + 1;
   await tx.insert(pageVersions).values({
     workspaceId: scope.workspaceId,
-    pageKind: 'booking',
+    pageKind: kind,
     pageId,
     version,
     snapshot,
@@ -45,7 +49,7 @@ export async function keepVersion(
     .delete(pageVersions)
     .where(
       and(
-        eq(pageVersions.pageKind, 'booking'),
+        eq(pageVersions.pageKind, kind),
         eq(pageVersions.pageId, pageId),
         lt(pageVersions.version, version - PAGE_VERSIONS_KEPT + 1),
       ),

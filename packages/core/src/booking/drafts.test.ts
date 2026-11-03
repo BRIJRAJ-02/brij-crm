@@ -1,6 +1,6 @@
 // A page's unpublished changes as sentences (spec 0068, AC-6811), per kind, and the draft's own arithmetic: what is
 // left once a setting goes back to what guests see, and a version made a draft.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   changedOnly,
   diffPage,
@@ -74,10 +74,17 @@ describe('diffPage (link)', () => {
 
 describe('the draft’s arithmetic', () => {
   it('reads a stored draft by the shared schema, anything else as none', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     expect(draftOf({ title: 'Hi' })).toEqual({ title: 'Hi' });
-    expect(draftOf({ title: 'Hi', status: 'paused' })).toEqual({});
     expect(draftOf(null)).toEqual({});
+    expect(warn).not.toHaveBeenCalled();
+    expect(draftOf({ title: 'Hi', status: 'paused' }, 'page-1')).toEqual({});
     expect(draftOf('nope')).toEqual({});
+    // An unreadable draft is said, by where it broke and never by its values.
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls[0]?.[1]).toMatchObject({ code: 'DRAFT_UNREADABLE', pageId: 'page-1' });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Hi');
+    warn.mockRestore();
   });
 
   it('leaves out every setting back at what guests see', () => {

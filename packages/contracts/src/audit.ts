@@ -416,6 +416,21 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(['managed_page.propagated'], bookingPage, NoParams),
   /** Bookings › Routing (spec 0037): its settings or skills changed, or a Test run; what changed stays in the row. */
   entry(['routing.settings_changed', 'routing.skills_changed', 'routing.tested'], workspace, NoParams),
+  /** A page's draft published or a version restored as its draft (spec 0068, AC-6812): which version. */
+  entry(
+    ['booking_page.published', 'booking_page.version_restored'],
+    bookingPage,
+    z.strictObject({ version: z.number().int().min(1) }),
+  ),
+  /** A page's draft discarded (spec 0068, AC-6811). */
+  entry(['booking_page.draft_discarded'], bookingPage, NoParams),
+  /** The same for a person's link page, the target the member whose page it is. */
+  entry(
+    ['link_page.published', 'link_page.version_restored'],
+    member,
+    z.strictObject({ version: z.number().int().min(1) }),
+  ),
+  entry(['link_page.draft_discarded'], member, NoParams),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;

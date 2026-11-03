@@ -157,7 +157,7 @@ export function pageOf(
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     ...(row.draft === null || row.draftChangedAt === null
       ? {}
-      : { draft: draftOf(row.draft), draftChangedAt: row.draftChangedAt }),
+      : { draft: draftOf(row.draft, row.id), draftChangedAt: row.draftChangedAt }),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

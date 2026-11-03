@@ -167,6 +167,15 @@ export const AUDIT_ACTIONS = [
   'routing.settings_changed',
   'routing.skills_changed',
   'routing.tested',
+  // Publish for public pages (spec 0068, AC-6811, AC-6812): a booking page's draft published (`after.version`), its
+  // draft discarded, or a version restored as its draft (`after.version`); the target is the page.
+  'booking_page.published',
+  'booking_page.draft_discarded',
+  'booking_page.version_restored',
+  // The same for a person's link page; the target is the member whose page it is.
+  'link_page.published',
+  'link_page.draft_discarded',
+  'link_page.version_restored',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

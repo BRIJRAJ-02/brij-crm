@@ -799,6 +799,34 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     // members were added and removed. The counts are written as numbers, not lists, so no member id is listed here.
     // The owner's own page, rewritten by its template. No params: what matters is that it happened and to which
     // page, and the parts are in the row for anyone reading it closely.
+    // Publish for public pages (spec 0068): the version published or restored, read back as a whole number (a row an
+    // older build wrote without one reads as version 1).
+    case 'booking_page.published':
+    case 'booking_page.version_restored': {
+      const version = typeof after.version === 'number' && Number.isInteger(after.version) && after.version >= 1;
+      return {
+        ...base,
+        action,
+        target: thing('booking_page', names.bookingPages),
+        params: { version: version ? Number(after.version) : 1 },
+        changes: [],
+      };
+    }
+    case 'booking_page.draft_discarded':
+      return { ...base, action, target: thing('booking_page', names.bookingPages), params: {}, changes: [] };
+    case 'link_page.published':
+    case 'link_page.version_restored': {
+      const version = typeof after.version === 'number' && Number.isInteger(after.version) && after.version >= 1;
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: { version: version ? Number(after.version) : 1 },
+        changes: [],
+      };
+    }
+    case 'link_page.draft_discarded':
+      return { ...base, action, target: memberTarget(), params: {}, changes: [] };
     case 'managed_page.propagated':
       return { ...base, action, target: thing('booking_page', names.bookingPages), params: {}, changes: [] };
     case 'managed_page.changed': {

@@ -15,6 +15,7 @@ import { LOCKED_PART_REFUSAL, lockedPartOfWrite, templateLocksOf } from './manag
 import { checkDurations, pageToChange, updatePageIn, viewWithCounts, type ReachedPage } from './pages.ts';
 import { checkPageQuestions, questionsSeenBy, withHiddenFilings } from './questions.ts';
 import { loadPage } from './slots.ts';
+import { writeAudit } from '../members/audit.ts';
 import { keepVersion, publisherOf } from './versions.ts';
 
 const { bookingPages, members, pageVersions } = schema;
@@ -116,7 +117,13 @@ export async function publishBookingPage(
     const view = await updatePageIn(tx, scope, { pageId: page.id, settings: draft }, now);
     const published = await loadPage(tx, page.id);
     if (published === undefined) throw refuse('NOT_FOUND', 'That booking page doesn’t exist, or isn’t yours.');
-    await keepVersion(tx, scope, page.id, publishedSnapshot(published), now);
+    const version = await keepVersion(tx, scope, page.id, publishedSnapshot(published), now);
+    await writeAudit(tx, scope.workspaceId, scope.actor, {
+      action: 'booking_page.published',
+      targetType: 'booking_page',
+      targetId: page.id,
+      after: { version, changed: Object.keys(draft) },
+    });
     return view;
   });
 }
@@ -130,6 +137,14 @@ export async function discardBookingPageDraft(
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
     const page = await pageToChange(tx, scope, input.pageId, true);
+    if (page.draft !== undefined && Object.keys(page.draft).length > 0) {
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: 'booking_page.draft_discarded',
+        targetType: 'booking_page',
+        targetId: page.id,
+        before: { changed: Object.keys(page.draft) },
+      });
+    }
     return viewWithCounts(tx, scope, await writeDraft(tx, page, {}, now), now);
   });
 }
@@ -199,6 +214,12 @@ export async function restoreBookingPageVersion(
         : (Object.fromEntries(
             Object.entries(restored).filter(([key]) => lockedPartOfWrite(locked, { [key]: true }) === undefined),
           ) as BookingPageDraft);
+    await writeAudit(tx, scope.workspaceId, scope.actor, {
+      action: 'booking_page.version_restored',
+      targetType: 'booking_page',
+      targetId: page.id,
+      after: { version: input.version },
+    });
     return viewWithCounts(tx, scope, await writeDraft(tx, page, kept, now), now);
   });
 }
