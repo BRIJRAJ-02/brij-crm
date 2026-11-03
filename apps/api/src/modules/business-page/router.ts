@@ -7,6 +7,7 @@ import {
   saveBusinessPage,
   setPlaceSlug,
 } from '@crm/core';
+import { forgetAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { errorFields, log } from '../../log.ts';
 import { member } from '../../orpc.ts';
@@ -24,7 +25,7 @@ export const businessPageRouter = b.router({
     const changed = await commitWrite(context, { mutationId: input.mutationId }, () =>
       claimBusinessHandle(context.scope, { handle: input.handle }),
     );
-    if (changed.stale) await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId));
+    if (changed.stale) await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     return changed.view;
   }),
   save: b.save.handler(({ context, input }) =>
@@ -36,14 +37,14 @@ export const businessPageRouter = b.router({
     const changed = await commitWrite(context, { mutationId: input.mutationId }, () =>
       setPlaceSlug(context.scope, { placeId: input.placeId, slug: input.slug }),
     );
-    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId, [input.placeId]));
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, [input.placeId]));
     return changed.view;
   }),
   publish: b.publish.handler(async ({ context, input }) => {
     const published = await commitWrite(context, { mutationId: input.mutationId }, () =>
       publishBusinessPage(context.scope),
     );
-    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId));
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     if (published.unusedPaths.length > 0 && context.files !== undefined) {
       // Their rows are gone already; a store that keeps a file only keeps an unreachable one, so it is logged, not thrown.
       await context.files.remove([...published.unusedPaths]).catch((error: unknown) => {

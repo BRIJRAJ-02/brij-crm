@@ -17,6 +17,7 @@ import {
   updatePlace,
   updateResource,
 } from '@crm/core';
+import { forgetAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -43,7 +44,7 @@ export const hospitalityRouter = h.router({
     );
     // The business page shows what its apps add (the menu, Reserve) and is live only while one is on: its edge
     // copies go with any change of apps (spec 0066, AC-6816).
-    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId));
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     return apps;
   }),
   remove: h.remove.handler(async ({ context, input }) => {
@@ -51,7 +52,7 @@ export const hospitalityRouter = h.router({
       removeApp(context.scope, { app: input.app, withDependents: input.withDependents }, hooks),
     );
     // With the last app gone the page answers 404 at once, not after the edge's minute (spec 0066, AC-6816).
-    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId));
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     return apps;
   }),
   business: h.business.handler(({ context }) => getBusiness(context.scope)),
@@ -60,7 +61,7 @@ export const hospitalityRouter = h.router({
       saveBusiness(context.scope, input.profile),
     );
     // The business page reads its name, kind and contact live (spec 0066, B4): its edge copies go.
-    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId));
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     return saved;
   }),
   createPlace: h.createPlace.handler(({ context, input }) =>
@@ -77,7 +78,7 @@ export const hospitalityRouter = h.router({
       }),
     );
     // A place's address and hours show on the business page live (spec 0066, B4): its edge copies go.
-    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId, [input.placeId]));
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, [input.placeId]));
     return place;
   }),
   resources: h.resources.handler(({ context, input }) => listResources(context.scope, { placeId: input.placeId })),

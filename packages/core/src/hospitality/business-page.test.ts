@@ -11,6 +11,7 @@ import { newId } from '../engine/ids.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { setEarlyAccess } from '../operator/early-access.ts';
+import { deleteWorkspace, restoreWorkspace } from '../workspace/settings.ts';
 import { testScope } from '../testing.ts';
 import { installApp, removeApp } from './apps.ts';
 import { businessCacheId } from './cache-tags.ts';
@@ -308,5 +309,21 @@ describe('the page editor (B4 lite)', () => {
     await installApp(w.owner, { app: 'menu' });
     expect(await listed()).toBe(true);
     expect((await enterBusinessPage({ db }, `sn-${run}-off`)).page.handle).toBe(`sn-${run}-off`);
+  });
+
+  it('leaves the sitemap when its workspace is deleted, and comes back when it is restored', async () => {
+    const w = await business();
+    await claimBusinessHandle(w.owner, { handle: `sn-${run}-del` });
+    await updatePlace(w.owner, { placeId: w.placeId, hours: OPEN_WEEK });
+    await publishBusinessPage(w.owner);
+    const listed = async () =>
+      (await listSitemapBusinesses({ db }, { max: 50_000 })).some((row) => row.handle === `sn-${run}-del`);
+    expect(await listed()).toBe(true);
+    await deleteWorkspace(w.owner, { confirmName: 'Somewhere' });
+    expect(await listed()).toBe(false);
+    expect(await refusalOf(enterBusinessPage({ db }, `sn-${run}-del`))).toBe('NOT_FOUND');
+    await restoreWorkspace(w.owner);
+    expect(await listed()).toBe(true);
+    expect((await enterBusinessPage({ db }, `sn-${run}-del`)).page.handle).toBe(`sn-${run}-del`);
   });
 });
