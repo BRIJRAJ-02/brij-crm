@@ -4,7 +4,8 @@
 // back and the refusal comes back to the screen. The address, a place's slug, Publish and Discard wait for the
 // server's answer before they show, since each changes what guests see or what is held for them. Gallery pictures go
 // up one at a time through the upload route, then join the draft. Only managers change it, rarely, so no change
-// event carries it: another tab sees a change the next time it holds the copy.
+// event carries it: another tab sees a change the next time it holds the copy. The data layer loads this module lazily;
+// `@crm/data/business-page/store` exposes it for the editor's browser tests, which drive the real store over a fake api.
 import type { BusinessPageContent, BusinessPageView, UploadedBusinessPhoto } from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
 import { holder, type HospitalityHeld } from '../hospitality/store.ts';
@@ -79,6 +80,25 @@ export function openBusinessPage(given: {
         (view) => ({ ...view, draft, hasChanges: true }),
         () => call((options) => api.save({ workspace, draft, mutationId: mintId() }, options)),
       ),
+    /**
+     * Changes the draft from the copy as it stands now (not as a screen last drew it), so two changes made in the same
+     * moment (a photo landing while a description saves) both keep; shown at once, sent in order, and Publish, queued
+     * behind it, publishes it.
+     */
+    changeDraft: (workspace: string, edit: (draft: BusinessPageContent) => BusinessPageContent) => {
+      let draft: BusinessPageContent | undefined;
+      return pageOf(workspace).change(
+        (view) => {
+          draft = edit(view.draft);
+          return { ...view, draft, hasChanges: true };
+        },
+        () => {
+          const sending = draft;
+          if (sending === undefined) return Promise.reject(new Error('The draft was never made.'));
+          return call((options) => api.save({ workspace, draft: sending, mutationId: mintId() }, options));
+        },
+      );
+    },
     /** Gives a place its address on the page (at once; its old one keeps finding it). */
     setPlaceSlug: (workspace: string, placeId: string, slug: string) =>
       settled(workspace, (mutationId, options) => api.setPlaceSlug({ workspace, placeId, slug, mutationId }, options)),

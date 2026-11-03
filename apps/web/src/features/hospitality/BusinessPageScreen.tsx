@@ -6,7 +6,10 @@
 //
 // Foolproof (spec 0068): one next action per empty state, and Publish refuses a page that would be broken with one
 // line saying what to fix and a link to it. The address and a place's address are claimed at once (they must be held
-// before they are shared); photos, About, amenities and search listing are the draft.
+// before they are shared); photos, About, amenities and search listing are the draft. An empty workspace's address
+// starts as the business's name. Typed text saves a moment after the typing stops (and when the field is left, and
+// when the screen goes), each change made on the draft as it stands, and Publish sends what is still being typed first
+// and goes out behind it. Removing a photo offers Undo.
 import type {
   BusinessAmenity,
   BusinessPageContent,
@@ -17,6 +20,7 @@ import type {
 } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import {
+  Avatar,
   BusinessGallery,
   Button,
   ButtonLink,
@@ -36,9 +40,9 @@ import {
   useFormatSettings,
   type Toasts,
 } from '@crm/ui';
-import { useId, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { publicBookingOrigin } from '../booking/links.ts';
-import { businessSettingsHref, placeTablesHref } from '../settings/nav.ts';
+import { brandSettingsHref, businessSettingsHref, placeTablesHref } from '../settings/nav.ts';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { pageStrings as words } from './business-page-strings.ts';
 import { PHOTO_PICK_MAX_BYTES, PHOTO_TYPES, pickGalleryPhoto } from './business-photos.ts';
@@ -61,6 +65,112 @@ const AMENITIES: readonly { readonly id: BusinessAmenity; readonly label: string
 /** The most photos the page shows. */
 const PHOTOS_MAX = 20;
 
+/** How long after the last keystroke typed text saves. */
+const TYPING_SAVE_MS = 600;
+
+/** How long Undo stays on a removed photo's toast. */
+const UNDO_MS = 10_000;
+
+/**
+ * The screen's typed text that hasn't gone out yet: each field registers how to send its own, so Publish (and leaving
+ * the tab) can send it all first. `isTyping` is true while any field holds unsent text.
+ */
+interface DraftTexts {
+  readonly register: (flush: () => boolean) => () => void;
+  readonly typing: () => void;
+  readonly flushAll: () => boolean;
+}
+
+/** The screen's registry of typed text (one per screen). */
+function useDraftTexts(): DraftTexts & { readonly isTyping: boolean } {
+  const flushers = useRef(new Set<() => boolean>());
+  const [isTyping, setTyping] = useState(false);
+  const texts = useMemo<DraftTexts>(
+    () => ({
+      register: (flush) => {
+        flushers.current.add(flush);
+        return () => {
+          flushers.current.delete(flush);
+        };
+      },
+      typing: () => {
+        setTyping(true);
+      },
+      flushAll: () => {
+        let sent = false;
+        for (const flush of flushers.current) sent = flush() || sent;
+        setTyping(false);
+        return sent;
+      },
+    }),
+    [],
+  );
+  // Closing or reloading the tab sends what was typed, and asks to stay while it is on its way.
+  useEffect(() => {
+    const onLeave = (event: BeforeUnloadEvent) => {
+      if (texts.flushAll()) event.preventDefault();
+    };
+    globalThis.addEventListener('beforeunload', onLeave);
+    return () => {
+      globalThis.removeEventListener('beforeunload', onLeave);
+    };
+  }, [texts]);
+  return { ...texts, isTyping };
+}
+
+/**
+ * One typed text of the draft: shown as typed, saved `TYPING_SAVE_MS` after the typing stops, at once when the field
+ * is left, when Publish asks, and when the screen goes (so leaving never drops it). A new saved value (Discard, another
+ * tab) replaces the field's while nothing typed is waiting.
+ */
+function useDraftText(saved: string, save: (text: string) => void, texts: DraftTexts) {
+  const [text, setText] = useState(saved);
+  const [seen, setSeen] = useState(saved);
+  // Whether typed text is waiting to go out (state, for the render; the text itself rides the ref, for the timer).
+  const [isUnsent, setUnsent] = useState(false);
+  const unsent = useRef<string | undefined>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveRef = useRef(save);
+  const savedRef = useRef(saved);
+  useEffect(() => {
+    saveRef.current = save;
+    savedRef.current = saved;
+  });
+  // A saved value that is only what was typed, trimmed (its own save landing mid sentence), never takes the trailing
+  // space the person is about to type after.
+  if (saved !== seen) {
+    setSeen(saved);
+    if (!isUnsent && saved !== text.trim()) setText(saved);
+  }
+  const flush = useCallback((): boolean => {
+    if (timer.current !== undefined) clearTimeout(timer.current);
+    timer.current = undefined;
+    const next = unsent.current;
+    unsent.current = undefined;
+    setUnsent(false);
+    if (next === undefined || next.trim() === savedRef.current) return false;
+    saveRef.current(next.trim());
+    return true;
+  }, []);
+  useEffect(() => {
+    const forget = texts.register(flush);
+    return () => {
+      forget();
+      // The screen going (another page, another tab of Settings) sends what was typed.
+      flush();
+    };
+  }, [texts, flush]);
+  const onChange = (next: string) => {
+    setText(next);
+    unsent.current = next;
+    setUnsent(true);
+    texts.typing();
+    if (timer.current !== undefined) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, TYPING_SAVE_MS);
+  };
+  return { text, onChange, onBlur: flush };
+}
+
 /** Props for the page editor. */
 export interface BusinessPageScreenProps {
   readonly store: BusinessPageStore;
@@ -71,6 +181,7 @@ export interface BusinessPageScreenProps {
 /** Settings › Business › Page. */
 export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenProps) {
   const state = useHospitality(store.held(slug));
+  const texts = useDraftTexts();
   const [isPublishing, setPublishing] = useState(false);
   const [isDiscarding, setDiscarding] = useState(false);
   const crumbs = [{ id: 'business', label: strings.businessTitle, href: businessSettingsHref(slug) }];
@@ -97,12 +208,17 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
   }
   const view = state.value;
   const address = view.handle === undefined ? undefined : `${publicBookingOrigin()}/${view.handle}`;
-  /** Saves the draft with one part changed; a refusal says so and the copy goes back. */
-  const saveDraft = async (next: Partial<BusinessPageContent>) => {
-    const refused = await store.saveDraft(slug, { ...view.draft, ...next });
+  /**
+   * Changes the draft as it stands when the change goes out (never as this render drew it, so a photo landing while a
+   * description saves keeps both); a refusal says so and the copy goes back.
+   */
+  const changeDraft = async (edit: (draft: BusinessPageContent) => BusinessPageContent) => {
+    const refused = await store.changeDraft(slug, edit);
     if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message || words.saveFailed });
   };
   const publish = async () => {
+    // What is still being typed goes out first; Publish is queued behind it, so it publishes the last keystroke.
+    texts.flushAll();
     setPublishing(true);
     const refused = await store.publish(slug);
     setPublishing(false);
@@ -126,7 +242,9 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
           )}
           <Button
             variant="primary"
-            isDisabled={view.problem !== undefined || (!view.hasChanges && view.published !== undefined)}
+            isDisabled={
+              view.problem !== undefined || (!view.hasChanges && !texts.isTyping && view.published !== undefined)
+            }
             isPending={isPublishing}
             onPress={() => void publish()}
           >
@@ -161,7 +279,7 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
       )}
       <AddressSection
         // A new address (another tab's, or this one's answer) starts the field again from it.
-        key={view.handle ?? ''}
+        key={view.handle ?? `suggested:${view.suggestedHandle ?? ''}`}
         view={view}
         address={address}
         onClaim={async (handle) => {
@@ -172,8 +290,15 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
       />
       {view.handle !== undefined && (
         <>
-          <PhotosSection store={store} slug={slug} view={view} toasts={toasts} onSave={saveDraft} />
-          <AboutSection view={view} onSave={saveDraft} />
+          <PhotosSection store={store} slug={slug} view={view} toasts={toasts} texts={texts} onChange={changeDraft} />
+          <AboutSection view={view} texts={texts} onChange={changeDraft} />
+          <SettingsSection title={words.look} description={words.lookText}>
+            <Card>
+              <SettingsRow title={words.logoAndColours} description={words.logoAndColoursText}>
+                <ButtonLink href={brandSettingsHref(slug)}>{words.openBrand}</ButtonLink>
+              </SettingsRow>
+            </Card>
+          </SettingsSection>
           <PlacesSection
             view={view}
             onSlug={async (placeId, next) => {
@@ -182,11 +307,12 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
               return refused;
             }}
             onHidden={(placeId, isHidden) =>
-              void saveDraft({
+              void changeDraft((draft) => ({
+                ...draft,
                 hiddenPlaces: isHidden
-                  ? [...view.draft.hiddenPlaces.filter((id) => id !== placeId), placeId]
-                  : view.draft.hiddenPlaces.filter((id) => id !== placeId),
-              })
+                  ? [...draft.hiddenPlaces.filter((id) => id !== placeId), placeId]
+                  : draft.hiddenPlaces.filter((id) => id !== placeId),
+              }))
             }
           />
           {(view.showsMenu || view.showsReserve) && (
@@ -208,7 +334,7 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
           <>
             <Button slot="close">{words.keepEditing}</Button>
             <Button
-              variant="primary"
+              variant="danger-solid"
               onPress={() => {
                 setDiscarding(false);
                 void store.discard(slug).then((refused) => {
@@ -250,7 +376,8 @@ function AddressSection({
   readonly onClaim: (handle: string) => Promise<DataError | undefined>;
 }) {
   const formId = useId();
-  const [handle, setHandle] = useState(view.handle ?? '');
+  // An empty workspace starts from the business's name as an address, free to claim; one press claims it.
+  const [handle, setHandle] = useState(view.handle ?? view.suggestedHandle ?? '');
   const [error, setError] = useState<string | undefined>(undefined);
   const [isBusy, setBusy] = useState(false);
   const changed = handle.trim().toLowerCase() !== (view.handle ?? '');
@@ -267,11 +394,16 @@ function AddressSection({
   return (
     <SettingsSection title={words.address} description={words.addressText}>
       <Card
-        footer={
-          <Button variant="primary" type="submit" form={formId} isDisabled={!changed} isPending={isBusy}>
-            {isBusy ? words.claiming : words.claim}
-          </Button>
-        }
+        // Claim shows only while the field says something new: a claimed address has nothing to press.
+        {...(changed || isBusy
+          ? {
+              footer: (
+                <Button type="submit" form={formId} isPending={isBusy}>
+                  {isBusy ? words.claiming : words.claim}
+                </Button>
+              ),
+            }
+          : {})}
       >
         {view.handle === undefined && (
           <Callout tone="info" title={words.firstAddress}>
@@ -305,18 +437,44 @@ function PhotosSection({
   slug,
   view,
   toasts,
-  onSave,
+  texts,
+  onChange,
 }: {
   readonly store: BusinessPageStore;
   readonly slug: string;
   readonly view: BusinessPageView;
   readonly toasts: Toasts;
-  readonly onSave: (next: Partial<BusinessPageContent>) => Promise<void>;
+  readonly texts: DraftTexts;
+  readonly onChange: (edit: (draft: BusinessPageContent) => BusinessPageContent) => Promise<void>;
 }) {
   const [sending, setSending] = useState(0);
   const photos = view.draft.gallery;
   const room = PHOTOS_MAX - photos.length;
-  const save = (gallery: readonly BusinessPhoto[]) => void onSave({ gallery: [...gallery] });
+  /** Changes the gallery as it stands when the change goes out. */
+  const changeGallery = (edit: (gallery: readonly BusinessPhoto[]) => readonly BusinessPhoto[]) =>
+    void onChange((draft) => ({ ...draft, gallery: [...edit(draft.gallery)] }));
+  /** Removes a photo, with Undo putting it back where it was (while there is room for it). */
+  const remove = (photo: BusinessPhoto, at: number) => {
+    changeGallery((gallery) => gallery.filter((each) => each.id !== photo.id));
+    toasts.toast(
+      {
+        tone: 'info',
+        message: words.photoRemoved,
+        action: {
+          label: words.undo,
+          onAction: () => {
+            changeGallery((gallery) => {
+              if (gallery.some((each) => each.id === photo.id) || gallery.length >= PHOTOS_MAX) return gallery;
+              const next = [...gallery];
+              next.splice(Math.min(at, next.length), 0, photo);
+              return next;
+            });
+          },
+        },
+      },
+      { timeout: UNDO_MS },
+    );
+  };
   const add = async (files: readonly File[]) => {
     if (files.length > room) toasts.toast({ tone: 'info', message: words.photosRoom(room) });
     const picked = files.slice(0, Math.max(room, 0));
@@ -336,14 +494,18 @@ function PhotosSection({
         setSending((was) => was - 1);
       }
     }
-    if (added.length > 0) save([...photos, ...added]);
+    if (added.length > 0) changeGallery((gallery) => [...gallery, ...added].slice(0, PHOTOS_MAX));
   };
-  const move = (at: number, by: -1 | 1) => {
-    const next = [...photos];
-    const [moving] = next.splice(at, 1);
-    if (moving === undefined) return;
-    next.splice(at + by, 0, moving);
-    save(next);
+  const move = (id: string, by: -1 | 1) => {
+    changeGallery((gallery) => {
+      const at = gallery.findIndex((each) => each.id === id);
+      if (at < 0 || at + by < 0 || at + by >= gallery.length) return gallery;
+      const next = [...gallery];
+      const [moving] = next.splice(at, 1);
+      if (moving === undefined) return gallery;
+      next.splice(at + by, 0, moving);
+      return next;
+    });
   };
   return (
     <SettingsSection title={words.photos} description={words.photosText}>
@@ -369,17 +531,21 @@ function PhotosSection({
           <PhotoRow
             key={photo.id}
             photo={photo}
+            src={store.photoSrc(slug, photo.id)}
             at={at}
             count={photos.length}
+            texts={texts}
             onAlt={(alt) =>
-              save(
-                photos.map((each) =>
-                  each.id === photo.id ? { ...each, ...(alt === '' ? { alt: undefined } : { alt }) } : each,
-                ),
+              changeGallery((gallery) =>
+                gallery.map((each) => {
+                  if (each.id !== photo.id) return each;
+                  const { alt: _was, ...rest } = each;
+                  return alt === '' ? rest : { ...rest, alt };
+                }),
               )
             }
-            onMove={(by) => move(at, by)}
-            onRemove={() => save(photos.filter((each) => each.id !== photo.id))}
+            onMove={(by) => move(photo.id, by)}
+            onRemove={() => remove(photo, at)}
           />
         ))}
       </Card>
@@ -387,57 +553,83 @@ function PhotosSection({
   );
 }
 
-/** One photo's description, saved when the field is left, with its move and remove buttons. */
+/**
+ * One photo: its thumbnail, so the description is written looking at the picture, the description (saved as typed),
+ * and its move and remove buttons.
+ */
 function PhotoRow({
   photo,
+  src,
   at,
   count,
+  texts,
   onAlt,
   onMove,
   onRemove,
 }: {
   readonly photo: BusinessPhoto;
+  readonly src: string;
   readonly at: number;
   readonly count: number;
+  readonly texts: DraftTexts;
   readonly onAlt: (alt: string) => void;
   readonly onMove: (by: -1 | 1) => void;
   readonly onRemove: () => void;
 }) {
-  const [alt, setAlt] = useState(photo.alt ?? '');
+  const alt = useDraftText(photo.alt ?? '', onAlt, texts);
   return (
-    <Field
-      label={words.photoAlt(at + 1)}
-      hint={at === 0 ? words.photoAltHint : undefined}
-      name={`alt-${String(at)}`}
-      autoComplete="off"
-      maxLength={120}
-      value={alt}
-      onChange={setAlt}
-      onBlur={() => {
-        if (alt.trim() !== (photo.alt ?? '')) onAlt(alt.trim());
-      }}
-      after={
-        <>
-          {at > 0 && <Button variant="ghost" icon="arrow-up" label={words.moveUp(at + 1)} onPress={() => onMove(-1)} />}
-          {at < count - 1 && (
-            <Button variant="ghost" icon="arrow-down" label={words.moveDown(at + 1)} onPress={() => onMove(1)} />
-          )}
-          <Button variant="ghost" icon="trash" label={words.removePhoto(at + 1)} onPress={onRemove} />
-        </>
-      }
-    />
+    <SettingsRow
+      title={words.photoTitle(at + 1)}
+      description={at === 0 ? words.photoLeads : undefined}
+      leading={<Avatar name={words.photoTitle(at + 1)} src={src} shape="square" size="title" isDecorative />}
+      leadingAlign="center"
+      control="field"
+    >
+      <Field
+        label={words.photoAlt(at + 1)}
+        isLabelHidden
+        placeholder={words.photoAltPlaceholder}
+        name={`alt-${photo.id}`}
+        autoComplete="off"
+        maxLength={120}
+        value={alt.text}
+        onChange={alt.onChange}
+        onBlur={alt.onBlur}
+        after={
+          <>
+            {at > 0 && (
+              <Button variant="ghost" icon="arrow-up" label={words.moveUp(at + 1)} onPress={() => onMove(-1)} />
+            )}
+            {at < count - 1 && (
+              <Button variant="ghost" icon="arrow-down" label={words.moveDown(at + 1)} onPress={() => onMove(1)} />
+            )}
+            <Button variant="ghost" icon="trash" label={words.removePhoto(at + 1)} onPress={onRemove} />
+          </>
+        }
+      />
+    </SettingsRow>
   );
 }
 
-/** About and amenities: the text saves when the field is left, an amenity at once. */
+/** About and amenities: the text saves as typed, an amenity at once. */
 function AboutSection({
   view,
-  onSave,
+  texts,
+  onChange,
 }: {
   readonly view: BusinessPageView;
-  readonly onSave: (next: Partial<BusinessPageContent>) => Promise<void>;
+  readonly texts: DraftTexts;
+  readonly onChange: (edit: (draft: BusinessPageContent) => BusinessPageContent) => Promise<void>;
 }) {
-  const [about, setAbout] = useState(view.draft.about ?? '');
+  const about = useDraftText(
+    view.draft.about ?? '',
+    (text) =>
+      void onChange((draft) => {
+        const { about: _was, ...rest } = draft;
+        return text === '' ? rest : { ...rest, about: text };
+      }),
+    texts,
+  );
   return (
     <SettingsSection title={words.about} description={words.aboutText}>
       <Card>
@@ -447,22 +639,19 @@ function AboutSection({
           isMultiline
           maxLength={1000}
           showCounter
-          value={about}
-          onChange={setAbout}
-          onBlur={() => {
-            if (about.trim() !== (view.draft.about ?? '')) {
-              void onSave(about.trim() === '' ? { about: undefined } : { about: about.trim() });
-            }
-          }}
+          value={about.text}
+          onChange={about.onChange}
+          onBlur={about.onBlur}
         />
         <ChoiceChips
           label={words.amenities}
           choices={AMENITIES}
           selected={view.draft.amenities}
           onChange={(selected) =>
-            void onSave({
+            void onChange((draft) => ({
+              ...draft,
               amenities: AMENITIES.flatMap((amenity) => (selected.includes(amenity.id) ? [amenity.id] : [])),
-            })
+            }))
           }
         />
       </Card>

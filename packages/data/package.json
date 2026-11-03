@@ -14,7 +14,8 @@
     "./imports": "./src/imports/index.ts",
     "./booking": "./src/booking/public.ts",
     "./booking/manage": "./src/booking/manage.ts",
-    "./business-page": "./src/booking/business.ts"
+    "./business-page": "./src/booking/business.ts",
+    "./business-page/store": "./src/business-page/store.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
