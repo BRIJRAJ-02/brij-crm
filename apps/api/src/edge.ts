@@ -4,7 +4,7 @@
 // middleware set (the client IP above all) worth believing.
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
-import type { AppEnvironment } from '@crm/contracts';
+import { GUEST_IP_HEADER, RENDER_HEADER, type AppEnvironment } from '@crm/contracts';
 
 /** The header Vercel's middleware puts the shared secret in. */
 export const EDGE_HEADER = 'x-crm-edge';
@@ -12,15 +12,8 @@ export const EDGE_HEADER = 'x-crm-edge';
 /** The header Vercel's middleware copies the browser's Origin into (its rewrite doesn't keep `origin` intact). */
 export const ORIGIN_HEADER = 'x-crm-origin';
 
-/**
- * The header the guest menu's server render (`apps/web/api/menu.mjs`) puts the edge secret in when it reads the
- * menu for a guest (security review, should-fix 4). The middleware overwrites `x-crm-edge` and `x-forwarded-for` with
- * its own on that read, so the render vouches for the guest's address in these two headers of its own. Equal to
- * `RENDER_HEADER` and `GUEST_IP_HEADER` in apps/web/menu-read.ts.
- */
-export const RENDER_HEADER = 'x-crm-render';
-/** The guest's own address, as the render's request saw it; believed only beside a valid `RENDER_HEADER`. */
-export const GUEST_IP_HEADER = 'x-crm-guest-ip';
+// The render's two headers are named once, in @crm/contracts, for the render that sends them and this edge that
+// checks them.
 
 /** The edge's geo headers (Vercel's), which the middleware forwards set by the edge itself (spec 0033). */
 export const GEO_COUNTRY_HEADER = 'x-vercel-ip-country';

@@ -4,12 +4,7 @@
 // address in `GUEST_IP_HEADER`. The middleware overwrites `x-crm-edge` and `x-forwarded-for` with its own, so these
 // two are the render's. The API believes the address only when the secret checks (`EdgeGuard.rendered`). Pure, run in
 // a Node test.
-
-/** Equal to `RENDER_HEADER` in apps/api/src/edge.ts. */
-export const RENDER_HEADER = 'x-crm-render';
-
-/** Equal to `GUEST_IP_HEADER` in apps/api/src/edge.ts. */
-export const GUEST_IP_HEADER = 'x-crm-guest-ip';
+import { GUEST_IP_HEADER, RENDER_HEADER } from '@crm/contracts/menu';
 
 /** What an edge secret must look like (middleware.ts's rule): 32 or more printable ASCII characters, no spaces. */
 const EDGE_SECRET_FORMAT = /^[\x21-\x7e]{32,}$/;

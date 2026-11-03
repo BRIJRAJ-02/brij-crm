@@ -144,6 +144,8 @@ export function servingAt(serving: MenuServingShape | undefined, instant: Date, 
   try {
     open = openAt(hours, instant, zone).open;
   } catch {
+    // Failing in UTC too (an Invalid Date), retrying would never end: shown, as with no serving time set.
+    if (zone === 'UTC') return { now: true };
     // A zone the platform doesn't know reads as UTC, as checklabs' did.
     return servingAt(serving, instant, 'UTC');
   }
@@ -313,6 +315,17 @@ export const MENU_KEY_PATTERN = /^[A-Za-z0-9_-]{16}$/;
 
 /** Whether `key` can be a menu key; anything else never reaches the database. */
 export const isMenuKey = (key: string): boolean => MENU_KEY_PATTERN.test(key);
+
+/**
+ * The header the guest menu's server render (`apps/web/api/menu.mjs`) puts the edge secret in when it reads the menu
+ * for a guest (security review, should-fix 4). The middleware overwrites `x-crm-edge` and `x-forwarded-for` with its
+ * own on that read, so the render vouches for the guest's address in headers of its own. One name for both sides:
+ * the render sends it (`apps/web/menu-read.ts`), the api checks it (`apps/api/src/edge.ts`).
+ */
+export const RENDER_HEADER = 'x-crm-render';
+
+/** The guest's own address, as the render's request saw it; the api believes it only beside a valid `RENDER_HEADER`. */
+export const GUEST_IP_HEADER = 'x-crm-guest-ip';
 
 /** The edge cache tags of places' guest menus (Rules settled: Routes): `menu:<placeId>`, each once. */
 export function menuCacheTags(...placeIds: readonly string[]): readonly string[] {

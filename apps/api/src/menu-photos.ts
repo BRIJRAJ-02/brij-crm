@@ -93,6 +93,9 @@ export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: 
   app.get('/menu/look.css', async (c) => {
     const entered = await memberScopeOf(c, deps, c.req.query('workspace'));
     if (entered instanceof Response) return entered;
+    // The same per person window as the draft photos' reads: each read is a transaction.
+    const decision = limiter(`menu-look-read:${entered.session.user.id}`, { max: 300, windowMs: 60_000 });
+    if (!decision.allowed) return errorResponse('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
     let css: string;
     try {
       css = await readMenuDraftLook(entered.scope);

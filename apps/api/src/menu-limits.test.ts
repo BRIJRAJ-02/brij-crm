@@ -8,7 +8,8 @@ import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { newIp, signInApp, testConnections } from '../test/sign-in.ts';
 import { memberWithWorkspace } from '../test/workspace.ts';
-import { EDGE_HEADER, GUEST_IP_HEADER, ORIGIN_HEADER, RENDER_HEADER } from './edge.ts';
+import { GUEST_IP_HEADER, RENDER_HEADER } from '@crm/contracts';
+import { EDGE_HEADER, ORIGIN_HEADER } from './edge.ts';
 import { MENU_LIMITS } from './public/limits.ts';
 import { APP_URL, TEST_EDGE_SECRET } from './testing.ts';
 

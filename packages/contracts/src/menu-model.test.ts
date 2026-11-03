@@ -74,6 +74,12 @@ describe('serving times (AC-6528), ported from checklabscms/src/lib/schedule.ts 
     expect(servingAt(brunch, new Date('2026-11-07T11:00:00Z'), 'Asia/Tokyo').now).toBe(false);
   });
 
+  it('an Invalid Date shows the section rather than looping between zones (security review)', () => {
+    expect(servingAt(brunch, new Date(Number.NaN), 'Europe/London')).toEqual({ now: true });
+    expect(servingAt(brunch, new Date(Number.NaN), 'UTC')).toEqual({ now: true });
+    expect(servingAt(brunch, new Date(Number.NaN), 'Not/AZone')).toEqual({ now: true });
+  });
+
   it('none means always: no serving times, or a week with no day set (checklabs’ empty schedule)', () => {
     expect(servingAt(undefined, new Date(), 'UTC')).toEqual({ now: true });
     expect(servingAt({ weekly: {} }, new Date(), 'UTC')).toEqual({ now: true });
