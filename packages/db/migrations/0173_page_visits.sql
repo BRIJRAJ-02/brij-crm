@@ -112,7 +112,7 @@ ALTER TABLE "insight_shares" ADD CONSTRAINT "insight_shares_creator" FOREIGN KEY
 CREATE INDEX "page_visits_by_page_day" ON "page_visits" USING btree ("workspace_id","page_kind","page_id","day");--> statement-breakpoint
 CREATE INDEX "page_visits_day" ON "page_visits" USING btree ("workspace_id","day");--> statement-breakpoint
 -- The Sessions table: the newest visits first, a page of 50 at a time.
-CREATE INDEX "page_visits_recent" ON "page_visits" USING btree ("workspace_id","first_at","page_id");--> statement-breakpoint
+CREATE INDEX "page_visits_recent" ON "page_visits" USING btree ("workspace_id","first_at","page_kind","page_id","visitor");--> statement-breakpoint
 -- The screen's range read over every page it may show.
 CREATE INDEX "page_visit_days_day" ON "page_visit_days" USING btree ("workspace_id","day");--> statement-breakpoint
 -- A share link is found by its secret's hash, inside the workspace its token names.

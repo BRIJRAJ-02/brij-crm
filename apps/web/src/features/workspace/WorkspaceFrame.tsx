@@ -47,6 +47,7 @@ import { strings as settingsStrings } from '../settings/strings.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
 import { useWorkspaceFavicon } from './favicon.ts';
 import { homeHref, newWorkspaceHref, settingsHomeHref, workspaceHref } from './objects.ts';
+import { insightsHref } from '../insights/search.ts';
 import { keepRailHint, readRailHint } from './rail.ts';
 import { PAGE_LINKS, topEntries, universeOf, type SidebarPage } from './sidebar.ts';
 import { itemMenu, SidebarSections } from './SidebarSections.tsx';
@@ -367,6 +368,12 @@ export function WorkspaceFrame({
           {!isMissing && (
             <NavItem icon="house" href={homeHref(slug)} isCurrent={currentPage === 'home'}>
               {strings.home}
+            </NavItem>
+          )}
+          {/* Insights beside Home (spec 0067, AC-6710): every public page's numbers, fixed in the Home section. */}
+          {!isMissing && (
+            <NavItem icon="chart-line" href={insightsHref(slug)} isCurrent={currentPage === 'insights'}>
+              {strings.insights}
             </NavItem>
           )}
           {!isMissing &&

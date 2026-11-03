@@ -78,8 +78,13 @@ function base(workspaceId: string, pages: readonly CoveredPage[], period: Resolv
     from page_visits v
     where v.workspace_id = ${workspaceId} and v.day between ${period.from}::date and ${period.to}::date
       and ${pagesFilter('v', pages)}
-      and (v.day >= ${today} or exists (
-        select 1 from page_visit_stale_days s where s.workspace_id = v.workspace_id and s.day = v.day
+      -- Only today and the stale days, named up front (an init plan), so the read walks page_visits_day for just
+      -- those days; a per row test here would scan every raw visit in the period (3 s a year at a million).
+      and v.day = any(array(
+        select ${today}
+        union
+        select s.day from page_visit_stale_days s
+        where s.workspace_id = ${workspaceId} and s.day between ${period.from}::date and ${period.to}::date
       ))
   `;
 }

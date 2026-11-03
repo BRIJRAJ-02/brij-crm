@@ -239,6 +239,7 @@ export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contra
 export type {
   InsightBucket,
   InsightFunnel,
+  InsightNumbers,
   InsightPage,
   InsightPages,
   InsightPeriod,
@@ -7357,9 +7358,11 @@ export function createDataLayer({
        * revoked, expired) rejects with NOT_FOUND.
        */
       shared: async (token: string): Promise<SharedInsights> => {
-        const response = await fetch(new URL(`/api/public/insights/${encodeURIComponent(token)}`, origin).href, {
+        // The token rides in a header, never the address, so no request log or Referer holds it.
+        const response = await fetch(new URL('/api/public/insights', origin).href, {
           credentials: 'omit',
           cache: 'no-store',
+          headers: { 'x-crm-insight-share': token },
         }).catch((error: unknown) => {
           throw toDataError(error);
         });

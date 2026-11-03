@@ -18,12 +18,14 @@ import { Route as TwoFactorRouteImport } from './routes/two-factor.tsx'
 import { Route as VerifyRouteImport } from './routes/verify.tsx'
 import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token.tsx'
+import { Route as PublicInsightsRouteImport } from './routes/public.insights.tsx'
 import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
 import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
 import { Route as WSlugBookingsRouteImport } from './routes/w.$slug.bookings.tsx'
 import { Route as WSlugCapturesRouteImport } from './routes/w.$slug.captures.tsx'
 import { Route as WSlugHomeRouteImport } from './routes/w.$slug.home.tsx'
 import { Route as WSlugInboxRouteImport } from './routes/w.$slug.inbox.tsx'
+import { Route as WSlugInsightsRouteImport } from './routes/w.$slug.insights.tsx'
 import { Route as WSlugLinkPageRouteImport } from './routes/w.$slug.link-page.tsx'
 import { Route as WSlugNotesRouteImport } from './routes/w.$slug.notes.tsx'
 import { Route as WSlugReportsRouteImport } from './routes/w.$slug.reports.tsx'
@@ -149,6 +151,11 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PublicInsightsRoute = PublicInsightsRouteImport.update({
+  id: '/public/insights',
+  path: '/public/insights',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WSlugRoute = WSlugRouteImport.update({
   id: '/w/$slug',
   path: '/w/$slug',
@@ -177,6 +184,11 @@ const WSlugHomeRoute = WSlugHomeRouteImport.update({
 const WSlugInboxRoute = WSlugInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugInsightsRoute = WSlugInsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugLinkPageRoute = WSlugLinkPageRouteImport.update({
@@ -627,11 +639,13 @@ export interface FileRoutesByFullPath {
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/public/insights': typeof PublicInsightsRoute
   '/w/$slug': typeof WSlugRouteWithChildren
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/inbox': typeof WSlugInboxRoute
+  '/w/$slug/insights': typeof WSlugInsightsRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
   '/w/$slug/notes': typeof WSlugNotesRoute
   '/w/$slug/reports': typeof WSlugReportsRoute
@@ -723,8 +737,10 @@ export interface FileRoutesByTo {
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/public/insights': typeof PublicInsightsRoute
   '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/inbox': typeof WSlugInboxRoute
+  '/w/$slug/insights': typeof WSlugInsightsRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
   '/w/$slug/notes': typeof WSlugNotesRoute
   '/w/$slug/reports': typeof WSlugReportsRoute
@@ -816,11 +832,13 @@ export interface FileRoutesById {
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/public/insights': typeof PublicInsightsRoute
   '/w/$slug': typeof WSlugRouteWithChildren
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/inbox': typeof WSlugInboxRoute
+  '/w/$slug/insights': typeof WSlugInsightsRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
   '/w/$slug/notes': typeof WSlugNotesRoute
   '/w/$slug/reports': typeof WSlugReportsRoute
@@ -914,11 +932,13 @@ export interface FileRouteTypes {
     | '/verify'
     | '/welcome'
     | '/invite/$token'
+    | '/public/insights'
     | '/w/$slug'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
     | '/w/$slug/home'
     | '/w/$slug/inbox'
+    | '/w/$slug/insights'
     | '/w/$slug/link-page'
     | '/w/$slug/notes'
     | '/w/$slug/reports'
@@ -1010,8 +1030,10 @@ export interface FileRouteTypes {
     | '/verify'
     | '/welcome'
     | '/invite/$token'
+    | '/public/insights'
     | '/w/$slug/home'
     | '/w/$slug/inbox'
+    | '/w/$slug/insights'
     | '/w/$slug/link-page'
     | '/w/$slug/notes'
     | '/w/$slug/reports'
@@ -1102,11 +1124,13 @@ export interface FileRouteTypes {
     | '/verify'
     | '/welcome'
     | '/invite/$token'
+    | '/public/insights'
     | '/w/$slug'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
     | '/w/$slug/home'
     | '/w/$slug/inbox'
+    | '/w/$slug/insights'
     | '/w/$slug/link-page'
     | '/w/$slug/notes'
     | '/w/$slug/reports'
@@ -1199,6 +1223,7 @@ export interface RootRouteChildren {
   VerifyRoute: typeof VerifyRoute
   WelcomeRoute: typeof WelcomeRoute
   InviteTokenRoute: typeof InviteTokenRoute
+  PublicInsightsRoute: typeof PublicInsightsRoute
   WSlugRoute: typeof WSlugRouteWithChildren
 }
 
@@ -1267,6 +1292,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/public/insights': {
+      id: '/public/insights'
+      path: '/public/insights'
+      fullPath: '/public/insights'
+      preLoaderRoute: typeof PublicInsightsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/w/$slug': {
       id: '/w/$slug'
       path: '/w/$slug'
@@ -1307,6 +1339,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/w/$slug/inbox'
       preLoaderRoute: typeof WSlugInboxRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/insights': {
+      id: '/w/$slug/insights'
+      path: '/insights'
+      fullPath: '/w/$slug/insights'
+      preLoaderRoute: typeof WSlugInsightsRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/link-page': {
@@ -2014,6 +2053,7 @@ interface WSlugRouteChildren {
   WSlugCapturesRoute: typeof WSlugCapturesRouteWithChildren
   WSlugHomeRoute: typeof WSlugHomeRoute
   WSlugInboxRoute: typeof WSlugInboxRoute
+  WSlugInsightsRoute: typeof WSlugInsightsRoute
   WSlugLinkPageRoute: typeof WSlugLinkPageRoute
   WSlugNotesRoute: typeof WSlugNotesRoute
   WSlugReportsRoute: typeof WSlugReportsRoute
@@ -2046,6 +2086,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugCapturesRoute: WSlugCapturesRouteWithChildren,
   WSlugHomeRoute: WSlugHomeRoute,
   WSlugInboxRoute: WSlugInboxRoute,
+  WSlugInsightsRoute: WSlugInsightsRoute,
   WSlugLinkPageRoute: WSlugLinkPageRoute,
   WSlugNotesRoute: WSlugNotesRoute,
   WSlugReportsRoute: WSlugReportsRoute,
@@ -2087,6 +2128,7 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyRoute: VerifyRoute,
   WelcomeRoute: WelcomeRoute,
   InviteTokenRoute: InviteTokenRoute,
+  PublicInsightsRoute: PublicInsightsRoute,
   WSlugRoute: WSlugRouteWithChildren,
 }
 export const routeTree = rootRouteImport

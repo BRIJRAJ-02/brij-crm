@@ -59,7 +59,7 @@ export const pageVisits = pgTable(
     primaryKey({ name: 'page_visits_pkey', columns: [t.workspaceId, t.pageKind, t.pageId, t.day, t.visitor] }),
     index('page_visits_by_page_day').on(t.workspaceId, t.pageKind, t.pageId, t.day),
     index('page_visits_day').on(t.workspaceId, t.day),
-    index('page_visits_recent').on(t.workspaceId, t.firstAt, t.pageId),
+    index('page_visits_recent').on(t.workspaceId, t.firstAt, t.pageKind, t.pageId, t.visitor),
     check('page_visits_visitor', sql`${t.visitor} ~ '^[0-9a-f]{32}$'`),
     check(
       'page_visits_kind',

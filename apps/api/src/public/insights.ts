@@ -1,4 +1,5 @@
-// An Insights share link's page (spec 0067, AC-6720): `GET /api/public/insights/:token`, numbers only, with no
+// An Insights share link's page (spec 0067, AC-6720): `GET /api/public/insights` with the token in the
+// `x-crm-insight-share` header (the page keeps it in its address's fragment, so no log or Referer holds it), numbers only, with no
 // session and no cookie. The token names the workspace and the share and carries the secret whose SHA-256 is
 // stored; the core answers NOT_FOUND alike for a malformed, wrong, revoked or expired link and a deleted workspace.
 // Never a session, a name, an email, a host under Other or a free text answer. 30 reads a minute per address, so a
@@ -28,9 +29,12 @@ interface Variables {
   origin: string | undefined;
 }
 
-/** Mounts `GET /public/insights/:token` on the app (`/api` is its base path). */
+/** The header a share link's token comes in. */
+export const INSIGHT_SHARE_HEADER = 'x-crm-insight-share';
+
+/** Mounts `GET /public/insights` on the app (`/api` is its base path). */
 export function mountInsightShares(app: Hono<{ Variables: Variables }>, deps: InsightShareDeps): void {
-  app.get('/public/insights/:token', async (c: Context<{ Variables: Variables }>) => {
+  app.get('/public/insights', async (c: Context<{ Variables: Variables }>) => {
     const noStore = { 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer' };
     const spent = deps.limiter(`insights:share:${limitAddress(c.get('clientIp'))}`, INSIGHT_SHARE_LIMIT);
     if (!spent.allowed) {
@@ -43,7 +47,11 @@ export function mountInsightShares(app: Hono<{ Variables: Variables }>, deps: In
       );
     }
     try {
-      const shared = await readInsightShare({ db: deps.db }, c.req.param('token') ?? '', deps.now?.() ?? new Date());
+      const shared = await readInsightShare(
+        { db: deps.db },
+        c.req.header(INSIGHT_SHARE_HEADER) ?? '',
+        deps.now?.() ?? new Date(),
+      );
       return Response.json(shared, { headers: noStore });
     } catch (error) {
       if (isRefusal(error)) {

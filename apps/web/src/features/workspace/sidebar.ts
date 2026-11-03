@@ -9,7 +9,7 @@ import { bookingsHref, capturesHref, inboxHref, linkPageHref, navObjects, notesH
 import { strings } from './strings.ts';
 
 /** A page the sidebar marks current that isn't an object's: Tasks, Bookings and Captures (the trash is in Settings). */
-export type SidebarPage = 'home' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'captures';
+export type SidebarPage = 'home' | 'insights' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'captures';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {

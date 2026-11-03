@@ -49,6 +49,11 @@
     fill: var(--dot-blue);
   }
 
+  /* The second series of a pair: the next data colour, the same axis. */
+  .bar[data-series='compare'] {
+    fill: var(--dot-orange);
+  }
+
   .line {
     fill: none;
     stroke: var(--dot-blue);
@@ -111,6 +116,10 @@
     .bar,
     .dot {
       fill: Highlight;
+    }
+
+    .bar[data-series='compare'] {
+      fill: CanvasText;
     }
 
     .line {

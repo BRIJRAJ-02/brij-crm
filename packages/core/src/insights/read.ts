@@ -291,6 +291,10 @@ export async function readInsightSessions(
       from page_visits v
       where v.workspace_id = ${scope.workspaceId}
         and v.day between ${period.from}::date and ${period.to}::date
+        -- The same period on first_at (a visit's day is its first moment's UTC day), so page_visits_recent walks
+        -- only the period, newest first, and stops at a page.
+        and v.first_at >= (${period.from}::date)::timestamp at time zone 'UTC'
+        and v.first_at < (${period.to}::date + 1)::timestamp at time zone 'UTC'
         and (v.page_kind, v.page_id) in (select p.k, p.i from unnest(${kinds}::text[], ${ids}::uuid[]) as p(k, i))
         and ${filterSql(input.filter)}
         ${
