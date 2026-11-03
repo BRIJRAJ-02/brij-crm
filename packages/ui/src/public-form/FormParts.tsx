@@ -16,9 +16,11 @@ import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { usePageVariables } from '../lib/page-variables.ts';
 import { poweredByHref } from '../lib/powered-by.ts';
 import { safeImageSrc } from '../lib/safe-image-src.ts';
+import { templateAttributes } from '../lib/page-template.ts';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
+import '@crm/tokens/packs.css';
 import styles from './FormParts.module.css';
 import { labelOf } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
@@ -74,6 +76,7 @@ export function FormGround({
         ref={variables}
         className={styles.root}
         data-theme={look?.colour}
+        {...(brand?.template === undefined ? {} : templateAttributes(brand.template))}
         data-corners={look?.corners}
         data-mode={mode}
         data-frame={kind}
@@ -111,8 +114,13 @@ const IMAGE_VERSION = /^[0-9a-f]{12}$/;
  */
 export function formBrand(form: PublicForm): PageBrand | undefined {
   const version = form.brand?.logo;
-  if (version === undefined || !FORM_SLUG.test(form.key) || !IMAGE_VERSION.test(version)) return undefined;
-  return { logo: { src: `/api/public/forms/${form.key}/logo?v=${version}`, alt: '' } };
+  // The workspace's template (spec 0068, AC-6804), worn with its brand: a plain form names no kit at all.
+  const template = form.brand?.template;
+  const withTemplate = template === undefined ? {} : { template };
+  if (version === undefined || !FORM_SLUG.test(form.key) || !IMAGE_VERSION.test(version)) {
+    return template === undefined ? undefined : withTemplate;
+  }
+  return { logo: { src: `/api/public/forms/${form.key}/logo?v=${version}`, alt: '' }, ...withTemplate };
 }
 
 /** `brand` as an optional prop, left off when there is none. */

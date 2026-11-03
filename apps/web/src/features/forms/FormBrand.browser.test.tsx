@@ -30,8 +30,8 @@ const FORM: PublicForm = {
   questions: [{ id: 'q-email', key: 'email', label: 'Work email', answerType: 'email', required: true }],
 };
 
-const KIT: BrandKit = { accent: '#1f5fd6', logo: { version: '0123456789ab' }, canEdit: true };
-const EMPTY: BrandKit = { canEdit: true };
+const KIT: BrandKit = { accent: '#1f5fd6', logo: { version: '0123456789ab' }, canEdit: true, template: 'classic' };
+const EMPTY: BrandKit = { canEdit: true, template: 'classic' };
 
 /**
  * A brand store whose kit never changes. The snapshot is one frozen constant: `useSyncExternalStore` compares

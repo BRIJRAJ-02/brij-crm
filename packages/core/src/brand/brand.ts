@@ -2,7 +2,14 @@
 // path. Every member reads the kit; only `workspace.manage` (owners and admins) changes it, checked before anything
 // is read or written. The row lives in `workspace_brands`, under the workspace's own row level security, so another
 // workspace's kit is never in reach. The accent is checked here as in the contract and again by the column's check.
-import { BRAND_HEX_PATTERN, BRAND_HEX_REFUSAL, type WorkspaceBrand } from '@crm/contracts';
+import {
+  BRAND_HEX_PATTERN,
+  BRAND_HEX_REFUSAL,
+  DEFAULT_PAGE_TEMPLATE,
+  isPageTemplate,
+  type PageTemplate,
+  type WorkspaceBrand,
+} from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { eq, sql } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
@@ -21,6 +28,13 @@ export interface BrandRow {
   readonly logoPath: string | null;
   readonly logoType: string | null;
   readonly logoVersion: string | null;
+  /** The workspace's template (spec 0068, AC-6804); the column's check holds it to the four. */
+  readonly template: string;
+}
+
+/** The template a kit row wears: its own when it is one of the four, else Classic (and Classic with no row). */
+export function templateOf(row: Pick<BrandRow, 'template'> | undefined): PageTemplate {
+  return isPageTemplate(row?.template) ? row.template : DEFAULT_PAGE_TEMPLATE;
 }
 
 /** The workspace's kit row, or undefined before anyone saved one. Inside the caller's own workspace transaction. */
@@ -32,6 +46,7 @@ export async function brandRowOf(tx: WorkspaceTx, workspaceId: string): Promise<
       logoPath: workspaceBrands.logoPath,
       logoType: workspaceBrands.logoType,
       logoVersion: workspaceBrands.logoVersion,
+      template: workspaceBrands.template,
     })
     .from(workspaceBrands)
     .where(eq(workspaceBrands.workspaceId, workspaceId));
@@ -43,6 +58,7 @@ function toBrand(row: BrandRow | undefined, canEdit: boolean): WorkspaceBrand {
     ...(typeof row?.accent === 'string' ? { accent: row.accent } : {}),
     ...(typeof row?.accentDark === 'string' ? { accentDark: row.accentDark } : {}),
     ...(typeof row?.logoVersion === 'string' ? { logo: { version: row.logoVersion } } : {}),
+    template: templateOf(row),
     canEdit,
   };
 }
@@ -115,11 +131,12 @@ export function requireBrandEditor(scope: EngineScope): void {
 
 /**
  * Saves the accent pair, whole (AC-3): `null` clears one, so an empty field is the product's accent. A dark accent
- * needs a light one. The logo is kept as it is. Answers the kit as saved.
+ * needs a light one. The logo is kept as it is, and the template (spec 0068, AC-6804) too unless one is given.
+ * Answers the kit as saved.
  */
 export async function saveWorkspaceBrand(
   scope: EngineScope,
-  input: { readonly accent: string | null; readonly accentDark: string | null },
+  input: { readonly accent: string | null; readonly accentDark: string | null; readonly template?: string },
 ): Promise<WorkspaceBrand> {
   requireBrandEditor(scope);
   const by = memberOf(scope);
@@ -127,15 +144,22 @@ export async function saveWorkspaceBrand(
   const accentDark = hexOrNull(input.accentDark, 'accentDark');
   if (accentDark !== null && accent === null)
     throw inputInvalid('accentDark', 'Pick the main colour before a dark one.');
+  if (input.template !== undefined && !isPageTemplate(input.template)) {
+    throw inputInvalid('template', 'Pick one of the four templates.');
+  }
+  const template = input.template;
   const row = await inWorkspace(scope, async (tx) => {
     const was = await brandRowOf(tx, scope.workspaceId);
     await tx
       .insert(workspaceBrands)
-      .values({ workspaceId: scope.workspaceId, accent, accentDark, updatedBy: by })
+      .values({ workspaceId: scope.workspaceId, accent, accentDark, updatedBy: by, ...(template ? { template } : {}) })
       .onConflictDoUpdate({
         target: workspaceBrands.workspaceId,
-        set: { accent, accentDark, updatedBy: by, updatedAt: sql`now()` },
+        set: { accent, accentDark, updatedBy: by, updatedAt: sql`now()`, ...(template ? { template } : {}) },
       });
+    if (template !== undefined && templateOf(was) !== template) {
+      await auditBrand(tx, scope, { brandTemplate: templateOf(was) }, { brandTemplate: template });
+    }
     if ((was?.accent ?? null) !== accent || (was?.accentDark ?? null) !== accentDark) {
       await auditBrand(
         tx,

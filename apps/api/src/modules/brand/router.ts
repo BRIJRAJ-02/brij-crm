@@ -10,7 +10,11 @@ export const brandRouter = member.brand.router({
   get: member.brand.get.handler(({ context }) => getWorkspaceBrand(context.scope)),
   save: member.brand.save.handler(async ({ context, input }) => {
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveWorkspaceBrand(context.scope, { accent: input.accent, accentDark: input.accentDark }),
+      saveWorkspaceBrand(context.scope, {
+        accent: input.accent,
+        accentDark: input.accentDark,
+        ...(input.template === undefined ? {} : { template: input.template }),
+      }),
     );
     // Once committed, the edge's copies of every page's brand stylesheet and logo are deleted (AC-21).
     await context.edgeCache.forget(brandCacheTags(context.scope.workspaceId));

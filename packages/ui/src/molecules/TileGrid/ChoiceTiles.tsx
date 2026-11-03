@@ -64,6 +64,12 @@ interface ChoiceTilesBase {
    * unaffected and still reads as a mark beside its name.
    */
   readonly keepsPicture?: boolean;
+  /**
+   * Only read with `showsDescription` and `keepsPicture`. `large` draws each picture a column tall and the tiles
+   * at least a column wide, two to a row in a settings card: a choice that is a whole page, seen before it is
+   * picked (the link page's four templates, spec 0068, AC-6804), where a small slot showed too little to choose by.
+   */
+  readonly pictureSize?: 'large';
 }
 
 /** A choice grid that keeps one tile chosen. */
@@ -188,10 +194,12 @@ function SelectTile({
   tile,
   showsDescription,
   keepsPicture,
+  isLarge = false,
 }: {
   readonly tile: ChoiceTile;
   readonly showsDescription: boolean;
   readonly keepsPicture: boolean;
+  readonly isLarge?: boolean;
 }) {
   const state = useContext(RadioGroupStateContext);
   if (state === null) throw new Error('A select tile renders inside its RadioGroup.');
@@ -225,6 +233,7 @@ function SelectTile({
       data-mode="select"
       data-described={showsDescription || undefined}
       data-tall={tall || undefined}
+      data-large={(tall && isLarge) || undefined}
       data-selected={isSelected || undefined}
       data-disabled={isDisabled || undefined}
       data-pressed={isPressed || undefined}
@@ -284,9 +293,11 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
     );
   }
   const { label, tiles, value, defaultValue, onChange } = props;
+  const isLarge = props.pictureSize === 'large' && showsDescription && keepsPicture;
   return (
     <RadioGroup
       className={styles.root}
+      data-large={isLarge || undefined}
       aria-label={label}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
@@ -294,7 +305,7 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
     >
       {tiles.map((tile) => (
         <WithTip key={tile.id} tile={tile} isShown={showsDescription}>
-          <SelectTile tile={tile} showsDescription={showsDescription} keepsPicture={keepsPicture} />
+          <SelectTile tile={tile} showsDescription={showsDescription} keepsPicture={keepsPicture} isLarge={isLarge} />
         </WithTip>
       ))}
     </RadioGroup>

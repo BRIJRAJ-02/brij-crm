@@ -460,6 +460,9 @@ function Blocks({
   // colour under the system picker's pointer while it is dragged, so the phone follows the drag before it settles.
   const lookState = useBrand(brand.look(slug));
   const extrasRead = lookState.status === 'ready' ? lookState.value : undefined;
+  // The look as it draws (spec 0068, AC-6804): the page's own template, else its workspace's, else Classic.
+  const worn: PageTheme = { ...theme, template: theme.template ?? extrasRead?.workspaceTemplate ?? 'classic' };
+  const wornMode = worn.template === 'night' ? 'dark' : worn.template === 'studio' ? 'light' : undefined;
   const [dragged, setDragged] = useState<string | undefined>(undefined);
   const [lookRefusal, setLookRefusal] = useState<DataError | undefined>(undefined);
   const [sending, setSending] = useState<PhotoSlot | undefined>(undefined);
@@ -879,10 +882,11 @@ function Blocks({
       // out here: it is for a visitor without a page, not for the person whose page this is, and `claimPageHref`
       // lives on the public pages' own entry, which the app's bundle has no reason to pull in.
       // The phone beside the editor shows the look being picked, so its mark follows that, not the app's theme.
-      foot={<BookingFoot page="booking_profile" {...(theme.mode === 'system' ? {} : { scheme: theme.mode })} />}
+      foot={<BookingFoot page="booking_profile" {...(wornMode === undefined ? {} : { scheme: wornMode })} />}
       // A new ground remounts the phone, which fades the page in on it (spec 0060, AC-18).
       // Only a new ground, mode or header: a font or a button shape changes in place, keeping the phone's scroll.
-      key={[theme.ground, theme.gradient, theme.pattern, theme.mode, theme.header].join(' ')}
+      // A new template remounts it too, so the switch crossfades (spec 0068, AC-6804).
+      key={[worn.template, theme.ground, theme.gradient, theme.pattern, theme.mode, theme.header].join(' ')}
       person={{
         name: profile.name.trim() || handle,
         id: handle,
@@ -896,7 +900,7 @@ function Blocks({
         : { brand: { name: profile.workspaceName, href: identity.site } })}
       {...(identity.footLine === '' ? {} : { footLine: identity.footLine })}
       {...(state.status === 'ready' ? { blocks: previewBlocks } : {})}
-      theme={theme}
+      theme={worn}
       {...(theme.layout === undefined ? {} : { pageLayout: theme.layout })}
       photos={lookPhotos}
       variables={lookVariables}
@@ -1123,7 +1127,7 @@ function Blocks({
       />
       {Editor !== undefined && editing !== undefined && (
         // The draft wears the page's own look (spec 0060, AC-16), as the phone does.
-        <DraftLook look={{ theme, photos: lookPhotos, variables: lookVariables }}>
+        <DraftLook look={{ theme: worn, photos: lookPhotos, variables: lookVariables }}>
           <EditorOrFrame
             // Adding keeps one dialog across the kinds (the frame owns it); editing opens the kind's own, as before.
             {...(kindPicker === undefined ? {} : { frame: { leading: kindPicker, hint: addHint } })}

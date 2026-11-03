@@ -287,6 +287,8 @@ export {
   type LinkPageTimes,
   type PageLook,
 } from './modules/LinkPage/LinkPage.tsx';
+/** One of the four templates every public page wears (spec 0068): Classic, Studio, Night or Split. */
+export type { PageTemplate } from './lib/page-template.ts';
 /** Titled sections, each a Card, that move as wholes: a profile's sections in Settings › Profile (owner ask A102). */
 export { SectionList, type SectionListProps, type SectionListSection } from './modules/SectionList/SectionList.tsx';
 export {

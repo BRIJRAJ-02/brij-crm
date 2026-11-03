@@ -110,6 +110,30 @@ export const Branded: Story = {
   },
 };
 
+/** A booking page in one of the four templates (spec 0068, AC-6801), the workspace's, in the orange brand. */
+function templated(template: 'classic' | 'studio' | 'night' | 'split'): Story {
+  return {
+    args: { brand: { logo: { src: LOGO, alt: 'Acme' }, variables: ORANGE_BRAND, template } },
+    render: (args) => <Interactive {...args} />,
+    play: async ({ canvasElement }) => {
+      const root = canvasElement.querySelector('main');
+      await expect(root).toHaveAttribute('data-template', template);
+      // Night pins dark and Studio light; Classic and Split follow the visitor.
+      const scheme = template === 'night' ? 'dark' : template === 'studio' ? 'light' : null;
+      await expect(root?.getAttribute('data-theme') ?? null).toBe(scheme);
+    },
+  };
+}
+
+/** Classic: the booking page as it always was, its headings in a clean grotesk. */
+export const TemplateClassic: Story = templated('classic');
+/** Studio: a warm ground and an editorial serif for the host. */
+export const TemplateStudio: Story = templated('studio');
+/** Night: a deep dark ground with the accent as a glow. */
+export const TemplateNight: Story = templated('night');
+/** Split: the rail as a sticky panel of its own beside the card, from the page breakpoint. */
+export const TemplateSplit: Story = templated('split');
+
 /** The host's social links (booking socials, 25 Oct 2026): the last line of their block, under the facts. */
 const SOCIALS = [
   { network: 'linkedin', href: 'https://linkedin.com/in/ada-lovelace', label: 'ada-lovelace' },

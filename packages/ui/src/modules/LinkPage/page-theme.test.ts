@@ -131,4 +131,20 @@ describe('the page look the library draws', () => {
       );
     }
   });
+
+  it('fixes the same names per template as the contract does (spec 0068)', () => {
+    const table = (source: string, name: string) =>
+      (new RegExp(`export const ${name} = \\{([\\s\\S]*?)\\n\\}`).exec(source)?.[1] ?? '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '');
+    const contract = table(CONTRACT, 'TEMPLATE_LOOKS');
+    expect(contract).toHaveLength(4);
+    expect(table(MODULE, 'PAGE_TEMPLATE_LOOKS')).toEqual(contract);
+    expect(setOf('PAGE_TEMPLATES')).toEqual(['classic', 'studio', 'night', 'split']);
+    // Each template other than Classic has blocks of its own for what no name holds.
+    for (const template of ['studio', 'night', 'split']) {
+      expect(STYLES, `${template} has a block`).toContain(`[data-template='${template}']`);
+    }
+  });
 });

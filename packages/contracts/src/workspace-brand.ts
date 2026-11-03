@@ -6,6 +6,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { BRAND_HEX_PATTERN } from './brand-colour.ts';
+import { PAGE_TEMPLATES } from './booking/page-theme.ts';
 import { FORM_SLUG } from './forms/answer-types.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -42,6 +43,8 @@ export const WorkspaceBrand = z.object({
   accent: BrandHex.optional(),
   accentDark: BrandHex.optional(),
   logo: z.object({ version: ImageVersion }).optional(),
+  /** The template every public page wears (spec 0068, AC-6804); Classic until an owner or admin picks another. */
+  template: z.enum(PAGE_TEMPLATES),
   canEdit: z.boolean(),
 });
 /** A workspace's brand kit. */
@@ -54,6 +57,8 @@ export type WorkspaceBrand = z.infer<typeof WorkspaceBrand>;
 export const SaveBrandInput = WorkspaceScoped.extend({
   accent: BrandHex.nullable(),
   accentDark: BrandHex.nullable(),
+  /** The workspace's template (spec 0068, AC-6804); left out keeps the one it has. */
+  template: z.enum(PAGE_TEMPLATES, { error: 'Pick one of the four templates.' }).optional(),
   mutationId: Uuid,
 }).refine((input) => input.accentDark === null || input.accent !== null, {
   error: 'Pick the main colour before a dark one.',
@@ -72,6 +77,8 @@ export const PublicBrand = z.object({
     .regex(/^[0-9a-f]{12}$/)
     .optional(),
   logo: ImageVersion.optional(),
+  /** The template the page wears (spec 0068, AC-6804); absent is Classic. */
+  template: z.enum(PAGE_TEMPLATES).optional(),
 });
 /** What a public page is told of its brand. */
 export type PublicBrand = z.infer<typeof PublicBrand>;

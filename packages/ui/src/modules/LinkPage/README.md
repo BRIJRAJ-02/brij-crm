@@ -121,6 +121,9 @@ Spec 0061's blocks add: a thumbnail that fails (its tile's fallback), a featured
 
 Tab reaches each block in reading order, then the foot's links. Enter opens a block. On a grid page Tab walks the tiles in the order they show. In the gallery's viewer the left and right arrows move through the pictures and Escape closes it, returning focus to the picture; the notice sheet's Escape is Go back.
 
+## Templates (spec 0068)
+
+`theme.template` is one of four finished templates: `classic`, `studio`, `night` and `split`. Set, it fixes six of the look's names (`PAGE_TEMPLATE_LOOKS`, held to the contracts' `TEMPLATE_LOOKS` by `page-theme.test.ts`): Classic is the plain ground following the visitor in a clean grotesk; Studio a warm off white ground, an editorial serif and round cards under a cover header; Night the ink ground pinned dark, bold type and the accent as a glow on hover and focus; Split two columns from the page breakpoint, a sticky panel holding who the page is (lockup, face, name, actions, socials) beside the blocks, and one column below it, in the editor's phone and in a thumbnail. The owner's hue and face shape stay theirs, a face is never hidden, and the stored names are kept but not drawn. `data-template` on the root carries what no name holds. In every template a row presses in and lifts under the pointer (AC-6803), with the movement dropped under reduced motion. The markup wraps who the page is and what it holds in `.identity` and `.content`, both `display: contents` except in Split. `LinkPageThumbnail` takes `size="large"` for the template picker: a column tall, with a face, a name and rows at a size where a template's type, corners and glow read apart.
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.

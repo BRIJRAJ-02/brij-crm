@@ -103,7 +103,7 @@ describe('the brand kit', () => {
   it('is changed by owners and admins only: a member gets FORBIDDEN and 403 before any byte is kept (AC-23)', async () => {
     const owner = await memberWithWorkspace(app);
     const member = await joined(owner.workspace.id, 'member');
-    expect(await member.client.brand.get({ workspace: owner.slug })).toEqual({ canEdit: false });
+    expect(await member.client.brand.get({ workspace: owner.slug })).toEqual({ canEdit: false, template: 'classic' });
     expect(
       await refusal(() =>
         member.client.brand.save({ workspace: owner.slug, accent: '#1f5fd6', accentDark: null, mutationId: newId() }),
@@ -131,7 +131,7 @@ describe('the brand kit', () => {
         accentDark: null,
         mutationId: newId(),
       }),
-    ).toEqual({ accent: '#1f5fd6', canEdit: true });
+    ).toEqual({ accent: '#1f5fd6', canEdit: true, template: 'classic' });
   });
 
   it('refuses a colour that is not a six digit hex (AC-22)', async () => {

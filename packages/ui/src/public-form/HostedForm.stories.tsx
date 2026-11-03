@@ -199,6 +199,23 @@ export const DarkSquare: Story = {
   args: { form: { ...LEAD, look: { colour: 'dark', corners: 'square' } } },
 };
 
+/** A form wearing its workspace's brand kit in one of the four templates (spec 0068, AC-6801). */
+function templated(template: 'studio' | 'night' | 'split'): Story {
+  return {
+    args: { form: { ...LEAD, look: { colour: 'light', corners: 'rounded', theme: 'brand' }, brand: { template } } },
+    play: async ({ canvasElement }) => {
+      await expect(canvasElement.querySelector('[data-template]')).toHaveAttribute('data-template', template);
+    },
+  };
+}
+
+/** Studio: a warm ground and the headline in an editorial serif. */
+export const TemplateStudio: Story = templated('studio');
+/** Night: dark, whatever the form's own colour, with the accent's glow on focus. */
+export const TemplateNight: Story = templated('night');
+/** Split: the form's own frame, its headline in the template's face. */
+export const TemplateSplit: Story = templated('split');
+
 /** Send with nothing filled: each required question says so, the summary lists them as links, the first takes focus. */
 export const Errors: Story = {
   play: async ({ canvas }) => {

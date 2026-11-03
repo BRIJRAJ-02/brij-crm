@@ -7,12 +7,14 @@ import {
   BOOT_ID,
   cacheControlFor,
   cardUrl,
+  drawnTheme,
   lookOf,
   partsOf,
   shellFor,
   withBoot,
   withLook,
   LOOK_LINK_ID,
+  SHELL_TEMPLATE_LOOKS,
   type ShellDeps,
   type ShellProfile,
 } from './handle-shell.ts';
@@ -25,7 +27,7 @@ const profile: ShellProfile = {
   handle: 'anish',
   name: 'Anish Rao',
   bio: 'Designer in Bangalore.',
-  theme: { ground: 'ink', hue: 'purple', mode: 'dark', shape: 'pill', fill: 'solid', font: 'mono' },
+  theme: { ground: 'ink', hue: 'purple', mode: 'dark', shape: 'pill', fill: 'solid', font: 'mono', template: 'night' },
   version: 'a1b2c3',
 };
 
@@ -56,7 +58,8 @@ describe('partsOf', () => {
 
 describe('lookOf', () => {
   it('takes all six names', () => {
-    expect(lookOf(profile.theme)).toEqual(profile.theme);
+    const { template: _template, ...names } = profile.theme as Record<string, unknown>;
+    expect(lookOf(profile.theme)).toEqual(names);
   });
 
   it('takes none of them when one is missing, malformed or not a word', () => {
@@ -298,7 +301,9 @@ describe('the look in the head (spec 0060, AC-20, AC-21)', () => {
     sans: '/assets/Inter-Variable-latin-AbC123.woff2',
     display: '/assets/InstrumentSerif-Regular-latin-dEf456.woff2',
     mono: '/assets/JetBrainsMono-Variable-latin-x9.woff2',
+    geometric: '/assets/Outfit-Variable-latin-gH789.woff2',
   };
+  // Night draws in Geometric, whatever font the stored look names (spec 0068).
   const display = {
     ...profile,
     theme: { ...(profile.theme as object), font: 'display' },
@@ -316,8 +321,9 @@ describe('the look in the head (spec 0060, AC-20, AC-21)', () => {
     expect(head).toContain(
       `<link rel="stylesheet" id="${LOOK_LINK_ID}" href="/api/public/handles/anish/look.css?v=abcdef012345">`,
     );
-    expect(head).toContain(`<link rel="preload" href="${fonts.display}" as="font" type="font/woff2" crossorigin>`);
+    expect(head).toContain(`<link rel="preload" href="${fonts.geometric}" as="font" type="font/woff2" crossorigin>`);
     expect(head).not.toContain(fonts.mono);
+    expect(head).not.toContain(fonts.display);
     // Nothing it fetches from another origin, and nothing inline.
     const fetched = head.match(/<link[^>]+rel="(?:stylesheet|preload)"[^>]*>/g) ?? [];
     expect(fetched.length).toBeGreaterThan(1);
@@ -454,5 +460,23 @@ describe('structured data and crawler text (spec 0061, AC-6121, AC-6122)', () =>
     expect(root).not.toContain('After dark');
     expect(root).not.toContain('mailto:');
     expect(ldOf(answer.body)).toBeDefined();
+  });
+});
+
+describe('the templates in the shell (spec 0068)', () => {
+  it('fixes the same names per template as the contract does', async () => {
+    const { TEMPLATE_LOOKS } = await import('@crm/contracts');
+    for (const [template, fixed] of Object.entries(TEMPLATE_LOOKS)) {
+      const { header: _header, ...rest } = fixed;
+      expect(SHELL_TEMPLATE_LOOKS[template], template).toEqual(rest);
+    }
+  });
+
+  it('draws a page in its own template, else its workspace’s, else Classic', () => {
+    const { template: _template, ...theme } = profile.theme as Record<string, unknown>;
+    expect(lookOf(drawnTheme({ ...theme, template: 'night' }))).toMatchObject({ ground: 'ink', mode: 'dark' });
+    expect(lookOf(drawnTheme(theme, 'studio'))).toMatchObject({ ground: 'paper', font: 'editorial' });
+    expect(lookOf(drawnTheme(theme))).toMatchObject({ ground: 'plain', mode: 'system', font: 'grotesk' });
+    expect(lookOf(drawnTheme({ ...theme, template: '"><x' }, 'nope'))).toEqual(lookOf(theme));
   });
 });

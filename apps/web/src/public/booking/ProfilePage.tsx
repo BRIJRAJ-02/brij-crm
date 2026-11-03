@@ -157,6 +157,20 @@ const footOf = (mode: 'light' | 'dark' | 'system') => (
   />
 );
 
+/**
+ * The look a link page wears (spec 0068, AC-6804): its own template, else its workspace's, else Classic. The
+ * library draws the template's fixed names over the stored ones.
+ */
+export function wornTheme(profile: Pick<PublicProfile, 'theme' | 'look'>): PublicProfile['theme'] {
+  return { ...profile.theme, template: profile.theme.template ?? profile.look?.template ?? 'classic' };
+}
+
+/** The light or dark a template pins (Night dark, Studio light), or `system` for one that follows the visitor. */
+export function wornMode(theme: PublicProfile['theme']): 'light' | 'dark' | 'system' {
+  if (theme.template === undefined) return theme.mode;
+  return theme.template === 'night' ? 'dark' : theme.template === 'studio' ? 'light' : 'system';
+}
+
 /** The link page: the person, then their blocks a page at a time, with a search once there are many. */
 export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
   const client = useMemo(() => createHandleClient({ origin: globalThis.location.origin }), []);
@@ -445,7 +459,7 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
           })}
       blocks={blocks}
       // The look its owner picked (spec 0054), which lands with the content, in one step.
-      theme={profile.theme}
+      theme={wornTheme(profile)}
       // Which photos its own stylesheet carries (spec 0060): a photo look without one draws plain and centred.
       photos={{ cover: profile.look?.cover !== undefined, ground: profile.look?.ground !== undefined }}
       // The open section, and the address it is kept in. `pushState` so the back button closes it (AC-5417).
@@ -460,7 +474,7 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
         );
       }}
       {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
-      foot={footOf(profile.theme.mode)}
+      foot={footOf(wornMode(wornTheme(profile)))}
       // A press is counted by a beacon (AC-5125): the navigation never waits for it.
       onPress={(id) => client.press(current, id)}
       onTimesNear={readTimes}

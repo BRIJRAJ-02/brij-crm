@@ -119,7 +119,8 @@ export function metaTags(source: MetaSource): string {
 /** The six attributes a look becomes, and `data-theme`, exactly as `@crm/ui`'s `LinkPage` writes them (AC-5509). */
 function lookAttributes(look: MetaLook): string {
   return [
-    ['data-theme', look.mode],
+    // Follow the visitor (spec 0060, AC-15; Classic and Split, spec 0068) pins nothing, as `LinkPage` does.
+    ...(look.mode === 'system' ? [] : [['data-theme', look.mode]]),
     ['data-page-ground', look.ground],
     ['data-page-hue', look.hue],
     ['data-page-mode', look.mode],

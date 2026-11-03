@@ -6,12 +6,13 @@ function setup(over: { save?: () => Promise<never>; send?: ImageSend } = {}) {
   const sent: string[] = [];
   const store = openBrand({
     brand: {
-      get: () => Promise.resolve({ accent: '#1f5fd6', canEdit: true }),
+      get: () => Promise.resolve({ accent: '#1f5fd6', template: 'classic' as const, canEdit: true }),
       save: (input) =>
         over.save?.() ??
         Promise.resolve({
           ...(input.accent === null ? {} : { accent: input.accent }),
           ...(input.accentDark === null ? {} : { accentDark: input.accentDark }),
+          template: input.template ?? 'classic',
           canEdit: true,
         }),
     },
@@ -86,10 +87,10 @@ describe('the brand store', () => {
   });
 
   it('keeps the latest of two quick picks, whichever answer comes back first', async () => {
-    const answers: ((value: { canEdit: boolean; accent?: string }) => void)[] = [];
+    const answers: ((value: { canEdit: boolean; template: 'classic'; accent?: string }) => void)[] = [];
     const store = openBrand({
       brand: {
-        get: () => Promise.resolve({ accent: '#1f5fd6', canEdit: true }),
+        get: () => Promise.resolve({ accent: '#1f5fd6', template: 'classic' as const, canEdit: true }),
         save: () => new Promise((resolve) => answers.push(resolve)),
       },
       profile: { look: () => Promise.resolve({}), saveAccent: () => Promise.reject(new Error('unused')) },
@@ -104,12 +105,12 @@ describe('the brand store', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     // Sent one after another: only the first is out until it answers.
     expect(answers).toHaveLength(1);
-    answers[0]?.({ canEdit: true, accent: '#ff5b59' });
+    answers[0]?.({ canEdit: true, template: 'classic', accent: '#ff5b59' });
     await first;
     const between = store.kit('acme').getSnapshot();
     expect(between.status === 'ready' && between.value.accent).toBe('#fb8f3c');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    answers[1]?.({ canEdit: true, accent: '#fb8f3c' });
+    answers[1]?.({ canEdit: true, template: 'classic', accent: '#fb8f3c' });
     await second;
     const after = store.kit('acme').getSnapshot();
     expect(after.status === 'ready' && after.value.accent).toBe('#fb8f3c');

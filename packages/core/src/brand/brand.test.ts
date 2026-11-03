@@ -78,18 +78,22 @@ describe('the brand kit', () => {
   it('is read by any member and saved only with workspace.manage (AC-1, AC-23)', async () => {
     const ada = await person('Ada');
     const asMember = rescope(ada.scope, { role: 'member' });
-    expect(await getWorkspaceBrand(asMember)).toEqual({ canEdit: false });
-    expect(await getWorkspaceBrand(ada.scope)).toEqual({ canEdit: true });
+    expect(await getWorkspaceBrand(asMember)).toEqual({ canEdit: false, template: 'classic' });
+    expect(await getWorkspaceBrand(ada.scope)).toEqual({ canEdit: true, template: 'classic' });
     await expect(saveWorkspaceBrand(asMember, { accent: '#1f5fd6', accentDark: null })).rejects.toMatchObject({
       refusal: { code: 'FORBIDDEN', message: PERMISSIONS['workspace.manage'].message },
     });
     expect(await saveWorkspaceBrand(ada.scope, { accent: '#1F5FD6', accentDark: null })).toEqual({
       accent: '#1f5fd6',
       canEdit: true,
+      template: 'classic',
     });
-    expect(await getWorkspaceBrand(asMember)).toEqual({ accent: '#1f5fd6', canEdit: false });
+    expect(await getWorkspaceBrand(asMember)).toEqual({ accent: '#1f5fd6', canEdit: false, template: 'classic' });
     // Clearing it is the product's accent again.
-    expect(await saveWorkspaceBrand(ada.scope, { accent: null, accentDark: null })).toEqual({ canEdit: true });
+    expect(await saveWorkspaceBrand(ada.scope, { accent: null, accentDark: null })).toEqual({
+      canEdit: true,
+      template: 'classic',
+    });
   });
 
   it('refuses anything but a six digit hex, and a dark colour alone (AC-22)', async () => {
@@ -134,7 +138,7 @@ describe('the brand kit', () => {
     const ada = await person('Ada');
     const bea = await person('Bea');
     await saveWorkspaceBrand(ada.scope, { accent: '#e11d48', accentDark: null });
-    expect(await getWorkspaceBrand(bea.scope)).toEqual({ canEdit: true });
+    expect(await getWorkspaceBrand(bea.scope)).toEqual({ canEdit: true, template: 'classic' });
     expect((await readFormBrand({ scope: bea.scope })).answer).toBeUndefined();
     const seen = await db.withWorkspace(bea.workspaceId, (tx) =>
       tx.execute<{ workspace_id: string }>(sql`select workspace_id from workspace_brands`),
@@ -229,6 +233,43 @@ describe('what a page wears', () => {
     ).rejects.toThrow();
     await expect(
       testQuery(ownerUrl, `update auth.public_profiles set accent = '#123456;}' where user_id = $1`, [ada.userId]),
+    ).rejects.toThrow();
+  });
+
+  it('keeps the workspace template, tells the pages only when it isn’t Classic, and refuses a fifth (spec 0068)', async () => {
+    const ada = await person('Ada');
+    expect((await readFormBrand({ scope: ada.scope })).answer).toBeUndefined();
+    const saved = await saveWorkspaceBrand(ada.scope, { accent: null, accentDark: null, template: 'night' });
+    expect(saved.template).toBe('night');
+    // An accent saved later keeps the template.
+    expect((await saveWorkspaceBrand(ada.scope, { accent: '#e11d48', accentDark: null })).template).toBe('night');
+    expect((await readFormBrand({ scope: ada.scope })).answer?.template).toBe('night');
+    expect(
+      await refusalOf(saveWorkspaceBrand(ada.scope, { accent: null, accentDark: null, template: 'gallery' })),
+    ).toBe('INPUT_INVALID');
+    await expect(
+      testQuery(ownerUrl, `update workspace_brands set template = 'neon' where workspace_id = $1`, [ada.workspaceId]),
+    ).rejects.toThrow();
+    // A link page's look takes a template and the move's note, and nothing else beside them.
+    await updateMyMemberProfile(ada.scope, { handle: `ada-${randomUUID().slice(0, 8)}` });
+    await testQuery(
+      ownerUrl,
+      `update auth.public_profiles set theme = theme || '{"template":"studio","moved":true}'::jsonb where user_id = $1`,
+      [ada.userId],
+    );
+    await expect(
+      testQuery(
+        ownerUrl,
+        `update auth.public_profiles set theme = theme || '{"template":"neon"}'::jsonb where user_id = $1`,
+        [ada.userId],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      testQuery(
+        ownerUrl,
+        `update auth.public_profiles set theme = theme || '{"moved":false}'::jsonb where user_id = $1`,
+        [ada.userId],
+      ),
     ).rejects.toThrow();
   });
 });

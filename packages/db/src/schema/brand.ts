@@ -22,6 +22,8 @@ export const workspaceBrands = pgTable(
     logoPath: text('logo_path'),
     logoType: text('logo_type'),
     logoVersion: text('logo_version'),
+    /** The template every public page wears (spec 0068, AC-6804, migration 0170): one of four words. */
+    template: text('template').notNull().default('classic'),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
     /** The member who last saved it. */
     updatedBy: uuid('updated_by').notNull(),
@@ -43,6 +45,7 @@ export const workspaceBrands = pgTable(
       sql`(${t.accent} is null or ${t.accent} ~ '^#[0-9a-f]{6}$')
         and (${t.accentDark} is null or (${t.accentDark} ~ '^#[0-9a-f]{6}$' and ${t.accent} is not null))`,
     ),
+    check('workspace_brands_template', sql`${t.template} in ('classic', 'studio', 'night', 'split')`),
     check(
       'workspace_brands_logo',
       sql`(${t.logoPath} is null and ${t.logoType} is null and ${t.logoVersion} is null)

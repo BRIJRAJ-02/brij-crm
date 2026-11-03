@@ -31,6 +31,7 @@ import { safeHref } from '../../lib/safe-href.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
 import { initialsOf } from '../../lib/stable-hue.ts';
+import type { PageTemplate } from '../../lib/page-template.ts';
 import styles from './LinkPage.module.css';
 // Types only: erased, so none of these chunks joins the first load.
 import type { LinkPageGalleryProps } from './LinkPageGallery.tsx';
@@ -386,6 +387,33 @@ export interface PageLook {
   readonly pattern: 'dots' | 'grid' | 'lines' | 'waves';
   readonly header: 'centred' | 'cover' | 'left';
   readonly avatar: 'circle' | 'rounded' | 'none';
+  /**
+   * The template the page wears (spec 0068, AC-6801): set, it fixes the ground, mode, shape, fill, font and header
+   * (`PAGE_TEMPLATE_LOOKS`), whatever the other keys hold, and its own blocks of this module's stylesheet draw the
+   * rest (Studio's warm ground, Night's glow, Split's two columns). Left out, the ten keys draw as they always did.
+   */
+  readonly template?: PageTemplate;
+}
+
+/**
+ * What each template fixes of the look (spec 0068, AC-6801, AC-6802), as `TEMPLATE_LOOKS` in `@crm/contracts`
+ * holds it; `page-theme.test.ts` keeps the two the same.
+ */
+export const PAGE_TEMPLATE_LOOKS = {
+  classic: { ground: 'plain', mode: 'system', shape: 'soft', fill: 'plain', font: 'grotesk', header: 'centred' },
+  studio: { ground: 'paper', mode: 'light', shape: 'pill', fill: 'plain', font: 'editorial', header: 'cover' },
+  night: { ground: 'ink', mode: 'dark', shape: 'soft', fill: 'plain', font: 'geometric', header: 'centred' },
+  split: { ground: 'plain', mode: 'system', shape: 'soft', fill: 'plain', font: 'sans', header: 'left' },
+} as const satisfies Record<PageTemplate, Pick<PageLook, 'ground' | 'mode' | 'shape' | 'fill' | 'font' | 'header'>>;
+
+/** A look as it draws: a template's fixed names over the stored ones, and an avatar a template never hides. */
+export function drawnLook(look: PageLook): PageLook {
+  if (look.template === undefined) return look;
+  return {
+    ...look,
+    ...PAGE_TEMPLATE_LOOKS[look.template],
+    avatar: look.avatar === 'none' ? 'circle' : look.avatar,
+  };
 }
 
 /**
@@ -394,8 +422,9 @@ export interface PageLook {
  * decides somebody else's page (AC-5406). `system` (spec 0060, AC-15) is the one mode that sets none, so the page
  * takes the visitor's own. A photo ground or cover the page has no photo for draws as `plain` or `centred`.
  */
-function lookAttributes(look: PageLook | undefined, photos: LinkPagePhotos | undefined) {
-  if (look === undefined) return {};
+function lookAttributes(stored: PageLook | undefined, photos: LinkPagePhotos | undefined) {
+  if (stored === undefined) return {};
+  const look = drawnLook(stored);
   const ground = look.ground === 'image' && photos?.ground !== true ? 'plain' : look.ground;
   const header = look.header === 'cover' && photos?.cover !== true ? 'centred' : look.header;
   return {
@@ -410,6 +439,7 @@ function lookAttributes(look: PageLook | undefined, photos: LinkPagePhotos | und
     'data-page-pattern': look.pattern,
     'data-page-header': header,
     'data-page-avatar': look.avatar,
+    ...(look.template === undefined ? {} : { 'data-template': look.template }),
   };
 }
 
@@ -1660,6 +1690,11 @@ export interface LinkPageThumbnailProps {
    * mode (Follow visitor split corner to corner, light over dark). Left out, the whole page in miniature.
    */
   readonly detail?: 'font' | 'shape' | 'mode';
+  /**
+   * `large` (spec 0068, AC-6804): the template picker's miniature, a column tall, with a face, a name and rows at a
+   * size that shows the template's own ground, type, corners and glow. Left out, the small slot's miniature.
+   */
+  readonly size?: 'large';
 }
 
 /**
@@ -1670,9 +1705,9 @@ export interface LinkPageThumbnailProps {
  * the plain look. It fills its slot (TileGrid's choice thumbnail), never moves, takes no focus and is hidden from
  * screen readers: the tile's own name says which look it is.
  */
-export function LinkPageThumbnail({ theme, variables, detail }: LinkPageThumbnailProps) {
+export function LinkPageThumbnail({ theme, variables, detail, size }: LinkPageThumbnailProps) {
   // Follow visitor: the page light and dark at once, one over the other, cut corner to corner.
-  const held = variables === undefined ? {} : { variables };
+  const held = { ...(variables === undefined ? {} : { variables }), ...(size === undefined ? {} : { size }) };
   if (detail === 'mode' && theme.mode === 'system') {
     return (
       <div className={styles.thumbSplit} aria-hidden="true">
@@ -1685,11 +1720,12 @@ export function LinkPageThumbnail({ theme, variables, detail }: LinkPageThumbnai
 }
 
 /** One look in miniature: the whole page, or only the detail its row is about. */
-function ThumbnailLook({ theme, variables, detail }: LinkPageThumbnailProps) {
+function ThumbnailLook({ theme, variables, detail, size }: LinkPageThumbnailProps) {
   return (
     <div
       className={styles.root}
       data-thumbnail
+      data-size={size}
       {...lookAttributes(theme, ALL_PHOTOS)}
       ref={usePageVariables(variables)}
       aria-hidden="true"
@@ -1705,9 +1741,9 @@ function ThumbnailLook({ theme, variables, detail }: LinkPageThumbnailProps) {
         </div>
       ) : (
         <div className={styles.thumb}>
-          {theme.header === 'cover' && <span className={styles.thumbCover} />}
+          {drawnLook(theme).header === 'cover' && <span className={styles.thumbCover} />}
           <span className={styles.thumbHead}>
-            {theme.avatar !== 'none' && <span className={styles.thumbFace} />}
+            {drawnLook(theme).avatar !== 'none' && <span className={styles.thumbFace} />}
             <span className={styles.thumbSample}>{strings.thumbnailSample}</span>
           </span>
           <span className={styles.thumbRow} />
@@ -1831,6 +1867,7 @@ export function LinkPage({
   // draws its empty state rather than an empty group.
   const groups = blocks === undefined ? [] : groupsOf(blocks);
   const look = lookAttributes(theme, photos);
+  const drawn = theme === undefined ? undefined : drawnLook(theme);
   const variablesRef = usePageVariables(variables);
   if (layout === 'blocks') {
     return (
@@ -1889,129 +1926,137 @@ export function LinkPage({
       >
         <div className={styles.column} ref={columnRef}>
           {banner !== undefined && !bannerClosed && <Banner block={banner} onPress={onPress} onClose={closeBanner} />}
-          {brand !== undefined && <Lockup brand={brand} />}
-          <header className={styles.hero} aria-busy={person === undefined || undefined}>
-            {person === undefined ? (
-              <>
-                <Skeleton shape="circle" size="xl" />
-                <p className={styles.name}>
-                  <Skeleton shape="text" width="medium" align="center" />
-                </p>
-                <p className={styles.bio}>
-                  <Skeleton shape="text" width="long" align="center" />
-                </p>
-                {/* The pill's own place, so the header doesn't grow when the address arrives. */}
-                {address !== undefined && (
-                  <span className={styles.pillLoading}>
-                    <Skeleton shape="fill" />
-                  </span>
-                )}
-              </>
-            ) : (
-              <>
-                {/* The cover photo (spec 0060, AC-13): a band the face overlaps, drawn from the page's own stylesheet. */}
-                {theme?.header === 'cover' && photos?.cover === true && (
-                  <span className={styles.cover} aria-hidden="true" />
-                )}
-                {theme?.avatar !== 'none' && (
-                  <span className={styles.face}>
-                    <Avatar
-                      name={person.name}
-                      id={person.id}
-                      size="hero"
-                      shape={theme?.avatar === 'rounded' ? 'square' : 'circle'}
-                      isDecorative
-                      {...(person.image === undefined ? {} : { src: person.image })}
-                    />
-                  </span>
-                )}
-                {/* The words beside the face in the left header, and in the column under it otherwise. */}
-                <div className={styles.who}>
-                  <h1 className={styles.name}>{person.name}</h1>
-                  {person.role !== undefined && person.role !== '' && <p className={styles.jobTitle}>{person.role}</p>}
-                  {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
+          {/* Who the page is: one column with the rest, except in Split, where it is the sticky panel on the left
+              of a wide page (spec 0068, AC-6801). */}
+          <div className={styles.identity}>
+            {brand !== undefined && <Lockup brand={brand} />}
+            <header className={styles.hero} aria-busy={person === undefined || undefined}>
+              {person === undefined ? (
+                <>
+                  <Skeleton shape="circle" size="xl" />
+                  <p className={styles.name}>
+                    <Skeleton shape="text" width="medium" align="center" />
+                  </p>
+                  <p className={styles.bio}>
+                    <Skeleton shape="text" width="long" align="center" />
+                  </p>
+                  {/* The pill's own place, so the header doesn't grow when the address arrives. */}
                   {address !== undefined && (
-                    <span className={styles.address}>
-                      <CopyButton
-                        value={address.value}
-                        label={address.label}
-                        name={strings.copyAddress(address.label)}
-                        announcement={strings.addressCopied}
-                        isRound
+                    <span className={styles.pillLoading}>
+                      <Skeleton shape="fill" />
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* The cover photo (spec 0060, AC-13): a band the face overlaps, drawn from the page's own stylesheet. */}
+                  {drawn?.header === 'cover' && photos?.cover === true && (
+                    <span className={styles.cover} aria-hidden="true" />
+                  )}
+                  {drawn?.avatar !== 'none' && (
+                    <span className={styles.face}>
+                      <Avatar
+                        name={person.name}
+                        id={person.id}
+                        size="hero"
+                        shape={drawn?.avatar === 'rounded' ? 'square' : 'circle'}
+                        isDecorative
+                        {...(person.image === undefined ? {} : { src: person.image })}
                       />
                     </span>
                   )}
-                </div>
-              </>
-            )}
-          </header>
-          {/* The one action under the person, then the way to pass the page on, then where else to find them.
-              Share stands while the page loads: it shares the address the visitor is already on. */}
-          <Actions
-            contact={contact}
-            share={share}
-            onPress={onPress}
-            {...(walletHref === undefined ? {} : { walletHref })}
-          />
-          {!hasSocialsBlock && socials}
-          {toolbar}
-          {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
-          {summary !== undefined && (
-            <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
-              {summary}
-            </p>
-          )}
-          {blocks === undefined ? (
-            <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
-              {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
-                <li key={index} className={styles.item}>
-                  <span className={styles.block} data-loading="">
-                    <LinkPageTile />
-                    <span className={styles.text}>
-                      <span className={styles.title}>
-                        <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
+                  {/* The words beside the face in the left header, and in the column under it otherwise. */}
+                  <div className={styles.who}>
+                    <h1 className={styles.name}>{person.name}</h1>
+                    {person.role !== undefined && person.role !== '' && (
+                      <p className={styles.jobTitle}>{person.role}</p>
+                    )}
+                    {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
+                    {address !== undefined && (
+                      <span className={styles.address}>
+                        <CopyButton
+                          value={address.value}
+                          label={address.label}
+                          name={strings.copyAddress(address.label)}
+                          announcement={strings.addressCopied}
+                          isRound
+                        />
                       </span>
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : groups.length === 0 && ghosts === 0 ? (
-            empty
-          ) : (
-            <div className={styles.blocks}>
-              {groups.map((group, index) => (
-                <Group
-                  key={group.heading?.id ?? `top-${String(index)}`}
-                  rows={group.rows}
-                  onPress={onPress}
-                  onToggleFolder={toggleFolder}
-                  {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
-                  {...(group.heading === undefined ? {} : { heading: group.heading })}
-                />
-              ))}
-              {ghosts > 0 && (
-                // Places for blocks that aren't there yet: decoration, so nothing here is read out or reachable.
-                <ul className={styles.list} aria-hidden="true">
-                  {Array.from({ length: ghosts }, (_, index) => (
-                    <li key={index} className={styles.item}>
-                      <span className={styles.block} data-ghost="">
-                        <LinkPageTile />
-                        <span className={styles.text}>
-                          <span className={styles.title}>
-                            <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
-                          </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </header>
+            {/* The one action under the person, then the way to pass the page on, then where else to find them.
+              Share stands while the page loads: it shares the address the visitor is already on. */}
+            <Actions
+              contact={contact}
+              share={share}
+              onPress={onPress}
+              {...(walletHref === undefined ? {} : { walletHref })}
+            />
+            {!hasSocialsBlock && socials}
+          </div>
+          <div className={styles.content}>
+            {toolbar}
+            {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
+            {summary !== undefined && (
+              <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
+                {summary}
+              </p>
+            )}
+            {blocks === undefined ? (
+              <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
+                {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
+                  <li key={index} className={styles.item}>
+                    <span className={styles.block} data-loading="">
+                      <LinkPageTile />
+                      <span className={styles.text}>
+                        <span className={styles.title}>
+                          <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
                         </span>
                       </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          {after}
-          {footLine !== undefined && footLine !== '' && <p className={styles.footLine}>{footLine}</p>}
-          {foot}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : groups.length === 0 && ghosts === 0 ? (
+              empty
+            ) : (
+              <div className={styles.blocks}>
+                {groups.map((group, index) => (
+                  <Group
+                    key={group.heading?.id ?? `top-${String(index)}`}
+                    rows={group.rows}
+                    onPress={onPress}
+                    onToggleFolder={toggleFolder}
+                    {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
+                    {...(group.heading === undefined ? {} : { heading: group.heading })}
+                  />
+                ))}
+                {ghosts > 0 && (
+                  // Places for blocks that aren't there yet: decoration, so nothing here is read out or reachable.
+                  <ul className={styles.list} aria-hidden="true">
+                    {Array.from({ length: ghosts }, (_, index) => (
+                      <li key={index} className={styles.item}>
+                        <span className={styles.block} data-ghost="">
+                          <LinkPageTile />
+                          <span className={styles.text}>
+                            <span className={styles.title}>
+                              <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
+                            </span>
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {after}
+            {footLine !== undefined && footLine !== '' && <p className={styles.footLine}>{footLine}</p>}
+            {foot}
+          </div>
         </div>
         {hasNotice && (
           <Suspense fallback={null}>

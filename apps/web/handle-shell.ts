@@ -111,6 +111,31 @@ export function pageFactsOf(profile: ShellProfile, name: string, url: string, or
 /** A string, or undefined for anything else: a read's answer is parsed here, never trusted by its type. */
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined);
 
+/**
+ * What each template fixes of the look (spec 0068, AC-6801), as `TEMPLATE_LOOKS` in `@crm/contracts` holds it,
+ * repeated here because this file imports nothing from the app (`handle-shell.test.ts` holds the two together).
+ */
+export const SHELL_TEMPLATE_LOOKS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  classic: { ground: 'plain', mode: 'system', shape: 'soft', fill: 'plain', font: 'grotesk' },
+  studio: { ground: 'paper', mode: 'light', shape: 'pill', fill: 'plain', font: 'editorial' },
+  night: { ground: 'ink', mode: 'dark', shape: 'soft', fill: 'plain', font: 'geometric' },
+  split: { ground: 'plain', mode: 'system', shape: 'soft', fill: 'plain', font: 'sans' },
+};
+
+/**
+ * A stored look as it draws (spec 0068, AC-6804): its own template, else the workspace's (`look.template` of the
+ * read), else Classic, whose fixed names win over the stored ones. Anything that isn't an object comes back as is.
+ */
+export function drawnTheme(theme: unknown, workspaceTemplate?: unknown): unknown {
+  if (typeof theme !== 'object' || theme === null) return theme;
+  const given = theme as Record<string, unknown>;
+  const own = typeof given.template === 'string' ? given.template : undefined;
+  const fallback = typeof workspaceTemplate === 'string' ? workspaceTemplate : 'classic';
+  const template = own !== undefined && Object.hasOwn(SHELL_TEMPLATE_LOOKS, own) ? own : fallback;
+  const fixed = Object.hasOwn(SHELL_TEMPLATE_LOOKS, template) ? SHELL_TEMPLATE_LOOKS[template] : undefined;
+  return fixed === undefined ? given : { ...given, ...fixed, template };
+}
+
 /** The six names of a look, or undefined unless every one of them is there (AC-5509). */
 export function lookOf(theme: unknown): MetaLook | undefined {
   if (typeof theme !== 'object' || theme === null) return undefined;
@@ -198,8 +223,8 @@ export function withLook(shell: string, profile: ShellProfile, fonts: Readonly<R
   const look =
     typeof profile.look === 'object' && profile.look !== null ? (profile.look as Record<string, unknown>) : {};
   const version = text(look.version);
-  const theme =
-    typeof profile.theme === 'object' && profile.theme !== null ? (profile.theme as Record<string, unknown>) : {};
+  const drawn = drawnTheme(profile.theme, look.template);
+  const theme = typeof drawn === 'object' && drawn !== null ? (drawn as Record<string, unknown>) : {};
   const font = text(theme.font);
   const links: string[] = [];
   if (
@@ -302,7 +327,9 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     };
   }
   const handle = text(profile.handle) ?? parts.handle;
-  const look = lookOf(profile.theme);
+  const lookRead =
+    typeof profile.look === 'object' && profile.look !== null ? (profile.look as Record<string, unknown>) : {};
+  const look = lookOf(drawnTheme(profile.theme, lookRead.template));
   const bio = text(profile.bio);
   const source: MetaSource = {
     name: text(profile.name) ?? handle,

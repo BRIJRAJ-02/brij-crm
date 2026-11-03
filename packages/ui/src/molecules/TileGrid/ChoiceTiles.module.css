@@ -211,6 +211,12 @@
     margin-block-end: var(--space-6);
   }
 
+  /* A large picture (`pictureSize="large"`, spec 0068): a column tall, the tiles a column wide at least, so a
+     settings card holds two to a row and each shows a whole page before it is picked. */
+  .root[data-large] {
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--size-column), 100%), 1fr));
+  }
+
   .tile[data-described][data-tall] .name {
     grid-row: 2;
     align-self: start;
@@ -311,5 +317,12 @@
     .tile[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
     }
+  }
+
+  /* After the selected slot's own rule, which this one sits on top of. */
+  .tile[data-described][data-tall][data-large] .picture {
+    place-content: stretch;
+    block-size: var(--size-column);
+    padding: 0;
   }
 }

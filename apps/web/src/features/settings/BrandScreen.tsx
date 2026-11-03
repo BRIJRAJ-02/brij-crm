@@ -1,9 +1,9 @@
 // Brief
-// Purpose: Settings › Workspace › Brand (spec 0060, AC-1 to AC-3, AC-6): the logo and colour every booking page and
-// form of the workspace wears, beside a preview of both wearing it.
-// Main task: an owner or admin adds the logo and picks the colour, and sees a booking page and a form change at once.
+// Purpose: Settings › Workspace › Brand (spec 0060, AC-1 to AC-3, AC-6; spec 0068, AC-6804): the template, logo and
+// colour every public page of the workspace wears, beside a preview of a booking page and a form wearing them.
+// Main task: an owner or admin picks the template, adds the logo and picks the colour, and sees the pages change.
 // Leaves out: a link page's own look (its Design panel), fonts and backgrounds (link pages only), and emails (later).
-import type { BrandStore, PublicForm } from '@crm/data';
+import { DEFAULT_PAGE_THEME, themeForTemplate, type BrandStore, type PageTemplate, type PublicForm } from '@crm/data';
 import { useBrand } from '@crm/data/react';
 import {
   AccentPicker,
@@ -15,12 +15,14 @@ import {
   EmptyState,
   FileDrop,
   HostedFormPreview,
+  LinkPageThumbnail,
   Modal,
   MonthTiles,
   PreviewLayout,
   SegmentedControl,
   SettingsRow,
   Skeleton,
+  TileGrid,
   type PageBrand,
   type Toasts,
 } from '@crm/ui';
@@ -58,6 +60,14 @@ function dayOf(date: Date): string {
   return `${String(date.getFullYear())}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+/** The four templates (spec 0068), in the picker's order. */
+const TEMPLATES: readonly { readonly id: PageTemplate; readonly name: string }[] = [
+  { id: 'classic', name: strings.templateClassic },
+  { id: 'studio', name: strings.templateStudio },
+  { id: 'night', name: strings.templateNight },
+  { id: 'split', name: strings.templateSplit },
+];
+
 /** Which page the preview shows. */
 type PreviewPage = 'booking' | 'form';
 
@@ -78,6 +88,13 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
   const wearing: PageBrand = {
     ...(logoSrc === undefined ? {} : { logo: { src: logoSrc, alt: strings.logoAlt } }),
     ...(colours === undefined ? {} : { variables: colours.variables }),
+    ...(kit === undefined ? {} : { template: kit.template }),
+  };
+  const chooseTemplate = (template: PageTemplate) => {
+    setRefusal(undefined);
+    void brand.saveTemplate(slug, template).then((refused) => {
+      if (refused !== undefined) setRefusal(refused.message);
+    });
   };
   const month = useMemo(() => {
     const now = new Date();
@@ -117,7 +134,8 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
     shown === 'booking' ? (
       // A sketch of a booking page, inert: the kit's logo heads its rail and its colour marks the chosen day. The day's
       // times are left out, as a phone shows them once a day is picked, so the whole page and its foot fit the phone.
-      <div inert>
+      // A new template remounts it, so the switch crossfades in (spec 0068).
+      <div inert key={kit?.template}>
         <BookingFrame
           isCompact
           brand={wearing}
@@ -139,7 +157,7 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
         </BookingFrame>
       </div>
     ) : (
-      <HostedFormPreview form={SAMPLE_FORM} brand={wearing} />
+      <HostedFormPreview key={kit?.template} form={SAMPLE_FORM} brand={wearing} />
     );
   return (
     <SettingsPage title={strings.title} fillsView>
@@ -172,6 +190,28 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
             isBusy={kit === undefined}
             {...(refusal === undefined ? {} : { footerNote: refusal })}
           >
+            {/* The template every public page wears (spec 0068, AC-6804): four finished looks, picked by sight. */}
+            <SettingsRow title={strings.template} description={strings.templateText} control="field">
+              {kit === undefined ? (
+                <Skeleton shape="field" />
+              ) : (
+                <TileGrid
+                  variant="choice"
+                  label={strings.template}
+                  value={kit.template}
+                  tiles={TEMPLATES.map((template) => ({
+                    id: template.id,
+                    name: template.name,
+                    isDisabled: !canEdit,
+                    thumbnail: <LinkPageThumbnail theme={themeForTemplate(template.id, DEFAULT_PAGE_THEME)} />,
+                  }))}
+                  onChange={(picked) => {
+                    const found = TEMPLATES.find((template) => template.id === picked);
+                    if (found !== undefined && found.id !== kit.template) chooseTemplate(found.id);
+                  }}
+                />
+              )}
+            </SettingsRow>
             <SettingsRow title={strings.logo} description={strings.logoText} control="field">
               {kit === undefined ? (
                 <Skeleton shape="field" />

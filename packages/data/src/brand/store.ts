@@ -7,7 +7,7 @@
 // either: another tab's change shows when a screen next holds it. The colours a page draws for an accent come from
 // `brandVariables()`, the same pure function the live page's stylesheet is made with, so a preview is exactly what
 // visitors see (AC-7). Loaded on first use (`data.brand.load()`), so none of it rides in the app's first load.
-import type { PageImageSlot, ProfileAccent, ProfileLook, WorkspaceBrand } from '@crm/contracts';
+import type { PageImageSlot, PageTemplate, ProfileAccent, ProfileLook, WorkspaceBrand } from '@crm/contracts';
 import { brandProperties, brandVariables, BRAND_HEX_PATTERN } from '@crm/contracts/brand-colour';
 import { toDataError, type DataError } from '../errors.ts';
 
@@ -69,13 +69,21 @@ export interface PageLookExtras extends ProfileLook {
   /** The workspace's accent pair: what the page wears while `accent` is unset (AC-14). */
   readonly workspaceAccent?: string;
   readonly workspaceAccentDark?: string;
+  /** The workspace's template (spec 0068, AC-6804): what the page wears while it has none of its own. */
+  readonly workspaceTemplate?: PageTemplate;
 }
 
 /** The brand procedures the store calls, as the data layer's client answers them. */
 interface BrandProcedures {
   readonly get: (input: { workspace: string }, options: { signal?: AbortSignal }) => Promise<WorkspaceBrand>;
   readonly save: (
-    input: { workspace: string; accent: string | null; accentDark: string | null; mutationId: string },
+    input: {
+      workspace: string;
+      accent: string | null;
+      accentDark: string | null;
+      template?: PageTemplate;
+      mutationId: string;
+    },
     options: { signal?: AbortSignal },
   ) => Promise<WorkspaceBrand>;
 }
@@ -228,7 +236,7 @@ export function openBrand(given: {
   const lookOf = (workspace: string) => {
     let found = looks.get(workspace);
     if (found === undefined) {
-      found = holder(async () => {
+      found = holder<PageLookExtras>(async () => {
         // The page's own, and the workspace's accent it follows until it has one: read together.
         const [own, kit] = await Promise.all([
           call((options) => given.profile.look({ workspace }, options)),
@@ -238,6 +246,7 @@ export function openBrand(given: {
           ...own,
           ...(kit.accent === undefined ? {} : { workspaceAccent: kit.accent }),
           ...(kit.accentDark === undefined ? {} : { workspaceAccentDark: kit.accentDark }),
+          workspaceTemplate: kit.template,
         };
       }, now);
       looks.set(workspace, found);
@@ -272,6 +281,33 @@ export function openBrand(given: {
                 workspace,
                 accent: accent ?? null,
                 accentDark: accent === undefined ? null : (accentDark ?? null),
+                mutationId: given.mintId(),
+              },
+              options,
+            ),
+          );
+          return () => saved;
+        },
+      );
+    },
+    /**
+     * Saves the workspace's template (spec 0068, AC-6804), the accent pair kept as it is. Shown at once; answers the
+     * refusal, or undefined once it landed.
+     */
+    saveTemplate: (workspace: string, template: PageTemplate): Promise<DataError | undefined> => {
+      looks.delete(workspace);
+      return kitOf(workspace).change(
+        (kit) => ({ ...kit, template }),
+        async () => {
+          const held = kitOf(workspace).held.getSnapshot();
+          const kit = held.status === 'ready' ? held.value : undefined;
+          const saved = await call((options) =>
+            given.brand.save(
+              {
+                workspace,
+                accent: kit?.accent ?? null,
+                accentDark: kit?.accent === undefined ? null : (kit.accentDark ?? null),
+                template,
                 mutationId: given.mintId(),
               },
               options,

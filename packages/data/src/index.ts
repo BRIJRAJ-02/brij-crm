@@ -701,7 +701,14 @@ export { RELATED_PREVIEW } from '@crm/contracts/activity-keys';
 export { opensInline, RECORD_FILE_ACCEPT, RECORD_FILE_MAX_BYTES } from '@crm/contracts/file-limits';
 // The link page's look (spec 0054): the default and the named starting points are values the editor presses, not
 // only types, so they come through the one data layer like every other shape a screen uses.
-export { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme } from '@crm/contracts';
+export {
+  DEFAULT_PAGE_THEME,
+  PAGE_TEMPLATES,
+  PAGE_THEME_PRESETS,
+  sameTheme,
+  themeForTemplate,
+  type PageTemplate,
+} from '@crm/contracts';
 // Managed booking pages (spec 0037, AC-1333): the lockable parts in the order the template editor lists them, and
 // how many people one covers — values a screen renders, not only types, so they come through the one data layer.
 export { MANAGED_MEMBERS_MAX, MANAGED_PART_KEYS, MANAGED_PARTS } from '@crm/contracts';

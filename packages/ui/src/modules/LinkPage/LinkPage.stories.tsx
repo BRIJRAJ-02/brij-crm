@@ -920,3 +920,56 @@ export const WithGhosts: Story = {
     </Stage>
   ),
 };
+
+/** Anish's page in one of the four templates (spec 0068, AC-6801), in the orange brand. */
+function templated(template: NonNullable<PageLook['template']>): Story {
+  return {
+    args: { person: PERSON, theme: { ...PLAIN, template }, variables: ORANGE_BRAND },
+    render: (args) => (
+      <Stage width="fill" height="page">
+        <LinkPage {...args} blocks={anishBlocks()} />
+      </Stage>
+    ),
+    play: async ({ canvasElement }) => {
+      settleEntrance(canvasElement);
+      const root = canvasElement.querySelector('[data-template]');
+      // The template is one attribute, and the names it fixes come with it, whatever the stored look holds.
+      await expect(root).toHaveAttribute('data-template', template);
+      await expect(root?.getAttribute('style') ?? '').not.toContain('background');
+    },
+  };
+}
+
+/** Classic: the visitor's light or dark, a clean grotesk, rows that lift a touch under the pointer. */
+export const TemplateClassic: Story = templated('classic');
+/** Studio: warm off white, an editorial serif, round cards and the cover header (centred with no cover photo). */
+export const TemplateStudio: Story = templated('studio');
+/** Night: a deep dark ground, bold type and the accent as a glow. */
+export const TemplateNight: Story = templated('night');
+/** Split: a sticky panel with who the page is beside the blocks, from the page breakpoint; one column below it. */
+export const TemplateSplit: Story = templated('split');
+
+/** The template picker's large miniatures (spec 0068, AC-6804): the four side by side, each the page in it. */
+export const TemplateThumbnails: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="Template"
+        defaultValue="classic"
+        showsDescription
+        keepsPicture
+        pictureSize="large"
+        tiles={(['classic', 'studio', 'night', 'split'] as const).map((template) => ({
+          id: template,
+          name: template,
+          description: template,
+          thumbnail: <LinkPageThumbnail theme={{ ...PLAIN, template }} variables={ORANGE_BRAND} size="large" />,
+        }))}
+      />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelectorAll('[data-size="large"]')).toHaveLength(4);
+  },
+};
