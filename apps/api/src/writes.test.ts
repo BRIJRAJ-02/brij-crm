@@ -844,6 +844,29 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.brand.save({ workspace: m.slug, accent: '#1f5fd6', accentDark: null, mutationId });
     return [];
   },
+  // The template waiting for Publish (spec 0068): a pick made first, then the case's own write. No record changes.
+  'brand.publishTemplate': async (m, mutationId) => {
+    await m.client.brand.save({
+      workspace: m.slug,
+      accent: null,
+      accentDark: null,
+      template: 'night',
+      mutationId: newId(),
+    });
+    await m.client.brand.publishTemplate({ workspace: m.slug, mutationId });
+    return [];
+  },
+  'brand.discardTemplate': async (m, mutationId) => {
+    await m.client.brand.save({
+      workspace: m.slug,
+      accent: null,
+      accentDark: null,
+      template: 'night',
+      mutationId: newId(),
+    });
+    await m.client.brand.discardTemplate({ workspace: m.slug, mutationId });
+    return [];
+  },
   'profile.setIndexable': async (m, mutationId) => {
     const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
     await m.client.profile.setIndexable({ workspace: m.slug, indexable: false, mutationId });
@@ -3253,6 +3276,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'profile.setIndexable': 2,
   'profile.show': 2,
   'profile.publish': 2,
+  'brand.publishTemplate': 2,
+  'brand.discardTemplate': 2,
   'profile.discard': 3,
   'profile.restore': 3,
   'profile.setShareImage': 2,
