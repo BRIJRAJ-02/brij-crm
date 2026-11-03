@@ -503,6 +503,51 @@ export const Sheet: Story = {
   },
 };
 
+/** A public page's sheet card (the guest menu's dish): a bottom sheet on a phone, a card centred over a wider window. */
+export const SheetCard: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Modal variant="sheet-card" title="Flat white" isOpen>
+        A double shot with steamed milk.
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveAccessibleName('Flat white');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const panel = dialog.getBoundingClientRect();
+    if (globalThis.innerWidth >= 480) {
+      // Centred, never the window's width.
+      await expect(panel.width).toBeLessThan(globalThis.innerWidth);
+      await expect(Math.abs(panel.left - (globalThis.innerWidth - panel.right))).toBeLessThan(2);
+    } else {
+      await expect(Math.round(panel.bottom)).toBe(globalThis.innerHeight);
+    }
+  },
+};
+
+/** A public page's side sheet (the guest menu's picks): a bottom sheet on a phone, a panel at the end edge wider. */
+export const SheetSide: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Modal variant="sheet-side" title="Your picks" isOpen>
+        Two flat whites and a bottle of Etna Rosso.
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveAccessibleName('Your picks');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const panel = dialog.getBoundingClientRect();
+    await expect(Math.round(panel.right)).toBe(globalThis.innerWidth);
+    await expect(Math.round(panel.bottom)).toBe(globalThis.innerHeight);
+  },
+};
+
 /** A drawer: a full height panel at the end edge for a long list, with the standard title bar and footer. */
 export const Drawer: Story = {
   parameters: { crm: { screenshot: false } },

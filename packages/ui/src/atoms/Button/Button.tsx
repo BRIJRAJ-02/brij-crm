@@ -12,10 +12,14 @@ import { Kbd } from '../Kbd/Kbd.tsx';
 import { ProviderMark, type ProviderName } from '../ProviderMark/ProviderMark.tsx';
 import { keyShortcuts, type KeyboardPlatform } from '../Kbd/shortcuts.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
+import { NumberPop } from '../NumberPop/NumberPop.tsx';
 import { Spinner } from '../Spinner/Spinner.tsx';
+import { TextSwap } from '../TextSwap/TextSwap.tsx';
+import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import { TooltipKbdContext } from '../Tooltip/tooltip-kbd.ts';
 import { useFooterRole } from './footer-keys.ts';
 import styles from './Button.module.css';
+import { strings } from './strings.ts';
 
 /** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours. */
 export type ButtonVariant =
@@ -56,6 +60,11 @@ interface ButtonLook {
    */
   readonly labelReserve?: string;
   /**
+   * Draws a changed label through TextSwap: the old words rise out, the new ones rise in (Publish, then Published).
+   * For a label whose change is the news; pair it with `labelReserve` so the button keeps its width.
+   */
+  readonly animateLabel?: boolean;
+  /**
    * A slot a parent fills, such as `close` inside a toast or a dialog. `null` opts out of the parent's slots: a
    * button of its own inside a calendar, whose only slots are its `previous` and `next` arrows.
    */
@@ -79,6 +88,11 @@ interface LabelledFace {
    * visible label, so speech input can still say what it sees (WCAG 2.5.3).
    */
   readonly label?: string;
+  /**
+   * A worded amount after the label, already formatted ("£9.50"): its changed digits pop in (NumberPop), and in a
+   * full width button it sits at the end. Part of the button's name. A guest menu's Add to your picks · £9.50.
+   */
+  readonly amount?: string;
 }
 
 interface IconOnlyFace {
@@ -228,7 +242,16 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
         )
       )}
       {face.children !== undefined &&
-        (look.labelReserve === undefined ? (
+        (look.animateLabel === true ? (
+          <span className={styles.label} {...(look.labelReserve === undefined ? {} : { 'data-reserve': '' })}>
+            <TextSwap>{face.children}</TextSwap>
+            {look.labelReserve === undefined ? null : (
+              <span className={styles.reserve} aria-hidden="true">
+                {look.labelReserve}
+              </span>
+            )}
+          </span>
+        ) : look.labelReserve === undefined ? (
           <span key={face.children} className={styles.label} {...swapped}>
             {face.children}
           </span>
@@ -242,6 +265,12 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
             </span>
           </span>
         ))}
+      {'amount' in face && face.amount !== undefined && (
+        <span className={styles.amount}>
+          <VisuallyHidden>{strings.amountSeparator}</VisuallyHidden>
+          <NumberPop value={face.amount} />
+        </span>
+      )}
       {keycaps(look.kbd, variant)}
       {look.iconRight !== undefined && <Icon name={look.iconRight} size="sm" />}
     </>

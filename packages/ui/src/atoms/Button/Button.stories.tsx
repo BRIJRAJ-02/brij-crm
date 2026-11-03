@@ -654,3 +654,18 @@ export const Disclosure: Story = {
     );
   },
 };
+
+/** An amount after the label: a full width primary with the price at its end, as the guest menu's Add to your picks. */
+export const WithAmount: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="phone">
+      <Button variant="primary" size="touch" isFullWidth amount="£9.50">
+        Add to your picks
+      </Button>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /Add to your picks\s*·\s*£9\.50/ })).toBeInTheDocument();
+  },
+};

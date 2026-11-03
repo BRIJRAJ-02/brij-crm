@@ -77,6 +77,14 @@
     visibility: hidden;
   }
 
+  /* An amount after the label (Add to your picks · £9.50): steady figures, so a changing price never shifts the
+     label. A full width button's label takes the room, so the amount sits at the end. */
+  .amount {
+    display: inline-flex;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
   .keys {
     display: inline-flex;
     gap: var(--space-2);

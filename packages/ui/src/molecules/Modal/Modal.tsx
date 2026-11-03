@@ -45,9 +45,13 @@ export function ModalTrigger({ children, isOpen, defaultOpen, onOpenChange }: Mo
  * context first as a crumb and no title drawn (the page shows its own), and
  * the body a centred writing column; `drawer` for a long list or detail that belongs beside the page rather than
  * over it (a rotation's member table): a full height panel at the end edge with the standard title bar and
- * footer, that slides in from the end.
+ * footer, that slides in from the end. A public page's sheets (spec 0065, the guest menu): `sheet-card` is a bottom
+ * sheet on a phone and a floating card centred over the page from 480px wide (a dish); `sheet-side` is a bottom sheet
+ * on a phone and a panel at the end edge from 480px wide (a guest's picks). Both name themselves for screen readers
+ * only, as `sheet` does, and wear whatever surface the page around them sets.
  */
-export type ModalVariant = 'dialog' | 'form' | 'confirm' | 'window' | 'palette' | 'peek' | 'sheet' | 'drawer';
+export type ModalVariant =
+  'dialog' | 'form' | 'confirm' | 'window' | 'palette' | 'peek' | 'sheet' | 'drawer' | 'sheet-card' | 'sheet-side';
 
 /** Props for Modal. */
 export interface ModalProps {
@@ -151,7 +155,12 @@ export function Modal({
   const isAlert = tone === 'danger';
   // The palette and a peek name themselves for screen readers only: the palette's field and the peek's page
   // (a note's own title) say what they are on screen.
-  const isTitleHidden = variant === 'palette' || variant === 'peek' || variant === 'sheet';
+  const isTitleHidden =
+    variant === 'palette' ||
+    variant === 'peek' ||
+    variant === 'sheet' ||
+    variant === 'sheet-card' ||
+    variant === 'sheet-side';
   // A confirm asks in its body: no title bar, the question over its one line of consequence.
   const isConfirm = variant === 'confirm';
   const bodyId = useId();
