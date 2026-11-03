@@ -299,6 +299,10 @@ test.describe('the Menu app from an empty workspace', () => {
       await page.getByLabel('Service added').fill('12.5');
       await page.getByLabel('Service added').press('Tab');
       await expect(page.getByLabel('Note at the foot')).toHaveValue('12.5% service is added.');
+      // Serving times start from the place's own week, not a made up brunch.
+      await page.getByRole('switch', { name: 'Serve at set times' }).click({ force: true });
+      await expect(page.getByRole('switch', { name: 'Friday', exact: true })).toBeChecked();
+      await expect(page.getByRole('button', { name: /Friday from/ }).first()).toContainText(/9:00/);
       await shot(page, '23-settings');
       await page.getByRole('button', { name: 'More', exact: true }).click();
       await page.getByRole('menuitem', { name: 'Discard' }).click();
