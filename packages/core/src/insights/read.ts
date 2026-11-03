@@ -57,7 +57,8 @@ export async function visiblePages(scope: EngineScope): Promise<readonly Visible
   const user = userOf(scope);
   return inWorkspace(scope, async (tx) => {
     const ids = await tx.execute<{ id: string }>(
-      sql`select id::text as id from forms order by created_at desc limit 2000`,
+      // Every form: a workspace's older forms count as much as its newest.
+      sql`select id::text as id from forms order by created_at desc`,
     );
     const forms = await loadForms(
       tx,

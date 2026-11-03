@@ -264,11 +264,20 @@ async function firstDay(
   pages: readonly CoveredPage[],
 ): Promise<string | undefined> {
   if (pages.length === 0) return undefined;
+  // One probe a page, each down its own index from the page's oldest day, never a walk of the workspace's history.
+  const kinds = `{${pages.map((page) => page.kind).join(',')}}`;
+  const ids = `{${pages.map((page) => page.id).join(',')}}`;
   const found = await tx.execute<{ day: string | null }>(sql`
-    select least(
-      (select min(d.day) from page_visit_days d where d.workspace_id = ${workspaceId} and ${pagesFilter('d', pages)}),
-      (select min(v.day) from page_visits v where v.workspace_id = ${workspaceId} and ${pagesFilter('v', pages)})
-    )::text as day
+    select min(least(rolled.day, raw.day))::text as day
+    from unnest(${kinds}::text[], ${ids}::uuid[]) as p(k, i)
+    cross join lateral (
+      select min(d.day) as day from page_visit_days d
+      where d.workspace_id = ${workspaceId} and d.page_kind = p.k and d.page_id = p.i
+    ) rolled
+    cross join lateral (
+      select min(v.day) as day from page_visits v
+      where v.workspace_id = ${workspaceId} and v.page_kind = p.k and v.page_id = p.i
+    ) raw
   `);
   return found.rows[0]?.day ?? undefined;
 }

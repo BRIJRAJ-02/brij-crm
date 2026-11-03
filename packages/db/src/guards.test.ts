@@ -1115,6 +1115,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         { column: 'notification_settings.time_zone', privilege: 'SELECT' },
         { column: 'notification_settings.workspace_id', privilege: 'SELECT' },
         // The Insights rollup's listing (spec 0067, migration 0173).
+        { column: 'page_visit_stale_days.day', privilege: 'SELECT' },
         { column: 'page_visit_stale_days.marked_at', privilege: 'SELECT' },
         { column: 'page_visit_stale_days.workspace_id', privilege: 'SELECT' },
         { column: 'workspaces.deleted_at', privilege: 'SELECT' },
@@ -2824,7 +2825,12 @@ describe('Insights (spec 0067, AC-6701, AC-6720, AC-6730)', () => {
 
   it('lists the workspaces with a stale day to the worker alone, ids only', async () => {
     const a = await workspaceWithMember('insights-rollup');
-    await visitIn(a.workspaceId);
+    // Today is never rolled up, so only a past day's mark lists the workspace.
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into page_visits (workspace_id, page_kind, page_id, day, visitor) values (${a.workspaceId}, 'form', ${randomUUID()}, (now() at time zone 'UTC')::date - 2, ${visitor()})`,
+      ),
+    );
     const worker = new pg.Client({ connectionString: workerUrl });
     await worker.connect();
     try {

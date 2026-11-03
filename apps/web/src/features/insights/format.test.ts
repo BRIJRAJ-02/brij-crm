@@ -21,6 +21,12 @@ describe('the tiles (AC-6711)', () => {
     ]);
   });
 
+  it('says there was nothing before rather than drawing a rise from zero', () => {
+    const tiles = tilesOf({ ...numbers, previous: { visits: 0, finishes: 0 } }, 'en-GB');
+    expect(tiles[0]).toMatchObject({ comparison: 'None the 7 days before' });
+    expect(tiles[0]?.trend).toBeUndefined();
+  });
+
   it('compares nothing for all time, and says when no finish was timed', () => {
     const tiles = tilesOf({ ...numbers, previous: undefined, totals: { visits: 3, finishes: 0 } }, 'en-GB');
     expect(tiles[0]?.comparison).toBeUndefined();

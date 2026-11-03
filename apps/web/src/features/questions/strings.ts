@@ -54,7 +54,7 @@ export const strings = {
   cantWrite: 'You can’t write to this',
   mustAnswer: 'Visitors must answer',
   // Spec 0067: its answers show beside Insights' sources.
-  sourceQuestion: 'How they heard about you',
+  sourceQuestion: 'Show in Insights as how they heard (one a form)',
   duplicateQuestion: 'Duplicate',
   deleteQuestion: 'Delete',
   questionDeleted: (label: string) => `Deleted “${label}”.`,

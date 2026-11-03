@@ -35,12 +35,12 @@ export interface InsightsBodyProps {
   readonly isRefreshing?: boolean;
   /** Extra panels under the sources (the signed in screen's Other sites). */
   readonly sourcesAside?: ReactNode;
-  /** One next action for a funnel over mixed kinds (the signed in screen offers Show forms). */
-  readonly onPickKind?: () => void;
+  /** One next action for a funnel over mixed kinds: the signed in screen's first kind, by its name. */
+  readonly pickKind?: { readonly label: string; readonly onPress: () => void };
 }
 
 /** The tiles, the charts, the funnel and the sources. */
-export function InsightsBody({ numbers, isRefreshing = false, sourcesAside, onPickKind }: InsightsBodyProps) {
+export function InsightsBody({ numbers, isRefreshing = false, sourcesAside, pickKind }: InsightsBodyProps) {
   const { locale } = useFormatSettings();
   const [sort, setSort] = useState<SortKey>('visits');
   const tiles = useMemo(() => tilesOf(numbers, locale), [numbers, locale]);
@@ -68,7 +68,8 @@ export function InsightsBody({ numbers, isRefreshing = false, sourcesAside, onPi
       label: numbers.grain === 'week' ? strings.weekOf(when) : when,
       axisLabel: when,
       value: rate,
-      valueText: percent(bucket.finishes, bucket.visits, locale),
+      // A quiet day reads as no visits, not as a page that stopped working.
+      valueText: bucket.visits === 0 ? strings.noVisits : percent(bucket.finishes, bucket.visits, locale),
     };
   });
   const { funnel } = numbers;
@@ -135,7 +136,9 @@ export function InsightsBody({ numbers, isRefreshing = false, sourcesAside, onPi
               icon="list-filter"
               layout="fill"
               title={strings.funnelPick}
-              {...(onPickKind === undefined ? {} : { actions: <PickKind onPress={onPickKind} /> })}
+              {...(pickKind === undefined
+                ? {}
+                : { actions: <PickKind label={pickKind.label} onPress={pickKind.onPress} /> })}
             />
           ) : (
             <FieldGroup label={drop ?? strings.nobodyLeaves} tone="heading" headingLevel={4}>
@@ -210,10 +213,10 @@ export function InsightsBody({ numbers, isRefreshing = false, sourcesAside, onPi
 }
 
 /** The funnel's one next action over mixed kinds. */
-function PickKind({ onPress }: { readonly onPress: () => void }) {
+function PickKind({ label, onPress }: { readonly label: string; readonly onPress: () => void }) {
   return (
     <Button variant="secondary" onPress={onPress}>
-      {strings.funnelPickAction}
+      {label}
     </Button>
   );
 }

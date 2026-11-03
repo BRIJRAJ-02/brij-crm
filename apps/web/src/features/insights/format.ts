@@ -48,6 +48,8 @@ export function tilesOf(numbers: InsightNumbersLike, locale?: string): readonly 
   const days = strings.previousDays(daysBetween(numbers.from, numbers.to));
   const count = (now: number, before: number | undefined): Partial<Tile> => {
     if (before === undefined) return {};
+    // Against nothing, a rise means nothing: say there was none, with no arrow.
+    if (before === 0 && now > 0) return { comparison: strings.noneBefore(days) };
     if (now === before) return { comparison: strings.noChange(days), trend: 'same' };
     const up = now > before;
     return {

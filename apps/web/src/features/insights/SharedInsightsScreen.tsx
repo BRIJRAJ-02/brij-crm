@@ -19,7 +19,13 @@ export function SharedInsightsScreen({ shared }: { readonly shared: SharedInsigh
         meta={`${strings.sharedBy(shared.workspaceName)} · ${strings.ranges[shared.range]}`}
       />
       <PageColumn>
-        <InsightsBody numbers={shared.numbers} />
+        {shared.numbers.totals.visits === 0 && (shared.numbers.previous?.visits ?? 0) === 0 ? (
+          <EmptyState icon="chart-line" title={strings.sharedEmptyTitle}>
+            {strings.sharedEmptyText}
+          </EmptyState>
+        ) : (
+          <InsightsBody numbers={shared.numbers} />
+        )}
       </PageColumn>
     </>
   );
@@ -48,7 +54,7 @@ export function SharedInsightsError({ error }: { readonly error: DataError | und
         title={gone ? strings.sharedGoneTitle : strings.sharedFailed}
         {...(gone ? {} : { tone: 'error' as const })}
       >
-        {gone ? strings.sharedGoneText : (error?.message ?? '')}
+        {gone ? strings.sharedGoneText : strings.sharedFailedText}
       </EmptyState>
     </PageColumn>
   );

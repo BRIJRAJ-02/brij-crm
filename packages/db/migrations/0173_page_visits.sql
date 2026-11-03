@@ -113,6 +113,8 @@ CREATE INDEX "page_visits_by_page_day" ON "page_visits" USING btree ("workspace_
 CREATE INDEX "page_visits_day" ON "page_visits" USING btree ("workspace_id","day");--> statement-breakpoint
 -- The Sessions table: the newest visits first, a page of 50 at a time.
 CREATE INDEX "page_visits_recent" ON "page_visits" USING btree ("workspace_id","first_at","page_kind","page_id","visitor");--> statement-breakpoint
+-- One page's sessions, newest first (a page picked, or its own Insights link).
+CREATE INDEX "page_visits_page_recent" ON "page_visits" USING btree ("workspace_id","page_kind","page_id","first_at");--> statement-breakpoint
 -- The screen's range read over every page it may show.
 CREATE INDEX "page_visit_days_day" ON "page_visit_days" USING btree ("workspace_id","day");--> statement-breakpoint
 -- A share link is found by its secret's hash, inside the workspace its token names.
@@ -152,10 +154,11 @@ create policy insight_shares_tenant on insight_shares
   with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
 --> statement-breakpoint
 -- A visit made or moved on marks its day stale, in the visit's own statement and under its own row level security:
--- an invoker trigger, so the mark can only ever be the visit's own workspace's. A day already marked is still
--- touched (an update that changes nothing), which locks the mark until the visit commits: the rollup takes marks
--- `for update skip locked`, so it can never take a day, delete its mark and read the raw rows while a visit to that
--- day is still uncommitted, and then miss it for good (near midnight, the day's last visit).
+-- an invoker trigger, so the mark can only ever be the visit's own workspace's. A day already marked costs one index
+-- probe and takes no lock, so a workspace's visits never queue behind each other. The near midnight race (a rollup
+-- taking a day while that day's last visit is still uncommitted, then missing it for good) can't happen because a
+-- visit only ever writes today's row, and the rollup takes no day until ten minutes after it ended
+-- (`crm_page_rollup_workspaces` and `rollUpPageVisits` both hold that line).
 create function crm_page_visit_mark_stale()
   returns trigger
   language plpgsql
@@ -164,7 +167,7 @@ as $$
 begin
   insert into public.page_visit_stale_days (workspace_id, day)
   values (new.workspace_id, new.day)
-  on conflict (workspace_id, day) do update set marked_at = page_visit_stale_days.marked_at;
+  on conflict (workspace_id, day) do nothing;
   return null;
 end;
 $$;
@@ -179,6 +182,9 @@ create trigger page_visits_mark_stale
 -- the detail. Row security off: the owner bypasses it, and a role it would filter fails here rather than copying
 -- nothing.
 set local row_security = off;
+--> statement-breakpoint
+-- The copy marks its days once, below, rather than once a row through the trigger.
+alter table page_visits disable trigger page_visits_mark_stale;
 --> statement-breakpoint
 insert into page_visits (
   workspace_id, page_kind, page_id, day, visitor, source, medium, referrer_host, started_at, finished_at,
@@ -212,12 +218,19 @@ select v.workspace_id, 'form', v.form_id, v.day, v.visitor,
 from form_visits v
 on conflict do nothing;
 --> statement-breakpoint
+insert into page_visit_stale_days (workspace_id, day)
+select distinct v.workspace_id, v.day from form_visits v
+on conflict do nothing;
+--> statement-breakpoint
+alter table page_visits enable trigger page_visits_mark_stale;
+--> statement-breakpoint
 reset row_security;
 --> statement-breakpoint
--- The rollup job's listing (AC-6730): the workspaces holding a stale day, oldest mark first, ids only, at most `max`
--- (1 to 500). Across every workspace, so the worker's alone (crm_worker), owned by crm_sweep, which reads two columns
--- of `page_visit_stale_days` for it and nothing else.
-grant select (workspace_id, marked_at) on page_visit_stale_days to crm_sweep;
+-- The rollup job's listing (AC-6730): the workspaces holding a stale day it may take (one that ended ten minutes ago
+-- or more), oldest mark first, ids only, at most `max` (1 to 500). Today is never rolled up: reads take it raw.
+-- Across every workspace, so the worker's alone (crm_worker), owned by crm_sweep, which reads three columns of
+-- `page_visit_stale_days` for it and nothing else.
+grant select (workspace_id, day, marked_at) on page_visit_stale_days to crm_sweep;
 --> statement-breakpoint
 create function crm_page_rollup_workspaces(max integer)
   returns setof uuid
@@ -229,6 +242,7 @@ create function crm_page_rollup_workspaces(max integer)
 begin atomic
   select s.workspace_id
   from public.page_visit_stale_days s
+  where s.day < ((pg_catalog.now() at time zone 'UTC') - interval '10 minutes')::date
   group by s.workspace_id
   order by pg_catalog.min(s.marked_at), s.workspace_id
   limit least(greatest(crm_page_rollup_workspaces.max, 1), 500);

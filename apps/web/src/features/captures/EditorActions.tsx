@@ -61,7 +61,10 @@ export interface EditorActionsProps {
   };
 }
 
-/** The editors' header actions, in one order on both: Copy link, View page or Preview, Publish changes, then ⋯. */
+/**
+ * The editors' header actions, in one order on both: Copy link, View page or Preview, Publish changes, Insights,
+ * then ⋯.
+ */
 export function EditorActions({
   link,
   linkOffReason,
@@ -90,13 +93,13 @@ export function EditorActions({
           {strings.viewPage}
         </ButtonLink>
       )}
+      {preview}
+      {publish}
       {insightsHref !== undefined && (
         <ButtonLink href={insightsHref} icon="chart-line" isLabelCollapsible label={strings.insights}>
           {strings.insights}
         </ButtonLink>
       )}
-      {preview}
-      {publish}
       {menu !== undefined && (
         <MenuTrigger>
           <Button

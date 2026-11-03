@@ -1,7 +1,7 @@
 // Brief
 // Purpose: share the numbers on screen with a client or partner (spec 0067, AC-6720): a signed link, numbers only,
 //   with an optional expiry, and the links already made, each revocable.
-// Main task: make a link and copy it.
+// Main task: make a link and copy it: what it covers (pages, a rolling period, an expiry) is said before it's made.
 // Leaves out: who the visitors were, ever (a shared page never shows a session, name, email, Other's sites or a
 //   free text answer), editing a link after it is made (revoke and make another), and sending it from here.
 import type { DataLayer, InsightPages, InsightRange, InsightShare } from '@crm/data';
@@ -26,9 +26,15 @@ export interface ShareDialogProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly pages: InsightPages;
+  /** The names of the pages it covers, as the picker shows them. */
+  readonly pageNames: readonly string[];
+  /** The screen's range, which the link starts on; a custom period starts it on 30 days. */
   readonly range: InsightRange;
   readonly onClose: () => void;
 }
+
+/** The periods a link may keep, in order. */
+const SHARE_RANGES: readonly InsightRange[] = ['7', '30', '90', '365', 'all'];
 
 /** When a new link stops working, from now. */
 type Expiry = 'never' | 'week' | 'month';
@@ -44,7 +50,7 @@ function messageOf(refused: unknown): string {
 export const sharedHref = (token: string) => `${globalThis.location.origin}/public/insights#t=${token}`;
 
 /** The share dialog: make a link (shown once, to copy), and the links already made. */
-export function ShareDialog({ data, slug, pages, range, onClose }: ShareDialogProps) {
+export function ShareDialog({ data, slug, pages, pageNames, range: initialRange, onClose }: ShareDialogProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const { locale, timeZone } = useFormatSettings();
   const list = useMemo(() => data.insights.shares(slug), [data, slug]);
@@ -53,7 +59,10 @@ export function ShareDialog({ data, slug, pages, range, onClose }: ShareDialogPr
   const [expiry, setExpiry] = useState<Expiry>('month');
   const [isMaking, setMaking] = useState(false);
   const [made, setMade] = useState<string | undefined>(undefined);
+  const [range, setRange] = useState<InsightRange>(initialRange);
+  // The name's own check, and the server's refusal, apart: a refusal is never the name's fault.
   const [error, setError] = useState<string | undefined>(undefined);
+  const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const [revoking, setRevoking] = useState<InsightShare | undefined>(undefined);
   const day = useMemo(() => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone }), [locale, timeZone]);
 
@@ -64,6 +73,7 @@ export function ShareDialog({ data, slug, pages, range, onClose }: ShareDialogPr
     }
     setMaking(true);
     setError(undefined);
+    setRefusal(undefined);
     const days = expiry === 'week' ? 7 : expiry === 'month' ? 30 : undefined;
     void data.insights
       .createShare(slug, {
@@ -78,7 +88,7 @@ export function ShareDialog({ data, slug, pages, range, onClose }: ShareDialogPr
           setLabel('');
         },
         (refused: unknown) => {
-          setError(messageOf(refused));
+          setRefusal(messageOf(refused));
         },
       )
       .finally(() => setMaking(false));
@@ -120,7 +130,18 @@ export function ShareDialog({ data, slug, pages, range, onClose }: ShareDialogPr
               value={label}
               maxLength={80}
               onChange={setLabel}
+              onSubmit={make}
               {...(error === undefined ? {} : { error })}
+            />
+            <DescriptionList items={[{ term: strings.sharePages, description: pageNames.join(', ') }]} />
+            <SegmentedControl
+              label={strings.sharePeriod}
+              value={range}
+              onChange={(next) => {
+                const found = SHARE_RANGES.find((each) => each === next);
+                if (found !== undefined) setRange(found);
+              }}
+              segments={SHARE_RANGES.map((each) => ({ value: each, label: strings.ranges[each] }))}
             />
             <SegmentedControl
               label={strings.shareExpiry}
@@ -134,15 +155,26 @@ export function ShareDialog({ data, slug, pages, range, onClose }: ShareDialogPr
                 { value: 'never', label: strings.expiryNever },
               ]}
             />
+            <Callout tone="info">{strings.shareRolling}</Callout>
+            {refusal !== undefined && (
+              <Callout tone="danger" isAnnounced>
+                {refusal}
+              </Callout>
+            )}
           </>
         ) : (
           <Callout
             tone="success"
             title={strings.shareCreated}
             actions={
-              <Button icon="copy" onPress={() => copy(made)}>
-                {strings.shareCopy}
-              </Button>
+              <>
+                <Button icon="copy" onPress={() => copy(made)}>
+                  {strings.shareCopy}
+                </Button>
+                <Button variant="ghost" onPress={() => setMade(undefined)}>
+                  {strings.shareMakeAnother}
+                </Button>
+              </>
             }
           >
             <DescriptionList
@@ -163,7 +195,10 @@ export function ShareDialog({ data, slug, pages, range, onClose }: ShareDialogPr
             rows={shares.shares}
             getRowId={(row) => row.id}
             renderCell={(row, column) => {
-              if (column === 'label') return `${row.label} · ${strings.shareCovers(row.pageCount)}`;
+              if (column === 'label') {
+                // Told apart by more than a name: its period, its pages, and the day it was made.
+                return `${row.label} · ${strings.ranges[row.range]} · ${strings.shareCovers(row.pageCount)} · ${strings.shareMade(day.format(new Date(row.createdAt)))}`;
+              }
               if (column === 'state') {
                 if (row.revokedAt !== undefined) return strings.shareRevoked;
                 return row.expiresAt === undefined
@@ -198,12 +233,14 @@ export function ShareDialog({ data, slug, pages, range, onClose }: ShareDialogPr
                 const target = revoking;
                 setRevoking(undefined);
                 if (target === undefined) return;
-                void data.insights.revokeShare(slug, target.id).catch((refused: unknown) => {
-                  toasts.toast({
-                    tone: 'danger',
-                    message: messageOf(refused),
-                  });
-                });
+                void data.insights.revokeShare(slug, target.id).then(
+                  () => {
+                    toasts.toast({ tone: 'success', message: strings.shareRevokedToast });
+                  },
+                  (refused: unknown) => {
+                    toasts.toast({ tone: 'danger', message: messageOf(refused) });
+                  },
+                );
               }}
             >
               {strings.shareRevoke}

@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { FormDocument, FormQuestion } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import { enterPublicForm } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -31,7 +32,7 @@ import {
 } from './shares.ts';
 import { countPageVisit, finishPageVisit, originOf } from './visits.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, workerUrl } = inject('testDatabase');
 let db: Database;
 const registry = jobKinds({ environment: 'local' });
 
@@ -238,11 +239,11 @@ describe('the Insights numbers (AC-6711 to AC-6714, AC-6730)', () => {
     await expect(rollUpPageVisits(w.scope)).rejects.toThrow();
   });
 
-  it('never loses a visit still being written while the rollup takes its day (the near midnight race)', async () => {
+  it('never takes today, so a visit still being written can’t be missed (the near midnight race)', async () => {
     const w = await workspace();
     const form = await liveForm(w);
-    // The day is marked by a visit already in.
-    await pastVisit(w, form.id, 'first', 2);
+    // A day that ended long ago, ready to roll up.
+    await pastVisit(w, form.id, 'old', 2);
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => {
       release = resolve;
@@ -251,25 +252,37 @@ describe('the Insights numbers (AC-6711 to AC-6714, AC-6730)', () => {
     const isWritten = new Promise<void>((resolve) => {
       written = resolve;
     });
-    // A second visit to the same day, its transaction left open: it touches the mark, which locks it.
+    // Today's visit, its transaction left open: a visit only ever writes today's row.
     const late = db.withWorkspace(w.workspaceId, async (tx) => {
-      await tx.execute(sql`
-        insert into page_visits (workspace_id, page_kind, page_id, day, visitor, first_at)
-        values (${w.workspaceId}, 'form', ${form.id}, (now() at time zone 'UTC')::date - 2, ${visitorHash('late')},
-          now() - interval '2 days')
-      `);
+      await countPageVisit(tx, {
+        workspaceId: w.workspaceId,
+        kind: 'form',
+        pageId: form.id,
+        visitor: visitorHash('late'),
+        step: 'view',
+      });
       written();
       await held;
     });
     await isWritten;
-    // The rollup can't take the day while the visit is uncommitted: it skips it rather than read it without it.
-    expect((await rollUpPageVisits(w.system)).days).toBe(0);
+    // The rollup takes the old day and leaves today alone, uncommitted visit or not.
+    expect((await rollUpPageVisits(w.system)).days).toBe(1);
     release();
     await late;
-    expect((await rollUpPageVisits(w.system)).days).toBe(1);
-    expect(await w.query(sql`select day from page_visit_stale_days`)).toEqual([]);
+    expect((await rollUpPageVisits(w.system)).days).toBe(0);
+    const marks = await w.query<{ today: boolean }>(
+      sql`select day = (now() at time zone 'UTC')::date as today from page_visit_stale_days`,
+    );
+    expect(marks).toEqual([{ today: true }]);
+    // And the read takes today from the raw rows: nothing is missed.
     const read = await readInsights(w.scope, { period: { range: '7' }, pages: {} });
     expect(read.totals.visits).toBe(2);
+    // The worker's listing names no workspace whose only stale day is today.
+    const listed = await testQuery<{ id: string }>(
+      workerUrl,
+      'select id::text from crm_page_rollup_workspaces(500) as w(id)',
+    );
+    expect(listed.map((row) => row.id)).not.toContain(w.workspaceId);
   });
 
   it('shows nothing of a form whose object is hidden from the reader, and NOT_FOUND for that page by name', async () => {

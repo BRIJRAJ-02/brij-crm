@@ -4,8 +4,7 @@
 //   before; the recent sessions, naming a person only where the reader may already read that submission or booking.
 // Main task: see whether a page is working and which source brings people who finish, then share the numbers.
 // Leaves out: live updates (a visit sends no change event; the page reads again on return), per product panels
-//   (menus, QR codes, reservations and events come with those products), goals and alerts, and a custom period
-//   picker (the address takes one; the controls offer the five ranges).
+//   (menus, QR codes, reservations and events come with those products), and goals and alerts.
 import type {
   DataLayer,
   InsightPage,
@@ -60,13 +59,18 @@ export interface InsightsScreenProps {
   readonly search: InsightsSearch;
 }
 
-/** The picker's value for a filter, and back. */
-const pickerValue = (pages: InsightPages) =>
-  pages.pageId !== undefined
-    ? `page:${pages.kind ?? ''}:${pages.pageId}`
-    : pages.kind !== undefined
-      ? `kind:${pages.kind}`
-      : 'all';
+/**
+ * The picker's value for a filter. The link page has no "every link page" item (a member has one), so its kind
+ * reads as that one page.
+ */
+function pickerValue(pages: InsightPages, known: readonly InsightPage[]): string {
+  if (pages.pageId !== undefined) return `page:${pages.kind ?? ''}:${pages.pageId}`;
+  if (pages.kind === 'link') {
+    const own = known.find((page) => page.kind === 'link');
+    return own === undefined ? 'all' : `page:link:${own.id}`;
+  }
+  return pages.kind !== undefined ? `kind:${pages.kind}` : 'all';
+}
 
 function pagesOfValue(value: string): InsightsSearch {
   if (value.startsWith('kind:')) {
@@ -78,6 +82,17 @@ function pagesOfValue(value: string): InsightsSearch {
     return (kind === 'form' || kind === 'booking' || kind === 'link') && page !== undefined ? { kind, page } : {};
   }
   return {};
+}
+
+/** The names of the pages a share would cover: the one picked, a kind's, or every page the reader sees. */
+function sharedPageNames(known: readonly InsightPage[], pages: InsightPages): string[] {
+  return known
+    .filter(
+      (page) =>
+        (pages.kind === undefined || page.kind === pages.kind) &&
+        (pages.pageId === undefined || page.id === pages.pageId),
+    )
+    .map((page) => page.name);
 }
 
 /** The page picker's items (AC-6710): every page, a kind, or one page the reader may see. */
@@ -128,7 +143,14 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
   const isCustom = 'from' in period;
   const view = useMemo(() => data.insights.numbers(slug, period, pages), [data, slug, period, pages]);
   const state = useInsightRead(view);
-  const [filter, setFilter] = useState<InsightSessionFilter>({});
+  // The sessions' column filters belong to one page and period: a new one starts them afresh.
+  const filterScope = JSON.stringify([period, pages]);
+  const [filtered, setFiltered] = useState<{ readonly scope: string; readonly filter: InsightSessionFilter }>({
+    scope: filterScope,
+    filter: {},
+  });
+  const filter = useMemo(() => (filtered.scope === filterScope ? filtered.filter : {}), [filtered, filterScope]);
+  const setFilter = (next: InsightSessionFilter) => setFiltered({ scope: filterScope, filter: next });
   const [isSharing, setSharing] = useState(false);
   const [customError, setCustomError] = useState<string | undefined>(undefined);
   const sessionsView = useMemo(
@@ -141,6 +163,10 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
     void navigate({ to: '/w/$slug/insights', params: { slug }, search: next });
   };
   const known: readonly InsightPage[] = state.status === 'ready' ? state.insights.pages : [];
+  // Where an empty period's one action goes: 90 days from a short range, else all time.
+  const longer: InsightRange = !isCustom && (range === '7' || range === '30') ? '90' : 'all';
+  // A funnel over mixed kinds offers the first kind the workspace has, by its own name.
+  const pickKind = (['form', 'booking', 'link'] as const).find((kind) => known.some((page) => page.kind === kind));
 
   const toolbar = (
     <Toolbar
@@ -155,7 +181,8 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
               if (state.status !== 'ready') return;
               const shown = sessions.status === 'ready' ? sessions.items : [];
               const csv = insightsCsv(state.insights, shown);
-              saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `insights-${slug}-${range}.csv`);
+              const named = 'from' in period ? `${period.from}_${period.to}` : range;
+              saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `insights-${slug}-${named}.csv`);
               toasts.toast({ tone: 'success', message: strings.exported });
             }}
           >
@@ -177,7 +204,7 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
         isLabelHidden
         size="sm"
         items={pickerItems(known)}
-        value={pickerValue(pages)}
+        value={pickerValue(pages, known)}
         onChange={(value) => {
           if (value !== null)
             go({
@@ -194,6 +221,7 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
         onChange={(next) => {
           const found = RANGES.find((each) => each === next);
           if (found === undefined) return;
+          setCustomError(undefined);
           const { from: _from, to: _to, ...rest } = search;
           go({ ...rest, range: found });
         }}
@@ -241,14 +269,33 @@ export function InsightsScreen({ data, slug, search }: InsightsScreenProps) {
               onSessionsRetry={() => sessionsView.reload()}
               onRetry={() => view.reload()}
               slug={slug}
+              isAllTime={!isCustom && range === 'all'}
+              longer={longer}
               onLonger={() => {
                 const { from: _from, to: _to, ...rest } = search;
-                go({ ...rest, range: '90' });
+                go({ ...rest, range: longer });
               }}
-              onPickKind={() => go({ ...search, kind: 'form', page: undefined })}
+              {...(pickKind === undefined
+                ? {}
+                : {
+                    pickKind: {
+                      label: strings.showKind[pickKind],
+                      onPress: () => {
+                        const { page: _page, ...rest } = search;
+                        go({ ...rest, kind: pickKind });
+                      },
+                    },
+                  })}
             />
             {isSharing && state.status === 'ready' && (
-              <ShareDialog data={data} slug={slug} pages={pages} range={range} onClose={() => setSharing(false)} />
+              <ShareDialog
+                data={data}
+                slug={slug}
+                pages={pages}
+                pageNames={sharedPageNames(known, pages)}
+                range={isCustom ? '30' : range}
+                onClose={() => setSharing(false)}
+              />
             )}
           </PageColumn>
         ),
@@ -266,8 +313,10 @@ function Body({
   onMore,
   onSessionsRetry,
   onRetry,
+  isAllTime,
+  longer,
   onLonger,
-  onPickKind,
+  pickKind,
   slug,
 }: {
   readonly state: InsightNumbersState;
@@ -277,8 +326,10 @@ function Body({
   readonly onMore: () => void;
   readonly onSessionsRetry: () => void;
   readonly onRetry: () => void;
+  readonly isAllTime: boolean;
+  readonly longer: InsightRange;
   readonly onLonger: () => void;
-  readonly onPickKind: () => void;
+  readonly pickKind?: { readonly label: string; readonly onPress: () => void };
   readonly slug: string;
 }) {
   if (state.status === 'loading') {
@@ -313,8 +364,8 @@ function Body({
     );
   }
   if (insights.totals.visits === 0 && (insights.previous?.visits ?? 0) === 0) {
-    // Nothing ever, or nothing in a long period: the one next action is to share a page, or to look further back.
-    const isLong = insights.grain === 'week';
+    // Nothing ever (all time), or nothing in this period: share a page, or look further back.
+    const isLong = isAllTime;
     return (
       <EmptyState
         icon="chart-line"
@@ -326,7 +377,7 @@ function Body({
             </ButtonLink>
           ) : (
             <Button variant="primary" onPress={onLonger}>
-              {strings.noneInPeriodAction}
+              {strings.showRange(longer)}
             </Button>
           )
         }
@@ -341,7 +392,7 @@ function Body({
         numbers={insights}
         isRefreshing={isRefreshing}
         sourcesAside={<OtherSites insights={insights} />}
-        onPickKind={onPickKind}
+        {...(pickKind === undefined ? {} : { pickKind })}
       />
       <Sessions
         insights={insights}

@@ -3,9 +3,9 @@
 // worker's `crm_cron_page_rollup` runs it every five minutes for each workspace `crm_page_rollup_workspaces` names.
 //
 // A day is taken by deleting its stale mark (`for update skip locked`, so two runs never take the same day) and
-// recomputed whole in the same transaction. A visit that lands meanwhile marks its day again (its insert waits for
-// this delete, then writes a fresh mark), so the next run takes it; until then a read takes that day from the raw
-// rows, so nothing is ever shown stale.
+// recomputed whole in the same transaction. Today is never taken, nor yesterday in its first ten minutes: a visit
+// only writes today's row, so no visit to a day taken can still be uncommitted. A read takes any day still marked,
+// and today, from the raw rows, so nothing is ever shown stale.
 import { sql } from 'drizzle-orm';
 import { FINISH_STEP } from '@crm/contracts';
 import type { EngineScope } from '../access/mint.ts';
@@ -23,6 +23,9 @@ export async function rollUpPageVisits(scope: EngineScope): Promise<{ readonly d
       where workspace_id = ${scope.workspaceId} and day in (
         select day from page_visit_stale_days
         where workspace_id = ${scope.workspaceId}
+          -- Never today, nor yesterday in its first ten minutes: a visit only writes today's row, so once a day has
+          -- been over ten minutes no visit to it can still be uncommitted, and taking it can't miss one.
+          and day < ((now() at time zone 'UTC') - interval '10 minutes')::date
         order by marked_at, day
         limit ${ROLLUP_DAYS_A_CALL}
         for update skip locked
