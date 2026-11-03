@@ -1,6 +1,7 @@
 import {
   addResources,
   archiveResource,
+  businessCacheTags,
   createPlace,
   deleteArea,
   deleteResource,
@@ -16,7 +17,6 @@ import {
   updatePlace,
   updateResource,
 } from '@crm/core';
-import { businessCacheTags } from '@crm/contracts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -29,8 +29,8 @@ const h = member.hospitality;
 
 export const hospitalityRouter = h.router({
   apps: h.apps.handler(({ context }) => listApps(context.scope)),
-  install: h.install.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+  install: h.install.handler(async ({ context, input }) => {
+    const apps = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       installApp(
         context.scope,
         {
@@ -40,13 +40,20 @@ export const hospitalityRouter = h.router({
         },
         hooks,
       ),
-    ),
-  ),
-  remove: h.remove.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+    );
+    // The business page shows what its apps add (the menu, Reserve) and is live only while one is on: its edge
+    // copies go with any change of apps (spec 0066, AC-6816).
+    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId));
+    return apps;
+  }),
+  remove: h.remove.handler(async ({ context, input }) => {
+    const apps = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       removeApp(context.scope, { app: input.app, withDependents: input.withDependents }, hooks),
-    ),
-  ),
+    );
+    // With the last app gone the page answers 404 at once, not after the edge's minute (spec 0066, AC-6816).
+    await context.edgeCache.forget(businessCacheTags(context.scope.workspaceId));
+    return apps;
+  }),
   business: h.business.handler(({ context }) => getBusiness(context.scope)),
   saveBusiness: h.saveBusiness.handler(async ({ context, input }) => {
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>

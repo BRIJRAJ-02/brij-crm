@@ -11,7 +11,9 @@ import {
   businessContentOf,
   businessPageChanges,
   businessPublishProblem,
+  handleCandidatesFromName,
   hasWeeklyHours,
+  isReservedHandle,
   placeSlugFromName,
   type BusinessPageContent,
   type BusinessPageContentShape,
@@ -143,8 +145,11 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
       hours: place.hours as PlaceHours,
     })),
   });
+  const hasHandle = row?.handle !== null && row?.handle !== undefined;
+  const suggested = hasHandle || profile === undefined ? undefined : await freeHandleFor(tx, profile.name);
   return {
     ...(row?.handle === null || row?.handle === undefined ? {} : { handle: row.handle }),
+    ...(suggested === undefined ? {} : { suggestedHandle: suggested }),
     draft: draft as BusinessPageContent,
     ...(row?.publishedAt === null || row?.publishedAt === undefined
       ? {}
@@ -162,6 +167,21 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
     showsReserve: apps.has('table_seating'),
     ...(problem === undefined ? {} : { problem }),
   };
+}
+
+/**
+ * The first free handle the business's name suggests (Foolproof: the address field starts filled), or undefined. A
+ * reserved word or a handle anybody holds or held (`crm_handle_taken`, a boolean through crm_handle's definer) is
+ * skipped; at most five are asked, in one statement.
+ */
+async function freeHandleFor(tx: WorkspaceTx, name: string): Promise<string | undefined> {
+  const candidates = handleCandidatesFromName(name).filter((handle) => !isReservedHandle(handle));
+  if (candidates.length === 0) return undefined;
+  const found = await tx.execute<{ handle: string }>(
+    sql`select c.handle from unnest(${`{${candidates.join(',')}}`}::text[]) with ordinality as c(handle, n)
+        where not crm_handle_taken(c.handle) order by c.n limit 1`,
+  );
+  return found.rows[0]?.handle;
 }
 
 /** Settings › Business › Page: the address, the draft, what is live and what Publish needs. */
@@ -351,6 +371,20 @@ async function listBusiness(tx: WorkspaceTx, workspaceId: string): Promise<void>
   await tx.execute(
     sql`select crm_list_business(${workspaceId}::uuid, ${row?.handle ?? null}, ${`{${slugs.join(',')}}`}::text[], ${isListed})`,
   );
+}
+
+/**
+ * Brings the business's search listing in line with its apps (spec 0066, AC-6644), in the apps write's transaction:
+ * with no business app left the page is not live (the public reads answer 404), so the sitemap drops it; with one
+ * back, a published page is listed again from its snapshot. Answers whether the business has a page row at all, so
+ * the caller knows whether there are public copies at the edge to delete.
+ */
+export async function syncBusinessListing(tx: WorkspaceTx, workspaceId: string, hasApps: boolean): Promise<boolean> {
+  const row = await pageRowOf(tx, workspaceId);
+  if (row === undefined) return false;
+  if (hasApps) await listBusiness(tx, workspaceId);
+  else await tx.execute(sql`select crm_list_business(${workspaceId}::uuid, null, '{}'::text[], false)`);
+  return true;
 }
 
 /**

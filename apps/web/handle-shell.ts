@@ -44,7 +44,7 @@ export const MISSED_CACHE_CONTROL = 'public, s-maxage=10';
 
 /**
  * What a business page's shell answers with (spec 0066, AC-6816): a minute fresh at the edge, since Publish and every
- * change to the business or a place delete its copies by their cache tags (`business:<workspace>`), and five minutes
+ * change to the business or a place delete its copies by their cache tags (`business:<opaque id>`), and five minutes
  * stale while a new one is fetched, so a cold api never keeps a guest waiting.
  */
 export const BUSINESS_SHELL_CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
@@ -427,6 +427,6 @@ async function businessAnswer(
     body: businessShell(deps.shell, page, deps.origin, (deps.now ?? Date.now)()),
     status: 200,
     outcome: 'business',
-    tags: page.tags.filter((tag) => /^(business|place):[0-9a-f-]{36}$/.test(tag)),
+    tags: page.tags.filter((tag) => /^business:[0-9a-f]{32}$|^place:[0-9a-f-]{36}$/.test(tag)),
   };
 }

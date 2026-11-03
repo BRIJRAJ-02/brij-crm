@@ -24,6 +24,11 @@
 --   spec 0068's pattern, kept here until the shared one lands), `business_photos` (the gallery's pictures, under the
 --   server's own path), `place_pages` (each place's current slug) and `place_slugs` (every slug a place has held, so
 --   an old address still finds it; unique per workspace, and never a reserved second segment).
+-- * The purge (crm_purge_workspace_begin, as 0123 left it, plus two statements): a purged workspace's business is
+--   taken out of the sitemap and its handles, current and old, are let go the way a deleted account's are (0122):
+--   turned into held rows naming nobody (`owner_kind` member, `released_at` now), which no lookup answers and no claim
+--   can take, and which the daily sweep frees 90 days on. crm_purge gets update of `owner_kind` and `released_at`
+--   alone on the handles, and delete on the listings.
 --
 -- Postgres 17 compatible. Any change to these roles or functions goes through security-access-reviewer.
 set local lock_timeout = '5s';
@@ -333,6 +338,103 @@ begin
   if has_table_privilege('crm_app', 'auth.business_listings', 'SELECT')
     or has_table_privilege('crm_app', 'auth.business_listings', 'INSERT') then
     raise exception 'crm_app must reach auth.business_listings only through its definers';
+  end if;
+end
+$$;
+--> statement-breakpoint
+grant select (workspace_id), delete on auth.business_listings to crm_purge;
+--> statement-breakpoint
+grant select (owner_kind), update (owner_kind, released_at) on auth.public_handles to crm_purge;
+--> statement-breakpoint
+grant crm_purge to current_user with inherit false, set true;
+--> statement-breakpoint
+grant create on schema public to crm_purge;
+--> statement-breakpoint
+set role crm_purge;
+--> statement-breakpoint
+create or replace function crm_purge_workspace_begin(workspace_id uuid)
+  returns boolean
+  language sql
+  security definer
+  set search_path = pg_catalog, pg_temp
+begin atomic
+  delete from public.audit_events a
+  where a.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  delete from public.outbox o
+  where o.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  delete from public.workspace_milestones m
+  where m.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  delete from public.member_onboarding o
+  where o.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  delete from auth.workspace_membership m
+  where m.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  update auth.user_prefs p set last_workspace_id = null
+  where p.last_workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  -- Its members' link pages here (late trap #86): the page, its blocks (their presses go with them) and its counts.
+  delete from auth.profile_items i
+  where i.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  delete from auth.profile_views v
+  where v.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  delete from auth.profile_view_days d
+  where d.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  delete from auth.public_profiles p
+  where p.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  -- Their handles here name nobody from now: held 90 days, then free, as a deleted account's are (0126).
+  update auth.public_handles h set user_id = null
+  where h.workspace_id = crm_purge_workspace_begin.workspace_id and h.user_id is not null
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  -- Its business page leaves the sitemap, and its business handles are held, naming nobody, until the sweep (0175).
+  delete from auth.business_listings l
+  where l.workspace_id = crm_purge_workspace_begin.workspace_id
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  update auth.public_handles h set owner_kind = 'member', released_at = pg_catalog.now()
+  where h.workspace_id = crm_purge_workspace_begin.workspace_id and h.owner_kind = 'business'
+    and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+  select exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
+    and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
+end;
+--> statement-breakpoint
+reset role;
+--> statement-breakpoint
+revoke create on schema public from crm_purge;
+--> statement-breakpoint
+revoke crm_purge from current_user;
+--> statement-breakpoint
+-- The purge lets a business's handles go through crm_purge_workspace_begin alone, and can do nothing else to them.
+do $$
+begin
+  if (select pg_get_userbyid(p.proowner) from pg_proc p
+      where p.oid = 'public.crm_purge_workspace_begin(uuid)'::regprocedure) <> 'crm_purge'
+    or has_table_privilege('crm_purge', 'auth.public_handles', 'DELETE')
+    or has_table_privilege('crm_purge', 'auth.public_handles', 'INSERT')
+    or has_column_privilege('crm_purge', 'auth.public_handles', 'handle', 'UPDATE')
+    or has_column_privilege('crm_purge', 'auth.public_handles', 'workspace_id', 'UPDATE')
+    or has_table_privilege('crm_purge', 'auth.business_listings', 'INSERT')
+    or has_table_privilege('crm_purge', 'auth.business_listings', 'UPDATE') then
+    raise exception 'the purge lets a business''s handles go through crm_purge_workspace_begin alone';
   end if;
 end
 $$;

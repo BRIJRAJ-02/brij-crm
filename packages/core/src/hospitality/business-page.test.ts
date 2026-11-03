@@ -12,7 +12,8 @@ import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { setEarlyAccess } from '../operator/early-access.ts';
 import { testScope } from '../testing.ts';
-import { installApp } from './apps.ts';
+import { installApp, removeApp } from './apps.ts';
+import { businessCacheId } from './cache-tags.ts';
 import {
   addBusinessPhoto,
   claimBusinessHandle,
@@ -23,7 +24,7 @@ import {
   setPlaceSlug,
 } from './business-page.ts';
 import { createPlace, getBusiness, updatePlace } from './places.ts';
-import { enterBusinessPage, listSitemapBusinesses, publicBusinessPhoto } from './public-page.ts';
+import { bookingCompanyOf, enterBusinessPage, listSitemapBusinesses, publicBusinessPhoto } from './public-page.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -46,7 +47,7 @@ const CARD: FirstBusiness = {
 };
 
 /** A workspace with Table seating installed, its owner's scope and a plain member's, and its first place's id. */
-async function business() {
+async function business(card: FirstBusiness = CARD) {
   made += 1;
   const created = await createWorkspace(db, {
     name: 'Somewhere',
@@ -67,7 +68,7 @@ async function business() {
     actor: { type: 'member', id: memberId },
     role: 'member',
   });
-  await installApp(owner, { app: 'table_seating', business: CARD });
+  await installApp(owner, { app: 'table_seating', business: card });
   const placeId = (await getBusiness(owner)).places[0]?.id ?? '';
   return { ...created, owner, member, placeId };
 }
@@ -110,6 +111,18 @@ describe('the page editor (B4 lite)', () => {
     expect((await claimBusinessHandle(w.owner, { handle: `sn-${run}-a` })).view.handle).toBe(`sn-${run}-a`);
   });
 
+  it('suggests a free address from the business’s name until it has one', async () => {
+    const card = { ...CARD, name: `Café Ünique ${run}` };
+    const w = await business(card);
+    const other = await business(card);
+    expect((await getBusinessPage(w.owner)).suggestedHandle).toBe(`cafe-unique-${run}`);
+    // Taken by another business, the next free one is suggested; once it has an address, none.
+    expect(
+      (await claimBusinessHandle(other.owner, { handle: `cafe-unique-${run}` })).view.suggestedHandle,
+    ).toBeUndefined();
+    expect((await getBusinessPage(w.owner)).suggestedHandle).toBe(`cafe-unique-${run}-2`);
+  });
+
   it('refuses Publish with one line until the page has an address, a name, a street and hours, then goes live', async () => {
     const w = await business();
     let view = await getBusinessPage(w.owner);
@@ -138,8 +151,11 @@ describe('the page editor (B4 lite)', () => {
       placeId: w.placeId,
       reserve: 'soon',
       indexable: true,
-      tags: [`business:${w.workspaceId}`, `place:${w.placeId}`],
+      tags: [`business:${businessCacheId(w.workspaceId)}`, `place:${w.placeId}`],
     });
+    // The public answer never names the workspace: its business tag is an opaque id.
+    expect(JSON.stringify(entry.page)).not.toContain(w.workspaceId);
+    expect(entry.page.tags[0]).toMatch(/^business:[0-9a-f]{32}$/);
     expect(entry.page.menu).toBeUndefined();
     expect(entry.page.places[0]).toMatchObject({
       slug: 'somewhere-nowhere',
@@ -272,5 +288,25 @@ describe('the page editor (B4 lite)', () => {
       `sn-${run}-map`,
     );
     expect((await enterBusinessPage({ db }, `sn-${run}-map`)).page.indexable).toBe(false);
+  });
+
+  it('leaves the sitemap and the public reads when the last app is turned off, and comes back with one', async () => {
+    const w = await business();
+    await claimBusinessHandle(w.owner, { handle: `sn-${run}-off` });
+    await updatePlace(w.owner, { placeId: w.placeId, hours: OPEN_WEEK });
+    // A booking page's logo links the company page only once it is published (AC-6646).
+    expect(await bookingCompanyOf({ scope: w.owner })).toBeUndefined();
+    await publishBusinessPage(w.owner);
+    expect(await bookingCompanyOf({ scope: w.owner })).toEqual({ name: 'Somewhere Nowhere', path: `/sn-${run}-off` });
+    const listed = async () =>
+      (await listSitemapBusinesses({ db }, { max: 50_000 })).some((row) => row.handle === `sn-${run}-off`);
+    expect(await listed()).toBe(true);
+    await removeApp(w.owner, { app: 'table_seating' });
+    expect(await listed()).toBe(false);
+    expect(await refusalOf(enterBusinessPage({ db }, `sn-${run}-off`))).toBe('NOT_FOUND');
+    expect(await bookingCompanyOf({ scope: w.owner })).toBeUndefined();
+    await installApp(w.owner, { app: 'menu' });
+    expect(await listed()).toBe(true);
+    expect((await enterBusinessPage({ db }, `sn-${run}-off`)).page.handle).toBe(`sn-${run}-off`);
   });
 });

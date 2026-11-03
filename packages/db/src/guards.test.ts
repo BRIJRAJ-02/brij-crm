@@ -2547,6 +2547,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     expect(tables.rows.map((row) => row.grant)).toEqual([
       // The business pages listed for search engines (spec 0066, migration 0175), through crm_handle's functions only.
       'business_listings DELETE',
+      // And the purge's, taking a purged workspace's business out of the sitemap (migration 0175).
+      'business_listings DELETE',
       'business_listings INSERT',
       'business_listings SELECT',
       'business_listings UPDATE',
@@ -2616,10 +2618,16 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(columns.rows.map((row) => row.grant)).toEqual([
+      // A purged workspace's business listing (migration 0175): which is its.
+      'auth.business_listings.workspace_id SELECT',
       // A purged workspace's link pages and handles (migration 0127): which are its, and its handles let go.
       'auth.profile_items.workspace_id SELECT',
       'auth.profile_view_days.workspace_id SELECT',
       'auth.profile_views.workspace_id SELECT',
+      // Its business handles let go into the hold (migration 0175): a member's kind, stamped released.
+      'auth.public_handles.owner_kind SELECT',
+      'auth.public_handles.owner_kind UPDATE',
+      'auth.public_handles.released_at UPDATE',
       'auth.public_handles.user_id SELECT',
       'auth.public_handles.user_id UPDATE',
       'auth.public_handles.workspace_id SELECT',

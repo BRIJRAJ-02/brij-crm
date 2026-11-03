@@ -925,8 +925,11 @@ export {
   type BusinessPageChange,
   type BusinessPagePublished,
 } from './hospitality/business-page.ts';
+/** The business's edge cache tags (spec 0066): an opaque id for the business, never its workspace's id. */
+export { businessCacheId, businessCacheTags } from './hospitality/cache-tags.ts';
 /** The public business page's reads (spec 0066, B4 lite): no session, the handle is the only key. */
 export {
+  bookingCompanyOf,
   businessPhotoSrc,
   enterBusinessPage,
   listSitemapBusinesses,

@@ -5,7 +5,6 @@
 // published, a deleted workspace, and a business whose apps are all off answer the same NOT_FOUND as no page at all.
 import {
   BUSINESS_SECOND_SEGMENTS,
-  businessCacheTags,
   businessContentOf,
   HANDLE_PATTERN,
   PLACE_SLUG_PATTERN,
@@ -17,8 +16,11 @@ import {
 import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { businessBrandOf, type PageBrand } from '../brand/public.ts';
+import type { EngineScope } from '../access/mint.ts';
+import { inWorkspace } from '../access/run.ts';
 import { isUuid } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
+import { businessCacheTags } from './cache-tags.ts';
 import { pagePlaces } from './business-page.ts';
 import { installedHospitalityApps } from './gate.ts';
 
@@ -253,6 +255,25 @@ export async function publishedBusinessHandle(tx: WorkspaceTx, workspaceId: stri
     .where(and(eq(businessPages.workspaceId, workspaceId), sql`${businessPages.publishedAt} is not null`));
   if (row?.handle === null || row?.handle === undefined) return undefined;
   return (await isLive(tx, workspaceId)) ? row.handle : undefined;
+}
+
+/**
+ * The company page a booking page's logo links to (AC-6646), gated exactly as a link page's lockup: the business's
+ * handle while its page is published and live, with the business's name for the link; else undefined. Read through
+ * the booking page's own entry, inside its workspace.
+ */
+export async function bookingCompanyOf(entry: {
+  readonly scope: EngineScope;
+}): Promise<{ readonly name: string; readonly path: string } | undefined> {
+  return inWorkspace(entry.scope, async (tx) => {
+    const handle = await publishedBusinessHandle(tx, entry.scope.workspaceId);
+    if (handle === undefined || !HANDLE_PATTERN.test(handle)) return undefined;
+    const [profile] = await tx
+      .select({ name: businessProfiles.name })
+      .from(businessProfiles)
+      .where(eq(businessProfiles.workspaceId, entry.scope.workspaceId));
+    return profile === undefined ? undefined : { name: profile.name, path: `/${handle}` };
+  });
 }
 
 /** The places a published snapshot names (`placeIds`, written by Publish), or undefined for a snapshot without them. */

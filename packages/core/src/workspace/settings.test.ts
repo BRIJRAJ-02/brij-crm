@@ -518,6 +518,54 @@ describe('the purge (AC-823)', () => {
     expect(await pagesOf(other.workspaceId)).toEqual({ pages: 1, held: 0, bound: 1 });
   });
 
+  it('takes its business out of the sitemap and holds its business handles rather than keeping them bound (spec 0066)', async () => {
+    const t = await team();
+    const other = await team();
+    const handle = `biz-${tag()}`;
+    const kept = `biz-${tag()}`;
+    // As crm_claim_business_handle and crm_list_business leave them: a business handle naming no person, listed.
+    for (const [workspaceId, name] of [
+      [t.workspaceId, handle],
+      [other.workspaceId, kept],
+    ] as const) {
+      await testQuery(
+        ownerUrl,
+        `insert into auth.public_handles (handle, user_id, workspace_id, owner_kind) values ($1, null, $2, 'business')`,
+        [name, workspaceId],
+      );
+      await testQuery(
+        ownerUrl,
+        `insert into auth.business_listings (workspace_id, handle, places, changed_at) values ($1, $2, '{}', now())`,
+        [workspaceId, name],
+      );
+    }
+    const state = (name: string) =>
+      testQuery<{ kind: string | null; held: boolean | null; listed: number }>(
+        ownerUrl,
+        `select (select owner_kind from auth.public_handles where handle = $1) as kind,
+          (select released_at is not null and user_id is null from auth.public_handles where handle = $1) as held,
+          (select count(*)::int from auth.business_listings where handle = $1) as listed`,
+        [name],
+      ).then((rows) => rows[0]);
+    await deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: 'Acme' });
+    expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() + 60_000)).toBe('skipped');
+    expect(await state(handle)).toEqual({ kind: 'business', held: false, listed: 1 });
+    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
+      t.workspaceId,
+    ]);
+    expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() + 60_000)).toBe('done');
+    // Held, naming nobody, until the sweep frees it 90 days on; no business lookup answers it, and it is unlisted.
+    expect(await state(handle)).toEqual({ kind: 'member', held: true, listed: 0 });
+    const owner = await testQuery<{ n: number }>(
+      appUrl,
+      'select count(*)::int as n from crm_business_handle_owner($1)',
+      [handle],
+    );
+    expect(owner[0]?.n).toBe(0);
+    // Another workspace's business stands.
+    expect(await state(kept)).toEqual({ kind: 'business', held: false, listed: 1 });
+  });
+
   it('stops where its time ran out and finishes on the next call', async () => {
     const t = await team();
     await deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: 'Acme' });

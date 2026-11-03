@@ -92,6 +92,26 @@ export function placeSlugFromName(name: string): string {
   return (BUSINESS_SECOND_SEGMENTS as readonly string[]).includes(slug) ? `${slug}-place` : slug;
 }
 
+/**
+ * The handles a business's name suggests for its first address, best first (the Foolproof rule: the field starts
+ * filled): the name as a handle ("Somewhere Nowhere" reads `somewhere-nowhere`), then the same with `-2` to `-5`.
+ * Only handle shaped ones (3 to 40 characters); the caller drops reserved words and any somebody holds. None for a
+ * name with fewer than three letters or digits.
+ */
+export function handleCandidatesFromName(name: string): readonly string[] {
+  const base = name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]+/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
+  if (base.length < 3) return [];
+  const numbered = [2, 3, 4, 5].map((n) => `${base.slice(0, 40 - 2).replace(/-+$/g, '')}-${String(n)}`);
+  return [base, ...numbered].filter((handle) => /^(?=.{3,40}$)[a-z0-9]+(?:-[a-z0-9]+)*$/.test(handle));
+}
+
 /** One picture of the gallery, as the draft and the snapshot keep it. */
 export interface BusinessPhotoShape {
   readonly id: string;
@@ -172,17 +192,8 @@ export interface PublicBusinessPage {
   readonly indexable: boolean;
   /** When the page was last published. */
   readonly publishedAt: string;
-  /** The edge cache tags this answer is filed under (`business:<workspace>`, `place:<id>`). */
+  /** The edge cache tags this answer is filed under (`business:<opaque id>`, `place:<id>`), never a workspace id. */
   readonly tags: readonly string[];
-}
-
-/** The edge cache tags of a business's public answers (0066, Public routes): its own, and each place's. */
-export function businessCacheTags(workspaceId: string, placeIds: readonly string[] = []): readonly string[] {
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return [
-    ...(uuid.test(workspaceId) ? [`business:${workspaceId}`] : []),
-    ...[...new Set(placeIds)].filter((id) => uuid.test(id)).map((id) => `place:${id}`),
-  ];
 }
 
 /** What Publish needs fixed first, in one line, and where to fix it (spec 0068: Publish refuses a broken page). */

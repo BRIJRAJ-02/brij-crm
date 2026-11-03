@@ -33,7 +33,7 @@ const PAGE: PublicBusinessPage = {
   reserve: 'soon',
   indexable: true,
   publishedAt: '2026-11-04T00:00:00.000Z',
-  tags: ['business:01a1a318-4527-783d-8b66-6e0e25215351', 'place:01a1a318-65c2-773f-9280-f19a9291844e'],
+  tags: ['business:5f0c2a9e1b7d4c3a8e6f0b2d4c6a8e0f', 'place:01a1a318-65c2-773f-9280-f19a9291844e'],
 };
 
 describe('businessShell', () => {
@@ -88,6 +88,18 @@ describe('shellFor with a business', () => {
         Promise.resolve(handle === 'somewhere-nowhere' && slug === undefined ? PAGE : undefined),
     });
     expect(answer).toMatchObject({ status: 200, outcome: 'business', tags: PAGE.tags });
+  });
+
+  it('files the answer under no tag shaped like a workspace id, only the opaque business id and place ids', async () => {
+    const answer = await shellFor('/somewhere-nowhere', {
+      ...deps,
+      readBusiness: () =>
+        Promise.resolve({
+          ...PAGE,
+          tags: ['business:01a1a318-4527-783d-8b66-6e0e25215351', ...PAGE.tags, 'other:thing'],
+        }),
+    });
+    expect(answer.tags).toEqual(PAGE.tags);
   });
 
   it('reads a place by its slug once no booking page has it', async () => {

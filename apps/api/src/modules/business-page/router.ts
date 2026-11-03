@@ -1,5 +1,5 @@
-import { businessCacheTags } from '@crm/contracts';
 import {
+  businessCacheTags,
   claimBusinessHandle,
   discardBusinessPage,
   getBusinessPage,
@@ -14,7 +14,7 @@ import { member } from '../../orpc.ts';
 // The business page's editor (spec 0066, B4 lite): Settings › Business › Page. Inside a workspace, behind the member
 // door; core checks `hospitality.manage` before anything is read, then the app gate. None of these change a record
 // or store an outbox row (the editor holds its own copy and reads it again when opened). What guests see changes on
-// Publish, a new address or a new place slug: those delete the business's copies at the edge (`business:<workspace>`
+// Publish, a new address or a new place slug: those delete the business's copies at the edge (`business:<opaque id>`
 // covers every place's answer), and Publish removes the pictures nothing uses any more from the store.
 const b = member.businessPage;
 

@@ -7,12 +7,18 @@
 //   GET /api/public/business/:handle/look/brand.css?v=  the workspace's accent, light and dark
 //   GET /api/public/business/:handle/look/logo?v=       the workspace's logo
 //
-// Every answer is filed at the edge under `business:<workspace>` (and the page under `place:<id>` too), so Publish, a
-// new address or slug, and a change to the business or a place delete every copy at once (AC-6816); the short
+// Every answer is filed at the edge under `business:<opaque id>` (never the workspace's id; and the page under
+// `place:<id>` too), so Publish, a new address or slug, turning the apps off and a change to the business or a place delete every copy at once (AC-6816); the short
 // `s-maxage` bounds a copy a purge missed. A miss of any kind is one 404, never cached, so nothing tells a private
 // business from no business. Per client address and per handle limits stand in front of every read.
 import { errorStatus, HANDLE_PATTERN, PLACE_SLUG_PATTERN, type ErrorCode } from '@crm/contracts';
-import { enterBusinessPage, publicBusinessBrand, publicBusinessPhoto, type MenuSource } from '@crm/core';
+import {
+  businessCacheTags,
+  enterBusinessPage,
+  publicBusinessBrand,
+  publicBusinessPhoto,
+  type MenuSource,
+} from '@crm/core';
 import { brandStylesheet } from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
@@ -79,7 +85,7 @@ export function mountPublicBusiness(app: Hono<{ Variables: Variables }>, deps: P
     if (spent !== undefined) return spent;
     const found = await publicBusinessBrand({ db: deps.db }, handle);
     if (found === undefined || !asksFor(c, found.brand.answer?.version)) return nothing();
-    deps.edgeCache?.tag([`business:${found.workspaceId}`]);
+    deps.edgeCache?.tag(businessCacheTags(found.workspaceId));
     return stylesheetResponse(brandStylesheet(found.brand));
   });
 
@@ -93,7 +99,7 @@ export function mountPublicBusiness(app: Hono<{ Variables: Variables }>, deps: P
     if (found === undefined || logo === undefined || !asksFor(c, logo.version)) return nothing();
     const loaded = await loadStoredImage(deps.files, logo.path, logo.type);
     if (loaded === undefined) return nothing();
-    deps.edgeCache?.tag([`business:${found.workspaceId}`]);
+    deps.edgeCache?.tag(businessCacheTags(found.workspaceId));
     return pictureResponse(loaded, BRAND_CACHE_CONTROL);
   });
 
@@ -109,7 +115,7 @@ export function mountPublicBusiness(app: Hono<{ Variables: Variables }>, deps: P
       log.warn('business_page.photo.missed', { requestId: c.get('requestId') });
       return nothing();
     }
-    deps.edgeCache?.tag([`business:${found.workspaceId}`]);
+    deps.edgeCache?.tag(businessCacheTags(found.workspaceId));
     return pictureResponse(loaded, BUSINESS_PHOTO_CACHE_CONTROL);
   });
 

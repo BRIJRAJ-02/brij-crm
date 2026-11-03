@@ -104,6 +104,11 @@ export type BusinessPagePlace = z.infer<typeof BusinessPagePlace>;
 /** Settings › Business › Page: the handle, the draft, what is live, and what Publish needs. */
 export const BusinessPageView = z.object({
   handle: z.string().optional(),
+  /**
+   * While there is no handle yet: a free one the business's name suggests (`somewhere-nowhere`), for the editor to
+   * start the field with. Absent once there is a handle, or when the name suggests none that is free.
+   */
+  suggestedHandle: z.string().optional(),
   draft: BusinessPageContent,
   /** When the page went live last, and its version; absent while it has never been published. */
   published: z.object({ at: Timestamp, version: z.number().int().positive() }).optional(),

@@ -24,6 +24,7 @@ import { refuse } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { writeAudit } from '../members/audit.ts';
+import { syncBusinessListing } from './business-page.ts';
 import { hasEarlyAccess, hospitalityMember, installedRows, isApp } from './gate.ts';
 import { insertPlace } from './places.ts';
 
@@ -230,6 +231,8 @@ export async function installApp(
           });
         await auditApps(tx, scope, before, new Set([...before, ...adding]));
         await recordSidebars(context);
+        // The first app back makes a published business page live again: back in the sitemap (spec 0066, AC-6644).
+        if (before.size === 0) await syncBusinessListing(tx, scope.workspaceId, true);
       }
       return viewOf(tx, scope);
     },
@@ -272,8 +275,11 @@ export async function removeApp(
           .set({ removedAt: sql`now()` })
           .where(and(eq(workspaceApps.workspaceId, scope.workspaceId), eq(workspaceApps.app, app)));
       }
-      await auditApps(tx, scope, before, new Set([...before].filter((app) => !removing.includes(app))));
+      const left = new Set([...before].filter((app) => !removing.includes(app)));
+      await auditApps(tx, scope, before, left);
       await recordSidebars(context);
+      // The last business app gone takes the business page down: out of the sitemap too (spec 0066, AC-6644).
+      if (left.size === 0) await syncBusinessListing(tx, scope.workspaceId, false);
       return viewOf(tx, scope);
     },
     hooks,
