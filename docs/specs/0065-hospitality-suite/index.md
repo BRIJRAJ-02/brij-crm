@@ -10,6 +10,7 @@
 - **H3 and H4 are replaced by 0066 B7**: Table seating is a preset of the visit engine. The `reservations` and `reservation_tables` design below is superseded and not built; the guest flow, rules and Service screen requirements (AC-6550 to AC-6565) still hold, met through 0066.
 - The "no public venue page" call is reversed: every business gets a business page (0066 B4); the menu page links back to it.
 - Analytics is spec 0067 (was 0066 in the text below).
+- Every guest surface is built on `@crm/ui/public-booking` and `@crm/ui/public-form` and the app library: see 0066 "Build on what exists". The guest menu adds MenuList and ItemSheet in a `@crm/ui/public-menu` entry.
 
 ## Structure
 

@@ -102,6 +102,25 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
 - **AC-6686**: The business page gains an Events section (upcoming first) and `timefix.com/<handle>/events` lists them as a calendar page (after Luma's calendar pages): upcoming and past, filterable by category, with "Subscribe" giving an iCal feed of public events.
 - **AC-6687**: Every registered guest matches or creates a Person; the Person page lists events attended (checked in) and missed. Paid tickets wait for Stripe (0062 L5).
 
+## Build on what exists
+
+Owner, 4 Nov 2026: "we have things built, we need to use them": every guest surface here is built on the two public libraries, `@crm/ui/public-booking` and `@crm/ui/public-form`, and the app library, following the design system order (reuse, then a variant, then a new part). A new module is allowed only where the table below says so, and it lives in the library with a story and README, never in an app.
+
+| Surface | Built from | New pieces (as library variants or modules) |
+|---|---|---|
+| Booking flow (B2, B5), Reserve (B7) | `BookingProvider`, `BookingFrame` (shell, steps, embed heights), `DayStrip`, `MonthTiles`, `SlotList`, `BookingDetails`, `BookingReceipt`, `BookingChanges`, `BookingMessage`, `BookingFoot` | step variants of BookingFrame for Service, Professional and Party size, made from `TileGrid`, `ChoiceChips`, `PersonLine` |
+| Intake, consents, event registration questions | `HostedForm`, `HostedFormSteps`, `Question`, consent (0165), `FormBooking` (the form then booking bridge from the Booking intake template) | none |
+| Manage page, cutoffs, requests | `BookingChanges`, `BookingReceipt` states from 0062 L1 | none |
+| Business page (B4), event pages and events calendar (B8) | `LinkPage` renderer, its themes (0060), foot card, `VisitorBar`, `LinkGrid`/`LinkCard` blocks (0061) | new block kinds: Gallery, Services, Team, Reviews, Hours, Location, Menu, Events; an Event page layout variant of LinkPage |
+| Guest menu (0065 H1) | `BookingProvider`, `BookingFoot`, brand `look.css`, `Tabs`, `ChoiceChips`, `Modal` (sheet) | MenuList and ItemSheet modules in a `@crm/ui/public-menu` entry (its own bundle) |
+| Calendar (B3), Service floor (B7) | `TeamDay`, `TeamWeek`, `WeekCalendar`, `MeetingCard`, `RecordPanel`, `TileGrid` | a resource column mode for TeamDay; a table tile variant of TileGrid |
+| Settings: services, team, shifts, resources | `SettingsLayout`, `Table` with `BulkActionBar`, `HoursEditor`, `TeamList`, `PersonLine`, `OptionsEditor`, `CurrencyPicker` | none |
+| Clients | the Person `RecordLayout`, `RelatedRecords`, `ActivityFeed`, saved views | a Visits related list |
+| Emails | `packages/emails` blocks and the brand | new templates only |
+| Motion | the shared motion parts (micro interactions, 1 Nov) | none |
+
+Delight comes from these parts used well (optimistic changes, springy press states, the step transitions BookingFrame already has, skeleton free loads, undo toasts), not from new one off components.
+
 ## Decision
 
 Build one place based visit engine for every appointment business, with staff, resources and services as data, rather than separate engines for restaurants, salons and clinics. Keep the meeting engine (booking pages) as it is, linked by the one person rule, and converge them later. Make Table seating a preset, so 0065's separate reservation tables are not built. Give every business a public business page in the handle namespace.
