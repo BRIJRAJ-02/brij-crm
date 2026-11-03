@@ -15,6 +15,7 @@ import {
   type MetaSource,
   type PageFacts,
 } from './handle-meta.ts';
+import { businessOf, businessShell, type BusinessBoot } from './business-shell.ts';
 import { HANDLE_PATH } from './public-paths.ts';
 
 /** How long the profile read may take before the plain shell goes out instead (AC-5503). */
@@ -42,11 +43,19 @@ export const PROFILE_SHELL_CACHE_CONTROL = 'public, s-maxage=60, stale-while-rev
 export const MISSED_CACHE_CONTROL = 'public, s-maxage=10';
 
 /**
+ * What a business page's shell answers with (spec 0066, AC-6816): a minute fresh at the edge, since Publish and every
+ * change to the business or a place delete its copies by their cache tags (`business:<workspace>`), and five minutes
+ * stale while a new one is fetched, so a cold api never keeps a guest waiting.
+ */
+export const BUSINESS_SHELL_CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
+
+/**
  * What the shell's answer is cached for: a miss briefly, a booking page as usual, and a link page or a 404 (which a
  * private page answers) for a minute, so either side of the Live or Private switch shows promptly.
  */
 export function cacheControlFor(outcome: ShellOutcome): string {
   if (outcome === 'missed') return MISSED_CACHE_CONTROL;
+  if (outcome === 'business') return BUSINESS_SHELL_CACHE_CONTROL;
   return outcome === 'page' ? SHELL_CACHE_CONTROL : PROFILE_SHELL_CACHE_CONTROL;
 }
 
@@ -155,6 +164,7 @@ export const BOOT_ID = 'crm-boot';
  * page draws only a recent copy (boot.ts), never an old one that the fresh read would then repaint.
  */
 export type ShellBoot =
+  | BusinessBoot
   | { readonly kind: 'profile'; readonly profile: ShellProfile; readonly readAt: number }
   | { readonly kind: 'page'; readonly publicKey: string; readonly handle: string; readonly slug: string };
 
@@ -221,7 +231,7 @@ export function withLook(shell: string, profile: ShellProfile, fonts: Readonly<R
 }
 
 /** What the shell was built from, which the answer's own header reports so a miss is visible in production. */
-export type ShellOutcome = 'profile' | 'page' | 'unknown' | 'missed';
+export type ShellOutcome = 'profile' | 'page' | 'business' | 'unknown' | 'missed';
 
 /** One answer: the page's bytes, its status, the outcome that produced it, and the edge cache tags it is filed under. */
 export interface ShellAnswer {
@@ -259,6 +269,11 @@ export interface ShellDeps {
    * by the build from `FONT_PACKS` in `@crm/tokens/packs`, so the preload names the file the stylesheet fetches.
    */
   readonly fonts?: Readonly<Record<string, string>>;
+  /**
+   * Reads a business's published page (spec 0066, B4), by its handle and, for `/<handle>/<slug>`, a place's slug, or
+   * throws. Asked only once the handle named no person, or the slug no booking page.
+   */
+  readonly readBusiness?: (handle: string, slug: string | undefined, signal: AbortSignal) => Promise<unknown>;
   /** The time now, in milliseconds: when a profile was read, so the page can tell an old shell's copy. */
   readonly now?: () => number;
   /** Where a miss is reported. */
@@ -286,6 +301,8 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     return { body: deps.shell, status: 200, outcome: 'missed' };
   }
   if (profile === undefined) {
+    const business = await businessAnswer(parts.handle, undefined, deps);
+    if (business !== undefined) return business;
     const source: MetaSource = {
       // No name at all, so the title is the product's own word once rather than twice (AC-5508).
       name: '',
@@ -354,6 +371,8 @@ async function pageShell(handle: string, slug: string, deps: ShellDeps): Promise
     return { body: deps.shell, status: 200, outcome: 'missed' };
   }
   if (page === undefined) {
+    const business = await businessAnswer(handle, slug, deps);
+    if (business !== undefined) return business;
     const source: MetaSource = {
       name: '',
       description: BRAND_DESCRIPTION,
@@ -381,5 +400,33 @@ async function pageShell(handle: string, slug: string, deps: ShellDeps): Promise
     body: publicKey === undefined ? body : withBoot(body, { kind: 'page', publicKey, ...found }),
     status: 200,
     outcome: 'page',
+  };
+}
+
+/**
+ * A business's shell (spec 0066, AC-6644), or undefined when the address names no business, or its read missed: the
+ * caller then answers as it did before businesses were in the namespace. Filed under the business's cache tags.
+ */
+async function businessAnswer(
+  handle: string,
+  slug: string | undefined,
+  deps: ShellDeps,
+): Promise<ShellAnswer | undefined> {
+  const read = deps.readBusiness;
+  if (read === undefined) return undefined;
+  let answer: unknown;
+  try {
+    answer = await read(handle, slug, AbortSignal.timeout(READ_TIMEOUT_MS));
+  } catch (error) {
+    deps.onMiss?.(handle, error instanceof Error ? error.name : 'unknown');
+    return undefined;
+  }
+  const page = businessOf(answer);
+  if (page === undefined) return undefined;
+  return {
+    body: businessShell(deps.shell, page, deps.origin, (deps.now ?? Date.now)()),
+    status: 200,
+    outcome: 'business',
+    tags: page.tags.filter((tag) => /^(business|place):[0-9a-f-]{36}$/.test(tag)),
   };
 }

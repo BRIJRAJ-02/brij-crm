@@ -66,6 +66,8 @@ export const appsSettingsHref = (slug: string) => `/w/${slug}/settings/apps`;
 
 /** Settings › Workspace › Business (spec 0065, AC-6507): the business profile and its places. */
 export const businessSettingsHref = (slug: string) => `/w/${slug}/settings/business`;
+/** Settings › Business › Page (spec 0066, B4 lite): the business's public page. */
+export const businessPageHref = (slug: string) => `/w/${slug}/settings/business/page`;
 
 /** One place's tables and areas (spec 0065, AC-6509), under Settings › Business. */
 export const placeTablesHref = (slug: string, placeId: string) => `/w/${slug}/settings/business/places/${placeId}`;

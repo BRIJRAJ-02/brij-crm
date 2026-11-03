@@ -28,6 +28,8 @@
     "public-paths.test.ts",
     "handle-meta.ts",
     "handle-meta.test.ts",
+    "business-shell.ts",
+    "business-shell.test.ts",
     "handle-shell.ts",
     "handle-shell.test.ts",
     "handle-entry.test.ts",

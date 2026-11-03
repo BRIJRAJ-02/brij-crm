@@ -41,6 +41,7 @@ describe('@crm/ui', () => {
       'BookingReceipt',
       'Breadcrumbs',
       'BulkActionBar',
+      'BusinessGallery',
       'Button',
       'ButtonGroup',
       'ButtonLink',

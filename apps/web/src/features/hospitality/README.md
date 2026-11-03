@@ -14,3 +14,5 @@ its slice (Menu H1, Menu QR H2, Table seating H3 and H4).
 
 Data comes only from `data.hospitality` (`packages/data/src/hospitality/store.ts`): every write shows at once where
 it can and goes back with the server's reason when refused.
+
+`BusinessPageScreen.tsx` (spec 0066, B4 lite) is Settings › Business › Page at `/w/$slug/settings/business/page`, linked from Business: the page's address (claimed at once), the gallery (FileDrop, a description per photo, move and remove, the BusinessGallery preview), About and amenities, each place's address and search listing, then Publish, which stays disabled with a one line Callout and a link to fix while the page would be broken. Every other change is a draft (`data.businessPage`, `packages/data/src/business-page/store.ts`) that guests never see until Publish; Discard asks first. Picture picks go through one function per kind in `business-photos.ts` (`pickGalleryPhoto`), where the shared crop step wires in.

@@ -93,6 +93,8 @@ interface Section {
  */
 function useCurrentSection(ids: readonly string[]): [string | undefined, (id: string) => void] {
   const [current, setCurrent] = useState<string | undefined>(ids[0]);
+  // A tab pressed is current until the reader scrolls on: the page's end may never bring its section to the top.
+  const chosenAt = useRef(0);
   const key = ids.join(' ');
   useEffect(() => {
     const sections = key
@@ -108,6 +110,7 @@ function useCurrentSection(ids: readonly string[]): [string | undefined, (id: st
           if (entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0) + 1) passed.add(entry.target.id);
           else passed.delete(entry.target.id);
         }
+        if (performance.now() - chosenAt.current < CHOSEN_HOLD_MS) return;
         const last = [...sections].reverse().find((section) => passed.has(section.id));
         setCurrent(last?.id ?? sections[0]?.id);
       },
@@ -119,8 +122,15 @@ function useCurrentSection(ids: readonly string[]): [string | undefined, (id: st
       observer.disconnect();
     };
   }, [key]);
-  return [current, setCurrent];
+  const choose = (id: string) => {
+    chosenAt.current = performance.now();
+    setCurrent(id);
+  };
+  return [current, choose];
 }
+
+/** How long a pressed tab stays current while the page scrolls to its section. */
+const CHOSEN_HOLD_MS = 1200;
 
 /**
  * The section tabs (AC-6641): links to each section, the current one underlined by an indicator that slides between
