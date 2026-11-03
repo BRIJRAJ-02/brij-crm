@@ -67,6 +67,7 @@ import { mountPublicBooking } from './public/booking.ts';
 import { mountBrandCss } from './public/brand-css.ts';
 import { mountLook } from './public/look.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
+import { mountInsightShares } from './public/insights.ts';
 import { createPictureFetch, createPictureLoader, type PictureFetch } from './public/picture.ts';
 import { createOutsideFetch, createPinnedFetch, OUTSIDE_TIMEOUT_MS, type OutsideFetch } from './public/outside.ts';
 import { createFaviconFetch, type FaviconFetch } from './public/favicon.ts';
@@ -739,6 +740,13 @@ export function createApp({
     edgeCache,
     // A link page's pictures (spec 0061), from the same private store its photos are kept in.
     ...(pictureFiles === undefined ? {} : { files: pictureFiles }),
+  });
+
+  // An Insights share link's numbers (spec 0067, AC-6720): no session, 30 a minute per address.
+  mountInsightShares(app, {
+    db,
+    limiter: createMemoryLimiter(),
+    ...(services.now === undefined ? {} : { now: services.now }),
   });
 
   // The marketing site's beacon (spec 0047, AC-1627): only from SITE_ORIGINS, 60 a minute per address.

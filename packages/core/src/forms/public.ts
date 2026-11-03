@@ -694,7 +694,12 @@ export async function submitForm(
         // (AC-6320). Both ride in this transaction: a submission that doesn't commit changes neither. A spam or
         // held submission does neither, so a bot can't clear someone's partial or inflate a completion count.
         await dropPartial(tx, form.id, input.resumeToken);
-        await completeFormVisit(tx, { workspaceId: scope.workspaceId, formId: form.id, visitor: input.visitor });
+        await completeFormVisit(tx, {
+          workspaceId: scope.workspaceId,
+          formId: form.id,
+          visitor: input.visitor,
+          submissionId: row.id,
+        });
         await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
         // Subscribed endpoints hear of a submission taken as received, in its own transaction (spec 0064, AC-6422).
         await queueFormWebhooks(tx, { submissionId: row.id, formId: form.id, referrer: cameFrom.referrer });

@@ -39,6 +39,7 @@ import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
 import { requirePermission } from './check.ts';
 import { workspaceRules } from './stored-rules.ts';
+import { countPageVisit, finishPageVisit, type VisitOrigin } from '../insights/visits.ts';
 import { checkScope, mintFormBeside, mintPageBeside, mintScope, rescope, type EngineScope } from './mint.ts';
 import { inWorkspace } from './run.ts';
 import {
@@ -1532,6 +1533,46 @@ export async function countProfileView(
 }
 
 /**
+ * Counts one Insights view of a link page (spec 0067, AC-6702) as a `link` page visit in the owner's workspace, the
+ * page known by its owner's user id. The owner and workspace are the ones a handle read found (`enterLinkPage`),
+ * never an input, and the caller has already left out the owner's own reads and known machines. Only while the
+ * person is an active member with a page there: the same check the link page's own counter makes.
+ */
+export async function countLinkVisit(
+  deps: { readonly db: Database },
+  owner: { readonly userId: string; readonly workspaceId: string },
+  visitor: string,
+  origin: VisitOrigin,
+): Promise<void> {
+  if (!isUuid(owner.userId) || !isUuid(owner.workspaceId) || !PROFILE_VISITOR.test(visitor)) return;
+  if (!(await isMemberThere(deps.db, owner))) return;
+  await deps.db.withWorkspace(owner.workspaceId, (tx) =>
+    countPageVisit(tx, {
+      workspaceId: owner.workspaceId,
+      kind: 'link',
+      pageId: owner.userId,
+      visitor,
+      step: 'view',
+      origin,
+    }),
+  );
+}
+
+/** Whether a person is an active member of a workspace, read inside it under row level security. */
+async function isMemberThere(
+  db: Database,
+  owner: { readonly userId: string; readonly workspaceId: string },
+): Promise<boolean> {
+  const found = await db.withWorkspace(owner.workspaceId, (tx) =>
+    tx.execute<{ ok: boolean }>(
+      sql`select exists (select 1 from members m join workspaces w on w.id = m.workspace_id and w.deleted_at is null
+        where m.user_id = ${owner.userId}::uuid and m.status = 'active') as ok`,
+    ),
+  );
+  return found.rows[0]?.ok === true;
+}
+
+/**
  * Counts one booking made from a link page (spec 0061, AC-6119): `handle` is what the booking request's `via` named,
  * and `crm_count_profile_booking` adds one only when that booking page is a live block on that handle's page now.
  * Answers whether it counted; a bad `via` counts nothing and is never an error. Exported only from `@crm/core/public`.
@@ -1652,7 +1693,14 @@ export async function countItemPress(
   handle: string,
   itemId: string,
   visitor: string,
-  options: { readonly signedInAs?: string } = {},
+  options: {
+    readonly signedInAs?: string;
+    /**
+     * The visitor's daily id on the page itself (spec 0067), as its view was counted: a press finishes that Insights
+     * visit. Absent, only the press is counted.
+     */
+    readonly pageVisitor?: (ownerUserId: string) => string;
+  } = {},
 ): Promise<void> {
   if (!isUuid(itemId) || !PROFILE_VISITOR.test(visitor)) return;
   // A private page has no visitors to count: only its owner can see it, and their presses never count.
@@ -1663,6 +1711,13 @@ export async function countItemPress(
     tx.execute(
       sql`select crm_count_item_press(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${itemId}::uuid, ${visitor})`,
     ),
+  );
+  const pageVisitor = options.pageVisitor?.(owner.userId);
+  if (pageVisitor === undefined || !PROFILE_VISITOR.test(pageVisitor)) return;
+  if (!(await isMemberThere(deps.db, owner))) return;
+  // A link page's finish is a press of one of its links (AC-6702).
+  await deps.db.withWorkspace(owner.workspaceId, (tx) =>
+    finishPageVisit(tx, { workspaceId: owner.workspaceId, kind: 'link', pageId: owner.userId, visitor: pageVisitor }),
   );
 }
 

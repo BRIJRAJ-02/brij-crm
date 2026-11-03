@@ -20,6 +20,7 @@
 //    the job's day (UTC) gets one `task_due` notification, 500 tasks a batch by
 //    id; a second run of the day finds them notified and writes nothing.
 // 1f. `views` (spec 0047): booking page view rows past a year.
+// 1h2. `page_visits` (spec 0067, AC-6730): raw page visits past thirteen months; the daily rollup stays.
 // 1g. `profile_counts` (spec 0051, AC-5128): link page views and presses past
 //    a year, the person's rather than the workspace's, through a definer.
 // 1h. `link_pages` (26 Oct 2026): every active member with a sign in and no link page here gets one, as the
@@ -50,7 +51,13 @@ import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
 import { pruneNavRows } from '../../navigation/navigation.ts';
 import { notifyTasksDue } from '../../notifications/notify.ts';
-import { FORM_VISITS_KEPT_DAYS, SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS, WEBHOOK_LOG_DAYS } from '@crm/contracts';
+import {
+  FORM_VISITS_KEPT_DAYS,
+  PAGE_VISITS_KEPT_DAYS,
+  SPAM_FILES_KEPT_DAYS,
+  UPLOAD_KEPT_HOURS,
+  WEBHOOK_LOG_DAYS,
+} from '@crm/contracts';
 import { ensureLinkPage, publicProfilesOf } from '../../booking/handles.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
@@ -85,6 +92,7 @@ const PHASES = [
   'views',
   'partials',
   'form_visits',
+  'page_visits',
   'profile_counts',
   'link_pages',
   'released_handles',
@@ -142,6 +150,8 @@ const Totals = z.object({
   partials: Count.default(0),
   // Added by spec 0063 (AC-6320): form visit rows past their thirteen months.
   formVisits: Count.default(0),
+  // Added by spec 0067 (AC-6730): raw page visits past their thirteen months; the daily rollup stays.
+  pageVisits: Count.default(0),
   // Added by spec 0051: link page view and press rows past a year.
   profileCounts: Count.default(0),
   // Added 26 Oct 2026: the link pages a membership's own transaction didn't make.
@@ -182,6 +192,7 @@ const NO_TOTALS: Totals = {
   views: 0,
   partials: 0,
   formVisits: 0,
+  pageVisits: 0,
   profileCounts: 0,
   linkPages: 0,
   linkPagesMissed: 0,
@@ -251,6 +262,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   views: totals.views + (more.views ?? 0),
   partials: totals.partials + (more.partials ?? 0),
   formVisits: totals.formVisits + (more.formVisits ?? 0),
+  pageVisits: totals.pageVisits + (more.pageVisits ?? 0),
   profileCounts: totals.profileCounts + (more.profileCounts ?? 0),
   linkPages: totals.linkPages + (more.linkPages ?? 0),
   linkPagesMissed: totals.linkPagesMissed + (more.linkPagesMissed ?? 0),
@@ -442,6 +454,25 @@ async function oldFormVisits(context: WriteContext, at: Checkpoint, limit: numbe
   `);
   const count = removed.rowCount ?? 0;
   const totals = plus(at.totals, { formVisits: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1h2 (spec 0067, AC-6730): raw page visits older than thirteen months, `limit` a batch, oldest days first.
+ * Their days stay in `page_visit_days`, so a year on year read keeps its numbers; only who came on which day goes,
+ * and that was only ever a daily hash.
+ */
+async function oldPageVisits(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const removed = await context.tx.execute(sql`
+    delete from page_visits where (workspace_id, page_kind, page_id, day, visitor) in (
+      select workspace_id, page_kind, page_id, day, visitor from page_visits
+      where workspace_id = ${context.scope.workspaceId}
+        and day < (now() at time zone 'UTC')::date - ${PAGE_VISITS_KEPT_DAYS}::integer
+      order by day limit ${limit}
+    )
+  `);
+  const count = removed.rowCount ?? 0;
+  const totals = plus(at.totals, { pageVisits: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
@@ -906,6 +937,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return expiredPartials(context, at, limit);
         case 'form_visits':
           return oldFormVisits(context, at, limit);
+        case 'page_visits':
+          return oldPageVisits(context, at, limit);
         case 'profile_counts':
           return oldProfileCounts(context, at, limit);
         case 'link_pages':

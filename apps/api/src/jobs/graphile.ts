@@ -44,6 +44,7 @@ import {
   AUTOMATION_TASK,
 } from './automation.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
+import { PAGE_ROLLUP_CRONTAB, PAGE_ROLLUP_TASK } from './page-rollup.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
 import { SCHEDULING_NOTICE_TASK } from './scheduling-notice.ts';
@@ -102,6 +103,7 @@ export const RUNNER_TASKS: readonly string[] = [
   CALENDAR_HEALTH_EMAIL_TASK,
   AUTOMATION_TASK,
   AUTOMATION_DUE_TASK,
+  PAGE_ROLLUP_TASK,
 ];
 
 /**
@@ -192,6 +194,11 @@ export interface JobRunnersOptions {
    * With it, the light runner holds the crontab line and the daily task.
    */
   readonly daily?: (input: DailyCleanupInput) => Promise<DailyCleanupReport>;
+  /**
+   * Insights' rollup (spec 0067, AC-6730): one run over the workspaces holding a stale visit day. With it, the light
+   * runner holds the five minute `crm_cron_page_rollup` line.
+   */
+  readonly pageRollup?: () => Promise<unknown>;
   /**
    * Calendar sync (spec 0024): one connection's run (`syncConnection` with the
    * worker's deps). With it, the light runner takes `crm_calendar_sync`.
@@ -680,6 +687,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const calendarHealth = lane === LANES.light ? options.calendarHealth : undefined;
       const automation = lane === LANES.light ? options.automation : undefined;
       const cutOff = lane === LANES.light ? options.cutOff : undefined;
+      const pageRollup = lane === LANES.light ? options.pageRollup : undefined;
       runners.push(
         watch(
           await run({
@@ -771,13 +779,25 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
               ...(cutOff === undefined
                 ? {}
                 : { [CUTOFF_TASK]: counted(cutOffTask(options, cutOff), inFlight, options.onActivity) }),
+              ...(pageRollup === undefined
+                ? {}
+                : {
+                    [PAGE_ROLLUP_TASK]: counted(
+                      async () => {
+                        await pageRollup();
+                      },
+                      inFlight,
+                      options.onActivity,
+                    ),
+                  }),
             },
             // The daily cleanup's line, the digest's hourly one beside the email task that sends it, and the calendar
             // health sweep's quarter hourly one beside its email task.
             ...(daily === undefined &&
             notificationEmail === undefined &&
             calendarHealth === undefined &&
-            automation === undefined
+            automation === undefined &&
+            pageRollup === undefined
               ? {}
               : {
                   crontab: [
@@ -785,6 +805,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                     ...(notificationEmail === undefined ? [] : [DIGEST_CRONTAB]),
                     ...(calendarHealth === undefined ? [] : [CALENDAR_HEALTH_CRONTAB]),
                     ...(automation === undefined ? [] : [AUTOMATION_DUE_CRONTAB]),
+                    ...(pageRollup === undefined ? [] : [PAGE_ROLLUP_CRONTAB]),
                   ].join('\n'),
                 }),
             // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before

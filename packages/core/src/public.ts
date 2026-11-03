@@ -11,6 +11,7 @@ export {
   countItemPress,
   countProfileBooking,
   countProfileView,
+  countLinkVisit,
   enterContactCard,
   enterLinkBlocks,
   enterLinkImage,
@@ -29,7 +30,9 @@ export {
 } from './access/door.ts';
 export {
   bookPublicSlot,
+  countBookingVisit,
   countPageView,
+  finishBookingVisit,
   readAddressedPage,
   readContactCard,
   linkIconOf,
@@ -124,3 +127,6 @@ export {
 export { viewFacts, type ViewFacts } from './profile/sources.ts';
 export { checkProfileImage, readPageMeta, profileImageStorePath, type CheckedImage } from './profile/images.ts';
 export { isShownAt } from './profile/schedule.ts';
+// Insights (spec 0067): a visit's origin from what its page sent, and a share link's numbers only page.
+export { originOf, type VisitOrigin } from './insights/visits.ts';
+export { readInsightShare } from './insights/shares.ts';

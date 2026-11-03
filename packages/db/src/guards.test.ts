@@ -211,6 +211,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_order_profile_items', owner: 'crm_handle' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
+      // The workspaces holding a stale Insights visit day, for the rollup job (spec 0067, migration 0173).
+      { name: 'crm_page_rollup_workspaces', owner: 'crm_sweep' },
       { name: 'crm_pictures_hidden', owner: 'crm_handle' },
       { name: 'crm_place_profile_page', owner: 'crm_handle' },
       { name: 'crm_profile_counts', owner: 'crm_handle' },
@@ -330,6 +332,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_order_profile_items', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_page_rollup_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_pictures_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it does nothing when the page is there already or a limit is reached.
       { name: 'crm_place_profile_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -462,14 +465,16 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_notification_digests_due',
         'crm_calendar_health_candidates',
         'crm_automation_due_workspaces',
+        'crm_page_rollup_workspaces',
       ],
       [
         'crm_workspace_ids(uuid, integer)',
         'crm_notification_digests_due(uuid, uuid, integer)',
         'crm_calendar_health_candidates(integer)',
         'crm_automation_due_workspaces(uuid, integer)',
+        'crm_page_rollup_workspaces(integer)',
       ],
-      ['worker', 'worker', 'worker', 'worker'],
+      ['worker', 'worker', 'worker', 'worker', 'worker'],
     ],
     [
       'crm_purge',
@@ -1071,7 +1076,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   describe('crm_workspace_ids (spec 0008, milestone 3, AC-112, AC-115)', () => {
-    it('gives crm_sweep select on workspaces.id and deleted_at, the digest’s columns, the calendar health sweep’s and the automations sweep’s, and nothing else', async () => {
+    it('gives crm_sweep select on workspaces.id and deleted_at, the digest’s columns, the calendar health sweep’s, the automations sweep’s and the Insights rollup’s, and nothing else', async () => {
       // From the catalog, by every route, as for crm_relay: no table privilege, two column grants, no role.
       const tables = await owner.query<{ table: string }>(`
         select n.nspname || '.' || c.relname as table
@@ -1109,6 +1114,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         { column: 'notification_settings.member_id', privilege: 'SELECT' },
         { column: 'notification_settings.time_zone', privilege: 'SELECT' },
         { column: 'notification_settings.workspace_id', privilege: 'SELECT' },
+        // The Insights rollup's listing (spec 0067, migration 0173).
+        { column: 'page_visit_stale_days.marked_at', privilege: 'SELECT' },
+        { column: 'page_visit_stale_days.workspace_id', privilege: 'SELECT' },
         { column: 'workspaces.deleted_at', privilege: 'SELECT' },
         { column: 'workspaces.id', privilege: 'SELECT' },
       ]);
@@ -2719,5 +2727,117 @@ describe('first run answers (spec 0036)', () => {
       where c.oid = 'public.member_onboarding'::regclass and a.grantee not in (c.relowner, 'crm_app'::regrole)
     `);
     expect(others.rows).toEqual([{ grantee: 'crm_purge', privilege: 'DELETE' }]);
+  });
+});
+
+describe('Insights (spec 0067, AC-6701, AC-6720, AC-6730)', () => {
+  const visitor = () => randomUUID().replaceAll('-', '');
+
+  /** A visit to a form page in `workspaceId`, made as the app makes it: inside `withWorkspace`. */
+  const visitIn = async (workspaceId: string) => {
+    const pageId = randomUUID();
+    const who = visitor();
+    await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into page_visits (workspace_id, page_kind, page_id, day, visitor) values (${workspaceId}, 'form', ${pageId}, (now() at time zone 'UTC')::date, ${who})`,
+      ),
+    );
+    return { pageId, visitor: who };
+  };
+
+  it('forces row level security on the four tables, each with its own policy', async () => {
+    const found = await owner.query<{ table: string; enabled: boolean; forced: boolean; policies: number }>(`
+      select c.relname as table, c.relrowsecurity as enabled, c.relforcerowsecurity as forced,
+        (select count(*)::int from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname) as policies
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and c.relname in ('page_visits', 'page_visit_days', 'page_visit_stale_days', 'insight_shares')
+      order by c.relname
+    `);
+    expect(found.rows).toEqual([
+      { table: 'insight_shares', enabled: true, forced: true, policies: 1 },
+      { table: 'page_visit_days', enabled: true, forced: true, policies: 1 },
+      { table: 'page_visit_stale_days', enabled: true, forced: true, policies: 1 },
+      { table: 'page_visits', enabled: true, forced: true, policies: 1 },
+    ]);
+  });
+
+  it("reads none of another workspace's visits, stale days, rollups or share links", async () => {
+    const a = await workspaceWithMember('insights-a');
+    const b = await workspaceWithMember('insights-b');
+    const inA = await visitIn(a.workspaceId);
+    await visitIn(b.workspaceId);
+    for (const { workspaceId, memberId } of [a, b]) {
+      await db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into insight_shares (workspace_id, token_hash, label, pages, range, created_by_member_id) values (${workspaceId}, ${'a'.repeat(64)}, 'Client', '[]', '30', ${memberId})`,
+        ),
+      );
+    }
+    const visits = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ visitor: string }>(sql`select visitor from page_visits`),
+    );
+    expect(visits.rows).toEqual([{ visitor: inA.visitor }]);
+    // The trigger marked the day stale in the visit's own workspace only.
+    const stale = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ workspace_id: string }>(sql`select workspace_id::text from page_visit_stale_days`),
+    );
+    expect(stale.rows).toEqual([{ workspace_id: a.workspaceId }]);
+    const shares = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ workspace_id: string }>(sql`select workspace_id::text from insight_shares`),
+    );
+    expect(shares.rows).toEqual([{ workspace_id: a.workspaceId }]);
+    // B's own share is there, read from B: the read above was scoped, not empty. The same secret's hash in two
+    // workspaces is two links, each found only inside its own.
+    const sharesInB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ workspace_id: string }>(sql`select workspace_id::text from insight_shares`),
+    );
+    expect(sharesInB.rows).toEqual([{ workspace_id: b.workspaceId }]);
+    // A rollup row for another workspace is refused outright.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into page_visit_days (workspace_id, page_kind, page_id, day, source, step, visits, finishes) values (${b.workspaceId}, 'form', ${randomUUID()}, current_date, 'direct', 'view', 1, 0)`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
+  });
+
+  it('keeps a visitor a daily hash, a kind one it knows, and a landing small', async () => {
+    const a = await workspaceWithMember('insights-shape');
+    const insert = (visitorValue: string, kind = 'form', landing: string | null = null) =>
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into page_visits (workspace_id, page_kind, page_id, day, visitor, landing) values (${a.workspaceId}, ${kind}, ${randomUUID()}, current_date, ${visitorValue}, ${landing}::jsonb)`,
+        ),
+      );
+    await expect(insert('203.0.113.9')).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'page_visits_visitor' },
+    });
+    await expect(insert(visitor(), 'newsletter')).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'page_visits_kind' },
+    });
+    await expect(insert(visitor(), 'form', JSON.stringify({ utm_source: 'x'.repeat(2_000) }))).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'page_visits_landing' },
+    });
+  });
+
+  it('lists the workspaces with a stale day to the worker alone, ids only', async () => {
+    const a = await workspaceWithMember('insights-rollup');
+    await visitIn(a.workspaceId);
+    const worker = new pg.Client({ connectionString: workerUrl });
+    await worker.connect();
+    try {
+      const found = await worker.query<Record<string, unknown>>(
+        'select * from crm_page_rollup_workspaces(500) as w(id)',
+      );
+      expect(found.fields.map((field) => field.name)).toEqual(['id']);
+      expect(found.rows.map((row) => row.id)).toContain(a.workspaceId);
+    } finally {
+      await worker.end();
+    }
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`select * from crm_page_rollup_workspaces(500)`)),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
   });
 });

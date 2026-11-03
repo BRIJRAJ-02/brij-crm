@@ -88,6 +88,10 @@ export const AUDIT_ACTIONS = [
   'webhook.turned_off',
   // Owner ask A102 (22 Oct 2026): a person put their Public booking pages in a new order on their profile.
   'booking_page.profile_reordered',
+  // A numbers only Insights share link made or revoked (spec 0067, AC-6720): the target is the workspace, `after`
+  // holds the share's id, name, range and page count, never its secret.
+  'insights.share_created',
+  'insights.share_revoked',
   // Scheduling access (spec 0037, AC-1257): See or Manage over someone's scheduling given, changed or taken back.
   // The row's target is the delegate; `before` and `after` hold the level and whom it is over.
   'delegation.granted',
