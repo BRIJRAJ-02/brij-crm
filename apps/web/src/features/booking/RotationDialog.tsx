@@ -15,7 +15,6 @@ import {
 } from '@crm/data';
 import {
   Button,
-  ButtonLink,
   Callout,
   Field,
   focusLater,
@@ -32,7 +31,6 @@ import {
   RecordChip,
 } from '@crm/ui';
 import { useRef, useState } from 'react';
-import { availabilityHref } from './links.ts';
 import { strings } from './rotation-strings.ts';
 
 /** Props for the dialog. */
@@ -134,12 +132,9 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
       : members.length > 20
         ? strings.tooMany
         : undefined;
-  // A refusal about one member ("Maya Patel needs to set hours or connect a calendar first.") offers to remove them,
-  // and, while they are an active member (so hours are what they lack), their hours in a new tab, so the group stays.
+  // A refusal about one member (a guest, someone no longer active, or someone the reader doesn't manage) offers to
+  // remove them. Missing hours is never one: a member who saved none books on weekdays 9 to 5 (4 November 2026).
   const refused = failure?.memberId;
-  // Someone the reader doesn't manage (spec 0037, AC-1340) lacks no hours: then only Remove from group is offered.
-  const isRefusedActive =
-    refused !== undefined && failure?.isReach !== true && people.some((person) => person.id === refused);
   // Where focus goes once a member's row or the refusal's Remove from group leaves with them: Create or Save, or the
   // next row's remove button. Left to itself it would fall to the title bar's Close, where Enter loses the draft.
   const saveRef = useRef<HTMLButtonElement>(null);
@@ -358,16 +353,6 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
                           >
                             {strings.removeFromGroup}
                           </Button>
-                        )}
-                        {isRefusedActive && (
-                          <ButtonLink
-                            href={availabilityHref(slug, refused)}
-                            isExternal
-                            icon="external-link"
-                            label={strings.setHoursFor(nameOf(refused))}
-                          >
-                            {strings.setHours}
-                          </ButtonLink>
                         )}
                       </>
                     ),

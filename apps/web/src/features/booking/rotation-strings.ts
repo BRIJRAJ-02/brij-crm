@@ -82,10 +82,6 @@ export const strings = {
   days: (count: number) => `${String(count)} days`,
   addMember: 'Add a member',
   addMemberPlaceholder: 'Search people',
-  /** On the server's refusal of someone who can't take meetings yet: their hours, in a new tab, so the group stays. */
-  setHours: 'Set hours',
-  /** Set hours' name: whose hours, and that they open in a new tab, as booking's "Open X in a new tab" says. */
-  setHoursFor: (name: string) => `Set hours for ${name}, in a new tab`,
   /** On the server's refusal of one member: save the group without them. Short, so a long name never widens it. */
   removeFromGroup: 'Remove from group',
   /** Remove from group's name: its visible words first (WCAG 2.5.3), then the member it removes. */
