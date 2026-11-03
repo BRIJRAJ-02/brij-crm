@@ -63,3 +63,19 @@ Prove the whole first release against the scale budget before launch.
 Let workspaces pay: checkout, upgrade, downgrade and invoices.
 **Done when:** an owner upgrades and the new limits apply at once; a downgrade that would break a limit is explained first; failed payments are retried and the owner is told; invoices and tax are correct.
 - [ ] Design it (spec): `/architect billing`
+
+## Slice 19: Hospitality apps
+
+### 68. Hospitality suite · planned
+Restaurants, cafés and bars install Menu, Menu QR and Table seating as separate apps, sharing one business profile with places, hours and tables.
+**Done when:** an admin of an early access workspace installs an app; a published menu opens from a table's QR code in under 2 seconds on a phone; a guest books a table for four online and gets a real table; the host stand seats walk ins and every tablet stays in step; each guest is a Person with their visits.
+- [x] Design it (spec): `/architect hospitality suite`
+- [ ] Build it: `/develop hospitality suite`
+  - [ ] H0 Apps and business profile
+  - [ ] H1 Menu
+  - [ ] H2 Menu QR
+  - [ ] H3 Table seating
+  - [ ] H4 Service screen
+  - [ ] H5 SN look
+Spec [0065](../specs/0065-hospitality-suite/index.md)
+
