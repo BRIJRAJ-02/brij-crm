@@ -588,7 +588,10 @@ export async function submitForm(
         claimedIds = claimed.ids;
         judged = bot;
       } else {
-        const checked = checkAnswers(rendered, body.answers, { absentNotAsked: input.fromSite === true });
+        const checked = checkAnswers(rendered, body.answers, {
+          absentNotAsked: input.fromSite === true,
+          requireConsent: input.fromSite === true,
+        });
         if (!checked.ok) {
           const [first, ...rest] = Object.entries(checked.fields).map(([field, message]) => ({
             code: 'ATTRIBUTE_VALUE_INVALID' as const,

@@ -19,6 +19,7 @@ import { jobKinds } from '../jobs/kinds/index.ts';
 import { testScope } from '../testing.ts';
 import { recordConsents, stampConsentVersions } from './consent.ts';
 import { createForm, getForm, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
+import { resumePartial, savePartial } from './partials.ts';
 import { processSubmission } from './process.ts';
 import { submitForm } from './public.ts';
 import { getSubmission, releaseSubmission } from './submissions.ts';
@@ -150,6 +151,23 @@ describe('a Consent question (AC-1053)', () => {
     await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'ada@example.com', marketing: 'yes' }), true);
     await processAll(w, live.id);
     expect(await consentRows(w)).toMatchObject([{ question_id: 'marketing', granted: true }]);
+  });
+
+  it('saves and resumes the other answers of a form with a required consent not yet ticked', async () => {
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId(), name: 'Newsletter' });
+    const document: FormDocument = {
+      ...created.draft,
+      saveProgress: true,
+      questions: [...created.draft.questions, consent('Send me the monthly note.')],
+    };
+    const saved = await saveFormDraft(w.scope, { formId: created.id, document, expectedRevision: created.revision });
+    const live = await publishForm(w.scope, { formId: created.id, expectedRevision: saved.revision });
+    const { scope, formId } = await enterPublicForm({ db }, live.publicKey);
+    // Part way, the consent is just not answered yet: the rest is kept, never wiped for it.
+    const partial = await savePartial(scope, { formId, answers: { name: 'Ada Lovelace', email: 'ada@example.com' } });
+    const resumed = await resumePartial(scope, { formId, resumeToken: partial.resumeToken });
+    expect(resumed.answers).toEqual({ name: 'Ada Lovelace', email: 'ada@example.com' });
   });
 
   it('versions its words on publish: 1 at first, the same for the same words, one more when they change', async () => {

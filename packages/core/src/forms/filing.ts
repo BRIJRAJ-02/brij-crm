@@ -53,7 +53,7 @@ import {
 } from './process.ts';
 import { canSeeForm, loadForm, loadVersions, type FormRow } from './shared.ts';
 import { lockRotation } from '../rotation/ledger.ts';
-import { consentAnswersOf, isPeopleObject, recordConsents } from './consent.ts';
+import { consentAnswersOf, consentMissing, isPeopleObject, recordConsents, type ConsentAnswers } from './consent.ts';
 import type { RecordFileStore } from '../records/files.ts';
 
 /** The Add to CRM job's name. */
@@ -253,6 +253,23 @@ async function fileBatch(
       outcomes.push({ position: item.position, state: 'skipped', code: 'FORM_STATE', message: ON_ANOTHER_OBJECT });
       continue;
     }
+    // The consents it gave, from the version the visitor answered (never the mapping's). A required one it never
+    // ticked is refused here as processing refuses it, before any record is touched (AC-1053).
+    let consents: ConsentAnswers | undefined;
+    if (mapping.isPeople) {
+      const own = (await loadVersions(tx, [row.version_id])).get(row.version_id);
+      consents = own === undefined ? undefined : consentAnswersOf(own.document, answersOf(row.answers));
+      if (consents?.kind === 'missing') {
+        totals.failures += 1;
+        outcomes.push({
+          position: item.position,
+          state: 'refused',
+          code: 'FORM_STATE',
+          message: consentMissing(consents.question.label),
+        });
+        continue;
+      }
+    }
     const filed = await fileAnswers(context, {
       submissionId: row.id,
       answers: answersOf(row.answers),
@@ -280,19 +297,14 @@ async function fileBatch(
     else if (filed.action === 'updated') totals.updated += 1;
     else totals.unchanged += 1;
     await settle(tx, row.id, filed, { filedWith: mapping.versionNumber });
-    // The consents it gave, from the version the visitor answered (never the mapping's): written once, so a
-    // submission processing already filed adds nothing here (AC-1053).
-    if (mapping.isPeople) {
-      const own = (await loadVersions(tx, [row.version_id])).get(row.version_id);
-      const consents = own === undefined ? undefined : consentAnswersOf(own.document, answersOf(row.answers));
-      if (consents?.kind === 'given') {
-        await recordConsents(tx, {
-          workspaceId: context.scope.workspaceId,
-          recordId: filed.recordId,
-          submissionId: row.id,
-          ticked: consents.ticked,
-        });
-      }
+    // Written once: a submission processing already filed adds nothing here.
+    if (consents?.kind === 'given') {
+      await recordConsents(tx, {
+        workspaceId: context.scope.workspaceId,
+        recordId: filed.recordId,
+        submissionId: row.id,
+        ticked: consents.ticked,
+      });
     }
     outcomes.push({ position: item.position, state: 'done' });
   }

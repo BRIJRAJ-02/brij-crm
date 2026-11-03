@@ -373,11 +373,17 @@ function checkOne(
  * comes. That question wasn't asked, so it is skipped as a hidden one is,
  * rather than refusing every visitor for a field they were never shown. A key
  * that comes empty was asked, and is held to the question as ever.
+ *
+ * `requireConsent` goes with it on a site's own form's submit (AC-1053): a
+ * required consent is never taken as not asked, since an unticked box posts
+ * nothing, so leaving it out is refused rather than filed as if agreed. A save
+ * part way (a partial) leaves it off: an untouched consent there is simply not
+ * answered yet.
  */
 export function checkAnswers(
   form: CheckedForm,
   answers: Readonly<Record<string, unknown>>,
-  options: { readonly absentNotAsked?: boolean } = {},
+  options: { readonly absentNotAsked?: boolean; readonly requireConsent?: boolean } = {},
 ): AnswerCheck {
   const words = formStrings(form.language);
   const fields: Record<string, string> = {};
@@ -391,9 +397,9 @@ export function checkAnswers(
   ): Readonly<Record<string, CheckedAnswer>> | undefined => {
     // A question whose Show when doesn't hold over the answers kept so far is skipped: never required, never kept.
     if (!matchesShowWhen(question.showWhen, values)) return undefined;
-    // A required consent is never taken as not asked: a site's own form that leaves it out (an unticked box posts
-    // nothing, and so does HTML copied before it was added) is refused, never filed as if agreed (AC-1053).
-    const consentRequired = question.answerType === 'consent' && question.required;
+    // On a site's own form's submit a required consent is never taken as not asked: left out (an unticked box posts
+    // nothing, and so does HTML copied before it was added), it is refused, never filed as if agreed (AC-1053).
+    const consentRequired = options.requireConsent === true && question.answerType === 'consent' && question.required;
     if (options.absentNotAsked === true && !consentRequired && !Object.hasOwn(answers, question.key)) return undefined;
     const given = Object.hasOwn(answers, question.key) ? answers[question.key] : undefined;
     // A hidden question takes the link's value, else its default (AC-6309), and is never refused for being empty:

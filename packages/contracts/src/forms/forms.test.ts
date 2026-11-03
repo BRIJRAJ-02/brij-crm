@@ -90,11 +90,13 @@ describe('checkAnswers (spec 0023, AC-553, AC-556, AC-660)', () => {
       ok: true,
       answers: { marketing: true, terms: false },
     });
-    // A site's own form that leaves a required consent out is refused, never taken as not asked; an optional one is.
-    const fromSite = checkAnswers(consent, {}, { absentNotAsked: true });
+    // Part way (a partial): a consent not yet answered is just not asked yet.
+    expect(checkAnswers(consent, {}, { absentNotAsked: true })).toEqual({ ok: true, answers: {} });
+    // A site's own form's submit that leaves a required consent out is refused, never taken as not asked.
+    const fromSite = checkAnswers(consent, {}, { absentNotAsked: true, requireConsent: true });
     expect(fromSite.ok).toBe(false);
     if (!fromSite.ok) expect(fromSite.fields).toEqual({ marketing: 'Tick this to go on.' });
-    expect(checkAnswers(consent, { marketing: 'yes' }, { absentNotAsked: true })).toEqual({
+    expect(checkAnswers(consent, { marketing: 'yes' }, { absentNotAsked: true, requireConsent: true })).toEqual({
       ok: true,
       answers: { marketing: true },
     });
