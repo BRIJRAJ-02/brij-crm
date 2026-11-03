@@ -109,7 +109,7 @@ export function PhotoCrop({ source, shape, isOpen, title = strings.title, onCanc
   return (
     <Modal
       title={title}
-      variant="form"
+      variant="window"
       isOpen={open}
       isDismissable={false}
       onOpenChange={(next) => {
@@ -433,6 +433,9 @@ function CropBody({ source, shape, onAnswer, ref }: CropBodyProps) {
         }}
         className={styles.stage}
         data-shape={shape}
+        // Dark in both themes, as a photo editor's stage is: the scrim over what the crop cuts reads as strongly on a
+        // light page as on a dark one (the tokens scope to any element with the attribute, as HostedFormPreview's do).
+        data-theme="dark"
         data-easing={isEasing || undefined}
         data-moving={isMoving || undefined}
         data-drags={natural === undefined ? undefined : ''}

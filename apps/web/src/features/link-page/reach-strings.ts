@@ -62,6 +62,8 @@ export const reachStrings = {
   galleryCount: (count: number) => `${figure(count)} ${count === 1 ? 'picture' : 'pictures'}`,
   galleryAlt: (at: number) => `Description of picture ${String(at)}`,
   galleryRemove: (at: number) => `Remove picture ${String(at)}`,
+  /** Crops a picture already in the gallery again (spec 0068, AC-6809). */
+  galleryAdjust: (at: number) => `Adjust crop of picture ${String(at)}`,
   galleryMoveUp: (at: number) => `Move picture ${String(at)} up`,
   galleryMoveDown: (at: number) => `Move picture ${String(at)} down`,
   galleryAddFirst: 'Add 2 to 12 pictures',

@@ -136,8 +136,13 @@ export const strings = {
    */
   yourPagePrivate: 'Private. Only you can open it.',
   copyLink: 'Copy link',
-  /** Under their name beside the picture, when the picture is the one their Google account gave. */
-  fromGoogle: 'From Google',
+  /** Under their name beside the picture, whichever way it came (their own upload or Google's). */
+  photoShown: 'Shown on your pages and bookings.',
+  /** Their own photo (spec 0068, AC-6809): the picker's words before and once there is one. */
+  uploadPhoto: 'Upload photo',
+  changePhoto: 'Change photo',
+  photoUnreadable: 'That picture can’t be read. Choose a JPEG, PNG or WebP.',
+  photoSaved: 'Photo updated.',
   /** Sync Google photo (23 Oct 2026): fetches their Google account's current photo, linking Google first if need be. */
   syncGooglePhoto: 'Sync Google photo',
   /** Its fuller name while Google isn't linked, saying what else it does (it starts with the visible label). */

@@ -36,7 +36,8 @@ The drag, pinch and wheel are about 150 lines of pointer events over pure arithm
 
 ## Anatomy
 
-- The stage: 4:3 (2:1 for a cover), at most 55% of the window's height, on `surface-sunken`. The photo sits behind a veil of the same surface (`opacity-busy`) with the frame cut out of it, the frame's edge in the accent, and thirds that fade in while the photo moves.
+- The Modal is a `window` (`size-dialog-wide`), so the stage is about 750px across on a desk and the window's width on a phone (round 2, 4 November 2026: at 560px the photo was too small to place).
+- The stage: 4:3 (2:1 for a cover), at most 55% of the window's height, in the dark theme whatever the page's (`data-theme="dark"` on it, as HostedFormPreview scopes its theme): `surface-sunken` under the photo, and the dark `scrim` (55%) over all of it but the frame, so what the crop cuts reads as clearly on a light page as on a dark one (a light wash was too pale to show it). The frame's edge is in the accent, and thirds fade in while the photo moves.
 - Under it: the zoom's minus, Slider and plus, then a preview a bar high in the frame's shape (round for a face): the crop as it will sit.
 - The footer: Reset at its start, then Cancel and Use photo.
 

@@ -236,6 +236,10 @@ The result comes first, in plain words and from the same rows as the grid ("Ever
 
 Lean, as the owner's settings pages are: no page description, one Email section like every other settings page's (its heading above the card, its line saying the inbox always gets everything, AC-1179) with short rows, Mentions, Replies, Task assignments and Daily digest; only the digest has an InfoTip, "One email at 8am with what’s unread." (30 October 2026: no tip repeats its row's name). Built from SettingsLayout (through `SettingsPage`), Card, SettingsRow (its `meta` slot), Switch and InfoTip, with no new component. Each switch saves at once through `data.inbox.setSettings`; once it lands, "Notifications saved" with Undo (SA31), whose Undo sends the switch back while the page still shows it; a refusal is put back with the data layer's toast, as Calendars' switch is. The settings follow a change made in another tab live (AC-1180). Turning the digest on sends the browser's time zone with it, for 8 in the morning there. Once the bar header lands (wip/recui), the title sits in the top bar like every settings page.
 
+## Settings › Account › Profile: Your photo (spec 0068, AC-6809)
+
+Beside the picture in Your details, next to Sync Google photo: Upload photo (Change photo once there is one) is FileDrop's button, which opens the library's round cropper (`usePhotoCrop`, shape `circle`), then `preparePhoto(source, 'avatar', crop)` draws it again (512 square JPEG, a phone photo's location left behind) and `data.profile.uploadPicture` sends it, replacing Google's in every workspace; the route reads the profile again and a quiet toast says "Photo updated." Adjust crop crops the one there again. A refusal is the picker's own refusal line. The note under the name no longer says "From Google" (an upload isn't): "Shown on your pages and bookings.", and the switch's hint below no longer names Google either.
+
 ## Settings › Account › Profile: Show my photo on booking pages (PhotoSwitch.tsx)
 
 - **Purpose**: whether the person's Google photo shows on their booking pages and their profile (owner ask A124, 23 October 2026). On by default.
