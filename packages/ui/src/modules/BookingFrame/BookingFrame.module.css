@@ -4,6 +4,9 @@
    the times side by side at one height so the times scroll in their pane, and
    a band across the foot for the Book bar). Below it everything stacks and
    Timefix moves to the page's end. */
+/* The faces the templates draw with (spec 0068), pulled into this stylesheet so they cost no file of their own. */
+@import '@crm/tokens/packs-templates.css';
+
 /* The public pages' crossfade between each other (styles/base.css says what it captures): only the pages that load
    this module opt in, never the app. */
 @view-transition {
@@ -154,6 +157,8 @@
     margin: 0;
     color: var(--text);
     font: var(--text-heading);
+    /* The template's own face (spec 0068): the root always carries one, Classic when the brand names none. */
+    font-family: var(--frame-face, var(--font-sans));
     letter-spacing: var(--tracking-heading);
     overflow-wrap: anywhere;
   }
@@ -268,6 +273,7 @@
     margin: 0;
     color: var(--text);
     font: var(--text-title);
+    font-family: var(--frame-face, var(--font-sans));
     letter-spacing: var(--tracking-title);
   }
 
@@ -716,11 +722,6 @@
     --frame-focus: 0 0 0 var(--border-width-thick) var(--frame-accent), var(--frame-glow);
 
     background: var(--surface-sunken);
-  }
-
-  .root[data-template] .host,
-  .root[data-template] .heading {
-    font-family: var(--frame-face, var(--font-sans));
   }
 
   .root[data-template='studio'] .host,

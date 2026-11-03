@@ -20,7 +20,6 @@ import { templateAttributes } from '../lib/page-template.ts';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
-import '@crm/tokens/packs.css';
 import styles from './FormParts.module.css';
 import { labelOf } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';

@@ -1,0 +1,67 @@
+/* The three font packs the templates draw with (spec 0068, AC-6801): Classic's Host Grotesk, Studio's Fraunces and
+   Night's Outfit, split out of `packs.css` so a booking page or a hosted form, which only ever wears a template, carries
+   these three faces and not the link page's other three (the booking page's CSS budget, `apps/web/.size-limit.js`).
+   The page modules pull it into their own stylesheet with `@import`, so it costs no file of its own. Same rules as
+   `packs.css`: open licence faces from our own origin, fetched only when text is drawn in them, each with a metric
+   matched local fallback so the swap moves nothing. */
+
+@font-face {
+  font-family: 'Host Grotesk';
+  src: url('./fonts/HostGrotesk-Variable-latin.woff2') format('woff2');
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Host Grotesk Fallback';
+  src: local('Arial');
+  size-adjust: 104.98%;
+  ascent-override: 96.69%;
+  descent-override: 30.01%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('./fonts/Fraunces-Variable-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fraunces Fallback';
+  src: local('Times New Roman');
+  size-adjust: 115.45%;
+  ascent-override: 84.71%;
+  descent-override: 22.09%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Outfit';
+  src: url('./fonts/Outfit-Variable-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Outfit Fallback';
+  src: local('Arial');
+  size-adjust: 99.82%;
+  ascent-override: 100.18%;
+  descent-override: 26.05%;
+  line-gap-override: 0%;
+}
+
+/* The families the templates read (Classic, Studio, Night), each the face, its metric matched fallback, then the
+   system's. */
+@layer tokens {
+  :root {
+    --font-pack-grotesk: 'Host Grotesk', 'Host Grotesk Fallback', ui-sans-serif, system-ui, sans-serif;
+    --font-pack-editorial: 'Fraunces', 'Fraunces Fallback', ui-serif, Georgia, serif;
+    --font-pack-geometric: 'Outfit', 'Outfit Fallback', ui-sans-serif, system-ui, sans-serif;
+  }
+}

@@ -6,6 +6,9 @@
    step, so every control inside squares its corners. On its own page from the
    page breakpoint, a card (Classic, Steps) sits centred on the ground colour;
    the one at a time frame (`data-frame='open'`) has no card. */
+/* The faces the templates draw with (spec 0068), pulled into this stylesheet so they cost no file of their own. */
+@import '@crm/tokens/packs-templates.css';
+
 /* The public pages' crossfade between each other (styles/base.css says what it captures): only the pages that load
    this module opt in, never the app. */
 @view-transition {

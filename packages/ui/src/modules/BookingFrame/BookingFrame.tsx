@@ -11,7 +11,6 @@ import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
 import { SocialLinks, type SocialLinkItem } from '../../molecules/SocialLinks/SocialLinks.tsx';
 import { templateAttributes, type PageTemplate } from '../../lib/page-template.ts';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
-import '@crm/tokens/packs.css';
 import styles from './BookingFrame.module.css';
 import { strings } from './strings.ts';
 

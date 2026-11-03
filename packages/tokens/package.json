@@ -6,6 +6,7 @@
     "./tokens.css": "./tokens.css",
     "./tokens.json": "./tokens.json",
     "./packs.css": "./packs.css",
+    "./packs-templates.css": "./packs-templates.css",
     "./packs": "./src/packs.ts"
   },
   "scripts": {

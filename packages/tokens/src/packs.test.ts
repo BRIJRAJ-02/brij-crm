@@ -1,11 +1,15 @@
 // The font packs are listed three times: the contracts' `PAGE_FONTS`, `packs.ts` (what a shell preloads) and
-// `packs.css` (the faces). This holds the three together, and every file named to the folder it lives in.
+// `packs.css` with `packs-templates.css` (the faces). This holds the three together, and every file named to the folder
+// it lives in.
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { FONT_PACKS } from './packs.ts';
 
 const FONTS = new URL('../fonts/', import.meta.url);
-const CSS = readFileSync(new URL('../packs.css', import.meta.url), 'utf8');
+const PACKS = readFileSync(new URL('../packs.css', import.meta.url), 'utf8');
+const TEMPLATE_PACKS = readFileSync(new URL('../packs-templates.css', import.meta.url), 'utf8');
+/** Every face the link page carries: `packs.css` and the template packs it imports. */
+const CSS = `${TEMPLATE_PACKS}\n${PACKS}`;
 const CONTRACT = readFileSync(new URL('../../contracts/src/booking/page-theme.ts', import.meta.url), 'utf8');
 
 describe('the link page font packs', () => {
@@ -36,6 +40,16 @@ describe('the link page font packs', () => {
       expect(CSS, `${face} has a fallback`).toMatch(fallback);
       expect(CSS, `${face} names its fallback`).toContain(`'${face}', '${face} Fallback'`);
     }
+  });
+});
+
+describe('the template packs (spec 0068)', () => {
+  it('hold exactly the faces Classic, Studio and Night draw with, which packs.css takes in whole', () => {
+    expect(PACKS).toContain("@import './packs-templates.css';");
+    const faces = [...TEMPLATE_PACKS.matchAll(/font-family: '([^']+)';\s*src: url/g)].map((match) => match[1]);
+    expect(faces).toEqual(['Host Grotesk', 'Fraunces', 'Outfit']);
+    for (const pack of ['grotesk', 'editorial', 'geometric']) expect(TEMPLATE_PACKS).toContain(`--font-pack-${pack}:`);
+    expect(PACKS).not.toMatch(/font-family: '(Host Grotesk|Fraunces|Outfit)';/);
   });
 });
 
