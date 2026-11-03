@@ -21,6 +21,9 @@ const config: StorybookConfig = {
   stories: ['../src/**/*.stories.tsx'],
   addons: ['@storybook/addon-docs', '@storybook/addon-a11y', '@storybook/addon-vitest', '@storybook/addon-mcp'],
   core: { disableTelemetry: true },
+  // The web app's public files (the Timefix wordmark under /brand, which "Powered by Timefix" draws), served at the
+  // root as the app serves them, so the public pages' stories show what visitors see.
+  staticDirs: ['../../../apps/web/public'],
   // Only under Vitest: the policy would also block Storybook's own docs styles.
   previewHead: (head) =>
     process.env.VITEST === undefined

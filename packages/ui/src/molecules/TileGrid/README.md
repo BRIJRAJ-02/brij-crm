@@ -60,3 +60,7 @@ Not in the artifact.
 ## Entering
 
 `isEntering` (cards only) eases each tile in on mount: a fade and a `space-8` rise over `duration-modal` on `ease-out`, the second tile one `duration-press` later and the rest two. Only translate and opacity move, reduced motion keeps the fade alone, and the tiles take input from the first frame. It is for a moment worth marking (first run's Done, spec 0058 AC-21), never for grids that load or refresh.
+
+## Large pictures
+
+`pictureSize="large"` (choice grids with `showsDescription` and `keepsPicture` only) draws each picture a column (`size-column`) tall and the tracks at least a column wide, two to a row in a settings card. It is for a choice that is a whole page seen before it is picked: the link page's four templates (spec 0068, AC-6804), where the small slot showed too little to choose by. Chosen, it keeps the ring and tick of any select tile.

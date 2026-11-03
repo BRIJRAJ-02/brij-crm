@@ -333,7 +333,7 @@ async function shownRole(
 ): Promise<{ readonly hostRole?: string }> {
   const owner = page.kind === 'personal' ? (page.ownerUserId ?? undefined) : undefined;
   if (owner === undefined) return {};
-  const identity = await identityOf(tx, owner, workspaceId);
+  const identity = await identityOf(tx, owner, workspaceId, 'published');
   if (identity?.showJobTitle !== true) return {};
   const role = await jobTitleOf(tx, owner, workspaceId);
   return role === undefined ? {} : { hostRole: role };

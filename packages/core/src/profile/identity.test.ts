@@ -7,17 +7,35 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterBookingPage, enterLinkPage, findLockupLogo } from '../access/door.ts';
+import {
+  enterBookingPage,
+  enterLinkPage as liveEnterLinkPage,
+  findLockupLogo as liveFindLockupLogo,
+} from '../access/door.ts';
 import { setLinkPageLive } from '../booking/handles.ts';
 import { createBookingPage } from '../booking/pages.ts';
-import { getPublicBookingPage, readLinkPage } from '../booking/public.ts';
+import { getPublicBookingPage as liveGetPublicBookingPage, readLinkPage } from '../booking/public.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
-import { testScope } from '../testing.ts';
+import { testScope, publishLinkPageForTest, publishPageOwnerForTest } from '../testing.ts';
 
-const { appUrl, ownerUrl } = inject('testDatabase');
+const { appUrl, ownerUrl, adminUrl } = inject('testDatabase');
+// Spec 0068: a link page's edits are a draft until Publish. A visitor's read here is of the page as its owner
+// would have published it just before, which is what these tests were written against.
+const enterLinkPage = async (...args: Parameters<typeof liveEnterLinkPage>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveEnterLinkPage(...args);
+};
+const findLockupLogo = async (...args: Parameters<typeof liveFindLockupLogo>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveFindLockupLogo(...args);
+};
+const getPublicBookingPage = async (...args: Parameters<typeof liveGetPublicBookingPage>) => {
+  await publishPageOwnerForTest(adminUrl, args[0].pageId);
+  return liveGetPublicBookingPage(...args);
+};
 let db: Database;
 
 beforeAll(() => {

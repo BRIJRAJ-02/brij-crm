@@ -576,6 +576,30 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed who has the Intro call managed page (2 added, 1 taken off)',
   ],
   [
+    { ...base, action: 'booking_page.published', target: managedPage, params: { version: 3 } },
+    'Ada Lovelace published Intro call (version 3)',
+  ],
+  [
+    { ...base, action: 'booking_page.draft_discarded', target: managedPage, params: {} },
+    'Ada Lovelace discarded the draft of Intro call',
+  ],
+  [
+    { ...base, action: 'booking_page.version_restored', target: managedPage, params: { version: 2 } },
+    'Ada Lovelace restored version 2 of Intro call as its draft',
+  ],
+  [
+    { ...base, action: 'link_page.published', target: member(bea), params: { version: 4 } },
+    'Ada Lovelace published Bea Rao’s link page (version 4)',
+  ],
+  [
+    { ...base, action: 'link_page.draft_discarded', target: member(bea), params: {} },
+    'Ada Lovelace discarded the draft of Bea Rao’s link page',
+  ],
+  [
+    { ...base, action: 'link_page.version_restored', target: member(bea), params: { version: 1 } },
+    'Ada Lovelace restored version 1 of Bea Rao’s link page as its draft',
+  ],
+  [
     { ...base, action: 'managed_page.propagated', target: managedPage, params: {} },
     'Ada Lovelace updated Intro call from its managed page',
   ],

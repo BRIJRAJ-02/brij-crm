@@ -44,6 +44,21 @@ export const PAGE_FONTS = [
 /** Light, dark, or `system`, which follows the visitor's own setting (AC-5406; spec 0060, AC-15). */
 export const PAGE_MODES = ['light', 'dark', 'system'] as const;
 
+/**
+ * The four templates every public page wears (spec 0068, AC-6801): Classic, Studio, Night and Split. Each is a
+ * finished, tested look; the owner picks one, an accent, a logo, a cover and the avatar's shape, and nothing else
+ * (AC-6802). The workspace's brand kit holds one for every page (AC-6804); a link page may pick its own.
+ */
+export const PAGE_TEMPLATES = ['classic', 'studio', 'night', 'split'] as const;
+/** One of the four templates. */
+export type PageTemplate = (typeof PAGE_TEMPLATES)[number];
+/** The template a page wears when nothing chose one: the plain, follow the visitor look every page drew before. */
+export const DEFAULT_PAGE_TEMPLATE: PageTemplate = 'classic';
+/** Whether `value` is one of the four templates. */
+export function isPageTemplate(value: unknown): value is PageTemplate {
+  return typeof value === 'string' && (PAGE_TEMPLATES as readonly string[]).includes(value);
+}
+
 /** The one sentence every refusal of a look uses (AC-5402). */
 export const PAGE_THEME_REFUSAL = 'That isn’t one of the looks you can pick.';
 
@@ -64,6 +79,17 @@ export const PageTheme = z
     header: z.enum(PAGE_HEADERS, { error: PAGE_THEME_REFUSAL }),
     avatar: z.enum(PAGE_AVATARS, { error: PAGE_THEME_REFUSAL }),
     layout: z.enum(PAGE_LAYOUTS, { error: PAGE_THEME_REFUSAL }).optional(),
+    /**
+     * The template this page wears (spec 0068, AC-6804). Absent follows the workspace's brand kit; set, the page
+     * draws that template and the ten keys above are what the template fixes (`themeForTemplate`), stored but
+     * unused for drawing (AC-6805).
+     */
+    template: z.enum(PAGE_TEMPLATES, { error: PAGE_THEME_REFUSAL }).optional(),
+    /**
+     * Set once by the move to templates (AC-6805) on a page whose old look was mapped: the editor shows "Your page
+     * now uses Classic" until its owner picks a template or closes the note, either of which saves the look without it.
+     */
+    moved: z.literal(true, { error: PAGE_THEME_REFUSAL }).optional(),
   })
   // No unknown key: a look is exactly these ten, so there is never a field the page doesn't draw.
   .strict();
@@ -160,7 +186,7 @@ export const PAGE_THEME_PRESETS = [
 /** One of the named starting points. */
 export type PageThemePreset = (typeof PAGE_THEME_PRESETS)[number]['id'];
 
-/** Whether two looks are the same, key for key: the editor marks the preset a person is standing on. */
+/** Whether two looks are the same, key for key (the template and its note too; the layout is the blocks'). */
 export function sameTheme(one: PageTheme, other: PageTheme): boolean {
   return (
     one.ground === other.ground &&
@@ -172,8 +198,67 @@ export function sameTheme(one: PageTheme, other: PageTheme): boolean {
     one.gradient === other.gradient &&
     one.pattern === other.pattern &&
     one.header === other.header &&
-    one.avatar === other.avatar
+    one.avatar === other.avatar &&
+    one.template === other.template &&
+    one.moved === other.moved
   );
+}
+
+/**
+ * What each template fixes of the ten names (spec 0068, AC-6801, AC-6802): the ground, mode, shape, fill, font and
+ * header. Only the hue and the avatar's shape are the owner's. The library's page modules draw the rest of a
+ * template (its warm ground, its glow, its two columns) from `data-template` alone.
+ */
+export const TEMPLATE_LOOKS = {
+  classic: { ground: 'plain', mode: 'system', shape: 'soft', fill: 'plain', font: 'grotesk', header: 'centred' },
+  studio: { ground: 'paper', mode: 'light', shape: 'pill', fill: 'plain', font: 'editorial', header: 'cover' },
+  night: { ground: 'ink', mode: 'dark', shape: 'soft', fill: 'plain', font: 'geometric', header: 'centred' },
+  split: { ground: 'plain', mode: 'system', shape: 'soft', fill: 'plain', font: 'sans', header: 'left' },
+} as const satisfies Record<PageTemplate, Pick<PageTheme, 'ground' | 'mode' | 'shape' | 'fill' | 'font' | 'header'>>;
+
+/**
+ * A look switched to `template` (AC-6804): the template's fixed names, the owner's hue and avatar kept (an avatar
+ * of `none` becomes a circle: no template hides the face), the layout kept, and the move's note dropped.
+ */
+export function themeForTemplate(template: PageTemplate, from: PageTheme): PageTheme {
+  const kept = Object.fromEntries(Object.entries(from).filter(([key]) => key !== 'moved')) as PageTheme;
+  return {
+    ...kept,
+    ...TEMPLATE_LOOKS[template],
+    avatar: from.avatar === 'none' ? 'circle' : from.avatar,
+    template,
+  };
+}
+
+/**
+ * The template an old look moves to (spec 0068, AC-6805): plain, paper, quiet, ocean, mint → Classic; editorial,
+ * dawn, gallery, peach → Studio; ink, bold, night, graphite → Night; studio and any remaining (a look made by hand)
+ * → Split with a cover photo, else Classic. The preset is found by its keys, as the editor found it; a look made by hand matches none. The
+ * migration that moved every page (0170) runs the same table in SQL; `page-theme.test.ts` holds the two together.
+ */
+export function nearestTemplate(theme: PageTheme, hasCover: boolean): PageTemplate {
+  const keys = ['ground', 'mode', 'shape', 'fill', 'font', 'gradient', 'pattern', 'header', 'avatar'] as const;
+  const preset = PAGE_THEME_PRESETS.find((one) => keys.every((key) => one.theme[key] === theme[key]));
+  switch (preset?.id) {
+    case 'plain':
+    case 'paper':
+    case 'quiet':
+    case 'ocean':
+    case 'mint':
+      return 'classic';
+    case 'editorial':
+    case 'dawn':
+    case 'gallery':
+    case 'peach':
+      return 'studio';
+    case 'ink':
+    case 'bold':
+    case 'night':
+    case 'graphite':
+      return 'night';
+    default:
+      return hasCover ? 'split' : 'classic';
+  }
 }
 
 /** A version as a look's paths carry it: the short hex the server made. */
@@ -188,6 +273,8 @@ const LOOK_HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  */
 export const PublicLook = z.object({
   version: z.string().regex(LOOK_VERSION).optional(),
+  /** The workspace's template (spec 0068, AC-6804), which a page with no template of its own wears. */
+  template: z.enum(PAGE_TEMPLATES).optional(),
   cover: z.string().regex(LOOK_VERSION).optional(),
   ground: z.string().regex(LOOK_VERSION).optional(),
 });

@@ -59,6 +59,9 @@ import { lockRotations } from '../rotation/assign.ts';
 import { everyoneRotation } from '../rotation/roster.ts';
 import { eligibleMembers, GUESTS_CANT_HOST, pageRotations, ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
+import { BOOKING_DRAFT_KEYS } from '@crm/contracts';
+import { changedOnly, diffPage, publishedSnapshot } from './drafts.ts';
+import { keepVersion } from './versions.ts';
 import {
   checkAnswersObject,
   checkNoNewWall,
@@ -179,7 +182,7 @@ export async function bookingTargetProblem(
  * page (AC-1273). A colleague's page is reached through the reader's Manage over its owner, who must still be an
  * active member who isn't a guest.
  */
-async function pageToChange(
+export async function pageToChange(
   tx: WorkspaceTx,
   scope: EngineScope,
   pageId: string,
@@ -224,7 +227,7 @@ async function pageToChange(
  * A page as `pageToChange` reads it: someone else's carries their name and the reach that opened it, and every page
  * the pages the reader edits (spec 0037, AC-1331).
  */
-type ReachedPage = PageRecord & {
+export type ReachedPage = PageRecord & {
   readonly ownerName?: string;
   readonly reach?: SchedulingReach;
   readonly edits?: ReadonlySet<string>;
@@ -313,7 +316,7 @@ function viewOf(
   locked?: readonly ManagedPart[],
 ): BookingPageView {
   const changeable = mayChange(scope, page, reach, edits);
-  return {
+  const view: BookingPageView = {
     id: page.id,
     publicKey: page.publicKey,
     // A managed template never reaches here: `pageToChange` and `listBookingPages` both exclude it, and Sharing
@@ -374,6 +377,31 @@ function viewOf(
     ...(locked === undefined ? {} : { lockedParts: [...locked] }),
     createdAt: page.createdAt.toISOString(),
     updatedAt: page.updatedAt.toISOString(),
+  };
+  return draftedView(view, page, (questions) => seen(questions, page.answersObjectId));
+}
+
+/**
+ * A page's view with its draft laid over it (spec 0068, AC-6810, AC-6811): the drafted settings are what the editor
+ * shows, and `publication` names each change guests don't see yet. Questions pass the same hidden field cut as the
+ * published ones. A page with no draft is its view as it was.
+ */
+function draftedView(
+  view: BookingPageView,
+  page: PageRecord,
+  seenQuestions: (questions: PageRecord['questions']) => PageRecord['questions'],
+): BookingPageView {
+  const draft = page.draft === undefined ? {} : changedOnly(page.draft, page);
+  const changes = diffPage('booking', page, draft);
+  if (changes.length === 0) return view;
+  return {
+    ...view,
+    ...draft,
+    ...(draft.questions === undefined ? {} : { questions: seenQuestions(draft.questions) }),
+    publication: {
+      changes: [...changes],
+      ...(page.draftChangedAt === undefined ? {} : { changedAt: page.draftChangedAt.toISOString() }),
+    },
   };
 }
 
@@ -482,7 +510,7 @@ export async function getBookingPage(
 }
 
 /** One page's view with its month's count, its rotation, and the rules the reader may see. */
-async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: ReachedPage, now: Date) {
+export async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: ReachedPage, now: Date) {
   const counts = await monthCounts(tx, [page.id], now);
   const hosts = await pageHosts(tx, [page]);
   const unseen = await unseenRules(tx, scope.access, page.routingRules ?? []);
@@ -932,6 +960,7 @@ export async function createBookingPage(
         if (row.status === 'live') await checkRotationsBook(tx, scope.workspaceId, row.id);
         const [team] = await pagesOf(tx, [row]);
         if (team === undefined) throw new Error('The booking page was not created.');
+        await keepVersion(tx, scope, team.id, publishedSnapshot(team), now);
         return await viewWithCounts(tx, scope, team, now);
       }
       await tx
@@ -939,6 +968,8 @@ export async function createBookingPage(
         .values({ workspaceId: scope.workspaceId, pageId: row.id, memberId: owner, position: 0 });
       const [page] = await pagesOf(tx, [row]);
       if (page === undefined) throw new Error('The booking page was not created.');
+      // A new page is published as it is made, version 1 (spec 0068, AC-6814): its settings are what guests see.
+      await keepVersion(tx, scope, page.id, publishedSnapshot(page), now);
       // A personal page has no rules.
       return viewOf(
         scope,
@@ -963,221 +994,238 @@ export async function updateBookingPage(
 ): Promise<BookingPageView> {
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
-    const page = await pageToChange(tx, scope, input.pageId, true);
-    const { settings } = input;
-    // A managed page's locked parts are the workspace's (spec 0037, AC-1334): the refusal is here, on the server, so
-    // a direct API call is refused whatever the member's editor shows. It holds for an admin too: a locked part is
-    // changed on the template, and a change made here would be overwritten by the template's next save.
-    const locked = await templateLocksOf(tx, page.templateId);
-    if (locked !== undefined) {
-      const hit = lockedPartOfWrite(locked, settings);
-      if (hit !== undefined) throw refuseOn('FORBIDDEN', LOCKED_PART_REFUSAL, hit.key);
+    const view = await updatePageIn(tx, scope, input, now);
+    // A save that changes what guests see goes live at once, outside the editor's draft (spec 0068): it is kept as a
+    // version too, so the versions always end with what guests see.
+    if (BOOKING_DRAFT_KEYS.some((key) => input.settings[key] !== undefined)) {
+      const published = await loadPage(tx, input.pageId);
+      if (published !== undefined) await keepVersion(tx, scope, published.id, publishedSnapshot(published), now);
     }
-    // The address after the owner's handle, where the page sits on their profile, and whether it shows their social
-    // links, are the owner's alone: an admin of a workspace may change the page, never what is published under the
-    // person's name.
-    const placement = (['slug', 'profileSection', 'profilePosition', 'showSocials'] as const).find(
-      (key) => settings[key] !== undefined,
-    );
-    // A workspace link is on nobody's profile and shows nobody's links; its address (`slug`) is the workspace's,
-    // so any `booking.admin` holder changes it.
-    if (page.scope === 'workspace' && placement !== undefined && placement !== 'slug') {
-      throw refuseOn('CONFIG_INVALID', 'A workspace link isn’t on anyone’s profile.', placement);
-    }
-    if (placement !== undefined && page.scope === 'member' && memberOf(scope) !== page.ownerMemberId) {
-      throw refuseOn(
-        'FORBIDDEN',
-        placement === 'showSocials'
-          ? 'Only the page’s owner chooses whether it shows their social links.'
-          : 'Only the page’s owner changes its address and its place on their profile.',
-        placement,
-      );
-    }
-    checkTeamSchedule(page.kind, settings.scheduleId);
-    checkDurations(settings.durations);
-    // Only through a form is a team page's (spec 0037, AC-1388): a personal page has no form in front of it.
-    if (settings.formOnly === true && page.kind !== 'round_robin') {
-      throw refuseOn('CONFIG_INVALID', 'Only a team page books through a form only.', 'formOnly');
-    }
-    // Redirect after booking (spec 0062, AC-6201): checked as the page will be, so switching to Redirect without
-    // an address, or clearing the address of a redirect page, is refused rather than stranding every visitor.
-    if (settings.afterBooking !== undefined || settings.redirectUrl !== undefined) {
-      checkAfterBooking(settings.afterBooking ?? page.afterBooking, afterRedirect(settings, page));
-    }
-    // A page a published form still sends visitors to stays live until that form changes (AC-1341).
-    if (settings.status === 'paused' && page.status === 'live') await checkNotRouted(tx, scope.access, page.id);
-    if (settings.scheduleId !== undefined && settings.scheduleId !== null) {
-      await checkPageSchedule(tx, page.ownerMemberId, settings.scheduleId);
-    }
-    // Where the answers are filed (booking answers parity, 27 Oct 2026): null is People, which is what every page
-    // did before. A page pointed at another object keeps its questions and loses the filings that object has no
-    // attribute for, exactly as a form's "Where the answers go" does; every filing is then checked afresh against
-    // the new object, since an attribute id belongs to one object.
-    const target = settings.answersObjectId === undefined ? page.answersObjectId : settings.answersObjectId;
-    const moved = settings.answersObjectId !== undefined && settings.answersObjectId !== page.answersObjectId;
-    // The questions as the writer sent them, with the filings a field hidden from them kept, then checked: what changed
-    // against the writer's own access (spec 0057, AC-5717), the rest as a form's publish checks it.
-    const seen = await questionsSeenBy(tx, scope.access);
-    const sent =
-      settings.questions === undefined
-        ? moved
-          ? page.questions
-          : undefined
-        : withHiddenFilings(page.questions, settings.questions, seen(page.questions, page.answersObjectId));
-    const questions =
-      sent === undefined ? undefined : moved ? refiledOnto(sent, await attributeIdsOf(tx, target)) : sent;
-    // Checked with the questions it will file there: a required question fills the field it is filed on.
-    if (moved && target !== null) await checkAnswersObject(tx, scope, target, questions ?? page.questions);
-    if (questions !== undefined) {
-      await checkPageQuestions(tx, scope, questions, moved ? [] : page.questions, target);
-    }
-    // Only on the way to live: a page already live onto such an object keeps working, and its other settings save.
-    // Filing to the CRM turned back on is going live for the records it makes: a required field may have turned
-    // Required meanwhile, since a page kept out of the CRM walls nothing (`livePagesWalledBy`).
-    const startsFiling = settings.fileToCrm === true && !page.fileToCrm && settings.status !== 'paused';
-    if ((settings.status === 'live' && page.status !== 'live') || (startsFiling && page.status === 'live')) {
-      await checkPageCanGoLive(tx, scope, questions ?? page.questions, target);
-    } else if (
-      page.status === 'live' &&
-      settings.status !== 'paused' &&
-      (settings.fileToCrm ?? page.fileToCrm) &&
-      questions !== undefined &&
-      !moved
-    ) {
-      // A live page's edit may not take away the required question a required field is filled by. A page kept out
-      // of the CRM makes no record, so it has nothing to wall.
-      await checkNoNewWall(tx, scope, page.questions, questions, target);
-    }
-    if (input.hosts !== undefined) {
-      if (page.kind !== 'round_robin') {
-        throw refuseOn('CONFIG_INVALID', 'Only a round robin page books from rotations.', 'hosts');
-      }
-      await checkHostsReach(tx, scope, page, input.hosts);
-      await setPageHosts(tx, scope.workspaceId, page.id, input.hosts);
-    }
-    // Live afterwards, with its rotations new or the page just turned on: each has to have someone to seat.
-    if (
-      page.kind === 'round_robin' &&
-      (settings.status ?? page.status) === 'live' &&
-      (input.hosts !== undefined || page.status !== 'live')
-    ) {
-      await checkRotationsBook(tx, scope.workspaceId, page.id);
-    }
-    // A personal or collective page turned back on needs a host who isn't a guest (spec 0037, AC-1432): a page paused
-    // when its owner became a guest stays paused until they are a member again.
-    if (page.kind !== 'round_robin' && settings.status === 'live' && page.status !== 'live') {
-      const hosts = await tx.execute<{ n: number }>(sql`
-        select count(*)::int as n from booking_page_members m
-        join members h on h.workspace_id = m.workspace_id and h.id = m.member_id
-          and h.status = 'active' and h.role::text <> 'guest'
-        where m.workspace_id = ${scope.workspaceId}::uuid and m.page_id = ${page.id}::uuid
-      `);
-      if ((hosts.rows[0]?.n ?? 0) === 0) throw refuseOn('MEMBER_INVALID', GUESTS_CANT_HOST, 'status');
-    }
-    // Routing rules (spec 0043, AC-1608): only a round robin page's, each naming members of its rotations; audited.
-    // The writer sends the rules they see; those over a field hidden from them are put back as they were, in place.
-    let routing: { readonly rules: readonly RoutingRule[] } | undefined;
-    if (input.routing !== undefined) {
-      if (page.kind !== 'round_robin') {
-        throw refuseOn('CONFIG_INVALID', 'Only a team page has routing rules.', 'routing');
-      }
-      const before = page.routingRules ?? [];
-      // Checked as sent, so a refusal names a rule by its place in the writer's own list.
-      await checkPageRoutes(tx, page.id, input.routing.rules, { access: scope.access, before });
-      const rules = withUnseenRules(before, input.routing.rules, await unseenRules(tx, scope.access, before));
-      if (rules.length > ROUTING_RULES_MAX) {
-        throw refuseOn(
-          'CONFIG_INVALID',
-          `This page holds the most rules it can, ${String(ROUTING_RULES_MAX)}. Remove one to add another.`,
-          'routing',
-        );
-      }
-      if (rulesChanged(before, rules)) {
-        await writeAudit(tx, scope.workspaceId, scope.actor, {
-          action: 'routing.changed',
-          targetType: 'booking_page',
-          targetId: page.id,
-          before: { rules: before.length },
-          after: { rules: rules.length, changed: changedRuleIds(before, rules) },
-        });
-      }
-      routing = { rules };
-    }
-    const by = actorRow(scope.actor);
-    try {
-      const [row] = await tx
-        .update(bookingPages)
-        .set({
-          ...(settings.title === undefined ? {} : { title: settings.title }),
-          ...(settings.description === undefined ? {} : { description: settings.description }),
-          ...(settings.slug === undefined ? {} : { slug: settings.slug }),
-          ...(settings.durations === undefined ? {} : { durations: [...settings.durations] }),
-          ...(settings.location === undefined ? {} : { location: settings.location }),
-          ...(settings.bufferBefore === undefined ? {} : { bufferBefore: settings.bufferBefore }),
-          ...(settings.bufferAfter === undefined ? {} : { bufferAfter: settings.bufferAfter }),
-          ...(settings.minNoticeMinutes === undefined ? {} : { minNoticeMinutes: settings.minNoticeMinutes }),
-          ...(settings.windowDays === undefined ? {} : { windowDays: settings.windowDays }),
-          ...(settings.dailyLimit === undefined ? {} : { dailyLimit: settings.dailyLimit }),
-          ...(settings.slotStep === undefined ? {} : { slotStep: settings.slotStep }),
-          // A status set by a person clears the system's reason for a pause (spec 0031, AC-814).
-          ...(settings.status === undefined ? {} : { status: settings.status, pausedReason: null }),
-          ...(settings.scheduleId === undefined
-            ? {}
-            : { scheduleId: settings.scheduleId, hoursMode: settings.scheduleId === null ? 'mine' : 'own' }),
-          ...(settings.rescheduleHost === undefined ? {} : { rescheduleHost: settings.rescheduleHost }),
-          ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
-          ...(settings.showSocials === undefined ? {} : { showSocials: settings.showSocials }),
-          ...(settings.defaultView === undefined ? {} : { defaultView: settings.defaultView }),
-          ...(settings.profileSection === undefined ? {} : { profileSection: settings.profileSection }),
-          ...(settings.profilePosition === undefined ? {} : { profilePosition: settings.profilePosition }),
-          ...(questions === undefined ? {} : { questions }),
-          ...(settings.fileToCrm === undefined ? {} : { fileToCrm: settings.fileToCrm }),
-          ...(settings.answersObjectId === undefined ? {} : { answersObjectId: settings.answersObjectId }),
-          ...(settings.formOnly === undefined ? {} : { formOnly: settings.formOnly }),
-          // Confirmation drops the address with it, so the database's pairing of the two always holds.
-          ...(settings.afterBooking === undefined && settings.redirectUrl === undefined
-            ? {}
-            : {
-                afterBooking: settings.afterBooking ?? page.afterBooking,
-                redirectUrl: afterRedirect(settings, page),
-              }),
-          ...(settings.sendBookingDetails === undefined ? {} : { sendBookingDetails: settings.sendBookingDetails }),
-          ...(settings.cancelCutoffMinutes === undefined ? {} : { cancelCutoffMinutes: settings.cancelCutoffMinutes }),
-          ...(settings.moveCutoffMinutes === undefined ? {} : { moveCutoffMinutes: settings.moveCutoffMinutes }),
-          ...(settings.requiresConfirmation === undefined
-            ? {}
-            : { requiresConfirmation: settings.requiresConfirmation }),
-          ...(settings.linksOnly === undefined ? {} : { linksOnly: settings.linksOnly }),
-          ...(routing === undefined ? {} : { routing }),
-          updatedAt: sql`now()`,
-          updatedByType: by.type,
-          updatedById: by.id,
-          updatedByMemberId: by.memberId,
-        })
-        .where(eq(bookingPages.id, input.pageId))
-        .returning();
-      const [changed] = row === undefined ? [] : await pagesOf(tx, [row]);
-      if (changed === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
-      await changedFor(tx, scope, page, changed);
-      // Link only made Public: the page joins the end of its owner's link page, once (spec 0051).
-      if (row !== undefined && page.isPrivate && !row.isPrivate && page.scope === 'member') {
-        await placeNewPage(tx, scope, row);
-      }
-      return await viewWithCounts(
-        tx,
-        scope,
-        {
-          ...changed,
-          ...(page.ownerName === undefined ? {} : { ownerName: page.ownerName }),
-          ...(page.reach === undefined ? {} : { reach: page.reach }),
-          ...(page.edits === undefined ? {} : { edits: page.edits }),
-        },
-        now,
-      );
-    } catch (error) {
-      throw slugRefusal(error) ?? error;
-    }
+    return view;
   });
+}
+
+/**
+ * `updateBookingPage` inside the caller's own transaction: Publish (spec 0068, AC-6811) writes a draft through it, so
+ * a draft is checked exactly as a save is, and its version is kept in the same transaction.
+ */
+export async function updatePageIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  input: Pick<UpdateBookingPageInput, 'pageId' | 'settings' | 'hosts' | 'routing'>,
+  now: Date,
+): Promise<BookingPageView> {
+  const page = await pageToChange(tx, scope, input.pageId, true);
+  const { settings } = input;
+  // A managed page's locked parts are the workspace's (spec 0037, AC-1334): the refusal is here, on the server, so
+  // a direct API call is refused whatever the member's editor shows. It holds for an admin too: a locked part is
+  // changed on the template, and a change made here would be overwritten by the template's next save.
+  const locked = await templateLocksOf(tx, page.templateId);
+  if (locked !== undefined) {
+    const hit = lockedPartOfWrite(locked, settings);
+    if (hit !== undefined) throw refuseOn('FORBIDDEN', LOCKED_PART_REFUSAL, hit.key);
+  }
+  // The address after the owner's handle, where the page sits on their profile, and whether it shows their social
+  // links, are the owner's alone: an admin of a workspace may change the page, never what is published under the
+  // person's name.
+  const placement = (['slug', 'profileSection', 'profilePosition', 'showSocials'] as const).find(
+    (key) => settings[key] !== undefined,
+  );
+  // A workspace link is on nobody's profile and shows nobody's links; its address (`slug`) is the workspace's,
+  // so any `booking.admin` holder changes it.
+  if (page.scope === 'workspace' && placement !== undefined && placement !== 'slug') {
+    throw refuseOn('CONFIG_INVALID', 'A workspace link isn’t on anyone’s profile.', placement);
+  }
+  if (placement !== undefined && page.scope === 'member' && memberOf(scope) !== page.ownerMemberId) {
+    throw refuseOn(
+      'FORBIDDEN',
+      placement === 'showSocials'
+        ? 'Only the page’s owner chooses whether it shows their social links.'
+        : 'Only the page’s owner changes its address and its place on their profile.',
+      placement,
+    );
+  }
+  checkTeamSchedule(page.kind, settings.scheduleId);
+  checkDurations(settings.durations);
+  // Only through a form is a team page's (spec 0037, AC-1388): a personal page has no form in front of it.
+  if (settings.formOnly === true && page.kind !== 'round_robin') {
+    throw refuseOn('CONFIG_INVALID', 'Only a team page books through a form only.', 'formOnly');
+  }
+  // Redirect after booking (spec 0062, AC-6201): checked as the page will be, so switching to Redirect without
+  // an address, or clearing the address of a redirect page, is refused rather than stranding every visitor.
+  if (settings.afterBooking !== undefined || settings.redirectUrl !== undefined) {
+    checkAfterBooking(settings.afterBooking ?? page.afterBooking, afterRedirect(settings, page));
+  }
+  // A page a published form still sends visitors to stays live until that form changes (AC-1341).
+  if (settings.status === 'paused' && page.status === 'live') await checkNotRouted(tx, scope.access, page.id);
+  if (settings.scheduleId !== undefined && settings.scheduleId !== null) {
+    await checkPageSchedule(tx, page.ownerMemberId, settings.scheduleId);
+  }
+  // Where the answers are filed (booking answers parity, 27 Oct 2026): null is People, which is what every page
+  // did before. A page pointed at another object keeps its questions and loses the filings that object has no
+  // attribute for, exactly as a form's "Where the answers go" does; every filing is then checked afresh against
+  // the new object, since an attribute id belongs to one object.
+  const target = settings.answersObjectId === undefined ? page.answersObjectId : settings.answersObjectId;
+  const moved = settings.answersObjectId !== undefined && settings.answersObjectId !== page.answersObjectId;
+  // The questions as the writer sent them, with the filings a field hidden from them kept, then checked: what changed
+  // against the writer's own access (spec 0057, AC-5717), the rest as a form's publish checks it.
+  const seen = await questionsSeenBy(tx, scope.access);
+  const sent =
+    settings.questions === undefined
+      ? moved
+        ? page.questions
+        : undefined
+      : withHiddenFilings(page.questions, settings.questions, seen(page.questions, page.answersObjectId));
+  const questions = sent === undefined ? undefined : moved ? refiledOnto(sent, await attributeIdsOf(tx, target)) : sent;
+  // Checked with the questions it will file there: a required question fills the field it is filed on.
+  if (moved && target !== null) await checkAnswersObject(tx, scope, target, questions ?? page.questions);
+  if (questions !== undefined) {
+    await checkPageQuestions(tx, scope, questions, moved ? [] : page.questions, target);
+  }
+  // Only on the way to live: a page already live onto such an object keeps working, and its other settings save.
+  // Filing to the CRM turned back on is going live for the records it makes: a required field may have turned
+  // Required meanwhile, since a page kept out of the CRM walls nothing (`livePagesWalledBy`).
+  const startsFiling = settings.fileToCrm === true && !page.fileToCrm && settings.status !== 'paused';
+  if ((settings.status === 'live' && page.status !== 'live') || (startsFiling && page.status === 'live')) {
+    await checkPageCanGoLive(tx, scope, questions ?? page.questions, target);
+  } else if (
+    page.status === 'live' &&
+    settings.status !== 'paused' &&
+    (settings.fileToCrm ?? page.fileToCrm) &&
+    questions !== undefined &&
+    !moved
+  ) {
+    // A live page's edit may not take away the required question a required field is filled by. A page kept out
+    // of the CRM makes no record, so it has nothing to wall.
+    await checkNoNewWall(tx, scope, page.questions, questions, target);
+  }
+  if (input.hosts !== undefined) {
+    if (page.kind !== 'round_robin') {
+      throw refuseOn('CONFIG_INVALID', 'Only a round robin page books from rotations.', 'hosts');
+    }
+    await checkHostsReach(tx, scope, page, input.hosts);
+    await setPageHosts(tx, scope.workspaceId, page.id, input.hosts);
+  }
+  // Live afterwards, with its rotations new or the page just turned on: each has to have someone to seat.
+  if (
+    page.kind === 'round_robin' &&
+    (settings.status ?? page.status) === 'live' &&
+    (input.hosts !== undefined || page.status !== 'live')
+  ) {
+    await checkRotationsBook(tx, scope.workspaceId, page.id);
+  }
+  // A personal or collective page turned back on needs a host who isn't a guest (spec 0037, AC-1432): a page paused
+  // when its owner became a guest stays paused until they are a member again.
+  if (page.kind !== 'round_robin' && settings.status === 'live' && page.status !== 'live') {
+    const hosts = await tx.execute<{ n: number }>(sql`
+      select count(*)::int as n from booking_page_members m
+      join members h on h.workspace_id = m.workspace_id and h.id = m.member_id
+        and h.status = 'active' and h.role::text <> 'guest'
+      where m.workspace_id = ${scope.workspaceId}::uuid and m.page_id = ${page.id}::uuid
+    `);
+    if ((hosts.rows[0]?.n ?? 0) === 0) throw refuseOn('MEMBER_INVALID', GUESTS_CANT_HOST, 'status');
+  }
+  // Routing rules (spec 0043, AC-1608): only a round robin page's, each naming members of its rotations; audited.
+  // The writer sends the rules they see; those over a field hidden from them are put back as they were, in place.
+  let routing: { readonly rules: readonly RoutingRule[] } | undefined;
+  if (input.routing !== undefined) {
+    if (page.kind !== 'round_robin') {
+      throw refuseOn('CONFIG_INVALID', 'Only a team page has routing rules.', 'routing');
+    }
+    const before = page.routingRules ?? [];
+    // Checked as sent, so a refusal names a rule by its place in the writer's own list.
+    await checkPageRoutes(tx, page.id, input.routing.rules, { access: scope.access, before });
+    const rules = withUnseenRules(before, input.routing.rules, await unseenRules(tx, scope.access, before));
+    if (rules.length > ROUTING_RULES_MAX) {
+      throw refuseOn(
+        'CONFIG_INVALID',
+        `This page holds the most rules it can, ${String(ROUTING_RULES_MAX)}. Remove one to add another.`,
+        'routing',
+      );
+    }
+    if (rulesChanged(before, rules)) {
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: 'routing.changed',
+        targetType: 'booking_page',
+        targetId: page.id,
+        before: { rules: before.length },
+        after: { rules: rules.length, changed: changedRuleIds(before, rules) },
+      });
+    }
+    routing = { rules };
+  }
+  const by = actorRow(scope.actor);
+  try {
+    const [row] = await tx
+      .update(bookingPages)
+      .set({
+        ...(settings.title === undefined ? {} : { title: settings.title }),
+        ...(settings.description === undefined ? {} : { description: settings.description }),
+        ...(settings.slug === undefined ? {} : { slug: settings.slug }),
+        ...(settings.durations === undefined ? {} : { durations: [...settings.durations] }),
+        ...(settings.location === undefined ? {} : { location: settings.location }),
+        ...(settings.bufferBefore === undefined ? {} : { bufferBefore: settings.bufferBefore }),
+        ...(settings.bufferAfter === undefined ? {} : { bufferAfter: settings.bufferAfter }),
+        ...(settings.minNoticeMinutes === undefined ? {} : { minNoticeMinutes: settings.minNoticeMinutes }),
+        ...(settings.windowDays === undefined ? {} : { windowDays: settings.windowDays }),
+        ...(settings.dailyLimit === undefined ? {} : { dailyLimit: settings.dailyLimit }),
+        ...(settings.slotStep === undefined ? {} : { slotStep: settings.slotStep }),
+        // A status set by a person clears the system's reason for a pause (spec 0031, AC-814).
+        ...(settings.status === undefined ? {} : { status: settings.status, pausedReason: null }),
+        ...(settings.scheduleId === undefined
+          ? {}
+          : { scheduleId: settings.scheduleId, hoursMode: settings.scheduleId === null ? 'mine' : 'own' }),
+        ...(settings.rescheduleHost === undefined ? {} : { rescheduleHost: settings.rescheduleHost }),
+        ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
+        ...(settings.showSocials === undefined ? {} : { showSocials: settings.showSocials }),
+        ...(settings.defaultView === undefined ? {} : { defaultView: settings.defaultView }),
+        ...(settings.profileSection === undefined ? {} : { profileSection: settings.profileSection }),
+        ...(settings.profilePosition === undefined ? {} : { profilePosition: settings.profilePosition }),
+        ...(questions === undefined ? {} : { questions }),
+        ...(settings.fileToCrm === undefined ? {} : { fileToCrm: settings.fileToCrm }),
+        ...(settings.answersObjectId === undefined ? {} : { answersObjectId: settings.answersObjectId }),
+        ...(settings.formOnly === undefined ? {} : { formOnly: settings.formOnly }),
+        // Confirmation drops the address with it, so the database's pairing of the two always holds.
+        ...(settings.afterBooking === undefined && settings.redirectUrl === undefined
+          ? {}
+          : {
+              afterBooking: settings.afterBooking ?? page.afterBooking,
+              redirectUrl: afterRedirect(settings, page),
+            }),
+        ...(settings.sendBookingDetails === undefined ? {} : { sendBookingDetails: settings.sendBookingDetails }),
+        ...(settings.cancelCutoffMinutes === undefined ? {} : { cancelCutoffMinutes: settings.cancelCutoffMinutes }),
+        ...(settings.moveCutoffMinutes === undefined ? {} : { moveCutoffMinutes: settings.moveCutoffMinutes }),
+        ...(settings.requiresConfirmation === undefined ? {} : { requiresConfirmation: settings.requiresConfirmation }),
+        ...(settings.linksOnly === undefined ? {} : { linksOnly: settings.linksOnly }),
+        ...(routing === undefined ? {} : { routing }),
+        updatedAt: sql`now()`,
+        updatedByType: by.type,
+        updatedById: by.id,
+        updatedByMemberId: by.memberId,
+      })
+      .where(eq(bookingPages.id, input.pageId))
+      .returning();
+    const [changed] = row === undefined ? [] : await pagesOf(tx, [row]);
+    if (changed === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+    await changedFor(tx, scope, page, changed);
+    // Link only made Public: the page joins the end of its owner's link page, once (spec 0051).
+    if (row !== undefined && page.isPrivate && !row.isPrivate && page.scope === 'member') {
+      await placeNewPage(tx, scope, row);
+    }
+    return await viewWithCounts(
+      tx,
+      scope,
+      {
+        ...changed,
+        ...(page.ownerName === undefined ? {} : { ownerName: page.ownerName }),
+        ...(page.reach === undefined ? {} : { reach: page.reach }),
+        ...(page.edits === undefined ? {} : { edits: page.edits }),
+      },
+      now,
+    );
+  } catch (error) {
+    throw slugRefusal(error) ?? error;
+  }
 }
 
 /**

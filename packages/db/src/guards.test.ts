@@ -176,6 +176,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_count_profile_booking', owner: 'crm_handle' },
       { name: 'crm_count_profile_view', owner: 'crm_handle' },
       { name: 'crm_delete_profile_item', owner: 'crm_handle' },
+      { name: 'crm_discard_link_draft', owner: 'crm_handle' },
       // Pictures no block uses, dropped by the daily cleanup (spec 0061).
       { name: 'crm_drop_profile_images', owner: 'crm_handle' },
       // The workspace's automation task (parity #53, migration 0140).
@@ -201,6 +202,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_join_requests_of', owner: 'crm_domain_lookup' },
+      { name: 'crm_link_page_rows', owner: 'crm_handle' },
+      { name: 'crm_link_page_state', owner: 'crm_handle' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_operator_daily', owner: 'crm_operator' },
       { name: 'crm_operator_members', owner: 'crm_operator' },
@@ -217,6 +220,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_handles_of', owner: 'crm_handle' },
       // Who the page is from (3 Nov 2026, migration 0164).
       { name: 'crm_profile_identity', owner: 'crm_handle' },
+      { name: 'crm_profile_identity_public', owner: 'crm_handle' },
       // A link page's pictures: its owner's, a visitor's while a live block uses one, and the unused (spec 0061).
       { name: 'crm_profile_image_of', owner: 'crm_handle' },
       { name: 'crm_profile_image_public', owner: 'crm_handle' },
@@ -227,15 +231,18 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_items_archived', owner: 'crm_handle' },
       { name: 'crm_profile_items_public', owner: 'crm_handle' },
       { name: 'crm_profile_look', owner: 'crm_handle' },
+      { name: 'crm_profile_look_public', owner: 'crm_handle' },
       // The share QR's style (spec 0061, AC-6124).
       { name: 'crm_profile_qr_style', owner: 'crm_handle' },
       // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112).
       { name: 'crm_profile_share_image', owner: 'crm_handle' },
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
+      { name: 'crm_publish_link_page', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       // A guest calendar connect's single use hand off to the public host (4 Nov 2026, migration 0168).
       { name: 'crm_put_guest_handoff', owner: 'crm_guest_handoff' },
+      { name: 'crm_restore_link_page', owner: 'crm_handle' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_profile_accent', owner: 'crm_handle' },
       { name: 'crm_save_profile_identity', owner: 'crm_handle' },
@@ -301,6 +308,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_count_profile_view', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it answers whether the block was the owner's, and closes the gap it left.
       { name: 'crm_delete_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_discard_link_draft', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it answers how many unused pictures' rows it removed.
       { name: 'crm_drop_profile_images', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_automation', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -322,6 +330,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_join_requests_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_link_page_rows', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_link_page_state', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_daily', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_members', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -339,6 +349,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_handles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_identity', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_identity_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_image_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_image_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_images_unused', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -347,12 +358,15 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_items_archived', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_look', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_look_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_qr_style', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_share_image', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_publish_link_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_put_guest_handoff', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_restore_link_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it checks the workspace and the membership, and raises PROFILE_MISSING (spec 0060).
       { name: 'crm_save_profile_accent', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -622,6 +636,15 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_sitemap_handles',
         'crm_profile_identity',
         'crm_save_profile_identity',
+        // Publish for link pages (spec 0068, migration 0172). The rows reader runs only inside the others, so it has
+        // no signature below.
+        'crm_link_page_rows',
+        'crm_link_page_state',
+        'crm_publish_link_page',
+        'crm_restore_link_page',
+        'crm_discard_link_draft',
+        'crm_profile_identity_public',
+        'crm_profile_look_public',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',
@@ -670,10 +693,16 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_sitemap_handles(text, integer)',
         'crm_profile_identity(uuid, uuid)',
         'crm_save_profile_identity(uuid, uuid, boolean, text, text)',
+        'crm_link_page_state(uuid, uuid)',
+        'crm_publish_link_page(uuid, uuid)',
+        'crm_restore_link_page(uuid, uuid, jsonb)',
+        'crm_discard_link_draft(uuid, uuid)',
+        'crm_profile_identity_public(uuid, uuid)',
+        'crm_profile_look_public(uuid, uuid)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 46 }, () => 'app'),
+      Array.from({ length: 52 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -1294,6 +1323,34 @@ describe('isolation', () => {
         ),
       ).rejects.toMatchObject({ cause: { code: '23514' } });
     }
+  });
+
+  it("reads none of another workspace's page versions, never lets the app rewrite one, and refuses a stray kind (spec 0068)", async () => {
+    const a = await workspaceWithMember('versions-iso-a');
+    const b = await workspaceWithMember('versions-iso-b');
+    const pageId = randomUUID();
+    for (const w of [a, b]) {
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into page_versions (workspace_id, page_kind, page_id, version, snapshot, published_by_member_id) values (${w.workspaceId}, 'booking', ${pageId}, 1, '{"title":"Intro"}'::jsonb, ${w.memberId})`,
+        ),
+      );
+    }
+    const seen = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ workspace_id: string }>(sql`select workspace_id from page_versions`),
+    );
+    expect(seen.rows.map((row) => row.workspace_id)).toEqual([a.workspaceId]);
+    // A version is what guests saw: the app may not rewrite its settings.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update page_versions set snapshot = '{}'::jsonb`)),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into page_versions (workspace_id, page_kind, page_id, version, snapshot) values (${a.workspaceId}, 'menu', ${pageId}, 2, '{}'::jsonb)`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
   });
 
   it('refuses a row written into another workspace', async () => {
@@ -2495,6 +2552,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // Whether search engines may show their page (spec 0055, migration 0108): one more column, and only
       // through crm_save_profile_indexable. This line is the whole of what that spec widened.
       'auth.public_profiles.indexable UPDATE',
+      // What guests see of the page (spec 0068, migration 0172): only through crm_publish_link_page.
+      'auth.public_profiles.published UPDATE',
+      'auth.public_profiles.published_at UPDATE',
       // The share QR's style (spec 0061, migration 0147), only through crm_save_profile_qr_style.
       'auth.public_profiles.qr_style UPDATE',
       // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112): three more

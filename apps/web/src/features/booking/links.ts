@@ -4,6 +4,8 @@ import type { BookingPageView } from '@crm/data';
 
 /** Captures › Links: the booking pages list. */
 export const linksHref = (slug: string) => `/w/${slug}/captures/links`;
+/** A booking page's draft, opened as a guest would see it (spec 0068, AC-6811): signed in only, inside the app. */
+export const pagePreviewHref = (slug: string, pageId: string) => `/w/${slug}/captures/links/${pageId}/preview`;
 
 /** Captures › Links with the New booking page dialog open, preset to Link only (Bookings' reserved time). */
 export const newLinkOnlyPageHref = (slug: string) => `/w/${slug}/captures/links?new=link-only`;

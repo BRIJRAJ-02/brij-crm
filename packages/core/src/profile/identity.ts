@@ -26,14 +26,20 @@ export interface ProfileIdentity {
   readonly footLine?: string;
 }
 
-/** `owner`'s choices in `workspace`, or undefined: no page there, or not an active member of it. */
+/**
+ * `owner`'s choices in `workspace`, or undefined: no page there, or not an active member of it. `published` reads them
+ * as guests see them (spec 0068, AC-6810: the last Publish); the owner's editor reads the draft.
+ */
 export async function identityOf(
   tx: WorkspaceTx,
   owner: string,
   workspace: string,
+  which: 'draft' | 'published' = 'draft',
 ): Promise<ProfileIdentity | undefined> {
   const found = await tx.execute<IdentityRow>(
-    sql`select show_job_title, site_url, foot_line from crm_profile_identity(${owner}::uuid, ${workspace}::uuid)`,
+    which === 'published'
+      ? sql`select show_job_title, site_url, foot_line from crm_profile_identity_public(${owner}::uuid, ${workspace}::uuid)`
+      : sql`select show_job_title, site_url, foot_line from crm_profile_identity(${owner}::uuid, ${workspace}::uuid)`,
   );
   const [row] = found.rows;
   if (row === undefined) return undefined;
@@ -75,8 +81,10 @@ export async function jobTitleOf(tx: WorkspaceTx, userId: string, workspace: str
 export async function publicIdentityOf(
   tx: WorkspaceTx,
   owner: { readonly userId: string; readonly workspaceId: string; readonly handle: string },
+  /** `draft` only for the owner's own Preview (spec 0068). */
+  which: 'draft' | 'published' = 'published',
 ): Promise<Pick<PublicProfile, 'role' | 'brand' | 'footLine'>> {
-  const identity = await identityOf(tx, owner.userId, owner.workspaceId);
+  const identity = await identityOf(tx, owner.userId, owner.workspaceId, which);
   if (identity === undefined) return {};
   const role = identity.showJobTitle ? await jobTitleOf(tx, owner.userId, owner.workspaceId) : undefined;
   let brand: PublicProfile['brand'];
@@ -111,7 +119,7 @@ export async function lockupLogoOf(
   tx: WorkspaceTx,
   owner: { readonly userId: string; readonly workspaceId: string },
 ): Promise<{ readonly path: string; readonly type: string; readonly version: string } | undefined> {
-  const identity = await identityOf(tx, owner.userId, owner.workspaceId);
+  const identity = await identityOf(tx, owner.userId, owner.workspaceId, 'published');
   if (identity?.site === undefined) return undefined;
   const kit = await brandRowOf(tx, owner.workspaceId);
   if (typeof kit?.logoPath !== 'string' || typeof kit.logoType !== 'string' || typeof kit.logoVersion !== 'string') {

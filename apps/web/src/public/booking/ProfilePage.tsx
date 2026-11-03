@@ -157,6 +157,20 @@ const footOf = (mode: 'light' | 'dark' | 'system') => (
   />
 );
 
+/**
+ * The look a link page wears (spec 0068, AC-6804): its own template, else its workspace's, else Classic. The
+ * library draws the template's fixed names over the stored ones.
+ */
+export function wornTheme(profile: Pick<PublicProfile, 'theme' | 'look'>): PublicProfile['theme'] {
+  return { ...profile.theme, template: profile.theme.template ?? profile.look?.template ?? 'classic' };
+}
+
+/** The light or dark a template pins (Night dark, Studio light), or `system` for one that follows the visitor. */
+export function wornMode(theme: PublicProfile['theme']): 'light' | 'dark' | 'system' {
+  if (theme.template === undefined) return theme.mode;
+  return theme.template === 'night' ? 'dark' : theme.template === 'studio' ? 'light' : 'system';
+}
+
 /** The link page: the person, then their blocks a page at a time, with a search once there are many. */
 export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
   const client = useMemo(() => createHandleClient({ origin: globalThis.location.origin }), []);
@@ -173,11 +187,15 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
   // What this view carries from the page (AC-6116): the referring site's host and the `utm_source`, read once,
   // before anything the page does can change the address. Nothing else about the visitor is read or sent.
   const [facts] = useState(() =>
-    viewFactsOf({
-      referrer: document.referrer,
-      search: globalThis.location.search,
-      origin: globalThis.location.origin,
-    }),
+    // The owner's own Preview of their draft (spec 0068, `?draft=1`): no view is counted, and the server answers the
+    // draft only to the signed in owner.
+    new URLSearchParams(globalThis.location.search).get('draft') === '1'
+      ? { draft: true }
+      : viewFactsOf({
+          referrer: document.referrer,
+          search: globalThis.location.search,
+          origin: globalThis.location.origin,
+        }),
   );
   // The tab's session, and all this page keeps in it (AC-6127): a closed banner and the continued notices.
   const visit = useMemo(() => visitStorage(), []);
@@ -445,7 +463,7 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
           })}
       blocks={blocks}
       // The look its owner picked (spec 0054), which lands with the content, in one step.
-      theme={profile.theme}
+      theme={wornTheme(profile)}
       // Which photos its own stylesheet carries (spec 0060): a photo look without one draws plain and centred.
       photos={{ cover: profile.look?.cover !== undefined, ground: profile.look?.ground !== undefined }}
       // The open section, and the address it is kept in. `pushState` so the back button closes it (AC-5417).
@@ -460,7 +478,7 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
         );
       }}
       {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
-      foot={footOf(profile.theme.mode)}
+      foot={footOf(wornMode(wornTheme(profile)))}
       // A press is counted by a beacon (AC-5125): the navigation never waits for it.
       onPress={(id) => client.press(current, id)}
       onTimesNear={readTimes}

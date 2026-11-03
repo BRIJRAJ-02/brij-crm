@@ -14,6 +14,7 @@
 // Leaves out: the deal step (milestone 2), collective members, and the profile's order (pages keep the
 // order they were made in until the Links list can be reordered by drag).
 import {
+  BOOKING_DRAFT_KEYS,
   BRAND_QUICK_PICKS,
   isDataError,
   MANAGED_PARTS,
@@ -46,6 +47,9 @@ import {
   Modal,
   PreviewFrame,
   PreviewLayout,
+  PublishBar,
+  type PublishBarStatus,
+  type PublishBarVersion,
   Popover,
   Radio,
   RadioGroup,
@@ -102,6 +106,7 @@ import {
   linksHref,
   PAGE_TABS,
   pageEditorHref,
+  pagePreviewHref,
   pageTabOf,
   publicBookingOrigin,
   publicBookingPath,
@@ -117,6 +122,7 @@ import { SharingPanel } from './SharingPanel.tsx';
 import { sharingStrings } from './sharing-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
+import { publishStrings } from './publish-strings.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
 import { strings as socialsStrings } from './socials-strings.ts';
@@ -176,6 +182,12 @@ const STEPS: SelectItem[] = [
   { id: 'duration', label: strings.stepDuration },
   ...[15, 30, 60].map((value) => ({ id: String(value), label: strings.minutes(value) })),
 ];
+
+/** Whether a setting waits in the draft for Publish (spec 0068, AC-6810), as against one that goes live on save. */
+const isDraftedKey = (key: string): boolean => (BOOKING_DRAFT_KEYS as readonly string[]).includes(key);
+
+/** How long "Published" stays in the bar before it says the page is live. */
+const PUBLISHED_MS = 1600;
 
 /** The tab each setting sits on, for a refusal that names its field. */
 const FIELD_TABS: Readonly<Record<string, PageTab>> = {
@@ -330,6 +342,18 @@ export function PageEditor({
   const [isRedirectLeft, setRedirectLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
+  // Publish (spec 0068, AC-6810 to AC-6812): Save keeps the guest facing settings as the page's draft, and the bar at
+  // the head says what guests don't see yet until Publish. What stays instant (AC-6813) is saved as before.
+  const [publishing, setPublishing] = useState<PublishBarStatus | undefined>(undefined);
+  const [publishProblem, setPublishProblem] = useState<
+    { readonly message: string; readonly field?: string } | undefined
+  >(undefined);
+  const [versions, setVersions] = useState<readonly PublishBarVersion[] | undefined>(undefined);
+  // A version picked while the draft holds changes waits for a yes (spec 0068, AC-6812): restoring replaces them.
+  const [restoreAsked, setRestoreAsked] = useState<number | undefined>(undefined);
+  // "Published" goes back to the page's state after a moment; a timer left when the editor closes is cleared.
+  const publishedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(publishedTimer.current), []);
   // The route shows its cached read first and reads again behind it (and again on any live change), so a newer
   // read arrives as a new `loaded`: the handle just claimed in Profile (owner, 23 Oct 2026: Copy link kept giving
   // /b/<key>), a pause from the Links card, the editor's own last save. The editor takes it unless it is older
@@ -374,6 +398,8 @@ export function PageEditor({
   };
   const isWeekDirty = !isLocked && hours.schedule !== undefined && week.isDirty;
   const isDirty = isPageDirty || isWeekDirty;
+  // Changes that wait for Publish (spec 0068, AC-6810): while any are among the unsaved ones, Save says Save draft.
+  const isDraftDirty = isPageDirty && Object.keys(dirty).some((key) => isDraftedKey(key));
   const [justSaved, setJustSaved] = useState(false);
   const change = (patch: Partial<BookingPageSettings>) => {
     setJustSaved(false);
@@ -628,7 +654,7 @@ export function PageEditor({
       ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: one.attributeId }), list),
     ];
     setDraft((current) => ({ ...current, questions: unfile(current.questions) }));
-    data.bookingPages.update(slug, page.id, { questions: unfile(savedQuestions.current) }).then(
+    sendSettings({ questions: unfile(savedQuestions.current) }).then(
       (next) => {
         setPage(next);
         setDraft((current) => draftAfterSave(settingsOf(next), current));
@@ -643,11 +669,97 @@ export function PageEditor({
     );
   };
 
+  /**
+   * Sends a change: what guests see goes into the page's draft (spec 0068, AC-6810), anything instant (AC-6813: the
+   * status, the address, the profile, privacy, filing) is saved as it always was. The draft goes first: a draft
+   * refused (a locked part, a bad length, a question) stops the save before anything instant has gone live, and a
+   * draft written that an instant part then refuses is only a draft, which guests never see. One answer, the page
+   * as it stands.
+   */
+  const sendSettings = async (patch: Partial<BookingPageSettings>) => {
+    const drafted = Object.fromEntries(Object.entries(patch).filter(([key]) => isDraftedKey(key)));
+    const instant = Object.fromEntries(Object.entries(patch).filter(([key]) => !isDraftedKey(key)));
+    let next = page;
+    if (Object.keys(drafted).length > 0) next = await data.bookingPages.saveDraft(slug, page.id, drafted);
+    if (Object.keys(instant).length > 0) next = await data.bookingPages.update(slug, page.id, instant);
+    return next;
+  };
+  /** The page as the server answered a publish, discard or restore: the draft follows, the person's own edits kept. */
+  const takePage = (next: typeof page) => {
+    setPage(next);
+    setDraft((current) => draftAfterSave(settingsOf(next), current));
+    setVersions(undefined);
+  };
+  const publish = () => {
+    setPublishing('publishing');
+    setPublishProblem(undefined);
+    data.bookingPages.publish(slug, page.id).then(
+      (next) => {
+        takePage(next);
+        setPublishing('published');
+        // "Published" stays a moment, then the bar says the page is live.
+        clearTimeout(publishedTimer.current);
+        publishedTimer.current = setTimeout(() => setPublishing(undefined), PUBLISHED_MS);
+      },
+      (error: unknown) => {
+        setPublishing('error');
+        const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        setPublishProblem({
+          message: isDataError(error) ? error.message : strings.somethingWrong,
+          ...(field === undefined ? {} : { field }),
+        });
+      },
+    );
+  };
+  /** The page as Discard or Restore left it: the editor shows exactly that, with nothing of its own kept over it. */
+  const resetTo = (next: typeof page) => {
+    setPage(next);
+    setDraft(settingsOf(next));
+    setFailure(undefined);
+    setPublishProblem(undefined);
+    setVersions(undefined);
+  };
+  const discardDraft = () => {
+    data.bookingPages
+      .discard(slug, page.id)
+      .then(resetTo, () => toasts.toast({ tone: 'danger', message: publishStrings.discardFailed }));
+  };
+  const readVersions = () => {
+    data.bookingPages.versions(slug, page.id).then(
+      (list) =>
+        setVersions(
+          list.versions.map((one) => ({
+            version: one.version,
+            isCurrent: one.isCurrent,
+            label: publishStrings.versionLabel(one.publishedBy, new Date(one.publishedAt)),
+          })),
+        ),
+      () => toasts.toast({ tone: 'danger', message: publishStrings.versionsFailed }),
+    );
+  };
+  const restore = (version: number) => {
+    data.bookingPages.restore(slug, page.id, version).then(
+      (next) => {
+        resetTo(next);
+        toasts.toast({ tone: 'success', message: publishStrings.restored(version) });
+      },
+      () => toasts.toast({ tone: 'danger', message: publishStrings.restoreFailed }),
+    );
+  };
+  // Restoring over changes not published asks first, in the confirm every ending step uses; over none it just runs.
+  const askRestore = (version: number) => {
+    if ((page.publication?.changes ?? []).length > 0) setRestoreAsked(version);
+    else restore(version);
+  };
+  const changes = page.publication?.changes ?? [];
+  const publishStatus: PublishBarStatus = publishing ?? (changes.length > 0 ? 'draft' : 'live');
+  const problemTab = publishProblem?.field === undefined ? undefined : FIELD_TABS[publishProblem.field];
+
   const save = (patch: Partial<BookingPageSettings>) => {
     if (isSaving || Object.keys(patch).length === 0) return;
     setSaving(true);
     setFailure(undefined);
-    data.bookingPages.update(slug, page.id, patch).then(
+    sendSettings(patch).then(
       (next) => {
         setSaving(false);
         setPage(next);
@@ -915,7 +1027,63 @@ export function PageEditor({
                   }
                   notices={
                     <>
-                      {page.status === 'paused' && <Callout tone="info">{strings.pausedNote}</Callout>}
+                      {/* What guests don't see yet, and Publish (spec 0068, AC-6811): the page's own, so not on a
+                          page the reader can't change. */}
+                      {!isLocked && (
+                        <PublishBar
+                          status={publishStatus}
+                          changes={changes}
+                          {...(publishProblem === undefined
+                            ? {}
+                            : {
+                                problem: {
+                                  message: publishProblem.message,
+                                  ...(problemTab === undefined
+                                    ? {}
+                                    : {
+                                        fix: {
+                                          label: publishStrings.goTo(tabLabel[problemTab]),
+                                          onFix: () => onTabChange(problemTab),
+                                        },
+                                      }),
+                                },
+                              })}
+                          onPublish={publish}
+                          onDiscard={discardDraft}
+                          {...(versions === undefined ? {} : { versions })}
+                          onVersions={readVersions}
+                          onRestore={askRestore}
+                          isPaused={page.status === 'paused'}
+                          previewHref={pagePreviewHref(slug, page.id)}
+                        />
+                      )}
+                      <Modal
+                        title={publishStrings.restoreTitle(restoreAsked ?? 0)}
+                        variant="confirm"
+                        tone="danger"
+                        isOpen={restoreAsked !== undefined}
+                        onOpenChange={(open) => {
+                          if (!open) setRestoreAsked(undefined);
+                        }}
+                        actions={
+                          <>
+                            <Button slot="close">{publishStrings.restoreKeep}</Button>
+                            <Button
+                              variant="danger-solid"
+                              onPress={() => {
+                                if (restoreAsked !== undefined) restore(restoreAsked);
+                                setRestoreAsked(undefined);
+                              }}
+                            >
+                              {publishStrings.restoreConfirm}
+                            </Button>
+                          </>
+                        }
+                      >
+                        {publishStrings.restoreText}
+                      </Modal>
+                      {/* The publish bar says Paused for a page its reader can change; a locked page has no bar. */}
+                      {page.status === 'paused' && isLocked && <Callout tone="info">{strings.pausedNote}</Callout>}
                       {isLocked && (
                         <Callout tone="info" title={strings.readOnlyTitle}>
                           {strings.readOnlyText}
@@ -951,6 +1119,7 @@ export function PageEditor({
                     <>
                       <SaveBar
                         status={barStatus}
+                        {...(isDraftDirty ? { saveLabel: publishStrings.saveDraft } : {})}
                         {...(barError === undefined ? {} : { error: barError })}
                         {...(sendable(draft) && (!isWeekDirty || week.isValid)
                           ? {}
@@ -1031,6 +1200,8 @@ export function PageEditor({
                         title={strings.sharing}
                         {...(isWorkspace ? { description: strings.workspaceLinkSharing } : {})}
                       >
+                        {/* The address, privacy and the profile skip the draft (spec 0068, AC-6813): said once here. */}
+                        <Callout tone="info">{publishStrings.goesLive}</Callout>
                         {page.handle !== undefined && !draft.isPrivate && !isWorkspace ? (
                           // The full address, the part after the owner's handle editable (22 Oct 2026); Copy and
                           // Open take the saved link, so they wait while the address has unsaved changes.
@@ -1443,6 +1614,7 @@ export function PageEditor({
                   )}
                   {isTeam && shown === 'hosts' && (
                     <>
+                      <Callout tone="info">{publishStrings.goesLive}</Callout>
                       <HostsCard
                         data={data}
                         slug={slug}
@@ -1494,6 +1666,8 @@ export function PageEditor({
                   )}
                   {shown === 'hours' && (
                     <>
+                      {/* A schedule's week and days off are shared by every page that books by it (AC-6813). */}
+                      <Callout tone="info">{publishStrings.hoursLive}</Callout>
                       {/* In reading order (the owner, 22 Oct 2026): the schedule, its week, its days off, then
                           reserved time and conflicts, each a section with its heading. */}
                       {isTeam ? (

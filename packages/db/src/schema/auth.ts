@@ -403,12 +403,22 @@ export const publicProfiles = auth.table(
     showJobTitle: boolean('show_job_title').notNull().default(false),
     siteUrl: text('site_url'),
     footLine: text('foot_line'),
+    /**
+     * What guests see (spec 0068, AC-6810): the page's drafted columns by name and its live blocks, as the last Publish
+     * left them. The rows above are the draft. Written only by `crm_publish_link_page`; null until first published.
+     */
+    published: jsonb('published'),
+    publishedAt: timestamptz('published_at'),
     updatedAt: updatedAt(),
   },
   (t) => [
     primaryKey({ name: 'public_profiles_pkey', columns: [t.userId, t.workspaceId] }),
     uniqueIndex('public_profiles_handle').on(t.handle),
     check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
+    check(
+      'public_profiles_published',
+      sql`(${t.published} is null) = (${t.publishedAt} is null) and (${t.published} is null or (jsonb_typeof(${t.published}) = 'object' and jsonb_typeof(${t.published} -> 'items') = 'array'))`,
+    ),
     check(
       'public_profiles_site',
       sql`${t.siteUrl} is null or (char_length(${t.siteUrl}) between 12 and 200 and ${t.siteUrl} ~ '^https://[^/?#@[:space:][:cntrl:]]+[.][^/?#@[:space:][:cntrl:]]+([/?#][^[:space:][:cntrl:]]*)?$')`,
@@ -421,10 +431,10 @@ export const publicProfiles = auth.table(
       'public_profiles_theme',
       // Postgres refuses a subquery in a check constraint, so "no key but these ten" is the ten taken away leaving
       // an empty object. A check whose expression is NULL passes, so "all ten present" needs `coalesce`. `layout`
-      // (spec 0061, migration 0157) is the one optional key: absent is `list`.
+      // (spec 0061, migration 0157) is optional, absent is `list`; so are `template` and `moved` (spec 0068, 0170).
       sql`${t.theme} is null or (
         jsonb_typeof(${t.theme}) = 'object'
-        and ${t.theme} - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' - 'gradient' - 'pattern' - 'header' - 'avatar' - 'layout' = '{}'::jsonb
+        and ${t.theme} - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' - 'gradient' - 'pattern' - 'header' - 'avatar' - 'layout' - 'template' - 'moved' = '{}'::jsonb
         and coalesce(${t.theme} ->> 'ground', '') in ('plain', 'paper', 'tint', 'ink', 'gradient', 'pattern', 'image')
         and coalesce(${t.theme} ->> 'hue', '') in ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')
         and coalesce(${t.theme} ->> 'mode', '') in ('light', 'dark', 'system')
@@ -436,6 +446,8 @@ export const publicProfiles = auth.table(
         and coalesce(${t.theme} ->> 'header', '') in ('centred', 'cover', 'left')
         and coalesce(${t.theme} ->> 'avatar', '') in ('circle', 'rounded', 'none')
         and coalesce(${t.theme} ->> 'layout', 'list') in ('list', 'grid')
+        and coalesce(${t.theme} ->> 'template', 'classic') in ('classic', 'studio', 'night', 'split')
+        and (not ${t.theme} ? 'moved' or ${t.theme} -> 'moved' = 'true'::jsonb)
       )`,
     ),
     check(

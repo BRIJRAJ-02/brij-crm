@@ -196,6 +196,13 @@ export const bookingPages = pgTable(
      * each get a page, instead of the chosen members in `managed_page_members`. Null when members are chosen.
      */
     followTeamId: uuid('follow_team_id'),
+    /**
+     * The changes not yet published (spec 0068, AC-6810): the guest facing settings an edit changed, by name, and
+     * when it last changed. Guests see the live columns until Publish writes the draft into them (migration 0171).
+     * Both null when there is nothing to publish.
+     */
+    draft: jsonb('draft'),
+    draftChangedAt: timestamptz('draft_changed_at'),
     ...auditColumns(),
     deletedAt: timestamptz('deleted_at'),
   },
@@ -240,6 +247,11 @@ export const bookingPages = pgTable(
     check('booking_pages_profile_position', sql`${t.profilePosition} between 0 and 999`),
     check('booking_pages_slug_shape', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`),
     check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin', 'managed')`),
+    check(
+      'booking_pages_draft',
+      sql`(${t.draft} is null) = (${t.draftChangedAt} is null)
+        and (${t.draft} is null or (jsonb_typeof(${t.draft}) = 'object' and pg_column_size(${t.draft}) <= 65536))`,
+    ),
     check('booking_pages_scope', sql`${t.scope} in ('member', 'workspace')`),
     check('booking_pages_scope_kind', sql`${t.scope} = 'member' or ${t.kind} = 'round_robin'`),
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),

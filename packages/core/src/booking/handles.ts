@@ -9,7 +9,7 @@ import {
   HANDLE_MAX,
   PageTheme,
 } from '@crm/contracts';
-import type { WorkspaceTx } from '@crm/db';
+import { schema, type WorkspaceTx } from '@crm/db';
 import { sql } from 'drizzle-orm';
 import { isUuid } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -89,7 +89,27 @@ export async function showLinkPage(tx: WorkspaceTx, userId: string, workspaceId:
   const found = await tx.execute<ShownRow>(
     sql`select crm_show_public_profile(${userId}::uuid, ${workspaceId}::uuid) as shown`,
   );
-  return found.rows[0]?.shown === true;
+  const shown = found.rows[0]?.shown === true;
+  if (shown) await publishFirstTime(tx, userId, workspaceId);
+  return shown;
+}
+
+/**
+ * A page going public that was never published is published as it stands, as version 1 (spec 0068): its owner's
+ * first claim or share is what puts it live, as it always was. From then on every edit waits for Publish. Nothing
+ * for a page published before.
+ */
+async function publishFirstTime(tx: WorkspaceTx, userId: string, workspaceId: string): Promise<void> {
+  const first = await tx.execute<{ snapshot: unknown }>(
+    sql`select crm_publish_link_page(${userId}::uuid, ${workspaceId}::uuid) as snapshot
+        from crm_link_page_state(${userId}::uuid, ${workspaceId}::uuid) s where s.published is null`,
+  );
+  const snapshot = first.rows[0]?.snapshot;
+  if (typeof snapshot !== 'object' || snapshot === null) return;
+  await tx
+    .insert(schema.pageVersions)
+    .values({ workspaceId, pageKind: 'link', pageId: userId, version: 1, snapshot })
+    .onConflictDoNothing();
 }
 
 /**
@@ -106,7 +126,9 @@ export async function setLinkPageLive(
   const found = await tx.execute<ShownRow>(
     sql`select crm_set_public_profile_live(${userId}::uuid, ${workspaceId}::uuid, ${live}) as shown`,
   );
-  return found.rows[0]?.shown === true;
+  const shown = found.rows[0]?.shown === true;
+  if (shown) await publishFirstTime(tx, userId, workspaceId);
+  return shown;
 }
 
 /** The constraint a handle another person holds (or held) is refused on. */

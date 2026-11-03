@@ -1191,6 +1191,27 @@
       "when": 1795506500000,
       "tag": "0169_workspace_time_zone_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 170,
+      "version": "7",
+      "when": 1795508000000,
+      "tag": "0170_page_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1795508100000,
+      "tag": "0171_page_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1795508200000,
+      "tag": "0172_link_page_drafts",
+      "breakpoints": true
     }
   ]
 }

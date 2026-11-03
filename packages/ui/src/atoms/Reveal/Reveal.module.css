@@ -1,0 +1,54 @@
+/* Reveal (spec 0068, AC-6806): transitions.dev's texts reveal, played once on first draw. Each place in the run
+   waits one stagger more; a line rises from space-12 below out of a soft blur over the page's reveal pace, on the
+   smooth out curve. Reduced motion shows it at once. */
+@layer components {
+  .root {
+    /* Tokens only: the stagger is a quarter of the press, the pace a dialog's (the longest UI motion token), and the
+       blur the smallest space step. */
+    --reveal-stagger: calc(var(--duration-press) / 4);
+    --reveal-pace: var(--duration-modal);
+    --reveal-blur: var(--space-2);
+
+    display: block;
+    animation: reveal-in var(--reveal-pace) var(--ease-out) both;
+    animation-delay: calc(var(--reveal-stagger) * (var(--reveal-place, 1) - 1));
+  }
+
+  .root[data-display='inline'] {
+    display: inline-block;
+  }
+
+  .root[data-order='2'] {
+    --reveal-place: 2;
+  }
+
+  .root[data-order='3'] {
+    --reveal-place: 3;
+  }
+
+  .root[data-order='4'] {
+    --reveal-place: 4;
+  }
+
+  .root[data-order='5'] {
+    --reveal-place: 5;
+  }
+
+  .root[data-order='6'] {
+    --reveal-place: 6;
+  }
+
+  @keyframes reveal-in {
+    from {
+      opacity: 0;
+      filter: blur(var(--reveal-blur));
+      translate: 0 var(--space-12);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      animation: none;
+    }
+  }
+}

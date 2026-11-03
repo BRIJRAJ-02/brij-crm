@@ -2,6 +2,11 @@ import { brandCacheTags, linkPageCacheTags, myPicturePath } from '@crm/contracts
 import {
   archiveProfileItem,
   importProfileLinks,
+  discardLinkDraft,
+  listLinkPageVersions,
+  publishLinkPage,
+  readLinkPagePublication,
+  restoreLinkPageVersion,
   isImportableHost,
   readImportedPage,
   deleteProfileItem,
@@ -84,6 +89,18 @@ const OUTSIDE_READS = { window: 60, max: 30 } as const;
 const SITE_READS = { window: 60, max: 60 } as const;
 
 // Settings › Account › Profile (spec 0031, slice 7, AC-821): the caller's own member row, behind the member door.
+/**
+ * After a Publish, Discard or Restore has committed: the edge's copies of the page go (AC-6816), then the photos it let
+ * go leave the store. A photo that won't delete is left for the store's own sweep, never failing the change.
+ */
+async function afterPublication(
+  context: Parameters<typeof forgetPictures>[0] & { readonly files: RequestContext['files'] },
+  forget: readonly string[],
+): Promise<void> {
+  await forgetPictures(context);
+  if (forget.length > 0) await context.files?.remove([...forget]).catch(() => undefined);
+}
+
 export const profileRouter = member.profile.router({
   get: member.profile.get.handler(async ({ context }) => getMyProfile(context.scope, await extrasOf(context))),
   update: member.profile.update.handler(async ({ context, input }) => {
@@ -147,6 +164,27 @@ export const profileRouter = member.profile.router({
       await context.edgeCache.forget(linkPageCacheTags(handle));
     }
     return shown;
+  }),
+  // Publish for the caller's own link page (spec 0068, AC-6810 to AC-6816). Each that changes what guests see purges
+  // the page's edge copies once committed; the photos it let go leave the store after that.
+  publication: member.profile.publication.handler(({ context }) => readLinkPagePublication(context.scope)),
+  publish: member.profile.publish.handler(async ({ context, input }) => {
+    const done = await commitWrite(context, { mutationId: input.mutationId }, () => publishLinkPage(context.scope));
+    await afterPublication(context, done.forget);
+    return done.publication;
+  }),
+  discard: member.profile.discard.handler(async ({ context, input }) => {
+    const done = await commitWrite(context, { mutationId: input.mutationId }, () => discardLinkDraft(context.scope));
+    await afterPublication(context, done.forget);
+    return done.publication;
+  }),
+  versions: member.profile.versions.handler(({ context }) => listLinkPageVersions(context.scope)),
+  restore: member.profile.restore.handler(async ({ context, input }) => {
+    const done = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      restoreLinkPageVersion(context.scope, input.version),
+    );
+    await afterPublication(context, done.forget);
+    return done.publication;
   }),
   counts: member.profile.counts.handler(async ({ context, input }) => {
     const counts = await readProfileCounts(context.scope, new Date(), input.days ?? 30);

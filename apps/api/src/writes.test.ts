@@ -98,6 +98,9 @@ const READS: ReadonlySet<string> = new Set([
   'profile.formChoices',
   // Add to Wallet (spec 0055): the address to save their own page from, made and never stored.
   'profile.walletLink',
+  // Publish for the link page (spec 0068): where it stands, and its versions.
+  'profile.publication',
+  'profile.versions',
   // The share QR's style (spec 0061, AC-6124): a read of schema auth through a definer.
   'profile.qrStyle',
   'deletedWorkspace.deleted',
@@ -212,6 +215,8 @@ const READS: ReadonlySet<string> = new Set([
   // Booking pages (spec 0025).
   'bookingPages.list',
   'bookingPages.get',
+  // A page's published versions (spec 0068, AC-6812).
+  'bookingPages.versions',
   // Where a page's answers may be filed (spec 0057): People and its attributes as this reader may write them.
   'bookingPages.attributes',
   // A page's one off links and requests (spec 0062, L1).
@@ -843,9 +848,51 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.brand.save({ workspace: m.slug, accent: '#1f5fd6', accentDark: null, mutationId });
     return [];
   },
+  // The template waiting for Publish (spec 0068): a pick made first, then the case's own write. No record changes.
+  'brand.publishTemplate': async (m, mutationId) => {
+    await m.client.brand.save({
+      workspace: m.slug,
+      accent: null,
+      accentDark: null,
+      template: 'night',
+      mutationId: newId(),
+    });
+    await m.client.brand.publishTemplate({ workspace: m.slug, mutationId });
+    return [];
+  },
+  'brand.discardTemplate': async (m, mutationId) => {
+    await m.client.brand.save({
+      workspace: m.slug,
+      accent: null,
+      accentDark: null,
+      template: 'night',
+      mutationId: newId(),
+    });
+    await m.client.brand.discardTemplate({ workspace: m.slug, mutationId });
+    return [];
+  },
   'profile.setIndexable': async (m, mutationId) => {
     const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
     await m.client.profile.setIndexable({ workspace: m.slug, indexable: false, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  // Publish for the link page (spec 0068): the published snapshot and its versions, no record changes, so no outbox
+  // row of its own beyond the handle's claim. Discard and Restore need a published page first.
+  'profile.publish': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.publish({ workspace: m.slug, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  'profile.discard': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.publish({ workspace: m.slug, mutationId: newId() });
+    await m.client.profile.discard({ workspace: m.slug, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  'profile.restore': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.publish({ workspace: m.slug, mutationId: newId() });
+    await m.client.profile.restore({ workspace: m.slug, version: 1, mutationId });
     return [{ kind: 'members', item_ids: [me.memberId] }];
   },
   // Sharing the link page makes it public (27 Oct 2026): one column in schema auth, no outbox row of its own.
@@ -2065,6 +2112,62 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookingPages.delete({ workspace: m.slug, pageId: page.id, mutationId });
     return [];
   },
+  // Publish (spec 0068): a page's draft, its publish, discard and restore are settings too: no outbox row.
+  'bookingPages.saveDraft': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.saveDraft({
+      workspace: m.slug,
+      pageId: page.id,
+      settings: { title: 'Hi' },
+      mutationId,
+    });
+    return [];
+  },
+  'bookingPages.publish': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.saveDraft({
+      workspace: m.slug,
+      pageId: page.id,
+      settings: { title: 'Hi' },
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.publish({ workspace: m.slug, pageId: page.id, mutationId });
+    return [];
+  },
+  'bookingPages.discard': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.discard({ workspace: m.slug, pageId: page.id, mutationId });
+    return [];
+  },
+  'bookingPages.restore': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.restore({ workspace: m.slug, pageId: page.id, version: 1, mutationId });
+    return [];
+  },
   // The profile's order (owner ask A102): settings too, so no outbox row; one poke.
   'bookingPages.reorderProfile': async (m, mutationId) => {
     const page = await m.client.bookingPages.create({
@@ -3208,12 +3311,21 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'routing.test': 2,
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
+  'bookingPages.saveDraft': 2,
+  'bookingPages.publish': 3,
+  'bookingPages.discard': 2,
+  'bookingPages.restore': 2,
   'profile.saveTheme': 2,
   'profile.saveQrStyle': 2,
   'profile.fetchThumbnail': 3,
   'profile.saveAccent': 2,
   'profile.setIndexable': 2,
   'profile.show': 2,
+  'profile.publish': 2,
+  'brand.publishTemplate': 2,
+  'brand.discardTemplate': 2,
+  'profile.discard': 3,
+  'profile.restore': 3,
   'profile.setShareImage': 2,
   'profile.orderItems': 2,
   'profile.archiveItem': 2,

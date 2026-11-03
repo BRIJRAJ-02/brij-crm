@@ -325,6 +325,20 @@ const SENTENCES: SentenceTemplates = {
   // A managed page (spec 0037, AC-1333 to AC-1335): what changed is said by the counts when people moved, since
   // that is the change with a consequence — a page was made or deleted for each of them.
   // On the member's own page, not the template: this is the line that explains a change they did not make.
+  // Publish for public pages (spec 0068): which version, so a restore reads against the versions list.
+  'booking_page.published': (entry, w) =>
+    actor(`published ${w.thing(entry.target)} (version ${String(entry.params.version)})`),
+  'booking_page.draft_discarded': (entry, w) => actor(`discarded the draft of ${w.thing(entry.target)}`),
+  'booking_page.version_restored': (entry, w) =>
+    actor(`restored version ${String(entry.params.version)} of ${w.thing(entry.target)} as its draft`),
+  'link_page.published': (entry, w) =>
+    actor(`published ${w.persons(entry.target.person)} link page (version ${String(entry.params.version)})`),
+  'link_page.draft_discarded': (entry, w) =>
+    actor(`discarded the draft of ${w.persons(entry.target.person)} link page`),
+  'link_page.version_restored': (entry, w) =>
+    actor(
+      `restored version ${String(entry.params.version)} of ${w.persons(entry.target.person)} link page as its draft`,
+    ),
   'managed_page.propagated': (entry, w) => actor(`updated ${w.thing(entry.target)} from its managed page`),
   'booking_page.link_created': (entry, w) => actor(`made a one-time link for ${w.thing(entry.target)}`),
   'booking_page.link_revoked': (entry, w) => actor(`revoked a one-time link for ${w.thing(entry.target)}`),

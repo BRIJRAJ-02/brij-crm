@@ -1,0 +1,71 @@
+/* SuccessCheck (spec 0068, AC-6806): transitions.dev's success check. The mark fades in out of a blur with a small
+   turn and a drop on the reveal pace, and its tick draws a beat after (`pathLength` 1, so the dash is the path's
+   whole length whatever its size). The disc is the success colour and the tick reads on it. Reduced motion shows it
+   drawn at once. */
+@layer components {
+  .root {
+    /* Tokens only: a dialog's pace (the longest UI motion token) and a small space step for the blur. */
+    --check-pace: var(--duration-modal);
+    --check-blur: var(--space-4);
+    --check-turn: -12deg;
+
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    animation: check-in var(--check-pace) var(--ease-out) both;
+  }
+
+  .root[data-size='lg'] {
+    inline-size: var(--size-input);
+    block-size: var(--size-input);
+  }
+
+  .mark {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: visible;
+  }
+
+  .disc {
+    fill: var(--success);
+  }
+
+  .tick {
+    fill: none;
+    stroke: var(--on-accent);
+    stroke-width: var(--border-width-thick);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: check-draw var(--duration-move) var(--ease-out) calc(var(--check-pace) / 3) forwards;
+  }
+
+  @keyframes check-in {
+    from {
+      opacity: 0;
+      filter: blur(var(--check-blur));
+      rotate: var(--check-turn);
+      translate: 0 calc(var(--space-4) * -1);
+    }
+  }
+
+  @keyframes check-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      animation: none;
+    }
+
+    .tick {
+      stroke-dashoffset: 0;
+      animation: none;
+    }
+  }
+}

@@ -39,6 +39,8 @@ export interface SaveBarProps {
    * while focus was on them, so it never falls to the page.
    */
   readonly onFocusAway?: () => void;
+  /** Save's name, where the page saves something more exact ("Save draft" in a published page's editor). Default "Save". */
+  readonly saveLabel?: string;
 }
 
 // How long "Saved" stays before the bar leaves.
@@ -52,7 +54,15 @@ const SAVED_MS = 1600;
  * the bar sinks out. Status changes are said politely. ⌘S saves from anywhere
  * on the page; Esc never discards, and Discard asks first.
  */
-export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFocusAway }: SaveBarProps) {
+export function SaveBar({
+  status,
+  error,
+  onSave,
+  onDiscard,
+  blockedReason,
+  onFocusAway,
+  saveLabel = strings.save,
+}: SaveBarProps) {
   const platform = useKeyboardPlatform();
   const [savedExpired, setSavedExpired] = useState(false);
   const [lastStatus, setLastStatus] = useState(status);
@@ -194,7 +204,7 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
             isDisabled={blockedReason !== undefined}
             onPress={onSave}
           >
-            {isError ? strings.tryAgain : strings.save}
+            {isError ? strings.tryAgain : saveLabel}
           </Button>
         </span>
       )}

@@ -8,14 +8,18 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { ProfileBlock } from '@crm/contracts';
-import { countItemPress, countProfileView, enterLinkPage } from '../access/door.ts';
+import {
+  countItemPress as liveCountItemPress,
+  countProfileView,
+  enterLinkPage as liveEnterLinkPage,
+} from '../access/door.ts';
 import { readLinkPage } from '../booking/public.ts';
 import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
-import { testScope } from '../testing.ts';
+import { testScope, publishLinkPageForTest } from '../testing.ts';
 import {
   archiveProfileItem,
   deleteProfileItem,
@@ -26,7 +30,17 @@ import {
   saveProfileItem,
 } from './items.ts';
 
-const { appUrl, ownerUrl } = inject('testDatabase');
+const { appUrl, ownerUrl, adminUrl } = inject('testDatabase');
+// Spec 0068: a link page's edits are a draft until Publish. A visitor's read here is of the page as its owner
+// would have published it just before, which is what these tests were written against.
+const enterLinkPage = async (...args: Parameters<typeof liveEnterLinkPage>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveEnterLinkPage(...args);
+};
+const countItemPress = async (...args: Parameters<typeof liveCountItemPress>) => {
+  await publishLinkPageForTest(adminUrl, args[1]);
+  return liveCountItemPress(...args);
+};
 let db: Database;
 
 beforeAll(() => {

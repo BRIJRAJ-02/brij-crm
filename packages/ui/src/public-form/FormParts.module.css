@@ -50,6 +50,27 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* The four templates (spec 0068, AC-6801), on a form that wears its workspace's brand kit: the ground, the
+     headline's face and the card's edge. Night comes with `data-theme='dark'` and Studio with `'light'`. */
+  .root[data-template='classic'] {
+    --form-face: var(--font-pack-grotesk);
+  }
+
+  .root[data-template='studio'] {
+    --form-face: var(--font-pack-editorial);
+
+    background: color-mix(in oklab, var(--tag-orange-bg) 45%, var(--surface));
+  }
+
+  .root[data-template='night'] {
+    --form-face: var(--font-pack-geometric);
+    --form-focus:
+      0 0 0 var(--border-width-thick) var(--form-accent),
+      0 0 var(--space-16) color-mix(in oklab, var(--form-accent) 45%, transparent);
+
+    background: var(--surface-sunken);
+  }
+
   /* On the page's root as well (the hosted page sets it), so lists opened in a popover square theirs too. */
   :root[data-corners='square'],
   .root[data-corners='square'] {
@@ -155,6 +176,11 @@
 
   .headline:focus {
     outline: none;
+  }
+
+  /* A template's face for the headline (spec 0068); the questions stay in the body face, as every control does. */
+  .root[data-template] .headline {
+    font-family: var(--form-face, var(--font-sans));
   }
 
   .subheading {

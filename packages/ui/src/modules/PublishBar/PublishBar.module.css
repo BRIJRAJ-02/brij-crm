@@ -1,0 +1,111 @@
+/* PublishBar (spec 0068, AC-6811): a raised strip at the head of an editor. The status at the start (a dot in the
+   warning colour while changes wait, a check once live or published, a pause while paused), the actions at the end;
+   under them, the changes as a quiet list and a refused Publish's one line (first, on a phone). The app's own look:
+   tokens, a card's border and radius, body type, and a plain crossfade when the status changes. */
+@layer components {
+  /* A container for the phone layout, so it takes its slot's width rather than its content's (a size container
+     has none of its own). */
+  .root {
+    container: publish-bar / inline-size;
+    box-sizing: border-box;
+    display: flex;
+    inline-size: 100%;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    min-block-size: var(--size-input);
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin: 0;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .root:is([data-said='live'], [data-said='paused']) .status {
+    color: var(--text-secondary);
+    font: var(--text-body);
+  }
+
+  .said {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    animation: publish-bar-said var(--duration-popover) var(--ease-out);
+  }
+
+  @keyframes publish-bar-said {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .dot {
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--dot-orange);
+  }
+
+  .actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .problem {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    margin: 0;
+    color: var(--danger);
+  }
+
+  .changes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding: var(--space-8) 0 var(--space-4);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    color: var(--text-secondary);
+    list-style: none;
+  }
+
+  .changes[hidden] {
+    display: none;
+  }
+
+  .change {
+    overflow-wrap: anywhere;
+  }
+
+  /* A phone's width: why Publish was refused comes first, above the status and the buttons. */
+  @container publish-bar (inline-size < 480px) {
+    .problem {
+      order: -1;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+  }
+}

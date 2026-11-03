@@ -140,7 +140,11 @@ async function start(): Promise<void> {
     }
     document.title = form.headline;
     document.documentElement.lang = form.language;
-    document.documentElement.dataset.theme = form.look.colour;
+    // A template that pins its scheme (spec 0068: Night dark, Studio light) wins over the form's own Colour, on the
+    // root as well, so the foot's mark and the popovers outside the card take the same scheme.
+    const template = form.brand?.template;
+    document.documentElement.dataset.theme =
+      template === 'night' ? 'dark' : template === 'studio' ? 'light' : form.look.colour;
     // On the root too, so the lists that open outside the form (in a popover) square their corners with it.
     document.documentElement.dataset.corners = form.look.corners;
     // The workspace's brand (spec 0060, AC-4), linked from our own api and waited on a moment, so the form draws in

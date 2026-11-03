@@ -265,6 +265,12 @@ export function BookingPage({
             return;
           }
           if (page.path !== undefined) onAddress?.(page.path);
+          // A template that pins its scheme (spec 0068: Night dark, Studio light) pins the whole document's, so the
+          // foot's mark and anything opened outside the frame take it too. Never in the editor's preview, which is the
+          // app's.
+          const pinned =
+            page.brand?.template === 'night' ? 'dark' : page.brand?.template === 'studio' ? 'light' : undefined;
+          if (pinned !== undefined && !isEditorPreview) document.documentElement.dataset.theme = pinned;
           // The brand it wears (spec 0060, AC-4), waited on a moment so the page draws in its colour from the start,
           // with its logo already decoded, so the logo is there with the header rather than pushing it down later.
           void Promise.all([

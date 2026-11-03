@@ -29,6 +29,14 @@ import { Uuid, uuidV7 } from '../values/ids.ts';
 import { RecordRefDisplay } from '../values/options.ts';
 import { RoutingRules } from '../forms/routing.ts';
 import { FormTargetChoices, SubmissionAnswer } from '../forms/forms.ts';
+import {
+  ListPageVersionsInput,
+  PageDraftInput,
+  PagePublication,
+  PageVersionList,
+  RestorePageVersionInput,
+  SaveBookingDraftInput,
+} from './publish.ts';
 
 /** The most fixed hosts, rotations, and hosts in all, on one round robin page (spec 0037, AC-1319). */
 export const TEAM_HOSTS_MAX = { fixed: 7, rotations: 3, hosts: 8 } as const;
@@ -107,6 +115,11 @@ export const BookingPageView = BookingPageSettings.extend({
    * the guard.
    */
   lockedParts: z.array(ManagedPart).optional(),
+  /**
+   * Where the page stands against what guests see (spec 0068, AC-6811): the drafted settings above are the draft's
+   * (what the editor shows), and `changes` names each one not yet published. Absent on a page with nothing to publish.
+   */
+  publication: PagePublication.optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });
@@ -262,6 +275,16 @@ export const bookingPagesContract = {
    * the reader may write each, as a form's Where it goes lists them.
    */
   attributes: oc.input(GetBookingPageInput).output(FormTargetChoices),
+  /** Changes the page's draft (spec 0068, AC-6810): guests see nothing of it until Publish. */
+  saveDraft: oc.input(SaveBookingDraftInput).output(BookingPageView),
+  /** Publishes the draft (AC-6811, AC-6812): checked as a save is, kept as a version, live at once. */
+  publish: oc.input(PageDraftInput).output(BookingPageView),
+  /** Drops the draft (AC-6811): the editor asks first. */
+  discard: oc.input(PageDraftInput).output(BookingPageView),
+  /** The page's last 20 published versions, newest first (AC-6812). */
+  versions: oc.input(ListPageVersionsInput).output(PageVersionList),
+  /** Brings a version back as the page's draft (AC-6812), to look at and publish. */
+  restore: oc.input(RestorePageVersionInput).output(BookingPageView),
 };
 
 /** A member's default schedule's hours and days off (spec 0035: `schedules.*` is the full surface). */

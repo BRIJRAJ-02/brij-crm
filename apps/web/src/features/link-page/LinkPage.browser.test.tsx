@@ -8,7 +8,6 @@
 import '@crm/ui/styles.css';
 import {
   dataError,
-  PAGE_THEME_PRESETS,
   DEFAULT_PAGE_THEME,
   type DataLayer,
   type LinkPageStore,
@@ -299,65 +298,64 @@ describe('the Add modal’s keyboard (AC-4, AC-9)', () => {
   });
 });
 
-describe('Design’s gallery of looks (spec 0058, AC-10; spec 0060, AC-8)', () => {
-  it('shows all fourteen as thumbnails with their names, ticks the one on the page, and picks by its picture', async () => {
-    const onChange = vi.fn();
-    const ink = PAGE_THEME_PRESETS.find((preset) => preset.id === 'ink');
-    if (ink === undefined) throw new Error('No Ink look.');
-    await render({}, () => <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={onChange} />);
-    const looks = page.getByRole('radiogroup', { name: 'Looks' });
-    for (const name of ['Plain', 'Paper', 'Bold', 'Ink', 'Quiet', 'Dawn', 'Studio', 'Editorial', 'Gallery']) {
-      await expect.element(looks.getByRole('radio', { name })).toBeInTheDocument();
-    }
-    const tiles = [...looks.element().querySelectorAll('[data-tile]')];
-    expect(tiles).toHaveLength(14);
-    // Each tile draws the real look in its picture slot, with the page's own look attributes (Ink's dark ground, and
-    // Gallery's photo, standing in until there is one).
-    const grounds = tiles.map((tile) => tile.querySelector('[data-thumbnail]')?.getAttribute('data-page-ground'));
-    expect(grounds).toEqual(PAGE_THEME_PRESETS.map((preset) => preset.theme.ground));
-    // The page stands on Plain (the default look), so Plain is the one ticked.
-    await expect.element(looks.getByRole('radio', { name: 'Plain' })).toBeChecked();
-    // Picked from the keyboard (the whole tile is the press target for a pointer): Plain, Paper, Bold, Ink.
-    (looks.getByRole('radio', { name: 'Plain' }).element() as HTMLElement).focus();
-    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
-    expect(onChange).toHaveBeenLastCalledWith(ink.theme);
-  });
-});
-
-describe('Design’s Customise rows (spec 0060, AC-6, AC-9)', () => {
-  it('shows each row as pictures, picks from the keyboard, and says when the colour was adjusted', async () => {
-    const onChange = vi.fn();
-    const onAccent = vi.fn();
-    const extras = {
-      look: { accent: '#ffd400', workspaceAccent: '#1f5fd6' },
+describe('Design’s four templates (spec 0068, AC-6802, AC-6804, AC-6805)', () => {
+  const extras = (template?: 'studio') =>
+    ({
+      look: {
+        accent: '#ffd400',
+        workspaceAccent: '#1f5fd6',
+        ...(template === undefined ? {} : { workspaceTemplate: template }),
+      },
       colours: () => ({ variables: [], adjusted: true, light: '#7a6700', dark: '#ffd400' }),
       variables: [],
       quickPicks: [{ hue: 'orange', value: '#fb8f3c' }],
       photoSrc: () => undefined,
-      onAccent,
+      onAccent: vi.fn(),
       onPreviewAccent: () => undefined,
       onPhoto: () => undefined,
       onRemovePhoto: () => undefined,
-    } as const;
-    await render({}, () => <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={onChange} extras={extras} />);
-    await userEvent.click(page.getByRole('button', { name: 'Customise' }));
-    // Six rows of choices (Buttons and Header each with their second row: corners and the face).
-    for (const name of ['Colour', 'Background', 'Font', 'Buttons', 'Corners', 'Header', 'Face', 'Mode']) {
-      await expect.element(page.getByRole('radiogroup', { name })).toBeInTheDocument();
+    }) as const;
+
+  it('shows the four as large pictures with who each suits, ticks the one worn, and picks by keyboard', async () => {
+    const onChange = vi.fn();
+    await render({}, () => <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={onChange} extras={extras('studio')} />);
+    const templates = page.getByRole('radiogroup', { name: 'Template' });
+    for (const name of ['Classic', 'Studio', 'Night', 'Split']) {
+      await expect.element(templates.getByRole('radio', { name })).toBeInTheDocument();
     }
-    // Every choice is a picture of the page: one thumbnail a tile.
-    const background = page.getByRole('radiogroup', { name: 'Background' }).element();
-    expect(background.querySelectorAll('[data-thumbnail]')).toHaveLength(17);
+    const tiles = [...templates.element().querySelectorAll('[data-tile]')];
+    expect(tiles).toHaveLength(4);
+    // Each tile draws the real page in its template, large.
+    expect(tiles.map((tile) => tile.querySelector('[data-thumbnail]')?.getAttribute('data-template'))).toEqual([
+      'classic',
+      'studio',
+      'night',
+      'split',
+    ]);
+    expect(tiles.every((tile) => tile.querySelector('[data-size="large"]') !== null)).toBe(true);
+    // A page with no template of its own wears the workspace's, and says so.
+    await expect.element(templates.getByRole('radio', { name: 'Studio' })).toBeChecked();
+    await expect.element(page.getByText('Your workspace uses Studio.', { exact: false })).toBeVisible();
+    (templates.getByRole('radio', { name: 'Studio' }).element() as HTMLElement).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ template: 'night', ground: 'ink' }));
+    // Nothing but the template, the colour, the cover and the face (AC-6802).
+    for (const gone of ['Background', 'Font', 'Buttons', 'Corners', 'Header', 'Mode', 'Looks']) {
+      await expect.element(page.getByRole('radiogroup', { name: gone })).not.toBeInTheDocument();
+    }
+    await expect.element(page.getByRole('radiogroup', { name: 'Face' })).toBeInTheDocument();
     await expect.element(page.getByRole('status')).toHaveTextContent('Adjusted so text stays readable.');
-    // Mode by keyboard: Light, then Dark.
-    (page.getByRole('radio', { name: 'Light' }).element() as HTMLElement).focus();
-    await userEvent.keyboard('{ArrowRight}');
-    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_PAGE_THEME, mode: 'dark' });
-    // A quick pick saves the colour, keeping no dark one the page didn't have.
-    // From the keyboard too: the default, then the arrow to the next swatch.
-    (page.getByRole('radio', { name: 'Workspace' }).element() as HTMLElement).focus();
-    await userEvent.keyboard('{ArrowRight}');
-    expect(onAccent).toHaveBeenLastCalledWith('#fb8f3c', undefined);
+  });
+
+  it('says the move once, and Keep it saves the look without the note', async () => {
+    const onChange = vi.fn();
+    const moved = { ...DEFAULT_PAGE_THEME, template: 'classic', moved: true } as const;
+    await render({}, () => <AppearanceCard theme={moved} onChange={onChange} extras={extras()} />);
+    await expect.element(page.getByText('Your page now uses Classic.')).toBeVisible();
+    await page.getByRole('button', { name: 'Keep it' }).click();
+    const kept = onChange.mock.lastCall?.[0] as Record<string, unknown> | undefined;
+    expect(kept?.template).toBe('classic');
+    expect(kept).not.toHaveProperty('moved');
   });
 });
 

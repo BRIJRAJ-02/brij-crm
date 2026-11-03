@@ -7,7 +7,7 @@
 // either: another tab's change shows when a screen next holds it. The colours a page draws for an accent come from
 // `brandVariables()`, the same pure function the live page's stylesheet is made with, so a preview is exactly what
 // visitors see (AC-7). Loaded on first use (`data.brand.load()`), so none of it rides in the app's first load.
-import type { PageImageSlot, ProfileAccent, ProfileLook, WorkspaceBrand } from '@crm/contracts';
+import type { PageImageSlot, PageTemplate, ProfileAccent, ProfileLook, WorkspaceBrand } from '@crm/contracts';
 import { brandProperties, brandVariables, BRAND_HEX_PATTERN } from '@crm/contracts/brand-colour';
 import { toDataError, type DataError } from '../errors.ts';
 
@@ -69,13 +69,29 @@ export interface PageLookExtras extends ProfileLook {
   /** The workspace's accent pair: what the page wears while `accent` is unset (AC-14). */
   readonly workspaceAccent?: string;
   readonly workspaceAccentDark?: string;
+  /** The workspace's template (spec 0068, AC-6804): what the page wears while it has none of its own. */
+  readonly workspaceTemplate?: PageTemplate;
 }
 
 /** The brand procedures the store calls, as the data layer's client answers them. */
 interface BrandProcedures {
   readonly get: (input: { workspace: string }, options: { signal?: AbortSignal }) => Promise<WorkspaceBrand>;
   readonly save: (
-    input: { workspace: string; accent: string | null; accentDark: string | null; mutationId: string },
+    input: {
+      workspace: string;
+      accent: string | null;
+      accentDark: string | null;
+      template?: PageTemplate;
+      mutationId: string;
+    },
+    options: { signal?: AbortSignal },
+  ) => Promise<WorkspaceBrand>;
+  readonly publishTemplate: (
+    input: { workspace: string; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<WorkspaceBrand>;
+  readonly discardTemplate: (
+    input: { workspace: string; mutationId: string },
     options: { signal?: AbortSignal },
   ) => Promise<WorkspaceBrand>;
 }
@@ -228,7 +244,7 @@ export function openBrand(given: {
   const lookOf = (workspace: string) => {
     let found = looks.get(workspace);
     if (found === undefined) {
-      found = holder(async () => {
+      found = holder<PageLookExtras>(async () => {
         // The page's own, and the workspace's accent it follows until it has one: read together.
         const [own, kit] = await Promise.all([
           call((options) => given.profile.look({ workspace }, options)),
@@ -238,6 +254,7 @@ export function openBrand(given: {
           ...own,
           ...(kit.accent === undefined ? {} : { workspaceAccent: kit.accent }),
           ...(kit.accentDark === undefined ? {} : { workspaceAccentDark: kit.accentDark }),
+          workspaceTemplate: kit.template,
         };
       }, now);
       looks.set(workspace, found);
@@ -281,6 +298,61 @@ export function openBrand(given: {
         },
       );
     },
+    /**
+     * Picks the workspace's template (spec 0068, AC-6804), the accent pair kept as it is. It waits for Publish
+     * (`publishTemplate`): the kit's `templateDraft` until then, the live one picked again clearing it. Shown at
+     * once; answers the refusal, or undefined once it landed.
+     */
+    saveTemplate: (workspace: string, template: PageTemplate): Promise<DataError | undefined> => {
+      return kitOf(workspace).change(
+        (kit) => withField(kit, 'templateDraft', template === kit.template ? undefined : template),
+        async () => {
+          const held = kitOf(workspace).held.getSnapshot();
+          const kit = held.status === 'ready' ? held.value : undefined;
+          const saved = await call((options) =>
+            given.brand.save(
+              {
+                workspace,
+                accent: kit?.accent ?? null,
+                accentDark: kit?.accent === undefined ? null : (kit.accentDark ?? null),
+                template,
+                mutationId: given.mintId(),
+              },
+              options,
+            ),
+          );
+          return () => saved;
+        },
+      );
+    },
+    /**
+     * Puts the waiting template live on every public page (spec 0068). Shown at once; answers the refusal, or
+     * undefined once it landed.
+     */
+    publishTemplate: (workspace: string): Promise<DataError | undefined> => {
+      // Their page's copy names the workspace's template too, so it is read again when next held.
+      looks.delete(workspace);
+      return kitOf(workspace).change(
+        (kit) => withField({ ...kit, template: kit.templateDraft ?? kit.template }, 'templateDraft', undefined),
+        async () => {
+          const saved = await call((options) =>
+            given.brand.publishTemplate({ workspace, mutationId: given.mintId() }, options),
+          );
+          return () => saved;
+        },
+      );
+    },
+    /** Lets the waiting template go: every public page keeps the one it wears. */
+    discardTemplate: (workspace: string): Promise<DataError | undefined> =>
+      kitOf(workspace).change(
+        (kit) => withField(kit, 'templateDraft', undefined),
+        async () => {
+          const saved = await call((options) =>
+            given.brand.discardTemplate({ workspace, mutationId: given.mintId() }, options),
+          );
+          return () => saved;
+        },
+      ),
     /**
      * The workspace's logo (AC-2): the bytes as the request body, already drawn again by the screen. Answers the
      * refusal, or undefined once it landed and the kit names the new version.

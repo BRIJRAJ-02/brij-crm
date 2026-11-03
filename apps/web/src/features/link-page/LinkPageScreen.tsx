@@ -51,6 +51,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { AppearanceCard, type PhotoSlot } from './AppearanceCard.tsx';
+import { LinkPublishBar } from './LinkPublishBar.tsx';
 import { DraftLook } from './draft-look.tsx';
 import { ClaimLink } from './ClaimLink.tsx';
 import { BlockEditorFrame } from './editors.tsx';
@@ -461,6 +462,9 @@ function Blocks({
   // colour under the system picker's pointer while it is dragged, so the phone follows the drag before it settles.
   const lookState = useBrand(brand.look(slug));
   const extrasRead = lookState.status === 'ready' ? lookState.value : undefined;
+  // The look as it draws (spec 0068, AC-6804): the page's own template, else its workspace's, else Classic.
+  const worn: PageTheme = { ...theme, template: theme.template ?? extrasRead?.workspaceTemplate ?? 'classic' };
+  const wornMode = worn.template === 'night' ? 'dark' : worn.template === 'studio' ? 'light' : undefined;
   const [dragged, setDragged] = useState<string | undefined>(undefined);
   const [lookRefusal, setLookRefusal] = useState<DataError | undefined>(undefined);
   const [sending, setSending] = useState<PhotoSlot | undefined>(undefined);
@@ -886,10 +890,11 @@ function Blocks({
       // out here: it is for a visitor without a page, not for the person whose page this is, and `claimPageHref`
       // lives on the public pages' own entry, which the app's bundle has no reason to pull in.
       // The phone beside the editor shows the look being picked, so its mark follows that, not the app's theme.
-      foot={<BookingFoot page="booking_profile" {...(theme.mode === 'system' ? {} : { scheme: theme.mode })} />}
+      foot={<BookingFoot page="booking_profile" {...(wornMode === undefined ? {} : { scheme: wornMode })} />}
       // A new ground remounts the phone, which fades the page in on it (spec 0060, AC-18).
       // Only a new ground, mode or header: a font or a button shape changes in place, keeping the phone's scroll.
-      key={[theme.ground, theme.gradient, theme.pattern, theme.mode, theme.header].join(' ')}
+      // A new template remounts it too, so the switch crossfades (spec 0068, AC-6804).
+      key={[worn.template, theme.ground, theme.gradient, theme.pattern, theme.mode, theme.header].join(' ')}
       person={{
         name: profile.name.trim() || handle,
         id: handle,
@@ -903,7 +908,7 @@ function Blocks({
         : { brand: { name: profile.workspaceName, href: identity.site } })}
       {...(identity.footLine === '' ? {} : { footLine: identity.footLine })}
       {...(state.status === 'ready' ? { blocks: previewBlocks } : {})}
-      theme={theme}
+      theme={worn}
       {...(theme.layout === undefined ? {} : { pageLayout: theme.layout })}
       photos={lookPhotos}
       variables={lookVariables}
@@ -998,11 +1003,23 @@ function Blocks({
   }
 
   const Editor = editing === undefined ? undefined : BLOCK_KINDS[editing.kind].Editor;
+  // Publish (spec 0068, AC-6810 to AC-6812): every edit here is a draft until Publish; the bar heads both views.
+  const publishBar = (
+    <LinkPublishBar
+      linkPage={linkPage}
+      slug={slug}
+      address={publicProfileUrl(handle)}
+      isPaused={!isLive}
+      blocks={state}
+      look={theme}
+      profile={profile}
+    />
+  );
   // What the page opens on: the page as something to hand out, the phone beside it showing exactly what a visitor
   // gets. Everything that changes the page is one press away, under Edit page (the owner, 27 October 2026).
   if (!isEditing) {
     return (
-      <PreviewLayout preview={preview} previewShare="wide">
+      <PreviewLayout preview={preview} previewShare="wide" notices={publishBar}>
         <LinkPageOverview
           data={data}
           slug={slug}
@@ -1025,7 +1042,7 @@ function Blocks({
     );
   }
   return (
-    <PreviewLayout preview={preview} previewShare="wide">
+    <PreviewLayout preview={preview} previewShare="wide" notices={publishBar}>
       {/* What is on the page comes first (its blocks, the archived ones, the social links), then how it looks:
           content is what the editor is opened for (flow walks, 29 October 2026: L2). */}
       <Card
@@ -1103,6 +1120,14 @@ function Blocks({
       <AppearanceCard
         theme={theme}
         onChange={chooseTheme}
+        // The template pictures draw this page: its owner's name and face, and its first rows (spec 0068, AC-6804).
+        profile={{
+          name: profile.name.trim() || handle,
+          ...(profile.image === undefined || profile.pictureHidden === true ? {} : { picture: profile.image }),
+          rows: previewBlocks
+            .flatMap((block) => ('title' in block && typeof block.title === 'string' ? [block.title] : []))
+            .slice(0, 3),
+        }}
         {...(themeRefusal === undefined
           ? lookRefusal === undefined
             ? {}
@@ -1131,7 +1156,7 @@ function Blocks({
       />
       {Editor !== undefined && editing !== undefined && (
         // The draft wears the page's own look (spec 0060, AC-16), as the phone does.
-        <DraftLook look={{ theme, photos: lookPhotos, variables: lookVariables }}>
+        <DraftLook look={{ theme: worn, photos: lookPhotos, variables: lookVariables }}>
           <EditorOrFrame
             // Adding keeps one dialog across the kinds (the frame owns it); editing opens the kind's own, as before.
             {...(kindPicker === undefined ? {} : { frame: { leading: kindPicker, hint: addHint } })}

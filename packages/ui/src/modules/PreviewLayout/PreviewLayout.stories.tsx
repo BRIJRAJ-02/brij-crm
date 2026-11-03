@@ -466,3 +466,17 @@ export const PhoneOnItsOwn: Story = {
     </Stage>
   ),
 };
+
+/** A draft's Preview in a tab of its own (spec 0068): the frame alone, the window's full height, still inert. */
+export const PageSize: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewFrame src="about:blank" title="Intro call" size="page" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const frame = await waitFor(() => canvas.getByTitle('Preview of Intro call'));
+    await expect(frame).toHaveAttribute('tabindex', '-1');
+  },
+};

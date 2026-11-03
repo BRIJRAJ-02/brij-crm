@@ -183,6 +183,13 @@ export {
   saveQrStyle,
   type ResolvedMedia,
 } from './profile/items.ts';
+export {
+  discardLinkDraft,
+  listLinkPageVersions,
+  publishLinkPage,
+  readLinkPagePublication,
+  restoreLinkPageVersion,
+} from './profile/link-publish.ts';
 // Link page blocks and reach (spec 0061): media links, picture checks, view facts and scheduled blocks, for the api's
 // signed in routes (the public ones take them from `@crm/core/public`).
 export {
@@ -206,6 +213,9 @@ export {
   saveBrandLogo,
   saveWorkspaceBrand,
   type StoredLogo,
+  discardBrandTemplate,
+  publishBrandTemplate,
+  workspaceHandles,
 } from './brand/brand.ts';
 export {
   pageImageFolder,
@@ -564,6 +574,16 @@ export {
   reorderProfilePages,
   updateBookingPage,
 } from './booking/pages.ts';
+// Publish for booking pages (spec 0068, AC-6810 to AC-6816): a draft, Publish with versions, Discard and Restore.
+export {
+  discardBookingPageDraft,
+  listBookingPageVersions,
+  publishBookingPage,
+  restoreBookingPageVersion,
+  saveBookingPageDraft,
+} from './booking/publish.ts';
+/** A page's unpublished changes as plain sentences (spec 0068, AC-6811), the one wording every page kind shares. */
+export { diffPage, type DraftedPageKind } from './booking/drafts.ts';
 // Managed booking pages (spec 0037, AC-1333 to AC-1336): one template, a page per member, locked parts kept in step.
 export {
   createManagedPage,

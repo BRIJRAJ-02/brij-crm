@@ -6,6 +6,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { BRAND_HEX_PATTERN } from './brand-colour.ts';
+import { PAGE_TEMPLATES } from './booking/page-theme.ts';
 import { FORM_SLUG } from './forms/answer-types.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -42,6 +43,13 @@ export const WorkspaceBrand = z.object({
   accent: BrandHex.optional(),
   accentDark: BrandHex.optional(),
   logo: z.object({ version: ImageVersion }).optional(),
+  /** The template every public page wears (spec 0068, AC-6804); Classic until an owner or admin picks another. */
+  template: z.enum(PAGE_TEMPLATES),
+  /**
+   * A template picked in Settings › Brand and not published yet (owner, 4 Nov 2026): every public page keeps
+   * `template` until Publish. Absent when nothing waits.
+   */
+  templateDraft: z.enum(PAGE_TEMPLATES).optional(),
   canEdit: z.boolean(),
 });
 /** A workspace's brand kit. */
@@ -54,6 +62,8 @@ export type WorkspaceBrand = z.infer<typeof WorkspaceBrand>;
 export const SaveBrandInput = WorkspaceScoped.extend({
   accent: BrandHex.nullable(),
   accentDark: BrandHex.nullable(),
+  /** The workspace's template (spec 0068, AC-6804); left out keeps the one it has. */
+  template: z.enum(PAGE_TEMPLATES, { error: 'Pick one of the four templates.' }).optional(),
   mutationId: Uuid,
 }).refine((input) => input.accentDark === null || input.accent !== null, {
   error: 'Pick the main colour before a dark one.',
@@ -72,6 +82,8 @@ export const PublicBrand = z.object({
     .regex(/^[0-9a-f]{12}$/)
     .optional(),
   logo: ImageVersion.optional(),
+  /** The template the page wears (spec 0068, AC-6804); absent is Classic. */
+  template: z.enum(PAGE_TEMPLATES).optional(),
 });
 /** What a public page is told of its brand. */
 export type PublicBrand = z.infer<typeof PublicBrand>;
@@ -126,4 +138,10 @@ export const UPLOAD_WORKSPACE_HEADER = 'x-crm-workspace';
 export const brandContract = {
   get: oc.input(WorkspaceScoped).output(WorkspaceBrand),
   save: oc.input(SaveBrandInput).output(WorkspaceBrand),
+  /**
+   * The template picked in Settings › Brand goes live on every public page (spec 0068: it waits for Publish), or is
+   * let go. `workspace.manage`, as a save is.
+   */
+  publishTemplate: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(WorkspaceBrand),
+  discardTemplate: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(WorkspaceBrand),
 };

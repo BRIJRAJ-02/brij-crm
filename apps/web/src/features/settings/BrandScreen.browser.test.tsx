@@ -82,7 +82,7 @@ async function render(brand: BrandStore) {
 
 describe('Settings › Brand', () => {
   it('lets an owner pick the colour, and the booking page preview wears it at once', async () => {
-    const { brand, saveKit } = store({ canEdit: true });
+    const { brand, saveKit } = store({ canEdit: true, template: 'classic' as const });
     await render(brand);
     await expect.element(page.getByRole('radio', { name: 'Timefix' })).toBeChecked();
     (page.getByRole('radio', { name: 'Timefix' }).element() as HTMLElement).focus();
@@ -94,7 +94,7 @@ describe('Settings › Brand', () => {
   });
 
   it('shows a member the kit with no way to change it', async () => {
-    const { brand } = store({ canEdit: false, accent: '#0fc27b' });
+    const { brand } = store({ canEdit: false, template: 'classic' as const, accent: '#0fc27b' });
     await render(brand);
     await expect.element(page.getByText('Only owners and admins change the brand.')).toBeInTheDocument();
     await expect.element(page.getByRole('button', { name: 'Any colour' })).not.toBeInTheDocument();
@@ -107,7 +107,7 @@ describe('Settings › Brand', () => {
 
   it.each(THEMES)('is clean under axe in %s', async (theme) => {
     applyTheme(theme);
-    const { brand } = store({ canEdit: true, accent: '#e8590c' });
+    const { brand } = store({ canEdit: true, template: 'classic' as const, accent: '#e8590c' });
     await render(brand);
     await expect.element(page.getByRole('radiogroup', { name: 'Colour' })).toBeInTheDocument();
     expect(await axeViolations()).toEqual([]);

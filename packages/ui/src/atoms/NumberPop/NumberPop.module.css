@@ -1,0 +1,50 @@
+/* NumberPop (spec 0068, AC-6806): transitions.dev's number pop in. A changed character rises space-8 out of a soft
+   blur on the move duration; the last two wait one and two staggers. A shared character, and the first value, hold
+   still. Reduced motion swaps at once. */
+@layer components {
+  .root {
+    /* Tokens only: the stagger is a quarter of the press, the blur the smallest space step. */
+    --digit-stagger: calc(var(--duration-press) / 4);
+    --digit-blur: var(--space-2);
+
+    display: inline-flex;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .digits {
+    display: inline-flex;
+    align-items: baseline;
+  }
+
+  .digit {
+    display: inline-block;
+    white-space: pre;
+    animation: digit-in var(--duration-move) var(--ease-out) both;
+  }
+
+  .digit[data-same] {
+    animation: none;
+  }
+
+  .digit[data-stagger='1'] {
+    animation-delay: var(--digit-stagger);
+  }
+
+  .digit[data-stagger='2'] {
+    animation-delay: calc(var(--digit-stagger) * 2);
+  }
+
+  @keyframes digit-in {
+    from {
+      opacity: 0;
+      filter: blur(var(--digit-blur));
+      translate: 0 var(--space-8);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .digit {
+      animation: none;
+    }
+  }
+}

@@ -90,6 +90,7 @@ import { Route as WSlugSettingsSchedulingCalendarsRouteImport } from './routes/w
 import { Route as WSlugSettingsSchedulingRotationsRouteImport } from './routes/w.$slug.settings.scheduling.rotations.tsx'
 import { Route as WSlugSettingsSchedulingRoundRobinRouteImport } from './routes/w.$slug.settings.scheduling.round-robin.tsx'
 import { Route as WSlugCapturesFormsFormIdPreviewRouteImport } from './routes/w.$slug.captures_.forms.$formId_.preview.tsx'
+import { Route as WSlugCapturesLinksPageIdPreviewRouteImport } from './routes/w.$slug.captures_.links.$pageId_.preview.tsx'
 import { Route as WSlugListsListViewsViewIdRouteImport } from './routes/w.$slug.lists.$list_.views.$viewId.tsx'
 import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdTabRouteImport } from './routes/w.$slug.objects.$object_.$recordId.$tab.tsx'
@@ -538,6 +539,12 @@ const WSlugCapturesFormsFormIdPreviewRoute =
     path: '/captures/forms/$formId/preview',
     getParentRoute: () => WSlugRoute,
   } as any)
+const WSlugCapturesLinksPageIdPreviewRoute =
+  WSlugCapturesLinksPageIdPreviewRouteImport.update({
+    id: '/captures_/links/$pageId_/preview',
+    path: '/captures/links/$pageId/preview',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 const WSlugListsListViewsViewIdRoute =
   WSlugListsListViewsViewIdRouteImport.update({
     id: '/lists/$list_/views/$viewId',
@@ -699,6 +706,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/settings/roles/': typeof WSlugSettingsRolesIndexRoute
   '/w/$slug/captures/forms/$formId/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
+  '/w/$slug/captures/links/$pageId/preview': typeof WSlugCapturesLinksPageIdPreviewRoute
   '/w/$slug/lists/$list/views/$viewId': typeof WSlugListsListViewsViewIdRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/imports/$importId': typeof WSlugObjectsObjectImportsImportIdRoute
@@ -791,6 +799,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/settings/roles': typeof WSlugSettingsRolesIndexRoute
   '/w/$slug/captures/forms/$formId/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
+  '/w/$slug/captures/links/$pageId/preview': typeof WSlugCapturesLinksPageIdPreviewRoute
   '/w/$slug/lists/$list/views/$viewId': typeof WSlugListsListViewsViewIdRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/imports/$importId': typeof WSlugObjectsObjectImportsImportIdRoute
@@ -888,6 +897,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/settings/roles/': typeof WSlugSettingsRolesIndexRoute
   '/w/$slug/captures_/forms/$formId_/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
+  '/w/$slug/captures_/links/$pageId_/preview': typeof WSlugCapturesLinksPageIdPreviewRoute
   '/w/$slug/lists/$list_/views/$viewId': typeof WSlugListsListViewsViewIdRoute
   '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object_/imports/$importId': typeof WSlugObjectsObjectImportsImportIdRoute
@@ -986,6 +996,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/objects/'
     | '/w/$slug/settings/roles/'
     | '/w/$slug/captures/forms/$formId/preview'
+    | '/w/$slug/captures/links/$pageId/preview'
     | '/w/$slug/lists/$list/views/$viewId'
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/imports/$importId'
@@ -1078,6 +1089,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/objects'
     | '/w/$slug/settings/roles'
     | '/w/$slug/captures/forms/$formId/preview'
+    | '/w/$slug/captures/links/$pageId/preview'
     | '/w/$slug/lists/$list/views/$viewId'
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/imports/$importId'
@@ -1174,6 +1186,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/objects/'
     | '/w/$slug/settings/roles/'
     | '/w/$slug/captures_/forms/$formId_/preview'
+    | '/w/$slug/captures_/links/$pageId_/preview'
     | '/w/$slug/lists/$list_/views/$viewId'
     | '/w/$slug/objects/$object_/$recordId/$tab'
     | '/w/$slug/objects/$object_/imports/$importId'
@@ -1771,6 +1784,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugCapturesFormsFormIdPreviewRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/captures_/links/$pageId_/preview': {
+      id: '/w/$slug/captures_/links/$pageId_/preview'
+      path: '/captures/links/$pageId/preview'
+      fullPath: '/w/$slug/captures/links/$pageId/preview'
+      preLoaderRoute: typeof WSlugCapturesLinksPageIdPreviewRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/lists/$list_/views/$viewId': {
       id: '/w/$slug/lists/$list_/views/$viewId'
       path: '/lists/$list/views/$viewId'
@@ -2034,6 +2054,7 @@ interface WSlugRouteChildren {
   WSlugObjectsObjectDuplicatesRoute: typeof WSlugObjectsObjectDuplicatesRoute
   WSlugObjectsObjectImportRoute: typeof WSlugObjectsObjectImportRoute
   WSlugCapturesFormsFormIdPreviewRoute: typeof WSlugCapturesFormsFormIdPreviewRoute
+  WSlugCapturesLinksPageIdPreviewRoute: typeof WSlugCapturesLinksPageIdPreviewRoute
   WSlugListsListViewsViewIdRoute: typeof WSlugListsListViewsViewIdRoute
   WSlugObjectsObjectRecordIdTabRoute: typeof WSlugObjectsObjectRecordIdTabRoute
   WSlugObjectsObjectImportsImportIdRoute: typeof WSlugObjectsObjectImportsImportIdRoute
@@ -2067,6 +2088,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugObjectsObjectDuplicatesRoute: WSlugObjectsObjectDuplicatesRoute,
   WSlugObjectsObjectImportRoute: WSlugObjectsObjectImportRoute,
   WSlugCapturesFormsFormIdPreviewRoute: WSlugCapturesFormsFormIdPreviewRoute,
+  WSlugCapturesLinksPageIdPreviewRoute: WSlugCapturesLinksPageIdPreviewRoute,
   WSlugListsListViewsViewIdRoute: WSlugListsListViewsViewIdRoute,
   WSlugObjectsObjectRecordIdTabRoute: WSlugObjectsObjectRecordIdTabRoute,
   WSlugObjectsObjectImportsImportIdRoute:

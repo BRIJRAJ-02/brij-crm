@@ -1,5 +1,15 @@
 /** Settings › Workspace › Brand's copy (spec 0060, AC-1 to AC-3). */
 export const strings = {
+  /** The workspace's template (spec 0068, AC-6804). */
+  template: 'Template',
+  /** A template picked and not published yet (spec 0068). */
+  templatePublishNote: 'Publishing changes every public page: booking pages, forms and link pages.',
+  templateChange: (from: string, to: string) => `Template ${from} → ${to}`,
+  templateText: 'How every booking page, form and link page looks. People can pick another for their own link page.',
+  templateClassic: 'Classic',
+  templateStudio: 'Studio',
+  templateNight: 'Night',
+  templateSplit: 'Split',
   title: 'Brand',
   /** The settings navigation's entry. */
   navLabel: 'Brand',

@@ -585,6 +585,24 @@
     }
   }
 
+  /* A page that pins a scheme of its own inside the document (a template: Night dark, Studio light) wins over the
+     document's, so the wordmark reads on the page it sits on. */
+  :not(:root)[data-theme='dark'] .wordmark[data-scheme='light'] {
+    display: none;
+  }
+
+  :not(:root)[data-theme='dark'] .wordmark[data-scheme='dark'] {
+    display: block;
+  }
+
+  :not(:root)[data-theme='light'] .wordmark[data-scheme='light'] {
+    display: block;
+  }
+
+  :not(:root)[data-theme='light'] .wordmark[data-scheme='dark'] {
+    display: none;
+  }
+
   .claim {
     display: inline-flex;
     align-items: center;
@@ -674,6 +692,71 @@
       margin-block: var(--space-24);
       padding-block: 0;
       border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+    }
+  }
+
+  /* The four templates (spec 0068, AC-6801): the workspace's, from its brand kit, on this root as `data-template`
+     (Night with `data-theme='dark'`, Studio with `'light'`). The layout stays the booking page's own (the rail
+     beside the card); a template changes the ground, the faces, the corners and how things answer the pointer. */
+  .root[data-template='classic'] {
+    --frame-face: var(--font-pack-grotesk);
+  }
+
+  /* Studio's paper ground warmed by the page's own accent (with no brand, a warm orange), as the link page's. */
+  .root[data-template='studio'] {
+    --frame-face: var(--font-pack-editorial);
+    --studio-warmth: var(--frame-brand-accent, var(--tag-orange-text));
+
+    background: color-mix(in oklab, var(--studio-warmth) 6%, var(--surface-subtle));
+  }
+
+  .root[data-template='night'] {
+    --frame-face: var(--font-pack-geometric);
+    --frame-glow: 0 0 var(--space-16) color-mix(in oklab, var(--frame-accent) 45%, transparent);
+    --frame-focus: 0 0 0 var(--border-width-thick) var(--frame-accent), var(--frame-glow);
+
+    background: var(--surface-sunken);
+  }
+
+  .root[data-template] .host,
+  .root[data-template] .heading {
+    font-family: var(--frame-face, var(--font-sans));
+  }
+
+  .root[data-template='studio'] .host,
+  .root[data-template='night'] .host {
+    font-size: var(--size-chip);
+    line-height: var(--size-control);
+  }
+
+  .root[data-template='studio'] .card {
+    border-color: color-mix(in oklab, var(--studio-warmth) 18%, var(--border));
+    box-shadow: var(--shadow-xs);
+  }
+
+  .root[data-template='night'] .card {
+    background: var(--surface-subtle);
+    box-shadow: var(--frame-glow);
+  }
+
+  /* Night's Book while no time is chosen: the accent at half strength on the dark card left its words under 3:1, so
+     the waiting button turns neutral (a raised fill, its edge, secondary words) and dims less. It reads as waiting,
+     not as the action, and its words hold 4.5:1. */
+  .root[data-template='night'] .footer:has([data-variant='primary'][data-disabled]) {
+    --accent: var(--surface-raised);
+    --accent-hover: var(--border);
+    --on-accent: var(--text-secondary);
+    --shadow-primary: none;
+    --opacity-disabled: var(--opacity-busy);
+  }
+
+  /* Split: on a wide page the rail is a sticky panel on the page's own ground (no card of its own: no border, no
+     shadow), so the logo, who you book and the facts stay in view as the times scroll; one column on a phone. */
+  @media (width >= 1024px) {
+    .root[data-template='split']:not([data-compact]) .rail {
+      position: sticky;
+      inset-block-start: var(--space-32);
+      align-self: start;
     }
   }
 

@@ -53,6 +53,12 @@ export { RemoteCursor, type RemoteCursorProps } from './atoms/RemoteCursor/Remot
 export { Separator, type SeparatorProps } from './atoms/Separator/Separator.tsx';
 export { Skeleton, type SkeletonProps, type SkeletonShape, type SkeletonWidth } from './atoms/Skeleton/Skeleton.tsx';
 export { Slider, type SliderProps } from './atoms/Slider/Slider.tsx';
+/** A public page's entrance, played once on first draw (spec 0068, AC-6806). */
+export { Reveal, type RevealProps } from './atoms/Reveal/Reveal.tsx';
+/** A worded number whose changed digits pop in (spec 0068, AC-6806). */
+export { NumberPop, type NumberPopProps } from './atoms/NumberPop/NumberPop.tsx';
+/** The moment something is done: a check that draws itself (spec 0068, AC-6806). */
+export { SuccessCheck, type SuccessCheckProps } from './atoms/SuccessCheck/SuccessCheck.tsx';
 export { Spinner, type SpinnerProps } from './atoms/Spinner/Spinner.tsx';
 export { StatusDot, type StatusDotProps } from './atoms/StatusDot/StatusDot.tsx';
 /** A booking link's colour from its id, the same on its card and its bookings on the week (grey and red left out). */
@@ -283,11 +289,22 @@ export {
   type LinkPagePerson,
   type LinkPagePhotos,
   type LinkPageProps,
+  type LinkPageThumbnailProfile,
   type LinkPageThumbnailProps,
   type LinkPageTileSize,
   type LinkPageTimes,
   type PageLook,
 } from './modules/LinkPage/LinkPage.tsx';
+/** One of the four templates every public page wears (spec 0068): Classic, Studio, Night or Split. */
+export type { PageTemplate } from './lib/page-template.ts';
+/** A public page's publish bar (spec 0068, AC-6811, AC-6812): changes not published, Changes, Versions and Publish. */
+export {
+  PublishBar,
+  type PublishBarProblem,
+  type PublishBarProps,
+  type PublishBarStatus,
+  type PublishBarVersion,
+} from './modules/PublishBar/PublishBar.tsx';
 /** Titled sections, each a Card, that move as wholes: a profile's sections in Settings › Profile (owner ask A102). */
 export { SectionList, type SectionListProps, type SectionListSection } from './modules/SectionList/SectionList.tsx';
 export {

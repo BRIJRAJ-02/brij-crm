@@ -9,7 +9,9 @@ import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
 import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
 import { SocialLinks, type SocialLinkItem } from '../../molecules/SocialLinks/SocialLinks.tsx';
+import { templateAttributes, type PageTemplate } from '../../lib/page-template.ts';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
+import '@crm/tokens/packs.css';
 import styles from './BookingFrame.module.css';
 import { strings } from './strings.ts';
 
@@ -121,6 +123,11 @@ export interface PageBrand {
   readonly logo?: { readonly src: string; readonly alt: string };
   /** The accent's custom properties, for an app preview (`brandProperties()`); the live page has a stylesheet. */
   readonly variables?: PageVariables;
+  /**
+   * The template the page wears (spec 0068, AC-6801, AC-6804): the workspace's, from the brand kit. Left out it is
+   * Classic. Night pins dark and Studio light; Classic and Split follow the visitor.
+   */
+  readonly template?: PageTemplate;
 }
 
 /** The web app's own wordmark files (apps/web/public/brand). */
@@ -184,6 +191,7 @@ export function BookingFrame({
     <main
       className={styles.root}
       ref={variables}
+      {...templateAttributes(brand?.template)}
       {...(isCompact ? { 'data-compact': true } : {})}
       {...(isEmbedded ? { 'data-embedded': true } : {})}
     >

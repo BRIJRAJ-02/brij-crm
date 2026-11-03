@@ -1,157 +1,42 @@
 // Brief
-// Purpose: the link page's Design panel (spec 0054, widened by spec 0060): a look picked by sight and seen at once.
-// Main task: pick one of the 14 looks, then change any key of it under Customise (colour, background, font, buttons,
-// header, mode), each a row of pictures of the page in that choice, and add a cover or background photo.
-// Leaves out: any colour, size or font of its own beyond the one accent; every pick is a name from a closed set, and
-// the stylesheet in `packages/ui` is the only place a value lives.
-import {
-  DEFAULT_PAGE_THEME,
-  PAGE_THEME_PRESETS,
-  sameTheme,
-  type BrandColours,
-  type DataError,
-  type PageLookExtras,
-  type PageTheme,
-} from '@crm/data';
+// Purpose: the link page's Design panel (spec 0068, AC-6802, AC-6804): one of four finished templates, picked by
+// seeing each as the page, then the owner's colour, cover photo and face shape, and nothing else.
+// Main task: pick a template; the phone beside it crossfades to the page in it at once.
+// Leaves out: fonts, grounds, gradients, patterns, row shapes and fills, which each template fixes; and any value of
+// its own: every pick is a name from a closed set, and the stylesheet in `packages/ui` is the only place a value lives.
+import { themeForTemplate, type BrandColours, type DataError, type PageLookExtras, type PageTheme } from '@crm/data';
 import {
   AccentPicker,
   Button,
+  Callout,
   Card,
   Disclosure,
   FieldGroup,
   FileDrop,
-  HuePicker,
   LinkPageThumbnail,
   Modal,
   SettingsStack,
   TileGrid,
   type AccentQuickPick,
-  type Hue,
+  type LinkPageThumbnailProfile,
+  type PageTemplate,
 } from '@crm/ui';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { BRAND_PHOTO_PICK_MAX_BYTES, BRAND_PHOTO_TYPES } from './photo-prep.ts';
 import { strings } from './strings.ts';
 
-/** What each starting point is called. The list's order is the contracts' own, so the two can't fall apart. */
-const PRESET_NAMES: Record<(typeof PAGE_THEME_PRESETS)[number]['id'], string> = {
-  plain: strings.presetPlain,
-  paper: strings.presetPaper,
-  bold: strings.presetBold,
-  ink: strings.presetInk,
-  quiet: strings.presetQuiet,
-  dawn: strings.presetDawn,
-  ocean: strings.presetOcean,
-  mint: strings.presetMint,
-  studio: strings.presetStudio,
-  editorial: strings.presetEditorial,
-  night: strings.presetNight,
-  peach: strings.presetPeach,
-  graphite: strings.presetGraphite,
-  gallery: strings.presetGallery,
-};
-
-/** One choice of a Customise row: its tile's id and name, and the look it makes from the one on the page. */
-interface Choice {
-  readonly id: string;
-  readonly name: string;
-  readonly apply: (theme: PageTheme) => PageTheme;
-}
-
-/** A row's choices for one key, each setting that key alone. */
-function choicesOf<Key extends Exclude<keyof PageTheme, 'layout'>>(
-  key: Key,
-  names: readonly (readonly [PageTheme[Key], string])[],
-): readonly Choice[] {
-  return names.map(([value, name]) => ({ id: value, name, apply: (theme) => ({ ...theme, [key]: value }) }));
-}
-
-/** The backgrounds: the four grounds, the eight gradients, the four patterns and the photo, in one row (AC-10). */
-const GROUNDS: readonly Choice[] = [
-  ...choicesOf('ground', [
-    ['plain', strings.groundPlain],
-    ['paper', strings.groundPaper],
-    ['tint', strings.groundTint],
-    ['ink', strings.groundInk],
-  ]),
-  ...(
-    [
-      ['dawn', strings.gradientDawn],
-      ['dusk', strings.gradientDusk],
-      ['mint', strings.gradientMint],
-      ['ocean', strings.gradientOcean],
-      ['peach', strings.gradientPeach],
-      ['grape', strings.gradientGrape],
-      ['sand', strings.gradientSand],
-      ['graphite', strings.gradientGraphite],
-    ] as const
-  ).map(([gradient, name]) => ({
-    id: `gradient-${gradient}`,
-    name,
-    apply: (theme: PageTheme): PageTheme => ({ ...theme, ground: 'gradient', gradient }),
-  })),
-  ...(
-    [
-      ['dots', strings.patternDots],
-      ['grid', strings.patternGrid],
-      ['lines', strings.patternLines],
-      ['waves', strings.patternWaves],
-    ] as const
-  ).map(([pattern, name]) => ({
-    id: `pattern-${pattern}`,
-    name,
-    apply: (theme: PageTheme): PageTheme => ({ ...theme, ground: 'pattern', pattern }),
-  })),
-  ...choicesOf('ground', [['image', strings.groundImage]]),
+/** The four templates in the picker's order, each with its name and the line that says who it suits. */
+const TEMPLATES: readonly { readonly id: PageTemplate; readonly name: string; readonly text: string }[] = [
+  { id: 'classic', name: strings.templateClassic, text: strings.templateClassicText },
+  { id: 'studio', name: strings.templateStudio, text: strings.templateStudioText },
+  { id: 'night', name: strings.templateNight, text: strings.templateNightText },
+  { id: 'split', name: strings.templateSplit, text: strings.templateSplitText },
 ];
 
-/** The background tile a look stands on. */
-function groundId(theme: PageTheme): string {
-  if (theme.ground === 'gradient') return `gradient-${theme.gradient}`;
-  if (theme.ground === 'pattern') return `pattern-${theme.pattern}`;
-  return theme.ground;
+/** A template's name, as the picker says it. */
+function nameOf(template: PageTemplate): string {
+  return TEMPLATES.find((one) => one.id === template)?.name ?? strings.templateClassic;
 }
-
-const FONTS = choicesOf('font', [
-  ['sans', strings.fontSans],
-  ['mono', strings.fontMono],
-  ['grotesk', strings.fontGrotesk],
-  ['editorial', strings.fontEditorial],
-  ['classic', strings.fontClassic],
-  ['friendly', strings.fontFriendly],
-  ['geometric', strings.fontGeometric],
-  ['display', strings.fontDisplay],
-]);
-
-const FILLS = choicesOf('fill', [
-  ['plain', strings.fillPlain],
-  ['soft', strings.fillSoft],
-  ['outline', strings.fillOutline],
-  ['solid', strings.fillSolid],
-]);
-
-const SHAPES = choicesOf('shape', [
-  ['soft', strings.shapeSoft],
-  ['pill', strings.shapePill],
-  ['square', strings.shapeSquare],
-]);
-
-const HEADERS = choicesOf('header', [
-  ['centred', strings.headerCentred],
-  ['cover', strings.headerCover],
-  ['left', strings.headerLeft],
-]);
-
-const AVATARS = choicesOf('avatar', [
-  ['circle', strings.avatarCircle],
-  ['rounded', strings.avatarRounded],
-  ['none', strings.avatarNone],
-]);
-
-const MODES = choicesOf('mode', [
-  ['light', strings.modeLight],
-  ['dark', strings.modeDark],
-  ['system', strings.modeSystem],
-]);
 
 /** A page's two photos. */
 export type PhotoSlot = 'cover' | 'ground';
@@ -183,7 +68,7 @@ export interface DesignExtras {
 
 /** Props for AppearanceCard. */
 export interface AppearanceCardProps {
-  /** The look as the page is drawn now, with any pick still on its way already shown. */
+  /** The look as stored, with any pick still on its way already shown. */
   readonly theme: PageTheme;
   /** A pick: shown at once by the caller, then saved. A refusal puts the control back and says why. */
   readonly onChange: (theme: PageTheme) => void;
@@ -191,172 +76,173 @@ export interface AppearanceCardProps {
   readonly refusal?: DataError;
   /** The colour and the photos (spec 0060). */
   readonly extras?: DesignExtras;
+  /**
+   * The owner's page as the template pictures draw it (spec 0068, AC-6804): their name, picture or initials, logo and
+   * first rows' titles. The cover comes from `extras`. Left out, the pictures draw a sample.
+   */
+  readonly profile?: LinkPageThumbnailProfile;
 }
 
 /**
- * Design (AC-5420; spec 0060, AC-8, AC-9): 14 looks as pictures of the page, then Customise, rows of pictures of the
- * page in each choice. Each pick shows at once in the phone beside it and saves once the picking stops.
+ * Design (spec 0068, AC-6802, AC-6804, AC-6805): the four templates as large pictures of the page, the one the page
+ * wears ringed and ticked; then Colour, Cover photo and Face. A page with no template of its own wears its
+ * workspace's, and the picker says so. A page moved to a template by the move says so once, with a way to pick
+ * another and a way to keep it.
  */
-export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceCardProps) {
-  const [isCustomising, setCustomising] = useState(false);
+export function AppearanceCard({ theme, onChange, refusal, extras, profile }: AppearanceCardProps) {
   const [removing, setRemoving] = useState<PhotoSlot | undefined>(undefined);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const variables = extras?.variables ?? [];
   const look = extras?.look;
-  const pick = (next: PageTheme) => {
-    onChange(next);
-  };
-  /** One row of pictures: the page as it is, with this one choice made. */
-  const row = (label: string, choices: readonly Choice[], value: string, detail?: 'font' | 'shape' | 'mode') => (
-    // The row's name over its pictures, as a field's label sits over its field.
-    <FieldGroup label={label}>
-      <TileGrid
-        variant="choice"
-        label={label}
-        value={value}
-        tiles={choices.map((choice) => ({
-          id: choice.id,
-          name: choice.name,
-          thumbnail: (
-            <LinkPageThumbnail
-              theme={choice.apply(theme)}
-              variables={variables}
-              {...(detail === undefined ? {} : { detail })}
-            />
-          ),
-        }))}
-        onChange={(picked) => {
-          const found = choices.find((choice) => choice.id === picked);
-          if (found !== undefined) pick(found.apply(theme));
-        }}
-      />
-    </FieldGroup>
-  );
-  /** A slot's picker, with what is there now as its preview so nobody replaces a photo they cannot see. */
-  const photo = (slot: PhotoSlot) => {
-    const version = look?.[slot];
-    const src = version === undefined ? undefined : extras?.photoSrc(slot, version);
-    const label =
-      slot === 'cover'
-        ? version === undefined
-          ? strings.coverPhotoDrop
-          : strings.coverPhoto
-        : version === undefined
-          ? strings.groundPhotoDrop
-          : strings.groundPhoto;
-    return (
-      <>
-        <FileDrop
-          label={label}
-          acceptedTypes={BRAND_PHOTO_TYPES}
-          typesText={strings.photoTypes}
-          maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
-          isDisabled={extras === undefined || look === undefined || extras.sending !== undefined}
-          {...(src === undefined
-            ? {}
-            : { preview: { src, alt: strings.photoAlt }, onAdjust: () => extras?.onPhoto(slot, src) })}
-          onFiles={(files) => {
-            const [file] = files;
-            if (file !== undefined) extras?.onPhoto(slot, file);
-          }}
-        />
-        {version !== undefined && (
-          <Button variant="ghost" size="md" icon="trash" onPress={() => setRemoving(slot)}>
-            {strings.photoRemove}
-          </Button>
-        )}
-      </>
-    );
-  };
-  // The starting point a person is standing on, or none once they have changed a key under it. Worked out from
-  // the keys rather than remembered, since the name is never stored (AC-5420).
-  const standing = PAGE_THEME_PRESETS.find((preset) => sameTheme(preset.theme, theme));
+  const workspaceTemplate = look?.workspaceTemplate ?? 'classic';
+  const worn = theme.template ?? workspaceTemplate;
   const colours = extras?.colours(look?.accent, look?.accentDark);
+  const cover = look?.cover;
+  const coverSrc = cover === undefined ? undefined : extras?.photoSrc('cover', cover);
   return (
     <Card
       title={strings.appearance}
       description={strings.appearanceText}
-      actions={<Button onPress={() => pick(DEFAULT_PAGE_THEME)}>{strings.reset}</Button>}
       {...(refusal === undefined ? {} : { footerNote: refusal.message })}
     >
-      {/* Each look as a picture of the page in it, its name under it: picked by sight, and the chosen one ringed
-          and ticked. None is ticked once a row below changes a key under it. Gallery needs its photos, so picking
-          it without them opens Customise, where they are added. */}
-      <TileGrid
-        variant="choice"
-        label={strings.startingPoint}
-        value={standing?.id ?? null}
-        tiles={PAGE_THEME_PRESETS.map((preset) => ({
-          id: preset.id,
-          name: PRESET_NAMES[preset.id],
-          thumbnail: <LinkPageThumbnail theme={preset.theme} variables={variables} />,
-        }))}
-        onChange={(picked) => {
-          const found = PAGE_THEME_PRESETS.find((preset) => preset.id === picked);
-          if (found === undefined) return;
-          pick(found.theme);
-          if (found.theme.ground === 'image' && look?.ground === undefined) setCustomising(true);
-        }}
-      />
-      <Disclosure
-        title={strings.customise}
-        variant="quiet"
-        isExpanded={isCustomising}
-        onExpandedChange={setCustomising}
-      >
-        {/* Each row's caption a step from the row above, so it reads with its own tiles (verify, 31 Oct 2026). */}
-        <SettingsStack variant="plain">
-          {extras !== undefined && (
-            <AccentPicker
-              label={strings.colour}
-              defaultName={strings.colourDefault}
-              {...(look?.workspaceAccent === undefined ? {} : { defaultValue: look.workspaceAccent })}
-              {...(look?.accent === undefined ? {} : { value: look.accent })}
-              quickPicks={extras.quickPicks}
-              isDisabled={look === undefined}
-              {...(colours?.adjusted === true ? { drawn: { light: colours.light, dark: colours.dark } } : {})}
-              onPreview={extras.onPreviewAccent}
-              onChange={(accent) => {
-                extras.onAccent(accent, accent === undefined ? undefined : look?.accentDark);
-              }}
-            >
-              {/* A separate colour for dark pages (AC-6), once there is a colour of the page's own to set it beside. */}
-              {look?.accent !== undefined && (
-                <Disclosure title={strings.colourMore} variant="quiet">
-                  <AccentPicker
-                    label={strings.colourMore}
-                    defaultName={strings.colourDarkDefault}
-                    {...(look.accentDark === undefined ? {} : { value: look.accentDark })}
-                    quickPicks={extras.quickPicks}
-                    onChange={(accentDark) => {
-                      extras.onAccent(look.accent, accentDark);
-                    }}
+      <SettingsStack variant="plain">
+        {/* The move to templates, said once (AC-6805): either answer saves the look without the note. */}
+        {theme.moved === true && (
+          <Callout
+            tone="info"
+            title={strings.templateMoved(nameOf(worn))}
+            actions={
+              <>
+                <Button
+                  size="md"
+                  onPress={() => {
+                    pickerRef.current?.querySelector<HTMLInputElement>('input:checked, input')?.focus();
+                  }}
+                >
+                  {strings.templateMovedChoose}
+                </Button>
+                <Button size="md" variant="ghost" onPress={() => onChange(themeForTemplate(worn, theme))}>
+                  {strings.templateMovedKeep}
+                </Button>
+              </>
+            }
+          >
+            {strings.templateMovedText}
+          </Callout>
+        )}
+        <div ref={pickerRef}>
+          <FieldGroup
+            label={strings.template}
+            {...(theme.template === undefined ? { hint: strings.templateFollows(nameOf(workspaceTemplate)) } : {})}
+          >
+            {/* Each template as the page in it, in the owner's colour and photos: picked by sight (AC-6804). */}
+            <TileGrid
+              variant="choice"
+              label={strings.template}
+              showsDescription
+              keepsPicture
+              pictureSize="large"
+              value={worn}
+              tiles={TEMPLATES.map((template) => ({
+                id: template.id,
+                name: template.name,
+                description: template.text,
+                thumbnail: (
+                  <LinkPageThumbnail
+                    theme={themeForTemplate(template.id, theme)}
+                    variables={variables}
+                    size="large"
+                    {...(profile === undefined
+                      ? {}
+                      : { profile: { ...profile, ...(coverSrc === undefined ? {} : { cover: coverSrc }) } })}
                   />
-                </Disclosure>
-              )}
-            </AccentPicker>
-          )}
-          {row(strings.ground, GROUNDS, groundId(theme))}
-          {/* The tint takes the person's hue, which changes nothing under any other background. */}
-          {theme.ground === 'tint' && (
-            <HuePicker
-              isLabelShown
-              label={strings.hue}
-              value={theme.hue}
-              onChange={(hue: Hue) => {
-                pick({ ...theme, hue });
+                ),
+              }))}
+              onChange={(picked) => {
+                const found = TEMPLATES.find((template) => template.id === picked);
+                if (found !== undefined) onChange(themeForTemplate(found.id, theme));
               }}
             />
-          )}
-          {theme.ground === 'image' && photo('ground')}
-          {row(strings.font, FONTS, theme.font, 'font')}
-          {row(strings.fill, FILLS, theme.fill)}
-          {row(strings.shape, SHAPES, theme.shape, 'shape')}
-          {row(strings.header, HEADERS, theme.header)}
-          {theme.header === 'cover' && photo('cover')}
-          {row(strings.avatar, AVATARS, theme.avatar)}
-          {row(strings.mode, MODES, theme.mode, 'mode')}
-        </SettingsStack>
-      </Disclosure>
+          </FieldGroup>
+        </div>
+        {extras !== undefined && (
+          <AccentPicker
+            label={strings.colour}
+            defaultName={strings.colourDefault}
+            {...(look?.workspaceAccent === undefined ? {} : { defaultValue: look.workspaceAccent })}
+            {...(look?.accent === undefined ? {} : { value: look.accent })}
+            quickPicks={extras.quickPicks}
+            isDisabled={look === undefined}
+            {...(colours?.adjusted === true ? { drawn: { light: colours.light, dark: colours.dark } } : {})}
+            onPreview={extras.onPreviewAccent}
+            onChange={(accent) => {
+              extras.onAccent(accent, accent === undefined ? undefined : look?.accentDark);
+            }}
+          >
+            {/* A separate colour for dark pages (AC-6), once there is a colour of the page's own to set it beside. */}
+            {look?.accent !== undefined && (
+              <Disclosure title={strings.colourMore} variant="quiet">
+                <AccentPicker
+                  label={strings.colourMore}
+                  defaultName={strings.colourDarkDefault}
+                  {...(look.accentDark === undefined ? {} : { value: look.accentDark })}
+                  quickPicks={extras.quickPicks}
+                  onChange={(accentDark) => {
+                    extras.onAccent(look.accent, accentDark);
+                  }}
+                />
+              </Disclosure>
+            )}
+          </AccentPicker>
+        )}
+        {/* The cover (AC-6802): Studio and Split lead with it; Classic and Night show it when there is one. */}
+        <FileDrop
+          label={cover === undefined ? strings.coverPhotoDrop : strings.coverPhoto}
+          acceptedTypes={BRAND_PHOTO_TYPES}
+          typesText={strings.photoTypes}
+          maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
+          isDisabled={extras === undefined || look === undefined || extras.sending !== undefined}
+          {...(coverSrc === undefined
+            ? {}
+            : {
+                preview: { src: coverSrc, alt: strings.photoAlt },
+                onAdjust: () => {
+                  extras?.onPhoto('cover', coverSrc);
+                },
+              })}
+          onFiles={(files) => {
+            const [file] = files;
+            if (file !== undefined) extras?.onPhoto('cover', file);
+          }}
+        />
+        {cover !== undefined && (
+          <Button variant="ghost" size="md" icon="trash" onPress={() => setRemoving('cover')}>
+            {strings.photoRemove}
+          </Button>
+        )}
+        <FieldGroup label={strings.avatar}>
+          <TileGrid
+            variant="choice"
+            label={strings.avatar}
+            value={theme.avatar === 'rounded' ? 'rounded' : 'circle'}
+            tiles={(
+              [
+                ['circle', strings.avatarCircle],
+                ['rounded', strings.avatarRounded],
+              ] as const
+            ).map(([id, name]) => ({
+              id,
+              name,
+              thumbnail: (
+                <LinkPageThumbnail theme={{ ...themeForTemplate(worn, theme), avatar: id }} variables={variables} />
+              ),
+            }))}
+            onChange={(picked) => {
+              if (picked === 'circle' || picked === 'rounded') onChange({ ...theme, avatar: picked });
+            }}
+          />
+        </FieldGroup>
+      </SettingsStack>
       <Modal
         isOpen={removing !== undefined}
         onOpenChange={(isOpen) => {
@@ -382,7 +268,7 @@ export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceC
           </>
         }
       >
-        {removing === 'cover' ? strings.coverRemoveText : strings.photoRemoveText}
+        {strings.coverRemoveText}
       </Modal>
     </Card>
   );

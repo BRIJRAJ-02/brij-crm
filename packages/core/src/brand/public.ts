@@ -23,7 +23,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { BookingEntry, HandleOwner } from '../access/door.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { brandRowOf, type BrandRow } from './brand.ts';
+import { brandRowOf, templateOf, type BrandRow } from './brand.ts';
 import { lookRowOf, type LookRow } from './look.ts';
 
 const { bookingPages } = schema;
@@ -74,14 +74,17 @@ function pageBrandOf(accents: Accents, brand: BrandRow | undefined): PageBrand {
       ? { path, type, version }
       : undefined;
   const sheet = accents.accent === undefined ? undefined : versionOf(accents.accent, accents.accentDark);
+  // The workspace's template (spec 0068, AC-6804): told only when it isn't Classic, which is what absent draws.
+  const template = templateOf(brand);
   const answer: PublicBrand = {
     ...(sheet === undefined ? {} : { version: sheet }),
     ...(logo === undefined ? {} : { logo: logo.version }),
+    ...(template === 'classic' ? {} : { template }),
   };
   return {
     accents,
     ...(logo === undefined ? {} : { logo }),
-    ...(sheet === undefined && logo === undefined ? {} : { answer }),
+    ...(sheet === undefined && logo === undefined && template === 'classic' ? {} : { answer }),
   };
 }
 
@@ -100,7 +103,7 @@ export async function readBookingBrand(entry: BookingEntry): Promise<PageBrand> 
     const brand = await brandRowOf(tx, entry.scope.workspaceId);
     const own =
       page.kind === 'personal' && page.ownerUserId !== null
-        ? await lookRowOf(tx, page.ownerUserId, entry.scope.workspaceId)
+        ? await lookRowOf(tx, page.ownerUserId, entry.scope.workspaceId, 'published')
         : undefined;
     return pageBrandOf(accentsOf(own, brand), brand);
   });
@@ -141,7 +144,7 @@ function imageOf(path: string | null, type: string | null, version: string | nul
  */
 export async function readHandleLook(deps: { readonly db: Database }, owner: HandleOwner): Promise<PageLook> {
   return deps.db.withWorkspace(owner.workspaceId, async (tx: WorkspaceTx) => {
-    const own = await lookRowOf(tx, owner.userId, owner.workspaceId);
+    const own = await lookRowOf(tx, owner.userId, owner.workspaceId, 'published');
     const brand = await brandRowOf(tx, owner.workspaceId);
     const accents = accentsOf(own, brand);
     const cover = imageOf(own?.cover_path ?? null, own?.cover_type ?? null, own?.cover_version ?? null);
@@ -150,16 +153,19 @@ export async function readHandleLook(deps: { readonly db: Database }, owner: Han
     const version = drawsAnything
       ? versionOf(accents.accent, accents.accentDark, cover?.version, ground?.version)
       : undefined;
+    // The workspace's template (spec 0068, AC-6804), which a page with no template of its own wears.
+    const template = templateOf(brand);
     const answer: PublicLook = {
       ...(version === undefined ? {} : { version }),
       ...(cover === undefined ? {} : { cover: cover.version }),
       ...(ground === undefined ? {} : { ground: ground.version }),
+      ...(template === 'classic' ? {} : { template }),
     };
     return {
       accents,
       ...(cover === undefined ? {} : { cover }),
       ...(ground === undefined ? {} : { ground }),
-      ...(drawsAnything ? { answer } : {}),
+      ...(drawsAnything || template !== 'classic' ? { answer } : {}),
     };
   });
 }

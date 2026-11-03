@@ -920,3 +920,260 @@ export const WithGhosts: Story = {
     </Stage>
   ),
 };
+
+/** Anish's page in one of the four templates (spec 0068, AC-6801), in the orange brand. */
+function templated(template: NonNullable<PageLook['template']>): Story {
+  return {
+    args: { person: PERSON, theme: { ...PLAIN, template }, variables: ORANGE_BRAND },
+    render: (args) => (
+      <Stage width="fill" height="page">
+        <LinkPage {...args} blocks={anishBlocks()} />
+      </Stage>
+    ),
+    play: async ({ canvasElement }) => {
+      settleEntrance(canvasElement);
+      const root = canvasElement.querySelector('[data-template]');
+      // The template is one attribute, and the names it fixes come with it, whatever the stored look holds.
+      await expect(root).toHaveAttribute('data-template', template);
+      await expect(root?.getAttribute('style') ?? '').not.toContain('background');
+    },
+  };
+}
+
+/** Classic: the visitor's light or dark, a clean grotesk, rows that lift a touch under the pointer. */
+export const TemplateClassic: Story = templated('classic');
+/** Studio: warm off white, an editorial serif, round cards and the cover header (centred with no cover photo). */
+export const TemplateStudio: Story = templated('studio');
+/** Night: a deep dark ground, bold type and the accent as a glow. */
+export const TemplateNight: Story = templated('night');
+/** Split: a sticky panel with who the page is beside the blocks, from the page breakpoint; one column below it. */
+export const TemplateSplit: Story = templated('split');
+
+/** The template picker's large miniatures (spec 0068, AC-6804): the four side by side, each the page in it. */
+export const TemplateThumbnails: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="Template"
+        defaultValue="classic"
+        showsDescription
+        keepsPicture
+        pictureSize="large"
+        tiles={(['classic', 'studio', 'night', 'split'] as const).map((template) => ({
+          id: template,
+          name: template,
+          description: template,
+          thumbnail: <LinkPageThumbnail theme={{ ...PLAIN, template }} variables={ORANGE_BRAND} size="large" />,
+        }))}
+      />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelectorAll('[data-size="large"]')).toHaveLength(4);
+  },
+};
+
+/** A navy brand, as `brandProperties(brandVariables({ accent: '#1f2a5a' }))` makes it: dark, lifted for dark pages. */
+const NAVY_BRAND = [
+  ['--brand-accent', '#1f2a5a'],
+  ['--brand-on-accent', '#ffffff'],
+  ['--brand-link', '#1f2a5a'],
+  ['--brand-accent-dark', '#6878af'],
+  ['--brand-on-accent-dark', '#000000'],
+  ['--brand-link-dark', '#8597d0'],
+] as const;
+
+/** A yellow brand, as `brandProperties(brandVariables({ accent: '#f5c518' }))` makes it: darkened for light pages. */
+const YELLOW_BRAND = [
+  ['--brand-accent', '#a38100'],
+  ['--brand-on-accent', '#000000'],
+  ['--brand-link', '#806600'],
+  ['--brand-accent-dark', '#f5c518'],
+  ['--brand-on-accent-dark', '#000000'],
+  ['--brand-link-dark', '#f5c518'],
+] as const;
+
+/**
+ * A template in a hard accent (spec 0068, AC-6802): navy, which sinks into a dark ground, or yellow, which vanishes
+ * on a light one. The contrast rule (spec 0060) adjusts the accent where it carries text, and axe checks AA in light
+ * and dark on every one.
+ */
+function accented(template: NonNullable<PageLook['template']>, variables: typeof NAVY_BRAND | typeof YELLOW_BRAND) {
+  return {
+    parameters: { crm: { screenshot: false } },
+    args: {
+      person: { ...PERSON, role: 'Head of partnerships' },
+      brand: { name: 'Acme', logo: LOGO, href: 'https://acme.example' },
+      theme: { ...PLAIN, template },
+      variables,
+    },
+    render: (args) => (
+      <Stage width="fill">
+        <LinkPage {...args} blocks={anishBlocks()} />
+      </Stage>
+    ),
+    play: async ({ canvasElement }) => {
+      settleEntrance(canvasElement);
+      await expect(canvasElement.querySelector('[data-template]')).toHaveAttribute('data-template', template);
+    },
+  } satisfies Story;
+}
+
+/** Classic in navy. */
+export const ClassicNavy: Story = accented('classic', NAVY_BRAND);
+/** Classic in yellow. */
+export const ClassicYellow: Story = accented('classic', YELLOW_BRAND);
+/** Studio in navy: the paper takes a touch of the navy. */
+export const StudioNavy: Story = accented('studio', NAVY_BRAND);
+/** Studio in yellow: the paper takes a touch of the yellow. */
+export const StudioYellow: Story = accented('studio', YELLOW_BRAND);
+/** Night in navy: the lifted navy glows; titles stay light. */
+export const NightNavy: Story = accented('night', NAVY_BRAND);
+/** Night in yellow. */
+export const NightYellow: Story = accented('night', YELLOW_BRAND);
+/** Split in navy. */
+export const SplitNavy: Story = accented('split', NAVY_BRAND);
+/** Split in yellow. */
+export const SplitYellow: Story = accented('split', YELLOW_BRAND);
+
+/** Night's titles are the card's own light text, and the accent only marks each row's end (spec 0068). */
+export const NightTitlesStayLight: Story = {
+  ...accented('night', NAVY_BRAND),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    const title = canvas.getByText('Intro call');
+    const name = canvas.getByRole('heading', { level: 1 });
+    // The title takes the page's text colour, never the accent's.
+    await expect(getComputedStyle(title).color).toBe(getComputedStyle(name).color);
+  },
+};
+
+/** A stand in cover photo: a soft landscape, drawn as an SVG so the story needs no photo route. */
+const COVER_PHOTO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6d6b8"/><stop offset="1" stop-color="#e9a77f"/></linearGradient></defs><rect width="600" height="240" fill="url(#s)"/><circle cx="450" cy="90" r="38" fill="#fff4e0"/><path d="M0 190 Q150 120 300 175 T600 160 V240 H0Z" fill="#b5654a"/><path d="M0 215 Q200 170 380 210 T600 205 V240 H0Z" fill="#7d3f33"/></svg>',
+)}`;
+
+/**
+ * Sets the cover photo the way the page's own stylesheet does (`--page-cover-image`), through the CSSOM on a wrapper
+ * the page inherits it from: `variables` takes only our own api's photos, which a story has no route for.
+ */
+function withCover(element: HTMLElement | null) {
+  element?.style.setProperty('--page-cover-image', `url("${COVER_PHOTO}")`);
+}
+
+/** Studio with its cover photo: the band across the top the face overlaps, on the accent warmed paper. */
+export const StudioWithCover: Story = {
+  args: {
+    person: { ...PERSON, role: 'Head of partnerships' },
+    theme: { ...PLAIN, template: 'studio' },
+    photos: { cover: true },
+    variables: ORANGE_BRAND,
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <div ref={withCover}>
+        <LinkPage {...args} blocks={anishBlocks()} />
+      </div>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    settleEntrance(canvasElement);
+    await expect(canvasElement.querySelector('[data-template]')).toHaveAttribute('data-page-header', 'cover');
+  },
+};
+
+/**
+ * Split with everything its panel holds (spec 0068): the logo, the name, whether the place is open and Book, on the
+ * page's own ground with no card around them; the blocks beside it on a wide page, under it on a phone.
+ */
+export const SplitPanel: Story = {
+  args: {
+    person: { ...PERSON, role: 'Head of partnerships' },
+    brand: { name: 'Acme', logo: LOGO, href: 'https://acme.example' },
+    theme: { ...PLAIN, template: 'split' },
+    variables: ORANGE_BRAND,
+    openNow: 'Open now · until 6 PM',
+    book: { label: 'Book a call', href: '/anish/intro-call' },
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={anishBlocks()} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    await expect(canvas.getByText('Open now · until 6 PM')).toBeVisible();
+    await expect(canvas.getByRole('link', { name: /Book a call/ })).toHaveAttribute('href', '/anish/intro-call');
+  },
+};
+
+/** Book only takes a path on this site: an outside address draws no button. */
+export const BookRefusesOutside: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    person: PERSON,
+    theme: { ...PLAIN, template: 'split' },
+    book: { label: 'Book a call', href: 'https://elsewhere.example/book' },
+  },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage {...args} blocks={anishBlocks().slice(0, 2)} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('link', { name: /Book a call/ })).toBeNull();
+  },
+};
+
+/** A stand in face: a round portrait, as an SVG. */
+const FACE_PHOTO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect width="80" height="80" fill="#c9d7e8"/><circle cx="40" cy="32" r="15" fill="#8a5a44"/><path d="M12 80 Q40 44 68 80Z" fill="#2f4a6d"/></svg>',
+)}`;
+
+/**
+ * The template picker's large miniatures with the owner's own page (spec 0068, AC-6804): their name, face or
+ * initials, logo, cover where the template wears one, and their first three rows, in their accent.
+ */
+export const TemplateThumbnailsReal: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="Template"
+        defaultValue="studio"
+        showsDescription
+        keepsPicture
+        pictureSize="large"
+        tiles={(['classic', 'studio', 'night', 'split'] as const).map((template, index) => ({
+          id: template,
+          name: template,
+          description: template,
+          thumbnail: (
+            <LinkPageThumbnail
+              theme={{ ...PLAIN, template }}
+              variables={NAVY_BRAND}
+              size="large"
+              profile={{
+                name: 'Anish Gupta',
+                cover: COVER_PHOTO,
+                rows: ['Intro call', 'Product demo', 'LinkedIn', 'X'],
+                // A picture, the company's logo in the face's place, a picture, then initials on the accent.
+                ...(index % 2 === 0 ? { picture: FACE_PHOTO } : {}),
+                ...(index === 1 ? { logo: LOGO } : {}),
+              }}
+            />
+          ),
+        }))}
+      />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelectorAll('[data-size="large"]')).toHaveLength(4);
+    // The owner's rows, three of them, in every miniature.
+    await expect(canvasElement.querySelectorAll('[data-profile]')).toHaveLength(4);
+    await expect([...canvasElement.querySelectorAll('[data-profile]')][0]).toHaveTextContent(
+      /Anish Gupta.*Intro call.*Product demo.*LinkedIn/,
+    );
+  },
+};

@@ -63,3 +63,40 @@ Prove the whole first release against the scale budget before launch.
 Let workspaces pay: checkout, upgrade, downgrade and invoices.
 **Done when:** an owner upgrades and the new limits apply at once; a downgrade that would break a limit is explained first; failed payments are retried and the owner is told; invoices and tax are correct.
 - [ ] Design it (spec): `/architect billing`
+
+## Slice 19: Hospitality apps
+
+### 68. Hospitality suite · planned
+Restaurants, cafés and bars install Menu, Menu QR and Table seating as separate apps, sharing one business profile with places, hours and tables.
+**Done when:** an admin of an early access workspace installs an app; a published menu opens from a table's QR code in under 2 seconds on a phone; a guest books a table for four online and gets a real table; the host stand seats walk ins and every tablet stays in step; each guest is a Person with their visits.
+- [x] Design it (spec): `/architect hospitality suite`
+- [ ] Build it: `/develop hospitality suite`
+  - [ ] H0 Apps and business profile
+  - [ ] H1 Menu
+  - [ ] H2 Menu QR
+  - [ ] H3 and H4 Table seating: moved to #69 (B7)
+  - [ ] H5 SN look
+Spec [0065](../specs/0065-hospitality-suite/index.md)
+
+### 69. Business booking · planned
+Salons, spas, barbers, clinics, studios and restaurants take visits through one engine: services, staff with shifts, resources, a calendar, clients in the CRM, verified reviews and a public business page.
+**Done when:** a client books "any stylist" from a business page and gets a real free person and chair; a doctor's meeting and an appointment can never overlap; the front desk drags and adds on a live calendar; the business page ranks with the right structured data; a clinic's intake answers are seen only by the treating staff.
+- [x] Design it (spec): `/architect business booking`
+- [ ] Build it: `/develop business booking`
+  - [ ] B0 Engine
+  - [ ] B1 Services, staff, shifts
+  - [ ] B2 Online booking
+  - [ ] B3 Calendar
+  - [ ] B4 Business page
+  - [ ] B5 Several services, intake, sensitive services
+  - [ ] B6 Reviews
+  - [ ] B7 Table seating preset
+Spec [0066](../specs/0066-business-booking/index.md)
+
+### 70. Professional pages and Publish · planned
+Every public page uses one of four finished templates (Classic, Studio, Night, Split), and every change to link, booking, business, event and menu pages waits for Publish, with versions.
+**Done when:** an owner picks a template and accent and every public page follows; a booking page edit is invisible to guests until Publish; any of the last 20 versions can be restored; existing pages moved to the nearest template with a note.
+- [x] Design it (spec): `/architect professional pages`
+- [ ] Build it: `/develop professional pages`
+Spec [0068](../specs/0068-professional-pages-publish/index.md)
+

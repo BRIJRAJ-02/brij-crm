@@ -362,6 +362,14 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     row('editors.changed', 'rotation', rotation, { after: { name: 'Sales', added: [bea], removed: [] } }),
   ],
   // A managed page template (spec 0037, AC-1333): the target is the template page, `after` its locks and counts.
+  'booking_page.published': [row('booking_page.published', 'booking_page', newId(), { after: { version: 3 } })],
+  'booking_page.draft_discarded': [row('booking_page.draft_discarded', 'booking_page', newId(), {})],
+  'booking_page.version_restored': [
+    row('booking_page.version_restored', 'booking_page', newId(), { after: { version: 2 } }),
+  ],
+  'link_page.published': [row('link_page.published', 'member', ada, { after: { version: 4 } })],
+  'link_page.draft_discarded': [row('link_page.draft_discarded', 'member', ada, {})],
+  'link_page.version_restored': [row('link_page.version_restored', 'member', ada, { after: { version: 1 } })],
   'managed_page.propagated': [
     row('managed_page.propagated', 'booking_page', newId(), {
       after: { templateId: newId(), name: 'Intro', locked: ['hours', 'limits'] },

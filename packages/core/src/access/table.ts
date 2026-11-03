@@ -589,6 +589,12 @@ export const ACCESS_TABLE = {
   deleteBookingPage: { bookingPages: true },
   // The owner's profile order (owner ask A102): their own pages alone, whoever else may change them.
   reorderProfilePages: { bookingPages: true },
+  // Publish (spec 0068): whoever may change the page, through the same door as a save.
+  saveBookingPageDraft: { bookingPages: true },
+  publishBookingPage: { bookingPages: true },
+  discardBookingPageDraft: { bookingPages: true },
+  listBookingPageVersions: { bookingPages: true },
+  restoreBookingPageVersion: { bookingPages: true },
   listBookings: { bookingPages: true },
   listWorkspaceBookings: { bookingPages: true },
   listMeetings: { bookingPages: true },

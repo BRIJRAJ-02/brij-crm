@@ -60,6 +60,13 @@ const IMAGE_VERSION = /^[0-9a-f]{12}$/;
  */
 export function railBrand(page: Pick<PublicBookingPage, 'publicKey' | 'brand'>): { readonly brand?: PageBrand } {
   const version = page.brand?.logo;
-  if (version === undefined || !PAGE_KEY.test(page.publicKey) || !IMAGE_VERSION.test(version)) return {};
-  return { brand: { logo: { src: `/api/public/booking/${page.publicKey}/logo?v=${version}`, alt: '' } } };
+  // The workspace's template (spec 0068, AC-6804), which the frame wears whether or not there is a logo.
+  const template = page.brand?.template;
+  const withTemplate = template === undefined ? {} : { template };
+  if (version === undefined || !PAGE_KEY.test(page.publicKey) || !IMAGE_VERSION.test(version)) {
+    return template === undefined ? {} : { brand: withTemplate };
+  }
+  return {
+    brand: { logo: { src: `/api/public/booking/${page.publicKey}/logo?v=${version}`, alt: '' }, ...withTemplate },
+  };
 }
