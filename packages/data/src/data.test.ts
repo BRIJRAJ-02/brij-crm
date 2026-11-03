@@ -3404,6 +3404,7 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     cancelCutoffMinutes: 0,
     moveCutoffMinutes: 0,
     requiresConfirmation: false,
+    linksOnly: false,
     defaultView: 'month',
     profileSection: null,
     profilePosition: 0,

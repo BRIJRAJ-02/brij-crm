@@ -579,6 +579,14 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'managed_page.propagated', target: managedPage, params: {} },
     'Ada Lovelace updated Intro call from its managed page',
   ],
+  [
+    { ...base, action: 'booking_page.link_created', target: managedPage, params: {} },
+    'Ada Lovelace made a one-time link for Intro call',
+  ],
+  [
+    { ...base, action: 'booking_page.link_revoked', target: managedPage, params: {} },
+    'Ada Lovelace revoked a one-time link for Intro call',
+  ],
 ];
 
 describe('every listed action', () => {

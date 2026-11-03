@@ -153,6 +153,8 @@ export const bookingPages = pgTable(
      * waiting booking holds its slot and stays off the calendar until confirmed; see `bookings.approval`.
      */
     requiresConfirmation: boolean('requires_confirmation').notNull().default(false),
+    /** Books only through one-time links (spec 0062, AC-6204, migration 0167): off by default. */
+    linksOnly: boolean('links_only').notNull().default(false),
     /**
      * Whether the page shows its owner's social links under their name (booking socials, migration 0097): on by
      * default. Read only for a personal page; a team page names no host, so never shows them (AC-754).
@@ -839,6 +841,8 @@ export const bookingPageLinks = pgTable(
     expiresAt: timestamptz('expires_at'),
     revokedAt: timestamptz('revoked_at'),
     createdByMemberId: uuid('created_by_member_id').notNull(),
+    /** The write that made it: a retry of the same New link answers this one. */
+    mutationId: uuid('mutation_id').notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -854,6 +858,7 @@ export const bookingPageLinks = pgTable(
       foreignColumns: [members.workspaceId, members.id],
     }),
     uniqueIndex('booking_page_links_token_hash').on(t.workspaceId, t.tokenHash),
+    uniqueIndex('booking_page_links_mutation').on(t.workspaceId, t.mutationId),
     index('booking_page_links_by_page').on(t.workspaceId, t.pageId, t.createdAt),
     check('booking_page_links_label', sql`${t.label} is null or char_length(${t.label}) between 1 and 60`),
     check('booking_page_links_token', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),

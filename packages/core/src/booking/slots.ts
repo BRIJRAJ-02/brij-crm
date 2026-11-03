@@ -152,6 +152,7 @@ export function pageOf(
     cancelCutoffMinutes: row.cancelCutoffMinutes,
     moveCutoffMinutes: row.moveCutoffMinutes,
     requiresConfirmation: row.requiresConfirmation,
+    linksOnly: row.linksOnly,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     createdAt: row.createdAt,
@@ -424,7 +425,13 @@ export function pageSlots(
     now: input.now,
     from: input.from,
     to: input.to,
-    minNoticeMinutes: page.isPrivate ? 0 : page.minNoticeMinutes,
+    // A page that confirms each booking first offers nothing sooner than an hour (spec 0062, AC-6203): a request
+    // needs time to be answered before it starts.
+    minNoticeMinutes: page.requiresConfirmation
+      ? Math.max(60, page.isPrivate ? 0 : page.minNoticeMinutes)
+      : page.isPrivate
+        ? 0
+        : page.minNoticeMinutes,
     windowDays: page.windowDays,
     ...(page.dailyLimit === null ? {} : { dailyLimit: page.dailyLimit }),
     ...(input.stepMinutes !== undefined

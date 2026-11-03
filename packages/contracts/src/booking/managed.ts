@@ -49,10 +49,27 @@ export const MANAGED_PART_KEYS = {
   durations: ['durations'],
   location: ['location'],
   questions: ['questions'],
-  on_booking: ['fileToCrm', 'answersObjectId'],
+  // Spec 0062, L1: what happens after a booking and whether each one waits for a Confirm are part of On booking.
+  on_booking: [
+    'fileToCrm',
+    'answersObjectId',
+    'afterBooking',
+    'redirectUrl',
+    'sendBookingDetails',
+    'requiresConfirmation',
+  ],
   // `slotStep` belongs to Limits, not Durations: the part names are what the editor shows, and the editor puts
   // "Slots start every" under Limits with the buffers and the window.
-  limits: ['bufferBefore', 'bufferAfter', 'minNoticeMinutes', 'windowDays', 'dailyLimit', 'slotStep'],
+  limits: [
+    'bufferBefore',
+    'bufferAfter',
+    'minNoticeMinutes',
+    'windowDays',
+    'dailyLimit',
+    'slotStep',
+    'cancelCutoffMinutes',
+    'moveCutoffMinutes',
+  ],
   // The Hours rule, not the hours: a member page always books on its own member's hours (AC-1336). Locked, the
   // member's default schedule is used and they may not name another; unlocked, they pick one (spec 0035, AC-966).
   hours: ['scheduleId'],

@@ -660,7 +660,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
     case 'booking.changed_for': {
       const made = after.change;
-      if (made !== 'made' && made !== 'moved' && made !== 'cancelled') return undefined;
+      if (made !== 'made' && made !== 'moved' && made !== 'cancelled' && made !== 'confirmed' && made !== 'declined') {
+        return undefined;
+      }
       return {
         ...base,
         action,
@@ -807,6 +809,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     // The owner's own page, rewritten by its template. No params: what matters is that it happened and to which
     // page, and the parts are in the row for anyone reading it closely.
     case 'managed_page.propagated':
+    // A one-time link made or revoked (spec 0062, AC-6204): the page only; the link's id and uses stay in the row.
+    case 'booking_page.link_created':
+    case 'booking_page.link_revoked':
       return { ...base, action, target: thing('booking_page', names.bookingPages), params: {}, changes: [] };
     case 'managed_page.changed': {
       const count = (value: unknown) =>

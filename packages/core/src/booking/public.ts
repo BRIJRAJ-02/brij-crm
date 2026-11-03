@@ -299,9 +299,7 @@ export async function getPublicBookingPage(
       ...(shut ? { formOnly: true as const } : {}),
       // Spec 0062, L1: a page that asks the host first says Request, and a link with nothing left says so.
       ...(page.requiresConfirmation ? { requiresConfirmation: true as const } : {}),
-      ...(oneOff !== undefined && (await oneOffStateOf(tx, page.id, oneOff.hash, oneOff.now)) !== 'open'
-        ? { linkUsed: true as const }
-        : {}),
+      ...(await linkFacts(tx, page, oneOff)),
     };
     return { facts, pictureUser: pictures === undefined ? undefined : await shownPictureOwner(tx, page) };
   });
@@ -1057,6 +1055,7 @@ export function redirectAfterBooking(
     return undefined;
   }
   const url = new URL(page.redirectUrl);
+  if (url.protocol !== 'https:') return undefined;
   if (page.sendBookingDetails) {
     url.searchParams.set('name', booking.name);
     url.searchParams.set('email', booking.email);
@@ -1179,6 +1178,8 @@ export async function bookPublicSlot(
     const live = liveOf(page);
     // A used up, expired or revoked link refuses before any calendar is read; its use is counted at the commit.
     if (oneOff !== undefined) await checkOneOffLink(tx, live.id, oneOff, now);
+    // A page that books only through one-time links needs one (AC-6204): its own address books nothing.
+    if (oneOff === undefined && live.linksOnly) throw refuse('LINK_USED', INVITATION_ONLY);
     checkDuration(live, input.duration);
     if (await formOnlyShut(tx, live, link)) throw refuse('BOOKING_CLOSED', FORM_ONLY_CLOSED);
     if (live.location.type === 'phone' && (input.phone ?? '').trim() === '') {
@@ -1375,8 +1376,9 @@ export async function bookPublicSlot(
           bookingId,
           page.requiresConfirmation ? ['requested', 'pending_expire'] : ['reminder_24h', 'reminder_1h'],
         );
-        // Subscribed endpoints hear of it with the booking (spec 0064, AC-6422): queued here, sent by the worker.
-        await queueBookingWebhook(tx, 'booking.created', bookingId);
+        // Subscribed endpoints hear of it with the booking (spec 0064, AC-6422): queued here, sent by the worker. A
+        // request is heard of only once it is confirmed (spec 0062): one declined was never made, to them.
+        if (!page.requiresConfirmation) await queueBookingWebhook(tx, 'booking.created', bookingId);
       } catch (error) {
         // The locks should make this unreachable: a write that skipped them, refused by the database.
         if (postgresError(error)?.code === '23P01') throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
@@ -1763,4 +1765,20 @@ export async function managedBookingIcs(
     sequence: Math.floor(now.getTime() / 1000),
     now,
   });
+}
+
+/** What a page that books only through one-time links says to a visitor without one (spec 0062, AC-6204). */
+const INVITATION_ONLY = 'This page books by invitation.';
+
+/**
+ * A one off link's facts for the public page (AC-6204): `linkUsed` for a link with nothing left, and
+ * `invitationOnly` for a page that books only through links opened without one.
+ */
+async function linkFacts(
+  tx: WorkspaceTx,
+  page: PageRecord,
+  oneOff: { readonly hash: string; readonly now: Date } | undefined,
+): Promise<{ readonly linkUsed?: true; readonly invitationOnly?: true }> {
+  if (oneOff === undefined) return page.linksOnly ? { invitationOnly: true } : {};
+  return (await oneOffStateOf(tx, page.id, oneOff.hash, oneOff.now)) === 'open' ? {} : { linkUsed: true };
 }

@@ -363,6 +363,12 @@ export const BookingPageSettings = z.object({
    * start.
    */
   requiresConfirmation: z.boolean(),
+  /**
+   * Books only through one-time links (spec 0062, AC-6204): with it on, the page's own address answers "This page
+   * books by invitation", and a booking needs a valid link's token. Off by default; saved at once from the One-time
+   * links card, as Only through a form is.
+   */
+  linksOnly: z.boolean(),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;

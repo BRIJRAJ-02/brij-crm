@@ -356,6 +356,7 @@ function viewOf(
     cancelCutoffMinutes: page.cancelCutoffMinutes,
     moveCutoffMinutes: page.moveCutoffMinutes,
     requiresConfirmation: page.requiresConfirmation,
+    linksOnly: page.linksOnly,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     // Who hosts it and how it routes are for those who manage it: a member seeing a workspace link gets neither.
     ...(hosts === undefined || !changeable ? {} : { hosts }),
@@ -854,6 +855,7 @@ export async function createBookingPage(
       cancelCutoffMinutes: given.cancelCutoffMinutes ?? 0,
       moveCutoffMinutes: given.moveCutoffMinutes ?? 0,
       requiresConfirmation: given.requiresConfirmation ?? false,
+      linksOnly: given.linksOnly ?? false,
     };
     checkAfterBooking(settings.afterBooking, settings.redirectUrl);
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
@@ -910,6 +912,7 @@ export async function createBookingPage(
           cancelCutoffMinutes: settings.cancelCutoffMinutes,
           moveCutoffMinutes: settings.moveCutoffMinutes,
           requiresConfirmation: settings.requiresConfirmation,
+          linksOnly: settings.linksOnly,
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -1144,6 +1147,7 @@ export async function updateBookingPage(
           ...(settings.requiresConfirmation === undefined
             ? {}
             : { requiresConfirmation: settings.requiresConfirmation }),
+          ...(settings.linksOnly === undefined ? {} : { linksOnly: settings.linksOnly }),
           ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
@@ -1521,10 +1525,12 @@ function afterRedirect(
   return settings.redirectUrl === undefined ? page.redirectUrl : settings.redirectUrl;
 }
 
-/** A redirect page needs an address to send its visitors to (spec 0062, AC-6201). */
+/** A redirect page needs an https address to send its visitors to (spec 0062, AC-6201): never plain http. */
 function checkAfterBooking(after: BookingAfter, url: string | null): void {
-  if (after === 'redirect' && url === null) {
-    throw refuseOn('VALUE_REQUIRED', 'Give the address to send visitors to.', 'redirectUrl');
+  if (after !== 'redirect') return;
+  if (url === null) throw refuseOn('VALUE_REQUIRED', 'Give the address to send visitors to.', 'redirectUrl');
+  if (!URL.canParse(url) || new URL(url).protocol !== 'https:') {
+    throw refuseOn('CONFIG_INVALID', 'Use an address that starts with https://', 'redirectUrl');
   }
 }
 

@@ -124,7 +124,8 @@ describe('the enqueue sites, read out of the sources', () => {
   const REGISTERED: Readonly<Record<string, number>> = {
     'booking/public.ts': 1,
     'booking/host.ts': 1,
-    'booking/change.ts': 4,
+    // Spec 0062, L1: Confirm sends `booking.created` for a request, which was held at booking time.
+    'booking/change.ts': 5,
     'calendar/apply.ts': 1,
     'forms/public.ts': 1,
     // Spec 0064 follow-up, 1 November: a submission that was never taken as received fires `form.submitted` when it

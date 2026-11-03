@@ -23,6 +23,7 @@ import {
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
+import { writeAudit } from '../members/audit.ts';
 import { editablePage } from './pages.ts';
 
 const { bookingPageLinks } = schema;
@@ -119,7 +120,7 @@ export async function listOneOffLinks(
 /** Makes a link and answers it with its token, the only time the token is ever sent (AC-6204). */
 export async function createOneOffLink(
   scope: EngineScope,
-  input: Pick<CreateOneOffLinkInput, 'pageId' | 'label' | 'maxUses' | 'expiresAt'>,
+  input: Pick<CreateOneOffLinkInput, 'pageId' | 'label' | 'maxUses' | 'expiresAt' | 'mutationId'>,
   now: Date = new Date(),
 ): Promise<CreatedOneOffLink> {
   const member = memberOf(scope);
@@ -133,6 +134,23 @@ export async function createOneOffLink(
   }
   return inWorkspace(scope, async (tx) => {
     const page = await editablePage(tx, scope, input.pageId, true);
+    const token = randomBytes(32).toString('base64url');
+    // A retry of the same New link (its mutation id) answers that link, not a second one. Its token is only ever
+    // stored as a hash, so the retry gets a new one in its place: the first answer never arrived, so nobody holds it.
+    const [again] = await tx
+      .select()
+      .from(bookingPageLinks)
+      .where(and(eq(bookingPageLinks.mutationId, input.mutationId), eq(bookingPageLinks.pageId, page.id)))
+      .for('update');
+    if (again !== undefined) {
+      const [renewed] = await tx
+        .update(bookingPageLinks)
+        .set({ tokenHash: oneOffTokenHash(token) })
+        .where(and(eq(bookingPageLinks.id, again.id), eq(bookingPageLinks.uses, 0)))
+        .returning();
+      if (renewed === undefined) throw refuse('LIMIT_REACHED', 'That link was already used. Make a new one.');
+      return { link: viewOf(renewed, now), token };
+    }
     const [count] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(bookingPageLinks)
@@ -143,7 +161,6 @@ export async function createOneOffLink(
         `A page keeps at most ${String(ONE_OFF_LINKS_MAX)} links. Revoke an old one first.`,
       );
     }
-    const token = randomBytes(32).toString('base64url');
     const [row] = await tx
       .insert(bookingPageLinks)
       .values({
@@ -154,9 +171,11 @@ export async function createOneOffLink(
         maxUses: input.maxUses ?? 1,
         expiresAt: expires ?? null,
         createdByMemberId: member,
+        mutationId: input.mutationId,
       })
       .returning();
     if (row === undefined) throw new Error('The link was not stored.');
+    await auditLink(tx, scope, 'booking_page.link_created', row);
     return { link: viewOf(row, now), token };
   });
 }
@@ -175,6 +194,35 @@ export async function revokeOneOffLink(
       .where(and(eq(bookingPageLinks.id, input.linkId), eq(bookingPageLinks.pageId, page.id)))
       .returning();
     if (row === undefined) throw refuse('NOT_FOUND', 'That link doesn’t exist.');
+    await auditLink(tx, scope, 'booking_page.link_revoked', row);
     return viewOf(row, now);
+  });
+}
+
+/**
+ * One use given back (AC-6204): a request it booked was declined or ran out of time, so the link may book again.
+ * Under the link row's lock, as a use is counted.
+ */
+export async function giveBackUse(tx: WorkspaceTx, linkId: string): Promise<void> {
+  const [row] = await tx.select().from(bookingPageLinks).where(eq(bookingPageLinks.id, linkId)).for('update');
+  if (row === undefined || row.uses === 0) return;
+  await tx
+    .update(bookingPageLinks)
+    .set({ uses: row.uses - 1 })
+    .where(eq(bookingPageLinks.id, linkId));
+}
+
+/** A link made or revoked, on its page's history: its id, uses and expiry, never its token or its hash. */
+async function auditLink(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  action: 'booking_page.link_created' | 'booking_page.link_revoked',
+  row: LinkRow,
+): Promise<void> {
+  await writeAudit(tx, scope.workspaceId, scope.actor, {
+    action,
+    targetType: 'booking_page',
+    targetId: row.pageId,
+    after: { linkId: row.id, maxUses: row.maxUses, expiresAt: row.expiresAt?.toISOString() ?? null },
   });
 }

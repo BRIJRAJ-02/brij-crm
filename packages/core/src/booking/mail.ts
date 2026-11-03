@@ -34,6 +34,9 @@ import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
 
 const { bookingHosts, bookings, members, rotationAssignments, workspaces } = schema;
 
+/** The kinds a request still waiting for its host sends (spec 0062, AC-6203). */
+const REQUEST_KINDS: ReadonlySet<string> = new Set(['requested', 'cancelled', 'declined', 'pending_expire']);
+
 /** How long a request waits for its host: 24 hours, or until an hour before it starts, whichever is first. */
 export const REQUEST_WAIT_MS = 24 * 3_600_000;
 /** How close to its start a request may still wait. */
@@ -208,6 +211,10 @@ export async function prepareBookingMail(
 
     if (kind !== 'cancelled' && kind !== 'declined' && cancelled) {
       return { messages: [], invited: [], skipped: 'cancelled' };
+    }
+    // A request (spec 0062, AC-6203) hears only of itself until it is confirmed: no confirmation, move or reminder.
+    if (row.approval === 'pending' && !REQUEST_KINDS.has(kind)) {
+      return { messages: [], invited: [], skipped: 'requested' };
     }
     if (kind === 'reminder_24h' || kind === 'reminder_1h') {
       const ahead = row.startsAt.getTime() - now.getTime();
@@ -523,6 +530,11 @@ export async function prepareBookingMail(
       case 'requested': {
         // A request (spec 0062, AC-6203): the visitor hears it was received, each host is asked to answer it.
         if (row.approval !== 'pending') return { messages: [], invited: [], skipped: 'answered' };
+        const [manager] = await tx
+          .select({ email: members.email })
+          .from(members)
+          .where(eq(members.id, page.ownerMemberId));
+        const managerEmail = manager?.email;
         const expires = new Date(
           Math.min(row.createdAt.getTime() + REQUEST_WAIT_MS, row.startsAt.getTime() - REQUEST_LEAD_MS),
         );
@@ -540,7 +552,9 @@ export async function prepareBookingMail(
           button: { label: 'View your request', url: manageUrl },
           why: visitorWhy,
         };
-        const requestsUrl = `${deps.appOrigin}/w/${encodeURIComponent(workspace?.slug ?? '')}/captures/links/${row.pageId}`;
+        const editorUrl = `${deps.appOrigin}/w/${encodeURIComponent(workspace?.slug ?? '')}/captures/links/${row.pageId}`;
+        // The page's own manager answers in its editor; a host who may not change the page, from Bookings.
+        const requestsUrl = (email: string) => (email === managerEmail ? editorUrl : bookingsUrl);
         const toHost: BookingMail[] = hosts.map((each) => ({
           to: each.email,
           subject: `Booking request: ${page.title} with ${row.visitorName}`,
@@ -554,7 +568,7 @@ export async function prepareBookingMail(
             ...answerRows,
             { label: 'Answer by', value: atLine(expires, hostZone) },
           ],
-          button: { label: 'Confirm or decline', url: requestsUrl },
+          button: { label: 'Confirm or decline', url: requestsUrl(each.email) },
           footnote: 'Left unanswered, it declines itself and the visitor is told.',
           why: hostWhy,
         }));

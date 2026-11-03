@@ -98,6 +98,8 @@ export const AUDIT_KINDS = {
     'editors.changed',
     'managed_page.changed',
     'managed_page.propagated',
+    'booking_page.link_created',
+    'booking_page.link_revoked',
     'routing.settings_changed',
     'routing.skills_changed',
     'routing.tested',

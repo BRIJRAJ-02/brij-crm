@@ -27,6 +27,9 @@ export const PAGE_AUDIT_FIELDS = [
   'answersObjectId',
   // Spec 0062, L1: what happens after a booking (never the address), the cutoffs and the Confirm step.
   'afterBooking',
+  // The redirect's host only, never its path or query (the address may carry the host's own tracking).
+  'redirectUrl',
+  'sendBookingDetails',
   'cancelCutoffMinutes',
   'moveCutoffMinutes',
   'requiresConfirmation',
@@ -61,6 +64,8 @@ function kept(page: PageAudited, field: PageAuditField): PageAuditValue {
       return digestOf(page.description);
     case 'durations':
       return [...page.durations];
+    case 'redirectUrl':
+      return page.redirectUrl !== null && URL.canParse(page.redirectUrl) ? new URL(page.redirectUrl).host : null;
     default:
       return page[field];
   }

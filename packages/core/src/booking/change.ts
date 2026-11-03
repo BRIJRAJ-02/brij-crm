@@ -37,6 +37,7 @@ import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } f
 import { handLinkOf, linkedRecords } from './links.ts';
 import { hostLockKey, lockKey } from './locks.ts';
 import { enqueueBookingMail } from './mail-queue.ts';
+import { giveBackUse } from './one-off-links.ts';
 import {
   BUSY_MARGIN_MS,
   bookedSpans,
@@ -153,7 +154,7 @@ async function auditChangedFor(
   tx: WorkspaceTx,
   target: ChangeTarget,
   row: BookingRow,
-  change: 'moved' | 'cancelled',
+  change: 'moved' | 'cancelled' | 'confirmed' | 'declined',
 ): Promise<void> {
   if (target.by !== 'host') return;
   const { scope } = target;
@@ -688,8 +689,9 @@ export async function cancelBooking(
       .returning();
     if (updated === undefined) throw new Error('The booking was not cancelled.');
     await enqueueBookingMail(tx, updated.id, ['cancelled']);
-    // Subscribed endpoints hear of each change in its own transaction (spec 0064, AC-6422).
-    await queueBookingWebhook(tx, 'booking.cancelled', updated.id);
+    // Subscribed endpoints hear of each change in its own transaction (spec 0064, AC-6422); a request they never
+    // heard of (spec 0062, AC-6203) is cancelled in silence.
+    if (row.approval !== 'pending') await queueBookingWebhook(tx, 'booking.cancelled', updated.id);
     await auditChangedFor(tx, target, row, 'cancelled');
     return updated;
   });
@@ -997,6 +999,9 @@ export async function confirmBooking(
       .set({ approval: 'approved', decidedAt: now, decidedByMemberId: actor.memberId, ...updatedBy(actor) })
       .where(eq(bookings.id, row.id));
     await enqueueBookingMail(tx, row.id, ['approved', 'reminder_24h', 'reminder_1h']);
+    // Subscribers hear of a request once it is a booking (spec 0064, AC-6422).
+    await queueBookingWebhook(tx, 'booking.created', row.id);
+    await auditChangedFor(tx, target, row, 'confirmed');
     return { confirmed: true };
   });
 }
@@ -1016,7 +1021,8 @@ export async function declineBooking(
     const { row, page } = await readTarget(tx, target, true);
     if (row.approval !== 'pending' || row.status !== 'confirmed') return { declined: false };
     const actor = actorOf(target, page);
-    await declineRow(tx, row.id, now, actor.memberId, reason === undefined || reason === '' ? null : reason, actor);
+    await declineRow(tx, row, now, actor.memberId, reason === undefined || reason === '' ? null : reason, actor);
+    await auditChangedFor(tx, target, row, 'declined');
     return { declined: true };
   });
 }
@@ -1030,15 +1036,18 @@ export async function expireRequest(scope: EngineScope, bookingId: string, now: 
   return inWorkspace(scope, async (tx) => {
     const [row] = await tx.select().from(bookings).where(eq(bookings.id, bookingId)).for('update');
     if (row?.approval !== 'pending' || row.status !== 'confirmed') return false;
-    await declineRow(tx, row.id, now, null, null, { type: 'booking', id: row.pageId, memberId: null });
+    await declineRow(tx, row, now, null, null, { type: 'booking', id: row.pageId, memberId: null });
     return true;
   });
 }
 
-/** A request turned down: cancelled from the host's side, its decision stamped, its visitor told. */
+/**
+ * A request turned down: cancelled from the host's side, its decision stamped, its visitor told. No webhook: its
+ * subscribers never heard of it. A one-time link's use it spent is given back, under the link's lock (AC-6204).
+ */
 async function declineRow(
   tx: WorkspaceTx,
-  bookingId: string,
+  row: BookingRow,
   now: Date,
   memberId: string | null,
   reason: string | null,
@@ -1056,15 +1065,29 @@ async function declineRow(
       declineReason: reason,
       ...updatedBy(actor),
     })
-    .where(eq(bookings.id, bookingId));
-  await enqueueBookingMail(tx, bookingId, ['declined']);
-  await queueBookingWebhook(tx, 'booking.cancelled', bookingId);
+    .where(eq(bookings.id, row.id));
+  if (row.oneOffLinkId !== null) await giveBackUse(tx, row.oneOffLinkId);
+  await enqueueBookingMail(tx, row.id, ['declined']);
 }
 
 /**
  * The worker's `approved` step, once the confirmed request's calendar event is written (`remakeEvent`): its
  * confirmation goes as any booking's, after the event so it knows whether the calendar already invited them.
  */
-export async function queueConfirmation(scope: EngineScope, bookingId: string): Promise<void> {
-  await inWorkspace(scope, (tx) => enqueueBookingMail(tx, bookingId, ['confirmed']));
+export async function queueConfirmation(
+  scope: EngineScope,
+  bookingId: string,
+): Promise<{ readonly orphan?: EventRef }> {
+  // Under the booking's lock: a cancel that raced the event's writing leaves an event nobody books, which the worker
+  // takes off the calendar again rather than sending a confirmation for.
+  return inWorkspace(scope, async (tx) => {
+    const [row] = await tx.select().from(bookings).where(eq(bookings.id, bookingId)).for('update');
+    if (row === undefined) return {};
+    if (row.status !== 'confirmed') {
+      const orphan = eventOf(scope.workspaceId, row);
+      return orphan === undefined ? {} : { orphan };
+    }
+    await enqueueBookingMail(tx, bookingId, ['confirmed']);
+    return {};
+  });
 }

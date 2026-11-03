@@ -382,7 +382,7 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(
     ['booking.changed_for'],
     booking,
-    z.strictObject({ host: AuditPerson, change: z.enum(['made', 'moved', 'cancelled']) }),
+    z.strictObject({ host: AuditPerson, change: z.enum(['made', 'moved', 'cancelled', 'confirmed', 'declined']) }),
   ),
   /** An automation made, changed, switched on or off, deleted or brought back (parity #53): its trigger's object. */
   entry(
@@ -417,6 +417,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   /** A member's page rewritten by its template (spec 0037, AC-1334): which parts were locked stays in the row. */
   entry(['managed_page.propagated'], bookingPage, NoParams),
+  /** A one-time link made or revoked on a booking page (spec 0062, AC-6204): never its token or its hash. */
+  entry(['booking_page.link_created', 'booking_page.link_revoked'], bookingPage, NoParams),
   /** Bookings › Routing (spec 0037): its settings or skills changed, or a Test run; what changed stays in the row. */
   entry(['routing.settings_changed', 'routing.skills_changed', 'routing.tested'], workspace, NoParams),
 ]);

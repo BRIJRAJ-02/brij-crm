@@ -162,6 +162,10 @@ export const AUDIT_ACTIONS = [
   // A member's own page overwritten by its template's locked parts (spec 0037, AC-1334): one entry on that
   // page, so its owner opening History sees why their hours or limits changed under them.
   'managed_page.propagated',
+  // A one-time link made or revoked on a booking page (spec 0062, AC-6204): the page, the link's id, its uses and
+  // expiry, never its token or hash.
+  'booking_page.link_created',
+  'booking_page.link_revoked',
   // Bookings › Routing (spec 0037, AC-1374, AC-1392): the shared settings (Won means), a skill or someone's skills,
   // each with before and after; and a Test run that named an email, the target the workspace.
   'routing.settings_changed',

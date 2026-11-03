@@ -5,6 +5,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { schema } from '@crm/db';
 import type { BookingRequestView, ListRequestsInput } from '@crm/contracts';
 import { inWorkspace } from '../access/run.ts';
+import { isRefusal } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { REQUEST_LEAD_MS, REQUEST_WAIT_MS } from './mail.ts';
 import { editablePage } from './pages.ts';
@@ -25,7 +26,17 @@ export async function listRequests(
   input: Pick<ListRequestsInput, 'pageId'>,
 ): Promise<BookingRequestView[]> {
   return inWorkspace(scope, async (tx) => {
-    const page = await editablePage(tx, scope, input.pageId);
+    // The page's editors see every request on it; a host who may not change the page sees their own (the one
+    // booking rule: its host answers it), and a page they can't reach answers as if it had none.
+    const editable = await editablePage(tx, scope, input.pageId).then(
+      () => true,
+      (error: unknown) => {
+        if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') return false;
+        throw error;
+      },
+    );
+    const me = scope.access.principal.kind === 'member' ? scope.access.principal.memberId : undefined;
+    if (!editable && me === undefined) return [];
     const rows = await tx
       .select({
         id: bookings.id,
@@ -36,7 +47,14 @@ export async function listRequests(
         visitorEmail: bookings.visitorEmail,
       })
       .from(bookings)
-      .where(and(eq(bookings.pageId, page.id), eq(bookings.approval, 'pending'), eq(bookings.status, 'confirmed')))
+      .where(
+        and(
+          eq(bookings.pageId, input.pageId),
+          eq(bookings.approval, 'pending'),
+          eq(bookings.status, 'confirmed'),
+          editable || me === undefined ? undefined : eq(bookings.hostMemberId, me),
+        ),
+      )
       .orderBy(asc(bookings.startsAt), asc(bookings.id))
       .limit(REQUESTS_MAX);
     return rows.map((row) => ({

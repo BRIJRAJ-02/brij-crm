@@ -367,6 +367,17 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
       after: { templateId: newId(), name: 'Intro', locked: ['hours', 'limits'] },
     }),
   ],
+  // A one-time link (spec 0062, AC-6204): the page, the link's id and uses; never its token or hash.
+  'booking_page.link_created': [
+    row('booking_page.link_created', 'booking_page', newId(), {
+      after: { linkId: newId(), maxUses: 1, expiresAt: null },
+    }),
+  ],
+  'booking_page.link_revoked': [
+    row('booking_page.link_revoked', 'booking_page', newId(), {
+      after: { linkId: newId(), maxUses: 3, expiresAt: null },
+    }),
+  ],
   'managed_page.changed': [
     row('managed_page.changed', 'booking_page', newId(), {
       after: { name: 'Intro call', locked: ['details'], added: 2, removed: 0 },

@@ -45,7 +45,9 @@ alter table "public"."booking_pages"
 -- (`status = 'cancelled'`, `approval = 'declined'`), which frees the slot the way any cancel does. Null is a
 -- booking on a page that never asked, which is every booking before this migration.
 alter table "public"."booking_pages"
-  add column "requires_confirmation" boolean not null default false;
+  add column "requires_confirmation" boolean not null default false,
+  -- Books only through one-time links (AC-6204): the page's own address then answers "by invitation".
+  add column "links_only" boolean not null default false;
 --> statement-breakpoint
 alter table "public"."bookings"
   add column "approval" text,
@@ -92,6 +94,8 @@ create table "public"."booking_page_links" (
   "expires_at" timestamp (6) with time zone,
   "revoked_at" timestamp (6) with time zone,
   "created_by_member_id" uuid not null,
+  -- The write that made it: a retry of the same New link finds this one instead of making a second.
+  "mutation_id" uuid not null,
   "created_at" timestamp (6) with time zone default now() not null,
   constraint "booking_page_links_pkey" primary key ("workspace_id", "id"),
   constraint "booking_page_links_label" check ("label" is null or char_length("label") between 1 and 60),
@@ -109,6 +113,8 @@ alter table "public"."booking_page_links" add constraint "booking_page_links_cre
   foreign key ("workspace_id", "created_by_member_id") references "public"."members" ("workspace_id", "id") on delete no action;
 --> statement-breakpoint
 create unique index "booking_page_links_token_hash" on "public"."booking_page_links" ("workspace_id", "token_hash");
+--> statement-breakpoint
+create unique index "booking_page_links_mutation" on "public"."booking_page_links" ("workspace_id", "mutation_id");
 --> statement-breakpoint
 create index "booking_page_links_by_page" on "public"."booking_page_links" ("workspace_id", "page_id", "created_at");
 --> statement-breakpoint
@@ -145,7 +151,11 @@ as $function$
       case crm_enqueue_booking_mail.kind
         when 'reminder_24h' then b.starts_at - interval '24 hours'
         when 'reminder_1h' then b.starts_at - interval '1 hour'
-        when 'pending_expire' then least(b.created_at + interval '24 hours', b.starts_at - interval '1 hour')
+        -- Never sooner than five minutes from now, so a request made close to its start isn't declined at once.
+        when 'pending_expire' then greatest(
+          pg_catalog.now() + interval '5 minutes',
+          least(b.created_at + interval '24 hours', b.starts_at - interval '1 hour')
+        )
         else pg_catalog.now()
       end as run_at
     from public.bookings b

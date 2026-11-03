@@ -372,6 +372,10 @@ function pageChange(field: string, from: unknown, to: unknown, scheduleName: str
       return 'where answers are filed changed';
     case 'afterBooking':
       return to === 'redirect' ? 'now sends bookers to another site' : 'now shows its own confirmation';
+    case 'redirectUrl':
+      return typeof to === 'string' ? `now sends bookers to ${to}` : undefined;
+    case 'sendBookingDetails':
+      return to === true ? 'now sends each booking to that site' : 'no longer sends each booking to that site';
     case 'cancelCutoffMinutes':
       return fromTo(minutesWords, 'cancel cutoff');
     case 'moveCutoffMinutes':

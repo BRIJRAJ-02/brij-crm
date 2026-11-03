@@ -307,7 +307,13 @@ const SENTENCES: SentenceTemplates = {
     return actor(`changed access to ${object}: ${who} ${what}${level === 'none' ? '' : which}${more}`);
   },
   'booking.changed_for': (entry, w) => {
-    const verb = { made: 'booked', moved: 'moved', cancelled: 'cancelled' }[entry.params.change];
+    const verb = {
+      made: 'booked',
+      moved: 'moved',
+      cancelled: 'cancelled',
+      confirmed: 'confirmed',
+      declined: 'declined',
+    }[entry.params.change];
     return actor(`${verb} ${w.booking(entry.target)} for ${w.person(entry.params.host)}`);
   },
   'booking_page.changed_for': (entry, w) =>
@@ -320,6 +326,8 @@ const SENTENCES: SentenceTemplates = {
   // that is the change with a consequence — a page was made or deleted for each of them.
   // On the member's own page, not the template: this is the line that explains a change they did not make.
   'managed_page.propagated': (entry, w) => actor(`updated ${w.thing(entry.target)} from its managed page`),
+  'booking_page.link_created': (entry, w) => actor(`made a one-time link for ${w.thing(entry.target)}`),
+  'booking_page.link_revoked': (entry, w) => actor(`revoked a one-time link for ${w.thing(entry.target)}`),
   'managed_page.changed': (entry, w) =>
     entry.params.added === 0 && entry.params.removed === 0
       ? actor(`changed the ${w.thing(entry.target)} managed page`)

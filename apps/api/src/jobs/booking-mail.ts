@@ -84,7 +84,9 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
         deps.log,
       );
     }
-    await queueConfirmation(scope, bookingId);
+    const { orphan } = await queueConfirmation(scope, bookingId);
+    // Cancelled while its event was being written: the event comes off again, and no confirmation goes.
+    if (orphan !== undefined && calendar?.existing !== undefined) await calendar.existing.cancel(orphan);
     return;
   }
   if (kind === 'pending_expire') {

@@ -274,7 +274,11 @@ describe('one off links (AC-6204)', () => {
 
   it('books its uses, then says it has been used; the token is stored only as its hash', async () => {
     const s = await setup();
-    const { link, token } = await createOneOffLink(s.host, { pageId: s.page.id, label: 'For Grace' }, NOW);
+    const { link, token } = await createOneOffLink(
+      s.host,
+      { mutationId: newId(), pageId: s.page.id, label: 'For Grace' },
+      NOW,
+    );
     expect(link).toMatchObject({ label: 'For Grace', maxUses: 1, uses: 0, state: 'open' });
     const stored = await testQuery<{ token_hash: string }>(
       ownerUrl,
@@ -296,7 +300,7 @@ describe('one off links (AC-6204)', () => {
 
   it('lets exactly one of two visitors racing the last use book', async () => {
     const s = await setup();
-    const { token } = await createOneOffLink(s.host, { pageId: s.page.id }, NOW);
+    const { token } = await createOneOffLink(s.host, { mutationId: newId(), pageId: s.page.id }, NOW);
     const outcomes = await Promise.allSettled([
       s.book({ oneOffToken: token }),
       s.book({ start: MONDAY_10, email: 'ann@example.com', oneOffToken: token }),
@@ -306,14 +310,18 @@ describe('one off links (AC-6204)', () => {
 
   it('books nothing once revoked or expired, and refuses an expiry past a year', async () => {
     const s = await setup();
-    const { link, token } = await createOneOffLink(s.host, { pageId: s.page.id, maxUses: 3 }, NOW);
+    const { link, token } = await createOneOffLink(s.host, { mutationId: newId(), pageId: s.page.id, maxUses: 3 }, NOW);
     expect((await revokeOneOffLink(s.host, { pageId: s.page.id, linkId: link.id }, NOW)).state).toBe('revoked');
     expect(await refusalOf(s.book({ oneOffToken: token }))).toMatchObject({ code: 'LINK_USED' });
     expect(
       await refusalOf(
         createOneOffLink(
           s.host,
-          { pageId: s.page.id, expiresAt: new Date(NOW.getTime() + 400 * 86_400_000).toISOString() },
+          {
+            mutationId: newId(),
+            pageId: s.page.id,
+            expiresAt: new Date(NOW.getTime() + 400 * 86_400_000).toISOString(),
+          },
           NOW,
         ),
       ),
@@ -322,8 +330,76 @@ describe('one off links (AC-6204)', () => {
 
   it('books a page through its link only while the page takes bookings', async () => {
     const s = await setup();
-    const { token } = await createOneOffLink(s.host, { pageId: s.page.id }, NOW);
+    const { token } = await createOneOffLink(s.host, { mutationId: newId(), pageId: s.page.id }, NOW);
     await s.set({ status: 'paused' });
     expect(await refusalOf(s.book({ oneOffToken: token }))).toMatchObject({ code: 'BOOKING_CLOSED' });
+  });
+});
+
+describe('review fixes (spec 0062, L1)', () => {
+  /** A plain member of the same workspace, who may not change the host's page. */
+  async function colleague(s: Awaited<ReturnType<typeof setup>>) {
+    const id = newId();
+    await db.withWorkspace(s.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${s.workspaceId}, ${id}, 'Bo', ${`bo-${id}@example.com`}, 'member', 'system', 'system')`,
+      ),
+    );
+    return rescope(s.host, { actor: { type: 'member', id }, role: 'member' });
+  }
+
+  it('lets nobody who can’t change the page list, make or revoke its links, or read its requests', async () => {
+    const s = await setup();
+    const { link } = await createOneOffLink(s.host, { mutationId: newId(), pageId: s.page.id }, NOW);
+    const bo = await colleague(s);
+    expect(await refusalOf(listOneOffLinks(bo, { pageId: s.page.id }, NOW))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(createOneOffLink(bo, { mutationId: newId(), pageId: s.page.id }, NOW))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(revokeOneOffLink(bo, { pageId: s.page.id, linkId: link.id }, NOW))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await listRequests(bo, { pageId: s.page.id })).toEqual([]);
+  });
+
+  it('refuses another page’s link, and reads another workspace’s hash as used', async () => {
+    const a = await setup();
+    const b = await setup();
+    const { link, token } = await createOneOffLink(a.host, { mutationId: newId(), pageId: a.page.id }, NOW);
+    const other = await createBookingPage(a.host, { id: newId(), title: 'Other', timeZone: 'UTC' }, NOW);
+    expect(await refusalOf(revokeOneOffLink(a.host, { pageId: other.id, linkId: link.id }, NOW))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    const hash = createHash('sha256').update(token).digest('hex');
+    expect((await getPublicBookingPage(b.entry, undefined, undefined, { hash, now: NOW })).linkUsed).toBe(true);
+    expect(await refusalOf(b.book({ oneOffToken: token }))).toMatchObject({ code: 'LINK_USED' });
+  });
+
+  it('answers a retried New link with the same link, under a new token', async () => {
+    const s = await setup();
+    const mutationId = newId();
+    const first = await createOneOffLink(s.host, { mutationId, pageId: s.page.id }, NOW);
+    const again = await createOneOffLink(s.host, { mutationId, pageId: s.page.id }, NOW);
+    expect(again.link.id).toBe(first.link.id);
+    expect(await listOneOffLinks(s.host, { pageId: s.page.id }, NOW)).toHaveLength(1);
+    expect((await s.book({ oneOffToken: again.token })).bookingId).toBeDefined();
+  });
+
+  it('books a links only page through a link alone, and says so without one', async () => {
+    const s = await setup();
+    await s.set({ linksOnly: true });
+    expect((await getPublicBookingPage(s.entry)).invitationOnly).toBe(true);
+    expect(await refusalOf(s.book())).toMatchObject({ code: 'LINK_USED' });
+    const { token } = await createOneOffLink(s.host, { mutationId: newId(), pageId: s.page.id }, NOW);
+    expect((await s.book({ oneOffToken: token })).bookingId).toBeDefined();
+  });
+
+  it('gives a link its use back when the request it booked is declined', async () => {
+    const s = await setup();
+    await s.set({ requiresConfirmation: true });
+    const { token } = await createOneOffLink(s.host, { mutationId: newId(), pageId: s.page.id }, NOW);
+    const booked = await s.book({ oneOffToken: token });
+    await declineBooking(hostTarget(s.host, booked.bookingId), { now: () => NOW }, {});
+    expect((await listOneOffLinks(s.host, { pageId: s.page.id }, NOW))[0]).toMatchObject({ uses: 0, state: 'open' });
   });
 });

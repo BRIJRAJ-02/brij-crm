@@ -107,6 +107,8 @@ export const PublicBookingPage = z.object({
   requiresConfirmation: z.literal(true).optional(),
   /** The one off link it was opened with has nothing left to book (AC-6204): "This link has been used". */
   linkUsed: z.literal(true).optional(),
+  /** A page that books only through one-time links, opened without one (AC-6204): "This page books by invitation". */
+  invitationOnly: z.literal(true).optional(),
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;
