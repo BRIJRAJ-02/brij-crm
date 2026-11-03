@@ -27,6 +27,16 @@ import { WorkspaceScoped } from './workspaces.ts';
 export * from './hospitality-model.ts';
 
 const COUNTRIES: ReadonlySet<string> = new Set(COUNTRY_CODES);
+
+/** Whether `value` is an http or https address with a host. */
+function isWebAddress(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.hostname !== '';
+  } catch {
+    return false;
+  }
+}
 const CURRENCIES: ReadonlySet<string> = new Set(CURRENCY_CODES);
 const L = HOSPITALITY_LIMITS;
 
@@ -140,7 +150,12 @@ export const BusinessProfileFields = z.object({
   description: Optional(L.descriptionMax).optional(),
   phone: Phone.optional(),
   email: z.union([z.literal(''), z.email({ error: 'Use an email address, such as hello@example.com.' })]).optional(),
-  website: Optional(2048).optional(),
+  // A guest page links it (H1): only an http or https address, never a script.
+  website: Optional(2048)
+    .refine((value) => value === '' || isWebAddress(value), {
+      error: 'Use a web address, such as https://example.com.',
+    })
+    .optional(),
   links: SocialLinks.optional(),
 });
 /** A business profile as saved. */

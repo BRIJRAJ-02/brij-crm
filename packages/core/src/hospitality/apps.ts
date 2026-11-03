@@ -13,7 +13,7 @@ import {
   type HospitalityApp,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, isNull, sql } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
@@ -180,10 +180,21 @@ export async function installApp(
         updatedByMemberId: by,
       });
       await insertPlace(tx, scope, newId(), { name: input.business.name, ...input.business.place }, by);
-      await tx
+      // The card's currency becomes the workspace's only while it has none: an existing default is never moved.
+      const changed = await tx
         .update(workspaces)
         .set({ currency: input.business.currency })
-        .where(eq(workspaces.id, scope.workspaceId));
+        .where(and(eq(workspaces.id, scope.workspaceId), isNull(workspaces.currency)))
+        .returning({ id: workspaces.id });
+      if (changed.length > 0) {
+        await writeAudit(tx, scope.workspaceId, scope.actor, {
+          action: 'workspace.updated',
+          targetType: 'workspace',
+          targetId: scope.workspaceId,
+          before: { currency: null },
+          after: { currency: input.business.currency },
+        });
+      }
     }
     const [ever] = await tx
       .select({ n: count() })

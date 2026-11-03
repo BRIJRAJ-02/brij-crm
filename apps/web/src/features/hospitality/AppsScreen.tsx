@@ -14,6 +14,7 @@ import {
   EmptyState,
   Icon,
   Modal,
+  sharedStrings,
   Skeleton,
   TileGrid,
   type Toasts,
@@ -68,7 +69,7 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
       return;
     }
     void send(app, withNeeded).catch((error: unknown) => {
-      toasts.toast({ tone: 'danger', message: error instanceof Error ? error.message : strings.failed });
+      toasts.toast({ tone: 'danger', message: error instanceof Error ? error.message : sharedStrings.couldntDoThat });
     });
   };
 

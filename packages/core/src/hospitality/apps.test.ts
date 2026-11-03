@@ -278,8 +278,14 @@ describe('a place’s floor (AC-6509)', () => {
     await addTables(w.owner, { placeId: w.placeId, labels: ['T2'], minGuests: 2, maxGuests: 2 });
     expect(await refusalOf(restoreTable(w.owner, { placeId: w.placeId, tableId: t2.id }))).toBe('NAME_TAKEN');
 
-    // Deleting a table takes it out of every join; deleting an area keeps its tables.
+    // Deleting a table takes it out of every join, and leaves its line in History; deleting an area keeps its tables.
     floor = await deleteTable(w.owner, { placeId: w.placeId, tableId: t3.id });
+    const audited = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ what: string }>(
+        sql`select after ->> 'hospitality' as what from audit_events where after ? 'hospitality' order by at desc limit 1`,
+      ),
+    );
+    expect(audited.rows).toEqual([{ what: 'table.deleted' }]);
     expect(floor.tables.find((table) => table.id === t1.id)?.joins).toEqual([]);
     floor = await deleteArea(w.owner, { placeId: w.placeId, areaId: terrace ?? '' });
     expect(floor.areas).toEqual([]);

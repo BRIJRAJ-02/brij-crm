@@ -6,6 +6,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { EngineScope } from '../access/mint.ts';
 import { refuse } from '../engine/refusals.ts';
+import { writeAudit } from '../members/audit.ts';
 
 const { workspaceApps, workspaces } = schema;
 
@@ -68,4 +69,22 @@ export function hospitalityMember(scope: EngineScope): string {
   const { principal } = scope.access;
   if (principal.kind !== 'member') throw refuse('FORBIDDEN', 'Only a member of the workspace can set up its apps.');
   return principal.memberId;
+}
+
+/**
+ * Audits one setup change (the business, a place, an area or a table) as a workspace change, naming what changed and
+ * its ids, so History says who changed the hours or deleted a table. No values a guest typed are kept.
+ */
+export function auditSetup(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  what: string,
+  ids: Readonly<Record<string, string>> = {},
+): Promise<void> {
+  return writeAudit(tx, scope.workspaceId, scope.actor, {
+    action: 'workspace.updated',
+    targetType: 'workspace',
+    targetId: scope.workspaceId,
+    after: { hospitality: what, ...ids },
+  });
 }

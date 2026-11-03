@@ -95,6 +95,16 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
           <Card isBusy>
             <Skeleton shape="field" />
           </Card>
+        ) : view.places.length === 0 ? (
+          <EmptyState
+            title={strings.noPlaces}
+            icon="map-pin"
+            actions={
+              <Button variant="primary" icon="plus" onPress={() => setAdding(true)}>
+                {strings.addPlace}
+              </Button>
+            }
+          />
         ) : (
           view.places.map((place) => (
             <PlaceCard key={place.id} store={store} slug={slug} place={place} toasts={toasts} />

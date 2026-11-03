@@ -43,7 +43,6 @@ export const strings = {
   retry: 'Try again',
   // The first install's card (AC-6506)
   cardTitle: 'Your business',
-  cardHint: 'Everything else can wait for Settings, Business.',
   businessName: 'Business name',
   kind: 'Kind',
   kinds: {
@@ -74,6 +73,7 @@ export const strings = {
   saved: 'Saved',
   places: 'Places',
   addPlace: 'Add place',
+  noPlaces: 'No places yet',
   newPlace: 'New place',
   placeName: 'Name',
   add: 'Add',
@@ -113,6 +113,9 @@ export const strings = {
   renameArea: (area: string) => `Rename ${area}`,
   deleteArea: (area: string) => `Delete ${area}`,
   noArea: 'No area',
+  noAreas: 'No areas yet',
+  edit: 'Edit',
+  deleteAreaText: 'Its tables stay, with no area.',
   addTables: 'Add tables',
   prefix: 'Label',
   from: 'From',

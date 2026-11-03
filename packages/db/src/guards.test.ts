@@ -1348,6 +1348,16 @@ describe('isolation', () => {
     ).rejects.toMatchObject({ cause: { code: '42501' } });
   });
 
+  it('lets the app update every workspaces column but early_access, so a new column needs its grant (spec 0065)', async () => {
+    const columns = await owner.query<{ name: string; ok: boolean }>(`
+      select a.attname as name, has_column_privilege('crm_app', 'public.workspaces', a.attname, 'UPDATE') as ok
+      from pg_attribute a
+      where a.attrelid = 'public.workspaces'::regclass and a.attnum > 0 and not a.attisdropped
+      order by a.attnum
+    `);
+    expect(columns.rows.filter((row) => row.ok === (row.name === 'early_access')).map((row) => row.name)).toEqual([]);
+  });
+
   it('refuses a row written into another workspace', async () => {
     const a = await workspaceWithMember('delta');
     const b = await workspaceWithMember('epsilon');

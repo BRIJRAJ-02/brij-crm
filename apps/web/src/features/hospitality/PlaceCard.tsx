@@ -13,7 +13,7 @@ import {
   Disclosure,
   EmptyState,
   Field,
-  FieldGroup,
+  FormRow,
   Form,
   formatDate,
   HoursEditor,
@@ -42,6 +42,17 @@ export interface PlaceCardProps {
   readonly slug: string;
   readonly place: Place;
   readonly toasts: Toasts;
+}
+
+/** `HH:MM` on the 12 hour clock the hours editor reads in ("6:00 pm"), in the reader's language. */
+function clockLabel(time: string, locale: string): string {
+  const [hours = 0, minutes = 0] = time.split(':').map(Number);
+  return new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hourCycle: 'h12',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
 }
 
 /** A place's address on one line. */
@@ -142,7 +153,9 @@ function SpecialDays({
   const hoursText = (exception: HoursException) =>
     exception.closed === true
       ? strings.closed
-      : (exception.ranges ?? []).map((range) => strings.rangeText(range.from, range.to)).join(', ');
+      : (exception.ranges ?? [])
+          .map((range) => strings.rangeText(clockLabel(range.from, locale), clockLabel(range.to, locale)))
+          .join(', ');
   return (
     <Disclosure
       title={strings.specialDays}
@@ -300,8 +313,20 @@ function DetailsForm({
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const zones = useMemo(() => zoneItems(timeZone, new Date()), [timeZone]);
+  const changed =
+    name !== place.name ||
+    addressLine !== (place.addressLine ?? '') ||
+    city !== (place.city ?? '') ||
+    postcode !== (place.postcode ?? '') ||
+    country !== place.country ||
+    timeZone !== place.timeZone ||
+    phone !== (place.phone ?? '');
   const save = () => {
-    if (isBusy || country === null) return;
+    if (isBusy || !changed) return;
+    if (country === null) {
+      setRefusals([{ code: 'INPUT_INVALID', message: strings.countryMissing, attributeId: 'country' }]);
+      return;
+    }
     setBusy(true);
     setRefusals([]);
     onSave({ name, addressLine, city, postcode, country, timeZone, phone, locale: place.locale }).then(
@@ -321,16 +346,16 @@ function DetailsForm({
       onSubmit={save}
       label={strings.placeDetails}
     >
-      <FieldGroup label={strings.placeName} layout="row">
+      <FormRow>
         <Field label={strings.placeName} name="name" maxLength={80} value={name} onChange={setName} />
         <Field label={strings.phone} name="phone" type="tel" maxLength={40} value={phone} onChange={setPhone} />
-      </FieldGroup>
+      </FormRow>
       <Field label={strings.address} name="addressLine" maxLength={200} value={addressLine} onChange={setAddressLine} />
-      <FieldGroup label={strings.address} layout="row">
+      <FormRow>
         <Field label={strings.city} name="city" maxLength={100} value={city} onChange={setCity} />
         <Field label={strings.postcode} name="postcode" maxLength={20} value={postcode} onChange={setPostcode} />
-      </FieldGroup>
-      <FieldGroup label={strings.country} layout="row">
+      </FormRow>
+      <FormRow>
         <CountryPicker label={strings.country} list="all" value={country} onChange={setCountry} />
         <Select
           label={strings.timeZone}
@@ -342,8 +367,8 @@ function DetailsForm({
             if (zone !== null) setTimeZone(zone);
           }}
         />
-      </FieldGroup>
-      <Button type="submit" form={formId} isPending={isBusy}>
+      </FormRow>
+      <Button type="submit" form={formId} isPending={isBusy} isDisabled={!changed}>
         {isBusy ? strings.saving : strings.save}
       </Button>
     </Form>

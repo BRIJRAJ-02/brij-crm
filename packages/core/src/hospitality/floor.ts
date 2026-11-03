@@ -13,7 +13,7 @@ import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
 import { checkId, isUuid } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
-import { hospitalityMember, requireAnyApp } from './gate.ts';
+import { auditSetup, hospitalityMember, requireAnyApp } from './gate.ts';
 import { PLACE_NOT_FOUND } from './places.ts';
 
 const { areas, places, placeTables } = schema;
@@ -67,6 +67,7 @@ async function readFloorOf(tx: WorkspaceTx, workspaceId: string, placeId: string
 async function onPlace(
   scope: EngineScope,
   placeId: string,
+  what: string | undefined,
   work: (tx: WorkspaceTx, by: string) => Promise<void>,
 ): Promise<PlaceFloor> {
   requirePermission(scope, 'hospitality.manage');
@@ -81,6 +82,8 @@ async function onPlace(
       .where(and(eq(places.workspaceId, scope.workspaceId), eq(places.id, id)));
     if (place === undefined) throw refuse('NOT_FOUND', PLACE_NOT_FOUND);
     await work(tx, by);
+    // A write leaves its line in History; a read (no `what`) none.
+    if (what !== undefined) await auditSetup(tx, scope, what, { placeId: id });
     return readFloorOf(tx, scope.workspaceId, id);
   });
 }
@@ -124,7 +127,7 @@ async function tableOf(tx: WorkspaceTx, workspaceId: string, placeId: string, ta
 
 /** One place's areas and tables (AC-6509), for `hospitality.manage`. */
 export async function readFloor(scope: EngineScope, input: { readonly placeId: string }): Promise<PlaceFloor> {
-  return onPlace(scope, input.placeId, () => Promise.resolve());
+  return onPlace(scope, input.placeId, undefined, () => Promise.resolve());
 }
 
 /** Adds an area (up to 12 a place) or renames one; a name already in the place is `NAME_TAKEN`. */
@@ -132,7 +135,7 @@ export async function saveArea(
   scope: EngineScope,
   input: { readonly placeId: string; readonly areaId?: string; readonly id?: string; readonly name: string },
 ): Promise<PlaceFloor> {
-  return onPlace(scope, input.placeId, async (tx, by) => {
+  return onPlace(scope, input.placeId, 'area.saved', async (tx, by) => {
     const name = input.name.trim();
     if (input.areaId !== undefined) {
       const areaId = checkId(input.areaId, AREA_NOT_FOUND);
@@ -179,7 +182,7 @@ export async function deleteArea(
   scope: EngineScope,
   input: { readonly placeId: string; readonly areaId: string },
 ): Promise<PlaceFloor> {
-  return onPlace(scope, input.placeId, async (tx) => {
+  return onPlace(scope, input.placeId, 'area.deleted', async (tx) => {
     const areaId = checkId(input.areaId, AREA_NOT_FOUND);
     await checkArea(tx, scope.workspaceId, input.placeId, areaId);
     await tx.delete(areas).where(and(eq(areas.workspaceId, scope.workspaceId), eq(areas.id, areaId)));
@@ -212,7 +215,7 @@ export async function addTables(
     readonly online?: boolean;
   },
 ): Promise<PlaceFloor> {
-  return onPlace(scope, input.placeId, async (tx, by) => {
+  return onPlace(scope, input.placeId, 'tables.added', async (tx, by) => {
     const labels = input.labels.map((label) => label.trim());
     const seen = new Set<string>();
     for (const label of labels) {
@@ -336,7 +339,7 @@ export async function updateTable(
     readonly joins?: readonly string[];
   },
 ): Promise<PlaceFloor> {
-  return onPlace(scope, input.placeId, async (tx, by) => {
+  return onPlace(scope, input.placeId, 'table.updated', async (tx, by) => {
     const table = await tableOf(tx, scope.workspaceId, input.placeId, input.tableId);
     if (typeof input.areaId === 'string') await checkArea(tx, scope.workspaceId, input.placeId, input.areaId);
     const [current] = await tx
@@ -371,7 +374,7 @@ export async function moveTable(
   scope: EngineScope,
   input: { readonly placeId: string; readonly tableId: string; readonly toIndex: number },
 ): Promise<PlaceFloor> {
-  return onPlace(scope, input.placeId, async (tx) => {
+  return onPlace(scope, input.placeId, 'table.moved', async (tx) => {
     const table = await tableOf(tx, scope.workspaceId, input.placeId, input.tableId);
     if (table.archivedAt !== null) throw refuse('CONFIG_INVALID', 'Bring the table back before you move it.');
     const rows = await tx
@@ -400,7 +403,7 @@ export async function archiveTable(
   scope: EngineScope,
   input: { readonly placeId: string; readonly tableId: string },
 ): Promise<PlaceFloor> {
-  return onPlace(scope, input.placeId, async (tx, by) => {
+  return onPlace(scope, input.placeId, 'table.archived', async (tx, by) => {
     const table = await tableOf(tx, scope.workspaceId, input.placeId, input.tableId);
     if (table.archivedAt !== null) return;
     await tx
@@ -415,7 +418,7 @@ export async function restoreTable(
   scope: EngineScope,
   input: { readonly placeId: string; readonly tableId: string },
 ): Promise<PlaceFloor> {
-  return onPlace(scope, input.placeId, async (tx, by) => {
+  return onPlace(scope, input.placeId, 'table.restored', async (tx, by) => {
     const table = await tableOf(tx, scope.workspaceId, input.placeId, input.tableId);
     if (table.archivedAt === null) return;
     const live = await liveTables(tx, scope.workspaceId, input.placeId);
@@ -439,7 +442,7 @@ export async function deleteTable(
   scope: EngineScope,
   input: { readonly placeId: string; readonly tableId: string },
 ): Promise<PlaceFloor> {
-  return onPlace(scope, input.placeId, async (tx) => {
+  return onPlace(scope, input.placeId, 'table.deleted', async (tx) => {
     const table = await tableOf(tx, scope.workspaceId, input.placeId, input.tableId);
     const holds = futureHolds();
     if (holds > 0) {

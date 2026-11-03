@@ -7,12 +7,11 @@ import type { Area, DiningTable, HospitalityStore, Place, PlaceFloor } from '@cr
 import { useHospitality } from '@crm/data/react';
 import { HOSPITALITY_LIMITS, tableLabels } from '@crm/data/hospitality';
 import {
-  Badge,
   Button,
   Disclosure,
   EmptyState,
   Field,
-  FieldGroup,
+  FormRow,
   Form,
   Menu,
   MenuItem,
@@ -61,7 +60,8 @@ type Editing =
   | { readonly kind: 'add' }
   | { readonly kind: 'table'; readonly table: DiningTable }
   | { readonly kind: 'area'; readonly area?: Area }
-  | { readonly kind: 'delete'; readonly table: DiningTable };
+  | { readonly kind: 'delete'; readonly table: DiningTable }
+  | { readonly kind: 'delete-area'; readonly area: Area };
 
 /** One place's areas and tables. */
 export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
@@ -111,7 +111,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
               }}
             >
               <MenuItem id="edit" icon="pencil">
-                {table.label}
+                {strings.edit}
               </MenuItem>
               <MenuItem id="archive" icon="archive">
                 {strings.archive}
@@ -245,7 +245,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
                       label={strings.tableActions(area.name)}
                       onAction={(key) => {
                         if (key === 'rename') setEditing({ kind: 'area', area });
-                        if (key === 'delete') void store.deleteArea(slug, place.id, area.id).then(said);
+                        if (key === 'delete') setEditing({ kind: 'delete-area', area });
                       }}
                     >
                       <MenuItem id="rename" icon="pencil">
@@ -258,7 +258,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
                   </MenuTrigger>
                 );
               }}
-              emptyState={<EmptyState title={strings.noArea} />}
+              emptyState={<EmptyState title={strings.noAreas} />}
             />
           </SettingsSection>
         </>
@@ -286,6 +286,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
             }}
           />
           <AreaDialog
+            key={editing?.kind === 'area' ? (editing.area?.id ?? 'new') : 'closed'}
             isOpen={editing?.kind === 'area'}
             area={editing?.kind === 'area' ? editing.area : undefined}
             onOpenChange={(open) => {
@@ -299,11 +300,13 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
         </>
       )}
       <Modal
-        isOpen={editing?.kind === 'delete'}
+        isOpen={editing?.kind === 'delete' || editing?.kind === 'delete-area'}
         onOpenChange={(open) => {
           if (!open) setEditing(undefined);
         }}
-        title={strings.deleteTitle(editing?.kind === 'delete' ? editing.table.label : '')}
+        title={strings.deleteTitle(
+          editing?.kind === 'delete' ? editing.table.label : editing?.kind === 'delete-area' ? editing.area.name : '',
+        )}
         variant="confirm"
         tone="danger"
         actions={
@@ -313,6 +316,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
               variant="danger-solid"
               onPress={() => {
                 if (editing?.kind === 'delete') void store.deleteTable(slug, place.id, editing.table.id).then(said);
+                if (editing?.kind === 'delete-area') void store.deleteArea(slug, place.id, editing.area.id).then(said);
                 setEditing(undefined);
               }}
             >
@@ -321,7 +325,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
           </>
         }
       >
-        {strings.deleteText}
+        {editing?.kind === 'delete-area' ? strings.deleteAreaText : strings.deleteText}
       </Modal>
     </SettingsPage>
   );
@@ -420,12 +424,20 @@ function AddTablesDialog({
         label={strings.addTables}
         focusesFirstField
       >
-        <FieldGroup label={strings.tables} layout="row">
+        <FormRow>
           <Field label={strings.prefix} name="prefix" maxLength={8} value={prefix} onChange={setPrefix} />
           <Field label={strings.from} name="from" inputMode="numeric" maxLength={3} value={from} onChange={setFrom} />
-          <Field label={strings.to} name="to" inputMode="numeric" maxLength={3} value={to} onChange={setTo} />
-        </FieldGroup>
-        <FieldGroup label={strings.seats} layout="row">
+          <Field
+            label={strings.to}
+            name="to"
+            inputMode="numeric"
+            maxLength={3}
+            value={to}
+            onChange={setTo}
+            hint={strings.preview(labels ?? [])}
+          />
+        </FormRow>
+        <FormRow>
           <Field
             label={strings.fewest}
             name="fewest"
@@ -436,8 +448,7 @@ function AddTablesDialog({
           />
           <Field label={strings.most} name="most" inputMode="numeric" maxLength={2} value={most} onChange={setMost} />
           <Select label={strings.area} items={areaItems(floor)} value={areaId} onChange={(id) => setAreaId(id ?? '')} />
-        </FieldGroup>
-        <Badge text={strings.preview(labels ?? [])} />
+        </FormRow>
       </Form>
     </Modal>
   );
@@ -458,26 +469,54 @@ function TableDialog({
     change: { label: string; areaId: string | null; minGuests: number; maxGuests: number; joins: string[] },
   ) => Promise<void>;
 }) {
+  const formId = useId();
+  const [isBusy, setBusy] = useState(false);
   return (
     <Modal
       title={table?.label ?? ''}
       variant="window"
       isOpen={table !== undefined}
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open && !isBusy) onClose();
       }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy}>
+            {strings.cancel}
+          </Button>
+          <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
+            {isBusy ? strings.saving : strings.save}
+          </Button>
+        </>
+      }
     >
-      {table !== undefined && <TableForm table={table} floor={floor} onClose={onClose} onSave={onSave} />}
+      {table !== undefined && (
+        <TableForm
+          formId={formId}
+          isBusy={isBusy}
+          onBusyChange={setBusy}
+          table={table}
+          floor={floor}
+          onClose={onClose}
+          onSave={onSave}
+        />
+      )}
     </Modal>
   );
 }
 
 function TableForm({
+  formId,
+  isBusy,
+  onBusyChange: setBusy,
   table,
   floor,
   onClose,
   onSave,
 }: {
+  readonly formId: string;
+  readonly isBusy: boolean;
+  readonly onBusyChange: (isBusy: boolean) => void;
   readonly table: DiningTable;
   readonly floor: PlaceFloor;
   readonly onClose: () => void;
@@ -486,13 +525,11 @@ function TableForm({
     change: { label: string; areaId: string | null; minGuests: number; maxGuests: number; joins: string[] },
   ) => Promise<void>;
 }) {
-  const formId = useId();
   const [label, setLabel] = useState(table.label);
   const [fewest, setFewest] = useState(String(table.minGuests));
   const [most, setMost] = useState(String(table.maxGuests));
   const [areaId, setAreaId] = useState(table.areaId ?? '');
   const [joins, setJoins] = useState<readonly string[]>(table.joins);
-  const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const others = floor.tables
     .filter((each) => !each.archived && each.id !== table.id)
@@ -534,7 +571,7 @@ function TableForm({
       focusesFirstField
     >
       <Field label={strings.label} name="label" maxLength={12} value={label} onChange={setLabel} />
-      <FieldGroup label={strings.seats} layout="row">
+      <FormRow>
         <Field
           label={strings.fewest}
           name="minGuests"
@@ -551,7 +588,7 @@ function TableForm({
           value={most}
           onChange={setMost}
         />
-      </FieldGroup>
+      </FormRow>
       <Select label={strings.area} items={areaItems(floor)} value={areaId} onChange={(id) => setAreaId(id ?? '')} />
       <Select
         label={strings.joins}
@@ -563,9 +600,6 @@ function TableForm({
         values={[...joins]}
         onValuesChange={setJoins}
       />
-      <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
-        {isBusy ? strings.saving : strings.save}
-      </Button>
     </Form>
   );
 }
@@ -583,7 +617,7 @@ function AreaDialog({
   readonly onSave: (name: string, area: Area | undefined) => Promise<void>;
 }) {
   const formId = useId();
-  const [name, setName] = useState('');
+  const [name, setName] = useState(area?.name ?? '');
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   return (

@@ -23,7 +23,7 @@ import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
-import { hospitalityMember, requireAnyApp } from './gate.ts';
+import { auditSetup, hospitalityMember, requireAnyApp } from './gate.ts';
 
 const { businessProfiles, places, placeTables, workspaces } = schema;
 
@@ -238,6 +238,7 @@ export async function saveBusiness(scope: EngineScope, fields: BusinessProfileFi
       .insert(businessProfiles)
       .values({ workspaceId: scope.workspaceId, ...values, createdByMemberId: by })
       .onConflictDoUpdate({ target: businessProfiles.workspaceId, set: { ...values, updatedAt: sql`now()` } });
+    await auditSetup(tx, scope, 'business.saved');
     const saved = await readProfile(tx, scope.workspaceId);
     if (saved === undefined) throw new Error('The business profile was not stored.');
     return saved;
@@ -255,6 +256,7 @@ export async function createPlace(
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
     await insertPlace(tx, scope, id, input.place, by);
+    await auditSetup(tx, scope, 'place.created', { placeId: id });
     return readPlace(tx, scope.workspaceId, id);
   });
 }
@@ -288,6 +290,7 @@ export async function updatePlace(
       .where(and(eq(places.workspaceId, scope.workspaceId), eq(places.id, placeId)))
       .returning({ id: places.id });
     if (changed.length === 0) throw refuse('NOT_FOUND', PLACE_NOT_FOUND);
+    await auditSetup(tx, scope, input.hours === undefined ? 'place.updated' : 'place.hours', { placeId });
     return readPlace(tx, scope.workspaceId, placeId);
   });
 }

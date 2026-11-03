@@ -4,17 +4,7 @@
 // Leaves out: everything else about the business (Settings › Business), more places, hours and tables.
 import type { BusinessKind, FirstBusiness, WorkspaceSettings } from '@crm/data';
 import { BUSINESS_KINDS } from '@crm/data/hospitality';
-import {
-  Button,
-  CountryPicker,
-  CurrencyPicker,
-  Field,
-  FieldGroup,
-  Form,
-  Modal,
-  Select,
-  type FormRefusal,
-} from '@crm/ui';
+import { Button, CountryPicker, CurrencyPicker, Field, FormRow, Form, Modal, Select, type FormRefusal } from '@crm/ui';
 import { useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
@@ -45,7 +35,6 @@ export function BusinessCardDialog({ isOpen, onOpenChange, workspace, onInstall 
         if (!open && isBusy) return;
         onOpenChange(open);
       }}
-      hint={strings.cardHint}
       actions={
         <>
           <Button slot="close" isDisabled={isBusy}>
@@ -141,7 +130,7 @@ function CardForm({
       label={strings.cardTitle}
       focusesFirstField
     >
-      <FieldGroup label={strings.cardTitle} layout="row">
+      <FormRow>
         <Field
           label={strings.businessName}
           name="name"
@@ -160,7 +149,7 @@ function CardForm({
             if (picked !== undefined) setKind(picked);
           }}
         />
-      </FieldGroup>
+      </FormRow>
       <Field
         label={strings.address}
         name="addressLine"
@@ -169,7 +158,7 @@ function CardForm({
         value={addressLine}
         onChange={setAddressLine}
       />
-      <FieldGroup label={strings.address} layout="row">
+      <FormRow>
         <Field
           label={strings.city}
           name="city"
@@ -179,8 +168,8 @@ function CardForm({
           onChange={setCity}
         />
         <CountryPicker label={strings.country} list="all" isRequired value={country} onChange={setCountry} />
-      </FieldGroup>
-      <FieldGroup label={strings.timeZone} layout="row">
+      </FormRow>
+      <FormRow>
         <Select
           label={strings.timeZone}
           items={zones}
@@ -192,7 +181,7 @@ function CardForm({
           }}
         />
         <CurrencyPicker label={strings.currency} value={currency} onChange={setCurrency} />
-      </FieldGroup>
+      </FormRow>
     </Form>
   );
 }
