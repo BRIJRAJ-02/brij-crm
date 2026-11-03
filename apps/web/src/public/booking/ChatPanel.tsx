@@ -202,7 +202,9 @@ export function ChatPanel(props: ChatPanelProps) {
       lines={lines}
       isWaiting={isWaiting}
       isDone={ended !== undefined}
-      {...(ended === 'booked' ? { doneNote: strings.chatBooked } : {})}
+      {...(ended === 'booked'
+        ? { doneNote: page.requiresConfirmation === true ? strings.chatRequested : strings.chatBooked }
+        : {})}
       maxLength={MAX_TEXT}
       {...(error === undefined ? {} : { error })}
       onSend={send}

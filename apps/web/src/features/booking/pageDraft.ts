@@ -7,7 +7,7 @@ import type { BookingPageSettings } from '@crm/data';
  * (owner ask A102), so a draft read before a reorder never puts the old place back. Only through a form saves at
  * once from its own switch (spec 0037, AC-1388), so the draft never sends it back.
  */
-const NOT_EDITED: ReadonlySet<keyof BookingPageSettings> = new Set(['profilePosition', 'formOnly']);
+const NOT_EDITED: ReadonlySet<keyof BookingPageSettings> = new Set(['profilePosition', 'formOnly', 'linksOnly']);
 
 /**
  * A setting as text that two spellings of one value share: every object's keys in order, a list's items left in

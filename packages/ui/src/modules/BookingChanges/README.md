@@ -33,3 +33,9 @@ Tab reaches Move, Guests and Cancel booking; Move and Guests are read as expande
 Not in the artifact.
 
 Guests are GuestChips (2 November 2026), the same chips the booking form adds guests with, so adding and removing guests looks one way everywhere. Each chip's remove still asks first, in the remove dialog.
+
+## Cutoffs (spec 0062, AC-6202)
+
+`canCancel` (true by default) leaves Cancel booking out inside the page's cancel cutoff, as `canMove` does for Move.
+`lockedNote` is one quiet line under the row saying why ("Too close to cancel here. Reply to the email."), so a
+missing button never reads as a bug. Guests stay: adding one is not a change to the time.

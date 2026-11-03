@@ -83,7 +83,6 @@ export const Cancelled: Story = {
   },
 };
 
-/** Passed. */
 /** A request right after it was made (spec 0062, AC-6203): no call or calendar entry until the host confirms it. */
 export const Requested: Story = {
   args: { state: 'requested', isWelcome: true },
@@ -117,6 +116,7 @@ export const Declined: Story = {
   },
 };
 
+/** Passed. */
 export const Past: Story = {
   parameters: { crm: { screenshot: false } },
   args: { state: 'past', isWelcome: false, again: { label: 'Book again', href: '/b/abc' } },

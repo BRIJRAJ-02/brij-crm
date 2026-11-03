@@ -264,7 +264,7 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  .band:not([data-state='confirmed']) .range {
+  .band:not([data-state='confirmed'], [data-state='requested']) .range {
     color: var(--text-secondary);
     text-decoration: line-through;
   }

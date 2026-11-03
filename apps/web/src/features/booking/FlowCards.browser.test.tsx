@@ -2,7 +2,7 @@
 // revoked behind a confirm) and requests (Confirm, Decline with a reason behind a confirm), with no axe violations in
 // either theme.
 import '@crm/ui/styles.css';
-import type { BookingRequestView, DataLayer, OneOffLinkView } from '@crm/data';
+import type { BookingPageView, BookingRequestView, DataLayer, OneOffLinkView } from '@crm/data';
 import { PageColumn } from '@crm/ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -29,6 +29,9 @@ const REQUEST: BookingRequestView = {
   expiresAt: '2026-11-08T09:00:00.000Z',
 };
 
+/** The page the links card belongs to: only its id and links only setting are read. */
+const PAGE = { id: 'page', linksOnly: false } as unknown as BookingPageView;
+
 let shown: InApp | undefined;
 afterEach(() => {
   shown?.unmount();
@@ -52,8 +55,15 @@ async function show(bookingFlow: ReturnType<typeof flow>) {
   shown = await renderInApp(
     () => (
       <PageColumn>
-        <RequestsCard data={data} slug="acme" pageId="page" />
-        <OneOffLinksCard data={data} slug="acme" pageId="page" pageUrl="https://timefix.com/b/abc" isReadOnly={false} />
+        <RequestsCard data={data} slug="acme" pageId="page" isReadOnly={false} isAlwaysShown />
+        <OneOffLinksCard
+          data={data}
+          slug="acme"
+          page={PAGE}
+          pageUrl="https://timefix.com/b/abc"
+          isReadOnly={false}
+          onSaved={() => undefined}
+        />
       </PageColumn>
     ),
     { data: { bookingFlow }, pattern: '/w/$slug/bookings/links/$id', at: '/w/acme/bookings/links/one' },

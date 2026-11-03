@@ -33,3 +33,11 @@ The heading takes focus on arrival; Tab reaches Join the call, each calendar and
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Requests (spec 0062, AC-6203)
+
+`state` also takes `requested` and `declined`. A request reads "Request sent" right after booking and "Your request"
+when its guest comes back, with one line saying the host will confirm it. Its mark is yellow, and its time is not
+struck through. It has no Join or Add to calendar yet, because no calendar event exists until the host confirms, but
+it keeps its changes, so the guest can still cancel it. `declined` reads "This request was declined", with a red mark
+and the way to book another time.

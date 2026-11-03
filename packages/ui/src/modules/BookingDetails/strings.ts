@@ -24,6 +24,10 @@ export const strings = {
   confirm: 'Confirm booking',
   confirming: 'Booking',
   booked: 'Booked',
+  /** A page that confirms each booking first (spec 0062, AC-6203). */
+  request: 'Send request',
+  requesting: 'Sending',
+  requested: 'Requested',
   nameRequired: 'Give your name.',
   emailRequired: 'Give an email address such as name@example.com.',
   guestInvalid: 'Give each guest’s email address.',

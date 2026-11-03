@@ -143,9 +143,9 @@ export const strings = {
   addToCrm: 'Add bookers to People',
   /** Spec 0062, L1: what a visitor sees once they book, and whether the host confirms each booking first. */
   confirmFirst: 'Confirm each booking first',
-  confirmFirstHint: 'It holds the time. Unanswered, it declines itself after a day.',
+  confirmFirstHint: 'Unanswered requests decline after a day.',
   thenShow: 'Then show',
-  afterChoices: { confirmation: 'Confirmation', redirect: 'Your page' },
+  afterChoices: { confirmation: 'Confirmation', redirect: 'Your site' },
   redirectUrl: 'Send them to',
   redirectPlaceholder: 'https://acme.com/thanks',
   redirectRequired: 'Give the address to send them to.',
@@ -175,7 +175,6 @@ export const strings = {
   linkFailed: 'That didn’t work. Try again.',
   /** The requests card (AC-6203). */
   requests: 'Requests',
-  requestsLine: 'Confirm or decline. Each holds its time until you answer.',
   noRequests: 'Nothing waiting.',
   requestsFailed: 'Requests didn’t load.',
   confirm: 'Confirm',
@@ -183,7 +182,10 @@ export const strings = {
   declineTitle: 'Decline this request?',
   declineReason: 'Reason (optional)',
   declineReasonHint: 'Sent to them by email.',
-  answerBy: (when: string) => `Declines itself ${when}`,
+  answerBy: (when: string) => `Expires ${when}`,
+  /** A one-time links only page (AC-6204). */
+  linksOnly: 'Book only through these links',
+  linksOnlyHint: 'The page’s own address says it books by invitation.',
   targetsFailedTitle: 'Where answers go didn’t load',
   targetsFailed: 'The object’s fields couldn’t be read, so questions can’t be filed onto them right now.',
   /** The Questions tab's object picker (booking answers parity, 27 Oct 2026), in the forms editor's words. */

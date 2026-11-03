@@ -2,9 +2,10 @@
 // Purpose: a booking page's one-time links (spec 0062, AC-6204): addresses that book the page a set number of times, then stop.
 // Main task: make one (a label, how many bookings, when it expires), copy it once, and revoke one that should stop now.
 // Leaves out: who booked through each link (Bookings shows the bookings) and editing a link (make a new one instead).
-import { isDataError, type DataLayer, type OneOffLinkView } from '@crm/data';
+import { isDataError, type BookingPageView, type DataLayer, type OneOffLinkView } from '@crm/data';
 import {
   Button,
+  Callout,
   Card,
   EmptyState,
   Field,
@@ -13,6 +14,7 @@ import {
   MenuTrigger,
   Modal,
   Select,
+  Switch,
   Table,
   useFormatSettings,
   type SelectItem,
@@ -21,11 +23,13 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { strings } from './strings.ts';
 
+// The same shape as the Requests card's table above it, so the two read as one family: a filling first column, the
+// facts, and an actions column fitted to its button.
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'label', label: strings.linkLabel, isRowHeader: true },
-  { id: 'left', label: strings.linkUses },
-  { id: 'expires', label: strings.linkExpires },
-  { id: 'actions', label: strings.revoke, isLabelHidden: true, align: 'end' },
+  { id: 'label', label: strings.linkLabel, isRowHeader: true, size: 'fill' },
+  { id: 'left', label: strings.linkUses, size: 'fit' },
+  { id: 'expires', label: strings.linkExpires, size: 'fit' },
+  { id: 'actions', label: strings.revoke, isLabelHidden: true, align: 'end', isInline: true, size: 'fit' },
 ];
 
 const USES: SelectItem[] = [1, 2, 3, 5, 10, 25, 50].map((value) => ({ id: String(value), label: String(value) }));
@@ -38,10 +42,12 @@ const EXPIRIES: SelectItem[] = [
 export interface OneOffLinksCardProps {
   readonly data: DataLayer;
   readonly slug: string;
-  readonly pageId: string;
+  readonly page: BookingPageView;
   /** The page's own `/b/<key>` address, which a link's token rides on after `#o=`. */
   readonly pageUrl: string;
   readonly isReadOnly: boolean;
+  /** Books only through these links saved: the page as the server now has it. */
+  readonly onSaved: (page: BookingPageView) => void;
 }
 
 type Loaded =
@@ -50,11 +56,33 @@ type Loaded =
   | { readonly status: 'ready'; readonly links: readonly OneOffLinkView[] };
 
 /** The card: the page's links, newest first, and New link. */
-export function OneOffLinksCard({ data, slug, pageId, pageUrl, isReadOnly }: OneOffLinksCardProps) {
+export function OneOffLinksCard({ data, slug, page, pageUrl, isReadOnly, onSaved }: OneOffLinksCardProps) {
+  const pageId = page.id;
   const { locale, timeZone } = useFormatSettings();
   const [loaded, setLoaded] = useState<Loaded>({ status: 'loading' });
   const [isMaking, setMaking] = useState(false);
   const [revoking, setRevoking] = useState<OneOffLinkView | undefined>(undefined);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
+  // Books only through these links (AC-6204): saved at once, as Only through a form is, and put back if refused.
+  const [linksOnly, setLinksOnly] = useState<boolean | undefined>(undefined);
+  const [isSaving, setSaving] = useState(false);
+  const saveLinksOnly = (next: boolean) => {
+    setLinksOnly(next);
+    setSaving(true);
+    setFailure(undefined);
+    data.bookingPages.update(slug, pageId, { linksOnly: next }).then(
+      (saved) => {
+        setSaving(false);
+        setLinksOnly(undefined);
+        onSaved(saved);
+      },
+      (error: unknown) => {
+        setSaving(false);
+        setLinksOnly(undefined);
+        setFailure(isDataError(error) ? error.message : strings.linkFailed);
+      },
+    );
+  };
   const read = useCallback(() => {
     data.bookingFlow.links(slug, pageId).then(
       (links) => setLoaded({ status: 'ready', links }),
@@ -74,6 +102,7 @@ export function OneOffLinksCard({ data, slug, pageId, pageUrl, isReadOnly }: One
     <Card
       title={strings.oneOffLinks}
       description={strings.oneOffLinksLine}
+      {...(failure === undefined ? {} : { footerNote: failure })}
       {...(isReadOnly
         ? {}
         : {
@@ -84,6 +113,14 @@ export function OneOffLinksCard({ data, slug, pageId, pageUrl, isReadOnly }: One
             ),
           })}
     >
+      <Switch
+        label={strings.linksOnly}
+        description={strings.linksOnlyHint}
+        isSelected={linksOnly ?? page.linksOnly}
+        isReadOnly={isReadOnly}
+        isDisabled={isSaving}
+        onChange={saveLinksOnly}
+      />
       {loaded.status === 'loading' && <EmptyState layout="row" isLoading title={strings.oneOffLinks} />}
       {loaded.status === 'error' && <EmptyState layout="row" tone="error" title={strings.linksFailed} onRetry={read} />}
       {loaded.status === 'ready' &&
@@ -138,7 +175,10 @@ export function OneOffLinksCard({ data, slug, pageId, pageUrl, isReadOnly }: One
               setRevoking(undefined);
               read();
             },
-            () => setRevoking(undefined),
+            (error: unknown) => {
+              setRevoking(undefined);
+              setFailure(isDataError(error) ? error.message : strings.linkFailed);
+            },
           )
         }
       />
@@ -232,13 +272,17 @@ function MakeLink({
     >
       {made === undefined ? (
         <>
+          {failure !== undefined && (
+            <Callout tone="danger" isAnnounced>
+              {failure}
+            </Callout>
+          )}
           <Field
             label={strings.linkLabel}
             placeholder={strings.linkLabelPlaceholder}
             maxLength={60}
             value={label}
             onChange={setLabel}
-            {...(failure === undefined ? {} : { error: failure })}
           />
           <Select label={strings.linkUses} items={USES} value={uses} onChange={(id) => setUses(id ?? '1')} />
           <Select

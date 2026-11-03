@@ -31,6 +31,9 @@ export const strings = {
   timeName: (time: string, day: string, minutes: number) => `${time}, ${day}, ${String(minutes)} minutes`,
   book: 'Book',
   bookAt: (day: string, time: string) => `Book ${day} at ${time}`,
+  /** A page that confirms each booking first (spec 0062, AC-6203). */
+  request: 'Request',
+  requestAt: (day: string, time: string) => `Request ${day} at ${time}`,
   // The best match in words, for the dialog's question ("You’re both free at 9:30 AM on Tue 20 Oct").
   matchWhen: (time: string, day: string) => `${time} on ${day}`,
   zoneSearch: 'Search city or GMT offset',
@@ -70,6 +73,7 @@ export const strings = {
   chatTooMany: 'That was a lot at once. Give it a few seconds and try again.',
   chatTooLong: 'This chat is too long to go on. Start over to book.',
   chatBooked: 'Booked. Opening your booking.',
+  chatRequested: 'Request sent. Opening your request.',
   errors: {
     taken: 'Someone just took that time. Pick another.',
     gone: 'That time is no longer available. Pick another.',
@@ -90,6 +94,9 @@ export const strings = {
   /** A one off link with nothing left to book (spec 0062, AC-6204). */
   linkUsedTitle: 'This link has been used',
   linkUsedText: 'Ask whoever sent it for a new one.',
+  /** A page that books only through one-time links, opened without one (AC-6204). */
+  invitationTitle: 'This page books by invitation',
+  invitationText: 'Ask whoever sent you here for a link.',
   notFoundTitle: 'Page not found',
   notFoundText: 'There’s nothing at this address.',
   failedTitle: 'This page didn’t load',

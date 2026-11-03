@@ -54,7 +54,7 @@ const storage = ((): HandoffStorage | undefined => {
 })();
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 // A one off link's token (spec 0062, AC-6204), from the fragment, which no server or Referer ever sees.
-const oneOffToken = oneOffTokenOf(globalThis.location.hash);
+const oneOffToken = carryOneOff(storage, oneOffTokenOf(globalThis.location.hash));
 // The page's one toast queue, so the preload guard can say a new version is ready over a half filled form.
 const toasts = createToasts();
 // A tab left open across a deploy asks for a chunk the new one no longer has: reload once onto it, or, while the
@@ -274,4 +274,21 @@ if (path !== null) {
   tryAddress();
 } else {
   renderMessage(strings.notFoundTitle, strings.notFoundText);
+}
+
+/**
+ * The page's one-time link token across the visitor's calendar connect (spec 0062, AC-6204): kept in this tab by
+ * the page's address, never a query, and read back when the page returns without its fragment.
+ */
+function carryOneOff(held: HandoffStorage | undefined, token: string | undefined): string | undefined {
+  const key = `tfx.o:${globalThis.location.pathname}`;
+  try {
+    if (token !== undefined) {
+      held?.setItem(key, token);
+      return token;
+    }
+    return oneOffTokenOf(`#o=${held?.getItem(key) ?? ''}`);
+  } catch {
+    return token;
+  }
 }

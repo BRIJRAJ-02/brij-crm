@@ -54,6 +54,8 @@ export type BookingDetailsOutcome =
 
 /** Props for BookingDetails. */
 export interface BookingDetailsProps {
+  /** The host confirms each booking first (spec 0062, AC-6203): the button says Send request, then Requested. */
+  readonly isRequest?: boolean;
   /** Asks for a number to call: a phone page. */
   readonly needsPhone?: boolean;
   /** Filled in from the visitor's sign in or a form hand off. */
@@ -131,6 +133,7 @@ function drawnErrors(
  * buttons. A prefilled visitor sees "Booking as Ada. Not you?".
  */
 export function BookingDetails({
+  isRequest = false,
   needsPhone = false,
   prefill,
   maxGuests = 10,
@@ -592,7 +595,17 @@ export function BookingDetails({
           isPending={isBusy && !isDone}
           {...(isDone ? { icon: 'check' as const } : {})}
         >
-          {isDone ? strings.booked : isBusy ? strings.confirming : strings.confirm}
+          {isRequest
+            ? isDone
+              ? strings.requested
+              : isBusy
+                ? strings.requesting
+                : strings.request
+            : isDone
+              ? strings.booked
+              : isBusy
+                ? strings.confirming
+                : strings.confirm}
         </Button>
       </div>
     </form>

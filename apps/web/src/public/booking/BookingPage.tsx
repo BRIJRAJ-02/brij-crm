@@ -160,7 +160,7 @@ type Client = ReturnType<typeof createBookingClient>;
 type Loaded =
   | { readonly state: 'loading' }
   | { readonly state: 'ready'; readonly page: PublicBookingPage }
-  | { readonly state: 'gone' | 'closed' | 'failed' | 'used' };
+  | { readonly state: 'gone' | 'closed' | 'failed' | 'used' | 'invitation' };
 
 /** One slots read covers 62 days (two months of the month view). */
 const CHUNK_DAYS = 62;
@@ -253,6 +253,11 @@ export function BookingPage({
             setLoaded({ state: 'used' });
             return;
           }
+          // A page that books only through one-time links, opened without one (AC-6204).
+          if (page.invitationOnly === true && !isEditorPreview) {
+            setLoaded({ state: 'invitation' });
+            return;
+          }
           // A page that books only through a form, reached without one (spec 0037, AC-1388): its closed state. The
           // host's own editor preview still draws it.
           if (page.formOnly === true && !isEditorPreview) {
@@ -335,6 +340,8 @@ export function BookingPage({
       );
     case 'used':
       return <BookingMessage title={strings.linkUsedTitle}>{strings.linkUsedText}</BookingMessage>;
+    case 'invitation':
+      return <BookingMessage title={strings.invitationTitle}>{strings.invitationText}</BookingMessage>;
     case 'loading':
       return <LoadingBooking locale={locale} timeZone={timeZone} now={now} />;
     case 'gone':
@@ -1126,6 +1133,8 @@ function Booking({
   const handedSkip = prefill?.skip ?? [];
   const asked = (page.questions ?? []).filter((question) => !handedSkip.includes(question.key));
   const detailsProps = {
+    // A page that confirms each booking first sends a request (spec 0062, AC-6203).
+    isRequest: page.requiresConfirmation === true,
     needsPhone: page.location.type === 'phone',
     // The page's own questions (spec 0057), after the note; a page with none draws nothing more (AC-5704).
     ...(asked.length === 0
@@ -1265,7 +1274,13 @@ function Booking({
         setStep({ step: 'details', attempt: crypto.randomUUID(), back: false });
       }}
     >
-      {time === undefined ? strings.book : strings.bookAt(dayHeading, timeLabel(time, zone, locale, hour12))}
+      {page.requiresConfirmation === true
+        ? time === undefined
+          ? strings.request
+          : strings.requestAt(dayHeading, timeLabel(time, zone, locale, hour12))
+        : time === undefined
+          ? strings.book
+          : strings.bookAt(dayHeading, timeLabel(time, zone, locale, hour12))}
     </Button>
   );
   const noticeLine =

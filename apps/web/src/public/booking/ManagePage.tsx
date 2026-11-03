@@ -99,7 +99,10 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
   const [notice, setNotice] = useState<'moved' | 'cancelled' | undefined>(undefined);
   // A redirect page's address (spec 0062, AC-6201), kept by the booking page in this tab: read once, right after
   // booking only, never from this page's own address.
-  const [next] = useState(() => (isWelcome ? takeRedirect(sessionStore(), token) : undefined));
+  const [kept] = useState(() => (isWelcome ? takeRedirect(sessionStore(), token) : undefined));
+  // Stay here clears the redirect (WCAG 2.2.1): a timed move the reader can stop.
+  const [isStaying, setStaying] = useState(false);
+  const next = isStaying ? undefined : kept;
   useEffect(() => {
     if (next === undefined || loaded.state !== 'ready') return;
     // "Taking you to …" for two seconds, so the booking reads as done; at once when motion is reduced.
@@ -277,6 +280,9 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
                 <ButtonLink variant="ghost" size="sm" href={next}>
                   {changeStrings.goNow}
                 </ButtonLink>
+                <Button variant="ghost" size="sm" onPress={() => setStaying(true)}>
+                  {changeStrings.stayHere}
+                </Button>
               </Callout>
             ),
           }
@@ -306,9 +312,13 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
                 canMove={booking.canMove}
                 // Inside the page's cutoffs a change is the host's (spec 0062, AC-6202): one line says so.
                 canCancel={booking.cancelTooLate !== true}
-                {...(booking.cancelTooLate === true || booking.moveTooLate === true
-                  ? { lockedNote: changeStrings.tooLate }
-                  : {})}
+                {...(booking.state === 'requested'
+                  ? {}
+                  : booking.cancelTooLate === true
+                    ? { lockedNote: changeStrings.tooLateCancel }
+                    : booking.moveTooLate === true
+                      ? { lockedNote: changeStrings.tooLateMove }
+                      : {})}
                 moveNote={changeStrings.timesIn(zoneDisplay(zone, now()))}
                 move={
                   <MovePicker

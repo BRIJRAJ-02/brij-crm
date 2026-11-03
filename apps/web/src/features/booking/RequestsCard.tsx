@@ -3,14 +3,23 @@
 // Main task: Confirm one, or Decline it with an optional reason the visitor is sent; each holds its time until then.
 // Leaves out: confirmed bookings (Bookings lists them) and changing a request's time (it moves once it is confirmed).
 import { isDataError, type BookingRequestView, type DataLayer } from '@crm/data';
-import { Button, Card, EmptyState, Field, Modal, Table, useFormatSettings, type TableColumn } from '@crm/ui';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Modal,
+  PersonLine,
+  Table,
+  useFormatSettings,
+  type TableColumn,
+} from '@crm/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { strings } from './strings.ts';
 
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'who', label: strings.requests, isRowHeader: true },
-  { id: 'when', label: strings.linkExpires },
-  { id: 'actions', label: strings.confirm, isLabelHidden: true, align: 'end' },
+  { id: 'who', label: strings.requests, isRowHeader: true, size: 'fill' },
+  { id: 'actions', label: strings.confirm, isLabelHidden: true, align: 'end', isInline: true, size: 'fit' },
 ];
 
 /** Props for the card. */
@@ -18,6 +27,10 @@ export interface RequestsCardProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly pageId: string;
+  /** A locked page (a managed member page): the requests show, Confirm and Decline don't. */
+  readonly isReadOnly: boolean;
+  /** Drawn even with nothing waiting (the page confirms first); otherwise only while requests wait. */
+  readonly isAlwaysShown: boolean;
 }
 
 type Loaded =
@@ -26,7 +39,7 @@ type Loaded =
   | { readonly status: 'ready'; readonly requests: readonly BookingRequestView[] };
 
 /** The card: the page's requests, soonest first, each with Confirm and Decline. */
-export function RequestsCard({ data, slug, pageId }: RequestsCardProps) {
+export function RequestsCard({ data, slug, pageId, isReadOnly, isAlwaysShown }: RequestsCardProps) {
   const { locale, timeZone } = useFormatSettings();
   const [loaded, setLoaded] = useState<Loaded>({ status: 'loading' });
   const [busy, setBusy] = useState<string | undefined>(undefined);
@@ -62,12 +75,10 @@ export function RequestsCard({ data, slug, pageId }: RequestsCardProps) {
       },
     );
   };
+  // Confirm-first turned off with requests still waiting: the card stays until they are answered.
+  if (!isAlwaysShown && (loaded.status !== 'ready' || loaded.requests.length === 0)) return null;
   return (
-    <Card
-      title={strings.requests}
-      description={strings.requestsLine}
-      {...(failure === undefined ? {} : { footerNote: failure })}
-    >
+    <Card title={strings.requests} {...(failure === undefined ? {} : { footerNote: failure })}>
       {loaded.status === 'loading' && <EmptyState layout="row" isLoading title={strings.requests} />}
       {loaded.status === 'error' && (
         <EmptyState layout="row" tone="error" title={strings.requestsFailed} onRetry={read} />
@@ -78,15 +89,19 @@ export function RequestsCard({ data, slug, pageId }: RequestsCardProps) {
         ) : (
           <Table
             label={strings.requests}
-            columns={COLUMNS}
+            columns={isReadOnly ? COLUMNS.filter((column) => column.id !== 'actions') : COLUMNS}
             rows={loaded.requests}
             isHeaderHidden
             getRowId={(request) => request.bookingId}
             renderCell={(request, column) =>
               column === 'who' ? (
-                `${request.visitorName} · ${at(request.start)}`
-              ) : column === 'when' ? (
-                strings.answerBy(at(request.expiresAt))
+                // Two lines at most at any width: who and when, then when it expires.
+                <PersonLine
+                  id={request.bookingId}
+                  name={request.visitorName}
+                  size="sm"
+                  meta={[at(request.start), strings.answerBy(at(request.expiresAt))]}
+                />
               ) : (
                 <>
                   <Button
@@ -178,6 +193,7 @@ function DeclineRequest({
     >
       <Field
         label={strings.declineReason}
+        isMultiline
         hint={strings.declineReasonHint}
         maxLength={500}
         value={reason}

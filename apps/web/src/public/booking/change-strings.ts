@@ -5,8 +5,11 @@ export const changeStrings = {
   /** A redirect page, right after booking (spec 0062, AC-6201). */
   takingYou: (site: string) => `Taking you to ${site}`,
   goNow: 'Go now',
+  stayHere: 'Stay here',
   /** Inside a page's cancel or move cutoff (spec 0062, AC-6202): the server's TOO_LATE says the same. */
   tooLate: 'Too close to the meeting to change it here. Reply to your confirmation email.',
+  tooLateCancel: 'Too close to cancel here. Reply to the email.',
+  tooLateMove: 'Too close to move here. Reply to the email.',
   poweredBy: 'Powered by Timefix (opens in a new tab)',
   pickNewTime: 'Pick a new time',
   timesIn: (zone: string) => `Times in ${zone}`,

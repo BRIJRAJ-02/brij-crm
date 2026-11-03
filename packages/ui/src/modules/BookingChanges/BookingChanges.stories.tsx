@@ -212,6 +212,8 @@ export const NoMoveFull: Story = {
  * stays.
  */
 export const TooLate: Story = {
+  // The receipt and its row are Default's; what differs is checked in play, so no shot of its own.
+  parameters: { crm: { screenshot: false } },
   args: {
     canMove: false,
     canCancel: false,

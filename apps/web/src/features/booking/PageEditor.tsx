@@ -251,6 +251,7 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   cancelCutoffMinutes: page.cancelCutoffMinutes,
   moveCutoffMinutes: page.moveCutoffMinutes,
   requiresConfirmation: page.requiresConfirmation,
+  linksOnly: page.linksOnly,
 });
 
 /** Why a redirect address can't be saved (spec 0062, AC-6201), or undefined when it can. */
@@ -325,6 +326,8 @@ export function PageEditor({
   const [draft, setDraft] = useState(saved);
   // The address's shape is said once the person leaves the field, not at every key.
   const [isSlugLeft, setSlugLeft] = useState(false);
+  // The redirect address's error waits until the field is left, as the address's does.
+  const [isRedirectLeft, setRedirectLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
   // The route shows its cached read first and reads again behind it (and again on any live change), so a newer
@@ -745,7 +748,8 @@ export function PageEditor({
       draft.title.trim() === '' ||
       draft.durations.length === 0 ||
       isWhereMissing ||
-      chipsError !== undefined,
+      chipsError !== undefined ||
+      redirectProblem(draft) !== undefined,
     questions: refusedTab === 'questions' || shownProblem !== undefined,
     hosts: refusedTab === 'hosts',
     hours: refusedTab === 'hours' || (isWeekDirty && !week.isValid),
@@ -1108,10 +1112,17 @@ export function PageEditor({
                           </FieldGroup>
                         )}
                       </Card>
+                      {/* Requests waiting for a Confirm (spec 0062, AC-6203): shown while any wait, even once
+                          confirm-first is off, and on its own while it is on. */}
+                      <RequestsCard
+                        data={data}
+                        slug={slug}
+                        pageId={page.id}
+                        isReadOnly={isLocked}
+                        isAlwaysShown={page.requiresConfirmation}
+                      />
                       {/* The snippet for someone else's site (spec 0062, L3), under Sharing, since it is one more
                           way to hand the page out rather than a setting of the page. */}
-                      {/* Requests waiting for a Confirm (spec 0062, AC-6203), first, since they need an answer. */}
-                      {page.requiresConfirmation && <RequestsCard data={data} slug={slug} pageId={page.id} />}
                       <EmbedCard
                         script={data.forms.embedUrl()}
                         publicKey={publicBookingPath(page).replace(/^\/(b\/)?/, '')}
@@ -1120,7 +1131,14 @@ export function PageEditor({
                         quickPicks={BRAND_QUICK_PICKS}
                       />
                       {/* One-time links (AC-6204): one more way to hand the page out, beside the snippet. */}
-                      <OneOffLinksCard data={data} slug={slug} pageId={page.id} pageUrl={bLink} isReadOnly={isLocked} />
+                      <OneOffLinksCard
+                        data={data}
+                        slug={slug}
+                        page={page}
+                        pageUrl={bLink}
+                        isReadOnly={isLocked}
+                        onSaved={setPage}
+                      />
                       {!isWorkspace && (
                         <SocialsCardSlot
                           data={data}
@@ -1324,7 +1342,10 @@ export function PageEditor({
                               placeholder={strings.redirectPlaceholder}
                               value={draft.redirectUrl ?? ''}
                               isReadOnly={isLocked}
-                              {...(redirectProblem(draft) === undefined ? {} : { error: redirectProblem(draft) })}
+                              {...(isRedirectLeft && redirectProblem(draft) !== undefined
+                                ? { error: redirectProblem(draft) }
+                                : {})}
+                              onBlur={() => setRedirectLeft(true)}
                               onChange={(value) => change({ redirectUrl: value })}
                             />
                             <Switch
