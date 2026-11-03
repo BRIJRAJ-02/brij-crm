@@ -319,6 +319,18 @@ import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/pict
 import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 import type { HospitalityStore } from './hospitality/store.ts';
+import type { BusinessPageStore } from './business-page/store.ts';
+export type { BusinessPageStore, PhotoUpload } from './business-page/store.ts';
+// The business page's editor (spec 0066, B4 lite): the shapes Settings › Business › Page shows.
+export type {
+  BusinessAmenity,
+  BusinessPageContent,
+  BusinessPagePlace,
+  BusinessPageView,
+  BusinessPhoto,
+  BusinessPublishProblem,
+  UploadedBusinessPhoto,
+} from '@crm/contracts';
 export type { HospitalityHeld, HospitalityHeldState, HospitalityStore, ResourceChange } from './hospitality/store.ts';
 // The Hospitality suite's setup (spec 0065, H0): the shapes Settings › Apps and Business show.
 export type {
@@ -2809,6 +2821,8 @@ export function createDataLayer({
   let brand: Promise<BrandStore> | undefined;
   // Settings › Apps and Business (spec 0065): the Hospitality setup, loaded with the first screen that asks.
   let hospitality: Promise<HospitalityStore> | undefined;
+  // Settings › Business › Page (spec 0066, B4 lite): the business page's editor, loaded with the first screen that asks.
+  let businessPage: Promise<BusinessPageStore> | undefined;
   /** An image to or from one of our own upload routes, for the workspace `x-crm-workspace` names (spec 0060). */
   const sendImage = async (
     path: string,
@@ -5909,6 +5923,39 @@ export function createDataLayer({
               void loadNav()
                 .then((store) => store.reload(workspace))
                 .catch(() => undefined);
+            },
+          }),
+        )),
+    },
+    /**
+     * The business page's editor (spec 0066, B4 lite): its address, draft, places' addresses, gallery pictures and
+     * Publish. The store loads on first use.
+     */
+    businessPage: {
+      load: (): Promise<BusinessPageStore> =>
+        (businessPage ??= import('./business-page/store.ts').then(({ openBusinessPage }) =>
+          openBusinessPage({
+            api: api.businessPage,
+            call,
+            mintId,
+            origin,
+            upload: async (workspace, body) => {
+              const response = await fetch(new URL('/api/business/page/photos', origin).href, {
+                method: 'POST',
+                headers: { 'x-crm-workspace': workspace, 'content-type': body.type },
+                body,
+                credentials: 'include',
+              }).catch((error: unknown) => {
+                throw toDataError(error);
+              });
+              const answer: unknown = await response.json().catch(() => undefined);
+              const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+              if (!response.ok) throw toDataError({ ...fields, status: response.status });
+              const { id, width, height } = fields;
+              if (typeof id !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
+                throw toDataError({ code: 'INTERNAL', message: 'The photo’s answer couldn’t be read.' });
+              }
+              return { id, width, height };
             },
           }),
         )),

@@ -1,0 +1,60 @@
+/* The business page's location (spec 0066, AC-6641): the address beside its pin, the phone and site as quiet links,
+   then the two Directions buttons side by side, each a thumb's height. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+  }
+
+  .address {
+    display: flex;
+    gap: var(--space-8);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    font-style: normal;
+    color: var(--text);
+  }
+
+  .lines {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .contact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8) var(--space-20);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    color: var(--link);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+  }
+
+  .link:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .link:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .directions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-8);
+  }
+}

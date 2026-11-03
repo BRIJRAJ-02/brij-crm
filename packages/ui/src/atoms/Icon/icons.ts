@@ -6,6 +6,7 @@
 // so an icon only a lazy part of the library draws goes in that part's scoped
 // set instead (editor-icons.ts for the note editor).
 import {
+  Accessibility,
   Activity,
   Apple,
   Archive,
@@ -259,6 +260,8 @@ import type { EditorIconName } from './editor-icons.ts';
 
 /** Lucide 1.49 icons by their lucide.dev name: the controls' own, one per attribute type, AI and help, and the curated object icons. */
 export const icons = {
+  // Wheelchair access, a business page's amenity (spec 0066, AC-6641).
+  accessibility: Accessibility,
   activity: Activity,
   apple: Apple,
   archive: Archive,

@@ -1,0 +1,70 @@
+/* The business page's opening hours (spec 0066, AC-6641): a day per row, its ranges at the end in tabular figures so
+   the times line up, today in the strong weight with a quiet "Today" beside it. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+  }
+
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-16);
+    padding-block: var(--space-8);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
+  }
+
+  .row:last-child {
+    border-block-end: 0;
+  }
+
+  .row[data-today] {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .day {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  .today {
+    padding: 0 var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--accent-soft);
+    color: var(--link);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .ranges {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .closed {
+    color: var(--text-tertiary);
+  }
+
+  .zone {
+    margin: 0;
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    color: var(--text-secondary);
+  }
+}

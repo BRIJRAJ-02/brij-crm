@@ -1,0 +1,192 @@
+/* The business page's gallery (spec 0066, AC-6641): on a phone a full width swipe row, a photo at a time, its place in
+   the corner; from a tablet up the mosaic, a large first photo and up to four tiles in the page's large corners. Every
+   photo fades in from the sunken surface it sits on, so a slow photo never flashes. */
+@layer components {
+  .root {
+    position: relative;
+  }
+
+  .mosaic {
+    display: none;
+  }
+
+  .track {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .slide {
+    flex: none;
+    inline-size: 100%;
+    aspect-ratio: 4 / 3;
+    scroll-snap-align: start;
+  }
+
+  .tile {
+    display: flex;
+    inline-size: 100%;
+    block-size: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: var(--surface-sunken);
+    overflow: hidden;
+    outline: none;
+  }
+
+  .tile:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent);
+    outline-offset: calc(var(--border-width-thick) * -1);
+  }
+
+  .picture {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    animation: reveal var(--duration-modal) var(--ease-out) both;
+    transition: transform var(--duration-modal) var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tile:hover .picture {
+      transform: scale(1.02);
+    }
+  }
+
+  .counter {
+    position: absolute;
+    inset-block-end: var(--space-12);
+    inset-inline-end: var(--space-12);
+    padding: var(--space-2) var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--surface-inverse);
+    color: var(--on-inverse);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .all {
+    display: none;
+  }
+
+  .placeholder {
+    display: none;
+    background: var(--surface-sunken);
+  }
+
+  /* Loading on a phone: the first photo's place, edge to edge. */
+  .root[data-loading] .mosaic {
+    display: flex;
+  }
+
+  .root[data-loading] .placeholder[data-first] {
+    display: block;
+    inline-size: 100%;
+    aspect-ratio: 4 / 3;
+  }
+
+  /* A laptop and up: the mosaic, in the page's large corners. */
+  @media (width >= 1024px) {
+    .track,
+    .counter {
+      display: none;
+    }
+
+    .mosaic {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: var(--space-8);
+      block-size: calc(var(--size-bar) * 9);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+    }
+
+    .root[data-loading] .mosaic {
+      display: grid;
+    }
+
+    .placeholder {
+      display: block;
+    }
+
+    .root[data-loading] .placeholder[data-first] {
+      aspect-ratio: auto;
+    }
+
+    .mosaic > [data-first] {
+      grid-row: 1 / span 2;
+    }
+
+    .mosaic[data-count='1'] {
+      grid-template-columns: 1fr;
+    }
+
+    .mosaic[data-count='2'] {
+      grid-template-columns: 2fr 1fr;
+    }
+
+    .mosaic[data-count='2'] > :last-child {
+      grid-row: 1 / span 2;
+    }
+
+    .mosaic[data-count='3'] {
+      grid-template-columns: 2fr 1fr;
+    }
+
+    .mosaic[data-count='4'] > :last-child {
+      grid-column: 2 / span 2;
+    }
+
+    .all {
+      display: flex;
+      position: absolute;
+      inset-block-end: var(--space-16);
+      inset-inline-end: var(--space-16);
+    }
+  }
+
+  /* The viewer's photo: as large as the window lets it, whole, centred; a swipe across it moves on. */
+  .large {
+    display: flex;
+    justify-content: center;
+    touch-action: pan-y;
+  }
+
+  .largePicture {
+    max-inline-size: 100%;
+    max-block-size: calc(100dvb - var(--size-bar) * 5);
+    inline-size: auto;
+    block-size: auto;
+    border-radius: var(--radius-md);
+    object-fit: contain;
+    user-select: none;
+    animation: reveal var(--duration-popover) var(--ease-out) both;
+  }
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .picture,
+    .largePicture {
+      animation: none;
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .tile:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

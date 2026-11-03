@@ -742,6 +742,14 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       restoreResource: os.hospitality.restoreResource.handler(notServed),
       deleteResource: os.hospitality.deleteResource.handler(notServed),
     },
+    businessPage: {
+      page: os.businessPage.page.handler(notServed),
+      claimHandle: os.businessPage.claimHandle.handler(notServed),
+      save: os.businessPage.save.handler(notServed),
+      setPlaceSlug: os.businessPage.setPlaceSlug.handler(notServed),
+      publish: os.businessPage.publish.handler(notServed),
+      discard: os.businessPage.discard.handler(notServed),
+    },
     // Account sessions (spec 0033) are driven against their own fake in `account/sessions.test.ts`.
     account: {
       sessions: {

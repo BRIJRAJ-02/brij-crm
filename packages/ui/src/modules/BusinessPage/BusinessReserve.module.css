@@ -1,0 +1,35 @@
+/* Reserve a table (spec 0066, AC-6642): the page's one primary. Until the flow lands, the disabled button carries a
+   small "Coming soon" pill at its end, and a quiet line under it says how to book meanwhile. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .soon {
+    position: relative;
+    display: flex;
+  }
+
+  .badge {
+    position: absolute;
+    inset-block-start: calc(var(--space-8) * -1);
+    inset-inline-end: var(--space-8);
+    padding: 0 var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--surface-inverse);
+    color: var(--on-inverse);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    pointer-events: none;
+  }
+
+  .note {
+    margin: 0;
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    color: var(--text-secondary);
+    text-align: center;
+  }
+}

@@ -115,7 +115,10 @@ export interface PublicClientOptions {
  * The plain calls the public clients make to `/api/public/booking/*`: each
  * failure a DataError with the API's code, being offline `API_UNAVAILABLE`.
  */
-export function publicCaller(options: PublicClientOptions, area: 'booking' | 'handles' | 'profiles' = 'booking') {
+export function publicCaller(
+  options: PublicClientOptions,
+  area: 'booking' | 'handles' | 'profiles' | 'business' = 'booking',
+) {
   const send = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const now = options.now ?? Date.now;
   const base = `${options.origin}/api/public/${area}`;
