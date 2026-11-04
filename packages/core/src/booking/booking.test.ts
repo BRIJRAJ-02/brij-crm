@@ -297,6 +297,8 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
   it('says the notice its times keep, as the slots read keeps it, and nothing when there is none', async () => {
     const w = await workspace();
     const { page, entry } = await livePage(w);
+    // A new page keeps 4 hours' notice (bookings lane O), and the public page says so before any edit.
+    expect(await getPublicBookingPage(entry)).toMatchObject({ minNoticeMinutes: 240 });
     await updateBookingPage(w.owner, { pageId: page.id, settings: { minNoticeMinutes: 240 } });
     const facts = await getPublicBookingPage(entry);
     expect(facts).toMatchObject({ minNoticeMinutes: 240, windowDays: 60 });
