@@ -1,6 +1,6 @@
 // The data journey's edges (CRM flow pass, 30 October 2026): a board column's "+" opens New deal with its stage
 // set; the view bar's Import / Export menu; Match columns guarding a required field nobody matched and asking
-// which way round a date column's dates are; Open trash from the view menu and ⌘K; and ⌘K's page actions.
+// which way round a date column's dates are; Open trash from the object's ⋯ and ⌘K; and ⌘K's page actions.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { addPerson, newWorkspace } from './people.ts';
@@ -69,9 +69,11 @@ test.describe('the data journey’s edges', () => {
       .locator('input[type="file"]')
       .setInputFiles({ name: 'deals.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
 
-    // Name is required and no column fills it: said here, and Continue waits.
+    // Name is required and no column fills it: a quiet row until Continue is pressed, then an error, and the step stays.
+    await expect(page.getByText('Name needs a column')).toBeVisible();
+    await expect(page.getByText('Name is required')).toBeHidden();
+    await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page.getByText('Name is required')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
     await page.getByRole('button', { name: /Match a column to Name/u }).click();
     await page.getByRole('option', { name: 'Label' }).click();
     await expect(page.getByText('Name is required')).toBeHidden();
@@ -86,13 +88,13 @@ test.describe('the data journey’s edges', () => {
     await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
 
-  test('the trash is a step away: the view menu’s Open trash, and ⌘K', async ({ page }) => {
+  test('the trash is a step away: the object’s ⋯ Open trash, and ⌘K', async ({ page }) => {
     test.setTimeout(120_000);
     const tag = randomUUID().slice(0, 8);
     const slug = `datatrash-${tag}`;
     await newWorkspace(page, `datatrash-${tag}@example.com`, slug);
     await page.goto(`/w/${slug}/objects/people`);
-    await page.getByRole('button', { name: 'All People', exact: true }).first().click();
+    await page.getByRole('button', { name: 'People actions' }).click();
     await page.getByRole('menuitem', { name: 'Open trash' }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash`));
 

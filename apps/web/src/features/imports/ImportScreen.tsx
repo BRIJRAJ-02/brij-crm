@@ -49,7 +49,6 @@ import {
   Table,
   type TableColumn,
   type TextContext,
-  Tooltip,
   TopBar,
   useFormatSettings,
 } from '@crm/ui';
@@ -96,7 +95,7 @@ import {
   type ReadChoices,
   type ReadRows,
 } from './rows.ts';
-import { unmatchedRequired } from './required.ts';
+import { columnsBlock, requiredTone, unmatchedRequired } from './required.ts';
 import { n, strings } from './strings.ts';
 
 /** Props for the import page: what its route loaded through the data layer. */
@@ -1175,7 +1174,7 @@ export function ImportScreen({
     </PageColumn>
   );
 
-  return <WorkspacePage currentObject={object.apiSlug} page={{ topBar, body }} />;
+  return <WorkspacePage {...(into === undefined ? { currentObject: object.apiSlug } : {})} page={{ topBar, body }} />;
 }
 
 /** Props for the match columns step. */
@@ -1196,7 +1195,7 @@ interface ColumnsStepProps {
   /** The date columns whose values read either way round, each with its order and one value read by it. */
   readonly dates: readonly DateColumn[];
   readonly onDateOrder: (column: number, order: DateOrder) => void;
-  /** Required attributes no column fills and no default fills: each a danger row, and Continue waits. */
+  /** Required attributes no column fills and no default fills: each a quiet row, an error once Continue is pressed. */
   readonly required: readonly AttributeDefinition[];
   /** Rows matching no record make one (the default), so the required attributes need a column. */
   readonly isCreating: boolean;
@@ -1243,7 +1242,18 @@ function ColumnsStep({
   onBack,
   onContinue,
 }: ColumnsStepProps) {
-  const isMissingRequired = isCreating && required.length > 0;
+  // Checked when Continue is pressed, never before (the foolproof pass): until then an unmatched required field is a
+  // quiet row with its Match a column, and Continue is always there to press.
+  const [isTried, setTried] = useState(false);
+  const block = columnsBlock(matched, required, isCreating);
+  const shownBlock = isTried ? block : undefined;
+  const tryContinue = () => {
+    if (block !== undefined) {
+      setTried(true);
+      return;
+    }
+    onContinue();
+  };
   const freeColumns: readonly SelectItem[] = loaded.table.headers.flatMap((header, column) =>
     targets[column] === undefined
       ? [{ id: String(column), label: header === '' ? strings.newAttributeTitle(column) : header }]
@@ -1282,18 +1292,9 @@ function ColumnsStep({
       footer={
         <>
           <Button onPress={onBack}>{strings.chooseAnother}</Button>
-          {matched === 0 || isMissingRequired ? (
-            // Off until a column has somewhere to go and every required field has one, and says so on hover and focus.
-            <Tooltip content={matched === 0 ? strings.matchOneFirst : strings.matchRequiredFirst}>
-              <Button variant="primary" isDisabled>
-                {strings.continue}
-              </Button>
-            </Tooltip>
-          ) : (
-            <Button variant="primary" isPending={checked !== undefined} onPress={onContinue}>
-              {strings.continue}
-            </Button>
-          )}
+          <Button variant="primary" isPending={checked !== undefined} onPress={tryContinue}>
+            {strings.continue}
+          </Button>
         </>
       }
     >
@@ -1302,13 +1303,19 @@ function ColumnsStep({
           {error}
         </Callout>
       )}
-      {/* Guarded here, not at Start: a required field no column fills would refuse every new row. */}
+      {shownBlock === 'no-column' && (
+        <Callout tone="danger" isAnnounced>
+          {strings.matchOneFirst}
+        </Callout>
+      )}
+      {/* Guarded here, not at Start: a required field no column fills would refuse every new row. Quiet until
+          Continue is pressed with it unmatched, then an error. */}
       {isCreating &&
         required.map((attribute) => (
           <Callout
             key={`required-${attribute.id}`}
-            tone="danger"
-            isPolite
+            tone={requiredTone(shownBlock === 'required')}
+            {...(shownBlock === 'required' ? { isAnnounced: true } : {})}
             {...(choices.some((choice) => choice.attribute.id === attribute.id) && freeColumns.length > 0
               ? {
                   actions: (
@@ -1327,7 +1334,9 @@ function ColumnsStep({
                 }
               : {})}
           >
-            {strings.requiredMissing(attribute.title)}
+            {shownBlock === 'required'
+              ? strings.requiredMissing(attribute.title)
+              : strings.requiredUnmatched(attribute.title)}
           </Callout>
         ))}
       {required.length > 0 && <Checkbox label={strings.updateOnly} isSelected={!isCreating} onChange={onUpdateOnly} />}
