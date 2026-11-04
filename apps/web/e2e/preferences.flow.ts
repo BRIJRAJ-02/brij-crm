@@ -47,9 +47,7 @@ test('Preferences: the start page and its Undo, and the date format kept on the 
   });
 
   await page.goto(`/w/${slug}/settings/account/preferences`);
-  // Preferences is a tab of Profile (4 November 2026): the bar's h1 names the item, the tab the page.
-  await expect(page.getByRole('heading', { level: 1, name: 'Profile' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Preferences' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { level: 1, name: 'Preferences' })).toBeVisible();
   await checkScreen(page, 'preferences');
 
   // The start page: Tasks, then opening the workspace lands there.

@@ -55,7 +55,7 @@ interface SettingsPageBase {
   /**
    * On a page that is one tab of a settings entry (Members' Teams), what the page adds to the entry's tab bar,
    * which SettingsPage draws itself: a count on its own tab, its tools at the bar's end, and one tab of its own
-   * beside it (Members' Joining), which the page shows in place of its body while chosen.
+   * beside it (Members' Invitations), which the page shows in place of its body while chosen.
    */
   readonly tabBar?: SettingsTabBar;
   /** Under the tab bar, the body's sections a breath below it (the default), or a Table flush on its hairline. */
@@ -69,7 +69,7 @@ export interface SettingsTabBar {
   readonly count?: number;
   /** The page's tools at the bar's end (Members' search), or atop the body when there is no bar. */
   readonly end?: ReactNode;
-  /** One more tab, right after the page's own, that the page fills itself (Members' Joining). */
+  /** One more tab, right after the page's own, that the page fills itself (Members' Invitations). */
   readonly extra?: { readonly id: string; readonly label: string; readonly count?: number };
   /** Whether `extra` is the chosen tab. */
   readonly isExtraSelected?: boolean;
@@ -137,7 +137,7 @@ export function SettingsPage({
   const access = useMyAccess();
   const navigate = useNavigate();
   // The entry this page is a tab of, as this member sees it, and only on the tab's own address (a role's page, under
-  // Members › Roles, has its trail instead).
+  // Roles and access, has its trail instead).
   const entry = inFrame
     ? undefined
     : tabbedEntry(
@@ -246,8 +246,8 @@ function tabbedEntry(entry: SettingsNavEntry | undefined, pathname: string): Set
 }
 
 /**
- * The tab bar of an entry that holds several pages (Members · Teams · Roles; the owner, 4 November 2026): one strip
- * under the bar, each tab its own address, the page's body in its tab, and a page's own extra tab (Joining) beside it.
+ * The tab bar of an entry that holds several pages (Members · Teams; Roles · Sign in rules; 5 November 2026): one strip
+ * under the bar, each tab its own address, the page's body in its tab, and a page's own extra tab (Invitations) beside it.
  */
 function EntryTabs({
   entry,

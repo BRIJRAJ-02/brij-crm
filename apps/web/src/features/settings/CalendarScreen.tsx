@@ -216,7 +216,7 @@ function AccountCalendars({
         </Callout>
       )}
       {/* Only when no main calendar was listed: the main one is always in use. */}
-      {shown.length === 0 && <EmptyState layout="row" icon="calendar" title={strings.noneInUse} />}
+      {shown.length === 0 && <EmptyState icon="calendar" title={strings.noneInUse} />}
     </>
   );
 }
@@ -326,7 +326,7 @@ function AccountCard({
             {strings.calendarsFailed}
           </Callout>
         ) : calendars.length === 0 ? (
-          <EmptyState layout="row" icon="calendar" title={strings.noCalendars} />
+          <EmptyState icon="calendar" title={strings.noCalendars} />
         ) : (
           <AccountCalendars account={connection.accountEmail} calendars={calendars} actions={actions} />
         )}

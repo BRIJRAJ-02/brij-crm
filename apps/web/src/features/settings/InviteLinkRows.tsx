@@ -2,7 +2,7 @@
 // Purpose: let an owner or admin share one link anyone can join the workspace through (spec 0031, AC-818).
 // Main task: turn the link on, copy it, and (folded under Link settings) limit how long and how many; reset or turn it
 // off (both ask first).
-// The first Card of Members › Joining › Other ways to join, Company email's after it.
+// The first Card of Members › Invitations › Other ways to join, Company email's after it.
 // Leaves out: guests (slice 9), email domains (the row after it), and who joined (the Members tab).
 import { INVITE_LINK_DAYS, isDataError, type DataLayer, type InviteLinkDays, type InviteLinkView } from '@crm/data';
 import { Button, Callout, Disclosure, Field, Select, SettingsRow, sharedStrings, Switch, type Toasts } from '@crm/ui';

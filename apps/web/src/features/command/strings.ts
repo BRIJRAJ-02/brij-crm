@@ -66,7 +66,7 @@ export const strings = {
   calendarsTerms: ['calendar', 'calendars', 'google', 'outlook', 'microsoft', 'sync', 'connect'],
   roundRobinTerms: ['rotation', 'rotations', 'team', 'share out', 'distribution'],
   objectsTerms: ['attributes', 'fields', 'columns', 'schema'],
-  /** Account › Sign in and devices answers to what people call it elsewhere (it was Security). */
+  /** Account › Sign in and security answers to what people call it elsewhere (it was Security). */
   signInTerms: ['security', 'password', 'two factor', 'sessions', 'devices', 'sign out'],
   /** Actions (AC-1086, AC-1087). */
   create: (singular: string) => `Create a ${singular.toLocaleLowerCase()}`,

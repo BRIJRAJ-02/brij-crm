@@ -2,7 +2,7 @@
 // Purpose: Settings › Workspace › Members (spec 0031, AC-803, AC-810, AC-811): who is in the workspace, what each can
 // do, and who is invited.
 // Main task: find someone by name or email; owners and admins change roles, remove people and invite, answer
-// requests to join, resend or cancel invitations, and set the invite link and company email (the Joining tab); an
+// requests to join, resend or cancel invitations, and set the invite link and company email (the Invitations tab); an
 // owner hands the workspace on; a step down (to Guest above all) asks first; everyone reads who is in, a guest
 // without anyone's email.
 // Leaves out: leaving (the workspace menu's), teams and roles (their own pages), and a role for the invite link.
@@ -155,7 +155,7 @@ const SEARCH_WAIT_MS = 250;
 /** The message a refusal shows, in the server's words when it gave any. */
 const messageOf = (error: unknown) => (isDataError(error) ? error.message : sharedStrings.couldntDoThat);
 
-/** The Members page: Members and Joining tabs, the Invite dialog and the confirms. */
+/** The Members page: Members and Invitations tabs, the Invite dialog and the confirms. */
 export function MembersScreen({
   data,
   toasts,
@@ -179,8 +179,8 @@ export function MembersScreen({
   const [isInviting, setInviting] = useState(false);
   // The request being approved: its Approve spins and its Decline waits, so one press makes one decision.
   const [approving, setApproving] = useState<string | undefined>(undefined);
-  // The tab shown: the search belongs to the Members tab alone. It opens on Joining while someone waits to join,
-  // since join requests send no other notice (the Joining count alone can't tell them from invitations).
+  // The tab shown: the search belongs to the Members tab alone. It opens on Invitations while someone waits to join,
+  // since join requests send no other notice (the Invitations count alone can't tell them from invitations).
   const [tab, setTab] = useState(() => (requests.length > 0 ? 'joining' : 'members'));
   // The invitations whose Resend is on its way: their row's menu waits for the answer.
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
@@ -425,7 +425,7 @@ export function MembersScreen({
     setRemoving(member);
   };
 
-  // The dialog says who was invited; the Joining tab reads them in behind it.
+  // The dialog says who was invited; the Invitations tab reads them in behind it.
   const invited = () => {
     void reload();
   };
@@ -795,7 +795,7 @@ export function MembersScreen({
     <SettingsPage
       title={strings.title}
       tabBody="table"
-      // Members' own tab carries the count and the search; Joining sits beside it in the same strip, for those who
+      // Members' own tab carries the count and the search; Invitations sits beside it in the same strip, for those who
       // may invite (the owner, 4 November 2026: Members, Teams and Roles as one item, one row of tabs).
       tabBar={{
         count: page.total,
@@ -966,7 +966,7 @@ export function MembersScreen({
  * them (or the note), the search, and skeleton rows.
  */
 export function MembersPending() {
-  // Joining only for those who get it, so nothing moves when the page arrives.
+  // Invitations only for those who get it, so nothing moves when the page arrives.
   const canInvite = useCan('members.invite');
   const canManage = useCan('members.manage');
   const searchField = (
@@ -993,7 +993,7 @@ export function MembersPending() {
     <SettingsPage
       title={strings.title}
       tabBody="table"
-      // Joining's place in the strip and the search hold while the page loads, so nothing moves when it arrives.
+      // Invitations' place in the strip and the search hold while the page loads, so nothing moves when it arrives.
       tabBar={{
         end: searchField,
         ...(canInvite ? { extra: { id: 'joining', label: strings.joiningTab } } : {}),

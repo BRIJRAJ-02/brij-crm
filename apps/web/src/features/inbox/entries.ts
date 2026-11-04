@@ -70,7 +70,7 @@ export function targetOf(
   objectSlugs: ReadonlyMap<string, string>,
 ): NotificationTarget {
   if (view.taskId !== undefined) return { kind: 'task', taskId: view.taskId };
-  // Members opens on Joining while someone waits, where Approve and Decline are.
+  // Members opens on Invitations while someone waits, where Approve and Decline are.
   if (view.joinRequestId !== undefined) return { kind: 'href', href: membersSettingsHref(slug) };
   // Someone changed the reader's scheduling (spec 0037, AC-1264): their hours, where the change shows.
   if (view.kind === 'scheduling_changed') return { kind: 'href', href: availabilityHref(slug) };

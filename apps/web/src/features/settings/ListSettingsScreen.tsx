@@ -76,13 +76,20 @@ function GeneralTab({
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const [isArchiving, setArchiving] = useState(false);
   const canManage = list.canManage;
-  const isChanged = name.trim() !== list.name || icon !== list.icon || hue !== list.hue;
-
-  const save = () => {
-    if (isBusy || name.trim() === '') return;
+  // One save model (critic A #8, 5 November 2026): the name saves when the field is left or Enter is pressed, the
+  // icon and colour as they are picked, each with its toast; no Save button in the card.
+  const commit = (next: { readonly name?: string; readonly icon?: ObjectIcon; readonly hue?: Hue }) => {
+    const nextName = (next.name ?? name).trim();
+    if (nextName === '') {
+      setName(list.name);
+      return;
+    }
+    const nextIcon = next.icon ?? icon;
+    const nextHue = next.hue ?? hue;
+    if (nextName === list.name && nextIcon === list.icon && nextHue === list.hue) return;
     setBusy(true);
     setProblem(undefined);
-    data.lists.update(slug, list.id, { name: name.trim(), icon, hue }).then(
+    data.lists.update(slug, list.id, { name: nextName, icon: nextIcon, hue: nextHue }).then(
       (saved) => {
         setBusy(false);
         toasts.toast({ tone: 'success', message: listStrings.saved(saved.name) });
@@ -113,17 +120,33 @@ function GeneralTab({
             label={listStrings.nameColumn}
             value={name}
             onChange={setName}
+            onBlur={() => {
+              commit({ name });
+            }}
+            onSubmit={() => {
+              commit({ name });
+            }}
             maxLength={100}
-            isReadOnly={!canManage}
+            isReadOnly={!canManage || isBusy}
             {...(problem === undefined ? {} : { error: problem })}
           />
-          <ObjectIconButton icon={icon} hue={hue} onChange={setIcon} isReadOnly={!canManage} />
-          <ObjectHueField hue={hue} onChange={setHue} isReadOnly={!canManage} />
-          {canManage && (
-            <Button variant="primary" isPending={isBusy} isDisabled={!isChanged} onPress={save}>
-              {listStrings.save}
-            </Button>
-          )}
+          <ObjectIconButton
+            icon={icon}
+            hue={hue}
+            onChange={(next) => {
+              setIcon(next);
+              commit({ icon: next });
+            }}
+            isReadOnly={!canManage}
+          />
+          <ObjectHueField
+            hue={hue}
+            onChange={(next) => {
+              setHue(next);
+              commit({ hue: next });
+            }}
+            isReadOnly={!canManage}
+          />
         </Card>
       </SettingsSection>
       <Card>

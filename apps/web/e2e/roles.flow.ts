@@ -1,7 +1,7 @@
 // What each role can do (flow walks, phase 5, 29 October 2026): the guide sits folded in the Invite dialog, on Member,
 // since that is the role an invitation gives; switching to Member shows less, an area opened says what the role can't
-// do. Members' header lost its own guide button on 4 November 2026: Roles is the tab beside Members now (the dashboard
-// IA brief, approved by the owner). Both widths: a phone reads the same guide in the same order.
+// do. Members' header lost its own guide button on 4 November 2026: Roles is its own entry, People › Roles and access
+// (5 November 2026). Both widths: a phone reads the same guide in the same order.
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { newWorkspace } from './people.ts';
@@ -14,9 +14,9 @@ test('the role guide sits folded in Invite on Member, switches, and opens an are
   await page.goto(`/w/${slug}/settings/members`);
   await expect(page.getByRole('heading', { level: 1, name: 'Members' })).toBeVisible();
 
-  // One header action: Invite. Roles is a tab beside Members.
+  // One header action: Invite. Roles is its own entry in Settings' People group.
   await expect(page.getByRole('button', { name: 'What each role can do' })).toHaveCount(0);
-  await expect(page.getByRole('tab', { name: 'Roles' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Roles and access' })).toBeAttached();
 
   // The Invite dialog: the same guide, folded, on Member.
   await page.getByRole('button', { name: 'Invite people' }).first().click();

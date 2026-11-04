@@ -121,7 +121,7 @@ function defaultSummary(days: readonly ChartDay[], format: Formatters): string {
 
 /**
  * A console page whose read was refused or failed: not a super admin (Settings' "nothing here"), two factor
- * missing (a way to Account, Sign in and devices), a session not proven with the app lately (confirm it's you,
+ * missing (a way to Account, Sign in and security), a session not proven with the app lately (confirm it's you,
  * here), or anything else (Retry).
  */
 export function AdminFailed({
