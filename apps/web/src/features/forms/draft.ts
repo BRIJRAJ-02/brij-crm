@@ -290,17 +290,31 @@ export function savableDraft(document: FormDocument, saved: FormDocument): FormD
       };
 }
 
-/** The questions with each unfinished Show when back at the server's (or none): the same list when all are done. */
+/**
+ * The questions with each unfinished Show when back at the server's (or none), and unfinished jumps (One at a time)
+ * left out: the same list when all are done.
+ */
 function savableQuestions(
   questions: FormDocument['questions'],
   saved: FormDocument['questions'],
 ): FormDocument['questions'] {
-  if (questions.every((question) => question.showWhen === undefined || isSavable(question.showWhen))) return questions;
+  const isDone = (question: FormDocument['questions'][number]) =>
+    (question.showWhen === undefined || isSavable(question.showWhen)) &&
+    (question.jumps ?? []).every((jump) => isSavable(jump.when));
+  if (questions.every(isDone)) return questions;
   return questions.map((question) => {
-    if (question.showWhen === undefined || isSavable(question.showWhen)) return question;
-    const kept = saved.find((each) => each.id === question.id)?.showWhen;
-    const { showWhen: _draft, ...rest } = question;
-    return kept === undefined ? rest : { ...rest, showWhen: kept };
+    if (isDone(question)) return question;
+    const { showWhen, jumps, ...rest } = question;
+    const kept =
+      showWhen === undefined || isSavable(showWhen)
+        ? showWhen
+        : saved.find((each) => each.id === question.id)?.showWhen;
+    const done = (jumps ?? []).filter((jump) => isSavable(jump.when));
+    return {
+      ...rest,
+      ...(kept === undefined ? {} : { showWhen: kept }),
+      ...(done.length === 0 ? {} : { jumps: done }),
+    };
   });
 }
 

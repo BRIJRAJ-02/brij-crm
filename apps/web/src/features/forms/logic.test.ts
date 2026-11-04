@@ -301,3 +301,57 @@ describe('one click suggestions (T41)', () => {
     expect(logicSuggestions(stepped, [], words)).toEqual([]);
   });
 });
+
+describe('One at a time: each question’s own rules (AC-6313)', () => {
+  const TEAM = q('team', 'short_text', 'Team');
+  it('finds a question nobody reaches, a rule back up the form, and a rule an earlier one catches', () => {
+    const budget: FormQuestion = {
+      ...BUDGET,
+      jumps: [
+        {
+          when: { join: 'all', rules: [{ key: 'budget', op: 'is_any_of', value: ['Under $1k', '$5k', '$10k+'] }] },
+          to: { step: 'notes' },
+        },
+        { when: { join: 'all', rules: [{ key: 'budget', op: 'is', value: '$5k' }] }, to: { step: 'team' } },
+      ],
+    };
+    const notes: FormQuestion = {
+      ...NOTES,
+      jumps: [{ when: { join: 'all', rules: [{ key: 'notes', op: 'is_answered' }] }, to: { step: 'budget' } }],
+    };
+    const problems = logicProblems(doc([NAME, budget, TEAM, notes], { layout: 'conversational' }));
+    expect(problems).toContainEqual({ kind: 'unreachable', place: { kind: 'question', questionId: 'team' } });
+    expect(problems).toContainEqual({
+      kind: 'shadowed',
+      place: { kind: 'questionJump', questionId: 'budget', index: 1 },
+      winner: 1,
+    });
+    expect(problems).toContainEqual({
+      kind: 'backward',
+      place: { kind: 'questionJump', questionId: 'notes', index: 0 },
+    });
+  });
+
+  it('judges question rules only with One at a time, and counts them', () => {
+    const budget: FormQuestion = {
+      ...BUDGET,
+      jumps: [{ when: { join: 'all', rules: [{ key: 'budget', op: 'is', value: 'Nope' }] }, to: { step: 'notes' } }],
+    };
+    expect(logicProblems(doc([budget, NOTES]))).toEqual([]);
+    expect(logicProblems(doc([budget, NOTES], { layout: 'conversational' }))).toEqual([
+      { kind: 'never', place: { kind: 'questionJump', questionId: 'budget', index: 0 } },
+    ]);
+    expect(logicCount(doc([budget, NOTES], { layout: 'conversational' }))).toBe(1);
+  });
+
+  it('Test it walks a question’s rule past the questions it skips', () => {
+    const budget: FormQuestion = {
+      ...BUDGET,
+      jumps: [
+        { when: { join: 'all', rules: [{ key: 'budget', op: 'is', value: 'Under $1k' }] }, to: { step: 'notes' } },
+      ],
+    };
+    const path = testPath(doc([budget, TEAM, NOTES], { layout: 'conversational' }), { budget: 'Under $1k' });
+    expect([...path.asked].sort()).toEqual(['budget', 'notes']);
+  });
+});

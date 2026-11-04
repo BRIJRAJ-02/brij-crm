@@ -47,7 +47,7 @@ import {
   type QuestionListItem,
   type Toasts,
 } from '@crm/ui';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   addPreset,
   changeQuestion,
@@ -66,7 +66,17 @@ import {
   type QuestionChange,
   type Questions,
 } from './questions.ts';
-import { addJump, changeJump, idOfTarget, jumpChoices, nextStepName, removeJump, targetOfId } from './jumps.ts';
+import {
+  addJump,
+  changeJump,
+  idOfTarget,
+  jumpChoices,
+  nextQuestionName,
+  nextStepName,
+  questionJumpChoices,
+  removeJump,
+  targetOfId,
+} from './jumps.ts';
 import {
   changeStep,
   fromItems,
@@ -174,13 +184,19 @@ export interface QuestionsSectionProps {
    * the list deletes it as usual.
    */
   readonly onRemoveUsed?: (question: FormQuestion, index: number) => boolean;
+  /**
+   * An empty list starts with one new question, its words focused (a Blank form, spec 0063, AC-6323: "the cursor in
+   * the first question"), once, as the list mounts. Escape before typing takes it away again, as with any new one.
+   */
+  readonly startsWithQuestion?: boolean;
 }
 
 /** Where a logic warning is: a question, a step, or a step's rule by its place. */
 export type LogicPlaceRef =
   | { readonly kind: 'question'; readonly questionId: string }
   | { readonly kind: 'step'; readonly stepId: string }
-  | { readonly kind: 'jump'; readonly stepId: string; readonly index: number };
+  | { readonly kind: 'jump'; readonly stepId: string; readonly index: number }
+  | { readonly kind: 'questionJump'; readonly questionId: string; readonly index: number };
 
 /** A form's step dividers, as the questions section draws and changes them. */
 export interface StepsProps {
@@ -205,6 +221,10 @@ const STEP_ROW = 'step:';
 const AFTER_ROW = 'after-step:';
 const afterOfRow = (rowId: string) => (rowId.startsWith(AFTER_ROW) ? rowId.slice(AFTER_ROW.length) : undefined);
 const stepOfRow = (rowId: string) => (rowId.startsWith(STEP_ROW) ? rowId.slice(STEP_ROW.length) : undefined);
+/** One at a time: a question's rules row, right under it ("After this question"). */
+const AFTER_QUESTION_ROW = 'after-question:';
+const afterQuestionOfRow = (rowId: string) =>
+  rowId.startsWith(AFTER_QUESTION_ROW) ? rowId.slice(AFTER_QUESTION_ROW.length) : undefined;
 
 /** Where it goes' two choices that are not a field: a new field made on Save, and the answer kept off the CRM. */
 const CREATE = 'create';
@@ -434,6 +454,16 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     setFresh((before) => new Set([...before, id]));
     opened(id);
   };
+  // A Blank form opens on its first question, ready to type (once, as the list mounts).
+  const hasStarted = useRef(false);
+  const startFirst = useEffectEvent(() => {
+    if (hasStarted.current || props.startsWithQuestion !== true || questions.length > 0 || isReadOnly) return;
+    hasStarted.current = true;
+    addAt('short_text');
+  });
+  useEffect(() => {
+    startFirst();
+  }, []);
   const addPresetAt = (key: string) => {
     const preset = QUESTION_PRESETS.find((each) => each.key === key);
     if (preset === undefined || isFull) return;
@@ -543,6 +573,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   // breaks kept in the document for the day Steps is chosen again.
   const flow: Flow | undefined = breaks === undefined ? undefined : { questions, steps: breaks.steps };
   const isStepped = breaks?.layout === 'steps' && flow !== undefined;
+  // One at a time (spec 0063, AC-6313): each question is a screen of its own, so each carries its own rules.
+  const isOneByOne = breaks?.layout === 'conversational';
   const places = flow === undefined ? new Map<string, { number: number; count: number }>() : stepPlaces(flow);
   // A stepped form whose first questions have no header of their own (one made before Steps split forms at once):
   // they still read as Step 1, under a header that makes its break the moment it is renamed or given logic.
@@ -588,8 +620,15 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       ];
   // A step's rules sit under its last question (critique c, 7: read after the questions they read), as a note row:
   // "After this step: If … → …, Otherwise → …".
+  // With One at a time a question's rules sit right under it, the same note row: "After this question: If … → …".
   const items: readonly QuestionListItem[] = !isStepped
-    ? headed
+    ? !isOneByOne
+      ? headed
+      : headed.flatMap((item): QuestionListItem[] => {
+          const question = questions.find((each) => each.id === item.id);
+          if (question === undefined || (question.jumps?.length ?? 0) === 0) return [item];
+          return [item, { id: `${AFTER_QUESTION_ROW}${question.id}`, kind: 'note', label: strings.afterQuestion }];
+        })
     : headed.flatMap((item, at): QuestionListItem[] => {
         const next = headed[at + 1];
         if (item.kind === 'step' || (next !== undefined && next.kind !== 'step')) return [item];
@@ -647,10 +686,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
    */
   const gapFor = (rowId: string): ReactNode => {
     const at = items.findIndex((item) => item.id === rowId);
-    if (at <= 0 || isFull) return null;
+    // A question's rules belong to it: nothing goes between them, and the gap under them adds after both.
+    if (at <= 0 || isFull || afterQuestionOfRow(rowId) !== undefined) return null;
     const previous = items[at - 1];
     // After a step's rules the next gap belongs to the next step: the end of this one is the gap above its rules.
-    if (previous?.kind === 'note') return null;
+    if (previous?.kind === 'note' && afterQuestionOfRow(previous.id) === undefined) return null;
     const noteOf = afterOfRow(rowId);
     if (noteOf !== undefined) {
       const ahead = items.slice(at + 1).find((item) => item.kind === undefined || item.kind === 'question');
@@ -828,6 +868,34 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     };
   };
 
+  /**
+   * Add logic on a question with One at a time (one click, as on a step): a ready rule reading this question, sending
+   * people past the next question (where everyone goes anyway) to the one after it, or to an ending, or to an ending
+   * made for it. Undefined when it could do nothing, so the menu leaves it out.
+   */
+  const addQuestionLogic = (question: FormQuestion): (() => void) | undefined => {
+    if (!isOneByOne || isReadOnly || question.answerType === 'hidden') return undefined;
+    const at = questions.findIndex((each) => each.id === question.id);
+    const facts = questionFacts(questions.slice(0, at + 1));
+    const jumps = question.jumps ?? [];
+    if (facts.length === 0 || jumps.length >= STEP_JUMPS_MAX) return undefined;
+    const offered = questionJumpChoices(questions, breaks.endings ?? [], question.id);
+    const choices = offered.slice(offered[0]?.id.startsWith('step:') === true ? 1 : 0);
+    if (choices.length === 0 && breaks.onAddEnding === undefined) return undefined;
+    return () => {
+      const first = choices[0];
+      const ending = first === undefined ? breaks.onAddEnding?.() : undefined;
+      const target = first === undefined ? (ending === undefined ? undefined : { ending }) : targetOfId(first.id);
+      if (target === undefined) return;
+      const when = storedShowWhen(readyConditions(facts, new Set([question.key])));
+      onChange((before) => {
+        const now = before.find((each) => each.id === question.id);
+        return changeQuestion(before, question.id, { jumps: addJump(now?.jumps ?? [], target, when) }, liveIds);
+      });
+      focusOn(`${question.id}:jump:${String(jumps.length)}`);
+    };
+  };
+
   /** A step header's ⋯: Rename, Add logic, Show only if…, and Merge with the step above. */
   const stepMenu = (rowId: string) => {
     const stepId = stepOfRow(rowId);
@@ -994,6 +1062,35 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           }
         : {})}
       renderOpen={(id) => {
+        const ruledId = afterQuestionOfRow(id);
+        if (ruledId !== undefined) {
+          const at = questions.findIndex((each) => each.id === ruledId);
+          const question = questions[at];
+          if (question === undefined || breaks === undefined) return null;
+          const nextName = nextQuestionName(questions, ruledId);
+          return (
+            <JumpRules
+              keyBase={ruledId}
+              heading={strings.afterQuestion}
+              goneText={strings.jumpGoneQuestion}
+              jumps={question.jumps ?? []}
+              // A question's rules decide once it is answered, so they read it and every question before it.
+              readable={questions.slice(0, at + 1)}
+              choices={questionJumpChoices(questions, breaks.endings ?? [], ruledId)}
+              {...(nextName === undefined ? {} : { nextName })}
+              isReadOnly={isReadOnly}
+              refFor={refFor}
+              focusOn={focusOn}
+              onChange={(jumps) => {
+                onChange((before) =>
+                  changeQuestion(before, ruledId, { jumps: jumps.length === 0 ? null : [...jumps] }, liveIds),
+                );
+              }}
+              onAddRule={addQuestionLogic(question)}
+              warnings={(index) => warningsAt({ kind: 'questionJump', questionId: ruledId, index })}
+            />
+          );
+        }
         const afterId = afterOfRow(id);
         const stepId = stepOfRow(id) ?? afterId;
         if (stepId !== undefined) {
@@ -1126,6 +1223,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           SCORED_TYPES.includes(question.answerType);
         // How they heard about you (spec 0067, AC-6703): a form's one choice or short text question.
         const canBeSource = props.keptWith === 'submission' && SOURCE_ANSWER_TYPES.has(question.answerType);
+        // One at a time: Add logic, while it has no rules (once it has, + Add a rule sits under them).
+        const addLogic = (question.jumps?.length ?? 0) > 0 ? undefined : addQuestionLogic(question);
         const filing = filingChoices(question);
         return (
           <MenuTrigger>
@@ -1147,6 +1246,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                 if (key === 'points') {
                   onChange((before) => changeQuestion(before, id, { points: startingPoints(question) }, liveIds));
                 }
+                if (key === 'logic') addLogic?.();
                 if (key === 'source') onChange((before) => markSource(before, id, question.source !== true));
                 if (key === 'duplicate') {
                   const copy = newId();
@@ -1159,6 +1259,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               {canShowIf && (
                 <MenuItem id="show" icon="eye">
                   {strings.showOnlyIf}
+                </MenuItem>
+              )}
+              {addLogic !== undefined && (
+                <MenuItem id="logic" icon="git-branch">
+                  {strings.addLogic}
                 </MenuItem>
               )}
               {filing !== undefined && (
@@ -1237,9 +1342,14 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               }
               if (breaks !== undefined) {
                 // Headers aren't drawn: a question moves among questions, and the breaks keep the order the
-                // document needs (each at its question, in the questions' order).
+                // document needs (each at its question, in the questions' order). One at a time's rules rows
+                // hold places of their own: the move counts without them.
+                const notes = items
+                  .filter((item) => item.id !== id)
+                  .slice(0, index)
+                  .filter((item) => item.kind === 'note').length;
                 breaks.onChange((before) => {
-                  const moved = { ...before, questions: moveQuestion(before.questions, id, index) };
+                  const moved = { ...before, questions: moveQuestion(before.questions, id, index - notes) };
                   return fromItems(moved, itemsOf(moved));
                 });
                 return;
@@ -1994,7 +2104,12 @@ function readableBy(flow: Flow, stepId: string): readonly FormQuestion[] {
 
 /** Props for a step's jumps. */
 interface JumpRulesProps {
-  readonly stepId: string;
+  /** What its focus keys start with: `step:<id>` for a step's rules, the question's id for a question's. */
+  readonly keyBase: string;
+  /** The heading over the rules: After this step, or After this question. */
+  readonly heading?: string;
+  /** Said over a rule whose target the form no longer has below it. */
+  readonly goneText?: string;
   readonly jumps: readonly FormJump[];
   /** What a jump's conditions may read: the questions up to and including this step's own. */
   readonly readable: readonly FormQuestion[];
@@ -2019,7 +2134,9 @@ interface JumpRulesProps {
  * With no rules, nothing is drawn: Add logic in the card's footer adds a ready one.
  */
 function JumpRules({
-  stepId,
+  keyBase,
+  heading = strings.logic,
+  goneText = strings.jumpGone,
   jumps,
   readable,
   choices,
@@ -2034,14 +2151,14 @@ function JumpRules({
   if (jumps.length === 0) return null;
   const facts = questionFacts(readable);
   return (
-    <FieldGroup label={strings.logic}>
+    <FieldGroup label={heading}>
       <SettingsStack variant="nested">
         {jumps.map((jump, index) => {
           const chosen = idOfTarget(jump.to);
           const isGone = !choices.some((choice) => choice.id === chosen);
           return (
             <SettingsStack key={String(index)} variant="nested">
-              {isGone && <Callout tone="danger">{strings.jumpGone}</Callout>}
+              {isGone && <Callout tone="danger">{goneText}</Callout>}
               {warnings(index).map((warning) => (
                 <Callout key={warning} tone="warning">
                   {warning}
@@ -2053,7 +2170,7 @@ function JumpRules({
                 facts={facts}
                 name={strings.jumpNumber(index + 1)}
                 isReadOnly={isReadOnly}
-                firstRef={refFor(`step:${stepId}:jump:${String(index)}`)}
+                firstRef={refFor(`${keyBase}:jump:${String(index)}`)}
                 onChange={(when) => {
                   onChange(changeJump(jumps, index, { when: storedShowWhen(when) }));
                 }}
@@ -2067,7 +2184,7 @@ function JumpRules({
                           label={strings.removeJump(index + 1)}
                           onPress={() => {
                             onChange(removeJump(jumps, index));
-                            focusOn(`step:${stepId}:menu`);
+                            focusOn(`${keyBase}:menu`);
                           }}
                         />
                       ),
@@ -2156,7 +2273,7 @@ function StepEditor({
   if (part === 'after') {
     return (
       <JumpRules
-        stepId={step.id}
+        keyBase={`step:${step.id}`}
         jumps={step.jumps ?? []}
         readable={readable}
         choices={jumpTargets}

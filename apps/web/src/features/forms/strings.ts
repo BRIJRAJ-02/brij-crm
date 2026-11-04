@@ -28,8 +28,10 @@ export const strings = {
   manageOnly: 'Only members who manage forms can change it',
   createFailed: 'Couldn’t make the form.',
 
-  // The template gallery (spec 0063, AC-6323): New form opens it, and each tile makes a draft at once.
+  // The template gallery (spec 0063, AC-6323; 5 November 2026: pick one, see it beside the list, then use it).
   galleryTitle: 'Start a form',
+  /** The gallery's one primary, naming the template it makes. */
+  galleryUse: (name: string) => `Use ${name}`,
   /** Said in the title bar, and announced politely, while a template is being turned into a draft. */
   galleryMakingOne: (name: string) => `Making your ${name}…`,
   /** What the blank template is called in that line, when the tiles never loaded and only Blank is reachable. */
@@ -147,8 +149,10 @@ export const strings = {
   square: 'Square',
   /** The look's third axis (spec 0063, AC-6327): the workspace's brand kit, or the product's own colours. */
   theme: 'Colours',
-  themeBrand: 'Brand colours',
-  themePlain: 'Plain colours',
+  themeBrand: 'Workspace brand',
+  themePlain: 'Plain',
+  /** The one button over the preview that holds the look (5 November 2026): Colour, Corners and Colours. */
+  design: 'Design',
   /** Said under Brand colours while the workspace has neither a colour nor a logo saved. */
   themeBrandEmpty: 'Add your logo and colour in Settings › Brand.',
   /** The workspace logo over the form reads as nothing: the headline beside it already names the form. */
@@ -466,8 +470,6 @@ export const strings = {
       ? `${count(done, 'submission', 'submissions')} added to the CRM.`
       : `${count(done, 'submission', 'submissions')} added, ${String(refused)} failed.`,
   jobFailed: (label: string) => `${label} didn’t finish. See why in Settings › Background jobs.`,
-  syncOld: 'Sync earlier submissions',
-  syncOldText: 'Save earlier submissions the way the form saves now',
   syncStarted: 'Syncing earlier submissions. You can keep working.',
   syncDone: (done: number, refused: number) =>
     refused === 0
@@ -603,6 +605,8 @@ export const strings = {
   flowEveryone: 'Everyone',
   flowThisStep: 'This step',
   flowQuestions: 'Questions',
+  /** One at a time: a card for one question's rules in the Logic map. */
+  flowAfterQuestion: (question: string) => `After ${question}`,
   flowNoRules: 'No rules here: everyone goes on.',
   flowEmptyTitle: 'No questions yet',
   flowEmpty: 'Add a question to give it logic.',

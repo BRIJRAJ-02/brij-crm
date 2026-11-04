@@ -234,6 +234,11 @@ export const strings = {
   jumpToEnding: (place: number, heading: string) =>
     heading.trim() === '' ? `Thank-you message ${String(place)}` : `Thank-you message: ${heading.trim()}`,
   jumpGone: 'This jump no longer points to a step below this one. Choose where it goes.',
+  /** One at a time: a question as a jump's target, after "→": "Question 4 · Budget". */
+  jumpToQuestion: (place: number, label: string) => `Question ${String(place)} · ${label}`,
+  jumpGoneQuestion: 'This jump no longer points to a question below this one. Choose where it goes.',
+  /** One at a time: the heading over a question's rules, and its rules row under it. */
+  afterQuestion: 'After this question',
   jumpsFull: (most: number) => `A step holds ${String(most)} jumps.`,
   jumpsNoAnswers: 'This step has no answers to jump on yet.',
   points: 'Points',

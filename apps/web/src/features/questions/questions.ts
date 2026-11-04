@@ -160,6 +160,8 @@ export interface QuestionChange {
   readonly options?: Partial<NonNullable<FormQuestion['options']>>;
   /** What its answers are worth (spec 0063, AC-6316): new points, or null for none. */
   readonly points?: FormQuestion['points'] | null;
+  /** With One at a time (spec 0063, AC-6313): its rules, "After this question", or null for none. */
+  readonly jumps?: FormQuestion['jumps'] | null;
 }
 
 /**
@@ -185,7 +187,16 @@ export function changeQuestion(
       }
       return question;
     }
-    const { filedOn, showWhen: shownWhen, kept: wasKept, options: hadOptions, points: hadPoints, ...rest } = question;
+    const {
+      filedOn,
+      showWhen: shownWhen,
+      kept: wasKept,
+      options: hadOptions,
+      points: hadPoints,
+      jumps: hadJumps,
+      ...rest
+    } = question;
+    const jumps = change.jumps === null ? undefined : (change.jumps ?? hadJumps);
     const merged = Object.fromEntries(
       Object.entries({ ...hadOptions, ...change.options }).filter(
         ([, value]: [string, unknown]) => value !== undefined && value !== '',
@@ -242,6 +253,7 @@ export function changeQuestion(
       ...(showWhen === undefined ? {} : { showWhen }),
       ...(options === undefined ? {} : { options }),
       ...(points === undefined ? {} : { points: points === 'value' ? points : [...points] }),
+      ...(jumps === undefined || jumps.length === 0 ? {} : { jumps: [...jumps] }),
     };
   });
   return renamedKeys(questions, changed).reduce((list, [from, to]) => renameShowWhen(list, from, to), changed);
@@ -282,21 +294,31 @@ export function renamedKeys(before: Questions, after: Questions): readonly (read
   });
 }
 
-/** The list with every Show when condition reading `from` reading `to` instead (spec 0043). */
+/**
+ * The list with every Show when condition reading `from` reading `to` instead (spec 0043), and each question's jumps
+ * (One at a time) too: their conditions, and a jump to the question whose key it was.
+ */
 export function renameShowWhen(questions: Questions, from: string, to: string): FormQuestion[] {
-  return questions.map((question) =>
-    question.showWhen === undefined
-      ? question
-      : {
-          ...question,
-          showWhen: {
-            ...question.showWhen,
-            rules: question.showWhen.rules.map((condition) =>
-              condition.key === from ? { ...condition, key: to } : condition,
-            ),
-          },
-        },
-  );
+  const renamed = <T extends { readonly rules: readonly { readonly key: string }[] }>(when: T): T => ({
+    ...when,
+    rules: when.rules.map((condition) => (condition.key === from ? { ...condition, key: to } : condition)),
+  });
+  return questions.map((question) => {
+    const { showWhen, jumps } = question;
+    if (showWhen === undefined && jumps === undefined) return question;
+    return {
+      ...question,
+      ...(showWhen === undefined ? {} : { showWhen: renamed(showWhen) }),
+      ...(jumps === undefined
+        ? {}
+        : {
+            jumps: jumps.map((jump) => ({
+              when: renamed(jump.when),
+              to: 'step' in jump.to && jump.to.step === from ? { step: to } : jump.to,
+            })),
+          }),
+    };
+  });
 }
 
 /** The attributes a question of `answerType` may be filed on, in their order. */
