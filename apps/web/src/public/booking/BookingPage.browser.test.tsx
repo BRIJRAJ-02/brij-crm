@@ -179,8 +179,8 @@ describe('a next times chip’s time (spec 0061, AC-6110)', () => {
     openAt(`?at=${encodeURIComponent(start)}&len=30`);
     show();
     await loaded();
-    await loaded();
-    expect(host?.textContent).toContain('Your name');
+    // The slots read waits on the link hash first, so the form can land a few promises after the second read.
+    await vi.waitFor(() => expect(host?.textContent).toContain('Your name'));
   });
 
   it('says a time that has gone since, over the other times, and asks nothing of the visitor', async () => {
