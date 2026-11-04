@@ -79,6 +79,8 @@ let shown: InApp | undefined;
 const used: string[] = [];
 /** What Delete and Undo asked the server for, in order. */
 const calls: string[] = [];
+/** Whether the small export is refused as too large, so the job takes it. */
+let exportTooLarge = false;
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -89,6 +91,7 @@ afterEach(() => {
   shown = undefined;
   used.length = 0;
   calls.length = 0;
+  exportTooLarge = false;
 });
 
 async function show(open: SubmissionView | undefined, spamCount = 2) {
@@ -106,6 +109,22 @@ async function show(open: SubmissionView | undefined, spamCount = 2) {
         calls.push(`delete ${submissionId}`);
         return Promise.resolve({ deleted: true });
       },
+      exportNow: () => {
+        calls.push('exportNow');
+        if (exportTooLarge) {
+          const error = Object.assign(new Error('More than 1,000 submissions export in the background.'), {
+            name: 'DataError',
+            code: 'JOB_TOO_LARGE',
+          });
+          return Promise.reject(error);
+        }
+        return Promise.resolve({ fileName: 'Talk to us - submissions.csv', csv: 'a,b\r\n' });
+      },
+      export: () => {
+        calls.push('export');
+        return new Promise(() => undefined);
+      },
+      newId: () => '0199f0a0-0000-7000-8000-0000000000ee',
       restore: (_slug: string, submissionId: string) => {
         calls.push(`restore ${submissionId}`);
         return Promise.resolve(open);
@@ -189,5 +208,15 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     } finally {
       await page.viewport(1280, 900);
     }
+  });
+
+  it('saves a small export at once, and sends a large one to the background (forms fixes 2)', async () => {
+    await show(undefined);
+    await userEvent.click(page.getByRole('button', { name: /Export/ }));
+    await expect.element(page.getByText('Saved Talk to us - submissions.csv.')).toBeVisible();
+    expect(calls).toEqual(['exportNow']);
+    exportTooLarge = true;
+    await userEvent.click(page.getByRole('button', { name: /Export/ }));
+    await expect.poll(() => calls).toEqual(['exportNow', 'exportNow', 'export']);
   });
 });
