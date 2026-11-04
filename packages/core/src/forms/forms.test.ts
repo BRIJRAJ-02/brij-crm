@@ -59,6 +59,7 @@ import {
   resolveSubmission,
   retrySubmission,
   useNewAnswer,
+  undoUseNewAnswer,
 } from './submissions.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -1241,6 +1242,14 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(await refusalOf(useNewAnswer(w.scope, { submissionId: submission.id, questionId: 'title' }))).toMatchObject([
       { code: 'FORM_STATE' },
     ]);
+    // Undo (forms fixes 2): the value before comes back, the answer reads as kept again, and only once.
+    const undone = await undoUseNewAnswer(w.scope, { submissionId: submission.id, questionId: 'title' });
+    expect(undone.kept).toEqual([{ questionId: 'name' }, { questionId: 'title' }]);
+    const [back] = await getRecords(w.scope, { ids: [existing.recordId] });
+    expect(back?.values[w.attribute('people.job_title')]).toBe('Countess');
+    expect(
+      await refusalOf(undoUseNewAnswer(w.scope, { submissionId: submission.id, questionId: 'title' })),
+    ).toMatchObject([{ code: 'FORM_STATE' }]);
   });
 
   it('adds a returning visitor’s new phone number to the list, keeping the old one (forms fix a4)', async () => {

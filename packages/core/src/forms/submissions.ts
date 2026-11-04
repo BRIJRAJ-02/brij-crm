@@ -25,8 +25,8 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import * as z from 'zod';
 import { checkId } from '../engine/ids.ts';
 import { queueFormWebhooks } from '../webhooks/queue.ts';
-import { readRecords } from '../engine/records.ts';
-import { loadAttributes, loadAttributesById } from '../engine/values.ts';
+import { readRecords, updateRecord } from '../engine/records.ts';
+import { currentItems, loadAttributes, loadAttributesById } from '../engine/values.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -38,7 +38,14 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { withdrawSubmissionNotices } from '../notifications/notify.ts';
 import { UNKNOWN_FORM } from './forms.ts';
-import { FORMS_PROCESS, fileOntoRecord, requiredFieldFailure, siteFieldFailure } from './process.ts';
+import {
+  FORMS_PROCESS,
+  fileOntoRecord,
+  heldValues,
+  indexHeld,
+  requiredFieldFailure,
+  siteFieldFailure,
+} from './process.ts';
 import { canSeeForm, loadForm, loadForms, loadVersions, millis } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
@@ -742,20 +749,31 @@ export async function useNewAnswer(
       const question = version?.document.questions.find((each) => each.id === input.questionId);
       const objectId = version?.document.targets.main?.objectId;
       if (row === undefined || question === undefined || objectId === undefined) throw refuse('FORM_STATE', NOT_KEPT);
+      const attributes = await loadAttributes(tx, objectId);
+      // The record's value before, kept on the submission so Undo can put it back (forms fixes 2).
+      const filedOn =
+        question.filedOn?.objectRole === 'main' ? attributes.get(question.filedOn.attributeId) : undefined;
+      const held =
+        filedOn === undefined
+          ? null
+          : (heldValues(indexHeld(await currentItems(tx, [recordId], [filedOn.id])), recordId)(filedOn) ?? null);
       const filed = await fileOntoRecord(context, {
         recordId,
         questions: [{ ...question, update: 'always' }],
-        attributes: await loadAttributes(tx, objectId),
+        attributes,
         answers: record(row.answers),
       });
       const [refusal] = filed.refused;
       if (refusal !== undefined) throw refuse('FORM_STATE', refusal.message);
+      const used = { questionId: input.questionId, attributeId: filedOn?.id ?? null, before: held };
       await tx
         .update(formSubmissions)
         .set({
-          outcome: sql`jsonb_set(${formSubmissions.outcome}, '{kept}', coalesce((
+          outcome: sql`jsonb_set(jsonb_set(${formSubmissions.outcome}, '{kept}', coalesce((
             select jsonb_agg(item) from jsonb_array_elements(${formSubmissions.outcome}->'kept') item
-            where item->>'questionId' <> ${input.questionId}), '[]'::jsonb))`,
+            where item->>'questionId' <> ${input.questionId}), '[]'::jsonb)), '{usedNew}', coalesce((
+            select jsonb_agg(item) from jsonb_array_elements(coalesce(${formSubmissions.outcome}->'usedNew', '[]'::jsonb)) item
+            where item->>'questionId' <> ${input.questionId}), '[]'::jsonb) || ${JSON.stringify([used])}::jsonb)`,
           updatedAt: sql`now()`,
         })
         .where(eq(formSubmissions.id, before.id));
@@ -765,6 +783,61 @@ export async function useNewAnswer(
   );
   return result;
 }
+
+/** What Undo on Use new says when there is nothing to put back. */
+export const NOTHING_TO_UNDO = 'That answer was not changed from here, so there is nothing to put back.';
+
+/**
+ * Undo for Use new (forms fixes 2): puts back the value the record held before, through the member's own access, and
+ * the answer reads as kept off the record again. The value before is the one Use new kept on the submission.
+ */
+export async function undoUseNewAnswer(
+  scope: EngineScope,
+  input: { readonly submissionId: string; readonly questionId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const before = await viewIn(tx, scope, input.submissionId);
+      const recordId = before.mainRecord?.recordId;
+      const [row] = await tx
+        .select({ outcome: formSubmissions.outcome })
+        .from(formSubmissions)
+        .where(eq(formSubmissions.id, before.id))
+        .for('update');
+      const usedList = record(row?.outcome).usedNew;
+      const used = (Array.isArray(usedList) ? usedList : [])
+        .map((item) => UsedNew.safeParse(item))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []))
+        .find((item) => item.questionId === input.questionId);
+      if (recordId === undefined || used === undefined || used.attributeId === null) {
+        throw refuse('FORM_STATE', NOTHING_TO_UNDO);
+      }
+      const written = await context.perRecord((inner) =>
+        updateRecord(inner, { recordId, values: { [used.attributeId ?? '']: { value: used.before } } }),
+      );
+      if (!written.ok) throw refuse('FORM_STATE', written.refusals[0]?.message ?? NOTHING_TO_UNDO);
+      await tx
+        .update(formSubmissions)
+        .set({
+          outcome: sql`jsonb_set(jsonb_set(${formSubmissions.outcome}, '{usedNew}', coalesce((
+            select jsonb_agg(item) from jsonb_array_elements(${formSubmissions.outcome}->'usedNew') item
+            where item->>'questionId' <> ${input.questionId}), '[]'::jsonb)), '{kept}',
+            coalesce(${formSubmissions.outcome}->'kept', '[]'::jsonb) || ${JSON.stringify([{ questionId: input.questionId }])}::jsonb)`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(formSubmissions.id, before.id));
+      return viewIn(tx, scope, before.id);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** One Use new, as the submission keeps it for Undo. */
+const UsedNew = z.object({ questionId: z.string(), attributeId: z.string().nullable(), before: z.unknown() });
 
 /** How long a deleted submission can be put back before the daily cleanup removes it for good. */
 export const DELETED_SUBMISSIONS_KEPT_DAYS = 30;

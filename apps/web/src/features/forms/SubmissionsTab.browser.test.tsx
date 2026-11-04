@@ -98,6 +98,10 @@ async function show(open: SubmissionView | undefined, spamCount = 2) {
         used.push(questionId);
         return Promise.resolve(open);
       },
+      undoUseNewAnswer: (_slug: string, _submissionId: string, questionId: string) => {
+        used.push(`undo ${questionId}`);
+        return Promise.resolve(open);
+      },
       delete: (_slug: string, submissionId: string) => {
         calls.push(`delete ${submissionId}`);
         return Promise.resolve({ deleted: true });
@@ -146,6 +150,9 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     await expect.element(page.getByText('Grace Hopper already had a different answer here')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Use the new answer for Job title' }));
     expect(used).toEqual(['title']);
+    // Undo puts the record's value before back (forms fixes 2).
+    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+    await expect.poll(() => used).toEqual(['title', 'undo title']);
     await expect.element(page.getByRole('button', { name: 'Previous submission' })).toBeDisabled();
     (document.activeElement as HTMLElement | null)?.blur();
     await userEvent.keyboard('j');

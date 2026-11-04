@@ -7857,6 +7857,11 @@ export function createDataLayer({
       retry: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.retry({ workspace, submissionId, mutationId: mintId() }, options)),
       /** Use new (forms fix a4): writes one answer filing kept off the record over the record's value. */
+      /** Undo for Use new (forms fixes 2): the record's value before comes back. */
+      undoUseNewAnswer: (workspace: string, submissionId: string, questionId: string) =>
+        call((options) =>
+          api.submissions.undoUseNewAnswer({ workspace, submissionId, questionId, mutationId: mintId() }, options),
+        ),
       useNewAnswer: (workspace: string, submissionId: string, questionId: string) =>
         call((options) =>
           api.submissions.useNewAnswer({ workspace, submissionId, questionId, mutationId: mintId() }, options),

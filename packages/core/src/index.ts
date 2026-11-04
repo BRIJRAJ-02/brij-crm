@@ -844,6 +844,7 @@ export {
   retrySubmission,
   UNKNOWN_SUBMISSION,
   useNewAnswer,
+  undoUseNewAnswer,
 } from './forms/submissions.ts';
 export {
   attachUploads,

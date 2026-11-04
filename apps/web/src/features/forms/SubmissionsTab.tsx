@@ -263,7 +263,24 @@ export function SubmissionsTab({
     data.submissions.useNewAnswer(slug, submissionId, questionId).then(
       () => {
         setUsingNew(undefined);
-        toasts.toast({ tone: 'success', message: strings.usedNew });
+        // Undo puts the record's value before back, and the answer reads as kept again (forms fixes 2).
+        toasts.toast({
+          tone: 'success',
+          message: strings.usedNew,
+          action: {
+            label: strings.undo,
+            onAction: () => {
+              data.submissions.undoUseNewAnswer(slug, submissionId, questionId).then(
+                () => {
+                  void router.invalidate();
+                },
+                (error: unknown) => {
+                  toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+                },
+              );
+            },
+          },
+        });
         void router.invalidate();
       },
       (error: unknown) => {
