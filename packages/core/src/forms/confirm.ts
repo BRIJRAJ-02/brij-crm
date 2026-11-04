@@ -14,7 +14,8 @@
 // only leaves the email out.
 import { sql } from 'drizzle-orm';
 import { EmailAddress, EmailTimeZone, type EmailRow, type FormConfirmationEmail } from '@crm/contracts/emails';
-import { pathOf, recall, scoreOf, sendsConfirmation, type FormDocument } from '@crm/contracts';
+import { brandLogoPath, pathOf, recall, scoreOf, sendsConfirmation, type FormDocument } from '@crm/contracts';
+import { brandRowOf } from '../brand/brand.ts';
 import type { WorkspaceTx } from '@crm/db';
 import type { WriteContext } from '../engine/write.ts';
 import { queueFormConfirmation } from '../emails/queue.ts';
@@ -115,6 +116,9 @@ async function confirmOne(tx: WorkspaceTx, workspaceId: string, submissionId: st
   const subject = document.confirmation?.subject;
   const line = document.confirmation?.line;
   const headline = document.headline.trim();
+  // The workspace's logo heads the copy (forms fixes 2, critique b3), as the form's own page serves it.
+  const logoVersion = (await brandRowOf(tx, workspaceId))?.logoVersion ?? undefined;
+  const logoPath = logoVersion === undefined ? undefined : brandLogoPath('forms', form.publicKey, logoVersion);
   const params: FormConfirmationEmail = {
     formName: form.name.slice(0, 200),
     ...(headline === '' ? {} : { headline: recall(headline, { answers, score }).replace(/\s+/g, ' ').slice(0, 200) }),
@@ -124,6 +128,7 @@ async function confirmOne(tx: WorkspaceTx, workspaceId: string, submissionId: st
     answers: [...confirmationRows(document, answers)],
     submittedAt: row.received_at,
     ...(timeZone.success ? { timeZone: timeZone.data } : {}),
+    ...(logoPath === undefined ? {} : { logoPath }),
   };
   await queueFormConfirmation(tx, {
     submissionId,

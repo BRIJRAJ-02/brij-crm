@@ -2,6 +2,8 @@
 // know where it is read: "Monday 2 November 2026, 9:00 AM (Europe/London)".
 // The same wording as the booking emails' "When" line.
 
+import { zoneName as zoneSpoken } from '@crm/contracts/zones';
+
 /** The parts of a moment in a zone, from the runtime's own calendar data. */
 function parts(at: Date, zone: string, options: Intl.DateTimeFormatOptions, locale = 'en-GB') {
   const found = new Map<string, string>();
@@ -10,6 +12,9 @@ function parts(at: Date, zone: string, options: Intl.DateTimeFormatOptions, loca
   }
   return found;
 }
+
+/** A zone as a person says it: "London time", "UTC" (the public pages' words, `@crm/contracts/zones`). */
+const spokenZone = (zone: string): string => zoneSpoken(zone);
 
 /** A zone as a reader sees it: `Europe/London`, `America/New York`, `UTC`. */
 export function zoneName(zone: string): string {
@@ -37,6 +42,18 @@ export function formatTime(iso: string, zone = 'UTC'): string {
 /** "Monday 2 November 2026, 9:00 AM (Europe/London)": one moment. */
 export function formatMoment(iso: string, zone = 'UTC'): string {
   return `${formatDay(iso, zone)}, ${formatTime(iso, zone)} (${zoneName(zone)})`;
+}
+
+/**
+ * "Mon 2 Nov, 9:00 AM, London time": one moment, short (forms fixes 2, critique N2), for a line read at a glance (when
+ * a submission came in, until when a link works). The year shows only when it isn't `now`'s.
+ */
+export function formatShortMoment(iso: string, zone = 'UTC', now: Date = new Date(iso)): string {
+  const at = new Date(iso);
+  const day = parts(at, zone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const thisYear = parts(now, zone, { year: 'numeric' }).get('year');
+  const year = day.get('year') === thisYear ? '' : ` ${day.get('year') ?? ''}`;
+  return `${day.get('weekday') ?? ''} ${day.get('day') ?? ''} ${day.get('month') ?? ''}${year}, ${formatTime(iso, zone)}, ${spokenZone(zone)}`;
 }
 
 /** "Monday 2 November 2026, 9:00 AM to 9:30 AM (Europe/London)": a span on one day, as a booking's When line. */
