@@ -102,6 +102,12 @@
     padding-inline: var(--space-16);
   }
 
+  /* An end with nothing in it yet (a tab with no tools of its own, its portal slot empty) takes no room: on a phone
+     it wrapped under the tabs as an empty band (Bookings' Roster and Round robin, the bookings critique A14). */
+  .end:not(:has(> :not(:empty))) {
+    display: none;
+  }
+
   .tab {
     position: relative;
     display: inline-flex;

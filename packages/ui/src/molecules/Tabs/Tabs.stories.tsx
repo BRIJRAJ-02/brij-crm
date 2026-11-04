@@ -190,6 +190,30 @@ export const Bar: Story = {
   },
 };
 
+/**
+ * A bar whose tab has no tools yet, on a phone: its end is an empty portal slot, which takes no room, so no empty
+ * band wraps under the tabs (Bookings' Roster, the bookings critique A14).
+ */
+export const BarEmptyEndNarrow: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="phone">
+      <Tabs {...args} variant="bar" end={<div />}>
+        <TabPanel id="activity">Field changes, notes and emails, newest first.</TabPanel>
+        <TabPanel id="notes">12 notes.</TabPanel>
+        <TabPanel id="tasks">3 open tasks.</TabPanel>
+        <TabPanel id="files">No files.</TabPanel>
+      </Tabs>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const list = canvas.getByRole('tablist', { name: 'Record' });
+    const bar = list.parentElement;
+    const barHeight = getComputedStyle(document.documentElement).getPropertyValue('--size-bar').trim();
+    await expect(bar?.getBoundingClientRect().height).toBe(Number.parseFloat(barHeight));
+  },
+};
+
 /** On a phone: the tools take a row of their own under the tabs, and the search narrows to fit. */
 /** `feature`: a product's areas on its home page, equal columns with a tile, a label and a line each, the line on top. */
 export const Feature: Story = {

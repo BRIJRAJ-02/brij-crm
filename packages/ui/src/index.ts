@@ -135,6 +135,7 @@ export {
   type DateRangePickerProps,
   type MonthCalendarProps,
 } from './molecules/DatePicker/DatePicker.tsx';
+export { DateNav, weekRangeLabel, type DateNavProps } from './molecules/DateNav/DateNav.tsx';
 export {
   DescriptionList,
   type DescriptionItem,

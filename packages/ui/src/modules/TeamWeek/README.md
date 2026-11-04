@@ -30,7 +30,7 @@ The references (Mobbin, read again for the owner's "better UI" pass, 30 October 
 ```
 
 - Every cell has a whole `label` ("Monday 2 November, Sam Lee: 9:00 am to 5:00 pm, this date only"), which is what a screen reader hears; the drawn lines are hidden from it.
-- A day with `weekday` and `date` heads its column with the two apart, the date in a small circle that is the accent on `isToday` (as WeekCalendar marks today), its header in the link colour over an accent line; a screen reader hears the `label`, with ", today" on today. `isQuiet` tints the whole column a step off the page (the weekend), from its header through the footer of totals, which keeps the band under the pointer too.
+- A day with `weekday` and `date` heads its column with the two apart, the date in a small circle that carries WeekCalendar's today mark on `isToday` (the link colour in a hairline accent ring, the one today mark), its header in the link colour over an accent line; a screen reader hears the `label`, with ", today" on today. `isQuiet` tints the whole column a step off the page (the weekend), from its header through the footer of totals, which keeps the band under the pointer too.
 - `isEditable` with `renderEditor` makes a person's cells buttons; otherwise they are text. The screen decides (a past week, See only).
 - `badge` follows the week's hours on the line under the name, after a middle dot ("36 h · UTC+5:30"), only when given: the screen passes the zone's offset only when it differs from the reader's.
 - `extra` sits under the name (a Link to the person's schedules); `actions` at the cell's end (the row's menu), so it stays beside the name.
@@ -46,7 +46,7 @@ Editable: usual (the grey tag's surface with a `border-subtle` hairline), this d
 
 Rows are taller than Table's 34px (a 24px picture over two lines, the blocks `size-input` high with `space-6` above and below), on purpose: the owner found 34px rows cramped here.
 
-Today's date circle repeats WeekCalendar's look at `size-chip` rather than its `size-control`, since it sits in a 36px table header beside the weekday rather than over it; the two stay separate until a third use earns a shared DayNumber.
+Today's date circle repeats WeekCalendar's ring (one today mark across the grids, the bookings critique A13; it was a filled accent circle) at `size-chip` rather than its `size-control`, since it sits in a 36px table header beside the weekday rather than over it; the two stay separate until a third use earns a shared DayNumber.
 
 ## Keyboard
 
