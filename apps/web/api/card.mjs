@@ -42,6 +42,8 @@ const {
   handleOf,
   stripTree,
 } = await import('../card-image.ts');
+// @boundaries-ignore the Vercel Function entry runs on the server, not in the client bundle
+const { meetingLine } = await import('../handle-shell.ts');
 const { default: satori } = await import('satori');
 const { Resvg } = await import('@resvg/resvg-js');
 
@@ -113,10 +115,44 @@ async function chosenCard(origin, path) {
   }
 }
 
+/** A booking page's slug as the card's `s` takes it: the page's own address part, nothing else. */
+const SLUG = /^[a-z0-9][a-z0-9-]{0,59}$/;
+
+/**
+ * One booking page's public facts, by its handle and slug (critic C3): the title, the host, the lengths and the kind
+ * of place, or undefined when either read misses. Only what the page itself shows to anyone.
+ */
+async function pageOf(origin, handle, slug) {
+  try {
+    const address = await fetch(
+      `${origin}/api/public/handles/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`,
+      {
+        signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+        headers: { accept: 'application/json' },
+      },
+    );
+    if (!address.ok) return undefined;
+    const { publicKey } = await address.json();
+    if (typeof publicKey !== 'string') return undefined;
+    const facts = await fetch(`${origin}/api/public/booking/${encodeURIComponent(publicKey)}`, {
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+      headers: { accept: 'application/json' },
+    });
+    if (!facts.ok) return undefined;
+    const page = await facts.json();
+    return typeof page?.title === 'string' && typeof page?.hostName === 'string' ? page : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function GET(request) {
   const url = new URL(request.url);
   const handle = handleOf(url.pathname);
   if (handle === undefined) return new Response('Not found', { status: 404 });
+  // A booking page's own card (`?s=<slug>`, critic C3): the meeting over the host's face.
+  const slug = url.searchParams.get('s') ?? undefined;
+  if (slug !== undefined && !SLUG.test(slug)) return new Response('Not found', { status: 404 });
 
   let profile;
   try {
@@ -151,7 +187,10 @@ export async function GET(request) {
   const isStrip = url.pathname.endsWith('/pass-strip.png');
 
   // A picture its owner chose stands in for the whole card, and nothing below is drawn at all.
-  const chosen = profile === undefined || isStrip ? undefined : await chosenCard(url.origin, profile.shareImage);
+  const chosen =
+    profile === undefined || isStrip || slug !== undefined
+      ? undefined
+      : await chosenCard(url.origin, profile.shareImage);
   if (chosen !== undefined) {
     return new Response(chosen.bytes, {
       status: 200,
@@ -171,12 +210,22 @@ export async function GET(request) {
   const picture = profile === undefined ? undefined : await pictureOf(url.origin, profile.image);
   const loaded = await loadAssets();
 
-  const source = {
-    name,
-    handle: shown,
-    description: bio ?? DEFAULT_DESCRIPTION,
-    ...(picture === undefined ? {} : { picture }),
-  };
+  const meeting = slug === undefined || isStrip ? undefined : await pageOf(url.origin, handle, slug);
+  const source =
+    meeting === undefined
+      ? {
+          name,
+          handle: shown,
+          description: bio ?? DEFAULT_DESCRIPTION,
+          ...(picture === undefined ? {} : { picture }),
+        }
+      : {
+          // "Intro call with Ada Lovelace" over "30 min · Video call", with the host's face: what the link books.
+          name: `${meeting.title} with ${meeting.hostName}`,
+          handle: `${shown}/${slug}`,
+          description: meetingLine(meeting) ?? DEFAULT_DESCRIPTION,
+          ...(picture === undefined ? {} : { picture }),
+        };
   const width = isStrip ? STRIP_WIDTH : CARD_WIDTH;
   const svg = await satori(isStrip ? stripTree(source, loaded) : cardTree(source, loaded), {
     width,

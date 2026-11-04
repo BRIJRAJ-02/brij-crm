@@ -167,6 +167,34 @@ export interface ShellPage {
   readonly title?: unknown;
   readonly description?: unknown;
   readonly hostName?: unknown;
+  /** The page's lengths in minutes, the first its default (the page's own facts, read after its address). */
+  readonly durations?: unknown;
+  /** Where it happens: `{ type: 'video' | 'phone' | … }`. Only the kind is said, never a value. */
+  readonly location?: unknown;
+}
+
+/** The kinds of place a share preview names, in the booking page's own words; anything else is "In person". */
+const PLACE_WORDS: Readonly<Record<string, string>> = { video: 'Video call', phone: 'Phone call' };
+
+/**
+ * What a booking page's preview says under its title (critic C3, 4 November 2026): its length and the kind of call,
+ * "30 min · Video call", as the rail says it. Never an address the host typed, and nothing about any visitor.
+ */
+export function meetingLine(page: ShellPage): string | undefined {
+  const durations = Array.isArray(page.durations) ? page.durations : [];
+  const minutes = typeof durations[0] === 'number' && Number.isFinite(durations[0]) ? durations[0] : undefined;
+  const kind =
+    typeof page.location === 'object' && page.location !== null && 'type' in page.location
+      ? page.location.type
+      : undefined;
+  const place = typeof kind === 'string' ? (PLACE_WORDS[kind] ?? 'In person') : undefined;
+  const parts = [...(minutes === undefined ? [] : [`${String(minutes)} min`]), ...(place === undefined ? [] : [place])];
+  return parts.length === 0 ? undefined : parts.join(' · ');
+}
+
+/** A booking page's share card: its handle's card route, told which page (`s`), so it draws the meeting. */
+export function pageCardUrl(origin: string, handle: string, slug: string): string {
+  return `${origin}/api/public/handles/${encodeURIComponent(handle)}/card.png?s=${encodeURIComponent(slug)}`;
 }
 
 /** The id of the shell's boot block, which the public bundle reads before it asks the api anything. */
@@ -392,18 +420,25 @@ async function pageShell(handle: string, slug: string, deps: ShellDeps): Promise
   }
   const title = text(page.title);
   const host = text(page.hostName);
+  // "30 min · Video call", then the host's own note when there is one (critic C3).
+  const described = [meetingLine(page), text(page.description)].filter((part) => part !== undefined).join(' · ');
+  const found = { handle: text(page.handle) ?? handle, slug: text(page.slug) ?? slug };
   const source: MetaSource = {
     name: title ?? '',
-    // Named whole where there is a host to name: `titleOf` would otherwise add the product to it as well.
-    ...(title === undefined || host === undefined ? {} : { title: `${title} · ${host}` }),
+    // Named whole where there is a host to name ("Intro call with Ada Lovelace", as the tab and the share preview
+    // read it, critic C3): `titleOf` would otherwise add the product to it as well.
+    ...(title === undefined || host === undefined ? {} : { title: `${title} with ${host}` }),
     canonical,
     kind: 'website',
     indexable: false,
-    ...(text(page.description) === undefined ? {} : { description: text(page.description) }),
+    ...(described === '' ? {} : { description: described }),
+    // The meeting's own card (critic C3): the host's face over what the meeting is.
+    ...(deps.cardOrigin === undefined || title === undefined
+      ? {}
+      : { card: pageCardUrl(deps.cardOrigin, found.handle, found.slug) }),
   };
   const body = withMeta(deps.shell, source);
   const publicKey = text(page.publicKey);
-  const found = { handle: text(page.handle) ?? handle, slug: text(page.slug) ?? slug };
   return {
     body: publicKey === undefined ? body : withBoot(body, { kind: 'page', publicKey, ...found }),
     status: 200,

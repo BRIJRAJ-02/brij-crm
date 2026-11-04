@@ -12,6 +12,7 @@ import {
   lookOf,
   partsOf,
   shellFor,
+  meetingLine,
   withBoot,
   withLook,
   LOOK_LINK_ID,
@@ -95,7 +96,8 @@ describe('shellFor, a booking page’s own address', () => {
     const answer = await shellFor('/anish/intro', pageDeps());
     expect(answer.status).toBe(200);
     expect(answer.outcome).toBe('page');
-    expect(answer.body).toContain('<title>Intro call · Anish Rao</title>');
+    expect(answer.body).toContain('<title>Intro call with Anish Rao</title>');
+    expect(answer.body).toContain('<meta property="og:title" content="Intro call with Anish Rao" />');
     expect(answer.body).toContain('<meta name="description" content="Fifteen minutes, by video." />');
     expect(answer.body).toContain('<meta property="og:type" content="website" />');
     expect(answer.body).toContain('<link rel="canonical" href="https://timefix.com/anish/intro" />');
@@ -107,6 +109,38 @@ describe('shellFor, a booking page’s own address', () => {
       pageDeps({ readPage: () => Promise.resolve({ title: 'Intro call' }) }),
     );
     expect(answer.body).toContain('<title>Intro call · Timefix</title>');
+  });
+
+  it('says how long and what kind of call, and shows the meeting’s own card (critic C3)', async () => {
+    const answer = await shellFor(
+      '/anish/intro',
+      pageDeps({
+        cardOrigin: 'https://timefix.com',
+        readPage: () =>
+          Promise.resolve({
+            ...page,
+            handle: 'anish',
+            slug: 'intro',
+            durations: [30, 60],
+            location: { type: 'video' },
+          }),
+      }),
+    );
+    expect(answer.body).toContain(
+      '<meta property="og:description" content="30 min · Video call · Fifteen minutes, by video." />',
+    );
+    expect(answer.body).toContain(
+      '<meta property="og:image" content="https://timefix.com/api/public/handles/anish/card.png?s=intro" />',
+    );
+    expect(answer.body).toContain('<meta name="twitter:card" content="summary_large_image" />');
+  });
+
+  it('names a place by its kind alone, never an address the host typed', () => {
+    expect(meetingLine({ durations: [45], location: { type: 'in_person', value: '1 Main St' } })).toBe(
+      '45 min · In person',
+    );
+    expect(meetingLine({ location: { type: 'phone' } })).toBe('Phone call');
+    expect(meetingLine({})).toBeUndefined();
   });
 
   it('is never indexed on its own: a person’s page is the way in', async () => {
