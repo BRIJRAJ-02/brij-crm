@@ -4,7 +4,7 @@
 export const strings = {
   /** The page's title, and its entry in the settings navigation. */
   /** Not "Security": that is the workspace's page, and the sidebar showed it twice (the owner, 22 October 2026). */
-  title: 'Sign in and devices',
+  title: 'Sign in and security',
   devices: 'Signed in devices',
   /** Recent activity (AC-898): the last 90 days of the account's security events. */
   activity: {

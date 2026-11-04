@@ -1,56 +1,10 @@
-import { isDataError } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
-import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { AutomationsPending, AutomationsScreen } from '../features/automations/AutomationsScreen.tsx';
-import { strings } from '../features/automations/strings.ts';
-import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
-// Settings, Automations (parity #53): "when X, if Y, do Z" for owners and admins (`automations.manage`). The loader
-// warms the held list and run log, the objects and the members through the data layer; the screen holds them, so it
-// updates live as runs finish. Anyone without the permission finds nothing here.
+// Settings › Automations (parity #53) is parked (the owner, 4 November 2026: "if not built properly remove it
+// and add it to be built later"). Its screen and the server stay; the page is out of the navigation and ⌘K, and its
+// address opens where Settings opens, so a bookmark or an old link still lands somewhere real.
 export const Route = createFileRoute('/w/$slug/settings/automations')({
-  loader: async ({ context, params }) => {
-    try {
-      const access = await context.data.access.mine(params.slug);
-      if (!access.permissions.includes('automations.manage')) return { page: undefined };
-      const [objects, members, held] = await Promise.all([
-        context.data.objects.list(params.slug),
-        context.data.members.list(params.slug),
-        context.data.automations.open(params.slug),
-      ]);
-      await held.ready();
-      return { page: { held, objects, members } };
-    } catch (error) {
-      // The frame above shows "workspace not found" for this one.
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined };
-      throw error;
-    }
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: '/w/$slug/settings/account/profile', params: { slug: params.slug }, replace: true });
   },
-  pendingComponent: () => (
-    <LoadingNow>
-      <AutomationsPending />
-    </LoadingNow>
-  ),
-  errorComponent: AutomationsError,
-  component: AutomationsRoute,
 });
-
-function AutomationsRoute() {
-  const { page } = Route.useLoaderData();
-  const { slug } = Route.useParams();
-  const { data } = Route.useRouteContext();
-  if (page === undefined) return <SettingsMissing backTo="home" />;
-  return <AutomationsScreen data={data} slug={slug} held={page.held} objects={page.objects} members={page.members} />;
-}
-
-function AutomationsError({ error }: ErrorComponentProps) {
-  const router = useRouter();
-  return (
-    <SettingsFailed
-      title={strings.title}
-      heading={strings.failedTitle}
-      text={isDataError(error) ? error.message : strings.failedText}
-      onRetry={() => void router.invalidate()}
-    />
-  );
-}

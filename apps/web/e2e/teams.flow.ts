@@ -67,7 +67,8 @@ test.describe('teams and access', () => {
     await newWorkspace(page, `ada-${tag}@example.com`, slug);
 
     await page.goto(`/w/${slug}/settings/teams`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Teams' })).toBeVisible();
+    // Teams is a tab of Members (4 November 2026).
+    await expect(page.getByRole('tab', { name: 'Teams' })).toHaveAttribute('aria-selected', 'true');
     // Nothing yet: one way forward.
     await expect(page.getByText('No teams yet')).toBeVisible();
     await checkScreen(page, 'teams-empty');

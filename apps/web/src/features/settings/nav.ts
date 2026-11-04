@@ -6,12 +6,9 @@
 // settings route does with object-tabs.ts.
 import type { ObjectSummary, Permission } from '@crm/data';
 import { strings as listStrings } from '../lists/strings.ts';
-import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
+import { settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { historyHref } from './history-href.ts';
-import { strings as automations } from '../automations/strings.ts';
-import { strings as developer } from './developer-nav-strings.ts';
 import { strings as history } from './history-nav-strings.ts';
-import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
 import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
@@ -19,8 +16,6 @@ import { strings as brand } from './brand-strings.ts';
 import { strings as teams } from './teams-nav-strings.ts';
 import { strings as roles } from './roles-nav-strings.ts';
 import { strings as security } from './security-strings.ts';
-import { strings as webhooks } from './webhooks-strings.ts';
-import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
 import { navStrings as admin } from '../admin/nav-strings.ts';
@@ -32,7 +27,7 @@ export { HISTORY_TABS, historyHref, isHistoryTab, type HistoryTab } from './hist
 /** Settings, Objects. */
 export const objectsSettingsHref = (slug: string) => `/w/${slug}/settings/objects`;
 
-/** Settings › Workspace › Lists (spec 0048, AC-4828). */
+/** Settings › Data › Lists (spec 0048, AC-4828). */
 export const listsSettingsHref = (slug: string) => `/w/${slug}/settings/lists`;
 
 /** One list's settings tab (General by default), by the list's API name, so links survive renames (AC-4829). */
@@ -49,114 +44,133 @@ export const objectSettingsHref = (
   tab: ObjectTab = 'attributes',
 ) => `/w/${slug}/settings/objects/${object.apiSlug}/${tab}`;
 
-/** Settings › Account › Preferences (spec 0026): the interface theme. Where Settings opens. */
-export const preferencesHref = settingsHomeHref;
+/** Settings › Account › Profile (spec 0031, AC-821): the member's own name and picture. Where Settings opens. */
+export const profileHref = settingsHomeHref;
 
-/** Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and public profile. */
-export const profileHref = (slug: string) => `/w/${slug}/settings/account/profile`;
+/** Settings › Account › Preferences (spec 0026): the interface theme. */
+export const preferencesHref = (slug: string) => `/w/${slug}/settings/account/preferences`;
 
 /** Settings › Workspace › General (spec 0031, AC-822): the workspace's name, time zone and address, and its delete. */
 export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/general`;
 
-/** Settings › Workspace › Brand (spec 0060, AC-1): the logo and colour its booking pages and forms wear. */
+/** Settings › Workspace › Brand (spec 0060, AC-1): the logo, colour and template its booking pages and forms wear. */
 export const brandSettingsHref = (slug: string) => `/w/${slug}/settings/brand`;
-/** Settings › Workspace › Automations (parity #53): what the workspace does for itself. */
-export const automationsHref = (slug: string) => `/w/${slug}/settings/automations`;
 
-/** Settings › Workspace › Developer (parity #34): the workspace's API keys, for `api_keys.manage`. */
-export const developerHref = (slug: string) => `/w/${slug}/settings/developer`;
-
-/** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
+/** Settings › People › Members (spec 0031): who is in the workspace, and (its second tab) the invitations out. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
 
-/** Settings › Workspace › Teams (spec 0031, slice 8): the groups of people that access rules name. */
+/** Settings › People › Members › Teams (spec 0031, slice 8): the groups of people that access rules name. */
 export const teamsSettingsHref = (slug: string) => `/w/${slug}/settings/teams`;
 
-/** Settings › Workspace › Roles (spec 0037, AC-1239): every role and what it can do. */
+/** Settings › People › Roles and access (spec 0037, AC-1239): every role and what it can do. */
 export const rolesSettingsHref = (slug: string) => `/w/${slug}/settings/roles`;
 
 /** One role's page (spec 0037, AC-1240), by its id: a built in role's name, or a custom role's uuid. */
 export const roleHref = (slug: string, roleId: string) => `/w/${slug}/settings/roles/${roleId}`;
 
+/** Settings › People › Roles and access › Sign in rules (spec 0033, milestone 4): the workspace's, owners only. */
+export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/security`;
+
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
 
-/** Settings › Account › Scheduling access (spec 0037, AC-1266): who can see or manage the member's scheduling. */
-export const schedulingAccessHref = (slug: string) => `/w/${slug}/settings/account/scheduling`;
-
-/** Settings › Account › Sign in and devices (spec 0033): two factor, the devices signed in and recent activity. */
+/** Settings › Account › Sign in and security (spec 0033): two factor, the devices signed in and recent sign ins. */
 export const securitySettingsHref = (slug: string) => `/w/${slug}/settings/account/sign-in`;
 
-/** The settings navigation's pages: Account's, then Scheduling's and Workspace's. */
+/** Settings › Account › Calendars (specs 0024 and 0026): the one place a member connects and disconnects calendars. */
+export const calendarsSettingsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
+
+/** Settings › Scheduling › Availability (spec 0035): the member's schedules, the screen Bookings' tab shows too. */
+export const availabilitySettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/availability`;
+
+/** Settings › Scheduling › Round robin (spec 0029): the groups a booking is shared out between. */
+export const roundRobinSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/round-robin`;
+
+/** Settings › Scheduling › Routing (spec 0037, AC-1383): what every routed form and team page shares. */
+export const routingSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/routing`;
+
+/** Settings › Scheduling › Scheduling access (spec 0037, AC-1266): who can see or manage the member's scheduling. */
+export const schedulingAccessHref = (slug: string) => `/w/${slug}/settings/scheduling/access`;
+
+/** Settings › Super admin (spec 0047): Overview, or one of its pages. */
+export const adminHref = (slug: string, page?: 'users' | 'booking-pages' | 'website') =>
+  `/w/${slug}/settings/admin${page === undefined ? '' : `/${page}`}`;
+
+/** Every settings page the navigation knows, by id. */
 export type SettingsPageId =
   | 'profile'
   | 'preferences'
-  | 'security'
   | 'notifications'
-  | 'scheduling-access'
+  | 'security'
+  | 'calendars'
   | 'general'
   | 'brand'
+  | 'history'
   | 'members'
   | 'teams'
   | 'roles'
   | 'workspace-security'
-  | 'webhooks'
+  | 'availability'
+  | 'round-robin'
+  | 'routing'
+  | 'scheduling-access'
   | 'objects'
   | 'lists'
-  | 'jobs'
-  | 'automations'
-  | 'developer'
-  | 'history'
   | 'trash'
+  | 'jobs'
   | 'admin-overview'
   | 'admin-users'
   | 'admin-pages'
   | 'admin-website';
 
-/** Settings › Workspace › Webhooks (spec 0064): where bookings and form submissions are sent, owners and admins. */
-export const webhooksHref = (slug: string) => `/w/${slug}/settings/webhooks`;
+/** The settings navigation's groups, in order (spec 0026, AC-682; regrouped on 5 November 2026). */
+export type SettingsGroupId = 'account' | 'workspace' | 'people' | 'scheduling' | 'data' | 'admin';
 
-/** Settings › Workspace › Security (spec 0033, milestone 4): the workspace's sign in rules, owners only. */
-export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/security`;
+/** The icon an entry wears: each entry its own, so the phone's list never shows one twice. */
+export type SettingsIcon =
+  | 'user-round'
+  | 'sliders-horizontal'
+  | 'bell'
+  | 'shield-check'
+  | 'calendar'
+  | 'building'
+  | 'palette'
+  | 'clock'
+  | 'users'
+  | 'key'
+  | 'calendar-clock'
+  | 'refresh-cw'
+  | 'git-branch'
+  | 'eye'
+  | 'box'
+  | 'list'
+  | 'trash'
+  | 'chart-line'
+  | 'users-round'
+  | 'calendar-days'
+  | 'globe';
 
-/**
- * The settings navigation's groups, in order (spec 0026, AC-682). Scheduling is gone from here (25 October 2026):
- * Calendars and Round robin are tabs of Bookings, where the work is, and one booking page's or one form's
- * settings stay in its editor. What is left is a member's own account and the workspace itself.
- */
-export type SettingsGroupId = 'account' | 'workspace' | 'admin';
+/** One tab of a settings entry that holds several pages (Members' Teams): its own page and address. */
+export interface SettingsTab {
+  readonly id: SettingsPageId;
+  readonly label: string;
+  readonly href: string;
+  /** A permission the tab's page needs; absent, every member may open it. */
+  readonly requires?: Permission;
+  /** Not for a guest (spec 0031, slice 9). */
+  readonly notForGuests?: true;
+}
 
 /** One entry in the settings navigation. */
 export interface SettingsNavEntry {
   readonly id: SettingsPageId;
   readonly label: string;
   readonly href: string;
-  readonly icon:
-    | 'user-round'
-    | 'sliders-horizontal'
-    | 'shield-check'
-    | 'calendar'
-    | 'bell'
-    | 'building'
-    | 'users'
-    | 'lock'
-    | 'id-card'
-    | 'box'
-    | 'list'
-    | 'list-checks'
-    | 'zap'
-    | 'clock'
-    | 'users-round'
-    | 'trash'
-    | 'chart-line'
-    | 'calendar-days'
-    | 'calendar-clock'
-    | 'globe'
-    | 'plug'
-    | 'palette'
-    | 'code';
-  /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
+  readonly icon: SettingsIcon;
+  /** A quiet word after the name. */
   readonly meta?: string;
+  /** Other words a person may type into "Find a setting" for this page (2FA, password, logo). */
+  readonly keywords?: readonly string[];
   /** A permission the page needs before the member may open it at all; absent, every member may. */
   readonly requires?: Permission;
   /**
@@ -164,8 +178,14 @@ export interface SettingsNavEntry {
    * a workspace permission; the server checks every read on its own.
    */
   readonly operatorOnly?: true;
-  /** Not for a guest (spec 0031, slice 9): a page about scheduling, which guests have none of. */
+  /** Not for a guest (spec 0031, slice 9): a page about scheduling or the CRM's data, which guests have none of. */
   readonly notForGuests?: true;
+  /**
+   * The pages this one entry holds as tabs, the first being the entry's own (the owner, 4 November 2026). Each tab
+   * keeps its own address, so old links still land. `visibleSettingsNav` keeps the tabs the member may open, points
+   * the entry at the first, and names it after that tab when it is the only one.
+   */
+  readonly tabs?: readonly SettingsTab[];
 }
 
 /** One group of the settings navigation, under its label. */
@@ -176,14 +196,12 @@ export interface SettingsNavGroup {
 }
 
 /**
- * The settings navigation (spec 0026, AC-682): Account (Profile, spec 0031;
- * Preferences, Notifications, spec 0038), Scheduling (Calendars, 21 Oct 2026)
- * and Workspace (General and Members, spec 0031; Objects, Background jobs,
- * Trash). Every entry is a page in Settings: the Booking pages and Forms links into
- * Captures went on 20 Oct 2026, as neither has workspace wide settings yet
- * (each page's and each form's own settings live in its editor). Every
- * member may open each page but Round robin and Security: everyone reads
- * Members and Objects, sees their own jobs and the trash they may see.
+ * The settings navigation (spec 0026, AC-682), as decided on 5 November 2026 (the owner delegates the call): Account
+ * (the member's own, Calendars included), Workspace (what the whole workspace wears, and its History), People (who
+ * is in it and what they may do), Scheduling (the screens Bookings' tabs show, so every setting is under Settings),
+ * Data (Objects, Lists and Trash), then Super admin for operators. Webhooks, Automations, Developer and Background
+ * jobs stay parked out of the navigation until each is built properly; their addresses redirect, or (jobs) stay
+ * for the links already sent.
  */
 export function settingsNav(slug: string): readonly SettingsNavGroup[] {
   return [
@@ -191,19 +209,42 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
       id: 'account',
       label: strings.account,
       entries: [
-        // Profile first (spec 0031, AC-832): every member has one.
-        { id: 'profile', label: workspace.profileTitle, href: profileHref(slug), icon: 'user-round' },
-        { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
-        { id: 'security', label: security.title, href: securitySettingsHref(slug), icon: 'shield-check' },
-        { id: 'notifications', label: notifications.title, href: notificationSettingsHref(slug), icon: 'bell' },
-        // Who can see or manage the member's scheduling, and whose they reach (spec 0037, AC-1266): every member
-        // but a guest, who has no scheduling.
         {
-          id: 'scheduling-access',
-          label: schedulingAccess.title,
-          href: schedulingAccessHref(slug),
-          icon: 'calendar-clock',
+          id: 'profile',
+          label: workspace.profileTitle,
+          href: profileHref(slug),
+          icon: 'user-round',
+          keywords: ['name', 'photo', 'picture', 'avatar', 'public profile'],
+        },
+        {
+          id: 'preferences',
+          label: strings.preferences,
+          href: preferencesHref(slug),
+          icon: 'sliders-horizontal',
+          keywords: ['theme', 'dark', 'light', 'appearance'],
+        },
+        {
+          id: 'notifications',
+          label: notifications.title,
+          href: notificationSettingsHref(slug),
+          icon: 'bell',
+          keywords: ['email', 'alerts'],
+        },
+        {
+          id: 'security',
+          label: security.title,
+          href: securitySettingsHref(slug),
+          icon: 'shield-check',
+          keywords: ['two factor', '2fa', 'devices', 'sessions', 'sign ins', 'backup codes', 'google', 'sign out'],
+        },
+        // The one place to connect a calendar (5 November 2026); Bookings › Calendars shows the same screen.
+        {
+          id: 'calendars',
+          label: strings.calendars,
+          href: calendarsSettingsHref(slug),
+          icon: 'calendar',
           notForGuests: true,
+          keywords: ['google', 'outlook', 'microsoft', 'connect', 'sync'],
         },
       ],
     },
@@ -211,36 +252,123 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
       id: 'workspace',
       label: strings.workspace,
       entries: [
-        // General, then Members (spec 0031, AC-832): every member may open both; what they may change is the server's
-        // call.
-        { id: 'general', label: workspace.generalTitle, href: generalSettingsHref(slug), icon: 'building' },
-        // Brand (spec 0060): every member but a guest reads it (it dresses booking pages and forms, which guests
-        // have none of, spec 0031); owners and admins change it.
-        { id: 'brand', label: brand.navLabel, href: brandSettingsHref(slug), icon: 'palette', notForGuests: true },
-        { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
-        // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
-        { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round', notForGuests: true },
-        // Roles (spec 0037, AC-1239): every member reads them; making and changing them is for `access.manage`.
-        { id: 'roles', label: roles.title, href: rolesSettingsHref(slug), icon: 'id-card', notForGuests: true },
-        // The workspace's sign in rules (spec 0033): owners only, so nobody else sees the entry at all.
         {
-          id: 'workspace-security',
-          label: workspaceSecurity.navLabel,
-          href: workspaceSecurityHref(slug),
-          icon: 'lock',
-          requires: 'security.manage',
+          id: 'general',
+          label: workspace.generalTitle,
+          href: generalSettingsHref(slug),
+          icon: 'building',
+          keywords: ['name', 'address', 'time zone', 'url', 'delete workspace'],
         },
-        // Webhooks (spec 0064): `webhooks.manage` only, so nobody else sees the entry at all.
+        // Brand (spec 0060): every member but a guest reads it; owners and admins change it.
         {
-          id: 'webhooks',
-          label: webhooks.navLabel,
-          href: webhooksHref(slug),
-          icon: 'plug',
-          requires: 'webhooks.manage',
+          id: 'brand',
+          label: brand.navLabel,
+          href: brandSettingsHref(slug),
+          icon: 'palette',
           notForGuests: true,
+          keywords: ['logo', 'colour', 'color', 'template'],
         },
-        { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box', notForGuests: true },
-        // Lists (spec 0048, AC-4828): every member may open it; they see the lists they may read.
+        // History (spec 0046): the workspace's changes, for `audit.read` alone. Each member's own sign ins are in
+        // Account › Sign in and security.
+        {
+          id: 'history',
+          label: history.title,
+          href: historyHref(slug),
+          icon: 'clock',
+          requires: 'audit.read',
+          keywords: ['audit', 'log', 'changes', 'activity'],
+        },
+      ],
+    },
+    {
+      id: 'people',
+      label: strings.people,
+      entries: [
+        // Members, with Invitations (the screen's own tab) and Teams (spec 0031, slice 8).
+        {
+          id: 'members',
+          label: members.title,
+          href: membersSettingsHref(slug),
+          icon: 'users',
+          keywords: ['invite', 'invitations', 'invite link', 'remove member'],
+          tabs: [
+            { id: 'members', label: members.title, href: membersSettingsHref(slug) },
+            { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), notForGuests: true },
+          ],
+        },
+        // Roles (spec 0037, AC-1239) and the workspace's sign in rules (spec 0033): every member but a guest reads
+        // the roles; the rules are for owners (`security.manage`) alone.
+        {
+          id: 'roles',
+          label: strings.rolesAndAccess,
+          href: rolesSettingsHref(slug),
+          icon: 'key',
+          keywords: ['permissions', 'admin', 'owner', 'two factor', 'security', 'session length'],
+          tabs: [
+            { id: 'roles', label: roles.title, href: rolesSettingsHref(slug), notForGuests: true },
+            {
+              id: 'workspace-security',
+              label: strings.signInRules,
+              href: workspaceSecurityHref(slug),
+              requires: 'security.manage',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      // The screens Bookings' tabs show (spec 0037), here too so every setting is under Settings. One screen each;
+      // Bookings' tabs stay as shortcuts to them.
+      id: 'scheduling',
+      label: strings.scheduling,
+      entries: [
+        {
+          id: 'availability',
+          label: strings.availability,
+          href: availabilitySettingsHref(slug),
+          icon: 'calendar-clock',
+          notForGuests: true,
+          keywords: ['hours', 'schedule', 'working hours', 'time off', 'limits'],
+        },
+        {
+          id: 'round-robin',
+          label: strings.roundRobin,
+          href: roundRobinSettingsHref(slug),
+          icon: 'refresh-cw',
+          requires: 'booking.manage',
+          keywords: ['rotation', 'groups', 'team booking'],
+        },
+        {
+          id: 'routing',
+          label: strings.routing,
+          href: routingSettingsHref(slug),
+          icon: 'git-branch',
+          requires: 'routing.manage',
+          keywords: ['skills', 'decisions', 'routed forms'],
+        },
+        {
+          id: 'scheduling-access',
+          label: schedulingAccess.title,
+          href: schedulingAccessHref(slug),
+          icon: 'eye',
+          notForGuests: true,
+          keywords: ['manage', 'delegate', 'calendar access'],
+        },
+      ],
+    },
+    {
+      id: 'data',
+      label: strings.data,
+      entries: [
+        {
+          id: 'objects',
+          label: strings.objects,
+          href: objectsSettingsHref(slug),
+          icon: 'box',
+          notForGuests: true,
+          keywords: ['attributes', 'fields'],
+        },
+        // Lists (spec 0048, AC-4828): every member but a guest; they see the lists they may read.
         {
           id: 'lists',
           label: listStrings.settingsTitle,
@@ -248,28 +376,14 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           icon: 'list',
           notForGuests: true,
         },
-        // Automations (parity #53): for `automations.manage` alone, so nobody else sees the entry at all.
+        // The trash opens inside Settings (A120, 23 October 2026); ⌘K's Open trash reaches the same address.
         {
-          id: 'automations',
-          label: automations.navLabel,
-          href: automationsHref(slug),
-          icon: 'zap',
-          requires: 'automations.manage',
+          id: 'trash',
+          label: strings.trash,
+          href: trashHref(slug),
+          icon: 'trash',
+          keywords: ['deleted', 'restore', 'bin'],
         },
-        // Developer (parity #34): API keys, for `api_keys.manage` alone, so nobody else sees the entry at all.
-        {
-          id: 'developer',
-          label: developer.title,
-          href: developerHref(slug),
-          icon: 'code',
-          requires: 'api_keys.manage',
-        },
-        { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks', notForGuests: true },
-        // History (spec 0046): every member opens it; Workspace changes inside it is for `audit.read` alone.
-        { id: 'history', label: history.title, href: historyHref(slug), icon: 'clock' },
-        // The trash left the sidebar for here (the owner, 22 October 2026), and opens inside Settings, its sidebar
-        // and trail kept (A120, 23 October 2026). ⌘K's Open trash reaches the same address; the old one redirects.
-        { id: 'trash', label: strings.trash, href: trashHref(slug), icon: 'trash' },
       ],
     },
     {
@@ -278,7 +392,13 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
       label: admin.group,
       entries: [
         { id: 'admin-overview', label: admin.overview, href: adminHref(slug), icon: 'chart-line', operatorOnly: true },
-        { id: 'admin-users', label: admin.users, href: adminHref(slug, 'users'), icon: 'users', operatorOnly: true },
+        {
+          id: 'admin-users',
+          label: admin.users,
+          href: adminHref(slug, 'users'),
+          icon: 'users-round',
+          operatorOnly: true,
+        },
         {
           id: 'admin-pages',
           label: admin.pages,
@@ -298,10 +418,6 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
   ];
 }
 
-/** Settings › Super admin (spec 0047): Overview, or one of its pages. */
-export const adminHref = (slug: string, page?: 'users' | 'booking-pages' | 'website') =>
-  `/w/${slug}/settings/admin${page === undefined ? '' : `/${page}`}`;
-
 /**
  * The groups as this member sees them: entries they may not open are left
  * out, and so is a group left with none, never shown locked (AC-682).
@@ -314,45 +430,127 @@ export function visibleSettingsNav(
   isOperator = false,
   isGuest = false,
 ): readonly SettingsNavGroup[] {
+  const mayOpen = (entry: Pick<SettingsNavEntry, 'operatorOnly' | 'notForGuests' | 'requires'>) =>
+    (entry.operatorOnly !== true || isOperator) &&
+    (entry.notForGuests !== true || !isGuest) &&
+    (entry.requires === undefined || (permissions?.includes(entry.requires) ?? false));
   return groups
     .map((group) => ({
       ...group,
-      entries: group.entries.filter(
-        (entry) =>
-          (entry.operatorOnly !== true || isOperator) &&
-          (entry.notForGuests !== true || !isGuest) &&
-          (entry.requires === undefined || (permissions?.includes(entry.requires) ?? false)),
-      ),
+      entries: group.entries.filter(mayOpen).flatMap((entry): readonly SettingsNavEntry[] => {
+        if (entry.tabs === undefined) return [entry];
+        const tabs = entry.tabs.filter(mayOpen);
+        const [first] = tabs;
+        if (first === undefined) return [];
+        // The entry opens its first tab the member may open; alone, it takes that tab's name.
+        return [{ ...entry, href: first.href, label: tabs.length === 1 ? first.label : entry.label, tabs }];
+      }),
     }))
     .filter((group) => group.entries.length > 0);
+}
+
+/** One place "Find a setting" can open: an entry, or one tab of it (Teams), with where it sits. */
+export interface SettingsSearchHit {
+  readonly id: SettingsPageId;
+  readonly label: string;
+  readonly href: string;
+  readonly icon: SettingsIcon;
+  /** The group, and the entry for a tab ("People › Members"), shown quietly after the label. */
+  readonly where: string;
+}
+
+/** Lower case, accents and punctuation gone, so "Two-factor" finds "two factor". */
+const fold = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/**
+ * "Find a setting" (5 November 2026, as Vercel's and Linear's settings search): the places among `groups` (the
+ * member's visible ones) whose name, group or keywords hold every word typed, best first: a name that starts with
+ * the query, then a name holding it, then the rest, each in the navigation's order. An empty query finds nothing.
+ */
+export function searchSettings(groups: readonly SettingsNavGroup[], query: string): readonly SettingsSearchHit[] {
+  const words = fold(query)
+    .split(' ')
+    .filter((word) => word !== '');
+  if (words.length === 0) return [];
+  const whole = words.join(' ');
+  const places = groups.flatMap((group) =>
+    group.entries.flatMap((entry) => [
+      {
+        hit: { id: entry.id, label: entry.label, href: entry.href, icon: entry.icon, where: group.label },
+        keywords: entry.keywords ?? [],
+      },
+      ...(entry.tabs ?? [])
+        .filter((tab) => tab.href !== entry.href)
+        .map((tab) => ({
+          hit: {
+            id: tab.id,
+            label: tab.label,
+            href: tab.href,
+            icon: entry.icon,
+            where: `${group.label} › ${entry.label}`,
+          },
+          keywords: [] as readonly string[],
+        })),
+    ]),
+  );
+  return places
+    .map(({ hit, keywords }, order) => {
+      const name = fold(hit.label);
+      const haystack = [name, fold(hit.where), ...keywords.map(fold)].join(' ');
+      const rank = name.startsWith(whole) ? 0 : name.includes(whole) ? 1 : 2;
+      return { hit, order, rank, isHit: words.every((word) => haystack.includes(word)) };
+    })
+    .filter((each) => each.isHit)
+    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+    .map(({ hit }) => hit);
+}
+
+/** The navigation entry that holds `page`: the page's own, or the one it is a tab of (Teams is in Members). */
+export function settingsEntryOf(
+  groups: readonly SettingsNavGroup[],
+  page: SettingsPageId | undefined,
+): SettingsNavEntry | undefined {
+  if (page === undefined) return undefined;
+  const entries = groups.flatMap((group) => group.entries);
+  return (
+    entries.find((entry) => entry.id === page) ?? entries.find((entry) => entry.tabs?.some((tab) => tab.id === page))
+  );
 }
 
 /** The settings page an address shows, as the navigation marks it current; undefined for none (an unknown address). */
 export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   const match = /^\/w\/[^/]+\/settings\/(.+?)\/*$/.exec(pathname);
   const rest = match?.[1] ?? '';
+  const under = (base: string) => rest === base || rest.startsWith(`${base}/`);
   if (rest === 'account/profile') return 'profile';
   if (rest === 'account/preferences') return 'preferences';
+  if (rest === 'account/notifications') return 'notifications';
+  if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
+  if (rest === 'account/calendars') return 'calendars';
   if (rest === 'general') return 'general';
   if (rest === 'brand') return 'brand';
-  if (rest === 'account/notifications') return 'notifications';
-  if (rest === 'account/scheduling') return 'scheduling-access';
-  if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
-  if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
-  if (rest === 'lists' || rest.startsWith('lists/')) return 'lists';
-  if (rest === 'jobs') return 'jobs';
-  if (rest === 'automations') return 'automations';
-  if (rest === 'developer') return 'developer';
-  if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
+  if (under('history')) return 'history';
   if (rest === 'members') return 'members';
   if (rest === 'teams') return 'teams';
-  if (rest === 'roles' || rest.startsWith('roles/')) return 'roles';
+  if (under('roles')) return 'roles';
   if (rest === 'security') return 'workspace-security';
-  if (rest === 'webhooks') return 'webhooks';
+  if (rest === 'scheduling/availability') return 'availability';
+  if (rest === 'scheduling/round-robin') return 'round-robin';
+  if (rest === 'scheduling/routing') return 'routing';
+  if (rest === 'scheduling/access' || rest === 'account/scheduling') return 'scheduling-access';
+  if (under('objects')) return 'objects';
+  if (under('lists')) return 'lists';
   if (rest === 'trash') return 'trash';
+  if (rest === 'jobs') return 'jobs';
   if (rest === 'admin') return 'admin-overview';
-  if (rest === 'admin/users' || rest.startsWith('admin/users/')) return 'admin-users';
-  if (rest === 'admin/booking-pages' || rest.startsWith('admin/booking-pages/')) return 'admin-pages';
+  if (under('admin/users')) return 'admin-users';
+  if (under('admin/booking-pages')) return 'admin-pages';
   if (rest === 'admin/website') return 'admin-website';
   return undefined;
 }
@@ -362,7 +560,8 @@ export function settingsGroupOf(
   groups: readonly SettingsNavGroup[],
   page: SettingsPageId | undefined,
 ): SettingsNavGroup | undefined {
-  return page === undefined ? undefined : groups.find((group) => group.entries.some((entry) => entry.id === page));
+  const entry = settingsEntryOf(groups, page);
+  return entry === undefined ? undefined : groups.find((group) => group.entries.includes(entry));
 }
 
 /** The workspace's objects in its order, live ones and archived ones apart (settings lists them in two sections). */

@@ -137,6 +137,11 @@ export type SidebarProps = (WorkspaceHead | HeadingHead) & {
    * (the settings navigation, AC-687).
    */
   readonly keyboard?: 'tab' | 'arrows';
+  /**
+   * A field that filters the items, under the head (the settings variant's "Find a setting", 5 November 2026): a
+   * `Field` with `variant="search"`. Left off on the rail, where there is no room for it.
+   */
+  readonly find?: ReactNode;
 };
 
 /**
@@ -154,9 +159,10 @@ export function Sidebar(props: SidebarProps) {
     collapseKbd,
     label = strings.navigation,
     keyboard = 'tab',
+    find,
   } = props;
-  // Below the compact breakpoint the shell folds it, and it stays folded.
-  const { isCompact } = useContext(AppShellContext);
+  // Below the compact breakpoint the shell folds it, and it stays folded; on a phone it may fill the screen instead.
+  const { isCompact, isFull } = useContext(AppShellContext);
   const isCollapsed = isCollapsedProp || isCompact;
   const onCollapsedChange = isCompact ? undefined : onCollapsedChangeProp;
   const foot = typeof footer === 'function' ? footer({ isCollapsed }) : footer;
@@ -182,6 +188,7 @@ export function Sidebar(props: SidebarProps) {
         className={styles.root}
         aria-label={label}
         data-collapsed={isCollapsed || undefined}
+        data-full={isFull || undefined}
         // Marks a list the arrow keys move through, so the app can leave focus in it after a route change.
         data-keyboard={keyboard}
       >
@@ -223,6 +230,7 @@ export function Sidebar(props: SidebarProps) {
             </div>
           )
         )}
+        {!isCollapsed && find !== undefined && <div className={styles.search}>{find}</div>}
         <div className={styles.scroll}>
           <div
             ref={bodyRef}

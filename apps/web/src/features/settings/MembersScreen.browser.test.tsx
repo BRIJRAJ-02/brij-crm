@@ -631,8 +631,13 @@ describe('the Joining tab', () => {
   it('counts invitations and requests, and holds Asking to join, Pending invitations, then Other ways to join', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer, { requests: [REQUEST], link: LINK, domains: DOMAINS });
-    // One tab for everyone on their way in: no Invitations or Join requests tab any more.
-    expect(page.getByRole('tab').elements()).toHaveLength(2);
+    // One tab for everyone on their way in, in the one strip with Members, Teams and Roles (4 November 2026).
+    expect(
+      page
+        .getByRole('tab')
+        .elements()
+        .map((tab) => tab.textContent.replaceAll(/\d/g, '')),
+    ).toEqual(['Members', 'Joining', 'Teams', 'Roles']);
     // Its count is the pending invitations plus the requests waiting: 1 and 1.
     expect(
       page
@@ -791,7 +796,13 @@ describe('a member who can’t invite', () => {
     // this harness doesn't mount.
     await expect.element(page.getByRole('row', { name: /Linus Torvalds/ })).toBeVisible();
     expect(page.getByText('Only owners and admins can change this.').elements()).toHaveLength(0);
-    expect(page.getByRole('tab').elements()).toHaveLength(0);
+    // No Joining tab: only Members, Teams and Roles.
+    expect(
+      page
+        .getByRole('tab')
+        .elements()
+        .map((tab) => tab.textContent.replaceAll(/\d/g, '')),
+    ).toEqual(['Members', 'Teams', 'Roles']);
     expect(page.getByRole('button', { name: /Role for/ }).elements()).toHaveLength(0);
     // Their own row's menu says what they can do (spec 0037, AC-1243); nobody else's has one.
     expect(page.getByRole('button', { name: /Actions for/ }).elements()).toHaveLength(1);

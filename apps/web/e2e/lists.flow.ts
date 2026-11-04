@@ -233,7 +233,8 @@ test.describe('lists around the record, settings and archive (milestones 3 and 4
     await newList(page, 'Hiring', 'People', 'Blank');
 
     await page.goto(`/w/${slug}/settings/lists`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Lists' })).toBeVisible();
+    // Lists is a tab of Objects (4 November 2026).
+    await expect(page.getByRole('tab', { name: 'Lists' })).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('row').filter({ hasText: 'Hiring' }).click();
     await expect(page.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
     await page.getByLabel('Name', { exact: true }).fill('Recruiting');

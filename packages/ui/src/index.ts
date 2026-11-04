@@ -243,6 +243,7 @@ export {
   AppShellSlot,
   type AppShellProps,
   type AppShellSlotProps,
+  type PhoneSidebar,
 } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps, type ProductLogo } from './modules/AuthLayout/AuthLayout.tsx';
 export {

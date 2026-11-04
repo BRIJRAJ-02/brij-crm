@@ -5,7 +5,9 @@ import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { newWorkspace } from './people.ts';
 
-test.describe('automations', () => {
+// Parked with Settings › Automations (the owner, 4 November 2026: "if not built properly remove it and add it to be
+// built later"); its address redirects to Settings. Turn this back on when the page returns.
+test.describe.skip('automations', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The settings and the builder run at desktop width.');
 
   test('a starter chip makes the first automation in two clicks, and a new deal gets its task', async ({ page }) => {
