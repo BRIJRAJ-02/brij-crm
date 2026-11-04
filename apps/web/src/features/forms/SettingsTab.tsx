@@ -495,9 +495,9 @@ export function SettingsTab({
                 onBlur={settings.leaveAddress}
                 onSubmit={settings.leaveAddress}
                 {...(linkError === undefined ? {} : { error: linkError })}
+                // Beside the box on its line, at the field's own height: one control height on the row (lane 3c).
+                after={<CopyButton value={link} label={strings.copyLink} isIconOnly size="lg" />}
               />
-              {/* At the field's own height: one control height on the row (lane 3c). */}
-              <CopyButton value={link} label={strings.copyLink} isIconOnly size="lg" />
             </SettingsRow>
           </>
         )}
