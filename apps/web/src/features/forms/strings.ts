@@ -73,10 +73,6 @@ export const strings = {
   sendButton: 'Send',
   /** The card's meta line (lane 3c, Klaviyo's list): "5 questions · edited 2h ago · 4 submissions". */
   editedAgo: (when: string) => `edited ${when}`,
-  /** The list's sort (lane 3c), the record lists' sort chip: by when it changed, or by name. */
-  sortLabel: 'Sort forms',
-  sortUpdated: 'Updated',
-  sortName: 'Name',
   /** Turning a form off from the list asks first: it ends something (lane 3c). */
   pauseForm: 'Pause',
   resumeForm: 'Resume',

@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links, each a picture of its own form
 // over its name, its state as a dot and a word, when it was edited, and its submissions (spec 0023; 5 November 2026).
-// Main task: open a form, make a new one at once, copy its link, or open its submissions; sort by Updated or Name.
+// Main task: open a form, make a new one at once, copy its link, or open its submissions; newest change first.
 // Leaves out: anything inside one form (its builder), archived forms (a later pass), and a one-click off switch:
 // pausing ends something, so it sits in ⋯ and asks first.
 import { isDataError, type FormSummary } from '@crm/data';
@@ -18,8 +18,6 @@ import {
   MenuTrigger,
   formatRelative,
   HostedFormPreview,
-  Popover,
-  SortChip,
   SpotIllustration,
   Tooltip,
   useFormatSettings,
@@ -27,7 +25,7 @@ import {
   type LinkGridCard,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { useCapturesCreate } from '../captures/create.tsx';
 import { pageHeading } from '../navigation/focus.ts';
@@ -86,58 +84,12 @@ function realSubmissions(form: FormSummary): number {
   return Math.max(form.submissionCount - form.spamCount, 0);
 }
 
-/** How the list is sorted: by when each form changed, newest first, or by name, A to Z. */
-type FormSort = 'updated' | 'name';
-
-/** The forms in the order picked; the server's order (newest first) breaks a tie. */
-function sortForms(forms: readonly FormSummary[], sort: FormSort, locale: string): readonly FormSummary[] {
-  const collator = new Intl.Collator(locale, { sensitivity: 'base', numeric: true });
-  return [...forms].sort((a, b) =>
-    sort === 'name' ? collator.compare(a.name, b.name) : b.updatedAt.localeCompare(a.updatedAt),
-  );
-}
-
 /**
- * The list's sort, as the record lists say theirs (SortChip, spec 0020): "Updated · descending", pressing it opens
- * the two choices.
+ * The forms, the one changed last first; the server's order (newest made first) breaks a tie. No sort control (the
+ * owner, 5 November 2026: "Remove sorting from forms listing"): Search finds one by name.
  */
-function FormsSort({ value, onChange }: { readonly value: FormSort; readonly onChange: (sort: FormSort) => void }) {
-  const anchor = useRef<HTMLSpanElement>(null);
-  const [isOpen, setOpen] = useState(false);
-  return (
-    <>
-      <SortChip
-        ref={anchor}
-        attribute={value === 'name' ? strings.sortName : strings.sortUpdated}
-        direction={value === 'name' ? 'ascending' : 'descending'}
-        onPress={() => {
-          setOpen(true);
-        }}
-      />
-      <Popover triggerRef={anchor} isOpen={isOpen} onOpenChange={setOpen} placement="bottom end" width="menu">
-        <Menu
-          label={strings.sortLabel}
-          isInline
-          // A menu in a popover of its own, which no MenuTrigger focuses: the picked sort's row takes focus as it opens.
-          // eslint-disable-next-line jsx-a11y-x/no-autofocus
-          autoFocus="first"
-          selectionMode="single"
-          selectedKeys={new Set([value])}
-          onAction={(key) => {
-            if (key === 'updated' || key === 'name') onChange(key);
-            setOpen(false);
-          }}
-        >
-          <MenuItem id="updated" icon="arrow-down-wide-narrow">
-            {strings.sortUpdated}
-          </MenuItem>
-          <MenuItem id="name" icon="arrow-up-narrow-wide">
-            {strings.sortName}
-          </MenuItem>
-        </Menu>
-      </Popover>
-    </>
-  );
+function newestFirst(forms: readonly FormSummary[]): readonly FormSummary[] {
+  return [...forms].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 /** Captures › Forms: New form, then one card per form, newest change first, read from the data layer's held list. */
@@ -150,7 +102,6 @@ export function FormsScreen({ slug }: FormsScreenProps) {
   const create = useCapturesCreate();
   const [deleting, setDeleting] = useState<FormSummary | undefined>(undefined);
   const [pausing, setPausing] = useState<FormSummary | undefined>(undefined);
-  const [sort, setSort] = useState<FormSort>('updated');
 
   // A refusal says what was put back, then why.
   const failed = (what: string) => (error: unknown) => {
@@ -182,8 +133,8 @@ export function FormsScreen({ slug }: FormsScreenProps) {
   };
 
   const items = list.status === 'ready' ? list.items : undefined;
-  // Sorted when the list, the pick or the language changes, not on every tick of the clock the cards read.
-  const forms = useMemo(() => (items === undefined ? [] : sortForms(items, sort, locale)), [items, sort, locale]);
+  // Ordered when the list changes, not on every tick of the clock the cards read.
+  const forms = useMemo(() => (items === undefined ? [] : newestFirst(items)), [items]);
   const cards: readonly LinkGridCard[] = forms.map((form) => {
     const isPending = list.status === 'ready' && list.pendingIds.has(form.id);
     const isPublished = form.liveVersionNumber !== undefined;
@@ -321,7 +272,6 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       onRetry={() => {
         data.forms.view(slug).reload();
       }}
-      toolbarActions={<FormsSort value={sort} onChange={setSort} />}
       dialogs={
         <>
           <PauseFormDialog

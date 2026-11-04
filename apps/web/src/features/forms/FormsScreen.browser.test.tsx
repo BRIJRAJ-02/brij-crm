@@ -112,4 +112,19 @@ describe('the forms list (5 November 2026)', () => {
     await expect.element(draft.getByRole('link', { name: 'Edit Untitled form' })).toBeVisible();
     expect(draft.getByRole('button', { name: 'Copy link' }).query()).toBeNull();
   });
+
+  it('lists the form changed last first, with no sort control (the owner, 5 November 2026)', async () => {
+    await renderForms([
+      formOf('f1', 'Older', { updatedAt: new Date(NOW - 86_400_000).toISOString() }),
+      formOf('f2', 'Newer', { updatedAt: new Date(NOW - 60_000).toISOString() }),
+    ]);
+    await expect.element(page.getByRole('article', { name: 'Newer' })).toBeVisible();
+    // The cards' own headings (each picture's form headline is hidden, so not among them).
+    const titles = page
+      .getByRole('heading', { level: 2 })
+      .elements()
+      .map((heading) => heading.textContent);
+    expect(titles).toEqual(['Newer', 'Older']);
+    expect(page.getByRole('button', { name: /Updated|Sort/ }).query()).toBeNull();
+  });
 });
