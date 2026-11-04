@@ -5,8 +5,10 @@
 // import lucide-react. Each name here is in the registry too (icons.test.ts checks), so it type checks the same.
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   ChevronDown,
+  ChevronUp,
   CircleAlert,
   CircleCheck,
   Copy,
@@ -25,8 +27,11 @@ import {
 /** The icons drawn with no registry around them: the hosted form's controls (Rating's star and a Ranking row's grip among them), its alerts, its toasts and its upload. */
 export const baseIcons = {
   'arrow-left': ArrowLeft,
+  // One at a time's question number and its up and down arrows (T42).
+  'arrow-right': ArrowRight,
   check: Check,
   'chevron-down': ChevronDown,
+  'chevron-up': ChevronUp,
   'circle-alert': CircleAlert,
   'circle-check': CircleCheck,
   copy: Copy,

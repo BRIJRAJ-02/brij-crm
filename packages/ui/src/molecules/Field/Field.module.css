@@ -342,6 +342,26 @@
     cursor: text;
   }
 
+  /* Underline: a public form's one large answer (One at a time, Typeform's way): no box or fill, a thick line in
+     the accent under the words; a refusal turns the line danger. */
+  .root[data-variant='underline'] .box {
+    padding-inline: 0;
+    border-width: 0 0 var(--border-width-thick);
+    border-color: var(--accent-line);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Focus thickens the line by a hairline, under it, so the field moves nothing. */
+  .root[data-variant='underline'] .box:focus-within {
+    box-shadow: 0 var(--border-width-hairline) 0 var(--accent-line);
+  }
+
+  .root[data-variant='underline'][data-invalid] .box {
+    border-color: var(--danger);
+  }
+
   .root[data-size='lg'] .input {
     font: var(--text-title-regular);
     letter-spacing: var(--tracking-title-regular);

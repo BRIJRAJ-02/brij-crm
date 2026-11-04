@@ -82,11 +82,8 @@ describe('jumps, recall and endings on the page (spec 0063, AC-6313, AC-6315, AC
       },
     });
 
-    // No total here, and this case is why (AC-6304): step 2 can jump to an ending, so the three steps the form
-    // holds are not three steps this visitor will be given. The old line promised "Step 1 of 3" and then handed
-    // them two, which is the promise this form cannot keep. Counting up keeps none.
-    await expect.element(page.getByText('Step 1').first()).toBeVisible();
-    expect(host.textContent).not.toContain('Step 1 of 3');
+    // Always a total (critique c): the longest this path can be, three, which a jump on step 2 may shorten to two.
+    await expect.element(page.getByText('Step 1 of 3').first()).toBeVisible();
     await userEvent.fill(page.getByLabelText('Your name'), '<b>Ada</b>');
     await userEvent.click(page.getByRole('button', { name: 'Continue' }));
 
@@ -112,6 +109,33 @@ describe('jumps, recall and endings on the page (spec 0063, AC-6313, AC-6315, AC
     // The answers read-back reads the label as it was asked, never with its braces showing.
     expect(host.textContent).not.toContain('{{name}}');
     await page.screenshot({ path: '../../.vitest/shots/s5-ending-light.png' });
+  });
+
+  it('finishes after a jump on a phone, by touch, as on a desktop (390 wide)', async () => {
+    await page.viewport(390, 844);
+    const sent: HostedSubmission[] = [];
+    drawn = mountHostedForm(host, FORM, {
+      mode: 'page',
+      onSubmit: (submission) => {
+        sent.push(submission);
+        return Promise.resolve({
+          kind: 'done' as const,
+          next: { kind: 'message' as const, text: '', heading: 'Thanks Ada, we are not a fit', ending: 'no_fit' },
+        });
+      },
+    });
+    await userEvent.fill(page.getByLabelText('Your name'), 'Ada');
+    await userEvent.click(page.getByRole('button', { name: 'Continue' }));
+    await expect.element(page.getByRole('radio', { name: 'Under $1k' })).toBeInTheDocument();
+    // A tap on the choice's box, as a thumb lands (the whole box is the hit area).
+    const choice = page.getByText('Under $1k', { exact: true }).element().closest('label');
+    if (choice === null) throw new Error('the choice has no box');
+    await userEvent.click(choice);
+    await expect.element(page.getByText('Step 2 of 2').first()).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Send' }));
+    await expect.poll(() => sent.length).toBe(1);
+    expect(Object.keys(sent[0]?.answers ?? {}).sort()).toEqual(['budget', 'name']);
+    await expect.element(page.getByRole('heading', { name: /not a fit/ })).toBeVisible();
   });
 
   it('asks every step when no jump matches, and draws the ending in dark', async () => {

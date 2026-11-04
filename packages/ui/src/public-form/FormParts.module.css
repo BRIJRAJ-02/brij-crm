@@ -226,10 +226,6 @@
     margin-block-start: var(--space-24);
   }
 
-  .loadingLine {
-    margin-block-end: var(--space-32);
-  }
-
   /* The email typo hint: a muted line under the field with its Use it. */
   .suggestion {
     display: flex;

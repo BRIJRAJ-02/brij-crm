@@ -118,9 +118,9 @@ describe('Layout (AC-6302)', () => {
       .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
       .toBe('Step 1 of 2');
     await userEvent.click(page.getByText('One at a time', { exact: true }));
-    await expect
-      .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
-      .toBe('1 of 3');
+    // One at a time opens on its welcome screen (T42) while no question is being edited: the headline and Start.
+    await expect.element(page.getByText('Start', { exact: true })).toBeInTheDocument();
+    expect(document.querySelector('[role="progressbar"]')).toBeNull();
   });
 });
 

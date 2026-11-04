@@ -92,7 +92,7 @@ it('says nothing at all in the builder’s preview, which is nobody’s visit', 
 // have taken so far, and a later answer can take a step away. Saying "Step 1 of
 // 3" and then giving them two is a promise broken; saying "Step 1" is no promise
 // made. Once the steps ahead hold no jump the total is certain, and it returns.
-it('promises a total only while the steps ahead hold no jump', async () => {
+it('always says Step x of y, counting the longest path while a jump ahead may shorten it (critique c)', async () => {
   const plain: PublicForm = {
     ...FORM,
     layout: 'steps',
@@ -117,6 +117,8 @@ it('promises a total only while the steps ahead hold no jump', async () => {
     ],
   };
   drawn = mountHostedForm(host, jumping, { mode: 'page' });
-  // No total on step 1: step 2 can jump past step 3, so three is not a number anyone should be promised.
-  await expect.poll(() => host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext')).toBe('Step 1');
+  // Step 2 can jump past step 3: the total is still the longest path, so it can only shrink, never grow.
+  await expect
+    .poll(() => host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
+    .toBe('Step 1 of 3');
 });

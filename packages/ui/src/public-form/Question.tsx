@@ -4,7 +4,6 @@ import { Rating } from '../atoms/Rating/Rating.tsx';
 import { ChoiceChips } from '../molecules/ChoiceChips/ChoiceChips.tsx';
 import { AddressQuestion, type AddressDraft } from './AddressQuestion.tsx';
 import { Radio, RadioGroup } from '../atoms/Radio/Radio.tsx';
-import { Switch } from '../atoms/Switch/Switch.tsx';
 import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
 import { Field } from '../molecules/Field/Field.tsx';
 import { PhoneField, type PhoneFieldValue } from '../molecules/PhoneField/PhoneField.tsx';
@@ -125,6 +124,8 @@ export interface QuestionProps {
   readonly hint?: string | undefined;
   /** Reads the recalls in the label (spec 0063, AC-6317): `HostedFormState.read`. */
   readonly read?: ((text: string) => string) | undefined;
+  /** One at a time (T42, Typeform's way): a typed answer is the Field's `underline`, a line in the accent. */
+  readonly isUnderlined?: boolean;
 }
 
 /** One question, drawn with the library's control for its answer type. */
@@ -140,6 +141,7 @@ export function Question({
   isLabelHidden = false,
   hint,
   read,
+  isUnderlined = false,
 }: QuestionProps) {
   const label = labelOf(question, words, read);
   const aside = asideOf(question, words);
@@ -149,12 +151,14 @@ export function Question({
     : { label, ...(aside === undefined ? {} : { labelAside: aside }) };
   const placeholder = question.placeholder;
   const errorProps = error === undefined ? {} : { error };
+  const underline = isUnderlined ? { variant: 'underline' as const } : {};
   const text = typeof value === 'string' ? value : '';
   switch (question.answerType) {
     case 'long_text':
       return (
         <Field
           {...labelProps}
+          {...underline}
           name={question.key}
           isMultiline
           value={text}
@@ -196,8 +200,10 @@ export function Question({
     }
     case 'choice':
       return (
+        // Lettered, full width options (T42, Typeform's way), in every layout: a letter key picks one.
         <RadioGroup
           {...labelProps}
+          variant="letters"
           name={question.key}
           value={text === '' ? null : text}
           onChange={onChange}
@@ -217,15 +223,21 @@ export function Question({
         <Checkbox label={label} name={question.key} isSelected={value === true} onChange={onChange} {...errorProps} />
       );
     case 'yes_no':
+      // Two answers to pick, Yes and No, as a choice is drawn (critique c, 9: a switch read as a setting, not a
+      // question). Nothing picked still sends No, as the switch's off did, so the answer means what it meant.
       return (
-        // The error is the switch's description, so a screen reader hears it with the switch.
-        <Switch
-          label={label}
+        <RadioGroup
+          {...labelProps}
+          variant="letters"
+          orientation="horizontal"
           name={question.key}
-          isSelected={value === true}
-          onChange={onChange}
-          {...(error === undefined ? {} : { description: error })}
-        />
+          value={value === true ? 'yes' : value === false ? 'no' : null}
+          onChange={(picked) => onChange(picked === 'yes')}
+          {...errorProps}
+        >
+          <Radio value="yes">{words.yes}</Radio>
+          <Radio value="no">{words.no}</Radio>
+        </RadioGroup>
       );
     case 'phone': {
       const phone = (value as PhoneFieldValue | undefined) ?? { country: countryGuess ?? 'US', national: '' };
@@ -401,6 +413,7 @@ export function Question({
       return (
         <Field
           {...labelProps}
+          {...underline}
           name={question.key}
           value={text}
           onChange={onChange}
