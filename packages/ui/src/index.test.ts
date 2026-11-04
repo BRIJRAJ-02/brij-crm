@@ -145,6 +145,7 @@ describe('@crm/ui', () => {
       'PhonePreview',
       'PhotoCrop',
       'Popover',
+      'PreviewFooter',
       'PreviewFrame',
       'PreviewLayout',
       'PreviewPage',

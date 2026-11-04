@@ -448,6 +448,7 @@ export {
 export {
   EditorStatus,
   PhonePreview,
+  PreviewFooter,
   PreviewFrame,
   PreviewLayout,
   PreviewPage,

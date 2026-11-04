@@ -607,6 +607,15 @@ export function PreviewPage({ bar, banner, device = 'desktop', children }: Previ
 }
 
 /**
+ * The body's foot, for a bar a tab owns itself (Forms' Submissions bulk bar, 5 November 2026): drawn last among the
+ * body's children, it sits `space-16` above the view's foot when the body is short and sticks there while a long one
+ * scrolls, after its last row, so scrolled to the end it never covers it. The same place `footer` puts the SaveBar.
+ */
+export function PreviewFooter({ children }: { readonly children: ReactNode }) {
+  return <div className={styles.footer}>{children}</div>;
+}
+
+/**
  * Every Captures editor's body under its TopBar (the booking page editor, the
  * form editor): any notices, then the body at the page gutter in the first
  * two thirds of the width, beside a sticky phone preview centred in the last
@@ -655,9 +664,7 @@ export function PreviewLayout({
             >
               {/* The body's Cards are the page's sections, h2 beside the Preview heading, under the TopBar's h1. */}
               <CardTitleLevel value={2}>{children}</CardTitleLevel>
-              {footer !== undefined && footer !== null && footer !== false && (
-                <div className={styles.footer}>{footer}</div>
-              )}
+              {footer !== undefined && footer !== null && footer !== false && <PreviewFooter>{footer}</PreviewFooter>}
             </div>
             {hasPreview && (
               <aside className={styles.side} aria-labelledby={headingId}>
