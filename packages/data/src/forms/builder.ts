@@ -22,6 +22,7 @@ export {
   FORM_QUESTIONS_MAX,
   FORM_ENDINGS_MAX,
   FORM_STEP_TITLE_MAX,
+  DEFAULT_HEADLINE,
   pathOf,
   // Jumps, the score and recall (spec 0063 slice 5): the builder's Flow view, its points rows and its preview.
   recall,
@@ -60,11 +61,14 @@ export {
   namedHosts,
   REQUIRED_SKILLS_MAX,
   requiredSkills,
+  // A form's rules, at most (spec 0043): After they send stops offering a new one at the most.
+  ROUTING_RULES_MAX,
   SKILL_GROUPS,
   SKILL_NAME_MAX,
   SKILLS_MAX,
   type KnownValue,
   matchesShowWhen,
+  NUMBER_OPS,
   summarizeShowWhen,
   VALUELESS_OPS,
   visibleQuestions,

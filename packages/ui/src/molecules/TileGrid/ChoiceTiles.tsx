@@ -59,8 +59,7 @@ interface ChoiceTilesBase {
   /**
    * Only read with `showsDescription`, and ignored without it. A tile that has a `thumbnail` keeps the tall picture slot and puts its name and
    * sentence underneath, instead of squashing the thumbnail into the small mark's square. For a grid whose tiles
-   * are chosen by sight *and* have to be read: the form template gallery (spec 0063, AC-6323), where each tile owes
-   * the person both a preview of the form it makes and a line saying what it is for. A tile with an `icon` is
+   * are chosen by sight *and* have to be read. A tile with an `icon` is
    * unaffected and still reads as a mark beside its name.
    */
   readonly keepsPicture?: boolean;
@@ -70,6 +69,13 @@ interface ChoiceTilesBase {
    * picked (the link page's four templates, spec 0068, AC-6804), where a small slot showed too little to choose by.
    */
   readonly pictureSize?: 'large';
+  /**
+   * Only read with `showsDescription`, and ignored without it. `wide` lays the tiles out as a list to scan: each at
+   * least a column wide, its mark beside both its name and its line rather than above the line. For a long run of
+   * choices read by name (the form template picker, 12 of them, 4 November 2026: "Dont need thumbnails here"), where
+   * narrow tiles broke names mid word and stacked the line under the mark.
+   */
+  readonly tileWidth?: 'wide';
 }
 
 /** A choice grid that keeps one tile chosen. */
@@ -128,11 +134,14 @@ function ActionTile({
   onAction,
   showsDescription,
   keepsPicture,
+  isWide = false,
 }: {
   readonly tile: ChoiceTile;
   readonly onAction: (id: string) => void;
   readonly showsDescription: boolean;
   readonly keepsPicture: boolean;
+  /** A wide tile (`tileWidth="wide"`): its mark beside both its name and its line. */
+  readonly isWide?: boolean;
 }) {
   const nameId = useId();
   const descriptionId = useId();
@@ -153,6 +162,7 @@ function ActionTile({
         data-mode="action"
         data-described={showsDescription || undefined}
         data-tall={tall || undefined}
+        data-wide={(isWide && showsDescription && !tall) || undefined}
         isDisabled={tile.isDisabled === true}
         onPress={() => {
           onAction(tile.id);
@@ -195,11 +205,14 @@ function SelectTile({
   showsDescription,
   keepsPicture,
   isLarge = false,
+  isWide = false,
 }: {
   readonly tile: ChoiceTile;
   readonly showsDescription: boolean;
   readonly keepsPicture: boolean;
   readonly isLarge?: boolean;
+  /** A wide tile (`tileWidth="wide"`): its mark beside both its name and its line. */
+  readonly isWide?: boolean;
 }) {
   const state = useContext(RadioGroupStateContext);
   if (state === null) throw new Error('A select tile renders inside its RadioGroup.');
@@ -234,6 +247,7 @@ function SelectTile({
       data-described={showsDescription || undefined}
       data-tall={tall || undefined}
       data-large={(tall && isLarge) || undefined}
+      data-wide={(isWide && showsDescription && !tall) || undefined}
       data-selected={isSelected || undefined}
       data-disabled={isDisabled || undefined}
       data-pressed={isPressed || undefined}
@@ -279,7 +293,12 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
   if (props.mode === 'action') {
     const { label, tiles, onAction } = props;
     return (
-      <div className={styles.root} role="group" aria-label={label}>
+      <div
+        className={styles.root}
+        role="group"
+        aria-label={label}
+        data-wide={(showsDescription && props.tileWidth === 'wide') || undefined}
+      >
         {tiles.map((tile) => (
           <ActionTile
             key={tile.id}
@@ -287,6 +306,7 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
             onAction={onAction}
             showsDescription={showsDescription}
             keepsPicture={keepsPicture}
+            isWide={props.tileWidth === 'wide'}
           />
         ))}
       </div>
@@ -298,6 +318,7 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
     <RadioGroup
       className={styles.root}
       data-large={isLarge || undefined}
+      data-wide={(showsDescription && props.tileWidth === 'wide') || undefined}
       aria-label={label}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
@@ -305,7 +326,13 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
     >
       {tiles.map((tile) => (
         <WithTip key={tile.id} tile={tile} isShown={showsDescription}>
-          <SelectTile tile={tile} showsDescription={showsDescription} keepsPicture={keepsPicture} isLarge={isLarge} />
+          <SelectTile
+            tile={tile}
+            showsDescription={showsDescription}
+            keepsPicture={keepsPicture}
+            isLarge={isLarge}
+            isWide={props.tileWidth === 'wide'}
+          />
         </WithTip>
       ))}
     </RadioGroup>

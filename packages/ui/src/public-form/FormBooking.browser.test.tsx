@@ -56,7 +56,7 @@ const said = () => host.querySelector('[aria-live="polite"]')?.textContent ?? ''
 describe('the countdown to book (AC-1059)', () => {
   it('says it once, counts down, and goes on at nought', async () => {
     const onRedirect = await sendWith(2);
-    await expect.element(page.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus();
+    await expect.element(page.getByRole('heading', { name: 'Thanks, we got it.' })).toHaveFocus();
     await expect.poll(said).toBe('Taking you to book a time in 2 seconds.');
     await expect.element(page.getByText('Thanks, we have it.')).toBeVisible();
     // A second's tick, on a busy runner: wait past vitest's one second default for it.

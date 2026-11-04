@@ -339,7 +339,12 @@ describe('Booking intake ends with Book a meeting (AC-6323)', () => {
     await createBookingPage(colleague, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' });
     const mine = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
     const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' });
-    expect(created.draft.after).toEqual({ kind: 'booking', bookingPageId: mine.id, countdownSeconds: 5, message: '' });
+    expect(created.draft.after).toEqual({
+      kind: 'booking',
+      bookingPageId: mine.id,
+      countdownSeconds: 5,
+      message: FORM_TEMPLATES.booking_intake.thanks,
+    });
     // And it publishes as it stands: the page is live and the maker's to use.
     const live = await publishForm(w.scope, { formId: created.id, expectedRevision: created.revision });
     expect(live.status).toBe('live');
@@ -348,7 +353,7 @@ describe('Booking intake ends with Book a meeting (AC-6323)', () => {
   it('thanks the visitor when there is no page to go on to, and never picks one the maker can’t use', async () => {
     const w = await workspace();
     const none = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' });
-    expect(none.draft.after).toEqual({ kind: 'message', message: '' });
+    expect(none.draft.after).toEqual({ kind: 'message', message: FORM_TEMPLATES.booking_intake.thanks });
     // A paused page is not one to send anyone to.
     const page = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
     await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
@@ -365,16 +370,16 @@ describe('Booking intake ends with Book a meeting (AC-6323)', () => {
       scopes: ['forms.manage', 'data.write'],
     });
     const hidden = await createFormFromTemplate(key, { id: newId(), templateId: 'booking_intake' });
-    expect(hidden.draft.after).toEqual({ kind: 'message', message: '' });
+    expect(hidden.draft.after).toEqual({ kind: 'message', message: FORM_TEMPLATES.booking_intake.thanks });
     // The owner, who may use it, goes on to it.
     const found = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' });
     expect(found.draft.after).toMatchObject({ kind: 'booking', bookingPageId: page.id });
   });
 
-  it('leaves every other template’s ending as the plain thank you', async () => {
+  it('leaves every other template’s ending as its own thank you', async () => {
     const w = await workspace();
     await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
     const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'demo_request' });
-    expect(created.draft.after).toEqual({ kind: 'message', message: '' });
+    expect(created.draft.after).toEqual({ kind: 'message', message: FORM_TEMPLATES.demo_request.thanks });
   });
 });

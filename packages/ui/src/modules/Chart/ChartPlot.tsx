@@ -1,4 +1,4 @@
-import { useState, type PointerEvent } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type RefObject } from 'react';
 import '../../lib/custom-properties.ts';
 import {
   areaPath,
@@ -6,7 +6,8 @@ import {
   barSlot,
   charsThatFit,
   cutLabel,
-  labelStep,
+  estimateLabelWidth,
+  labelStepFor,
   linePath,
   nearestIndex,
   niceTicks,
@@ -25,6 +26,39 @@ const RIGHT = 8;
 const PAIR_GAP = 2;
 /** The most a tooltip's middle is held from either edge, so its box stays inside the plot. */
 const TIP_EDGE = 56;
+/** The x labels' type size before it is read from the page (text-label). */
+const LABEL_SIZE = 12;
+
+/** Measures a label in the x labels' own font, or estimates it where nothing can measure. */
+type MeasureText = (text: string) => number;
+
+/**
+ * The x labels' font, read from a hidden label once the drawing is on the page, and a canvas that measures text in
+ * it. Before then, and where there is no canvas, a conservative estimate stands in.
+ */
+function useLabelMeasure(): { readonly probe: RefObject<SVGTextElement | null>; readonly measure: MeasureText } {
+  const probe = useRef<SVGTextElement>(null);
+  const [font, setFont] = useState<{ readonly css: string; readonly size: number } | undefined>(undefined);
+  useLayoutEffect(() => {
+    const element = probe.current;
+    if (element === null) return;
+    const style = getComputedStyle(element);
+    const size = Number.parseFloat(style.fontSize);
+    setFont({
+      css: `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
+      size: Number.isFinite(size) ? size : LABEL_SIZE,
+    });
+  }, []);
+  const measure = useMemo<MeasureText>(() => {
+    const size = font?.size ?? LABEL_SIZE;
+    const context = font === undefined ? null : document.createElement('canvas').getContext('2d');
+    if (context === null || font === undefined) return (text) => estimateLabelWidth(text, size);
+    context.font = font.css;
+    // Tabular figures run a touch wider than the canvas's proportional ones: a pixel a character covers them.
+    return (text) => context.measureText(text).width + text.length;
+  }, [font]);
+  return { probe, measure };
+}
 
 /** Props for the drawing. */
 export interface ChartPlotProps {
@@ -58,13 +92,17 @@ export function ChartPlot({ kind, label, points, width, formatTick, compareLabel
   const count = points.length;
   const slot = count > 0 ? plotWidth / count : plotWidth;
   const centre = (index: number) => left + slot * (index + 0.5);
-  const widest = Math.max(0, ...points.map((point) => (point.axisLabel ?? point.label).length));
   const fits = charsThatFit(slot - 6);
-  // A line keeps at least 8 characters of a label (see the x labels below), so its step is worked out on those.
   // Labels keep a floor of characters (a bar's 6, a line's 8), so a narrow plot thins its labels rather than cutting
   // each to a letter.
   const floor = kind === 'bar' ? Math.max(fits, 6) : Math.max(fits, 8);
-  const step = labelStep(count, slot, Math.min(widest, floor));
+  const { probe, measure } = useLabelMeasure();
+  const axisLabels = points.map((point) => cutLabel(point.axisLabel ?? point.label, floor));
+  // Thinned to the room there is, from each label's measured width, so no two drawn labels ever touch (T7).
+  const step = labelStepFor(
+    axisLabels.map((text) => measure(text)),
+    slot,
+  );
   const biggest = values.indexOf(Math.max(...values));
 
   const move = (event: PointerEvent<SVGSVGElement>) => {
@@ -174,10 +212,14 @@ export function ChartPlot({ kind, label, points, width, formatTick, compareLabel
             })}
           </>
         )}
+        {/* Read for the x labels' font, never seen. */}
+        <text ref={probe} className={styles.xlabel} visibility="hidden" aria-hidden="true" x={0} y={0}>
+          0
+        </text>
         {points.map((point, index) =>
           index % step === 0 ? (
             <text key={point.id} className={styles.xlabel} x={centre(index)} y={PLOT_HEIGHT - 12} textAnchor="middle">
-              {cutLabel(point.axisLabel ?? point.label, floor)}
+              {axisLabels[index]}
             </text>
           ) : null,
         )}

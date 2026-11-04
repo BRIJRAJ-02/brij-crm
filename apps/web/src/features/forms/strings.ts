@@ -46,7 +46,6 @@ export const strings = {
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
   noSubmissionsYet: 'No submissions yet',
-  publishToShare: 'Publish it to start taking submissions',
   /** A draft card's one action: back into its builder to finish it and publish. */
   editDraft: 'Edit',
   /** Its accessible name: which draft it opens, the visible word first. */
@@ -81,15 +80,24 @@ export const strings = {
 
   // The editor
   untitledForm: 'Untitled form',
+  /** The Form tab's one title: the headline visitors read, and the line under it. */
+  formTitle: 'Title',
+  formTitlePlaceholder: 'Untitled form',
+  formLine: 'Line under the title',
+  formLinePlaceholder: 'Add a line under it (optional)',
   previewOpen: 'Preview',
   previewNotLive: 'Preview, not live. Answers are checked here, and nothing is sent.',
   publish: 'Publish',
-  publishChanges: 'Publish changes',
+  /** The ⋯ menu's way back to the live form, and its confirm (it loses work, so it asks first). */
+  discardChanges: 'Discard changes',
+  discardTitle: 'Discard your changes?',
+  discardText: 'The form goes back to what is live now. Your edits since the last publish are lost.',
+  discarded: 'Changes discarded.',
   publishing: 'Publishing',
   moreActions: 'More actions',
   pause: 'Pause',
   resume: 'Resume',
-  statusLive: (version: number) => `Live · v${String(version)}`,
+  statusLive: 'Live',
   statusChanged: 'Live · edited',
   statusDraft: 'Draft',
   statusPaused: 'Paused',
@@ -99,13 +107,15 @@ export const strings = {
   tabInstall: 'Install',
   tabSubmissions: 'Submissions',
   tabAnalytics: 'Analytics',
-  published: (version: number) => `Published version ${String(version)}.`,
+  published: 'Published.',
   madeUnique: (field: string, objectName: string) => `${field} is now unique on ${objectName}: one record per email.`,
   viewField: 'View field',
   /** The first publish's one line on the match (spec 0058, AC-13), said before Publish makes it so. */
   willMakeUnique: (field: string, objectName: string) =>
     `${field} becomes unique on ${objectName}: one record per email.`,
   changedBy: (name: string) => `${name} changed this form.`,
+  changedByMe: 'You changed this form in another tab.',
+  loadMine: 'Load that version',
   someoneChanged: 'Someone else changed this form.',
   loadTheirs: 'Load their version',
   saveFailed: 'Your last change didn’t save. Check your connection; it saves again as you go on.',
@@ -127,19 +137,14 @@ export const strings = {
   // Layout (spec 0063)
   layoutTitle: 'Layout',
   layoutClassic: 'Classic',
-  layoutClassicHint: 'Every question on one page.',
   layoutSteps: 'Steps',
-  layoutStepsHint: 'Questions in groups, with Back and Continue.',
   layoutOneAtATime: 'One at a time',
-  layoutOneAtATimeHint: 'One question per screen. Enter goes on.',
-  /** Under the tiles when Steps has no divider yet. */
-  layoutAddStep: 'Add a step under Questions to split the form.',
   colour: 'Colour',
-  light: 'Light form',
-  dark: 'Dark form',
+  light: 'Light',
+  dark: 'Dark',
   corners: 'Corners',
-  rounded: 'Rounded corners',
-  square: 'Square corners',
+  rounded: 'Rounded',
+  square: 'Square',
   /** The look's third axis (spec 0063, AC-6327): the workspace's brand kit, or the product's own colours. */
   theme: 'Colours',
   themeBrand: 'Brand colours',
@@ -176,11 +181,11 @@ export const strings = {
   /** A question kept off the CRM, with the submission only. */
   submissionOnly: 'Submission only',
   embedTiles: 'Put it on your site',
-  ownFormThanks: 'Thank you. That is with us.',
+  ownFormThanks: 'Thanks, we got it.',
 
   // Settings tab
   nameRequired: 'Give the form a name.',
-  addressChanged: 'Address changed. Old links still open the form.',
+  addressChanged: 'Link changed. Old links still open the form.',
   headline: 'Headline',
   headlineDefault: 'Fill this in and we will come back to you',
   subheadingOptional: 'Subheading',
@@ -191,7 +196,7 @@ export const strings = {
   afterChoice: 'What they see next',
   showMessage: 'Message',
   sendToAddress: 'Web page',
-  thankYou: 'Thank you message',
+  thankYou: 'Thank-you message',
   thankYouDefault: 'Thank you. We will come back to you at the address you gave.',
   redirectUrl: 'Web address',
   redirectHint: 'Starts with https://',
@@ -387,7 +392,7 @@ export const strings = {
   noneIn: {
     received: 'Nothing waiting.',
     processing: 'Nothing in progress.',
-    processed: 'Nothing filed yet.',
+    processed: 'Nothing added yet.',
     spam: 'No spam. Anything that looks like it lands here.',
     held: 'Nothing held.',
     needs_review: 'Nothing needs a look.',
@@ -455,14 +460,14 @@ export const strings = {
   addManyText: (n: number, max: number) =>
     n > max
       ? `Adds ${String(max)} now, the way the form files. Run it again for the rest.`
-      : 'Each is added the way the form files now.',
+      : 'Each is added the way the form saves now.',
   addDone: (done: number, refused: number) =>
     refused === 0
       ? `${count(done, 'submission', 'submissions')} added to the CRM.`
       : `${count(done, 'submission', 'submissions')} added, ${String(refused)} failed.`,
-  jobFailed: (label: string) => `${label} didn’t finish. Background jobs in Settings says why.`,
+  jobFailed: (label: string) => `${label} didn’t finish. See why in Settings › Background jobs.`,
   syncOld: 'Sync earlier submissions',
-  syncOldText: 'File earlier submissions the way the form files now',
+  syncOldText: 'Save earlier submissions the way the form saves now',
   syncStarted: 'Syncing earlier submissions. You can keep working.',
   syncDone: (done: number, refused: number) =>
     refused === 0
@@ -470,14 +475,14 @@ export const strings = {
       : `${count(done, 'submission', 'submissions')} synced; ${String(refused)} couldn’t be.`,
   // Sync earlier submissions (spec 0058, AC-14): one line, the scope, the counts, one button
   syncTitle: 'Sync earlier submissions?',
-  syncTextPublished: 'File earlier submissions the new way too.',
-  syncTextMenu: 'File earlier submissions the way the form files now.',
+  syncTextPublished: 'Save earlier submissions the new way too.',
+  syncTextMenu: 'Save earlier submissions the way the form saves now.',
   syncTextConnected: 'Add earlier submissions to the CRM too.',
   syncNothing: 'Nothing to sync',
   syncNothingText: 'Every earlier submission already follows the form.',
   syncFailuresText: 'Any that can’t be synced stay as they are.',
   syncScope: 'Which submissions',
-  syncUnfiled: 'Only unfiled',
+  syncUnfiled: 'Only unsaved',
   syncAll: 'All',
   /** The count preview's name for screen readers. */
   syncPreview: 'What syncing would do',
@@ -528,6 +533,13 @@ export const strings = {
     who === undefined ? 'Delete this submission?' : `Delete the submission from ${who}?`,
   deleteSubmissionText: 'Its answers are gone for good; the people and records it made stay.',
   deleteSubmissionAction: 'Delete submission',
+  /** Bulk Delete (asks first: a submission can't come back): "Delete 3 submissions?". */
+  deleteManyTitle: (n: number) => `Delete ${count(n, 'submission', 'submissions')}?`,
+  deleteManyText: 'Their answers are gone for good; the people and records they made stay.',
+  deleteManyAction: (n: number) => `Delete ${count(n, 'submission', 'submissions')}`,
+  deletingMany: 'Deleting…',
+  deletedMany: (n: number) => `${count(n, 'submission', 'submissions')} deleted.`,
+  deletedSome: (done: number, of: number) => `Deleted ${String(done)} of ${String(of)}; the rest are still picked.`,
   /** Marks the answers not saved on the record, when some were. */
   notSavedMark: 'Not saved',
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
@@ -558,18 +570,18 @@ export const strings = {
   // Endings, the score and the Flow view (spec 0063 slice 5, AC-6315, AC-6316, AC-6325).
   endingsTitle: 'Endings',
   endingsLine: 'Where a jump or a rule can send a visitor instead of the thank you.',
-  endingsFull: (most: number) => `A form holds the thank you and ${String(most)} endings.`,
+  endingsFull: (most: number) => `A form holds ${String(most)} thank-you messages beside the thank you page.`,
   addEnding: 'Add an ending',
   endingName: (place: number, heading: string | undefined) =>
-    heading === undefined || heading.trim() === '' ? `Ending ${String(place)}` : heading,
+    heading === undefined || heading.trim() === '' ? `Thank-you message ${String(place)}` : heading,
   endingHeading: 'Heading',
   endingHeadingPlaceholder: 'Thanks, we are not a fit',
   endingLine: 'Line under it',
-  endingLinePlaceholder: 'We only take projects over $5k.',
+  endingLinePlaceholder: 'Optional',
   endingButton: 'Button',
   endingButtonNone: 'No button',
-  endingButtonUrl: 'Go to a web address',
-  endingButtonBooking: 'Book a meeting',
+  endingButtonUrl: 'Link',
+  endingButtonBooking: 'Booking page',
   endingButtonLabel: 'Button text',
   endingButtonLabelPlaceholder: 'Read the guide',
   endingAddress: 'Web address',
@@ -577,28 +589,38 @@ export const strings = {
   endingRemoved: 'Ending removed.',
   recallHint: 'Write {{key}} to show an earlier answer, or {{score}} for the score.',
   scoreTitle: 'Score',
-  scoreLine: 'Points on the answers add up to a score you can jump on, show, and file.',
-  scoreFiledOn: 'File the score on',
+  scoreLine: 'Points on the answers add up to a score you can jump on, show, and save.',
+  scoreFiledOn: 'Save the score to',
   scoreFiledNowhere: 'Keep it off the CRM',
-  scoreNoNumbers: 'This object has no number field to file a score on.',
-  flowOpen: 'Flow',
-  flowTitle: 'The flow',
-  flowLine: 'The steps a visitor walks, their jumps, and where each one ends.',
-  flowStep: (place: number, title: string | undefined) =>
-    title === undefined || title.trim() === '' ? `Step ${String(place)}` : `Step ${String(place)} · ${title}`,
-  flowQuestions: (count: number) => (count === 1 ? '1 question' : `${String(count)} questions`),
-  flowJump: (condition: string) => `If ${condition}`,
-  flowToStep: (name: string) => `go to ${name}`,
-  flowToEnding: (name: string) => `end with ${name}`,
-  flowNext: 'Otherwise',
-  flowEndings: 'Endings',
-  flowClassic: 'Classic shows every question on one page, so it has no steps to jump between.',
-  flowEmptyTitle: 'No steps yet',
-  flowEmpty: 'Add a question, and a step to split the form, to see the flow.',
-  flowThanks: 'The thank you',
-  flowNoLine: 'No line',
+  scoreNoNumbers: 'This object has no number field to save a score to.',
+  // The Logic map (T41): every rule in the form's order, what to check, suggestions and Test it.
+  logicTitle: 'Logic',
+  toCheck: (count: number) => (count === 1 ? '1 thing to check' : `${String(count)} things to check`),
+  flowGoTo: 'Go to it',
+  flowIf: (condition: string) => `If ${condition}`,
+  flowOtherwise: 'Otherwise',
+  flowThen: 'Then',
+  flowEveryone: 'Everyone',
+  flowThisStep: 'This step',
+  flowQuestions: 'Questions',
+  flowNoRules: 'No rules here: everyone goes on.',
+  flowEmptyTitle: 'No questions yet',
+  flowEmpty: 'Add a question to give it logic.',
   flowEdit: 'Edit',
   flowClose: 'Close',
+  suggestionsTitle: 'Suggestions',
+  suggestionAdd: 'Add this rule',
+  /** A suggestion, after its question (UX review: short, the question quoted as its term). */
+  suggestMessage: (choice: string) => `is ${choice} → a different thank-you message`,
+  suggestBook: (choice: string, page: string) => `is ${choice} → book ${page}`,
+  suggestLow: (below: string) => `is less than ${below} → a different thank-you message`,
+  suggestionAdded: 'Rule added to After they send.',
+  testTitle: 'Test it',
+  testLine: 'Pick answers to see the path a visitor takes. Nothing is sent.',
+  testNoAnswer: 'No answer',
+  testSees: 'Sees',
+  testSkips: 'Skips',
+  testEnds: 'Ends on',
   // Analytics (spec 0063, AC-6321, AC-6322). Short on purpose (spec 0058, AC-3).
   analytics: 'Analytics',
   analyticsPeriod: 'Period',
@@ -644,4 +666,82 @@ export const strings = {
     paused: 'Paused',
     archived: 'Archived',
   } satisfies Record<FormStatus, string>,
+  // After they send (T20, 5 November 2026): the end of the Form tab's list, as Typeform's endings and Tally's thank you
+  // page sit at the end of a form. Endings, routing and the score live here, never in Settings.
+  afterSend: 'After they send',
+  /** The one line of what everyone gets (T39): "Everyone sees [Thank you page]", "Everyone else" once a rule exists. */
+  everyoneSees: 'Everyone sees',
+  everyoneElseSees: 'Everyone else sees',
+  everyoneGets: 'What everyone else sees',
+  afterKindThanks: 'Thank you page',
+  afterKindBooking: 'A booking page',
+  afterKindLink: 'A link',
+  /** The quiet line that adds a rule. */
+  sendSome: 'Send some people somewhere else',
+  sendSomeNeedsQuestion: 'Add a question with choices first, so a rule has something to read.',
+  rulesFull: (most: number) => `A form holds ${String(most)} rules.`,
+  /** A rule's destination, after its arrow. */
+  thenArrow: '→',
+  destination: 'Where they go',
+  toMessage: 'A different thank-you message',
+  toPage: (title: string) => `Booking page · ${title}`,
+  toLink: 'A link',
+  ruleName: (place: number) => `rule ${String(place)}`,
+  ruleMenu: (place: number) => `Rule ${String(place)} actions`,
+  moveUp: 'Move up',
+  moveDown: 'Move down',
+  deleteRule: 'Delete',
+  ruleDeleted: 'Rule deleted.',
+  addCondition: 'Add a condition',
+  /** A booking page's countdown, in the sentence: "after 5 seconds". */
+  countdownInLine: 'at once',
+  countdownAfterInLine: (seconds: number) => `after ${String(seconds)} seconds`,
+  ifWord: 'If',
+  /** A used question deleted with the rules that read it (T41), one Undo for both. */
+  deletedWithRules: (label: string, count: number) =>
+    `Deleted “${label}” and the ${count === 1 ? 'rule' : `${String(count)} rules`} that read it.`,
+  /** A choice removed that rules named (T41). */
+  choiceRulesDropped: (count: number) =>
+    count === 1
+      ? 'A rule named that choice, so it went too.'
+      : `${String(count)} rules named that choice, so they went too.`,
+  /** The Logic count in the Questions header (T41): every rule, and how many need a look. */
+  logicButton: (count: number) => `Logic · ${String(count)}`,
+  logicButtonWarn: (count: number, warnings: number) => `Logic · ${String(count)}, ${String(warnings)} to check`,
+  /** A thank-you message only a step's jump reaches: said, with where its rule is changed. */
+  sentByStep: (step: string) => `${step} sends some people to this thank-you message`,
+  editTheRule: 'Edit the rule',
+  nothingSendsHere: 'Nothing sends people to this thank-you message yet',
+  sendPeopleHere: 'Send people here',
+  messageMenu: 'Thank-you message actions',
+  deleteMessage: 'Delete',
+  messageDelete: 'Delete this thank-you message',
+  messageDeleted: 'Thank-you message deleted.',
+  insertAnswer: 'Insert an answer',
+  insertScore: 'Score',
+  linkAddress: 'Address',
+  scoreRow: 'Score',
+  scoreSaveTo: 'Save the score to',
+  scoreSaveHelp: 'Points from the answers add up to a score. Save it on the record to sort and filter by it.',
+  routeIncomplete: 'A link needs a full address that starts with https://.',
+  // The preview's words, edited in place (T21: the Text card went).
+  editHeadline: 'Edit the headline',
+  editButton: 'Edit the button',
+  // Settings as rows (T21: label left, a compact control right, no cards).
+  saveAnswersTo: 'Save answers to',
+  onlySubmissions: 'Only in Submissions',
+  emailEach: 'Email each submission to',
+  acceptingRow: 'Accepting submissions',
+  acceptingHelp: 'Turn off to close the form. Visitors see that it is closed.',
+  spamRow: 'Spam',
+  linkHelp: 'Links with the old address keep working.',
+  ownerHelpTip: 'Who owns the records this form makes. Records already made keep their owner.',
+  savingHelpTip: 'Each submission adds or updates a record here, matched by email. A change goes live with Publish.',
+  savingChangedToast: (where: string) => `Answers will save to ${where} once you publish.`,
+  savingOffToast: 'Answers will stay in Submissions once you publish.',
+  // Analytics (T22)
+  analyticsFinishedOf: (finished: string, started: string) => `${finished} of ${started} who started finished`,
+  analyticsAllFinished: 'Everyone who started finished.',
+  analyticsSourceLine: (views: string, finished: string, count: number) =>
+    `${views} ${count === 1 ? 'view' : 'views'} · ${finished} finished`,
 } as const;

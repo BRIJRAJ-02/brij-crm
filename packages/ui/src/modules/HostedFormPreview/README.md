@@ -17,6 +17,7 @@ New. The builder must show exactly what goes live (spec 0023, `0023-experience.m
 - `page` checks the answers as the server would and shows the thank you, but sends nothing.
 - The look is the form's own (`look.colour`, `look.corners`), whatever the app's theme. It sits on the form's own ground (`surface` in that look), which fills whatever height its container gives it: in PreviewLayout's phone, a short form's colour runs to the frame's foot, a light form in dark mode included (spec 0058).
 
+- `onTextChange` (T21, 5 November 2026, after Tally) makes the headline and the button editable where they are: a quiet press target is laid exactly over each (measured, and again as the preview resizes), with a dashed accent edge on hover, focus or while open, and pressing it opens a Popover by it with the words (Headline and Line under it; or Button text), which change the preview as they are typed. The rest of the preview stays inert. The button is editable where it shows the form's own words (Classic, or the last step). Why an overlay and not editable parts in the form: the hosted page's tree is what every visitor loads, against the tightest budget in the product, so it carries nothing for the builder.
 - The layout is the form's own (`layout`, spec 0063): Classic draws `HostedForm`, Steps and One at a time `HostedFormSteps`; a change of layout starts the preview again from its first step.
 
 ## FormLayoutThumbnail

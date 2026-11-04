@@ -86,7 +86,7 @@ test.describe('confirms on forms', () => {
       await visitor.getByLabel(/Work email/).fill(email);
       await visitor.waitForTimeout(2_500);
       await visitor.getByRole('button', { name: 'Send' }).click();
-      await expect(visitor.getByText(/Thank you/).first()).toBeVisible();
+      await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible();
       await visitor.close();
     }
     // Then filing to People again, live, so Add to CRM takes both.

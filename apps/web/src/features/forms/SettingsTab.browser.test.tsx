@@ -1,7 +1,8 @@
 // A form's owner in Chromium (spec 0029 milestone 3, AC-755; spec 0023 AC-567, AC-1050): Settings › Details' Owner
 // lists Nobody, the teammates and, under Round robin, the groups the reader can see with how many are switched on.
-// Choosing a group says who gets each new record and saves the group alone (never a teammate beside it) from the
-// SaveBar; a group with nobody switched on, and one the reader can't list, each say so in the one line under it.
+// Choosing a group says who gets each new record and saves the group alone (never a teammate beside it) as it is
+// picked, with no Save (one save model, 5 November 2026); a group with nobody switched on, and one the reader can't
+// list, each say so in the one line under it. The name and link save as they are left, and say what is wrong only then.
 import type {
   BookingPageView,
   DataLayer,
@@ -171,22 +172,24 @@ function fakeData(groups: readonly RotationView[], bookingPages: readonly Bookin
       hostedUrl: (key: string) => `https://app.example.com/f/${key}`,
       updateSettings: (_slug: string, _formId: string, settings: Record<string, unknown>) => {
         saves.push(settings);
-        return Promise.resolve(
-          formView(
+        return Promise.resolve({
+          ...formView(
             {
               ...(typeof settings.ownerMemberId === 'string' ? { ownerMemberId: settings.ownerMemberId } : {}),
               ...(typeof settings.ownerRotationId === 'string' ? { ownerRotationId: settings.ownerRotationId } : {}),
             },
             Array.isArray(settings.notifyMemberIds) ? (settings.notifyMemberIds as string[]) : [],
           ),
-        );
+          ...(typeof settings.name === 'string' ? { name: settings.name } : {}),
+          ...(typeof settings.slug === 'string' ? { publicKey: settings.slug } : {}),
+        });
       },
     },
   } as unknown as DataLayer;
   return { data, saves };
 }
 
-/** The Settings tab with its SaveBar, as the form editor holds them. */
+/** The Settings tab and its settings, as the form editor holds them (no SaveBar: each field saves itself). */
 function Editor({ initial }: { readonly initial: FormView }) {
   const [form, setForm] = useState(initial);
   const settings = useFormSettings({ slug: 'acme', form, onFormChange: setForm });
@@ -201,17 +204,22 @@ function Editor({ initial }: { readonly initial: FormView }) {
         members={MEMBERS}
         isReadOnly={false}
         settings={settings}
-        onDraftChange={() => undefined}
-        onRetarget={() => undefined}
+        onRetarget={(objectId) => {
+          retargets.push(objectId);
+        }}
         isRetargeting={false}
-        showGaps={false}
+        onStatusChange={(status) => {
+          statuses.push(status);
+        }}
       />
-      {settings.footer}
     </>
   );
 }
 
 let shown: InApp | undefined;
+/** What the tab asked the editor for: where answers are saved, and opening or closing the form. */
+const retargets: (string | null)[] = [];
+const statuses: string[] = [];
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -220,6 +228,8 @@ beforeAll(async () => {
 afterEach(() => {
   shown?.unmount();
   shown = undefined;
+  retargets.length = 0;
+  statuses.length = 0;
 });
 
 async function show(
@@ -244,10 +254,11 @@ describe('the owner of a form’s new records', () => {
       group(SALES, 'Sales team', [true, true]),
       group(QUIET, 'Night shift', [false, false]),
     ]);
-    const owner = page.getByRole('button', { name: /Owner$/ });
+    const owner = page.getByRole('button', { name: /Owner$/ }).last();
     // The chosen teammate shows with their avatar, so the name is matched on its own.
     await expect.element(owner.getByText('Ada Lovelace', { exact: true })).toBeVisible();
-    await expect.element(page.getByText('For new records only.')).toBeVisible();
+    // Its help is a tip beside the label, never a line under the field (T21).
+    expect(page.getByText('For new records only.').query()).toBeNull();
 
     await owner.click();
     const list = page.getByRole('listbox');
@@ -260,9 +271,9 @@ describe('the owner of a form’s new records', () => {
     await list.getByRole('option', { name: /Sales team/ }).click();
 
     await expect.element(owner).toHaveTextContent('Sales team');
-    await expect.element(page.getByText('Each new record goes to the next teammate in Sales team.')).toBeVisible();
-    await page.getByRole('button', { name: 'Save' }).click();
+    // Saved as it is picked: there is no Save button to find.
     await expect.poll(() => fake.saves).toEqual([{ ownerMemberId: null, ownerRotationId: SALES }]);
+    expect(page.getByRole('button', { name: 'Save' }).query()).toBeNull();
     await expect.element(owner).toHaveTextContent('Sales team');
 
     // A group with nobody switched on says new records get no owner; Nobody saves both cleared.
@@ -276,15 +287,13 @@ describe('the owner of a form’s new records', () => {
       .toBeVisible();
     await owner.click();
     await page.getByRole('listbox').getByRole('option', { name: 'Nobody', exact: true }).click();
-    await page.getByRole('button', { name: 'Save' }).click();
     await expect.poll(() => fake.saves.at(-1)).toEqual({ ownerMemberId: null, ownerRotationId: null });
   });
 
   it('keeps a group the reader can’t list in view, saying new records still go to it, and the keyboard reaches every choice', async () => {
     await show(formView({ ownerRotationId: GONE }), [group(SALES, 'Sales team', [true, true])]);
-    const owner = page.getByRole('button', { name: /Owner$/ });
+    const owner = page.getByRole('button', { name: /Owner$/ }).last();
     await expect.element(owner).toHaveTextContent('Round robin group');
-    await expect.element(page.getByText('New records go to a round robin group you can’t see.')).toBeVisible();
 
     // Opened from the keyboard, the arrows move through the list; Enter picks a teammate in place of the group.
     (owner.element() as HTMLElement).focus();
@@ -293,12 +302,11 @@ describe('the owner of a form’s new records', () => {
     await expect.element(list).toBeVisible();
     await userEvent.keyboard('{Home}{ArrowDown}{Enter}');
     await expect.element(owner.getByText('Ada Lovelace', { exact: true })).toBeVisible();
-    await expect.element(page.getByText('For new records only.')).toBeVisible();
   });
 
   it('names an owner who has left as a former member, saying new records get no owner', async () => {
     await show(formView({ ownerMemberId: '0199a6f2-0000-7000-8000-0000000000ff' }), []);
-    const owner = page.getByRole('button', { name: /Owner$/ });
+    const owner = page.getByRole('button', { name: /Owner$/ }).last();
     await expect.element(owner).toHaveTextContent('Former member');
     await expect
       .element(page.getByText('They’ve left the workspace, so new records get no owner. Pick another.'))
@@ -306,109 +314,100 @@ describe('the owner of a form’s new records', () => {
   });
 });
 
+describe('the name and the link save as they are left (one save model)', () => {
+  it('says nothing while the name is typed, says an empty one is missing once left, and saves a real one on leaving', async () => {
+    const fake = await show(formView({}), []);
+    const name = page.getByRole('textbox', { name: 'Name', exact: true });
+    await userEvent.clear(name);
+    // Emptied but not left: no error yet, and nothing sent.
+    expect(page.getByText('Give the form a name.').query()).toBeNull();
+    await userEvent.tab();
+    await expect.element(page.getByText('Give the form a name.')).toBeVisible();
+    expect(fake.saves).toEqual([]);
+    // Typing again clears it; leaving saves it, trimmed, with no Save button.
+    await userEvent.fill(name, ' Talk to us ');
+    expect(page.getByText('Give the form a name.').query()).toBeNull();
+    await userEvent.tab();
+    await expect.poll(() => fake.saves).toEqual([{ name: 'Talk to us' }]);
+    await expect.element(name).toHaveValue('Talk to us');
+  });
+
+  it('checks the link on leaving: one that can’t be a link says so and is not sent, a good one saves', async () => {
+    const fake = await show(formView({}), []);
+    const link = page.getByRole('textbox', { name: /^Link/ });
+    await userEvent.fill(link, 'a');
+    expect(page.getByText(/The link needs 2 to 40/).query()).toBeNull();
+    await userEvent.tab();
+    await expect.element(page.getByText(/The link needs 2 to 40/)).toBeVisible();
+    expect(fake.saves).toEqual([]);
+    await userEvent.fill(link, 'talk-to-us');
+    await userEvent.tab();
+    await expect.poll(() => fake.saves).toEqual([{ slug: 'talk-to-us' }]);
+  });
+});
+
 describe('who is emailed each new submission (AC-568, AC-1047)', () => {
   it('lists the people the form tells, saves a change alone, and says the owner is told too', async () => {
     const fake = await show(formView({ ownerMemberId: ADA }, [ADA]), []);
-    const notify = page.getByRole('button', { name: /Email each new submission to$/ });
+    const notify = page.getByRole('button', { name: /Email each submission to$/ }).last();
     await expect.element(notify).toHaveTextContent('Ada Lovelace');
-    await expect
-      .element(
-        page.getByText(
-          'The new record’s owner is emailed too. People who can’t see submissions aren’t emailed, and each email leaves out answers that person can’t see.',
-        ),
-      )
-      .toBeVisible();
     await notify.click();
     await page.getByRole('listbox').getByRole('option', { name: /Bea/ }).click();
     await userEvent.keyboard('{Escape}');
-    await page.getByRole('button', { name: 'Save' }).click();
     await expect.poll(() => fake.saves).toEqual([{ notifyMemberIds: [ADA, BEA] }]);
   });
 
   it('keeps people the reader can’t list as one choice, and names nobody as Nobody else', async () => {
     await show(formView({ ownerMemberId: ADA }, ['0199a6f2-0000-7000-8000-0000000000ff']), []);
     await expect
-      .element(page.getByRole('button', { name: /Email each new submission to$/ }))
+      .element(page.getByRole('button', { name: /Email each submission to$/ }).last())
       .toHaveTextContent('1 other person');
     shown?.unmount();
     await show(formView({ ownerMemberId: ADA }), []);
     await expect
-      .element(page.getByRole('button', { name: /Email each new submission to$/ }))
+      .element(page.getByRole('button', { name: /Email each submission to$/ }).last())
       .toHaveTextContent('Nobody else');
     // With no owner, nobody else is told either: the field says Nobody and the hint drops the owner.
     shown?.unmount();
     await show(formView({}), []);
     await expect
-      .element(page.getByRole('button', { name: /Email each new submission to$/ }))
+      .element(page.getByRole('button', { name: /Email each submission to$/ }).last())
       .not.toHaveTextContent('Nobody else');
-    await expect.element(page.getByText(/^People who can’t see submissions aren’t emailed/)).toBeVisible();
   });
 });
 
-describe('a form that sends visitors on to a booking page (late trap #53)', () => {
-  const DEMO = '0199f0a0-0000-7000-8000-0000000000d1';
-  const sending = (status: 'live' | 'paused') => {
-    const draft: FormDocument = {
-      ...DRAFT,
-      after: { kind: 'booking', bookingPageId: DEMO, countdownSeconds: 5, message: 'Thanks' },
-    };
-    const form = { ...formView({}), draft, live: draft };
-    const demo = {
-      id: DEMO,
-      title: 'Demo call',
-      status,
-      durations: [30],
-      canChange: true,
-      ...(status === 'paused' ? { pausedReason: 'host_removed' } : {}),
-    } as unknown as BookingPageView;
-    return { form, demo };
-  };
-
-  it('says when the page is paused, why, and offers the way to it', async () => {
-    const { form, demo } = sending('paused');
-    await show(form, [], [demo]);
-    await expect.element(page.getByText('Demo call is paused')).toBeVisible();
-    await expect.element(page.getByText(/Its last host left the workspace/)).toBeVisible();
-    await expect
-      .element(page.getByRole('link', { name: 'Open page' }))
-      .toHaveAttribute('href', `/w/acme/captures/links/${DEMO}`);
+describe('Settings as plain rows (T21)', () => {
+  it('keeps only the form’s own settings, as rows with no cards or text fields for the words', async () => {
+    await show(formView({ ownerMemberId: ADA }), []);
+    for (const gone of ['After sending', 'Endings', 'Score', 'Routing', 'Text', 'Details', 'Headline', 'Button text']) {
+      expect(page.getByRole('heading', { name: gone, exact: true }).query()).toBeNull();
+    }
+    expect(page.getByRole('textbox', { name: 'Headline' }).query()).toBeNull();
+    for (const row of [
+      'Name',
+      'Link',
+      'Save answers to',
+      'Owner',
+      'Email each submission to',
+      'Accepting submissions',
+    ]) {
+      await expect.element(page.getByText(row, { exact: true }).first()).toBeVisible();
+    }
+    await expect.element(page.getByRole('button', { name: 'Copy link' })).toBeVisible();
   });
 
-  it('says a deleted page is gone to a reader who sees every page, and nothing to one who may not', async () => {
-    const { form } = sending('paused');
-    await show(form, [], [], ['forms.manage', 'booking.admin']);
-    await expect.element(page.getByText('Its booking page was deleted')).toBeVisible();
-    await expect.element(page.getByText(/Pick another page\./)).toBeVisible();
-    shown?.unmount();
-    await show(form, [], [], ['forms.manage']);
-    await expect.element(page.getByRole('button', { name: /Booking page/ })).toBeVisible();
-    expect(page.getByText('Its booking page was deleted').query()).toBeNull();
-  });
-
-  it('says nothing while the page is live', async () => {
-    const { form, demo } = sending('live');
-    await show(form, [], [demo]);
-    await expect.element(page.getByRole('button', { name: /Booking page/ })).toBeVisible();
-    expect(page.getByText('Demo call is paused').query()).toBeNull();
-  });
-});
-
-describe('where a live form saves its answers (late trap #39)', () => {
-  const WAITS = 'Changes here go live when you publish. Until then, submissions are still saved to People.';
-
-  it('says a change waits for Publish, naming where submissions still go', async () => {
-    const keptOnly: FormDocument = {
-      ...DRAFT,
-      questions: DRAFT.questions.map(({ filedOn: _filed, ...question }) => question),
-      targets: {},
-    };
-    await show({ ...formView({}), draft: keptOnly }, []);
-    await expect.element(page.getByText(WAITS)).toBeVisible();
-  });
-
-  it('says nothing while the draft saves answers as the live form does', async () => {
+  it('saves answers to an object or to Submissions only, from one picker', async () => {
     await show(formView({}), []);
-    await expect.element(page.getByText('Talk to us').or(page.getByRole('switch').first())).toBeVisible();
-    expect(page.getByText(WAITS).query()).toBeNull();
+    const saving = page.getByRole('button', { name: /Save answers to$/ }).last();
+    await expect.element(saving).toHaveTextContent('People');
+    await saving.click();
+    await page.getByRole('listbox').getByRole('option', { name: 'Only in Submissions' }).click();
+    expect(retargets).toEqual([null]);
+  });
+
+  it('closes and opens the form from Accepting submissions', async () => {
+    await show(formView({}), []);
+    (page.getByRole('switch', { name: 'Accepting submissions' }).element() as HTMLElement).click();
+    expect(statuses).toEqual(['paused']);
   });
 });

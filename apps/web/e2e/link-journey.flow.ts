@@ -70,7 +70,7 @@ test.describe('the link page journey', () => {
     await visitor.getByLabel('Email').fill(`subscriber-${tag}@example.com`);
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Sign me up' }).click();
-    await expect(visitor.getByText(/^Thank you/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/^Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
 
     // The owner: the signup is a form under Captures, holding the one submission.
     await page.goto(`/w/${slug}/captures/forms`);

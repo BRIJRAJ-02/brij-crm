@@ -3,7 +3,16 @@
 import { describe, expect, it } from 'vitest';
 import type { FormQuestion } from '@crm/data';
 import type { FormEnding } from '@crm/data/forms';
-import { addJump, changeJump, idOfTarget, jumpChoices, removeJump, targetOfId, targetWords } from './jumps.ts';
+import {
+  addJump,
+  changeJump,
+  idOfTarget,
+  jumpChoices,
+  nextStepName,
+  removeJump,
+  targetOfId,
+  targetWords,
+} from './jumps.ts';
 import { changeStep, stepQuestionsOf, type Flow } from './steps.ts';
 
 const question = (id: string, key: string): FormQuestion => ({
@@ -48,9 +57,14 @@ describe('jumpChoices (AC-6313)', () => {
 
   it('names a step by its place and an ending by its heading', () => {
     expect(jumpChoices(flow, endings, 's3').map((choice) => choice.label)).toEqual([
-      'Go to step 4',
-      'End with “Not a fit”',
+      'Step 4',
+      'Thank-you message: Not a fit',
     ]);
+  });
+
+  it('names where a step goes when no jump matched: the next step, or nothing at the last (the thank you)', () => {
+    expect(nextStepName(flow, 's3')).toBe('Step 4');
+    expect(nextStepName(flow, 's4')).toBeUndefined();
   });
 });
 
@@ -65,7 +79,7 @@ describe('a jump’s target and its words', () => {
 
   it('has no words for a target the form no longer has, which the row says is gone', () => {
     const choices = jumpChoices(flow, endings, 's3');
-    expect(targetWords({ step: 's4' }, choices)).toBe('Go to step 4');
+    expect(targetWords({ step: 's4' }, choices)).toBe('Step 4');
     expect(targetWords({ step: 'removed' }, choices)).toBeUndefined();
   });
 });

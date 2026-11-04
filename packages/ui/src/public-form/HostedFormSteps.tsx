@@ -1,5 +1,5 @@
 import type { PublicQuestion } from '@crm/contracts/forms';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { ProgressBar } from '../atoms/ProgressBar/ProgressBar.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -51,6 +51,71 @@ function takesEnter(question: PublicQuestion | undefined): boolean {
  */
 const ADVANCE_PAUSE_MS = 400;
 
+/**
+ * Whether a key press asks for the step before (T23): the up arrow in a one line text field, Typeform's way. Never
+ * from a button, a list, a choice group or a long answer, which use the arrows themselves, and never Tab, which
+ * keeps moving focus as it always does.
+ */
+function backByKey(event: KeyboardEvent<HTMLFormElement>): boolean {
+  const target = event.target;
+  if (event.key !== 'ArrowUp' || event.altKey || event.metaKey || event.shiftKey) return false;
+  if (!(target instanceof HTMLInputElement)) return false;
+  const isLine = ['text', 'email', 'tel', 'url', 'number', 'search'].includes(target.type);
+  const inList = target.closest('[role="listbox"], [role="combobox"], [role="grid"]') !== null;
+  return isLine && !inList && target.getAttribute('aria-expanded') !== 'true';
+}
+
+/**
+ * The leaving step, animated out (T23): a still, inert copy of `form` laid over its place, sliding a little the way
+ * the visitor goes and fading, then removed. A copy, so the real step changes at once and nothing waits on the
+ * animation; ids, label links and question marks are taken off it so it never doubles a field. Nothing happens without the Web
+ * Animations API.
+ */
+function leaveFrom(form: HTMLFormElement | null, way: 'forward' | 'back'): void {
+  const parent = form?.parentElement;
+  if (form === null || parent === null || parent === undefined || typeof form.animate !== 'function') return;
+  const ghost = form.cloneNode(true);
+  if (!(ghost instanceof HTMLElement)) return;
+  for (const each of [ghost, ...ghost.querySelectorAll('[id], [for], [data-question]')]) {
+    each.removeAttribute('id');
+    each.removeAttribute('for');
+    // A question's mark is how focus finds it: the copy must never be found instead of the real one.
+    each.removeAttribute('data-question');
+  }
+  ghost.inert = true;
+  ghost.setAttribute('aria-hidden', 'true');
+  const box = form.getBoundingClientRect();
+  const frame = parent.getBoundingClientRect();
+  Object.assign(ghost.style, {
+    position: 'absolute',
+    insetBlockStart: `${String(box.top - frame.top + parent.scrollTop)}px`,
+    insetInlineStart: `${String(box.left - frame.left)}px`,
+    inlineSize: `${String(box.width)}px`,
+    margin: '0',
+    pointerEvents: 'none',
+  });
+  parent.insertBefore(ghost, form);
+  const tokens = getComputedStyle(form);
+  const distance = tokens.getPropertyValue('--space-16').trim() || '0px';
+  const duration = Number.parseFloat(tokens.getPropertyValue('--duration-exit')) || 0;
+  const remove = () => {
+    ghost.remove();
+  };
+  // Whichever comes first: the exit finishing, or its own length passing (a paused animation never strands it).
+  globalThis.setTimeout(remove, duration * 2);
+  ghost
+    .animate(
+      prefersStill()
+        ? [{ opacity: 1 }, { opacity: 0 }]
+        : [
+            { opacity: 1, transform: 'none' },
+            { opacity: 0, transform: `translateY(${way === 'back' ? distance : `calc(-1 * ${distance})`})` },
+          ],
+      { duration, easing: tokens.getPropertyValue('--ease-out').trim() || 'ease-out', fill: 'forwards' },
+    )
+    .finished.then(remove, remove);
+}
+
 /** True when the visitor asked for less motion. */
 function prefersStill(): boolean {
   return globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -87,8 +152,8 @@ export function HostedFormSteps({
   // A resumed fill opens on the step it was left on (AC-6319), found by id among the steps this path shows.
   // A step the answers have since taken away, or an id from an older version, leaves them at the first step.
   const [shownIndex, setIndex] = useState(0);
-  // How the visitor last moved: a pointer's move eases the next question in, a key's shows it at once.
-  const [moved, setMoved] = useState<'pointer' | 'key' | undefined>(undefined);
+  // Which way the visitor last moved (T23): the next step rises in, Back comes down; none before the first move.
+  const [moved, setMoved] = useState<'forward' | 'back' | undefined>(undefined);
   const hasMoved = moved !== undefined;
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
   const [focusesStep, setFocusesStep] = useState(false);
@@ -170,7 +235,11 @@ export function HostedFormSteps({
 
   const go = (next: number) => {
     setPicks(0);
-    setMoved(byPointer.current ? 'pointer' : 'key');
+    // The step on screen leaves the way the visitor is going (up on, down back) while the next one comes in
+    // (T23, Typeform): a still copy of it is laid where it was and animated out through the Web Animations API,
+    // on the motion tokens, so the move itself is never held up by it. Under reduced motion it fades only.
+    leaveFrom(formRef.current, next < index ? 'back' : 'forward');
+    setMoved(next < index ? 'back' : 'forward');
     setFocusesStep(true);
     setIndex(next);
   };
@@ -188,7 +257,8 @@ export function HostedFormSteps({
       () => {
         formRef.current?.requestSubmit();
       },
-      prefersStill() ? 0 : ADVANCE_PAUSE_MS,
+      // The beat is time to see the pick land and change it, not motion: it stays under reduced motion too.
+      ADVANCE_PAUSE_MS,
     );
     return () => {
       window.clearTimeout(timer);
@@ -241,7 +311,7 @@ export function HostedFormSteps({
     body = (
       <>
         {isOpen && groups.length > 0 ? (
-          <div className={styles.line}>
+          <div className={styles.line} data-mode={mode}>
             <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} isLabelHidden />
           </div>
         ) : null}
@@ -273,7 +343,7 @@ export function HostedFormSteps({
           data-layout={layout}
           noValidate
           ref={formRef}
-          data-moved={moved === 'pointer' || undefined}
+          data-enter={moved}
           // Capture: a control's press handling keeps these from bubbling.
           onPointerDownCapture={() => {
             byPointer.current = true;
@@ -282,6 +352,12 @@ export function HostedFormSteps({
             byPointer.current = false;
           }}
           onKeyDown={(event) => {
+            // Back by key (T23, Typeform): the up arrow from a one line text field goes to the step before.
+            if (index > 0 && !preview && backByKey(event)) {
+              event.preventDefault();
+              go(index - 1);
+              return;
+            }
             if (!isOpen || event.key !== 'Enter' || event.nativeEvent.isComposing) return;
             // One at a time, Enter goes on from a choice too (AC-1034), and from a long answer, where Shift and Enter
             // breaks the line (AC-6305); a browser submits only from a one line field.
@@ -352,7 +428,7 @@ export function HostedFormSteps({
             );
           })}
           {isLast && <FormTrap form={form} state={state} />}
-          <div className={styles.actions}>
+          <div className={styles.actions} data-layout={layout}>
             {!isOpen && <ErrorSummary state={state} among={step.questions} />}
             <FormAlert state={state} />
             <div className={styles.buttons} data-layout={layout}>

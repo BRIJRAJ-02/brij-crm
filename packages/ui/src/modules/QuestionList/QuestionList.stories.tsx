@@ -58,13 +58,11 @@ interface SampleProps {
   readonly withStep?: boolean;
 }
 
-/** A New step divider: the step's place and title, and what it holds. */
+/** A page break: the step's place and title, an inline header among the cards (T20). */
 const STEP: QuestionListItem = {
   id: 'step:company',
   kind: 'step',
   label: 'Step 2 · Your company',
-  typeIcon: 'layers',
-  note: '2 questions',
 };
 
 /** The list holding its own order and open questions, as the form builder does. */
@@ -272,18 +270,127 @@ export const WithoutTypes: Story = {
   },
 };
 
-/** A break between steps (kind step, spec 0063): on the ground with a dashed edge, among the question cards. */
+/** A page break (kind step, spec 0063; T20): an inline header on the ground, no card, among the question cards. */
 export const WithStep: Story = {
   render: () => <SampleQuestions withStep />,
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: /^Step 2 · Your company/ })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    const header = canvas.getByRole('button', { name: /^Step 2 · Your company/ });
+    // A header names its page; it has no editor to open of its own.
+    await expect(header).not.toHaveAttribute('aria-expanded');
+  },
+};
+
+/** The gap over a card (renderGap): "Split here" shows while a pointer is over it or focus is in it. */
+export const WithGap: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <QuestionList
+        label="Questions"
+        items={QUESTIONS}
+        openIds={new Set<string>()}
+        onOpenChange={() => undefined}
+        renderOpen={() => null}
+        renderGap={(id) =>
+          id === 'name' ? null : (
+            <Button size="sm" icon="scissors">
+              Split here
+            </Button>
+          )
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // Every card but the first has the action in the gap above it.
+    await expect(canvas.getAllByRole('button', { name: 'Split here' })).toHaveLength(3);
   },
 };
 
 /** A step break open: what the caller renders (its title), as a question's editor shows. */
 export const StepOpen: Story = {
   render: () => <SampleQuestions withStep initialOpen={['step:company']} />,
+};
+
+/**
+ * An open question with its own head (renderOpenHead, T40): the type as a small icon menu at its start and the
+ * question typed in the head itself; the chevron stays, as its own button that closes the card.
+ */
+export const OpenHead: Story = {
+  render: () => (
+    <Stage width="fill">
+      <QuestionList
+        label="Questions"
+        items={QUESTIONS}
+        openIds={new Set(['budget'])}
+        onOpenChange={() => undefined}
+        renderOpenHead={(id) => (
+          <>
+            <Button variant="ghost" icon="chevrons-up-down" label="Answer type: Dropdown" />
+            <Field
+              label="Question"
+              isLabelHidden
+              size="lg"
+              value={QUESTIONS.find((item) => item.id === id)?.label ?? ''}
+            />
+          </>
+        )}
+        renderOpen={() => (
+          <Field label="Placeholder" isLabelHidden size="sm" placeholder="Placeholder text (optional)" />
+        )}
+        onMove={() => undefined}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Question' })).toHaveValue('Budget');
+    await expect(canvas.getByRole('button', { name: 'Close Budget' })).toBeVisible();
+  },
+};
+
+/** Gaps kept in view (gaps="shown", T39): a quiet + between cards, for touch and the keyboard as well as a pointer. */
+export const GapsShown: Story = {
+  render: () => (
+    <Stage width="fill">
+      <QuestionList
+        label="Questions"
+        items={QUESTIONS}
+        gaps="shown"
+        openIds={new Set<string>()}
+        onOpenChange={() => undefined}
+        renderOpen={() => null}
+        renderGap={(id) => (id === 'name' ? null : <Button variant="ghost" size="sm" icon="plus" label="Add here" />)}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('button', { name: 'Add here' })).toHaveLength(3);
+  },
+};
+
+/** A note among the rows (kind note): a step's rules, under its last question, in a hairline box with no head. */
+const WITH_NOTE: readonly QuestionListItem[] = [
+  ...QUESTIONS.slice(0, 3),
+  { id: 'after', kind: 'note', label: 'After Step 1' },
+  ...QUESTIONS.slice(3),
+];
+
+export const WithNote: Story = {
+  render: () => (
+    <Stage width="fill">
+      <QuestionList
+        label="Questions"
+        items={WITH_NOTE}
+        openIds={new Set<string>()}
+        onOpenChange={() => undefined}
+        renderOpen={(id) => (id === 'after' ? <span>If Budget is Under $1k → Thanks, we are not a fit</span> : null)}
+        onMove={() => undefined}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('If Budget is Under $1k → Thanks, we are not a fit')).toBeVisible();
+    // A note is not a question: the count stays at the questions.
+    await expect(canvas.getByText('4')).toBeVisible();
+  },
 };

@@ -9,6 +9,8 @@ import { mountHostedForm, type HostedFormHandle, type HostedSubmission } from '.
 
 /** Picks a choice the way a visitor on a keyboard does: focus its radio, then Space. */
 async function pick(name: string) {
+  // The next step arrives once the last has left (T23's motion), so wait for the choice to be there.
+  await expect.element(page.getByRole('radio', { name })).toBeInTheDocument();
   (page.getByRole('radio', { name }).element() as HTMLElement).focus();
   await userEvent.keyboard(' ');
 }

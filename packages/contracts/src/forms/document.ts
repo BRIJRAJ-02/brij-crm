@@ -17,7 +17,14 @@ import {
   QUESTION_KEY,
 } from './answer-types.ts';
 import { stepsOfBreaks, type ResolvedStep } from './breaks.ts';
-import { FORM_ENDINGS_MAX, FORM_LAYOUTS, FORM_LOOK_THEMES, FORM_STEP_TITLE_MAX, STEP_JUMPS_MAX } from './path.ts';
+import {
+  DEFAULT_HEADLINE,
+  FORM_ENDINGS_MAX,
+  FORM_LAYOUTS,
+  FORM_LOOK_THEMES,
+  FORM_STEP_TITLE_MAX,
+  STEP_JUMPS_MAX,
+} from './path.ts';
 import { POINTS_LIMIT, SCORED_TYPES } from './score.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
@@ -325,9 +332,6 @@ export type FormConfirmation = z.infer<typeof FormConfirmation>;
 
 /** Below this many questions a Classic form saves no progress unless its owner asks (AC-6319). */
 export const SAVE_PROGRESS_CLASSIC_MIN = 10;
-
-/** The default headline. */
-export const DEFAULT_HEADLINE = 'Fill this in and we will come back to you';
 
 /** The default button text. */
 export const DEFAULT_BUTTON_TEXT = 'Send';

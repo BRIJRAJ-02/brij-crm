@@ -1,6 +1,6 @@
 // Brief
 // Purpose: one form's editor (spec 0023, 0023-experience.md, Builder): its questions beside a live preview, and Settings (what happens after sending, routing, the owner) from the start; Install and Submissions once published.
-// Main task: shape the draft (saved quietly as you go), publish it, and share it.
+// Main task: shape the draft (saved quietly as you go), publish it in one click, and share it.
 // Leaves out: round robin (#58), booking (#59), analytics. Jumps, endings, points and the Flow view arrived with spec 0063 slice 5: the jumps on a step divider (Form tab), the endings and the score's filing in Settings.
 import {
   isDataError,
@@ -14,27 +14,36 @@ import {
   type SubmissionState,
   type SubmissionView,
 } from '@crm/data';
-import { FORM_QUESTIONS_MAX, pathOf, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
+import {
+  DEFAULT_HEADLINE,
+  FORM_ENDINGS_MAX,
+  FORM_QUESTIONS_MAX,
+  pathOf,
+  previewOf,
+  publishProblem,
+  type PublishProblem,
+} from '@crm/data/forms';
 import { useCaptureList } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
   Callout,
-  Card,
   EditorStatus,
   Field,
+  SettingsStack,
   focusLater,
   HostedFormPreview,
   PreviewLayout,
   Select,
+  type PreviewTextChange,
   TabPanel,
   Tabs,
   TopBar,
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { DeleteFormDialog, RetargetFormDialog, type RetargetAsk } from './FormConfirms.tsx';
+import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { DeleteFormDialog, DiscardChangesDialog, RetargetFormDialog, type RetargetAsk } from './FormConfirms.tsx';
 import { retargetStep } from './retarget.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
@@ -45,20 +54,34 @@ import {
   isMatchQuestion,
   planNewAttributes,
   publishAttributesOf,
+  firstPublish,
+  canDiscard,
   sameDocument,
   savableDraft,
   statusOf,
   withFlow,
+  mintEndingId,
   withQuestions,
 } from './draft.ts';
 import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from './FormBrand.tsx';
-import { FlowView } from './FlowView.tsx';
+import { LogicMap } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
-import { PublishDialog } from './PublishDialog.tsx';
+import { ReadyDialog } from './PublishDialog.tsx';
+import { AFTER_ROW, AfterSendSection } from './AfterSendSection.tsx';
+import {
+  dropQuestionLogic,
+  followChoices,
+  logicCount,
+  logicProblems,
+  logicUses,
+  problemsAt,
+  problemWords,
+} from './logic.ts';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
+import { splitIntoSteps } from '../questions/steps.ts';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
 import { afterPageProblem } from './after-page.ts';
 import { emailToMakeUnique, readyMatch } from './match.ts';
@@ -71,10 +94,6 @@ import { strings as questionStrings } from '../questions/strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
-import { insightsHref } from '../insights/search.ts';
-
-/** The refusals that are fixed in Settings, not on the Form tab (spec 0063, AC-6315, AC-6316, AC-6326). */
-const IN_SETTINGS: readonly PublishProblem['code'][] = ['ENDING_INVALID', 'SCORE_FILING_INVALID'];
 
 /** Props for the editor: what its route loaded through the data layer. */
 export interface FormEditorProps {
@@ -109,6 +128,9 @@ function filingOf(document: FormDocument | undefined): string {
   ]);
 }
 
+/** The Steps header that stands for the first page while it has no break of its own (`QuestionsSection`). */
+const LEAD_STEP = '~lead';
+
 /** How long after the last change the draft saves. */
 const SAVE_AFTER_MS = 1_000;
 
@@ -128,7 +150,10 @@ export function FormEditor(props: FormEditorProps) {
   // A refused publish: the check's problem, or the server's (kept with the draft it refused).
   const [problem, setProblem] = useState<(PublishProblem & { readonly atDraft?: FormDocument }) | undefined>(undefined);
   const [isPublishing, setPublishing] = useState(false);
-  const [isFirstPublish, setFirstPublish] = useState(false);
+  // The form the first publish just put live: the Ready dialog shows its link (one click, no fields first).
+  const [justLive, setJustLive] = useState<FormView | undefined>(undefined);
+  // Discard changes asks first: it loses every edit since the last publish.
+  const [isDiscarding, setDiscarding] = useState(false);
   // Delete asks first; Pause and Resume act at once with Undo (the owner, 22 October 2026).
   const [isDeleting, setDeleting] = useState(false);
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
@@ -143,7 +168,7 @@ export function FormEditor(props: FormEditorProps) {
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // The Flow view (spec 0063, AC-6325): the steps, their jumps and the endings, read only, from the Form tab.
   const [isFlowOpen, setFlowOpen] = useState(false);
-  // The name, address and owner, saved together from the SaveBar on the Settings tab.
+  // The name, link, owner and who is emailed: each saves on its own on the Settings tab, with no Save.
   const settings = useFormSettings({
     slug,
     form,
@@ -243,6 +268,14 @@ export function FormEditor(props: FormEditorProps) {
   }
 
   const isPublished = form.liveVersionNumber !== undefined;
+  // What is wrong with the logic (T41), said where each rule is and counted on the Logic button.
+  const logicIssues = useMemo(() => logicProblems(draft), [draft]);
+  // One title (critique c, blocker 2): a draft whose headline nobody wrote yet takes the form's name, once, so a
+  // template's form reads "Lead qualification", not the stock headline.
+  if (!isPublished && canManage && form.name !== strings.untitledForm && draft.headline === DEFAULT_HEADLINE) {
+    setDraft({ ...draft, headline: form.name });
+  }
+
   // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
   // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
   // reuses what this already holds rather than asking again.
@@ -266,9 +299,11 @@ export function FormEditor(props: FormEditorProps) {
     const steps = preview.steps ?? [];
     const target =
       preview.layout === 'steps'
-        ? steps.find((step) =>
-            stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId,
-          )
+        ? stepId === LEAD_STEP
+          ? steps[0]
+          : steps.find((step) =>
+              stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId,
+            )
         : undefined;
     const lifted = new Set(target?.keys ?? (key === undefined ? [] : [key]));
     const form = {
@@ -299,13 +334,21 @@ export function FormEditor(props: FormEditorProps) {
 
   // Gives each unfiled, labelled question an attribute on the target object, with no prompt: files the question
   // onto it, and offers Undo (unfile, archive). Answers the draft to publish; a failure leaves the question unfiled.
-  const createMissingAttributes = async (): Promise<{
+  const createMissingAttributes = async (
+    draft: FormDocument,
+  ): Promise<{
     readonly document: FormDocument;
     readonly choices: FormTargetChoices;
   }> => {
     const objectId = target.objectId;
     const plans = planNewAttributes(draft, target.items, canBuild && canManage && objectId !== undefined);
-    if (objectId === undefined || plans.length === 0) return { document: draft, choices: target };
+    if (objectId === undefined || plans.length === 0) {
+      if (draft !== latest.current) {
+        setDraft(draft);
+        latest.current = draft;
+      }
+      return { document: draft, choices: target };
+    }
     const made = await createPlannedAttributes(data, slug, objectId, plans);
     // A field that couldn't be made leaves its question unfiled: said, never published quietly (late trap #37).
     const missed = plans.filter((plan) => !made.some((each) => each.questionId === plan.questionId));
@@ -361,23 +404,28 @@ export function FormEditor(props: FormEditorProps) {
         message:
           gap === 'redirect'
             ? strings.publishGap(strings.redirectIncomplete)
-            : strings.publishGapButton(strings.buttonTextMissing),
+            : gap === 'route'
+              ? strings.routeIncomplete
+              : strings.publishGapButton(strings.buttonTextMissing),
       });
       setShowGaps(true);
-      if (tab !== 'settings') void navigate({ href: formHref(slug, form.id, 'settings') });
+      // Everything a visitor meets is on the Form tab now (T20, T21): After they send, and the preview's words.
+      void navigate({ href: `${formHref(slug, form.id)}?question=${AFTER_ROW}` });
       return;
     }
-    // Questions with no attribute to file onto get one first, with no prompt; then the email the form matches on is
-    // made ready (`readyMatch`); the check and publish then read both.
+    // The first publish is one click (the owner, 5 November 2026, after Tally): each answer meets a field with its
+    // label first (`fileByLabel`, what the old dialog prefilled), then questions with no field to save to get one,
+    // with no prompt; then the email the form matches on is made ready (`readyMatch`); the check and publish read
+    // both. Where answers go is changed later in Settings › CRM.
     // An email field the object already had becomes unique on the way (late trap #36): it changes how imports and
-    // every other form match there too, so it is never done unsaid. A first publish leaves it to its dialog, which
-    // says so before Publish; a later one says so as soon as it is done, whatever the publish then does. One made
-    // just now for this form needs no word.
-    const mayMakeUnique = canBuild && canManage && isPublished;
-    const making = mayMakeUnique ? emailToMakeUnique(draft, target) : undefined;
+    // every other form match there too, so it is never done unsaid: a toast says so as soon as it is done, whatever
+    // the publish then does. One made just now for this form needs no word.
+    const start = isPublished ? draft : firstPublish(draft, form, target.items).document;
+    const mayMakeUnique = canBuild && canManage;
+    const making = mayMakeUnique ? emailToMakeUnique(start, target) : undefined;
     const uniqueTitle = target.items.find((item) => item.attributeId === making)?.title;
     setPublishing(true);
-    createMissingAttributes()
+    createMissingAttributes(start)
       .then(({ document, choices }) =>
         readyMatch({ data, slug, formId: form.id, canChangeAttributes: mayMakeUnique, flush }, document, choices),
       )
@@ -408,69 +456,116 @@ export function FormEditor(props: FormEditorProps) {
       }, failed);
   };
 
+  /**
+   * The first publish's name and link, with nothing asked: the form's own name, and a link made from it when that is
+   * free, else the form's own key (which is always its own).
+   */
+  const firstAddress = async (): Promise<{ readonly name: string; readonly slug: string }> => {
+    const { name, address } = firstPublish(draft, form, target.items);
+    if (address === form.publicKey) return { name, slug: form.publicKey };
+    const isFree = await data.forms.slugAvailable(slug, form.id, address).catch(() => false);
+    return { name, slug: isFree ? address : form.publicKey };
+  };
+
+  /** Publishes the saved draft; the first time with its name and link, its own key if the link was just taken. */
+  const goLive = async (): Promise<FormView> => {
+    const first = isPublished ? undefined : await firstAddress();
+    const revision = await flush();
+    if (first === undefined) return data.forms.publish(slug, form.id, { expectedRevision: revision });
+    try {
+      return await data.forms.publish(slug, form.id, { expectedRevision: revision, ...first });
+    } catch (error) {
+      const isTaken = isDataError(error) && error.code === 'SLUG_TAKEN';
+      if (!isTaken || first.slug === form.publicKey) throw error;
+      return data.forms.publish(slug, form.id, { expectedRevision: revision, name: first.name, slug: form.publicKey });
+    }
+  };
+
   const publishChecked = (draft: FormDocument, target: FormTargetChoices) => {
-    const attributes = publishAttributesOf(target);
-    // The first publish names the form and its address in its dialog; the questions are checked first.
     const found = publishProblem({
-      name: isPublished ? form.name : form.name === '' ? 'x' : form.name,
+      name: form.name,
       slug: form.publicKey,
       document: draft,
-      attributes,
+      attributes: publishAttributesOf(target),
       ...(target.objectName === undefined ? {} : { objectName: target.objectName }),
       canChangeAttributes: canBuild && canManage,
     });
-    // A first publish's dialog names the form and its address, and makes the email unique once it has said so.
-    const dialogFixes = (problem: PublishProblem) =>
-      problem.code === 'NAME_MISSING' ||
-      problem.code === 'ADDRESS_INVALID' ||
-      (problem.code === 'EMAIL_MISSING' && canBuild && emailToMakeUnique(draft, target) !== undefined);
-    if (found !== undefined && (isPublished || !dialogFixes(found))) {
+    if (found !== undefined) {
       setProblem(found);
-      // Each refusal opens the tab that holds what it is about (spec 0063, AC-6326): the endings and the score's
-      // filing live in Settings, everything else on the Form tab.
-      // A recall refused in an ending's words carries its ending, so it goes to Settings too.
-      const where = IN_SETTINGS.includes(found.code) || found.endingId !== undefined ? 'settings' : 'form';
-      if (tab !== where) void navigate({ href: formHref(slug, form.id, where) });
+      // Each refusal opens where it is fixed (spec 0063, AC-6326): everything a visitor meets, the endings and the
+      // score included, is on the Form tab now (T20).
+      if (tab !== 'form') void navigate({ href: formHref(slug, form.id) });
       return;
     }
-    if (!isPublished) {
-      setFirstPublish(true);
-      return;
-    }
+    const wasPublished = isPublished;
     setPublishing(true);
-    flush()
-      .then((revision) => data.forms.publish(slug, form.id, { expectedRevision: revision }))
-      .then(
-        (view) => {
-          setPublishing(false);
-          const filingChanged = form.live !== undefined && filingOf(form.live) !== filingOf(view.live);
-          const wasKeptOnly = form.live?.targets.main === undefined;
-          apply(view);
-          toasts.toast({ tone: 'success', message: strings.published(view.liveVersionNumber ?? 1) });
-          // Where answers are filed changed, and the form files now: offer to file the earlier submissions the same way.
-          if (filingChanged && view.live?.targets.main !== undefined && view.submissionCount > 0) {
-            setSyncOffer(wasKeptOnly ? 'connected' : 'published');
-          } else focusLater(() => moreRef.current);
-        },
-        (error: unknown) => {
-          setPublishing(false);
-          if (isDataError(error) && error.code === 'FORM_CHANGED') {
-            setConflict(true);
-            return;
-          }
-          const refusal = firstRefusal(error);
-          const questionId = draft.questions.some((question) => question.id === refusal.field)
-            ? refusal.field
-            : undefined;
-          // The server's refusal, shown until the draft changes; its code is the server's own.
-          setProblem({
-            code: 'LABEL_MISSING',
-            message: refusal.message,
-            atDraft: draft,
-            ...(questionId === undefined ? {} : { questionId }),
-          });
-        },
-      );
+    goLive().then(
+      (view) => {
+        setPublishing(false);
+        const filingChanged = form.live !== undefined && filingOf(form.live) !== filingOf(view.live);
+        const wasKeptOnly = form.live?.targets.main === undefined;
+        apply(view);
+        setDraft(view.draft);
+        latest.current = view.draft;
+        // The first time, the Ready dialog says it is live and hands over the link.
+        if (!wasPublished) {
+          setJustLive(view);
+          return;
+        }
+        toasts.toast({ tone: 'success', message: strings.published });
+        // Where answers are saved changed, and the form saves now: offer to save the earlier submissions the same way.
+        if (filingChanged && view.live?.targets.main !== undefined && view.submissionCount > 0) {
+          setSyncOffer(wasKeptOnly ? 'connected' : 'published');
+        } else focusLater(() => moreRef.current);
+      },
+      (error: unknown) => {
+        setPublishing(false);
+        if (isDataError(error) && error.code === 'FORM_CHANGED') {
+          setConflict(true);
+          return;
+        }
+        const refusal = firstRefusal(error);
+        const questionId = draft.questions.some((question) => question.id === refusal.field)
+          ? refusal.field
+          : undefined;
+        // The server's refusal, shown until the draft changes; its code is the server's own.
+        setProblem({
+          code: 'LABEL_MISSING',
+          message: refusal.message,
+          atDraft: draft,
+          ...(questionId === undefined ? {} : { questionId }),
+        });
+      },
+    );
+  };
+
+  /**
+   * Discard changes (the ⋯ menu, after a confirm): the draft goes back to the live form and is saved, which the server
+   * reads as the live version again, so the status is Live and Publish goes. A field still being typed goes with it.
+   * A draft the server holds apart from live with the same words (edits undone by hand) is saved back all the same,
+   * so Discard never says it worked while nothing changed. A refused save puts the edits back on screen: the confirm
+   * says why, and Cancel then really keeps them.
+   */
+  const discard = async (): Promise<void> => {
+    const live = form.live;
+    if (live === undefined) return;
+    if (inFlight.current !== undefined) await inFlight.current.catch(() => undefined);
+    const before = latest.current;
+    setDraft(live);
+    latest.current = live;
+    try {
+      if (sameDocument(live, saved.current.document)) {
+        const view = await data.forms.saveDraft(slug, form.id, live, saved.current.revision);
+        saved.current = { document: live, revision: view.revision };
+        setForm(view);
+      } else await flush();
+    } catch (error) {
+      setDraft(before);
+      latest.current = before;
+      throw error;
+    }
+    setProblem(undefined);
+    setShowGaps(false);
   };
 
   // Settings' Add each submission to the CRM: the draft points at an object (its starting questions filed by the
@@ -524,11 +619,19 @@ export function FormEditor(props: FormEditorProps) {
     }, failed);
   };
 
+  // The headline, the line under it and the button, typed on the preview itself (T21: the Text card went). The
+  // preview shows the draft as a visitor gets it, so an empty headline shows the default until words are typed.
+  const changeText = (change: PreviewTextChange) => {
+    setDraft((before) => ({ ...before, ...change }));
+  };
+
   const goTab = (next: FormTab) => {
     void navigate({ href: formHref(slug, form.id, next) });
   };
 
   const changedBy = members.find((member) => member.id === form.draftSavedByMemberId)?.name;
+  // Saved by this person from another tab (critique c): never blamed on them as if someone else.
+  const isMine = useMyAccess()?.memberId === form.draftSavedByMemberId;
 
   const topBar = (
     <TopBar
@@ -540,8 +643,7 @@ export function FormEditor(props: FormEditorProps) {
       <EditorActions
         // A draft has no link yet: Copy link shows from the first publish, as the forms list shows it.
         {...(isPublished ? { link: data.forms.hostedUrl(form.publicKey) } : {})}
-        // Its visits, finishes and sources (spec 0067), once it has a public address to visit.
-        {...(isPublished ? { insightsHref: insightsHref(slug, { kind: 'form', page: form.id }) } : {})}
+        // No Insights here (T22): the Analytics tab is the form's one door to how it does.
         preview={
           <Button
             icon="eye"
@@ -561,12 +663,12 @@ export function FormEditor(props: FormEditorProps) {
             {strings.previewOpen}
           </Button>
         }
-        // Forms keep a draft: Publish (the first time) or Publish changes shows while there is something to publish.
+        // Forms keep a draft: Publish, the page's one primary, shows while there is something to publish.
         {...(canManage && (!isPublished || isChanged || form.hasUnpublished)
           ? {
               publish: (
                 <Button variant="primary" onPress={publish} isPending={isPublishing}>
-                  {isPublishing ? strings.publishing : isPublished ? strings.publishChanges : strings.publish}
+                  {isPublishing ? strings.publishing : strings.publish}
                 </Button>
               ),
             }
@@ -586,10 +688,22 @@ export function FormEditor(props: FormEditorProps) {
                 onDelete: () => setDeleting(true),
                 deleteLabel: strings.deleteForm,
                 triggerRef: moreRef,
-                // Earlier submissions filed again the way the form files now: once it files and has some.
-                ...(form.live?.targets.main !== undefined && form.submissionCount > 0
-                  ? {
-                      extra: [
+                extra: [
+                  // Back to what is live, once there is something unpublished to lose (it asks first).
+                  ...(canDiscard(form, isChanged)
+                    ? [
+                        {
+                          id: 'discard',
+                          label: strings.discardChanges,
+                          icon: 'undo-2' as const,
+                          isDanger: true,
+                          onAction: () => setDiscarding(true),
+                        },
+                      ]
+                    : []),
+                  // Earlier submissions saved again the way the form saves now: once it saves to the CRM and has some.
+                  ...(form.live?.targets.main !== undefined && form.submissionCount > 0
+                    ? [
                         {
                           id: 'sync',
                           label: strings.syncOld,
@@ -597,9 +711,9 @@ export function FormEditor(props: FormEditorProps) {
                           description: strings.syncOldText,
                           onAction: () => setSyncOffer('menu'),
                         },
-                      ],
-                    }
-                  : {}),
+                      ]
+                    : []),
+                ],
               },
             }
           : {})}
@@ -643,8 +757,16 @@ export function FormEditor(props: FormEditorProps) {
         }}
       />
       {conflict && (
-        <Callout tone="warning" isAnnounced actions={<Button onPress={loadTheirs}>{strings.loadTheirs}</Button>}>
-          {changedBy === undefined ? strings.someoneChanged : strings.changedBy(changedBy)}
+        <Callout
+          tone="warning"
+          isAnnounced
+          actions={<Button onPress={loadTheirs}>{isMine ? strings.loadMine : strings.loadTheirs}</Button>}
+        >
+          {isMine
+            ? strings.changedByMe
+            : changedBy === undefined
+              ? strings.someoneChanged
+              : strings.changedBy(changedBy)}
         </Callout>
       )}
       {shown !== undefined && (
@@ -668,10 +790,9 @@ export function FormEditor(props: FormEditorProps) {
             members={members}
             isReadOnly={!canManage}
             settings={settings}
-            onDraftChange={setDraft}
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
-            showGaps={showGaps}
+            onStatusChange={setStatus}
           />
         );
       case 'install':
@@ -700,46 +821,88 @@ export function FormEditor(props: FormEditorProps) {
       default:
         return (
           <>
-            {/* Before the first publish the name is changed here too, as a field, beside the questions. */}
-            {!isPublished && canManage && (
-              <DraftName
-                name={form.name}
-                onRename={(name) => {
-                  data.forms.updateSettings(slug, form.id, { name }).then((view) => {
-                    setForm((before) => ({ ...before, name: view.name, revision: before.revision }));
-                  }, failed);
-                }}
-              />
-            )}
+            {/* One title (critique c, blocker 2): the headline visitors read, edited here at the top with the line
+                under it; while the form is still Untitled, its name follows the headline. */}
+            <FormTitle
+              headline={draft.headline}
+              subheading={draft.subheading ?? ''}
+              isReadOnly={!canManage}
+              onChange={(change) => {
+                setDraft((before) => {
+                  const { subheading: _was, ...rest } = before;
+                  const subheading = change.subheading ?? before.subheading ?? '';
+                  return {
+                    ...rest,
+                    headline: change.headline ?? before.headline,
+                    ...(subheading.trim() === '' ? {} : { subheading }),
+                  };
+                });
+              }}
+              onCommit={(headline) => {
+                if (isPublished || !canManage || form.name !== strings.untitledForm || headline.trim() === '') return;
+                const name = headline.trim().slice(0, 80);
+                data.forms.updateSettings(slug, form.id, { name }).then((view) => {
+                  setForm((before) => ({ ...before, name: view.name, revision: before.revision }));
+                }, failed);
+              }}
+            />
             <LayoutCard
               layout={draft.layout}
-              hasSteps={draft.steps.length > 0}
               isReadOnly={!canManage}
               onChange={(layout) => {
-                setDraft((before) => ({ ...before, layout }));
+                // Steps splits the form into pages at once (T20, Tally's page breaks): a header on every page, after
+                // the contact details or in the middle, breaks it already has kept.
+                setDraft((before) =>
+                  layout === 'steps'
+                    ? withFlow(
+                        { ...before, layout },
+                        splitIntoSteps({ questions: before.questions, steps: before.steps }, () => data.forms.newId(), {
+                          details: questionStrings.yourDetails,
+                          rest: questionStrings.aboutYou,
+                        }),
+                      )
+                    : { ...before, layout },
+                );
               }}
             />
-            <Button
-              variant="secondary"
-              icon="git-branch"
-              onPress={() => {
-                setFlowOpen(true);
-              }}
-            >
-              {strings.flowOpen}
-            </Button>
-            <FlowView
-              draft={draft}
-              isOpen={isFlowOpen}
-              questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
-              stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
-              endingsHref={formHref(slug, form.id, 'settings')}
-              onOpenChange={setFlowOpen}
-            />
+            {isFlowOpen && (
+              <LogicMap
+                slug={slug}
+                draft={draft}
+                problems={logicIssues}
+                onSuggest={(suggestion) => {
+                  const ids = { rule: data.forms.newId(), ending: mintEndingId(draft.endings ?? []) };
+                  setDraft((before) => suggestion.apply(before, ids));
+                  toasts.toast({ tone: 'success', message: strings.suggestionAdded });
+                }}
+                questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
+                stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
+                endingsHref={`${formHref(slug, form.id)}?question=${AFTER_ROW}`}
+                onOpenChange={setFlowOpen}
+              />
+            )}
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               {...(questionStats === undefined ? {} : { stats: questionStats })}
               onOpened={setPreviewRow}
+              // The Logic map's door (T41): how many rules the form has, and how many need a look.
+              {...(draft.questions.length === 0
+                ? {}
+                : {
+                    actionsStart: (
+                      <Button
+                        variant="ghost"
+                        icon={logicIssues.length > 0 ? 'triangle-alert' : 'git-branch'}
+                        onPress={() => {
+                          setFlowOpen(true);
+                        }}
+                      >
+                        {logicIssues.length > 0
+                          ? strings.logicButtonWarn(logicCount(draft), logicIssues.length)
+                          : strings.logicButton(logicCount(draft))}
+                      </Button>
+                    ),
+                  })}
               steps={{
                 steps: draft.steps,
                 layout: draft.layout,
@@ -748,10 +911,91 @@ export function FormEditor(props: FormEditorProps) {
                   setDraft((before) => withFlow(before, update({ questions: before.questions, steps: before.steps })));
                 },
                 ...(shown?.stepId === undefined ? {} : { problem: { stepId: shown.stepId, message: shown.message } }),
+                onAddEnding: () => {
+                  const id = mintEndingId(draft.endings ?? []);
+                  if ((draft.endings ?? []).length >= FORM_ENDINGS_MAX) return undefined;
+                  setDraft((before) => ({
+                    ...before,
+                    endings: [...(before.endings ?? []), { id, heading: questionStrings.newEndingHeading }],
+                  }));
+                  return id;
+                },
               }}
               questions={draft.questions}
               onChange={(update) => {
-                setDraft((before) => withQuestions(before, update(before.questions)));
+                // Rules follow their choices (T41): a renamed choice is renamed in them, a removed one leaves them,
+                // said once with Undo when a rule went with it.
+                const snapshot = draft;
+                const dropped = followChoices(
+                  snapshot.questions,
+                  withQuestions(snapshot, update(snapshot.questions)),
+                ).dropped;
+                setDraft(
+                  (before) => followChoices(before.questions, withQuestions(before, update(before.questions))).document,
+                );
+                if (dropped > 0) {
+                  toasts.toast({
+                    tone: 'info',
+                    message: strings.choiceRulesDropped(dropped),
+                    action: {
+                      label: strings.undo,
+                      onAction: () => {
+                        setDraft(snapshot);
+                      },
+                    },
+                  });
+                }
+              }}
+              logicWarnings={(place) => problemsAt(logicIssues, place).map(problemWords)}
+              onRemoveUsed={(question, index) => {
+                const uses = logicUses(draft, question.key);
+                if (uses === 0) return false;
+                const snapshot = draft;
+                setDraft(
+                  (before) =>
+                    dropQuestionLogic(
+                      withQuestions(
+                        before,
+                        before.questions.filter((each) => each.id !== question.id),
+                      ),
+                      question.key,
+                    ).document,
+                );
+                toasts.toast({
+                  tone: 'info',
+                  message: strings.deletedWithRules(
+                    question.label === '' ? questionStrings.untitledQuestion : question.label,
+                    uses,
+                  ),
+                  action: {
+                    label: strings.undo,
+                    onAction: () => {
+                      setDraft((before) =>
+                        before.questions.some((each) => each.id === question.id)
+                          ? before
+                          : {
+                              ...before,
+                              questions: [
+                                ...before.questions.slice(0, index),
+                                question,
+                                ...before.questions.slice(index),
+                              ],
+                              steps: snapshot.steps,
+                              routing: snapshot.routing,
+                              ...(snapshot.endings === undefined ? {} : { endings: snapshot.endings }),
+                            },
+                      );
+                      // Show only if on the other questions comes back with the question.
+                      setDraft((before) => ({
+                        ...before,
+                        questions: before.questions.map(
+                          (each) => snapshot.questions.find((was) => was.id === each.id) ?? each,
+                        ),
+                      }));
+                    },
+                  },
+                });
+                return true;
               }}
               max={FORM_QUESTIONS_MAX}
               holder={questionStrings.formHolder}
@@ -773,6 +1017,21 @@ export function FormEditor(props: FormEditorProps) {
                 ? {}
                 : { problem: { questionId: shown.questionId, message: shown.message } })}
             />
+            <AfterSendSection
+              slug={slug}
+              draft={draft}
+              target={target}
+              isReadOnly={!canManage}
+              toasts={toasts}
+              newId={() => data.forms.newId()}
+              onDraftChange={setDraft}
+              showGaps={showGaps}
+              stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
+              {...(props.question === AFTER_ROW ? { focusRow: AFTER_ROW } : {})}
+              {...(shown?.endingId === undefined
+                ? {}
+                : { problem: { endingId: shown.endingId, message: shown.message } })}
+            />
           </>
         );
     }
@@ -781,10 +1040,10 @@ export function FormEditor(props: FormEditorProps) {
   const layout = (
     <PreviewLayout
       notices={notices}
+      // The phone beside the questions from a laptop's width up (critique c, blocker 1): two fifths of the width.
+      previewShare="wide"
       // Every tab reads top to bottom, full width; only the Form tab keeps the preview (the owner, 22 October 2026).
       bodyLayout="stack"
-      // On every tab, so a name, link or owner left unsaved still says so after a tab change.
-      footer={settings.footer}
       {...(current === 'form'
         ? {
             preview:
@@ -794,11 +1053,13 @@ export function FormEditor(props: FormEditorProps) {
                   slug={slug}
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
+                  {...(canManage ? { onTextChange: changeText } : {})}
                 />
               ) : (
                 <HostedFormPreview
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
+                  {...(canManage ? { onTextChange: changeText } : {})}
                 />
               ),
             previewControls: (
@@ -890,37 +1151,26 @@ export function FormEditor(props: FormEditorProps) {
           });
         }}
       />
-      {isFirstPublish && (
-        <PublishDialog
-          slug={slug}
-          form={form}
-          draft={draft}
-          target={target}
-          objects={objects}
-          canBuild={canBuild}
-          flush={flush}
-          onDraftChange={(next) => {
-            setDraft(next);
-            latest.current = next;
-          }}
-          onTargetChange={(view, choices) => {
-            apply(view);
-            setDraft(view.draft);
-            latest.current = view.draft;
-            setTarget(choices);
-          }}
-          onPublished={(view) => {
-            apply(view);
-            setDraft(view.draft);
-            latest.current = view.draft;
-          }}
-          onClose={() => {
-            setFirstPublish(false);
-            // Publish left once the form went live; focus goes to the menu beside where it was.
-            focusLater(() => moreRef.current);
-          }}
-        />
-      )}
+      <ReadyDialog
+        form={justLive}
+        onClose={() => {
+          setJustLive(undefined);
+          // Publish left once the form went live; focus goes to the menu beside where it was.
+          focusLater(() => moreRef.current);
+        }}
+      />
+      <DiscardChangesDialog
+        isOpen={isDiscarding}
+        onDiscard={discard}
+        onClose={() => {
+          setDiscarding(false);
+        }}
+        onDone={() => {
+          setDiscarding(false);
+          toasts.toast({ tone: 'success', message: strings.discarded });
+          focusLater(() => moreRef.current);
+        }}
+      />
       <DeleteFormDialog
         data={data}
         slug={slug}
@@ -1018,29 +1268,60 @@ function AfterPageNotice({
   );
 }
 
-/** A draft's name, as a field: blur saves it, an empty one says so. */
-function DraftName({ name, onRename }: { readonly name: string; readonly onRename: (name: string) => void }) {
-  const [value, setValue] = useState(name);
-  const [error, setError] = useState<string | undefined>(undefined);
+/** What the title at the top of the Form tab changes: the headline, or the line under it. */
+interface TitleChange {
+  readonly headline?: string;
+  readonly subheading?: string;
+}
+
+/**
+ * The form's one title (critique c, blocker 2; Tally's page title): the headline visitors read, in the page's title
+ * type, and the line under it, quiet, each edited in place. The private name lives in Settings once published.
+ */
+function FormTitle({
+  headline,
+  subheading,
+  isReadOnly,
+  onChange,
+  onCommit,
+}: {
+  readonly headline: string;
+  readonly subheading: string;
+  readonly isReadOnly: boolean;
+  readonly onChange: (change: TitleChange) => void;
+  /** The headline was left: an Untitled form takes it as its name. */
+  readonly onCommit: (headline: string) => void;
+}) {
   return (
-    <Card title={strings.name}>
+    <SettingsStack variant="nested">
       <Field
-        label={strings.name}
+        label={strings.formTitle}
         isLabelHidden
-        value={value}
-        maxLength={80}
-        isRequired
+        variant="title"
+        isWrapping
+        placeholder={strings.formTitlePlaceholder}
+        value={headline}
+        maxLength={120}
+        isReadOnly={isReadOnly}
         onChange={(text) => {
-          setValue(text);
-          setError(undefined);
+          onChange({ headline: text });
         }}
         onBlur={() => {
-          const trimmed = value.trim();
-          if (trimmed === '') setError(strings.nameRequired);
-          else if (trimmed !== name) onRename(trimmed);
+          onCommit(headline);
         }}
-        {...(error === undefined ? {} : { error })}
       />
-    </Card>
+      <Field
+        label={strings.formLine}
+        isLabelHidden
+        isWrapping
+        placeholder={strings.formLinePlaceholder}
+        value={subheading}
+        maxLength={240}
+        isReadOnly={isReadOnly}
+        onChange={(text) => {
+          onChange({ subheading: text });
+        }}
+      />
+    </SettingsStack>
   );
 }

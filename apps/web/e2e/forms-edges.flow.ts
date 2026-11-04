@@ -67,15 +67,19 @@ test.describe('the form journey’s edges', () => {
     test.setTimeout(180_000);
     const { slug, form } = await withForm(page, 'required');
     await page.goto(`/w/${slug}/captures/forms/${form.id}`);
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    // The type first (T40), then the words in the card's head, then Required in its footer.
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
-    await page.getByText('Visitors must answer').last().click();
+    // A switch's input sits under its drawn track: focus it and press Space, as a keyboard does.
+    await page.getByRole('switch', { name: 'Required' }).last().focus();
+    await page.keyboard.press('Space');
     // A live form publishes its changes in one press, no dialog.
     await page
       .getByRole('button', { name: /^Publish/ })
       .first()
       .click();
-    await expect(page.getByText(/Live · v2/).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Published.')).toBeVisible({ timeout: 30_000 });
 
     const visitor = await visitorOn(browser, page, form);
     await visitor.getByLabel(/Your name/).fill('Ada Lovelace');
@@ -83,10 +87,10 @@ test.describe('the form journey’s edges', () => {
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Send' }).click();
     await expect(visitor.getByText('Answer this question.')).toBeVisible();
-    await expect(visitor.getByText(/Thank you/)).toHaveCount(0);
+    await expect(visitor.getByText(/Thanks, we got it/)).toHaveCount(0);
     await visitor.getByLabel(/What is your budget\?/).fill('About ten thousand');
     await visitor.getByRole('button', { name: 'Send' }).click();
-    await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
     await visitor.context().close();
   });
 
@@ -94,7 +98,7 @@ test.describe('the form journey’s edges', () => {
     test.setTimeout(180_000);
     const { slug, form } = await withForm(page, 'retarget');
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=settings`);
-    const target = page.getByRole('button', { name: /Save to$/ });
+    const target = page.getByRole('button', { name: /Save answers to$/ }).last();
     await expect(target).toContainText('People');
     await target.click();
     await page.getByRole('option', { name: 'Deals', exact: true }).click();
@@ -117,7 +121,7 @@ test.describe('the form journey’s edges', () => {
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Send' }).click();
     // A bot learns nothing: it is thanked like anyone else.
-    await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
     await visitor.context().close();
 
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=submissions`);
@@ -161,9 +165,10 @@ test.describe('the form journey’s edges', () => {
     const { slug, form } = await withForm(page, 'moved');
     const moved = `talk-${form.id.slice(-8)}`;
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=settings`);
+    // The link saves itself as the field is left: there is no Save (one save model, 5 November 2026).
     await page.getByLabel('Link', { exact: true }).fill(moved);
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeHidden({ timeout: 15_000 });
+    await page.getByLabel('Link', { exact: true }).press('Tab');
+    await expect(page.getByText('Link changed. Old links still open the form.')).toBeVisible({ timeout: 15_000 });
 
     // A link pasted before the change still opens the form, and the page moves to the new address.
     const visitor = await visitorOn(browser, page, form);
@@ -172,7 +177,7 @@ test.describe('the form journey’s edges', () => {
     await visitor.context().close();
   });
 
-  test('a form published again while a visitor fills it in redraws in place, their answers kept', async ({
+  test('a form published again while a visitor fills it in takes their send as the version they saw (AC-6302)', async ({
     page,
     browser,
   }) => {
@@ -182,29 +187,31 @@ test.describe('the form journey’s edges', () => {
     await visitor.getByLabel(/Your name/).fill('Ada Lovelace');
     await visitor.getByLabel(/Work email/).fill(`ada-${form.id.slice(-6)}@example.com`);
 
-    // Meanwhile the owner adds a required question and publishes, so the visitor's page lacks something it needs.
+    // Meanwhile the owner adds a required question and publishes.
     await page.goto(`/w/${slug}/captures/forms/${form.id}`);
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    // The type first (T40), then the words in the card's head, then Required in its footer.
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
-    await page.getByText('Visitors must answer').last().click();
+    // A switch's input sits under its drawn track: focus it and press Space, as a keyboard does.
+    await page.getByRole('switch', { name: 'Required' }).last().focus();
+    await page.keyboard.press('Space');
     await page
       .getByRole('button', { name: /^Publish/ })
       .first()
       .click();
-    await expect(page.getByText(/Live · v2/).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Published.')).toBeVisible({ timeout: 30_000 });
 
+    // Spec 0063 (AC-6302): a send is checked and filed as the version the visitor saw, so the new required question
+    // never strands someone who started before it existed.
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Send' }).click();
-    // Not lost and not a dead end: the new version, the answers still in it, and why.
-    await expect(visitor.getByText(/This form was updated while you filled it in\./)).toBeVisible({ timeout: 15_000 });
-    await expect(visitor.getByLabel(/Your name/)).toHaveValue('Ada Lovelace');
-    await visitor.getByLabel(/What is your budget\?/).fill('About ten thousand');
-    await visitor.getByRole('button', { name: 'Send' }).click();
-    await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/This form was updated while you filled it in\./)).toHaveCount(0);
     await visitor.context().close();
   });
 
-  test('a new form sends its visitors to a booking page, set up in Settings before the first publish', async ({
+  test('a new form sends its visitors to a booking page, set up in After they send before the first publish', async ({
     page,
     browser,
   }) => {
@@ -215,24 +222,27 @@ test.describe('the form journey’s edges', () => {
     await rpc(page, 'bookingPages/create', {
       workspace: slug,
       id: uuidv7(),
-      title: 'Intro call',
+      // Named apart from the booking page a new workspace starts with.
+      title: `Intro call ${tag}`,
       timeZone: 'UTC',
       mutationId: randomUUID(),
     });
 
     await page.goto(`/w/${slug}/captures/forms`);
     await newForm(page);
-    // Settings is open before the first publish, so what comes after sending is chosen first.
-    await page.getByRole('tab', { name: 'Settings' }).click();
-    await page.getByRole('radio', { name: 'Booking' }).check({ force: true });
-    await page.getByRole('button', { name: /Booking page$/ }).click();
-    await page.getByRole('option', { name: /^Intro call/ }).click();
-    await expect(page.getByRole('button', { name: /Booking page$/ })).toContainText('Intro call');
+    // What comes after sending is set before the first publish, at the end of the Form tab, as one sentence (T39:
+    // "Everyone sees [A booking page] [Intro call] after [5 seconds]").
+    await page.getByRole('button', { name: /What everyone else sees$/ }).click();
+    await page.getByRole('option', { name: 'A booking page' }).click();
+    await page
+      .getByRole('button', { name: /Booking page$/ })
+      .last()
+      .click();
+    await page.getByRole('option', { name: new RegExp(`^Intro call ${tag}`) }).click();
+    await expect(page.getByRole('button', { name: /Booking page$/ }).last()).toContainText('Intro call');
 
+    // The first publish is one click, with nothing asked.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const publish = page.getByRole('dialog', { name: 'Publish your form' });
-    await publish.getByRole('textbox', { name: 'Name', exact: true }).fill(`Talk to us ${tag}`);
-    await publish.getByRole('button', { name: 'Publish', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
     await page.keyboard.press('Escape');
     await page.getByRole('tab', { name: 'Settings' }).click();

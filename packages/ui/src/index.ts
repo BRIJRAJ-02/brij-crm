@@ -513,7 +513,11 @@ export {
   FormLayoutThumbnail,
   type FormLayoutThumbnailProps,
 } from './modules/HostedFormPreview/FormLayoutThumbnail.tsx';
-export { HostedFormPreview, type HostedFormPreviewProps } from './modules/HostedFormPreview/HostedFormPreview.tsx';
+export {
+  HostedFormPreview,
+  type HostedFormPreviewProps,
+  type PreviewTextChange,
+} from './modules/HostedFormPreview/HostedFormPreview.tsx';
 export {
   OptionsEditor,
   type OptionOutcome,
@@ -521,7 +525,12 @@ export {
   type OptionsEditorOption,
   type OptionsEditorProps,
 } from './modules/OptionsEditor/OptionsEditor.tsx';
-export { QuestionList, type QuestionListItem, type QuestionListProps } from './modules/QuestionList/QuestionList.tsx';
+export {
+  focusInCard,
+  QuestionList,
+  type QuestionListItem,
+  type QuestionListProps,
+} from './modules/QuestionList/QuestionList.tsx';
 export {
   editorRuleOf,
   ruleOf,

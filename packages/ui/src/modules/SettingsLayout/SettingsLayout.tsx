@@ -257,7 +257,12 @@ export interface SettingsStackProps {
    * `plain` drops the hairline SettingsRows draw between them, space alone setting them apart (the Captures
    * editors, the owner, 22 Oct 2026: "remove lines as separators"). Settings pages keep the default.
    */
-  readonly variant?: 'default' | 'plain';
+  /**
+   * `nested` is a stack inside a field's rhythm rather than a page's: no breath above it and space-8 between its
+   * parts, for a rule's conditions under a quiet label (a form's Show only if and Logic, 4 November 2026), where the
+   * page's space-16 and the tab's breath put a hole between the label and what it labels.
+   */
+  readonly variant?: 'default' | 'plain' | 'nested';
   readonly children: ReactNode;
 }
 
@@ -267,7 +272,7 @@ export interface SettingsStackProps {
  */
 export function SettingsStack({ variant = 'default', children }: SettingsStackProps) {
   return (
-    <div className={styles.stack} data-variant={variant === 'plain' ? 'plain' : undefined}>
+    <div className={styles.stack} data-variant={variant === 'default' ? undefined : variant}>
       {children}
     </div>
   );

@@ -33,12 +33,11 @@ export interface LinkCardProps {
    * card doesn't open.
    */
   readonly href?: string;
-  /** The colour edge on the start side: the link's own hue. Left out (and no `colourKey`), a neutral edge (a form). */
+  /** The link's own hue, a small dot before the title. Left out (and no `colourKey`), no dot (a form). */
   readonly hue?: Hue;
   /**
-   * For a link with no hue of its own (a booking page today): a stable id the edge takes its colour from, so
-   * the same link keeps the same colour everywhere. Grey (the neutral edge) and red (which reads as an error)
-   * are left out.
+   * For a link with no hue of its own (a booking page today): a stable id the dot takes its colour from, so
+   * the same link keeps the same colour everywhere. Grey and red (which reads as an error) are left out.
    */
   readonly colourKey?: string;
   /** The title's heading level: 2 on a page whose h1 is the TopBar (Captures), 3 inside a section (default). */
@@ -52,7 +51,7 @@ export interface LinkCardProps {
   readonly address?: string;
   /** A state the switch can't say, beside the title ("Not published", "Private", "Copying"). Never "Off". */
   readonly badge?: string;
-  /** Off (not taking people): the card reads quieter, its title muted. Its edge keeps its colour: the edge never says a state. */
+  /** Off (not taking people): the card reads quieter, its title muted. Its dot keeps its colour: the dot never says a state. */
   readonly isOff?: boolean;
   /** Shown before the server made it: quieter still, and nothing in it works yet. */
   readonly isPending?: boolean;
@@ -64,10 +63,11 @@ export interface LinkCardProps {
 }
 
 /**
- * One link as a card (spec 0025's links, spec 0023's forms; the owner's card grid, 20 October 2026): a colour
- * edge, the title (a link over the whole card to its editor) with a state badge, the on or off switch at the
- * top end, the facts and the public link, then a footer with Copy link and the card's actions. The controls
- * sit above the card's link, so each does its own thing and stays in the tab order after the title.
+ * One link as a card (spec 0025's links, spec 0023's forms; the owner's card grid, 20 October 2026; restyled
+ * 4 November 2026): a small colour dot and the title (a link over the whole card to its editor) with a state
+ * badge, the on or off switch at the top end, the facts, then one footer line with the public link at its start
+ * and Copy link and the card's actions at its end. The controls sit above the card's link, so each does its own
+ * thing and stays in the tab order after the title.
  */
 export function LinkCard({
   title,
@@ -101,6 +101,8 @@ export function LinkCard({
       <div className={styles.body}>
         <div className={styles.head}>
           <div className={styles.titleRow}>
+            {/* The link's colour, as a small quiet dot before its title: a mark, never a state. */}
+            {edge !== undefined && <span className={styles.dot} data-dot="" aria-hidden="true" />}
             <Heading className={styles.heading}>
               {safe === undefined ? (
                 <span id={titleId} className={styles.title}>
@@ -117,14 +119,17 @@ export function LinkCard({
           {toggle !== undefined && <CardSwitch toggle={toggle} isPending={isPending} />}
         </div>
         {facts.length > 0 && <p className={styles.facts}>{facts.join(' · ')}</p>}
-        {address !== undefined && (
-          <p ref={addressRef} className={styles.address}>
-            {address}
-          </p>
-        )}
       </div>
-      {hasFoot && (
+      {(hasFoot || address !== undefined) && (
         <div className={styles.foot} role="group" aria-label={strings.actionsFor(title)}>
+          {/* The public link sits where it is copied from, so the card spends one line on it, not two. */}
+          {address !== undefined ? (
+            <p ref={addressRef} className={styles.address}>
+              {address}
+            </p>
+          ) : (
+            <span className={styles.spacer} />
+          )}
           {copyValue !== undefined && (
             <span className={styles.control}>
               <CopyButton

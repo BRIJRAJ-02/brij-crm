@@ -27,6 +27,15 @@ export const strings = {
   // Conditions
   op: (op: ConditionOp) => OPS[op],
   when: 'When',
+  /** A rule's first word, read as a sentence (T39). */
+  ifWord: 'If',
+  /** Which condition a control belongs to, said to screen readers where a rule has several. */
+  conditionPlace: (index: number) => `condition ${String(index + 1)}`,
+  /** A text value's box, with no label over it. */
+  anAnswer: 'an answer',
+  aNumber: 'a number',
+  /** A rule whose conditions still need a value: said instead of its route, which would read as everyone. */
+  ruleUnfinished: 'Not finished: give each condition a value.',
   and: 'and',
   or: 'or',
   join: 'Match',
@@ -67,7 +76,7 @@ export const strings = {
   clearShowWhen: 'Always show it',
   noEarlier: 'Add an earlier question first.',
   readsLater: 'A condition uses a later question. Pick another, or remove it.',
-  shownWhen: (line: string) => `Shows when ${line}`,
+  shownWhen: (line: string) => `Shown if ${line}`,
 
   // Rules
   routing: 'Routing',

@@ -45,7 +45,8 @@ export interface FormsScreenProps {
  * ("12 submissions · 2 spam"), or "No submissions yet".
  */
 function factsOf(form: FormSummary): readonly string[] {
-  if (form.liveVersionNumber === undefined) return [strings.publishToShare];
+  // A draft's badge (Not published) and its Edit say it all: no line repeating them.
+  if (form.liveVersionNumber === undefined) return [];
   if (form.submissionCount === 0) return [strings.noSubmissionsYet];
   return [strings.submissionCount(form.submissionCount), ...(form.spamCount > 0 ? [strings.spam(form.spamCount)] : [])];
 }
@@ -101,8 +102,7 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       id: form.id,
       title: form.name,
       href: formHref(slug, form.id),
-      // Each form keeps one colour, picked from its id, as a booking page does.
-      colourKey: form.id,
+      // No colour mark: a form has no colour of its own, and one picked from its id identified nothing (T3).
       facts: factsOf(form),
       // A draft has no link yet: its generated address only becomes real on the first publish.
       ...(isPending ? { address: strings.addressPending } : isPublished ? { address: `/f/${form.publicKey}` } : {}),

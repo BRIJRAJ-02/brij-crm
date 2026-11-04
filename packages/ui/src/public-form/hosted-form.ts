@@ -107,7 +107,16 @@ export function mountFormMessage(
     createElement(FormMessage, {
       mode: message.mode,
       title,
-      ...(message.kind === 'missing' ? { text: words.notFound } : {}),
+      ...(message.kind === 'missing'
+        ? { text: words.notFound }
+        : {
+            retry: {
+              label: words.tryAgain,
+              onRetry: () => {
+                globalThis.location.reload();
+              },
+            },
+          }),
     }),
   );
   return { title, update: () => undefined, destroy: view.destroy };

@@ -51,6 +51,41 @@ export function labelStep(count: number, slot: number, widest: number): number {
   return Math.max(1, Math.ceil(needed / Math.max(slot, 1)));
 }
 
+/** The least air between two neighbouring x labels, in pixels. */
+export const LABEL_GAP = 8;
+
+/**
+ * A label's width when nothing can measure it (no canvas): a conservative 0.62em a character, which Inter's widest
+ * figures and capitals stay under, so an estimate errs towards fewer labels, never touching ones.
+ */
+export function estimateLabelWidth(text: string, fontSize: number): number {
+  return text.length * fontSize * 0.62;
+}
+
+/**
+ * Every how-many-th x label to draw so that no two drawn labels touch (T7, 4 November 2026: "numbers are
+ * overlapping"), from each label's own width. Labels sit centred in their slots, `slot` pixels apart, so two drawn
+ * labels `step` slots apart need `step × slot` to hold half of each and `gap` between them. The step is the least
+ * that holds for every pair the axis would draw, so a long range on a narrow plot thins to what fits, and a short
+ * one draws them all.
+ */
+export function labelStepFor(widths: readonly number[], slot: number, gap: number = LABEL_GAP): number {
+  const count = widths.length;
+  if (count <= 1 || slot <= 0) return Math.max(1, count);
+  for (let step = 1; step < count; step += 1) {
+    let fits = true;
+    for (let at = step; at < count; at += step) {
+      const need = ((widths[at - step] ?? 0) + (widths[at] ?? 0)) / 2 + gap;
+      if (step * slot < need) {
+        fits = false;
+        break;
+      }
+    }
+    if (fits) return step;
+  }
+  return count;
+}
+
 /** A line through `points` as an SVG path. */
 export function linePath(points: readonly { readonly x: number; readonly y: number }[]): string {
   return points.map((point, index) => `${index === 0 ? 'M' : 'L'}${round(point.x)} ${round(point.y)}`).join(' ');

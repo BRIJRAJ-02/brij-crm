@@ -217,9 +217,36 @@
     grid-template-columns: repeat(auto-fit, minmax(min(var(--size-column), 100%), 1fr));
   }
 
+  /* Wide tiles (`tileWidth="wide"`): a list to scan, each tile a column wide at least, its mark beside its name and
+     its line, the two stacked. */
+  .root[data-wide] {
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--size-column), 100%), 1fr));
+  }
+
   .tile[data-described][data-tall] .name {
     grid-row: 2;
     align-self: start;
+  }
+
+  /* A wide tile's mark beside both its name and its line (`tileWidth="wide"`), after every tile rule it overrides. */
+  .tile[data-described][data-wide] {
+    grid-template-rows: auto auto;
+    align-content: center;
+  }
+
+  .tile[data-described][data-wide] .picture {
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  .tile[data-described][data-wide] .name {
+    grid-row: 1;
+    grid-column: 2;
+    align-self: end;
+  }
+
+  .tile[data-described][data-wide] :is(.describe, .reason) {
+    grid-column: 2;
   }
 
   /* The two quiet lines under a name, as one rule so they can't drift: what the choice does (`describe`, the
