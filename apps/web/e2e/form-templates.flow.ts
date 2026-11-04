@@ -100,11 +100,19 @@ test.describe('the form template gallery', () => {
     await ready.getByRole('button', { name: /^Done/ }).click();
     await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
 
-    // Settings has no Save anywhere: a setting saves itself to the draft, and Publish is the one primary.
-    await page.goto(`${formUrl}?tab=settings`);
+    // The words are edited on the preview (T21: press the headline, as Tally), saving themselves to the draft;
+    // nothing has a Save, and Publish is the one primary. Below the widest screens the preview is a sheet.
+    await page.goto(formUrl);
+    if ((await page.getByRole('button', { name: 'Edit the headline' }).count()) === 0) {
+      await page.getByRole('button', { name: 'Show preview' }).click();
+    }
+    await page.getByRole('button', { name: 'Edit the headline' }).click();
     const headline = page.getByRole('textbox', { name: 'Headline' });
     await expect(headline).toBeVisible({ timeout: 30_000 });
     await headline.fill('Tell us how it went');
+    await page.keyboard.press('Escape');
+    // The preview's sheet (below the widest screens) closes too, so the header is in reach.
+    if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape');
     await expect(page.getByText('Live · edited').first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
@@ -118,8 +126,9 @@ test.describe('the form template gallery', () => {
     await shoot(page, 'discard-confirm');
     await discard.getByRole('button', { name: 'Discard changes' }).click();
     await expect(discard).toBeHidden({ timeout: 15_000 });
-    await expect(headline).not.toHaveValue('Tell us how it went');
     await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(0);
+    // The live words are back on the preview.
+    await expect(page.getByText('Tell us how it went')).toHaveCount(0);
     await shoot(page, 'discarded');
 
     // It is on Forms, live, under the template's name.

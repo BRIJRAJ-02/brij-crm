@@ -12,8 +12,9 @@ import { strings } from './strings.ts';
 export interface QuestionListItem {
   readonly id: string;
   /**
-   * `step` draws a break between steps rather than a question (spec 0063, AC-6303): on the ground, with a dashed
-   * edge, so the list reads as groups of question cards. It opens, moves and is announced as a question is.
+   * `step` draws a page break rather than a question (spec 0063, AC-6303; T20, 5 November 2026): an inline header
+   * on the ground, no card ("Step 2 · About you"), so the list reads as pages of question cards. It moves and is
+   * announced as a question is; its end holds the caller's menu (`renderStepEnd`).
    */
   readonly kind?: 'question' | 'step';
   /** The question; empty shows "Untitled question", muted. */
@@ -77,6 +78,19 @@ export interface QuestionListProps {
   readonly renderOpen: (id: string) => ReactNode;
   /** A question was moved to `index` (by drag, or the keyboard). Absent: read only, with no handles. */
   readonly onMove?: (id: string, index: number) => void;
+  /** Leaves the count out of the header, for a list whose rows are not questions (a form's After they send). */
+  readonly isCountHidden?: boolean;
+  /**
+   * What sits in the gap above a row, shown while a pointer is over the gap or focus is in it: a form's "Split here"
+   * between two questions of one step. Nothing for a row it returns null for.
+   */
+  readonly renderGap?: (id: string) => ReactNode;
+  /** A step header's end: its ⋯ menu (Rename, Add logic, Merge). */
+  readonly renderStepEnd?: (id: string) => ReactNode;
+  /** In a step header, in place of its name while it is being renamed: a field. Undefined keeps the name. */
+  readonly renderStepTitle?: (id: string) => ReactNode;
+  /** A step header's name was pressed: the form builder shows that step in its preview. */
+  readonly onStepPress?: (id: string) => void;
 }
 
 /**
@@ -99,6 +113,11 @@ export function QuestionList({
   wideActions,
   renderFooter,
   renderFooterStart,
+  isCountHidden = false,
+  renderGap,
+  renderStepEnd,
+  renderStepTitle,
+  onStepPress,
 }: QuestionListProps) {
   const headingId = useId();
 
@@ -114,7 +133,7 @@ export function QuestionList({
           {label}
         </h2>
         {/* Questions only: a step break is not one more question. */}
-        <Badge count={items.filter((item) => item.kind !== 'step').length} label={label} />
+        {!isCountHidden && <Badge count={items.filter((item) => item.kind !== 'step').length} label={label} />}
         {(actions !== undefined || wideActions !== undefined) && (
           <span className={styles.actions}>
             {wideActions !== undefined && <span className={styles.wide}>{wideActions}</span>}
@@ -139,22 +158,87 @@ export function QuestionList({
           aria-label={label}
           items={items}
           // Rows draw again when what they show beside their item changes: which are open, and their editors.
-          dependencies={[openIds, renderOpen, renderFooter, renderFooterStart]}
+          dependencies={[
+            openIds,
+            renderOpen,
+            renderFooter,
+            renderFooterStart,
+            renderGap,
+            renderStepEnd,
+            renderStepTitle,
+          ]}
           className={styles.list}
           keyboardNavigationBehavior="tab"
         >
           {(item) => {
             const name = item.label === '' ? strings.untitled : item.label;
             const isOpen = openIds.has(item.id);
+            const gap = renderGap?.(item.id);
+            const gapNode =
+              gap === undefined || gap === null || gap === false ? null : <div className={styles.gap}>{gap}</div>;
+            if (item.kind === 'step') {
+              const renaming = renderStepTitle?.(item.id);
+              const isRenaming = renaming !== undefined && renaming !== null && renaming !== false;
+              const body = isOpen ? renderOpen(item.id) : null;
+              return (
+                <GridListItem
+                  id={item.id}
+                  textValue={name}
+                  className={styles.row}
+                  data-kind="step"
+                  data-gap={gapNode === null ? undefined : true}
+                  data-problem={item.hasProblem === true || undefined}
+                >
+                  {gapNode}
+                  <div className={styles.stepHead}>
+                    {onMove !== undefined && (
+                      <span className={styles.stepHandle}>
+                        <SortableRowGrip id={item.id} label={strings.move(name)} />
+                      </span>
+                    )}
+                    {isRenaming ? (
+                      <span className={styles.stepTitle}>{renaming}</span>
+                    ) : (
+                      <AriaButton
+                        className={styles.stepToggle}
+                        onPress={() => {
+                          onStepPress?.(item.id);
+                        }}
+                      >
+                        <span className={styles.stepName}>{name}</span>
+                        {item.hasProblem === true && (
+                          <span className={styles.problem}>
+                            <Icon name="circle-alert" size="sm" />
+                            {strings.hasProblem}
+                          </span>
+                        )}
+                        {[item.note, item.condition].some((part) => part !== undefined && part !== '') && (
+                          <span className={styles.stepMeta}>
+                            {[item.note, item.condition]
+                              .filter((part): part is string => part !== undefined && part !== '')
+                              .join(strings.separator)}
+                          </span>
+                        )}
+                      </AriaButton>
+                    )}
+                    {renderStepEnd !== undefined && <span className={styles.stepEnd}>{renderStepEnd(item.id)}</span>}
+                  </div>
+                  {body !== null && body !== undefined && body !== false && (
+                    <div className={styles.stepBody}>{body}</div>
+                  )}
+                </GridListItem>
+              );
+            }
             return (
               <GridListItem
                 id={item.id}
                 textValue={name}
                 className={styles.row}
-                data-kind={item.kind === 'step' ? 'step' : undefined}
+                data-gap={gapNode === null ? undefined : true}
                 data-open={isOpen || undefined}
                 data-problem={item.hasProblem === true || undefined}
               >
+                {gapNode}
                 <div className={styles.head}>
                   {onMove !== undefined && (
                     <span className={styles.handle}>

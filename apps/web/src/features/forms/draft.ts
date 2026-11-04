@@ -211,12 +211,31 @@ export function isRedirectAddress(value: string): boolean {
   return url.protocol === 'https:' && /^[^.]+(\.[^.]+)+$/.test(url.hostname);
 }
 
-/** What a Settings field still needs before the draft can hold it: the web address, or the button's words. */
-export type DraftGap = 'redirect' | 'button';
+/**
+ * What a field still needs before the draft can hold it: the thank you page's link, a rule's or an ending's link (After
+ * they send), or the button's words.
+ */
+export type DraftGap = 'redirect' | 'route' | 'button';
+
+/** Whether a rule can be saved as it stands: its conditions complete, and a link it sends to a whole address. */
+function isRuleDone(rule: FormDocument['routing']['rules'][number]): boolean {
+  return isSavable(rule.when) && (rule.then.kind !== 'redirect' || isRedirectAddress(rule.then.url));
+}
+
+/** Whether an ending's button can be saved: no button, a booking page, or a whole web address. */
+function isEndingDone(ending: FormEnding): boolean {
+  return ending.button?.kind !== 'url' || isRedirectAddress(ending.button.url);
+}
 
 /** The first field typed into but not yet complete, which neither saves nor publishes until it is. */
 export function draftGap(document: FormDocument): DraftGap | undefined {
   if (document.after.kind === 'redirect' && !isRedirectAddress(document.after.url)) return 'redirect';
+  if (
+    document.routing.rules.some((rule) => rule.then.kind === 'redirect' && !isRedirectAddress(rule.then.url)) ||
+    !(document.endings ?? []).every(isEndingDone)
+  ) {
+    return 'route';
+  }
   if (document.buttonText.trim() === '') return 'button';
   return undefined;
 }
@@ -234,12 +253,41 @@ export function savableDraft(document: FormDocument, saved: FormDocument): FormD
   const buttonText = document.buttonText.trim() === '' ? saved.buttonText : document.buttonText;
   const questions = savableQuestions(document.questions, saved.questions);
   const steps = savableSteps(document.steps, saved.steps);
+  // A rule or an ending still being written (After they send) keeps the server's, or waits, as a jump does.
+  const rules = document.routing.rules.every(isRuleDone)
+    ? document.routing.rules
+    : document.routing.rules.flatMap((rule) => {
+        if (isRuleDone(rule)) return [rule];
+        const kept = saved.routing.rules.find((each) => each.id === rule.id);
+        return kept === undefined ? [] : [kept];
+      });
+  const endings =
+    document.endings === undefined || document.endings.every(isEndingDone)
+      ? document.endings
+      : document.endings.map((ending) => {
+          if (isEndingDone(ending)) return ending;
+          const kept = saved.endings?.find((each) => each.id === ending.id)?.button;
+          const { button: _typing, ...rest } = ending;
+          return kept === undefined || (kept.kind === 'url' && !isRedirectAddress(kept.url))
+            ? rest
+            : { ...rest, button: kept };
+        });
   return after === document.after &&
     buttonText === document.buttonText &&
     questions === document.questions &&
-    steps === document.steps
+    steps === document.steps &&
+    rules === document.routing.rules &&
+    endings === document.endings
     ? document
-    : { ...document, after, buttonText, questions, steps };
+    : {
+        ...document,
+        after,
+        buttonText,
+        questions,
+        steps,
+        routing: { rules },
+        ...(endings === undefined ? {} : { endings }),
+      };
 }
 
 /** The questions with each unfinished Show when back at the server's (or none): the same list when all are done. */

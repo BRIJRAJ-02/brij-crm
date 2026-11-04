@@ -118,6 +118,8 @@
     --text-label-strong: var(--text-body);
     --tracking-label-strong: var(--tracking-body);
 
+    /* The leaving step's copy is laid over its place inside the card as the next one comes in (T23). */
+    position: relative;
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
@@ -307,6 +309,12 @@
 
   .root[data-mode='page'] .foot {
     margin-block-start: auto;
+  }
+
+  /* One at a time on its own page (T23, Typeform): the question block sits in the middle of the window at every
+     width, the foot at the window's foot. */
+  .root[data-frame='open'] .card {
+    margin-block: auto;
   }
 
   @media (width >= 1024px) {

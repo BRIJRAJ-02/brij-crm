@@ -1,6 +1,6 @@
-// The Layout tiles and New step dividers in Chromium (spec 0063, AC-6302, AC-6303): the tiles switch the preview,
-// and a divider is added, titled and removed with Undo, with a quiet note outside Steps. Moving one is the list's
-// own drag (QuestionList's keyboard story) over `moveItem` (`steps.test.ts`).
+// Layout and Steps as pages in Chromium (spec 0063, AC-6302, AC-6303; T20, 5 November 2026): Steps splits the form
+// at once into headed pages, Split here makes another, a header renames in place and merges up with Undo, and Classic
+// draws no headers. Moving one is the list's own drag (QuestionList's keyboard story) over `moveItem`.
 import type { FormDocument, FormQuestion } from '@crm/data';
 import { previewOf, type FormLayout, type FormStep } from '@crm/data/forms';
 import { createToasts, HostedFormPreview, type Toasts } from '@crm/ui';
@@ -11,7 +11,7 @@ import '@crm/ui/styles.css';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { LayoutCard } from '../forms/LayoutCard.tsx';
 import { QuestionsSection } from './QuestionsSection.tsx';
-import type { Flow } from './steps.ts';
+import { splitIntoSteps, type Flow } from './steps.ts';
 
 const question = (id: string, label: string): FormQuestion => ({
   id,
@@ -63,7 +63,19 @@ function Builder({
   };
   return (
     <>
-      <LayoutCard layout={layout} isReadOnly={false} onChange={setLayout} />
+      <LayoutCard
+        layout={layout}
+        isReadOnly={false}
+        onChange={(next) => {
+          setLayout(next);
+          // As the editor does: Steps splits the form into pages at once.
+          if (next === 'steps') {
+            setFlow((before) =>
+              splitIntoSteps(before, () => `new${String((ids += 1))}`, { details: 'Your details', rest: 'About you' }),
+            );
+          }
+        }}
+      />
       <QuestionsSection
         questions={flow.questions}
         onChange={(update) => {
@@ -112,42 +124,63 @@ describe('Layout (AC-6302)', () => {
   });
 });
 
-describe('New step dividers (AC-6303)', () => {
-  it('adds one already placed and named, titles it, and removes it with Undo (T15)', async () => {
-    await open('steps');
-    // Wide enough for Add a step beside Add a question.
-    await userEvent.click(page.getByRole('button', { name: 'Add a step' }));
-    // One click splits the form: the new step already holds the last question, named by its place, title focused.
-    const title = page.getByRole('textbox', { name: 'Step title' });
-    await expect.element(title).toHaveFocus();
-    await expect.element(page.getByText('1 question')).toBeVisible();
-    await userEvent.type(title, 'About your team');
-    await expect.element(page.getByRole('button', { name: /^Step 2 · About your team/ })).toBeVisible();
-    // Its head closes it, as a question's does.
-    await userEvent.click(page.getByRole('button', { name: /^Step 2 · About your team/, expanded: true }));
-    await expect.element(title).not.toBeInTheDocument();
-    await userEvent.click(page.getByRole('button', { name: /^Step 2 · About your team/, expanded: false }));
-    // The preview walks the two steps at once.
-    await expect.poll(() => document.querySelector('[role="progressbar"]')).not.toBeNull();
-    // Remove it: its questions join the step above, and Undo brings it back.
-    await userEvent.click(page.getByRole('button', { name: 'Remove step' }));
-    await expect.element(page.getByRole('button', { name: /^Step 2/ })).not.toBeInTheDocument();
-    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
-    await expect.element(page.getByRole('button', { name: /^Step 2 · About your team/ })).toBeVisible();
+describe('Steps as pages (AC-6303, T20)', () => {
+  it('splits the form at once, after the contact details, each page under a header', async () => {
+    await open('classic');
+    // Classic draws no headers at all.
+    expect(page.getByRole('button', { name: /^Step 1(?!.* options$)/ }).query()).toBeNull();
+    await userEvent.click(page.getByText('Steps', { exact: true }).first());
+    await expect.element(page.getByRole('button', { name: /^Step 1 · Your details(?!.* options$)/ })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /^Step 2(?!.* options$)/ })).toBeVisible();
+    // The vague Add a step is gone.
+    expect(page.getByRole('button', { name: 'Add a step' }).query()).toBeNull();
+    await expect
+      .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
+      .toBe('Step 1 of 2');
   });
 
-  it('keeps dividers outside Steps, and says quietly that only Steps uses them', async () => {
+  it('splits at a question, renames the new page in place, and merges it back with Undo', async () => {
+    await open('steps', [
+      { id: 's1', startsAt: 'name' },
+      { id: 's2', startsAt: 'company' },
+    ]);
+    // Split here, from the open question's footer (the gap over a card does the same on hover).
+    await userEvent.click(page.getByRole('button', { name: /^Team size/ }));
+    await userEvent.click(page.getByRole('button', { name: 'Start a new step here' }));
+    const title = page.getByRole('textbox', { name: 'Step title' });
+    await expect.element(title).toHaveFocus();
+    await userEvent.type(title, 'Your team');
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByRole('button', { name: /^Step 3 · Your team(?!.* options$)/ })).toBeVisible();
+    // Merge it with the step above: one less page, and Undo brings it back.
+    await userEvent.click(page.getByRole('button', { name: 'Step 3 · Your team options' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Merge with the step above' }));
+    await expect.element(page.getByRole('button', { name: /^Step 3(?!.* options$)/ })).not.toBeInTheDocument();
+    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+    await expect.element(page.getByRole('button', { name: /^Step 3 · Your team(?!.* options$)/ })).toBeVisible();
+  });
+
+  it('shows the gap’s Split here over a card on hover, never on the first question of a page', async () => {
+    await open('steps', [{ id: 's1', startsAt: 'name' }]);
+    // Company and Team size can be split above; Your name starts the page.
+    expect(document.querySelectorAll('[class*="gap"] button').length).toBe(2);
+  });
+
+  it('keeps breaks outside Steps without saying so, and draws no headers', async () => {
     await open('classic', [{ id: 's2', title: 'More', startsAt: 'size' }]);
-    await expect.element(page.getByText('Only used with the Steps layout')).toBeVisible();
-    expect(page.getByRole('button', { name: 'Add a step' }).query()).toBeNull();
+    expect(page.getByRole('button', { name: 'Step 2 · More', exact: true }).query()).toBeNull();
+    expect(page.getByText('Only used with the Steps layout').query()).toBeNull();
   });
 });
 
 describe('the questions header at a phone’s width (spec 0058, AC-1)', () => {
-  it('keeps Add a question and the menu on screen, with Add a step in the menu, and no sideways scroll', async () => {
+  it('keeps Add a question and the menu on screen, with no sideways scroll', async () => {
     await page.viewport(390, 844);
     try {
-      await open('steps', [{ id: 's2', startsAt: 'company' }]);
+      await open('steps', [
+        { id: 's1', startsAt: 'name' },
+        { id: 's2', startsAt: 'company' },
+      ]);
       const add = page.getByRole('button', { name: 'Add a question' }).element();
       const more = page.getByRole('button', { name: 'More question actions' }).element();
       for (const each of [add, more]) {
@@ -155,10 +188,7 @@ describe('the questions header at a phone’s width (spec 0058, AC-1)', () => {
         expect(box.right).toBeLessThanOrEqual(390);
         expect(box.width).toBeGreaterThan(0);
       }
-      expect(page.getByRole('button', { name: 'Add a step' }).query()).toBeNull();
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
-      await userEvent.click(page.getByRole('button', { name: 'More question actions' }));
-      await expect.element(page.getByRole('menuitem', { name: 'Add a step' })).toBeVisible();
     } finally {
       await page.viewport(1280, 900);
     }

@@ -9,7 +9,7 @@ import { isHiddenFact, isRecordFact } from './conditions.ts';
 import { SCORE_FACT } from './recall.ts';
 import { CONDITION_OPS, CONDITIONS_MAX, NUMBER_OPS, VALUELESS_OPS } from './show-when.ts';
 import { QUESTION_KEY } from './answer-types.ts';
-import { REQUIRED_SKILLS_MAX } from './routing-limits.ts';
+import { REQUIRED_SKILLS_MAX, ROUTING_RULES_MAX } from './routing-limits.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 
@@ -63,8 +63,6 @@ export const ShowWhenSchema = z.strictObject({
     .max(CONDITIONS_MAX, { error: `Use at most ${String(CONDITIONS_MAX)} conditions.` }),
 });
 
-/** At most this many rules on one form or one team page (AC-1601). */
-export const ROUTING_RULES_MAX = 20;
 /** At most this many hosts a route narrows to (AC-1604, AC-1608). */
 export const ROUTE_HOSTS_MAX = 8;
 

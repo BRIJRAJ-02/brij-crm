@@ -8,6 +8,7 @@
 // page gave no `onSave`, and the builder's preview.
 import { useState } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
+import { Icon } from '../atoms/Icon/Icon.tsx';
 import styles from './FinishLater.module.css';
 import type { HostedFormState } from './use-hosted-form.ts';
 
@@ -16,11 +17,6 @@ function dayOf(iso: string, language: string): string {
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) return '';
   return new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long' }).format(when);
-}
-
-/** The time a save landed, to the minute: a visitor wants "just now", not a timestamp. */
-function timeOf(language: string): string {
-  return new Intl.DateTimeFormat(language, { hour: 'numeric', minute: '2-digit' }).format(new Date());
 }
 
 export interface FinishLaterProps {
@@ -34,55 +30,68 @@ export interface FinishLaterProps {
 export function FinishLater({ state, language, stepId }: FinishLaterProps) {
   const { words, save } = state;
   const [isAsked, setAsked] = useState(false);
-  const [emailed, setEmailed] = useState<'none' | 'sending' | 'sent' | 'needs-address'>('none');
+  const [emailed, setEmailed] = useState<'none' | 'sending' | 'sent' | 'needs-address' | 'failed'>('none');
   const [isCopied, setCopied] = useState(false);
   if (!state.savesFills) return null;
 
   const kept = save.kind === 'kept' ? save.kept : undefined;
-  // The quiet line: only ever one of these, and never while nothing has happened yet.
-  const note =
-    save.kind === 'saving'
-      ? words.saving
-      : save.kind === 'failed'
-        ? words.saveFailed
-        : kept === undefined
-          ? undefined
-          : words.savedOn(timeOf(language));
-
+  const isFailed = save.kind === 'failed';
   return (
     <div className={styles.wrap}>
-      {!isAsked && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onPress={() => {
-            setAsked(true);
-            state.keepNow(stepId);
-          }}
-        >
-          {words.finishLater}
-        </Button>
-      )}
-      {/* Polite, not assertive: a save is news a visitor can read when they look, never an interruption. */}
-      <p className={styles.line} aria-live="polite">
-        {note ?? ''}
-      </p>
+      {/* One quiet line (T23, after Typeform): a tick and Saved once something is kept, and Finish later as a link
+          that opens the ways back only when pressed. A failed save says so, with Try again, never a promise. */}
+      <div className={styles.row}>
+        {/* Polite, not assertive: a save is news a visitor can read when they look, never an interruption. */}
+        <span className={styles.line} aria-live="polite">
+          {save.kind === 'saving' ? (
+            words.saving
+          ) : isFailed ? (
+            words.saveFailed
+          ) : kept === undefined ? (
+            ''
+          ) : (
+            <>
+              <Icon name="check" size="xs" /> {words.savedOn('')}
+            </>
+          )}
+        </span>
+        {isFailed ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onPress={() => {
+              state.keepNow(stepId);
+            }}
+          >
+            {words.tryAgain}
+          </Button>
+        ) : (
+          !isAsked && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                setAsked(true);
+                state.keepNow(stepId);
+              }}
+            >
+              {words.finishLater}
+            </Button>
+          )
+        )}
+      </div>
       {isAsked && kept !== undefined && (
         <div className={styles.panel}>
-          <p className={styles.line}>
-            <strong>{words.resumeHeading}</strong>
-          </p>
           <p className={styles.line}>{words.resumeLine(dayOf(kept.expiresAt, language))}</p>
-          <p className={styles.line}>{kept.resumeUrl}</p>
+          {/* No raw link on screen: Copy link carries it, and the email sends it. */}
           <div className={styles.row}>
             <Button
               variant="secondary"
               size="sm"
+              icon={isCopied ? 'check' : 'copy'}
               onPress={() => {
                 void navigator.clipboard.writeText(kept.resumeUrl).then(
                   () => setCopied(true),
-                  // Where the browser refuses the clipboard the link is on screen to copy by hand, so there is
-                  // nothing to say: claiming "Copied" when nothing was copied is worse than saying nothing.
                   () => undefined,
                 );
               }}
@@ -100,24 +109,27 @@ export function FinishLater({ state, language, stepId }: FinishLaterProps) {
                   setEmailed('sending');
                   void send(kept.resumeToken).then(
                     (sent) => setEmailed(sent ? 'sent' : 'needs-address'),
-                    () => setEmailed('needs-address'),
+                    // A failed request is the network's or the server's, not a missing address.
+                    () => setEmailed('failed'),
                   );
                 }}
               >
                 {words.emailLink}
               </Button>
             )}
-          </div>
-          {emailed !== 'none' && emailed !== 'sending' && (
-            <p className={styles.line} aria-live="polite">
-              {emailed === 'sent' ? words.emailSent : words.emailNeedsAddress}
-            </p>
-          )}
-          <div className={styles.row}>
             <Button variant="ghost" size="sm" onPress={() => setAsked(false)}>
               {words.keepFilling}
             </Button>
           </div>
+          {emailed !== 'none' && emailed !== 'sending' && (
+            <p className={styles.line} aria-live="polite">
+              {emailed === 'sent'
+                ? words.emailSent
+                : emailed === 'failed'
+                  ? words.emailFailed
+                  : words.emailNeedsAddress}
+            </p>
+          )}
         </div>
       )}
     </div>

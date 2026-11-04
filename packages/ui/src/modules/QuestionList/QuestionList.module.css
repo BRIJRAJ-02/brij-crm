@@ -61,23 +61,28 @@
      at its start, Duplicate and Delete at its end, on one line. */
   .footer {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-8);
     align-items: center;
     padding-block-start: var(--space-8);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* On a narrow card the choices wrap onto their own lines rather than squeezing one word a line. */
   .footerStart {
     display: flex;
     flex: 1;
+    flex-wrap: wrap;
+    gap: var(--space-4);
     align-items: center;
-    min-inline-size: 0;
+    min-inline-size: fit-content;
   }
 
-  /* Duplicate and Delete, space-8 apart. */
+  /* Duplicate and Delete, space-8 apart, at the end even when the start wrapped. */
   .footerEnd {
     display: flex;
     flex: none;
+    margin-inline-start: auto;
     gap: var(--space-8);
     align-items: center;
   }
@@ -108,9 +113,154 @@
     box-shadow: var(--shadow-focus);
   }
 
-  /* A break between steps (kind step, spec 0063) is a card like the questions, its layers mark and its "Step 2" name
-     saying what it is: the dashed grey edge read as an empty placeholder (T15, 4 November 2026). Its head is a line
-     shorter (below the head's own rules). */
+  /* A page break (kind step, spec 0063; T20, 5 November 2026): an inline header on the ground, no card, so the list
+     reads as pages of question cards. Breath above it parts one page from the last; its grip always shows. */
+  .row[data-kind='step'] {
+    overflow: visible;
+    border: none;
+    background: transparent;
+  }
+
+  .row[data-kind='step']:not(:first-child) {
+    margin-block-start: var(--space-12);
+  }
+
+  .row[data-kind='step'][data-focus-visible] {
+    border-radius: var(--radius-sm);
+  }
+
+  .stepHead {
+    display: flex;
+    gap: var(--space-4);
+    align-items: center;
+    min-block-size: var(--size-row);
+  }
+
+  .stepHandle {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .stepToggle {
+    display: flex;
+    flex: 1;
+    gap: var(--space-8);
+    align-items: baseline;
+    min-inline-size: 0;
+    padding-block: var(--space-4);
+    padding-inline: var(--space-4);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    outline: none;
+  }
+
+  .stepToggle[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .stepToggle {
+      transition: background-color var(--duration-hover) var(--ease-hover);
+    }
+
+    .stepToggle:hover {
+      background: var(--surface-hover);
+    }
+  }
+
+  .stepName {
+    flex: none;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .stepMeta {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stepTitle {
+    display: flex;
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .stepEnd {
+    display: flex;
+    flex: none;
+    gap: var(--space-4);
+    align-items: center;
+    margin-inline-start: auto;
+  }
+
+  /* A step's logic, under its header, on the ground, in line with its name. */
+  .stepBody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-12) var(--space-16);
+    margin-block-start: var(--space-4);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  /* The gap above a row (renderGap): a line with a small action on it ("Split here"), drawn over the space-8
+     between two cards, shown only while a pointer is over that gap or focus is in it. The row lets it out. */
+  .row[data-gap] {
+    position: relative;
+    overflow: visible;
+  }
+
+  .gap {
+    position: absolute;
+    z-index: var(--z-raised);
+    inset-block-start: calc(-1 * var(--space-12));
+    inset-inline: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    block-size: var(--space-16);
+    opacity: 0;
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  .gap::before {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 50%;
+    border-block-start: var(--border-width-hairline) dashed var(--accent-line);
+    content: '';
+  }
+
+  .gap:focus-within {
+    opacity: 1;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .gap:hover {
+      opacity: 1;
+    }
+  }
+
+  /* Touch has no hover: the caller offers the same action in an open card's footer, so the gap stays out of the way. */
+  @media (hover: none) {
+    .gap {
+      display: none;
+    }
+  }
+
+  .gap > * {
+    position: relative;
+  }
 
   /* A question a publish refused: the danger edge, and "Needs a fix" by its title. */
   .row[data-problem] {
@@ -317,14 +467,20 @@
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
-  /* A step break's head: a line shorter than a question's (kind step). */
-  .row[data-kind='step'] .head {
-    min-block-size: calc(var(--size-row) + 2 * var(--space-6));
+  /* A row that lets its gap out keeps its head inside its corners itself (it no longer clips). */
+  .row[data-gap]:not([data-kind='step']) .head {
+    border-radius: inherit;
+  }
+
+  .row[data-gap][data-open]:not([data-kind='step']) .head {
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
   }
 
   @media (forced-colors: active) {
     .row[data-focus-visible],
-    .toggle[data-focus-visible] {
+    .toggle[data-focus-visible],
+    .stepToggle[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
     }
 

@@ -1,48 +1,19 @@
 // Brief
-// Purpose: a form's Settings tab (spec 0023), for someone setting up a form in under a minute: what people see after
-// sending, whether and where submissions go in the CRM, the form's words, its details (name, link, owner: nobody, a
-// teammate, or a round robin group handing each new record to its next teammate, spec 0029) and spam.
-// Main task: scan the groups and change only what needs changing (the defaults already work). Nothing here has a
-// Save: the name and link save as their field is left, the owner and who is emailed as they are picked, and the rest
-// saves to the draft and goes live with the one Publish in the header (one save model, 5 November 2026).
-// Leaves out: the daily digest (spec 0023 milestone 3), each question's filing (set on the question, linked from here),
-// and the look (on the Form tab, beside the preview, the only tab that has one).
-import type {
-  BookingPageView,
-  FormDocument,
-  FormTargetChoices,
-  FormView,
-  MemberSummary,
-  ObjectSummary,
-} from '@crm/data';
+// Purpose: a form's Settings tab (spec 0023; T21, 5 November 2026): the form's own settings as plain rows: name, link,
+// where answers are saved, the owner of new records, who is emailed, whether it takes submissions, and spam.
+// Main task: scan the rows and change only what needs changing (the defaults already work). Nothing here has a Save:
+// each row saves itself (where answers are saved goes live with the header's one Publish).
+// Leaves out: everything a visitor meets (the words, what happens after they send, the look), on the Form tab beside
+// the preview; each question's filing (set on the question).
+import type { FormDocument, FormTargetChoices, FormView, MemberSummary, ObjectSummary } from '@crm/data';
 import { FORM_SLUG } from '@crm/data/forms';
 import { useCaptureList } from '@crm/data/react';
-import {
-  Avatar,
-  ButtonLink,
-  Callout,
-  Card,
-  EmptyState,
-  Field,
-  Link,
-  SegmentedControl,
-  Select,
-  Switch,
-  Table,
-} from '@crm/ui';
+import { Avatar, ButtonLink, CopyButton, Field, InfoTip, Select, SettingsRow, SettingsStack, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
-import { linksHref, pageEditorHref } from '../booking/links.ts';
-import { afterPageProblem } from './after-page.ts';
-import { EndingsCard } from './EndingsCard.tsx';
-import { isRedirectAddress, sameValue } from './draft.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
-import { questionFacts } from '../routing/facts.ts';
-import { RulesCard } from '../routing/RulesCard.tsx';
-import { strings as routingStrings } from '../routing/strings.ts';
-import { useCan } from '../workspace/WorkspacePage.tsx';
 
 const NOBODY = 'nobody';
 
@@ -63,19 +34,6 @@ function ownerChange(choice: string): { ownerMemberId: string | null; ownerRotat
     ? { ownerMemberId: choice, ownerRotationId: null }
     : { ownerMemberId: null, ownerRotationId: group };
 }
-
-/** The countdowns a form offers before it sends its visitor on to book (AC-1056): 0 is at once. */
-const COUNTDOWNS = [0, 3, 5, 10, 15, 30] as const;
-
-/** What sending a form leads to: a thank you, another web page, or on to book (AC-1055). */
-type AfterKind = FormDocument['after']['kind'];
-
-/**
- * One form's Form tab with one question open and in view: the map of where answers go links each line here.
- * Kept beside its one link rather than in paths.ts, which the routes load up front.
- */
-const questionHref = (slug: string, formId: string, questionId: string) =>
-  `/w/${slug}/captures/forms/${formId}?question=${encodeURIComponent(questionId)}`;
 
 /** The settings that apply when saved: the name, the address, the owner and who is emailed each submission. */
 interface Applied {
@@ -237,16 +195,24 @@ export interface SettingsTabProps {
   readonly members: readonly MemberSummary[];
   readonly isReadOnly: boolean;
   readonly settings: FormSettings;
-  readonly onDraftChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
   /** Points the draft at an object, or at none (keep submissions only); the editor saves first and takes the answer. */
   readonly onRetarget: (objectId: string | null) => void;
   /** A change of where submissions go is on its way. */
   readonly isRetargeting: boolean;
-  /** Publish was refused for an incomplete field: show its message whether or not it was left yet. */
-  readonly showGaps: boolean;
+  /** Opens or closes the form (Pause, Resume): what the header's menu does too, as a setting. */
+  readonly onStatusChange: (status: 'live' | 'paused') => void;
 }
 
-/** The groups, as short Cards in one full width column, with no subtitles. */
+/** The answers saved nowhere but the form's Submissions: Save answers to's first choice. */
+const KEEP_ONLY = 'submissions-only';
+
+/**
+ * The Settings tab as plain rows (T21, 5 November 2026, "Settings doesn't feel like settings"; Linear's and Vercel's
+ * settings, Tally's form settings): a label on the left, a compact control on the right, no card per section and no
+ * subtitles; a word of help sits in an InfoTip beside its label, and a change is said in a toast. Only the form's own
+ * settings live here: its name and link, who owns its records, who is emailed, where answers are saved, whether it
+ * takes submissions, and spam. What a visitor meets (the words, what happens after they send) is on the Form tab.
+ */
 export function SettingsTab({
   slug,
   form,
@@ -256,97 +222,11 @@ export function SettingsTab({
   members,
   isReadOnly,
   settings,
-  onDraftChange,
   onRetarget,
   isRetargeting,
-  showGaps,
+  onStatusChange,
 }: SettingsTabProps) {
-  const { data, toasts } = useRouteContext({ from: '__root__' });
-  // What each follow up last held, so switching back and forth keeps what was typed.
-  const [kept, setKept] = useState({
-    message: draft.after.kind === 'redirect' ? '' : draft.after.message,
-    url: draft.after.kind === 'redirect' ? draft.after.url : 'https://',
-    bookingPageId: draft.after.kind === 'booking' ? draft.after.bookingPageId : undefined,
-    countdownSeconds: draft.after.kind === 'booking' ? draft.after.countdownSeconds : 5,
-  });
-  // The booking pages a visitor can be sent on to: the reader's own, or everyone's with booking.admin, live ones.
-  const pages = useCaptureList(data.bookingPages.view(slug));
-  const seesAllPages = useCan('booking.admin');
-  const pageList: readonly BookingPageView[] = pages.status === 'ready' ? pages.items : [];
-  const usable = pageList.filter((page) => page.canChange && page.status === 'live');
-
-  const after = draft.after;
-  // An incomplete field (a partial web address, no button words) says what it needs once it is left, never mid
-  // typing, or when a Publish was refused for it; until then the draft keeps the value before, and Publish waits.
-  // Coming back to the tab with one still incomplete shows it at once.
-  const [left, setLeft] = useState(() => ({
-    address: after.kind === 'redirect' && !isRedirectAddress(after.url),
-    button: draft.buttonText.trim() === '',
-  }));
-  const redirectError =
-    !isReadOnly && after.kind === 'redirect' && (left.address || showGaps) && !isRedirectAddress(after.url)
-      ? strings.redirectIncomplete
-      : undefined;
-  const buttonError =
-    !isReadOnly && (left.button || showGaps) && draft.buttonText.trim() === '' ? strings.buttonTextMissing : undefined;
-
-  // Booking is always a choice: with no live page to send visitors to, it shows the picker's empty state (create
-  // one) and the draft keeps its follow up until a page can be picked.
-  const [isBookingPending, setBookingPending] = useState(false);
-  const shownKind: AfterKind = isBookingPending ? 'booking' : draft.after.kind;
-  // A live page arriving while Booking waits (the list loading, a teammate turning one on) swaps the empty state
-  // for the picker; picking a page completes the choice.
-  const pickPending = (pageId: string) => {
-    setBookingPending(false);
-    onDraftChange((before) => ({
-      ...before,
-      after: {
-        kind: 'booking',
-        bookingPageId: pageId,
-        countdownSeconds: kept.countdownSeconds,
-        message: before.after.kind === 'redirect' ? kept.message : before.after.message,
-      },
-    }));
-  };
-
-  const choose = (next: AfterKind) => {
-    if (next === shownKind) return;
-    setBookingPending(false);
-    if (next === after.kind) return;
-    setLeft((before) => ({ ...before, address: false }));
-    // Keep what the other choice held, then bring back what this one held.
-    setKept((before) =>
-      after.kind === 'redirect'
-        ? { ...before, url: after.url }
-        : after.kind === 'booking'
-          ? {
-              ...before,
-              message: after.message,
-              bookingPageId: after.bookingPageId,
-              countdownSeconds: after.countdownSeconds,
-            }
-          : { ...before, message: after.message },
-    );
-    // On to book takes the page it last had while it can still be used, else the first that can.
-    const pageId = usable.some((page) => page.id === kept.bookingPageId) ? kept.bookingPageId : usable[0]?.id;
-    if (next === 'booking' && pageId === undefined) {
-      setBookingPending(true);
-      return;
-    }
-    // The thank you and on to book share their words: the ones on screen carry over.
-    const message = after.kind === 'redirect' ? kept.message : after.message;
-    onDraftChange((before) => ({
-      ...before,
-      after:
-        next === 'redirect'
-          ? { kind: 'redirect', url: kept.url }
-          : next === 'booking' && pageId !== undefined
-            ? { kind: 'booking', bookingPageId: pageId, countdownSeconds: kept.countdownSeconds, message }
-            : { kind: 'message', message },
-    }));
-  };
-
-  // Routing (spec 0043): a team page's people, for rules that narrow who takes the booking.
+  const { data } = useRouteContext({ from: '__root__' });
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
 
@@ -354,7 +234,7 @@ export function SettingsTab({
   // the reader can see under their own heading. One the form names that the reader can't list stays shown, by name.
   const chosenGroupId = groupOf(settings.values.owner);
   const chosenGroup = rotationList.find((rotation) => rotation.id === chosenGroupId);
-  // A teammate the form names who has left (late trap #88): shown as such, and the hint says their leads go unowned.
+  // A teammate the form names who has left (late trap #88): shown as such, and the tip says their leads go unowned.
   const ownerLeft =
     chosenGroupId === undefined &&
     settings.values.owner !== NOBODY &&
@@ -378,15 +258,13 @@ export function SettingsTab({
       : []),
     ...(ownerLeft ? [{ id: settings.values.owner, label: strings.ownerFormer }] : []),
   ];
-  // Who is emailed each submission: any teammate, drawn as people are. Those the form lists whom the reader can't
-  // list stay chosen as one "other people" option, so a save keeps them.
-  // Read from what is saved, so unticking that option can be ticked again.
+  // Who is emailed each submission. Those the form lists whom the reader can't list stay chosen as one "other
+  // people" option, so a save keeps them; read from what is saved, so unticking that option can be ticked again.
   const hiddenNotify = form.notifyMemberIds.filter((id) => !members.some((member) => member.id === id));
   const notifyValues = [
     ...settings.values.notify.filter((id) => !hiddenNotify.includes(id)),
     ...(hiddenNotify.some((id) => settings.values.notify.includes(id)) ? [HIDDEN_NOTIFY] : []),
   ];
-  // At the limit, the people not chosen yet wait, saying why.
   const isFull = settings.values.notify.length >= NOTIFY_MAX;
   const notifyItems = [
     ...members.map((member) => {
@@ -409,425 +287,133 @@ export function SettingsTab({
           },
         ]),
   ];
-  // One line under it: who gets new records, or why nobody will.
-  const ownerHint = ownerLeft
+  // What the owner row's tip says: who gets new records, or why nobody will. A problem is said under the control.
+  const ownerProblem = ownerLeft
     ? strings.ownerLeftHint
     : rotations.status === 'error'
       ? strings.groupsFailed
-      : chosenGroupId === undefined || (chosenGroup === undefined && rotations.status !== 'ready')
-        ? strings.ownerHint
-        : chosenGroup === undefined
-          ? strings.groupHidden
-          : takers(chosenGroup) === 0
-            ? strings.groupNobodyOn(chosenGroup.name)
-            : strings.groupHint(chosenGroup.name);
-  const poolOf = (pageId: string) => {
-    const page = pageList.find((each) => each.id === pageId);
-    if (page?.kind !== 'round_robin') return [];
-    const ids = new Set(page.hosts?.rotations ?? []);
-    const pool = rotationList
-      .filter((rotation) => ids.has(rotation.id))
-      .flatMap((rotation) => rotation.members.map((member) => ({ id: member.memberId, name: member.name })));
-    return pool.filter((member, at) => pool.findIndex((each) => each.id === member.id) === at);
-  };
-  const live = form.live;
-  // By value, not as text: rules the editor wrote spell their keys in another order than the published ones, so
-  // text said "waits for publish" for rules that were already live.
-  const routingChanged = live !== undefined && !sameValue(live.routing.rules, draft.routing.rules);
-  // Where answers are saved, as the live form does it: a change waits for Publish, and the card says so, naming where
-  // submissions still go meanwhile (late trap #39: the card showed the new object as if it were already in use).
-  const savingOf = (document: Pick<FormDocument, 'targets' | 'questions'>) => ({
-    targets: document.targets,
-    filed: document.questions.map((question) => [question.id, question.filedOn?.attributeId ?? null]),
-  });
+      : chosenGroup !== undefined && takers(chosenGroup) === 0
+        ? strings.groupNobodyOn(chosenGroup.name)
+        : undefined;
+  const ownerTip =
+    chosenGroup !== undefined
+      ? strings.groupHint(chosenGroup.name)
+      : chosenGroupId !== undefined && rotations.status === 'ready'
+        ? strings.groupHidden
+        : strings.ownerHelpTip;
   const isPublished = form.liveVersionNumber !== undefined;
-  const savingChanged = live !== undefined && !sameValue(savingOf(live), savingOf(draft));
-  const liveMain = live?.targets.main;
-  const liveObjectName =
-    liveMain === undefined ? undefined : objects.find((object) => object.id === liveMain.objectId)?.pluralName;
-  const savingWaits = !savingChanged
-    ? undefined
-    : liveMain === undefined
-      ? strings.savingWaitsKeptOnly
-      : strings.savingWaits(liveObjectName ?? strings.thisObject);
-
-  const bookingPage = after.kind === 'booking' ? pageList.find((page) => page.id === after.bookingPageId) : undefined;
-  const afterProblem = afterPageProblem(draft, pages.status === 'ready' ? pages.items : undefined, seesAllPages);
-  // Where each question's answer goes: the target's attribute, or kept with the submission only.
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
-  // The new record's owner hears of each submission too, when there is one to hear: not Nobody, not someone who left,
-  // and not a round robin group with nobody switched on.
   const ownerIsTold =
     isFiling &&
     settings.values.owner !== NOBODY &&
     !ownerLeft &&
     !(chosenGroup !== undefined && takers(chosenGroup) === 0);
-  const objectName = target.objectName ?? '';
-  const attributeTitle = (attributeId: string | undefined) =>
-    target.items.find((item) => item.attributeId === attributeId)?.title;
-  // The match, said by the question that carries it ("Work email"), or the attribute when no question does.
-  const matchId = draft.targets.main?.matchAttributeId;
-  const matchQuestion = draft.questions.find((question) => question.filedOn?.attributeId === matchId);
-  const matchTitle = matchQuestion?.label ?? attributeTitle(matchId);
-  // Each row links to its question on the Form tab, where its filing is set.
-  const filing = draft.questions.map((question) => {
-    const title = attributeTitle(question.filedOn?.attributeId);
-    return {
-      id: question.id,
-      question: question.label.trim() === '' ? strings.untitledQuestion : question.label,
-      savedAs: title === undefined ? strings.keptOnly : strings.filedOn(objectName, title),
-    };
-  });
-  // The object a submission goes to when the switch is turned on: People, else the first live object.
+  // Save answers to: the objects a submission can add to, then Only in Submissions, apart. One control for what was a
+  // switch and a picker.
   const liveObjects = objects.filter((object) => !object.isArchived && object.access === 'write');
-  const firstObject = liveObjects.find((object) => object.standardKey === 'people') ?? liveObjects[0];
+  const savingTo = draft.targets.main?.objectId ?? KEEP_ONLY;
+  const link = data.forms.hostedUrl(settings.values.address);
+  const linkError = settings.fieldError('slug');
+  const nameError = settings.fieldError('name');
+  const ownerError = settings.fieldError('owner') ?? ownerProblem;
+  const notifyError = settings.fieldError('notifyMemberIds');
+  const tip = (label: string, text: string) => <InfoTip label={label}>{text}</InfoTip>;
 
   return (
-    <>
-      <Card title={strings.afterTitle}>
-        <SegmentedControl
-          label={strings.afterChoice}
-          size="compact"
-          segments={[
-            { value: 'message', label: strings.showMessage },
-            { value: 'redirect', label: strings.sendToAddress },
-            { value: 'booking', label: strings.bookMeeting },
-          ]}
-          value={shownKind}
-          isReadOnly={isReadOnly}
-          onChange={(value) => {
-            if (value === 'message' || value === 'redirect' || value === 'booking') choose(value);
-          }}
-        />
-        {isBookingPending && usable.length > 0 && (
-          <Select
-            label={strings.bookingPage}
-            placeholder={strings.pickBookingPage}
-            items={usable.map((page) => ({
-              id: page.id,
-              label: strings.pageItem(page.title, page.durations[0] ?? 30),
-            }))}
-            value={null}
-            isReadOnly={isReadOnly}
-            onChange={(id) => {
-              if (id !== null) pickPending(id);
-            }}
-          />
-        )}
-        {isBookingPending && usable.length === 0 && (
-          <EmptyState
-            layout="row"
-            // Try again reads the pages again, never the whole editor.
-            {...(pages.status === 'error'
-              ? { tone: 'error' as const, onRetry: () => data.bookingPages.view(slug).reload() }
-              : {})}
-            isLoading={pages.status === 'loading'}
-            title={pages.status === 'error' ? strings.bookingPagesFailed : strings.noBookingPages}
-            {...(pages.status === 'ready'
-              ? {
-                  actions: (
-                    <ButtonLink href={linksHref(slug)} variant="secondary">
-                      {strings.createBookingPage}
-                    </ButtonLink>
-                  ),
-                }
-              : {})}
-          >
-            {/* Until a page can be picked, the form keeps doing what it did: said, so nobody leaves thinking otherwise. */}
-            {after.kind === 'redirect' ? strings.keepsWebPage : strings.keepsMessage}
-          </EmptyState>
-        )}
-        {after.kind === 'booking' && (
-          <>
-            {/* Late trap #53: the page paused (by hand, or its last host left) or went, and every visitor quietly got
-                the message instead of a meeting. Said here, beside the choice that fixes it. */}
-            {afterProblem?.kind === 'paused' && (
-              <Callout
-                tone="warning"
-                title={strings.pagePausedTitle(afterProblem.page.title)}
-                {...(afterProblem.page.canChange
-                  ? {
-                      actions: (
-                        <ButtonLink href={pageEditorHref(slug, afterProblem.page.id)} variant="secondary">
-                          {strings.openPage}
-                        </ButtonLink>
-                      ),
-                    }
-                  : {})}
-              >
-                {strings.pagePaused({
-                  hostLeft: afterProblem.page.pausedReason === 'host_removed',
-                  canResume: afterProblem.page.canChange,
-                  canPick: !isReadOnly,
-                })}
-              </Callout>
-            )}
-            {afterProblem?.kind === 'gone' && (
-              <Callout tone="warning" title={strings.pageGoneTitle}>
-                {strings.pageGone(!isReadOnly)}
-              </Callout>
-            )}
-            <Select
-              label={strings.bookingPage}
-              items={[
-                ...usable.map((page) => ({
-                  id: page.id,
-                  label: strings.pageItem(page.title, page.durations[0] ?? 30),
-                })),
-                // The page chosen before, now paused or no longer the reader's, stays shown, muted, with why.
-                ...(bookingPage !== undefined && !usable.includes(bookingPage)
-                  ? [
-                      {
-                        id: bookingPage.id,
-                        label: bookingPage.title,
-                        description: strings.pageNotUsable,
-                        isArchived: true,
-                      },
-                    ]
-                  : []),
-              ]}
-              value={after.bookingPageId}
+    <SettingsStack>
+      {isPublished && (
+        <>
+          <SettingsRow title={strings.name} control="field">
+            <Field
+              label={strings.name}
+              isLabelHidden
+              value={settings.values.name}
+              maxLength={80}
+              isRequired
               isReadOnly={isReadOnly}
-              onChange={(id) => {
-                if (id === null) return;
-                onDraftChange((before) =>
-                  before.after.kind === 'booking'
-                    ? { ...before, after: { ...before.after, bookingPageId: id } }
-                    : before,
-                );
+              onChange={(name) => {
+                settings.set({ name });
               }}
+              onBlur={settings.leaveName}
+              // Enter saves it too, so a name typed and left by Esc or a shortcut isn't lost.
+              onSubmit={settings.leaveName}
+              {...(nameError === undefined ? {} : { error: nameError })}
             />
-            <Select
-              label={strings.countdown}
-              items={COUNTDOWNS.map((seconds) => ({
-                id: String(seconds),
-                label: seconds === 0 ? strings.countdownAtOnce : strings.countdownAfter(seconds),
-              }))}
-              value={String(after.countdownSeconds)}
+          </SettingsRow>
+          <SettingsRow title={strings.address} meta={tip(strings.address, strings.linkHelp)} control="field">
+            <Field
+              label={strings.address}
+              isLabelHidden
+              prefix={data.forms.hostedUrl('').replace(/^https?:\/\//, '')}
+              value={settings.values.address}
+              maxLength={40}
+              isRequired
               isReadOnly={isReadOnly}
-              onChange={(id) => {
-                const seconds = Number(id);
-                if (!Number.isInteger(seconds)) return;
-                onDraftChange((before) =>
-                  before.after.kind === 'booking'
-                    ? { ...before, after: { ...before.after, countdownSeconds: seconds } }
-                    : before,
-                );
+              onChange={(text) => {
+                settings.set({ address: text.toLowerCase() });
               }}
+              onBlur={settings.leaveAddress}
+              onSubmit={settings.leaveAddress}
+              {...(linkError === undefined ? {} : { error: linkError })}
             />
-          </>
-        )}
-        {isBookingPending ? null : after.kind === 'redirect' ? (
-          <Field
-            label={strings.redirectUrl}
-            {...(redirectError === undefined ? {} : { error: redirectError })}
-            type="url"
-            value={after.url}
-            hint={strings.redirectHint}
-            onBlur={() => {
-              setLeft((before) => ({ ...before, address: true }));
-            }}
-            isRequired
-            isReadOnly={isReadOnly}
-            onChange={(url) => {
-              onDraftChange((before) => ({ ...before, after: { kind: 'redirect', url } }));
-            }}
-          />
-        ) : (
-          <Field
-            label={strings.thankYou}
-            placeholder={strings.thankYouDefault}
-            isMultiline
-            showCounter
-            value={after.message}
-            maxLength={2_000}
-            isReadOnly={isReadOnly}
-            onChange={(message) => {
-              onDraftChange((before) => ({
-                ...before,
-                after: before.after.kind === 'booking' ? { ...before.after, message } : { kind: 'message', message },
-              }));
-            }}
-          />
-        )}
-      </Card>
-      <EndingsCard
-        draft={draft}
-        target={target}
-        pages={usable}
-        isReadOnly={isReadOnly}
-        toasts={toasts}
-        onDraftChange={onDraftChange}
-      />
-      <RulesCard
-        data={data}
-        slug={slug}
-        surface={{ kind: 'form', pages: usable, poolOf }}
-        report={{ kind: 'form', formId: form.id }}
-        rules={draft.routing.rules}
-        facts={questionFacts(draft.questions)}
-        factLabel={routingStrings.question}
-        emptyFacts={routingStrings.noQuestions}
-        description={routingStrings.formRoutingLine(draft.routing.rules.length)}
-        isReadOnly={isReadOnly}
-        waitsForPublish={routingChanged}
-        nameOf={(memberId) => members.find((member) => member.id === memberId)?.name ?? ''}
-        onRulesChange={(rules) => {
-          onDraftChange((before) => ({ ...before, routing: { rules: [...rules] } }));
-          return Promise.resolve();
-        }}
-      />
-      <Card
-        title={strings.crmTitle}
-        isBusy={isRetargeting}
-        {...(savingWaits === undefined ? {} : { description: savingWaits })}
-      >
-        <Switch
-          label={strings.addToCrmSwitch}
-          // Whether a submission makes a record or updates one matters, so it stays in view while the form files.
-          {...(isFiling && matchTitle !== undefined ? { description: strings.addToCrmOn(objectName, matchTitle) } : {})}
-          isSelected={draft.targets.main !== undefined}
-          isReadOnly={isReadOnly}
-          isDisabled={isRetargeting || (draft.targets.main === undefined && firstObject === undefined)}
-          onChange={(isOn) => {
-            onRetarget(isOn ? (firstObject?.id ?? null) : null);
-          }}
-        />
-        {isFiling && (
-          <>
-            <Select
-              savesOnPick
-              label={strings.whichObject}
-              items={liveObjects.map((object) => ({ id: object.id, label: object.pluralName, icon: object.icon }))}
-              value={draft.targets.main?.objectId ?? null}
-              isReadOnly={isReadOnly}
-              isDisabled={isRetargeting}
-              onChange={(objectId) => {
-                if (objectId !== null) onRetarget(objectId);
-              }}
-            />
-            {filing.length > 0 && (
-              <Table
-                label={strings.mappingLabel}
-                columns={[
-                  { id: 'question', label: strings.mappingQuestion, isRowHeader: true },
-                  { id: 'savedAs', label: strings.mappingSavedAs },
-                ]}
-                rows={filing}
-                getRowId={(row) => row.id}
-                renderCell={(row, column) =>
-                  column === 'question' ? (
-                    row.question
-                  ) : (
-                    <Link href={questionHref(slug, form.id, row.id)}>{row.savedAs}</Link>
-                  )
-                }
-              />
-            )}
-          </>
-        )}
-      </Card>
-      <Card title={strings.wordsTitle}>
-        <Field
-          label={strings.headline}
-          placeholder={strings.headlineDefault}
-          value={draft.headline}
-          maxLength={120}
-          isReadOnly={isReadOnly}
-          onChange={(headline) => {
-            onDraftChange((before) => ({ ...before, headline }));
-          }}
-        />
-        <Field
-          label={strings.subheadingOptional}
-          value={draft.subheading ?? ''}
-          maxLength={240}
-          isReadOnly={isReadOnly}
-          onChange={(subheading) => {
-            onDraftChange((before) => ({ ...before, subheading }));
-          }}
-        />
-        <Field
-          label={strings.buttonText}
-          value={draft.buttonText}
-          {...(buttonError === undefined ? {} : { error: buttonError })}
-          onBlur={() => {
-            setLeft((before) => ({ ...before, button: true }));
-          }}
-          maxLength={40}
-          isReadOnly={isReadOnly}
-          onChange={(buttonText) => {
-            onDraftChange((before) => ({ ...before, buttonText }));
-          }}
-        />
-      </Card>
-      {/* Before the first publish, the name and address belong to the Form tab and the publish dialog (late trap #47):
-          one place each, and no talk of old links for a form that has none. */}
-      {(isPublished || isFiling) && (
-        <Card title={strings.detailsTitle}>
-          {isPublished && (
-            <>
-              <Field
-                label={strings.name}
-                value={settings.values.name}
-                maxLength={80}
-                isRequired
-                isReadOnly={isReadOnly}
-                onChange={(name) => {
-                  settings.set({ name });
-                }}
-                onBlur={settings.leaveName}
-                // Enter saves it too, so a name typed and left by Esc or a shortcut isn't lost.
-                onSubmit={settings.leaveName}
-                {...(settings.fieldError('name') === undefined ? {} : { error: settings.fieldError('name') ?? '' })}
-              />
-              <Field
-                label={strings.address}
-                prefix={data.forms.hostedUrl('').replace(/^https?:\/\//, '')}
-                hint={strings.addressChangeWarning}
-                value={settings.values.address}
-                maxLength={40}
-                isRequired
-                isReadOnly={isReadOnly}
-                onChange={(text) => {
-                  settings.set({ address: text.toLowerCase() });
-                }}
-                onBlur={settings.leaveAddress}
-                onSubmit={settings.leaveAddress}
-                {...(settings.fieldError('slug') === undefined ? {} : { error: settings.fieldError('slug') ?? '' })}
-              />
-            </>
-          )}
-          {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
-          {isFiling && (
-            <Select
-              label={strings.owner}
-              hint={ownerHint}
-              items={ownerItems}
-              value={settings.values.owner}
-              isReadOnly={isReadOnly}
-              {...(settings.fieldError('owner') === undefined ? {} : { error: settings.fieldError('owner') ?? '' })}
-              onChange={(id) => {
-                settings.pick({ owner: id ?? NOBODY });
-              }}
-            />
-          )}
-        </Card>
+            <CopyButton value={link} label={strings.copyLink} isIconOnly />
+          </SettingsRow>
+        </>
       )}
-      <Card title={strings.noticesTitle}>
+      <SettingsRow
+        title={strings.saveAnswersTo}
+        meta={tip(strings.saveAnswersTo, strings.savingHelpTip)}
+        control="field"
+      >
         <Select
-          label={strings.noticesLabel}
+          label={strings.saveAnswersTo}
+          isLabelHidden
+          savesOnPick
+          items={[
+            ...liveObjects.map((object) => ({ id: object.id, label: object.pluralName, icon: object.icon })),
+            { id: KEEP_ONLY, label: strings.onlySubmissions, isApart: liveObjects.length > 0 },
+          ]}
+          value={savingTo}
+          isReadOnly={isReadOnly}
+          isDisabled={isRetargeting}
+          onChange={(id) => {
+            if (id === null || id === savingTo) return;
+            onRetarget(id === KEEP_ONLY ? null : id);
+          }}
+        />
+      </SettingsRow>
+      {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
+      {isFiling && (
+        <SettingsRow title={strings.owner} meta={tip(strings.owner, ownerTip)} control="field">
+          <Select
+            label={strings.owner}
+            isLabelHidden
+            items={ownerItems}
+            value={settings.values.owner}
+            isReadOnly={isReadOnly}
+            {...(ownerError === undefined ? {} : { error: ownerError })}
+            onChange={(id) => {
+              settings.pick({ owner: id ?? NOBODY });
+            }}
+          />
+        </SettingsRow>
+      )}
+      <SettingsRow
+        title={strings.emailEach}
+        meta={tip(strings.emailEach, strings.noticesHint(ownerIsTold))}
+        control="field"
+      >
+        <Select
+          label={strings.emailEach}
+          isLabelHidden
           selectionMode="multiple"
           placeholder={ownerIsTold ? strings.noticesNobody : strings.nobody}
-          hint={strings.noticesHint(ownerIsTold)}
           items={notifyItems}
           values={notifyValues}
           isSearchable={members.length > 8}
           searchLabel={strings.noticesSearch}
           isReadOnly={isReadOnly}
-          {...(settings.fieldError('notifyMemberIds') === undefined
-            ? {}
-            : { error: settings.fieldError('notifyMemberIds') ?? '' })}
+          {...(notifyError === undefined ? {} : { error: notifyError })}
           onValuesChange={(ids) => {
             settings.pick({
               notify: [
@@ -837,21 +423,27 @@ export function SettingsTab({
             });
           }}
         />
-      </Card>
-      <Card
-        title={strings.spamTitle}
-        {...(isPublished
-          ? {
-              actions: (
-                <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">
-                  {strings.spamReview}
-                </ButtonLink>
-              ),
-            }
-          : {})}
-      >
-        {strings.spamSummary}
-      </Card>
-    </>
+      </SettingsRow>
+      {isPublished && (
+        <SettingsRow title={strings.acceptingRow} meta={tip(strings.acceptingRow, strings.acceptingHelp)}>
+          <Switch
+            label={strings.acceptingRow}
+            isLabelHidden
+            isSelected={form.status !== 'paused'}
+            isReadOnly={isReadOnly}
+            onChange={(isOn) => {
+              onStatusChange(isOn ? 'live' : 'paused');
+            }}
+          />
+        </SettingsRow>
+      )}
+      {isPublished && (
+        <SettingsRow title={strings.spamRow} meta={tip(strings.spamRow, strings.spamSummary)}>
+          <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">
+            {strings.spamReview}
+          </ButtonLink>
+        </SettingsRow>
+      )}
+    </SettingsStack>
   );
 }

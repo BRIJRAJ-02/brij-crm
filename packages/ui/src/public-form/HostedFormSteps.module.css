@@ -33,27 +33,49 @@
     margin-block-start: var(--space-20);
   }
 
+  /* One at a time (T23, Typeform): the answer field and the buttons a size up, matched, so the one question reads
+     as the whole screen, and the answer in a larger type, drawn from the spacing scale as the touch sizes are until
+     the design system has an answer size. The lines under them (the error, Saved) take the label size the card
+     worked out, so they stay small. */
   .form[data-layout='conversational'] {
+    --size-input: calc(2 * var(--space-24));
+    --text-body: 400 var(--space-20) / var(--space-32) var(--font-sans);
+
     margin-block-start: var(--space-32);
   }
 
-  /* Reached by pointer only: a question reached by Enter or Back from the keyboard shows at once. */
-  .form[data-layout='conversational'][data-moved] {
-    animation: question-rise var(--duration-move) var(--ease-out);
+  /* Moving on (T23): the next step or question rises in from below as the last one left upwards; Back comes down
+     from above. The leaving one is animated out by the component (it is gone from the tree by then). Opacity and
+     transform only, about a quarter second; under reduced motion a crossfade alone. */
+  .form[data-enter] {
+    animation: step-in var(--duration-modal) var(--ease-out);
   }
 
-  @keyframes question-rise {
+  /* Back comes down from above; under reduced motion it is a crossfade alone, with no travel. */
+  .form[data-enter='back'] {
+    --step-from: calc(-1 * var(--space-16));
+  }
+
+  @keyframes step-in {
     from {
       opacity: 0;
-      translate: 0 var(--space-8);
+      translate: 0 var(--step-from, var(--space-16));
     }
   }
 
-  /* Reduced motion: the next question is there at once (spec 0063 Motion, spec 0058 AC-2). */
   @media (prefers-reduced-motion: reduce) {
-    .form[data-layout='conversational'][data-moved] {
-      animation: none;
+    .form[data-enter] {
+      --step-from: 0;
     }
+  }
+
+  /* One at a time on its own page: the progress line runs along the window's top edge, as Typeform's does. */
+  .line[data-mode='page'] {
+    position: fixed;
+    z-index: var(--z-sticky);
+    inset-block-start: 0;
+    inset-inline: 0;
+    margin: 0;
   }
 
   /* The question, large, with its number before it in the accent. */
@@ -88,6 +110,11 @@
     flex-direction: column;
     gap: var(--space-12);
     margin-block-start: var(--space-4);
+  }
+
+  /* One at a time the block reads from its start edge, so Saved and Finish later sit under OK, not in the middle. */
+  .actions[data-layout='conversational'] {
+    align-items: flex-start;
   }
 
   .buttons {

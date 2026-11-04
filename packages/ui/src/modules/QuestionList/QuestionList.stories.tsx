@@ -58,13 +58,11 @@ interface SampleProps {
   readonly withStep?: boolean;
 }
 
-/** A New step divider: the step's place and title, and what it holds. */
+/** A page break: the step's place and title, an inline header among the cards (T20). */
 const STEP: QuestionListItem = {
   id: 'step:company',
   kind: 'step',
   label: 'Step 2 · Your company',
-  typeIcon: 'layers',
-  note: '2 questions',
 };
 
 /** The list holding its own order and open questions, as the form builder does. */
@@ -272,14 +270,40 @@ export const WithoutTypes: Story = {
   },
 };
 
-/** A break between steps (kind step, spec 0063): on the ground with a dashed edge, among the question cards. */
+/** A page break (kind step, spec 0063; T20): an inline header on the ground, no card, among the question cards. */
 export const WithStep: Story = {
   render: () => <SampleQuestions withStep />,
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: /^Step 2 · Your company/ })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    const header = canvas.getByRole('button', { name: /^Step 2 · Your company/ });
+    // A header names its page; it has no editor to open of its own.
+    await expect(header).not.toHaveAttribute('aria-expanded');
+  },
+};
+
+/** The gap over a card (renderGap): "Split here" shows while a pointer is over it or focus is in it. */
+export const WithGap: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <QuestionList
+        label="Questions"
+        items={QUESTIONS}
+        openIds={new Set<string>()}
+        onOpenChange={() => undefined}
+        renderOpen={() => null}
+        renderGap={(id) =>
+          id === 'name' ? null : (
+            <Button size="sm" icon="scissors">
+              Split here
+            </Button>
+          )
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // Every card but the first has the action in the gap above it.
+    await expect(canvas.getAllByRole('button', { name: 'Split here' })).toHaveLength(3);
   },
 };
 

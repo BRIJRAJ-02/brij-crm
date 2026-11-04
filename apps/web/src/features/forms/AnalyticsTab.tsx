@@ -15,8 +15,19 @@ import type {
   FormView,
 } from '@crm/data';
 import { useFormAnalytics } from '@crm/data/react';
-import { EmptyState, FieldGroup, SegmentedControl, Separator, Skeleton, Stats, Table, type StatItem } from '@crm/ui';
+import {
+  DescriptionList,
+  EmptyState,
+  FieldGroup,
+  SegmentedControl,
+  SettingsStack,
+  Skeleton,
+  Stats,
+  type StatItem,
+} from '@crm/ui';
 import { lazy, Suspense, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useFormToolbarSlot } from './toolbarSlot.ts';
 import { strings } from './strings.ts';
 
 /** The chart, loaded with the first tab that has figures to draw: never in the editor's own chunk (AC-6331). */
@@ -88,40 +99,48 @@ export interface AnalyticsTabProps {
   readonly form: FormView;
 }
 
-/** The four headline figures, each against the period before (AC-6321). */
+/**
+ * The hero figure (T22, 5 November 2026: one figure leads): completion, the rate people compare forms on, finishes
+ * of starts (a view may never be a fill), said with the counts behind it rather than against a period with nothing.
+ */
+function heroOf(analytics: FormAnalytics): readonly StatItem[] {
+  const { totals } = analytics;
+  return [
+    {
+      id: 'completion',
+      label: strings.analyticsCompletion,
+      value: percent(totals.completions, totals.starts),
+      comparison: strings.analyticsFinishedOf(figure(totals.completions), figure(totals.starts)),
+    },
+  ];
+}
+
+/**
+ * The figures under the hero, each against the period before only when there was something before (T22: "+100% vs
+ * 30 days before" from nothing says nothing).
+ */
 function headlineOf(analytics: FormAnalytics): readonly StatItem[] {
   const { totals, previous, range } = analytics;
   const median = totals.medianMs;
+  const hadBefore = previous.views > 0;
   return [
     {
       id: 'views',
       label: strings.analyticsViews,
       value: figure(totals.views),
-      ...compared(totals.views, previous.views, range, figure),
+      ...(hadBefore ? compared(totals.views, previous.views, range, figure) : {}),
     },
     {
       id: 'starts',
       label: strings.analyticsStarts,
       value: figure(totals.starts),
-      ...compared(totals.starts, previous.starts, range, figure),
-    },
-    {
-      // The rate people compare forms on: finishes of starts, not of views, since a view may never be a fill.
-      id: 'completion',
-      label: strings.analyticsCompletion,
-      value: percent(totals.completions, totals.starts),
-      ...compared(
-        totals.starts === 0 ? 0 : totals.completions / totals.starts,
-        previous.starts === 0 ? 0 : previous.completions / previous.starts,
-        range,
-        (value) => percent(value, 1),
-      ),
+      ...(hadBefore ? compared(totals.starts, previous.starts, range, figure) : {}),
     },
     {
       id: 'median',
       label: strings.analyticsMedian,
       value: median === undefined ? '—' : duration(median),
-      ...comparedTime(median, previous.medianMs),
+      ...(hadBefore || median === undefined ? comparedTime(median, previous.medianMs) : {}),
     },
   ];
 }
@@ -144,10 +163,14 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
     return new Map(document.questions.map((question) => [question.id, question.label]));
   }, [form.live, form.draft]);
 
-  const period = (
+  // The period sits at the end of the tab strip, as Submissions' tools do (T22: it was jammed onto the figures), so
+  // the page opens on the figures themselves. Before the editor has drawn the strip it sits at the top instead.
+  const slot = useFormToolbarSlot();
+  const switcher = (
     <SegmentedControl
       label={strings.analyticsPeriod}
       size="compact"
+      isFitted
       value={String(range)}
       onChange={(next) => {
         const found = RANGES.find((each) => String(each) === next);
@@ -156,24 +179,25 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
       segments={RANGES.map((each) => ({ value: String(each), label: strings.analyticsDays(each) }))}
     />
   );
+  const period = slot === null ? switcher : createPortal(switcher, slot);
 
   if (state.status === 'loading') {
     return (
-      <FieldGroup tone="heading" headingLevel={2} label={strings.analytics}>
+      <SettingsStack>
         {period}
         <Skeleton shape="fill" />
-      </FieldGroup>
+      </SettingsStack>
     );
   }
   if (state.status === 'error') {
     return (
-      <FieldGroup tone="heading" headingLevel={2} label={strings.analytics}>
+      <SettingsStack>
         {period}
         {/* EmptyState's own error tone draws Try again from `onRetry`: no second button style here. */}
         <EmptyState tone="error" title={strings.analyticsFailed} onRetry={() => view.reload()}>
           {state.message}
         </EmptyState>
-      </FieldGroup>
+      </SettingsStack>
     );
   }
 
@@ -181,10 +205,12 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
   // Empty is a sentence and the way to fix it (AC-6321), never a row of flat bars pretending to be data.
   if (analytics.totals.views === 0 && analytics.previous.views === 0) {
     return (
-      <FieldGroup tone="heading" headingLevel={2} label={strings.analytics}>
+      <SettingsStack>
         {period}
-        <EmptyState title={strings.analyticsEmpty}>{strings.analyticsEmptyText}</EmptyState>
-      </FieldGroup>
+        <EmptyState icon="chart-line" title={strings.analyticsEmpty}>
+          {strings.analyticsEmptyText}
+        </EmptyState>
+      </SettingsStack>
     );
   }
 
@@ -192,11 +218,13 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
   // obvious, and nothing is drawn as a flat line pretending to be data.
   if (analytics.totals.views === 0) {
     return (
-      <FieldGroup tone="heading" headingLevel={2} label={strings.analytics}>
+      <SettingsStack>
         {period}
         <Stats label={strings.analyticsSummary} items={headlineOf(analytics)} />
-        <EmptyState title={strings.analyticsNoneInRange}>{strings.analyticsNoneInRangeText}</EmptyState>
-      </FieldGroup>
+        <EmptyState icon="chart-line" title={strings.analyticsNoneInRange}>
+          {strings.analyticsNoneInRangeText}
+        </EmptyState>
+      </SettingsStack>
     );
   }
 
@@ -227,9 +255,12 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
     valueText: figure(row.leftHere),
   }));
 
+  // Somebody started and nobody stopped: said in words, never as an empty chart (T22).
+  const nobodyLeft = dropPoints.every((point) => point.value === 0);
   return (
-    <FieldGroup tone="heading" headingLevel={2} label={strings.analytics}>
+    <SettingsStack>
       {period}
+      <Stats label={strings.analyticsCompletion} items={heroOf(analytics)} size="large" />
       <Stats label={strings.analyticsSummary} items={headlineOf(analytics)} />
       {dayPoints.length > 1 && (
         <Suspense fallback={<Skeleton shape="fill" />}>
@@ -243,10 +274,11 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
           />
         </Suspense>
       )}
-      {dropPoints.length > 0 && (
-        <>
-          <Separator />
-          <FieldGroup tone="heading" headingLevel={3} label={strings.analyticsDropOff}>
+      {analytics.totals.starts > 0 && (
+        <FieldGroup tone="heading" headingLevel={2} label={strings.analyticsDropOff}>
+          {nobodyLeft ? (
+            <EmptyState layout="row" icon="circle-check" title={strings.analyticsAllFinished} />
+          ) : (
             <Suspense fallback={<Skeleton shape="fill" />}>
               <Chart
                 kind="bar"
@@ -257,31 +289,25 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
                 formatTick={(value) => figure(value)}
               />
             </Suspense>
-          </FieldGroup>
-        </>
+          )}
+        </FieldGroup>
       )}
-      <Separator />
-      <FieldGroup tone="heading" headingLevel={3} label={strings.analyticsSources}>
-        <Table
-          label={strings.analyticsSources}
-          columns={[
-            { id: 'source', label: strings.analyticsSource, isRowHeader: true },
-            { id: 'views', label: strings.analyticsViews, align: 'end', size: 'fit' },
-            { id: 'completions', label: strings.analyticsCompletions, align: 'end', size: 'fit' },
-          ]}
-          rows={analytics.bySource}
-          emptyState={<EmptyState layout="row" title={strings.analyticsNoSources} />}
-          getRowId={(row) => row.source}
-          renderCell={(row, column) =>
-            column === 'source'
-              ? sourceWords(row.source)
-              : column === 'views'
-                ? figure(row.views)
-                : figure(row.completions)
-          }
-        />
+      <FieldGroup tone="heading" headingLevel={2} label={strings.analyticsSources}>
+        {analytics.bySource.length === 0 ? (
+          <EmptyState layout="row" title={strings.analyticsNoSources} />
+        ) : (
+          // A short list, not a full width table: a source and its two counts read together (T22).
+          <DescriptionList
+            layout="compact"
+            items={analytics.bySource.map((row) => ({
+              id: row.source,
+              term: sourceWords(row.source),
+              description: strings.analyticsSourceLine(figure(row.views), figure(row.completions), row.views),
+            }))}
+          />
+        )}
       </FieldGroup>
-    </FieldGroup>
+    </SettingsStack>
   );
 }
 

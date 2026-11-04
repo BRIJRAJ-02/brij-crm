@@ -83,10 +83,10 @@ test.describe('the form journey’s edges', () => {
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Send' }).click();
     await expect(visitor.getByText('Answer this question.')).toBeVisible();
-    await expect(visitor.getByText(/Thank you/)).toHaveCount(0);
+    await expect(visitor.getByText(/Thanks, we got it/)).toHaveCount(0);
     await visitor.getByLabel(/What is your budget\?/).fill('About ten thousand');
     await visitor.getByRole('button', { name: 'Send' }).click();
-    await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
     await visitor.context().close();
   });
 
@@ -94,7 +94,7 @@ test.describe('the form journey’s edges', () => {
     test.setTimeout(180_000);
     const { slug, form } = await withForm(page, 'retarget');
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=settings`);
-    const target = page.getByRole('button', { name: /Save to$/ });
+    const target = page.getByRole('button', { name: /Save answers to$/ }).last();
     await expect(target).toContainText('People');
     await target.click();
     await page.getByRole('option', { name: 'Deals', exact: true }).click();
@@ -117,7 +117,7 @@ test.describe('the form journey’s edges', () => {
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Send' }).click();
     // A bot learns nothing: it is thanked like anyone else.
-    await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
     await visitor.context().close();
 
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=submissions`);
@@ -198,12 +198,12 @@ test.describe('the form journey’s edges', () => {
     // never strands someone who started before it existed.
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Send' }).click();
-    await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
     await expect(visitor.getByText(/This form was updated while you filled it in\./)).toHaveCount(0);
     await visitor.context().close();
   });
 
-  test('a new form sends its visitors to a booking page, set up in Settings before the first publish', async ({
+  test('a new form sends its visitors to a booking page, set up in After they send before the first publish', async ({
     page,
     browser,
   }) => {
@@ -222,12 +222,15 @@ test.describe('the form journey’s edges', () => {
 
     await page.goto(`/w/${slug}/captures/forms`);
     await newForm(page);
-    // Settings is open before the first publish, so what comes after sending is chosen first.
-    await page.getByRole('tab', { name: 'Settings' }).click();
-    await page.getByRole('radio', { name: 'Booking' }).check({ force: true });
-    await page.getByRole('button', { name: /Booking page$/ }).click();
+    // What comes after sending is set before the first publish, at the end of the Form tab (T20: After they send).
+    await page.getByRole('button', { name: /^Thank you page/ }).click();
+    await page.getByText('Booking page', { exact: true }).first().click();
+    await page
+      .getByRole('button', { name: /Booking page$/ })
+      .last()
+      .click();
     await page.getByRole('option', { name: new RegExp(`^Intro call ${tag}`) }).click();
-    await expect(page.getByRole('button', { name: /Booking page$/ })).toContainText('Intro call');
+    await expect(page.getByRole('button', { name: /Booking page$/ }).last()).toContainText('Intro call');
 
     // The first publish is one click, with nothing asked.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();

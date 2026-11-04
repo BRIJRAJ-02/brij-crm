@@ -199,3 +199,74 @@ export function renameStepKeys(steps: readonly FormStep[], from: string, to: str
         },
   );
 }
+
+/** The answer types that make up someone's contact details: the page a stepped form asks first. */
+const CONTACT_TYPES: ReadonlySet<string> = new Set(['email', 'phone']);
+/** A short text whose words ask for a name or a company is contact detail too. */
+const CONTACT_WORDS = /\b(name|company|organi[sz]ation|job title|role at)\b/i;
+
+/** Whether a question asks for contact details (a name, an email, a phone, a company). */
+export function isContactQuestion(question: Pick<FormQuestion, 'answerType' | 'label'>): boolean {
+  return (
+    CONTACT_TYPES.has(question.answerType) ||
+    (question.answerType === 'short_text' && CONTACT_WORDS.test(question.label))
+  );
+}
+
+/**
+ * The form split into pages when Steps is chosen (T20, 5 November 2026: "choosing Steps splits the form at once",
+ * Tally's page breaks): breaks it already has are kept. The first question always starts a step of its own, so every
+ * page has a header to rename. A form with no breaks of its own is split after its contact details (a leading run of
+ * name, email and phone, titled "Your details"), else in the middle; a form of one question stays one step.
+ */
+export function splitIntoSteps(
+  flow: Flow,
+  newId: () => string,
+  words: { readonly details: string; readonly rest: string },
+): Flow {
+  const first = flow.questions[0];
+  if (first === undefined) return flow;
+  const resolved = stepsOfBreaks(flow.questions, flow.steps);
+  const hasLead = resolved[0]?.id !== undefined;
+  if (flow.steps.some((step) => step.startsAt !== undefined)) {
+    if (hasLead) return flow;
+    // Breaks of its own: only the first page gets its header.
+    const steps = [{ id: newId(), startsAt: first.id }, ...flow.steps];
+    return fromItems({ ...flow, steps }, itemsOf({ ...flow, steps }));
+  }
+  if (flow.questions.length < 2) return { ...flow, steps: [{ id: newId(), startsAt: first.id }] };
+  const contactRun = flow.questions.findIndex((question) => !isContactQuestion(question));
+  const cut = contactRun > 0 ? contactRun : Math.ceil(flow.questions.length / 2);
+  const second = flow.questions[cut];
+  const steps: FormStep[] = [
+    { id: newId(), startsAt: first.id, ...(contactRun > 0 && second !== undefined ? { title: words.details } : {}) },
+    ...(second === undefined
+      ? []
+      : [{ id: newId(), startsAt: second.id, ...(contactRun > 0 ? { title: words.rest } : {}) }]),
+    // Breaks at the end (with nothing under them yet) are kept where they were.
+    ...flow.steps.filter((step) => step.startsAt === undefined),
+  ];
+  return fromItems({ ...flow, steps }, itemsOf({ ...flow, steps }));
+}
+
+/** The flow with a new break starting at `questionId` (Split here): its questions from there on make a new step. */
+export function splitAt(flow: Flow, questionId: string, id: string): Flow {
+  if (!flow.questions.some((question) => question.id === questionId)) return flow;
+  if (flow.steps.some((step) => step.startsAt === questionId)) return flow;
+  const items = itemsOf(flow);
+  const at = items.findIndex((item) => item.kind === 'question' && item.id === questionId);
+  const next = [...items.slice(0, at), { kind: 'step' as const, id }, ...items.slice(at)];
+  return fromItems({ ...flow, steps: [...flow.steps, { id }] }, next);
+}
+
+/** Whether a question starts a step (it comes right after a break): there is nothing to split above it. */
+export function startsAStep(flow: Flow, questionId: string): boolean {
+  const items = itemsOf(flow);
+  const at = items.findIndex((item) => item.kind === 'question' && item.id === questionId);
+  return at <= 0 || items[at - 1]?.kind === 'step';
+}
+
+/** Whether the break `id` is the form's first page, which has no step above it to merge with. */
+export function isFirstStep(flow: Flow, id: string): boolean {
+  return itemsOf(flow)[0]?.id === id;
+}

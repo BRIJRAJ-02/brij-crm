@@ -7,7 +7,7 @@ import {
   type PublicForm,
   type PublicQuestion,
 } from '@crm/contracts/forms';
-import { useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Button, ButtonLink } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
 import { Link } from '../atoms/Link/Link.tsx';
@@ -193,7 +193,7 @@ export function FormHeader({
 
 /**
  * The thank you, in the booking confirmation's shape: the green check, the heading, a muted line, what was sent,
- * then one next step, Send another.
+ * and an ending's own button when it has one; nothing to send again.
  */
 export function FormThanks({
   form,
@@ -228,9 +228,7 @@ export function FormThanks({
           {button.label}
         </ButtonLink>
       )}
-      <Button variant="ghost" onPress={state.sendAnother}>
-        {state.words.sendAnother}
-      </Button>
+      {/* No Send another (T23, the audit's slice 8, Tally's way): a visitor who sent it is done. */}
     </FormConfirmation>
   );
 }
@@ -310,11 +308,36 @@ export function QuestionSlot({
   readonly children: ReactNode;
 }) {
   const hint = state.hints[question.key];
+  const error = state.errors[question.key];
+  const slot = useRef<HTMLDivElement>(null);
+  // A required question left empty nudges once beside its line (T23, Typeform): a short shake through the Web
+  // Animations API, so the hosted page's tight stylesheet carries none of it; nothing under reduced motion.
+  useEffect(() => {
+    const element = slot.current;
+    if (error === undefined || element === null || typeof element.animate !== 'function') return;
+    if (globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const tokens = getComputedStyle(element);
+    const step = tokens.getPropertyValue('--space-4').trim() || '0px';
+    element.animate(
+      [
+        { transform: 'none' },
+        { transform: `translateX(calc(-1.5 * ${step}))` },
+        { transform: `translateX(${step})` },
+        { transform: 'none' },
+      ],
+      {
+        duration: Number.parseFloat(tokens.getPropertyValue('--duration-modal')) || 0,
+        easing: tokens.getPropertyValue('--ease-out').trim() || 'ease-out',
+      },
+    );
+  }, [error]);
   return (
     <div
+      ref={slot}
       data-question={question.key}
       id={`question-${question.key}`}
       className={styles.question}
+      data-invalid={error === undefined ? undefined : true}
       onBlur={(event) => state.blur(question, event)}
     >
       {children}
@@ -438,10 +461,13 @@ export function FormMessage({
   mode,
   title,
   text,
+  retry,
 }: {
   readonly mode: HostedFormMode;
   readonly title: string;
   readonly text?: string;
+  /** A load that failed offers Try again (the audit's slice 8): a way on, never a dead end. */
+  readonly retry?: { readonly label: string; readonly onRetry: () => void };
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
   return (
@@ -452,6 +478,11 @@ export function FormMessage({
         </Heading>
         {text !== undefined && <p className={styles.subheading}>{text}</p>}
       </header>
+      {retry !== undefined && (
+        <Button variant="secondary" onPress={retry.onRetry}>
+          {retry.label}
+        </Button>
+      )}
     </FormGround>
   );
 }

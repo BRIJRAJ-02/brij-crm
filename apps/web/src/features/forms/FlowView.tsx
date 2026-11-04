@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the Flow view (spec 0063, AC-6325): the steps a visitor walks, top to bottom, what happens after each one, and where the form ends.
-// Main task: read the shape of a form's logic in one place, add a step, and go from any part of it to where it is edited.
+// Main task: read the shape of a form's logic in one place, and go from any part of it to where it is edited.
 // Leaves out: editing a rule here (each step links to its card, where Add logic is) and the look of the form (that is the preview).
 import type { FormDocument } from '@crm/data';
 import { stepsOfBreaks } from '@crm/data/forms';
@@ -18,10 +18,8 @@ export interface FlowViewProps {
   readonly questionHref: (questionId: string) => string;
   /** One step divider's row on the Form tab. */
   readonly stepHref: (stepId: string) => string;
-  /** The Settings tab, where the endings are worded. */
+  /** After they send, at the end of the Form tab, where the endings are worded. */
   readonly endingsHref: string;
-  /** Adds a step (placed and named by the list) and opens it on the Form tab. Left out, read only. */
-  readonly onAddStep?: () => void;
   readonly onOpenChange: (isOpen: boolean) => void;
 }
 
@@ -30,17 +28,9 @@ export interface FlowViewProps {
  * card per step a visitor can reach, its questions, then what happens after it in Typeform's words, each rule "If …
  * Jump to …", and last where everyone else goes ("Otherwise Go to Step 2", or "Then Thank you page" for a step
  * with no rules). The endings close the list, the thank you page first, so every step, every jump and every end is
- * on the page. Add a step is at the foot. Classic and One at a time draw no steps, so they say so in one line.
+ * on the page. Classic and One at a time draw no steps, so they say so in one line.
  */
-export function FlowView({
-  draft,
-  isOpen,
-  questionHref,
-  stepHref,
-  endingsHref,
-  onAddStep,
-  onOpenChange,
-}: FlowViewProps) {
+export function FlowView({ draft, isOpen, questionHref, stepHref, endingsHref, onOpenChange }: FlowViewProps) {
   const endings = draft.endings ?? [];
   const facts = questionFacts(draft.questions);
   const byKey = new Map(draft.questions.map((question) => [question.key, question]));
@@ -62,16 +52,7 @@ export function FlowView({
       title={strings.flowTitle}
       isOpen={isOpen}
       onOpenChange={onOpenChange}
-      actions={
-        <>
-          {isSteps && onAddStep !== undefined && draft.questions.length > 0 && (
-            <Button icon="layers" onPress={onAddStep}>
-              {strings.flowAddStep}
-            </Button>
-          )}
-          <Button slot="close">{strings.flowClose}</Button>
-        </>
-      }
+      actions={<Button slot="close">{strings.flowClose}</Button>}
     >
       {!isSteps ? (
         <p>{strings.flowClassic}</p>

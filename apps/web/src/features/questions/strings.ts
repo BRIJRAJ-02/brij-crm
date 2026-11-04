@@ -80,18 +80,27 @@ export const strings = {
   offerOther: 'Offer Other, with a box to type in',
   hiddenDefault: 'Value when the link has none',
   hiddenDefaultHint: (key: string) => `Visitors never see it. Add ?${key}=… to the link to set it.`,
-  // A form's New step dividers (spec 0063)
-  addStep: 'Add a step',
+  // A form's steps as pages (spec 0063; T20, 5 November 2026: Tally's page breaks)
+  /** Between two questions of one step, on hover or focus: one click starts a new step there. */
+  splitHere: 'Split here',
+  /** The same, from an open question's footer (touch has no hover). */
+  startStepHere: 'Start a new step here',
+  /** The first page's title when Steps splits a form after its contact details. */
+  yourDetails: 'Your details',
+  /** The second page's title when the first is the contact details. */
+  aboutYou: 'About you',
+  /** A step header's ⋯ menu. */
+  stepMenu: (name: string) => `${name} options`,
+  renameStep: 'Rename',
+  /** Joins a step's questions to the step above it (the break goes). */
+  mergeUp: 'Merge with the step above',
+  stepMerged: (name: string) => `Merged ${name} into the step above.`,
   /** A divider's name: its step's place ("New step" while empty), then its title when it has one ("Step 2 · Your company"). */
   stepName: (number: number, title?: string) => {
     // A divider with nothing under it yet is no step a visitor counts.
     const place = number === 0 ? 'New step' : `Step ${String(number)}`;
     return title === undefined || title.trim() === '' ? place : `${place} · ${title.trim()}`;
   },
-  stepHolds: (count: number) =>
-    count === 0 ? 'No questions yet' : count === 1 ? '1 question' : `${String(count)} questions`,
-  /** On a divider outside the Steps layout: it is kept, and only Steps draws it (One at a time and Classic ignore it). */
-  stepsOnly: 'Only used with the Steps layout',
   separator: ' · ',
   stepTitle: 'Step title',
   stepTitlePlaceholder: 'About your company',
@@ -116,8 +125,11 @@ export const strings = {
   stepShowWhenHint: 'Show this step only when earlier answers match. Its answers are not kept when it is skipped.',
   stepNoEarlier: 'Add a question before this step to show it by an answer.',
   stepReadsLater: 'A condition reads a question that is no longer before this step. Pick another, or remove it.',
-  removeStep: 'Remove step',
-  stepRemoved: (name: string) => `Removed ${name}. Its questions joined the step above.`,
+  // Points (spec 0063, AC-6316; T20: Typeform's score, offered on the question, never a Settings card)
+  /** One click on a question that can score: sensible points appear, and the form gets a score. */
+  givePoints: 'Give points',
+  /** Takes a question's points away. */
+  stopPoints: 'No points',
   answerTypes: {
     short_text: 'Short text',
     long_text: 'Long text',

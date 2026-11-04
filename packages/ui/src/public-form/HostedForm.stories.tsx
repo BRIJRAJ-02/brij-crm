@@ -288,8 +288,8 @@ export const Failed: Story = {
 };
 
 /**
- * The thank you replaces the form, with focus on its heading: what was sent, read back (spec 0058, AC-19), then one
- * next step, Send another, which starts again.
+ * The thank you replaces the form, with focus on its heading: what was sent, read back (spec 0058, AC-19), and
+ * nothing to send again (T23, Tally's way).
  */
 export const Thanks: Story = {
   args: {
@@ -299,13 +299,13 @@ export const Thanks: Story = {
     await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
-    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
+    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thanks, we got it.' })).toHaveFocus());
     await settleAnimations();
     await expect(canvas.getByText('We will come back to you at the address you gave.')).toBeVisible();
     // Only what was answered: the empty phone and size are left out.
     await expect(canvasElement.querySelector('dl')).toHaveTextContent('Your nameAda LovelaceWork emailada@example.com');
-    // One next step, and only one.
-    await expect(canvas.getAllByRole('button').map((button) => button.textContent)).toEqual(['Send another']);
+    // A visitor who sent it is done: no Send another.
+    await expect(canvas.queryAllByRole('button')).toHaveLength(0);
   },
 };
 
@@ -397,7 +397,7 @@ export const BookAfter: Story = {
     await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
-    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
+    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thanks, we got it.' })).toHaveFocus());
     await expect(canvas.getByRole('button', { name: 'Book a time' })).toBeInTheDocument();
     await expect(canvas.getByText('ada@example.com')).toBeInTheDocument();
     await expect(args.onRedirect).not.toHaveBeenCalled();

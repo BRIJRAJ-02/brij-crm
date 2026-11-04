@@ -65,13 +65,16 @@ import {
 } from './questions.ts';
 import { addJump, changeJump, idOfTarget, jumpChoices, nextStepName, removeJump, targetOfId } from './jumps.ts';
 import {
-  addStep,
   changeStep,
+  fromItems,
+  isFirstStep,
   itemsOf,
   moveItem,
   questionsBefore,
   removeStep,
   restoreStep,
+  splitAt,
+  startsAStep,
   stepPlaces,
   stepQuestionsOf,
   type Flow,
@@ -337,14 +340,23 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     ...(stats?.get(question.id) ?? {}),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
-  // With dividers, each in its place among the questions (spec 0063): a step's place and title, what it holds, its
-  // Show when, and outside Steps a quiet note that only Steps draws it.
+  // Steps as pages (spec 0063; T20, 5 November 2026: Tally's page breaks): with the Steps layout each break is an
+  // inline header among the questions ("Step 2 · About you"); Classic and One at a time draw no headers at all, the
+  // breaks kept in the document for the day Steps is chosen again.
   const flow: Flow | undefined = breaks === undefined ? undefined : { questions, steps: breaks.steps };
+  const isStepped = breaks?.layout === 'steps' && flow !== undefined;
   const places = flow === undefined ? new Map<string, { number: number; count: number }>() : stepPlaces(flow);
-  const items: readonly QuestionListItem[] =
-    flow === undefined || breaks === undefined
-      ? questionItems
-      : itemsOf(flow).flatMap((item): QuestionListItem[] => {
+  // A stepped form whose first questions have no header of their own (one made before Steps split forms at once):
+  // they still read as Step 1, under a header that makes its break the moment it is renamed or given logic.
+  const firstQuestion = questions[0];
+  const hasLeadHeader = flow === undefined || firstQuestion === undefined || itemsOf(flow)[0]?.kind === 'step';
+  const leadRow: readonly QuestionListItem[] =
+    isStepped && !hasLeadHeader ? [{ id: `${STEP_ROW}${LEAD}`, kind: 'step', label: strings.stepName(1) }] : [];
+  const items: readonly QuestionListItem[] = !isStepped
+    ? questionItems
+    : [
+        ...leadRow,
+        ...itemsOf(flow).flatMap((item): QuestionListItem[] => {
           if (item.kind === 'question') return questionItems.filter((each) => each.id === item.id);
           const step = breaks.steps.find((each) => each.id === item.id);
           if (step === undefined) return [];
@@ -354,24 +366,59 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               id: `${STEP_ROW}${step.id}`,
               kind: 'step',
               label: strings.stepName(place.number, step.title),
-              typeIcon: 'layers',
-              // Outside Steps the divider is kept but does nothing (One at a time and Classic ignore it), so it says so.
-              note: breaks.layout === 'steps' ? strings.stepHolds(place.count) : strings.stepsOnly,
               // Named by every question, so one that comes after the step reads by its label, not as removed.
               ...shownWhenOf(step.showWhen, questionFacts(questions)),
               hasProblem: stepProblem?.stepId === step.id,
             },
           ];
-        });
+        }),
+      ];
 
-  const addBreak = () => {
-    if (breaks === undefined) return;
+  // A step with logic shows it under its header, always: its rules are what the header is about.
+  const shownOpen = useMemo(
+    () =>
+      new Set([
+        ...openIds,
+        ...(breaks?.steps ?? [])
+          .filter((step) => (step.jumps?.length ?? 0) > 0 || step.showWhen !== undefined)
+          .map((step) => `${STEP_ROW}${step.id}`),
+      ]),
+    [openIds, breaks?.steps],
+  );
+
+  // The step being renamed in place, and what has been typed. Its field takes focus as it appears.
+  const [renaming, setRenaming] = useState<{ readonly stepId: string; readonly text: string } | undefined>(undefined);
+  const renameRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  const renamingId = renaming?.stepId;
+  useEffect(() => {
+    if (renamingId !== undefined) focusLater(() => renameRef.current);
+  }, [renamingId]);
+
+  /** The break a header stands for, made first for the lead header that has none yet; answers its id. */
+  const ensureStep = (stepId: string): string | undefined => {
+    if (breaks === undefined || firstQuestion === undefined) return undefined;
+    if (stepId !== LEAD) return stepId;
     const id = newId();
-    breaks.onChange((before) => addStep(before, id));
-    opened(`${STEP_ROW}${id}`);
+    breaks.onChange((before) => {
+      const first = before.questions[0];
+      if (first === undefined || itemsOf(before)[0]?.kind === 'step') return before;
+      const steps = [{ id, startsAt: first.id }, ...before.steps];
+      return fromItems({ ...before, steps }, itemsOf({ ...before, steps }));
+    });
+    return id;
   };
 
-  const removeBreak = (stepId: string) => {
+  /** Split here: a new step starts at this question, its title field open to name it. */
+  const split = (questionId: string) => {
+    if (breaks === undefined) return;
+    const id = newId();
+    breaks.onChange((before) => splitAt(before, questionId, id));
+    setRenaming({ stepId: id, text: '' });
+    props.onOpened?.(`${STEP_ROW}${id}`);
+  };
+
+  /** Merge with the step above: the break goes, its questions join the step before it, with Undo. */
+  const merge = (stepId: string) => {
     if (breaks === undefined || flow === undefined) return;
     const step = breaks.steps.find((each) => each.id === stepId);
     if (step === undefined) return;
@@ -380,7 +427,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     breaks.onChange((before) => removeStep(before, stepId).flow);
     toasts.toast({
       tone: 'info',
-      message: strings.stepRemoved(name),
+      message: strings.stepMerged(name),
       action: {
         label: strings.undo,
         onAction: () => {
@@ -388,6 +435,14 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         },
       },
     });
+  };
+
+  const commitRename = () => {
+    if (renaming === undefined || breaks === undefined) return;
+    const { stepId, text } = renaming;
+    setRenaming(undefined);
+    breaks.onChange((before) => changeStep(before, stepId, { title: text.trim() }));
+    focusOn(`step:${stepId}:menu`);
   };
 
   // Where focus goes after a one click rule appears or goes: its first picker, or back to the button that made it.
@@ -418,19 +473,108 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     );
   };
 
+  /**
+   * Add logic on a step (one click, the owner's "everything complex at a single click"): a ready rule reading the
+   * step's own question with options first, jumping to the next step, or to an ending made for it when there is
+   * nowhere below. Undefined when it could do nothing, so the menu leaves it out.
+   */
+  const addLogicTo = (stepId: string): (() => void) | undefined => {
+    if (breaks === undefined || flow === undefined || isReadOnly) return undefined;
+    const step = breaks.steps.find((each) => each.id === stepId);
+    const isLead = stepId === LEAD;
+    if (step === undefined && !isLead) return undefined;
+    // The lead header's questions are those before the first break: what its break, once made, will hold.
+    const firstBreak = itemsOf(flow).findIndex((item) => item.kind === 'step');
+    const leadQuestions = questions.slice(0, firstBreak < 0 ? questions.length : firstBreak);
+    const own = isLead ? leadQuestions : stepQuestionsOf(flow, stepId);
+    const readable = isLead ? leadQuestions : readableBy(flow, stepId);
+    const facts = questionFacts(readable);
+    const jumps = step?.jumps ?? [];
+    // The lead header has no break yet, so every break is below it: no step's id matches, and all are offered.
+    // A ready rule never jumps to where everyone goes anyway (the next step): that would be a rule that does
+    // nothing (UX review). It takes the step after, or an ending, or makes an ending to go to.
+    const offered = jumpChoices(flow, breaks.endings ?? [], isLead ? '' : stepId);
+    const choices = offered.slice(offered[0]?.id.startsWith('step:') === true ? 1 : 0);
+    if (facts.length === 0 || jumps.length >= STEP_JUMPS_MAX) return undefined;
+    if (choices.length === 0 && breaks.onAddEnding === undefined) return undefined;
+    return () => {
+      const id = ensureStep(stepId);
+      if (id === undefined) return;
+      const first = choices[0];
+      const ending = first === undefined ? breaks.onAddEnding?.() : undefined;
+      const target = first === undefined ? (ending === undefined ? undefined : { ending }) : targetOfId(first.id);
+      if (target === undefined) return;
+      const when = storedShowWhen(readyConditions(facts, new Set(own.map((each) => each.key))));
+      breaks.onChange((before) => {
+        const now = before.steps.find((each) => each.id === id);
+        return changeStep(before, id, { jumps: addJump(now?.jumps ?? [], target, when) });
+      });
+      props.onOpened?.(`${STEP_ROW}${id}`);
+      focusOn(`step:${id}:jump:${String(jumps.length)}`);
+    };
+  };
+
+  /** A step header's ⋯: Rename, Add logic, Show only if…, and Merge with the step above. */
+  const stepMenu = (rowId: string) => {
+    const stepId = stepOfRow(rowId);
+    if (stepId === undefined || isReadOnly || flow === undefined || breaks === undefined) return null;
+    const step = breaks.steps.find((each) => each.id === stepId);
+    const isLead = stepId === LEAD;
+    const name = isLead ? strings.stepName(1) : strings.stepName(places.get(stepId)?.number ?? 1, step?.title);
+    const addLogic = addLogicTo(stepId);
+    const earlier = isLead ? [] : questionsBefore(flow, stepId);
+    const canShowIf = !isLead && step?.showWhen === undefined && questionFacts(earlier).length > 0;
+    const canMerge = !isLead && !isFirstStep(flow, stepId) && hasLeadHeader;
+    const canMergeAfterLead = !isLead && !hasLeadHeader;
+    return (
+      <MenuTrigger>
+        <Button ref={refFor(`step:${stepId}:menu`)} variant="ghost" icon="ellipsis" label={strings.stepMenu(name)} />
+        <Menu
+          label={strings.stepMenu(name)}
+          onAction={(key) => {
+            if (key === 'rename') {
+              const id = ensureStep(stepId);
+              if (id !== undefined) setRenaming({ stepId: id, text: step?.title ?? '' });
+            }
+            if (key === 'logic') addLogic?.();
+            if (key === 'show' && step !== undefined) {
+              breaks.onChange((before) =>
+                changeStep(before, stepId, { showWhen: storedShowWhen(readyConditions(questionFacts(earlier))) }),
+              );
+              focusOn(`step:${stepId}:show`);
+            }
+            if (key === 'merge') merge(stepId);
+          }}
+        >
+          <MenuItem id="rename" icon="pencil">
+            {strings.renameStep}
+          </MenuItem>
+          {addLogic !== undefined && (
+            <MenuItem id="logic" icon="git-branch">
+              {strings.addLogic}
+            </MenuItem>
+          )}
+          {canShowIf && (
+            <MenuItem id="show" icon="eye">
+              {strings.showOnlyIf}
+            </MenuItem>
+          )}
+          {(canMerge || canMergeAfterLead) && (
+            <>
+              <MenuSeparator />
+              <MenuItem id="merge" icon="arrow-up">
+                {strings.mergeUp}
+              </MenuItem>
+            </>
+          )}
+        </Menu>
+      </MenuTrigger>
+    );
+  };
+
   return (
     <QuestionList
       label={strings.questions}
-      // With Steps, Add a step beside Add a question where there is room; it is always in the menu as well.
-      {...(breaks?.layout === 'steps' && !isReadOnly
-        ? {
-            wideActions: (
-              <Button variant="ghost" icon="layers" onPress={addBreak}>
-                {strings.addStep}
-              </Button>
-            ),
-          }
-        : {})}
       actions={
         <>
           {props.actionsStart}
@@ -454,15 +598,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                   label={strings.questionMenu}
                   onAction={(key) => {
                     if (key === 'close') setOpen(new Set(problem === undefined ? [] : [problem.questionId]));
-                    if (key === 'step') addBreak();
                   }}
                 >
-                  {/* Only Steps draws steps: elsewhere a divider would do nothing, so it isn't offered. */}
-                  {breaks?.layout === 'steps' && (
-                    <MenuItem id="step" icon="layers">
-                      {strings.addStep}
-                    </MenuItem>
-                  )}
                   <SubmenuTrigger>
                     <MenuItem icon="list-plus" isDisabled={isFull} {...(isFull ? { description: tooMany } : {})}>
                       {strings.addFromPresets}
@@ -495,7 +632,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         </>
       }
       items={items}
-      openIds={openIds}
+      openIds={shownOpen}
       onOpenChange={(id, isOpen) => {
         // The question or divider a publish refused stays open until it is fixed.
         if (!isOpen && (problem?.questionId === id || `${STEP_ROW}${stepProblem?.stepId ?? ''}` === id)) return;
@@ -507,11 +644,64 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           return next;
         });
       }}
+      {...(isStepped
+        ? {
+            onStepPress: (id: string) => {
+              props.onOpened?.(id);
+            },
+            renderStepEnd: stepMenu,
+            renderStepTitle: (id: string) => {
+              const stepId = stepOfRow(id);
+              if (renaming === undefined || stepId !== renaming.stepId) return undefined;
+              return (
+                <Field
+                  ref={renameRef}
+                  label={strings.stepTitle}
+                  isLabelHidden
+                  size="sm"
+                  placeholder={strings.stepName(places.get(stepId)?.number ?? 1)}
+                  value={renaming.text}
+                  maxLength={FORM_STEP_TITLE_MAX}
+                  onChange={(text) => {
+                    setRenaming({ stepId, text });
+                  }}
+                  onSubmit={commitRename}
+                  onBlur={commitRename}
+                  onEscape={() => {
+                    setRenaming(undefined);
+                    focusOn(`step:${stepId}:menu`);
+                  }}
+                />
+              );
+            },
+            ...(isReadOnly
+              ? {}
+              : {
+                  renderGap: (id: string) => {
+                    if (stepOfRow(id) !== undefined || startsAStep(flow, id)) return null;
+                    return (
+                      <Button
+                        size="sm"
+                        icon="scissors"
+                        onPress={() => {
+                          split(id);
+                        }}
+                      >
+                        {strings.splitHere}
+                      </Button>
+                    );
+                  },
+                }),
+          }
+        : {})}
       renderOpen={(id) => {
         const stepId = stepOfRow(id);
         if (stepId !== undefined) {
           const step = breaks?.steps.find((each) => each.id === stepId);
           if (step === undefined || breaks === undefined || flow === undefined) return null;
+          if ((step.jumps?.length ?? 0) === 0 && step.showWhen === undefined && stepProblem?.stepId !== stepId) {
+            return null;
+          }
           return (
             <StepEditor
               step={step}
@@ -523,7 +713,6 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               refFor={refFor}
               focusOn={focusOn}
               isReadOnly={isReadOnly}
-              isJustAdded={justAdded === id || stepProblem?.stepId === stepId}
               {...(stepProblem?.stepId === stepId ? { problem: stepProblem.message } : {})}
               onChange={(change) => {
                 breaks.onChange((before) => changeStep(before, stepId, change));
@@ -563,27 +752,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         );
       }}
       renderFooterStart={(id) => {
-        const stepId = stepOfRow(id);
-        if (stepId !== undefined) {
-          const step = breaks?.steps.find((each) => each.id === stepId);
-          if (step === undefined || breaks === undefined || flow === undefined || isReadOnly) return null;
-          return (
-            <StepLogicButtons
-              step={step}
-              earlier={questionsBefore(flow, stepId)}
-              readable={readableBy(flow, stepId)}
-              own={stepQuestionsOf(flow, stepId)}
-              targets={jumpChoices(flow, breaks.endings ?? [], stepId)}
-              showIfButton={(onAdd) => showIfButton(id, questionsBefore(flow, stepId), onAdd)}
-              refFor={refFor}
-              focusOn={focusOn}
-              {...(breaks.onAddEnding === undefined ? {} : { onAddEnding: breaks.onAddEnding })}
-              onChange={(change) => {
-                breaks.onChange((before) => changeStep(before, stepId, change));
-              }}
-            />
-          );
-        }
+        if (stepOfRow(id) !== undefined) return null;
         const question = questions.find((each) => each.id === id);
         if (question === undefined) return null;
         // Show only if…: one click to a ready condition, while it has none and something before it to read.
@@ -600,6 +769,22 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                   onChange((before) => changeQuestion(before, id, { showWhen }, liveIds));
                 },
               );
+        // Give points (Typeform's score, T20): one click on a question that can score, on a form only.
+        const givePoints =
+          props.keptWith === 'submission' &&
+          !isReadOnly &&
+          question.points === undefined &&
+          SCORED_TYPES.includes(question.answerType) ? (
+            <Button
+              variant="ghost"
+              icon="target"
+              onPress={() => {
+                onChange((before) => changeQuestion(before, id, { points: startingPoints(question) }, liveIds));
+              }}
+            >
+              {strings.givePoints}
+            </Button>
+          ) : null;
         // A hidden question has nothing a visitor could answer (spec 0063): it is never one they must.
         if (question.answerType === 'hidden') return showIf;
         // How they heard about you (spec 0067, AC-6703): a form's one choice or short text question whose answers
@@ -626,30 +811,31 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               />
             )}
             {showIf}
+            {givePoints}
           </>
         );
       }}
       renderFooter={(id) => {
-        const stepId = stepOfRow(id);
-        if (stepId !== undefined) {
-          return isReadOnly ? null : (
-            <Tooltip content={strings.removeStep}>
-              <Button
-                variant="ghost-danger"
-                size="lg"
-                icon="trash"
-                label={strings.removeStep}
-                onPress={() => {
-                  removeBreak(stepId);
-                }}
-              />
-            </Tooltip>
-          );
-        }
+        if (stepOfRow(id) !== undefined) return null;
         const question = questions.find((each) => each.id === id);
         if (question === undefined || isReadOnly) return null;
+        // Split here's twin for touch and the keyboard: the gap above a card shows only on hover.
+        const canSplit = isStepped && !startsAStep(flow, id);
         return (
           <>
+            {canSplit && (
+              <Tooltip content={strings.startStepHere}>
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  icon="scissors"
+                  label={strings.startStepHere}
+                  onPress={() => {
+                    split(id);
+                  }}
+                />
+              </Tooltip>
+            )}
             <Tooltip content={strings.duplicateQuestion}>
               <Button
                 variant="ghost"
@@ -685,9 +871,21 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         ? {}
         : {
             onMove: (id: string, index: number) => {
-              // With dividers, a move is among questions and dividers together: a question crossing one changes step.
+              const stepId = stepOfRow(id);
+              if (stepId === LEAD) return;
+              if (breaks !== undefined && isStepped) {
+                // The lead header (no break yet) holds a row of its own: moves count without it.
+                const at = leadRow.length > 0 ? Math.max(0, index - 1) : index;
+                breaks.onChange((before) => moveItem(before, stepId ?? id, at));
+                return;
+              }
               if (breaks !== undefined) {
-                breaks.onChange((before) => moveItem(before, stepOfRow(id) ?? id, index));
+                // Headers aren't drawn: a question moves among questions, and the breaks keep the order the
+                // document needs (each at its question, in the questions' order).
+                breaks.onChange((before) => {
+                  const moved = { ...before, questions: moveQuestion(before.questions, id, index) };
+                  return fromItems(moved, itemsOf(moved));
+                });
                 return;
               }
               onChange((before) => moveQuestion(before, id, index));
@@ -695,6 +893,16 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           })}
     />
   );
+}
+
+/** A lead header's stand in id: the questions before the first break, which have no break of their own yet. */
+const LEAD = '~lead';
+
+/** A question's first points, one click from Give points: the answer itself, yes over no, or 1, 2, 3 by choice. */
+function startingPoints(question: FormQuestion): NonNullable<FormQuestion['points']> {
+  if (question.answerType === 'rating' || question.answerType === 'scale') return 'value';
+  if (question.answerType === 'yes_no') return [1, 0];
+  return (question.choices ?? []).map((_, place) => place + 1);
 }
 
 /** Props for one open question. */
@@ -1299,9 +1507,22 @@ function PointsField({
  * one scores nothing, as the document refuses points on it.
  */
 function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
-  if (!SCORED_TYPES.includes(question.answerType)) return null;
+  // Only once the question gives points (Give points in its footer, T20): a question that scores nothing says nothing.
+  if (!SCORED_TYPES.includes(question.answerType) || question.points === undefined) return null;
   const { points } = question;
-  const numbers = points === undefined || points === 'value' ? [] : points;
+  const stop = isReadOnly ? null : (
+    <Tooltip content={strings.stopPoints}>
+      <Button
+        variant="ghost"
+        icon="x"
+        label={strings.stopPoints}
+        onPress={() => {
+          onChange({ points: null });
+        }}
+      />
+    </Tooltip>
+  );
+  const numbers = points === 'value' ? [] : points;
   const at = (place: number) => numbers[place];
   const set = (place: number, value: number | undefined) => {
     const next = [...numbers];
@@ -1349,6 +1570,7 @@ function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
             set(1, value);
           }}
         />
+        {stop}
       </SettingsRow>
     );
   }
@@ -1377,6 +1599,7 @@ function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
               />,
             ],
       )}
+      {stop}
     </SettingsRow>
   );
 }
@@ -1452,7 +1675,7 @@ function JumpRules({
                   : {
                       onRemove: () => {
                         onChange(removeJump(jumps, index));
-                        focusOn(`step:${stepId}:logic-button`);
+                        focusOn(`step:${stepId}:menu`);
                       },
                     })}
               >
@@ -1477,72 +1700,7 @@ function JumpRules({
   );
 }
 
-/** Props for a step card's footer buttons. */
-interface StepLogicButtonsProps {
-  readonly step: FormStep;
-  readonly earlier: readonly FormQuestion[];
-  readonly readable: readonly FormQuestion[];
-  /** The step's own questions: a ready rule reads one of these first. */
-  readonly own: readonly FormQuestion[];
-  readonly targets: readonly { readonly id: string; readonly label: string }[];
-  /** Show only if…, drawn by the section (null when there is nothing before the step to read). */
-  readonly showIfButton: (onAdd: (showWhen: ShowWhenValue) => void) => ReactNode;
-  readonly refFor: (key: string) => (node: HTMLButtonElement | null) => void;
-  readonly focusOn: (key: string) => void;
-  readonly onAddEnding?: () => string | undefined;
-  readonly onChange: (change: StepChange) => void;
-}
-
-/**
- * A step card's footer: Add logic and Show only if…, each one click to a ready rule (the owner, 4 November 2026:
- * "everything complex at a single click"). Add logic reads the step's own question with options first, takes its
- * first option, and jumps to the first place below (the next step, or an ending); with nowhere below to go it makes an
- * ending to jump to. Neither shows when it could do nothing, rather than a disabled button.
- */
-function StepLogicButtons({
-  step,
-  readable,
-  own,
-  targets,
-  showIfButton,
-  refFor,
-  focusOn,
-  onAddEnding,
-  onChange,
-}: StepLogicButtonsProps) {
-  const jumps = step.jumps ?? [];
-  const facts = questionFacts(readable);
-  const canJump =
-    facts.length > 0 && jumps.length < STEP_JUMPS_MAX && (targets.length > 0 || onAddEnding !== undefined);
-  return (
-    <>
-      {canJump && (
-        <Button
-          ref={refFor(`step:${step.id}:logic-button`)}
-          variant="ghost"
-          icon="git-branch"
-          onPress={() => {
-            const first = targets[0];
-            const to = first === undefined ? onAddEnding?.() : undefined;
-            const target = first === undefined ? (to === undefined ? undefined : { ending: to }) : targetOfId(first.id);
-            if (target === undefined) return;
-            const when = storedShowWhen(readyConditions(facts, new Set(own.map((each) => each.key))));
-            onChange({ jumps: addJump(jumps, target, when) });
-            focusOn(`step:${step.id}:jump:${String(jumps.length)}`);
-          }}
-        >
-          {strings.addLogic}
-        </Button>
-      )}
-      {step.showWhen === undefined &&
-        showIfButton((showWhen) => {
-          onChange({ showWhen });
-        })}
-    </>
-  );
-}
-
-/** Props for one open step divider. */
+/** Props for one step's logic. */
 interface StepEditorProps {
   readonly step: FormStep;
   readonly earlier: readonly FormQuestion[];
@@ -1555,15 +1713,13 @@ interface StepEditorProps {
   readonly refFor: (key: string) => (node: HTMLButtonElement | null) => void;
   readonly focusOn: (key: string) => void;
   readonly isReadOnly: boolean;
-  /** Just added: its title takes focus, and the divider comes into view. */
-  readonly isJustAdded: boolean;
   readonly problem?: string;
   readonly onChange: (change: StepChange) => void;
 }
 
 /**
- * One step divider open (spec 0063, AC-6303, AC-6312, AC-6313): its title, then, only when it has them, its Show only
- * if and its logic. Add logic and Show only if… are in the card's footer.
+ * A step's logic under its header (spec 0063, AC-6312, AC-6313; T20): its Show only if and its jumps, only when it
+ * has them. Its title is renamed in place on the header, and Add logic is in the header's menu.
  */
 function StepEditor({
   step,
@@ -1574,35 +1730,14 @@ function StepEditor({
   refFor,
   focusOn,
   isReadOnly,
-  isJustAdded,
   problem,
   onChange,
 }: StepEditorProps) {
-  const titleRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (!isJustAdded) return;
-    const input = titleRef.current;
-    if (input === null) return;
-    input.focus({ preventScroll: true });
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    input.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
-  }, [isJustAdded]);
   const key = `step:${step.id}`;
   return (
     <>
-      {/* A refusal is about the step (empty, or its Show when), not its title: said over the editor. */}
+      {/* A refusal is about the step (empty, or its Show when): said over its logic. */}
       {problem !== undefined && <Callout tone="danger">{problem}</Callout>}
-      <Field
-        ref={titleRef}
-        label={strings.stepTitle}
-        placeholder={strings.stepTitlePlaceholder}
-        value={step.title ?? ''}
-        maxLength={FORM_STEP_TITLE_MAX}
-        isReadOnly={isReadOnly}
-        onChange={(title) => {
-          onChange({ title });
-        }}
-      />
       {step.showWhen !== undefined && (
         <ShowWhenRules
           showWhen={step.showWhen}
@@ -1615,7 +1750,7 @@ function StepEditor({
           }}
           onClear={() => {
             onChange({ showWhen: null });
-            focusOn(`${key}:show-button`);
+            focusOn(`${key}:menu`);
           }}
         />
       )}

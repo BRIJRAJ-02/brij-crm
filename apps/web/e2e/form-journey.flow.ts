@@ -63,7 +63,7 @@ test.describe('the form journey', () => {
     await visitor.getByLabel(/What is your role\?/).fill('Rear admiral');
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Send' }).click();
-    await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
     await visitorContext.close();
 
     // The owner: the person is in People with the answer on Job title.
@@ -74,17 +74,29 @@ test.describe('the form journey', () => {
 
     // Changing which object the form saves to would unfile the question: asked first; Cancel keeps People.
     await page.goto(`${formUrl}?tab=settings`);
-    await page.getByRole('button', { name: /Save to$/ }).click();
+    await page
+      .getByRole('button', { name: /Save answers to$/ })
+      .last()
+      .click();
     await page.getByRole('option', { name: 'Companies', exact: true }).click();
     const confirm = page.getByRole('alertdialog', { name: 'Change which object submissions are saved to?' });
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(confirm).toBeHidden();
-    await expect(page.getByRole('button', { name: /Save to$/ })).toContainText('People');
+    await expect(page.getByRole('button', { name: /Save answers to$/ }).last()).toContainText('People');
 
-    // A change saves to the draft by itself; Discard changes (⋯, asks first) puts it back to what is live.
+    // A change saves to the draft by itself; Discard changes (⋯, asks first) puts it back to what is live. The
+    // button's words are edited on the preview (T21), pressing the button.
+    await page.goto(formUrl);
+    if ((await page.getByRole('button', { name: 'Edit the button' }).count()) === 0) {
+      await page.getByRole('button', { name: 'Show preview' }).click();
+    }
+    await page.getByRole('button', { name: 'Edit the button' }).click();
     const button = page.getByRole('textbox', { name: 'Button text' });
     await button.fill('Send it');
+    await page.keyboard.press('Escape');
+    // The preview's sheet (below the widest screens) closes too, so the header is in reach.
+    if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape');
     await expect(page.getByText('Live · edited').first()).toBeVisible({ timeout: 15_000 });
     await page.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('menuitem', { name: 'Discard changes' }).click();
@@ -92,10 +104,14 @@ test.describe('the form journey', () => {
     await discard.getByRole('button', { name: 'Discard changes' }).click();
     await expect(discard).toBeHidden();
     await expect(page.getByText('Changes discarded.')).toBeVisible();
-    await expect(button).toHaveValue('Send');
     await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
     await page.reload();
     await expect(page.getByText('Live', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    // The button's words are what is live again.
+    if ((await page.getByRole('button', { name: 'Edit the button' }).count()) === 0) {
+      await page.getByRole('button', { name: 'Show preview' }).click();
+    }
+    await page.getByRole('button', { name: 'Edit the button' }).click();
     await expect(page.getByRole('textbox', { name: 'Button text' })).toHaveValue('Send');
   });
 });

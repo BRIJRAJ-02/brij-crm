@@ -73,6 +73,10 @@ export interface FormStrings {
   readonly emailLink: string;
   readonly emailSent: string;
   readonly emailNeedsAddress: string;
+  /** The resume link's email could not be sent (the network, the server): not the visitor's doing. */
+  readonly emailFailed: string;
+  /** Saving or sending again, after a failure. */
+  readonly tryAgain: string;
   readonly keepFilling: string;
   /** Said when a resumed fill is drawn, so a visitor knows why their answers are already there. */
   readonly resumedNote: string;
@@ -195,7 +199,7 @@ const EN: FormStrings = {
   changed: 'This form changed while you were filling it in. Copy your answers first, then reload the page.',
   updated:
     'This form was updated while you filled it in. Your answers are kept. Answer any new questions and send again.',
-  thanksTitle: 'Thank you. That is with us.',
+  thanksTitle: 'Thanks, we got it.',
   thanks: 'We will come back to you at the address you gave.',
   thanksNeutral: 'We have it, and the team will read it shortly.',
   thanksMeeting: 'We will come back to you at the address you gave, or book a time now and skip the wait.',
@@ -219,16 +223,18 @@ const EN: FormStrings = {
   untitledQuestion: 'Untitled question',
   finishLater: 'Finish later',
   saving: 'Saving…',
-  savedOn: (date) => `Saved ${date}`,
-  saveFailed: 'That didn’t save. It will try again as you type.',
+  savedOn: () => 'Saved',
+  saveFailed: 'That didn’t save. Check your connection and try again.',
   resumeHeading: 'Come back to this',
-  resumeLine: (date) => `Your answers are kept until ${date}. Open this link to pick up where you left off.`,
+  resumeLine: (date) => `Your answers are kept until ${date}.`,
   resumeLinkLabel: 'Your link',
   copyLink: 'Copy link',
   copiedLink: 'Copied',
   emailLink: 'Email it to me',
   emailSent: 'Sent. Check your inbox.',
   emailNeedsAddress: 'Add your email address to the form first, then ask again.',
+  emailFailed: 'That didn’t send. Try again in a moment.',
+  tryAgain: 'Try again',
   keepFilling: 'Keep filling it in',
   resumedNote: 'We kept your answers from last time.',
   poweredBy: 'Powered by',

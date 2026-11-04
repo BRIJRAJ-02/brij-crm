@@ -60,6 +60,8 @@ export {
   namedHosts,
   REQUIRED_SKILLS_MAX,
   requiredSkills,
+  // A form's rules, at most (spec 0043): After they send stops offering a new one at the most.
+  ROUTING_RULES_MAX,
   SKILL_GROUPS,
   SKILL_NAME_MAX,
   SKILLS_MAX,
