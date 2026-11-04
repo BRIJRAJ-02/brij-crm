@@ -79,3 +79,8 @@ export const DayTones: Story = {
     await expect(within(canvasElement).getByText('Free')).toBeVisible();
   },
 };
+
+/** A staff member's own colour on the tile (spec 0066 B1): no photo yet, so the hue they chose. */
+export const StaffColour: Story = {
+  args: { id: 'asha', name: 'Asha Rao', meta: ['Senior stylist', 'Indiranagar'], size: 'md', hue: 'purple' },
+};

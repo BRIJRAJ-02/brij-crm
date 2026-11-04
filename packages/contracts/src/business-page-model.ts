@@ -209,7 +209,7 @@ export interface PublicBusinessPage {
 /** What Publish needs fixed first, in one line, and where to fix it (spec 0068: Publish refuses a broken page). */
 export interface BusinessPageProblem {
   readonly message: string;
-  readonly fix: 'handle' | 'profile' | 'place' | 'hours' | 'address';
+  readonly fix: 'handle' | 'profile' | 'place' | 'hours' | 'address' | 'services' | 'staff' | 'shifts';
   /** The place to fix, when the problem is one place's. */
   readonly placeId?: string | undefined;
 }
@@ -225,6 +225,12 @@ export interface PublishFacts {
     readonly city?: string | undefined;
     readonly hours: PlaceHoursShape;
   }[];
+  /**
+   * With Appointments installed (spec 0066 B1): whether an online service has someone to do it, and whether that
+   * someone has shifts there, so the page never offers Book with nothing bookable behind it.
+   */
+  readonly appointments?:
+    { readonly hasService: boolean; readonly hasStaff: boolean; readonly hasShifts: boolean } | undefined;
 }
 
 /** Whether `hours` opens at least once a week. */
@@ -252,6 +258,12 @@ export function businessPublishProblem(facts: PublishFacts): BusinessPageProblem
     if (!hasWeeklyHours(place.hours)) {
       return { message: `Set ${place.name}’s opening hours first.`, fix: 'hours', placeId: place.id };
     }
+  }
+  const visits = facts.appointments;
+  if (visits !== undefined) {
+    if (!visits.hasService) return { message: 'Add a service clients can book online first.', fix: 'services' };
+    if (!visits.hasStaff) return { message: 'Add someone who does your services first.', fix: 'staff' };
+    if (!visits.hasShifts) return { message: 'Set your staff’s shifts first.', fix: 'shifts' };
   }
   return undefined;
 }

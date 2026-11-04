@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Button as AriaButton, DialogTrigger } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
+import type { Hue } from '../../hue.ts';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
@@ -56,6 +57,10 @@ export interface TeamWeekPerson {
   readonly cells: readonly TeamWeekCell[];
   /** Whether the reader may change this person's cells; read only cells are text, never buttons. */
   readonly isEditable: boolean;
+  /** Their picture on our origin, in place of the initials (a staff profile's photo, spec 0066 B1). */
+  readonly picture?: string;
+  /** Their tile's hue when there is no picture (a staff member's own colour); else one from their id. */
+  readonly hue?: Hue;
 }
 
 /**
@@ -260,7 +265,14 @@ function PersonCell({ person }: { readonly person: TeamWeekPerson }) {
   return (
     <span className={styles.person}>
       <span className={styles.picture}>
-        <Avatar name={person.name} id={person.id} size="md" isDecorative />
+        <Avatar
+          name={person.name}
+          id={person.id}
+          size="md"
+          isDecorative
+          {...(person.picture === undefined ? {} : { src: person.picture })}
+          {...(person.hue === undefined ? {} : { hue: person.hue })}
+        />
       </span>
       <span className={styles.who}>
         <span className={styles.name}>

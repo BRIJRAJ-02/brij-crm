@@ -32,6 +32,7 @@ import { profileRouter } from './modules/profile/router.ts';
 import { brandRouter } from './modules/brand/router.ts';
 import { hospitalityRouter } from './modules/hospitality/router.ts';
 import { menuRouter } from './modules/menu/router.ts';
+import { servicesRouter } from './modules/services/router.ts';
 import { tablesRouter } from './modules/tables/router.ts';
 import { businessPageRouter } from './modules/business-page/router.ts';
 import { deletedWorkspaceRouter } from './modules/workspace/deleted.ts';
@@ -93,6 +94,7 @@ export const router = base.router({
   hospitality: hospitalityRouter,
   menu: menuRouter,
   tables: tablesRouter,
+  services: servicesRouter,
   businessPage: businessPageRouter,
   access: accessRouter,
   accessRules: accessRulesRouter,

@@ -25,6 +25,7 @@ import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
 import { navStrings as admin } from '../admin/nav-strings.ts';
 import { strings as hospitality } from '../hospitality/strings.ts';
+import { strings as services } from '../services/strings.ts';
 import type { ObjectTab } from './object-tabs.ts';
 
 export { OBJECT_TABS, isObjectTab, type ObjectTab } from './object-tabs.ts';
@@ -69,6 +70,21 @@ export const businessSettingsHref = (slug: string) => `/w/${slug}/settings/busin
 /** Settings › Business › Page (spec 0066, B4 lite): the business's public page. */
 export const businessPageHref = (slug: string) => `/w/${slug}/settings/business/page`;
 
+/** Settings › Workspace › Services (spec 0066 B1): the catalogue clients book from. */
+export const servicesSettingsHref = (slug: string) => `/w/${slug}/settings/services`;
+/** Settings › Workspace › Staff (spec 0066 B1): the people clients book. */
+export const staffSettingsHref = (slug: string) => `/w/${slug}/settings/staff`;
+/** One staff member's profile (spec 0066 B1), by id. */
+export const staffProfileHref = (slug: string, staffId: string) => `/w/${slug}/settings/staff/${staffId}`;
+/** Settings › Workspace › Shifts (spec 0066 B1): who works when, per place and week (`?place=&week=`). */
+export const shiftsSettingsHref = (slug: string, query: { readonly place?: string; readonly week?: string } = {}) => {
+  const params = new URLSearchParams({
+    ...(query.place === undefined ? {} : { place: query.place }),
+    ...(query.week === undefined ? {} : { week: query.week }),
+  }).toString();
+  return `/w/${slug}/settings/shifts${params === '' ? '' : `?${params}`}`;
+};
+
 /** One place's tables and areas (spec 0065, AC-6509), under Settings › Business. */
 export const placeTablesHref = (slug: string, placeId: string) => `/w/${slug}/settings/business/places/${placeId}`;
 
@@ -110,6 +126,9 @@ export type SettingsPageId =
   | 'brand'
   | 'apps'
   | 'business'
+  | 'services'
+  | 'staff'
+  | 'shifts'
   | 'members'
   | 'teams'
   | 'roles'
@@ -170,6 +189,7 @@ export interface SettingsNavEntry {
     | 'palette'
     | 'blocks'
     | 'store'
+    | 'scissors'
     | 'code';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
@@ -248,6 +268,29 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           href: businessSettingsHref(slug),
           icon: 'store',
           requires: 'hospitality.manage',
+        },
+        // Services, Staff and Shifts (spec 0066 B1): the catalogue and the profiles for `services.manage`, the shifts
+        // for `services.calendar` (the front desk sets the rota without the catalogue).
+        {
+          id: 'services',
+          label: services.servicesTitle,
+          href: servicesSettingsHref(slug),
+          icon: 'scissors',
+          requires: 'services.manage',
+        },
+        {
+          id: 'staff',
+          label: services.staffTitle,
+          href: staffSettingsHref(slug),
+          icon: 'id-card',
+          requires: 'services.manage',
+        },
+        {
+          id: 'shifts',
+          label: services.shiftsTitle,
+          href: shiftsSettingsHref(slug),
+          icon: 'calendar-clock',
+          requires: 'services.calendar',
         },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
         // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
@@ -369,6 +412,9 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'brand') return 'brand';
   if (rest === 'apps') return 'apps';
   if (rest === 'business' || rest.startsWith('business/')) return 'business';
+  if (rest === 'services') return 'services';
+  if (rest === 'staff' || rest.startsWith('staff/')) return 'staff';
+  if (rest === 'shifts') return 'shifts';
   if (rest === 'account/notifications') return 'notifications';
   if (rest === 'account/scheduling') return 'scheduling-access';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';

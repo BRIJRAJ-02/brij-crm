@@ -31,12 +31,20 @@ export interface BusinessCardDialogProps {
   readonly workspace: WorkspaceSettings | undefined;
   /** Installs with the card; rejects with the refusal, which lands on its field. */
   readonly onInstall: (business: FirstBusiness) => Promise<void>;
+  /** The kind the card starts on: a salon for Appointments (spec 0066 B1), a restaurant for the food apps. */
+  readonly firstKind?: BusinessKind;
 }
 
 const FIELDS = ['name', 'country', 'timeZone', 'currency'] as const;
 
 /** "Your business": a Modal with six short fields, every one prefilled from the workspace. */
-export function BusinessCardDialog({ isOpen, onOpenChange, workspace, onInstall }: BusinessCardDialogProps) {
+export function BusinessCardDialog({
+  isOpen,
+  onOpenChange,
+  workspace,
+  onInstall,
+  firstKind = 'restaurant',
+}: BusinessCardDialogProps) {
   const formId = useId();
   const [isBusy, setBusy] = useState(false);
   return (
@@ -62,6 +70,7 @@ export function BusinessCardDialog({ isOpen, onOpenChange, workspace, onInstall 
       <CardForm
         formId={formId}
         workspace={workspace}
+        firstKind={firstKind}
         isBusy={isBusy}
         onBusyChange={setBusy}
         onInstall={onInstall}
@@ -81,14 +90,16 @@ function CardForm({
   onBusyChange,
   onInstall,
   onDone,
+  firstKind,
 }: Pick<BusinessCardDialogProps, 'workspace' | 'onInstall'> & {
+  readonly firstKind: BusinessKind;
   readonly formId: string;
   readonly isBusy: boolean;
   readonly onBusyChange: (isBusy: boolean) => void;
   readonly onDone: () => void;
 }) {
   const [name, setName] = useState(workspace?.name ?? '');
-  const [kind, setKind] = useState<BusinessKind>('restaurant');
+  const [kind, setKind] = useState<BusinessKind>(firstKind);
   const [addressLine, setAddressLine] = useState('');
   const [city, setCity] = useState('');
   // Sensible defaults so a first install works without reading anything (spec 0068, foolproof; walk of 4 Nov 2026):

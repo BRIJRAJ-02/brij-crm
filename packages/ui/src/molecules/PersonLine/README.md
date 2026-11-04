@@ -17,6 +17,7 @@ New, lifted out of TeamWeek's person cell when the Team day (spec 0030) needed t
 - `hint` is a Tooltip (the Tooltip atom, `isTextTrigger`) over the name and line, for what a short line leaves out (the Team day keeps the job title there unless the columns are ordered by it), the name first, so it stands in for the name's own tooltip when that is cut. Screen readers get it from what the line heads.
 - `size` is the picture's: `sm` in a calendar column's head, `md` in a table row.
 - `end` sits after the name, never cut: a health chip, a view only mark, a row's menu.
+- `picture` and `hue` (spec 0066 B1, a staff list): a staff member's photo in place of the initials, and their own colour on the tile when there is no photo. Why a variant: a staff row is this line with a chosen look; Avatar already takes both.
 - `isDecorative` hides it from screen readers where the thing it heads already names the person in full (TeamDay's columns carry the whole name, status and offset in their label).
 
 ## States

@@ -151,6 +151,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'businessCacheId',
   'businessCacheTags',
   'menuWorkspaceCacheTags',
+  // Where a staff profile's photos are stored (spec 0066 B1): a pure path prefix.
+  'staffPhotoFolder',
   'bookingCompanyOf',
   'businessMenuOf',
   'periodDays',

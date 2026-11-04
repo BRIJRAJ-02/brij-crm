@@ -139,6 +139,11 @@ const READS: ReadonlySet<string> = new Set([
   'tables.day',
   // A walk in's free tables now (spec 0066 B7 lite).
   'tables.freeTables',
+  // Services, staff and shifts (spec 0066 B1): the catalogue, the team, the shifts and the desk's times.
+  'services.catalogue',
+  'services.team',
+  'services.shifts',
+  'services.times',
   // The business page's editor (spec 0066, B4 lite).
   'businessPage.page',
   // The roles every role picker offers (spec 0037, AC-1439), and the Roles page's reads (job J9).
@@ -3251,6 +3256,28 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   // The reader's own reservation emails after the install; a walk in after its tables and the setup.
   'tables.setNotify': 2,
   'tables.walkIn': 4,
+  // Services, staff and shifts (spec 0066 B1): Appointments installed first, then what each case needs.
+  'services.saveCategory': 2,
+  'services.deleteCategory': 3,
+  'services.moveCategory': 3,
+  'services.saveService': 2,
+  'services.moveService': 3,
+  'services.setOnline': 3,
+  'services.setCategory': 3,
+  'services.archive': 3,
+  'services.restore': 4,
+  'services.saveStaff': 2,
+  'services.moveStaff': 3,
+  'services.linkStaff': 3,
+  'services.archiveStaff': 3,
+  'services.restoreStaff': 4,
+  'services.removeStaffPhoto': 3,
+  'services.setShifts': 3,
+  'services.copyShifts': 4,
+  'services.addTimeOff': 3,
+  'services.removeTimeOff': 4,
+  'services.addBlock': 3,
+  'services.removeBlock': 4,
   // The business page (spec 0066): installed first (and its address and hours before a publish).
   'businessPage.claimHandle': 2,
   'businessPage.save': 2,
@@ -3928,6 +3955,253 @@ Object.assign(WRITES, {
     await m.client.tables.saveSetup({ workspace: m.slug, placeId, rules: setup.rules, mutationId: newId() });
     await m.client.tables.walkIn({ workspace: m.slug, placeId, party: 2, resourceIds: [one], mutationId });
     return [{ kind: 'nav' }, { kind: 'visits', item_ids: [placeId], mutation_id: mutationId }];
+  },
+});
+
+/** Opens early access and installs Appointments for a salon (one write), answering the first place. */
+async function appointmentsOf(m: Member): Promise<{ readonly placeId: string }> {
+  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
+  await m.client.hospitality.install({
+    workspace: m.slug,
+    app: 'appointments',
+    business: { name: 'Studio', kind: 'salon', place: { country: 'GB', timeZone: 'Europe/London' }, currency: 'GBP' },
+    mutationId: newId(),
+  });
+  const business = await m.client.hospitality.business({ workspace: m.slug });
+  const place = business.places[0];
+  if (place === undefined) throw new Error('No place.');
+  return { placeId: place.id };
+}
+
+/** A haircut at the place (one write), answering its id. */
+async function haircutAt(m: Member, placeId: string): Promise<string> {
+  const id = newId();
+  await m.client.services.saveService({
+    workspace: m.slug,
+    id,
+    service: {
+      name: 'Haircut',
+      categoryId: null,
+      bufferAfterMin: 0,
+      online: true,
+      staffRule: 'all',
+      staffIds: [],
+      placeIds: [placeId],
+      needs: [],
+      variants: [{ name: 'Haircut', minutes: 30, priceMinor: 2500, priceType: 'fixed', bufferBeforeMin: 0 }],
+    },
+    mutationId: newId(),
+  });
+  return id;
+}
+
+/** A stylist working at the place (one write), answering their id. */
+async function stylistAt(m: Member, placeId: string, name = 'Asha'): Promise<string> {
+  const id = newId();
+  await m.client.services.saveStaff({
+    workspace: m.slug,
+    id,
+    staff: { name, color: null, placeIds: [placeId], serviceIds: [] },
+    mutationId: newId(),
+  });
+  return id;
+}
+
+/** A category (one write), answering its id. */
+async function categoryOf(m: Member): Promise<string> {
+  const id = newId();
+  await m.client.services.saveCategory({ workspace: m.slug, id, name: 'Hair', mutationId: newId() });
+  return id;
+}
+
+// Services, staff and shifts (spec 0066 B1): no record changes; each write stores one `visits` row naming the places
+// it touched (every place for a category), after the install's `nav`.
+const visitsAt = (placeId: string, mutationId?: string) => ({
+  kind: 'visits',
+  item_ids: [placeId],
+  ...(mutationId === undefined ? {} : { mutation_id: mutationId }),
+});
+const SPAN = { start: '2030-01-07T09:00:00.000Z', end: '2030-01-07T10:00:00.000Z' };
+Object.assign(WRITES, {
+  'services.saveCategory': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    await m.client.services.saveCategory({ workspace: m.slug, id: newId(), name: 'Hair', mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId, mutationId)];
+  },
+  'services.deleteCategory': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const categoryId = await categoryOf(m);
+    await m.client.services.deleteCategory({ workspace: m.slug, categoryId, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.moveCategory': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const categoryId = await categoryOf(m);
+    await m.client.services.moveCategory({ workspace: m.slug, categoryId, toIndex: 0, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.saveService': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    await m.client.services.saveService({
+      workspace: m.slug,
+      id: newId(),
+      service: {
+        name: 'Colour',
+        categoryId: null,
+        bufferAfterMin: 15,
+        online: true,
+        staffRule: 'all',
+        staffIds: [],
+        placeIds: [placeId],
+        needs: [],
+        variants: [{ name: 'Colour', minutes: 90, priceMinor: 9000, priceType: 'from', bufferBeforeMin: 0 }],
+      },
+      mutationId,
+    });
+    return [{ kind: 'nav' }, visitsAt(placeId, mutationId)];
+  },
+  'services.moveService': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const serviceId = await haircutAt(m, placeId);
+    await m.client.services.moveService({ workspace: m.slug, serviceId, categoryId: null, toIndex: 0, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.setOnline': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const serviceId = await haircutAt(m, placeId);
+    await m.client.services.setOnline({ workspace: m.slug, serviceIds: [serviceId], online: false, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.setCategory': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const serviceId = await haircutAt(m, placeId);
+    await m.client.services.setCategory({ workspace: m.slug, serviceIds: [serviceId], categoryId: null, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.archive': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const serviceId = await haircutAt(m, placeId);
+    await m.client.services.archive({ workspace: m.slug, serviceIds: [serviceId], mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.restore': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const serviceId = await haircutAt(m, placeId);
+    await m.client.services.archive({ workspace: m.slug, serviceIds: [serviceId], mutationId: newId() });
+    await m.client.services.restore({ workspace: m.slug, serviceIds: [serviceId], mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.saveStaff': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    await m.client.services.saveStaff({
+      workspace: m.slug,
+      id: newId(),
+      staff: { name: 'Ben', title: 'Barber', color: 'sky', placeIds: [placeId], serviceIds: [] },
+      mutationId,
+    });
+    return [{ kind: 'nav' }, visitsAt(placeId, mutationId)];
+  },
+  'services.moveStaff': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    await m.client.services.moveStaff({ workspace: m.slug, staffId, toIndex: 0, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.linkStaff': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    const { memberId } = await m.client.access.mine({ workspace: m.slug });
+    await m.client.services.linkStaff({ workspace: m.slug, staffId, memberId, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.archiveStaff': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    await m.client.services.archiveStaff({ workspace: m.slug, staffId, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.restoreStaff': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    await m.client.services.archiveStaff({ workspace: m.slug, staffId, mutationId: newId() });
+    await m.client.services.restoreStaff({ workspace: m.slug, staffId, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.removeStaffPhoto': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    await m.client.services.removeStaffPhoto({ workspace: m.slug, staffId, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.setShifts': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    await m.client.services.setShifts({
+      workspace: m.slug,
+      staffId,
+      placeId,
+      shifts: { weekly: { tue: [{ from: '10:00', to: '16:00' }] }, exceptions: [] },
+      outsideHours: false,
+      mutationId,
+    });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.copyShifts': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    const other = await stylistAt(m, placeId, 'Ben');
+    await m.client.services.copyShifts({ workspace: m.slug, staffId, placeId, toStaffIds: [other], mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.addTimeOff': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    await m.client.services.addTimeOff({
+      workspace: m.slug,
+      id: newId(),
+      staffId,
+      reason: 'holiday',
+      ...SPAN,
+      mutationId,
+    });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.removeTimeOff': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    const id = newId();
+    await m.client.services.addTimeOff({
+      workspace: m.slug,
+      id,
+      staffId,
+      reason: 'sick',
+      ...SPAN,
+      mutationId: newId(),
+    });
+    await m.client.services.removeTimeOff({ workspace: m.slug, id, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.addBlock': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    await m.client.services.addBlock({
+      workspace: m.slug,
+      id: newId(),
+      staffId,
+      placeId,
+      reason: 'Lunch',
+      ...SPAN,
+      mutationId,
+    });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  'services.removeBlock': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const staffId = await stylistAt(m, placeId);
+    const id = newId();
+    await m.client.services.addBlock({ workspace: m.slug, id, staffId, placeId, ...SPAN, mutationId: newId() });
+    await m.client.services.removeBlock({ workspace: m.slug, id, mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId), visitsAt(placeId, mutationId)];
   },
 });
 

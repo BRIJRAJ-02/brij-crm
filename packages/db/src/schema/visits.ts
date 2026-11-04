@@ -192,6 +192,8 @@ export const staff = pgTable(
     title: text('title'),
     photoPath: text('photo_path'),
     bio: text('bio'),
+    /** One of the nine hues (migration 0181), or null until chosen. */
+    color: text('color'),
     memberId: uuid('member_id'),
     position: integer('position').notNull(),
     archivedAt: timestamptz('archived_at'),
@@ -218,6 +220,10 @@ export const staff = pgTable(
     check('staff_title', sql`char_length(${t.title}) <= 60`),
     check('staff_bio', sql`char_length(${t.bio}) <= 600`),
     check('staff_photo_path', sql`char_length(${t.photoPath}) <= 300`),
+    check(
+      'staff_color',
+      sql`${t.color} is null or ${t.color} in ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')`,
+    ),
   ],
 );
 

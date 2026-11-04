@@ -997,6 +997,40 @@ export {
   type VisitDeps,
 } from './visits/book.ts';
 export { linkStaffMember, type LinkOverlap } from './visits/staff-link.ts';
+/** Settings › Services, Staff and Shifts (spec 0066 B1): the catalogue, the profiles, their shifts and the desk's times. */
+export {
+  archiveServices,
+  deleteServiceCategory,
+  getCatalogue,
+  moveService,
+  moveServiceCategory,
+  restoreServices,
+  saveService,
+  saveServiceCategory,
+  setServicesCategory,
+  setServicesOnline,
+  type CatalogueDeps,
+} from './visits/catalogue.ts';
+export {
+  addStaffBlock,
+  addStaffTimeOff,
+  archiveStaff,
+  copyShifts,
+  getShifts,
+  getTeam,
+  linkStaff,
+  moveStaff,
+  readStaffPhoto,
+  removeStaffBlock,
+  removeStaffPhoto,
+  removeStaffTimeOff,
+  restoreStaff,
+  saveStaff,
+  setShifts,
+  setStaffPhoto,
+  staffPhotoFolder,
+} from './visits/team.ts';
+export { serviceTimes } from './visits/times.ts';
 export {
   getTableSetup,
   saveTableSetup,

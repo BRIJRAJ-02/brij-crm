@@ -44,7 +44,14 @@ import {
 } from '@crm/ui';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { publicBookingOrigin } from '../booking/links.ts';
-import { brandSettingsHref, businessSettingsHref, placeTablesHref } from '../settings/nav.ts';
+import {
+  brandSettingsHref,
+  businessSettingsHref,
+  placeTablesHref,
+  servicesSettingsHref,
+  shiftsSettingsHref,
+  staffSettingsHref,
+} from '../settings/nav.ts';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { pageStrings as words } from './business-page-strings.ts';
 import { PHOTO_PICK_MAX_BYTES, PHOTO_TYPES, pickGalleryPhoto } from './business-photos.ts';
@@ -265,12 +272,26 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
           actions={
             <ButtonLink
               href={
-                view.problem.placeId === undefined
-                  ? businessSettingsHref(slug)
-                  : placeTablesHref(slug, view.problem.placeId)
+                view.problem.fix === 'services'
+                  ? servicesSettingsHref(slug)
+                  : view.problem.fix === 'staff'
+                    ? staffSettingsHref(slug)
+                    : view.problem.fix === 'shifts'
+                      ? shiftsSettingsHref(slug)
+                      : view.problem.placeId === undefined
+                        ? businessSettingsHref(slug)
+                        : placeTablesHref(slug, view.problem.placeId)
               }
             >
-              {view.problem.placeId === undefined ? words.fixInBusiness : words.fixPlace}
+              {view.problem.fix === 'services'
+                ? words.fixServices
+                : view.problem.fix === 'staff'
+                  ? words.fixStaff
+                  : view.problem.fix === 'shifts'
+                    ? words.fixShifts
+                    : view.problem.placeId === undefined
+                      ? words.fixInBusiness
+                      : words.fixPlace}
             </ButtonLink>
           }
         >

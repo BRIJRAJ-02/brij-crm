@@ -244,6 +244,7 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
           if (!open) setAsking(undefined);
         }}
         workspace={workspace}
+        firstKind={asking?.kind === 'card' && asking.app === 'appointments' ? 'salon' : 'restaurant'}
         onInstall={(business) =>
           asking?.kind === 'card' ? send(asking.app, asking.withNeeded, business) : Promise.resolve()
         }

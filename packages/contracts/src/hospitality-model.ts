@@ -152,6 +152,20 @@ export const RESTAURANT_HOURS: PlaceHoursShape = {
   exceptions: [],
 };
 
+/**
+ * A salon's, a clinic's or a studio's first week (spec 0066 B1, Foolproof): Tuesday to Saturday 09:00 to 18:00, so a
+ * new staff member's shifts (which start from the place's hours) and the first bookable times work at once.
+ */
+export const APPOINTMENT_HOURS: PlaceHoursShape = {
+  weekly: Object.fromEntries(
+    (['tue', 'wed', 'thu', 'fri', 'sat'] as const).map((day) => [day, [{ from: '09:00', to: '18:00' }]]),
+  ),
+  exceptions: [],
+};
+
+/** The kinds of business that book people rather than tables: their first place opens on `APPOINTMENT_HOURS`. */
+export const APPOINTMENT_KINDS: readonly BusinessKind[] = ['salon', 'spa', 'barber', 'clinic', 'fitness'];
+
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 /** Minutes after midnight of `HH:MM`, or undefined when it isn't one. */

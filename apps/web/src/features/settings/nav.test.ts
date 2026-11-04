@@ -25,6 +25,9 @@ describe('settingsNav', () => {
         'Brand',
         'Apps',
         'Business',
+        'Services',
+        'Staff',
+        'Shifts',
         'Members',
         'Teams',
         'Roles',
@@ -55,6 +58,10 @@ describe('settingsNav', () => {
       // The Hospitality apps and the business they share (spec 0065).
       apps: '/w/acme/settings/apps',
       business: '/w/acme/settings/business',
+      // Services, Staff and Shifts (spec 0066 B1).
+      services: '/w/acme/settings/services',
+      staff: '/w/acme/settings/staff',
+      shifts: '/w/acme/settings/shifts',
       security: '/w/acme/settings/account/sign-in',
       members: '/w/acme/settings/members',
       teams: '/w/acme/settings/teams',
@@ -110,7 +117,10 @@ describe('visibleSettingsNav', () => {
             entry.id !== 'webhooks' &&
             entry.id !== 'developer' &&
             entry.id !== 'apps' &&
-            entry.id !== 'business',
+            entry.id !== 'business' &&
+            entry.id !== 'services' &&
+            entry.id !== 'staff' &&
+            entry.id !== 'shifts',
         ),
       })),
     );
@@ -124,6 +134,8 @@ describe('visibleSettingsNav', () => {
         'api_keys.manage',
         'workspace.manage',
         'hospitality.manage',
+        'services.manage',
+        'services.calendar',
       ]),
     ).toEqual(workspaceGroups);
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.

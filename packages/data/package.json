@@ -9,6 +9,7 @@
     "./navigation": "./src/navigation/index.ts",
     "./hospitality": "./src/hospitality/index.ts",
     "./menu": "./src/menu/index.ts",
+    "./services": "./src/services/index.ts",
     "./menu-guest": "./src/menu/guest.ts",
     "./roster": "./src/scheduling/roster.ts",
     "./public-form": "./src/public-form/client.ts",
