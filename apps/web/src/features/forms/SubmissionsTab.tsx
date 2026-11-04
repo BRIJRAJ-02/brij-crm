@@ -1,6 +1,6 @@
 // Brief
 // Purpose: a form's submissions (spec 0023): who sent what and when, newest first, with what needs a look on top.
-// Main task: scan the people and their first answers, open one in full, settle many at once (spam or not), and get
+// Main task: scan the people and their first answers, open one in full, settle or delete many at once, and get
 // any that aren't in the CRM there (Add to CRM, Sync earlier submissions); take them out as CSV.
 // Leaves out: counts per state, server search (search filters the rows loaded so far), and live arrival.
 import {
@@ -18,6 +18,7 @@ import {
   MenuTrigger,
   Avatar,
   BulkActionBar,
+  focusLater,
   Button,
   Callout,
   CopyButton,
@@ -40,6 +41,7 @@ import { formatDate, StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { pageHeading } from '../navigation/focus.ts';
 import { recordLinks } from '../records/timeline.ts';
 import { AnswerList, answerText, holdsFile } from '../questions/AnswerList.tsx';
 import { answerFiling, notSavedReasons } from './answer-filing.ts';
@@ -160,6 +162,10 @@ export function SubmissionsTab({
   const [addingMany, setAddingMany] = useState<readonly string[]>([]);
   const [isAddingMany, setIsAddingMany] = useState(false);
   const [addFailure, setAddFailure] = useState<string | undefined>(undefined);
+  // Bulk Delete asks first, since a submission can't come back; the picked ids stay while the dialog plays its exit.
+  const [deletingMany, setDeletingMany] = useState<readonly string[]>([]);
+  const [isDeletingMany, setIsDeletingMany] = useState(false);
+  const [deleteManyFailure, setDeleteManyFailure] = useState<string | undefined>(undefined);
 
   const go = (submissionId?: string, nextState: SubmissionState | undefined = state) => {
     if (nextState !== state) setSelected(new Set());
@@ -316,6 +322,47 @@ export function SubmissionsTab({
         setSelected(new Set(ids.slice(done)));
         const reason = isDataError(error) ? error.message : strings.failedText;
         toasts.toast({ tone: 'danger', message: `${strings.settledSome(done, ids.length)} ${reason}` });
+        void router.invalidate();
+      },
+    );
+  };
+
+  /**
+   * Deletes the picked submissions one after another, with progress in the bar, as the other bulk actions run. A
+   * refusal stops there: the confirm stays open saying why, and the ones not deleted yet stay picked.
+   */
+  const deleteAll = (ids: readonly string[]) => {
+    if (bulk !== undefined) return;
+    let done = 0;
+    setDeleteManyFailure(undefined);
+    setBulk({ label: strings.deletingMany, value: 0 });
+    const step = (index: number): Promise<void> => {
+      const id = ids[index];
+      if (id === undefined) return Promise.resolve();
+      return data.submissions.delete(slug, id).then(() => {
+        done += 1;
+        setBulk({ label: strings.deletingMany, value: Math.round((done / ids.length) * 100) });
+        return step(index + 1);
+      });
+    };
+    step(0).then(
+      () => {
+        setBulk(undefined);
+        setIsDeletingMany(false);
+        setSelected(new Set());
+        toasts.toast({ tone: 'success', message: strings.deletedMany(done) });
+        // The bar that held Delete goes with the selection, so focus goes to the page's heading, not the body.
+        focusLater(() => pageHeading(document));
+        // The open one may be among them: the panel closes with it.
+        if (open !== undefined && ids.includes(open.id)) go(undefined);
+        else void router.invalidate();
+      },
+      (error: unknown) => {
+        setBulk(undefined);
+        setSelected(new Set(ids.slice(done)));
+        setDeletingMany(ids.slice(done));
+        const reason = isDataError(error) ? error.message : strings.failedText;
+        setDeleteManyFailure(done === 0 ? reason : `${strings.deletedSome(done, ids.length)} ${reason}`);
         void router.invalidate();
       },
     );
@@ -529,6 +576,18 @@ export function SubmissionsTab({
               {strings.markSpam}
             </Button>
           )}
+          <Button
+            variant="danger"
+            icon="trash"
+            onPress={() => {
+              if (bulk !== undefined) return;
+              setDeleteManyFailure(undefined);
+              setDeletingMany(picked.map((submission) => submission.id));
+              setIsDeletingMany(true);
+            }}
+          >
+            {strings.deleteSubmission}
+          </Button>
         </BulkActionBar>
       )}
       {isEmpty ? (
@@ -689,6 +748,38 @@ export function SubmissionsTab({
       >
         {deleteFailure !== undefined && <Callout tone="danger">{deleteFailure}</Callout>}
         <p>{strings.deleteSubmissionText}</p>
+      </Modal>
+      <Modal
+        title={strings.deleteManyTitle(deletingMany.length)}
+        variant="confirm"
+        tone="danger"
+        isOpen={isDeletingMany}
+        isBusy={bulk !== undefined}
+        onOpenChange={(isOpen) => {
+          if (bulk !== undefined || isOpen) return;
+          setIsDeletingMany(false);
+          setDeleteManyFailure(undefined);
+        }}
+        actions={
+          <>
+            <Button slot="close" isDisabled={bulk !== undefined}>
+              {strings.cancel}
+            </Button>
+            <Button
+              variant="danger-solid"
+              icon="trash"
+              isPending={bulk !== undefined}
+              onPress={() => {
+                deleteAll(deletingMany);
+              }}
+            >
+              {strings.deleteManyAction(deletingMany.length)}
+            </Button>
+          </>
+        }
+      >
+        {deleteManyFailure !== undefined && <Callout tone="danger">{deleteManyFailure}</Callout>}
+        <p>{strings.deleteManyText}</p>
       </Modal>
       <Modal
         title={strings.addManyTitle(addingMany.length, ADD_MAX)}
