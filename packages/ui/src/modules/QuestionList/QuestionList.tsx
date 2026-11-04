@@ -108,6 +108,12 @@ export interface QuestionListProps {
    * between feels like a find"): the cards part a little further to hold it, and touch sees it too.
    */
   readonly gaps?: 'hover' | 'shown';
+  /**
+   * Where an open question's footer parts go. `footer` (the default) keeps them in a row under its editor; `head` puts
+   * them at the end of its own head, before the chevron, so the card reads "type ▾ … Required ⋯" across its top and
+   * the editor holds only fields (forms fixes 3, after Typeform's and Sprig's question cards). Only with `renderOpenHead`.
+   */
+  readonly actionsIn?: 'footer' | 'head';
 }
 
 /**
@@ -137,6 +143,7 @@ export function QuestionList({
   onStepPress,
   renderOpenHead,
   gaps = 'hover',
+  actionsIn = 'footer',
 }: QuestionListProps) {
   const headingId = useId();
 
@@ -224,6 +231,7 @@ export function QuestionList({
             renderStepEnd,
             renderStepTitle,
             renderOpenHead,
+            actionsIn,
           ]}
           className={styles.list}
           data-gaps={gaps}
@@ -304,6 +312,7 @@ export function QuestionList({
             }
             const openHead = isOpen ? renderOpenHead?.(item.id) : undefined;
             const hasOpenHead = openHead !== undefined && openHead !== null && openHead !== false;
+            const isActionsInHead = hasOpenHead && actionsIn === 'head';
             return (
               <GridListItem
                 id={item.id}
@@ -312,6 +321,7 @@ export function QuestionList({
                 data-gap={gapNode === null ? undefined : true}
                 data-open={isOpen || undefined}
                 data-open-head={hasOpenHead || undefined}
+                data-actions-head={isActionsInHead || undefined}
                 data-problem={item.hasProblem === true || undefined}
               >
                 {gapNode}
@@ -324,7 +334,7 @@ export function QuestionList({
                   {hasOpenHead ? (
                     <>
                       <CardPart
-                        className={styles.openHead}
+                        className={isActionsInHead ? styles.openHeadFit : styles.openHead}
                         onFocus={keepPortalFocus}
                         onBlur={keepPortalFocus}
                         onKeyDown={keepKeys}
@@ -337,6 +347,18 @@ export function QuestionList({
                           <Icon name="circle-alert" size="sm" />
                           {strings.hasProblem}
                         </span>
+                      )}
+                      {isActionsInHead && (
+                        <CardPart
+                          className={styles.headActions}
+                          onFocus={keepPortalFocus}
+                          onBlur={keepPortalFocus}
+                          onKeyDown={keepKeys}
+                          onKeyUp={keepKeys}
+                        >
+                          {renderFooterStart?.(item.id)}
+                          {renderFooter?.(item.id)}
+                        </CardPart>
                       )}
                       <Button
                         variant="ghost"
@@ -421,7 +443,7 @@ export function QuestionList({
                     onKeyUp={keepKeys}
                   >
                     {renderOpen(item.id)}
-                    <Footer start={renderFooterStart?.(item.id)} end={renderFooter?.(item.id)} />
+                    {!isActionsInHead && <Footer start={renderFooterStart?.(item.id)} end={renderFooter?.(item.id)} />}
                   </CardPart>
                 )}
               </GridListItem>

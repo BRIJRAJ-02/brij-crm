@@ -118,9 +118,11 @@ describe('Layout (AC-6302)', () => {
       .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
       .toBe('Step 1 of 2');
     await userEvent.click(page.getByText('One at a time', { exact: true }));
-    // One at a time opens on its welcome screen (T42) while no question is being edited: the headline and Start.
-    await expect.element(page.getByText('Start', { exact: true })).toBeInTheDocument();
-    expect(document.querySelector('[role="progressbar"]')).toBeNull();
+    // One at a time opens straight on its first question (5 November 2026): no Start, the place along the top.
+    await expect
+      .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
+      .toMatch(/^1 of /);
+    expect(page.getByText('Start', { exact: true }).query()).toBeNull();
   });
 });
 
@@ -158,6 +160,23 @@ describe('Steps as pages (AC-6303, T20)', () => {
     await expect.element(page.getByRole('button', { name: /^Step 3(?!.* options$)/ })).not.toBeInTheDocument();
     await userEvent.click(page.getByRole('button', { name: 'Undo' }));
     await expect.element(page.getByRole('button', { name: /^Step 3 · Your team(?!.* options$)/ })).toBeVisible();
+  });
+
+  it('says two merges in a row once, and its one Undo brings both steps back (forms fixes 3)', async () => {
+    await open('steps', [
+      { id: 's1', startsAt: 'name' },
+      { id: 's2', startsAt: 'company' },
+      { id: 's3', startsAt: 'size' },
+    ]);
+    await userEvent.click(page.getByRole('button', { name: 'Step 3 options' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Merge with the step above' }));
+    await userEvent.click(page.getByRole('button', { name: 'Step 2 options' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Merge with the step above' }));
+    await expect.element(page.getByText('Merged 2 steps into the ones above.')).toBeVisible();
+    expect(page.getByRole('button', { name: 'Undo' }).all()).toHaveLength(1);
+    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+    await expect.element(page.getByRole('button', { name: /^Step 3(?!.* options$)/ })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /^Step 2(?!.* options$)/ })).toBeVisible();
   });
 
   it('keeps a quiet + in every gap, a step header counting its questions, and adds a question at a step’s top', async () => {

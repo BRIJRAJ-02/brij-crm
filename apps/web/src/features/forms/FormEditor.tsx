@@ -37,16 +37,25 @@ import {
   HostedFormPreview,
   type HostedFormPreviewProps,
   PreviewLayout,
+  SegmentedControl,
   type PreviewTextChange,
   TabPanel,
   Tabs,
+  ToggleButton,
+  Tooltip,
   TopBar,
   ViewOnlyTag,
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { DeleteFormDialog, DiscardChangesDialog, RetargetFormDialog, type RetargetAsk } from './FormConfirms.tsx';
+import {
+  DeleteFormDialog,
+  DiscardChangesDialog,
+  PauseFormDialog,
+  RetargetFormDialog,
+  type RetargetAsk,
+} from './FormConfirms.tsx';
 import { retargetStep } from './retarget.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
@@ -67,10 +76,9 @@ import {
   withQuestions,
   uploadsOffFor,
 } from './draft.ts';
-import { BrandedFormPreview, DesignButton } from './FormBrand.tsx';
-import { LogicMap } from './FlowView.tsx';
+import { BrandedFormPreview, LookControls } from './FormBrand.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
-import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
+import { AnalyticsTab } from './AnalyticsTab.tsx';
 import { ShareTab } from './ShareTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { ReadyDialog, type LiveFiling } from './PublishDialog.tsx';
@@ -145,6 +153,9 @@ const SAVE_AFTER_MS = 1_000;
 /** The editor: the TopBar (name, Preview, Publish, menu), then the status line, tabs and the tab. */
 export function FormEditor(props: FormEditorProps) {
   const { slug, members, objects, tab } = props;
+  // The live dialog says where answers go by the object's plural ("Answers go to People"), as the sidebar names it.
+  const pluralOf = (target: FormTargetChoices) =>
+    objects.find((object) => object.id === target.objectId)?.pluralName ?? target.objectName ?? '';
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const router = useRouter();
@@ -178,10 +189,18 @@ export function FormEditor(props: FormEditorProps) {
     [data, slug],
   );
   const jobs = useJobFollower(data.jobs.view(slug, 'mine'), heldJobs);
-  // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
+  // The end of the tab strip, where a tab draws its own tools (Analytics' period).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
-  // The Flow view (spec 0063, AC-6325): the steps, their jumps and the endings, read only, from the Form tab.
-  const [isFlowOpen, setFlowOpen] = useState(false);
+  // Logic · n shows only the cards that carry rules (forms fixes 3, the design critic: a map that said only Edit).
+  const [isLogicOnly, setLogicOnly] = useState(false);
+  // The cards Logic · n would leave (review, forms fixes 3): After they send's routes have no card here.
+  const ruledCards =
+    draft.questions.filter((question) => question.showWhen !== undefined || (question.jumps?.length ?? 0) > 0).length +
+    (draft.layout === 'steps'
+      ? draft.steps.filter((step) => step.showWhen !== undefined || (step.jumps?.length ?? 0) > 0).length
+      : 0);
+  // The screen the preview lays the form out at (forms fixes 3): this tab's own choice, not the form's.
+  const [device, setDevice] = useState<'phone' | 'desktop'>('phone');
   // The name, link, owner and who is emailed: each saves on its own on the Settings tab, with no Save.
   const settings = useFormSettings({
     slug,
@@ -190,6 +209,36 @@ export function FormEditor(props: FormEditorProps) {
       setForm((before) => ({ ...view, revision: before.revision }));
     },
   });
+
+  // A status change made elsewhere (forms fixes 3): Pause in another tab, or the send that filled the form and paused
+  // it. The form is read again for its status and counts only; the draft being edited and its revision stay this
+  // tab's, so nothing typed here is overwritten.
+  // A read that answers after a newer view of the form (this tab's own Resume or Settings change, or a later read)
+  // is dropped by its time, so it never puts back an older status or settings (review, forms fixes 3). A form
+  // deleted elsewhere reloads the route, which says so.
+  const formId = form.id;
+  useEffect(() => {
+    let isMounted = true;
+    const stop = data.forms.onChanged(slug, () => {
+      data.forms.get(slug, formId).then(
+        (view) => {
+          if (!isMounted) return;
+          setForm((before) =>
+            Date.parse(view.updatedAt) < Date.parse(before.updatedAt)
+              ? before
+              : { ...view, draft: before.draft, revision: before.revision },
+          );
+        },
+        (error: unknown) => {
+          if (isMounted && isDataError(error) && error.code === 'NOT_FOUND') void router.invalidate();
+        },
+      );
+    });
+    return () => {
+      isMounted = false;
+      stop();
+    };
+  }, [data, slug, formId, router]);
 
   // What the server holds: the draft last saved, and the revision a save names.
   const saved = useRef<{ document: FormDocument; revision: number }>({
@@ -334,14 +383,7 @@ export function FormEditor(props: FormEditorProps) {
   }
   const viewOnly = !canManage && isPublished;
 
-  // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
-  // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
-  // reuses what this already holds rather than asking again.
-  const analyticsView = useMemo(
-    () => (isPublished ? data.forms.analytics(slug, form.id, FORM_CHIP_RANGE) : undefined),
-    [isPublished, data, slug, form.id],
-  );
-  const questionStats = useQuestionStats(analyticsView);
+  // No answered share on the question cards (forms fixes 3, the design critic: it belongs in Analytics).
   const isChanged = isPublished && !sameDocument(draft, form.live);
   const status = statusOf(form, isChanged);
   const liveIds = useMemo(() => new Set(form.live?.questions.map((question) => question.id) ?? []), [form.live]);
@@ -448,7 +490,7 @@ export function FormEditor(props: FormEditorProps) {
     // The first publish says it in its live dialog, with Change; a later one in a toast with Undo.
     if (!isPublished) {
       setLiveFiling({
-        objectName: target.objectName ?? '',
+        objectName: pluralOf(target),
         made: made.flatMap((each) => plans.find((plan) => plan.questionId === each.questionId)?.title ?? []),
       });
       return { document: next, choices };
@@ -593,7 +635,7 @@ export function FormEditor(props: FormEditorProps) {
         // The first time, the Ready dialog says it is live and hands over the link.
         if (!wasPublished) {
           if (target.objectName !== undefined && view.live?.targets.main !== undefined) {
-            const objectName = target.objectName;
+            const objectName = pluralOf(target);
             setLiveFiling((before) => before ?? { objectName, made: [] });
           } else setLiveFiling(undefined);
           setJustLive(view);
@@ -744,7 +786,13 @@ export function FormEditor(props: FormEditorProps) {
       });
   };
 
-  // Pause and Resume act at once, as a booking page's do, and their toast offers Undo (the owner, 22 Oct 2026).
+  // Resume acts at once, its toast offering Undo (the owner, 22 Oct 2026). Pausing ends something, so the header's
+  // menu and Settings' switch ask first (lane 3c), as the forms list does; its toast offers Undo too.
+  const [isPausing, setPausing] = useState(false);
+  const askStatus = (next: 'live' | 'paused') => {
+    if (next === 'paused') setPausing(true);
+    else setStatus('live');
+  };
   const setStatus = (next: 'live' | 'paused') => {
     data.forms.setStatus(slug, form.id, next).then((view) => {
       apply(view);
@@ -821,7 +869,7 @@ export function FormEditor(props: FormEditorProps) {
           ? {
               menu: {
                 ...(isPublished ? { status: form.status === 'paused' ? ('paused' as const) : ('live' as const) } : {}),
-                onPause: () => setStatus('paused'),
+                onPause: () => askStatus('paused'),
                 onResume: () => setStatus('live'),
                 onDuplicate: () => {
                   data.forms.duplicate(slug, form.id).then((copy) => {
@@ -932,7 +980,7 @@ export function FormEditor(props: FormEditorProps) {
             settings={settings}
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
-            onStatusChange={setStatus}
+            onStatusChange={askStatus}
             onSettingsChange={applySettings}
             {...(props.keepMonths === undefined ? {} : { keepMonths: props.keepMonths })}
           />
@@ -1022,45 +1070,34 @@ export function FormEditor(props: FormEditorProps) {
                 );
               }}
             />
-            {isFlowOpen && (
-              <LogicMap
-                slug={slug}
-                draft={draft}
-                problems={logicIssues}
-                onSuggest={(suggestion) => {
-                  const ids = { rule: data.forms.newId(), ending: mintEndingId(draft.endings ?? []) };
-                  setDraft((before) => suggestion.apply(before, ids));
-                  toasts.toast({ tone: 'success', message: strings.suggestionAdded });
-                }}
-                questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
-                stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
-                endingsHref={`${formHref(slug, form.id)}?question=${AFTER_ROW}`}
-                onOpenChange={setFlowOpen}
-              />
-            )}
             <QuestionsSection
               // A new form never saved since it was made with nothing in it (Blank) opens on its first question.
               startsWithQuestion={!isPublished && form.revision === 1}
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
-              {...(questionStats === undefined ? {} : { stats: questionStats })}
               onOpened={openRow}
-              // The Logic map's door (T41): how many rules the form has, and how many need a look.
+              // Logic · n (T41; forms fixes 3): how many rules the form has and how many need a look, pressed to show only
+              // the cards that carry them. Off while the form has none.
+              logicOnly={isLogicOnly && ruledCards > 0}
               {...(draft.questions.length === 0
                 ? {}
                 : {
-                    actionsStart: (
-                      <Button
-                        variant="ghost"
-                        icon={logicIssues.length > 0 ? 'triangle-alert' : 'git-branch'}
-                        onPress={() => {
-                          setFlowOpen(true);
-                        }}
-                      >
-                        {logicIssues.length > 0
-                          ? strings.logicButtonWarn(logicCount(draft), logicIssues.length)
-                          : strings.logicButton(logicCount(draft))}
-                      </Button>
-                    ),
+                    actionsStart: (() => {
+                      const toggle = (
+                        <ToggleButton
+                          variant="ghost"
+                          icon={logicIssues.length > 0 ? 'triangle-alert' : 'git-branch'}
+                          isSelected={isLogicOnly && ruledCards > 0}
+                          isDisabled={ruledCards === 0}
+                          onChange={setLogicOnly}
+                        >
+                          {logicIssues.length > 0
+                            ? strings.logicButtonWarn(logicCount(draft), logicIssues.length)
+                            : strings.logicButton(logicCount(draft))}
+                        </ToggleButton>
+                      );
+                      // Off says why (review, forms fixes 3): no card carries a rule yet.
+                      return ruledCards === 0 ? <Tooltip content={strings.logicNone}>{toggle}</Tooltip> : toggle;
+                    })(),
                   })}
               steps={{
                 steps: draft.steps,
@@ -1203,6 +1240,9 @@ export function FormEditor(props: FormEditorProps) {
       notices={notices}
       // The phone beside the questions from a laptop's width up (critique c, blocker 1): two fifths of the width.
       previewShare="wide"
+      // On a sunken canvas, the frame as tall as the form (forms fixes 3, the design critic: a white slab in dark).
+      previewSurface="canvas"
+      previewDevice={device}
       // Every tab reads top to bottom, full width; only the Form tab keeps the preview (the owner, 22 October 2026).
       bodyLayout="stack"
       {...(current === 'form'
@@ -1225,17 +1265,33 @@ export function FormEditor(props: FormEditorProps) {
                   {...(previewEnding === undefined ? {} : { ending: previewEnding })}
                 />
               ),
-            // Design (5 November 2026): one button holding the look, over the preview it changes.
+            // The look, upfront over the preview it changes (forms fixes 3): Mode, Corners and Brand, no click away.
             previewControls: (
-              <DesignButton
-                look={draft.look}
-                isReadOnly={!canManage}
-                {...(props.brand === undefined ? {} : { brand: props.brand })}
-                slug={slug}
-                onChange={(look) => {
-                  setDraft((before) => ({ ...before, look }));
-                }}
-              />
+              <>
+                {/* Desktop or Phone (forms fixes 3, the design critic): the form laid out at either, as Tally's and
+                    Typeform's previews switch. Phone first, as most visitors fill it in on one. */}
+                <SegmentedControl
+                  label={strings.previewDevice}
+                  size="compact"
+                  segments={[
+                    { value: 'phone', label: strings.previewPhone, icon: 'smartphone', isIconOnly: true },
+                    { value: 'desktop', label: strings.previewDesktop, icon: 'monitor', isIconOnly: true },
+                  ]}
+                  value={device}
+                  onChange={(value) => {
+                    if (value === 'phone' || value === 'desktop') setDevice(value);
+                  }}
+                />
+                <LookControls
+                  look={draft.look}
+                  isReadOnly={!canManage}
+                  {...(props.brand === undefined ? {} : { brand: props.brand })}
+                  slug={slug}
+                  onChange={(look) => {
+                    setDraft((before) => ({ ...before, look }));
+                  }}
+                />
+              </>
             ),
           }
         : {})}
@@ -1292,6 +1348,21 @@ export function FormEditor(props: FormEditorProps) {
           focusLater(() => moreRef.current);
         }}
       />
+      <PauseFormDialog
+        data={data}
+        slug={slug}
+        form={isPausing ? form : undefined}
+        onClose={() => setPausing(false)}
+        onDone={(_paused, view) => {
+          setPausing(false);
+          apply(view);
+          toasts.toast({
+            tone: 'success',
+            message: capturesStrings.pausedToast(view.name),
+            action: { label: capturesStrings.undo, onAction: () => setStatus('live') },
+          });
+        }}
+      />
       <DeleteFormDialog
         data={data}
         slug={slug}
@@ -1307,7 +1378,7 @@ export function FormEditor(props: FormEditorProps) {
 
   return (
     <WorkspacePage
-      currentPage="forms"
+      currentPage="captures"
       page={{
         topBar,
         body: (
@@ -1316,7 +1387,9 @@ export function FormEditor(props: FormEditorProps) {
               // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
               <Tabs
                 variant="bar"
-                end={<div ref={setToolbarSlot} />}
+                // Only Analytics draws its period at the strip's end; Submissions keeps its tools in a row of its own
+                // under the tabs, as People does, so no empty slot wraps onto a line of its own on a phone.
+                {...(current === 'analytics' ? { end: <div ref={setToolbarSlot} /> } : {})}
                 label={strings.tabs}
                 selectedKey={current}
                 onSelectionChange={(value) => {
@@ -1445,6 +1518,9 @@ function FormTitle({
       <Field
         label={strings.formLine}
         isLabelHidden
+        // The same quiet field as the title, one step down (forms fixes 3, the design critic).
+        variant="title"
+        size="sm"
         isWrapping
         placeholder={strings.formLinePlaceholder}
         value={subheading}

@@ -71,4 +71,4 @@ Enter, Space or the arrow keys open it; arrows move; typing jumps to a match; En
 ## Differences from the artifact
 
 - `items` (with `optionStyle`) replace `options` with `color`, `dot` and `render`; `value` and `onChange(id | null)` follow React Aria.
-- `isClearable`, archived options, `isReadOnly` with its reason, and `error` are new.
+- `isClearable`, archived options, `isReadOnly` with its reason, and `error` are new. Drawn by the shared FieldError atom: the alert mark, then the words (5 November 2026).

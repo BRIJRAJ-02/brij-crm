@@ -8,6 +8,16 @@
     background: var(--surface);
   }
 
+  /* A thumbnail (size="thumbnail"): the form laid out at a panel's width and shown at half size, so a tile shows
+     its first questions; the tile crops what runs past its foot. */
+  .ground[data-size='thumbnail'] {
+    inline-size: var(--size-panel);
+    margin-inline: auto;
+    min-block-size: calc(2 * 100%);
+    zoom: 0.5;
+    pointer-events: none;
+  }
+
   /* The layer the press targets sit in: over the inert preview, taking no room of its own. */
   .edits {
     position: absolute;

@@ -398,7 +398,12 @@ export {
   type GuestsOutcome,
 } from './modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip, type DayStripProps } from './modules/DayStrip/DayStrip.tsx';
-export { ReadyPanel, type ReadyPanelProps } from './modules/ReadyPanel/ReadyPanel.tsx';
+export {
+  ReadyPanel,
+  type ReadyPanelOnward,
+  type ReadyPanelProps,
+  type ReadyPanelQrKind,
+} from './modules/ReadyPanel/ReadyPanel.tsx';
 /** A printable A4 sheet of table tent cards, each with its QR (Menu QR's print page, spec 0065 H2). */
 export { QrSheet, type QrSheetCard, type QrSheetProps } from './modules/QrSheet/QrSheet.tsx';
 export { EmbedPreview, type EmbedPreviewProps } from './modules/EmbedPreview/EmbedPreview.tsx';
@@ -461,10 +466,12 @@ export {
   PhonePreview,
   PreviewFrame,
   PreviewLayout,
+  PreviewPage,
   type EditorStatusTone,
   type PhonePreviewProps,
   type PreviewFrameProps,
   type PreviewLayoutProps,
+  type PreviewPageProps,
 } from './modules/PreviewLayout/PreviewLayout.tsx';
 export {
   HoursEditor,

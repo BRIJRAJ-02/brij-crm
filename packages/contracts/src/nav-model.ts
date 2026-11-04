@@ -29,11 +29,9 @@ export const NAV_TOP_PAGES = ['linkPage', 'inbox', 'tasks', 'notes'] as const;
  * The Scheduling section's pages, in their default order: Bookings (its Availability a tab of it) and Captures (its
  * Booking pages and Forms tabs), two rows as round 6 had them (the owner, 22 October 2026), and the Roster between
  * them (spec 0037 J6, the owner, 30 October 2026: the Team week as a feature of its own, opening Availability's Team
- * view). Forms after Captures (forms critique c, 5 November 2026: forms took a minute to find, behind Captures'
- * Booking pages tab), opening Captures › Forms. A stored choice for a page no longer here is skipped on read and
- * dropped on the next write.
+ * view). A stored choice for a page no longer here is skipped on read and dropped on the next write.
  */
-export const NAV_SCHEDULING_PAGES = ['bookings', 'roster', 'captures', 'forms'] as const;
+export const NAV_SCHEDULING_PAGES = ['bookings', 'roster', 'captures'] as const;
 /**
  * The Hospitality section's pages (spec 0065, AC-6510; Rules settled: Navigation), in their default order: Menus
  * (Menu), QR codes (Menu QR), Reservations and Service (Table seating). Only the installed apps' pages show.

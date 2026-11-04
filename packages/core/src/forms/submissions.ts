@@ -6,11 +6,15 @@
 // see are left out, the same rule as everywhere else (hidden means absent).
 import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import {
+  DELETE_SUBMISSIONS_MAX,
+  type DeleteSubmissionsResult,
+  type RestoreSubmissionsResult,
   SPAM_FILES_KEPT_DAYS,
   SubmissionContext,
   SUBMISSION_SUMMARY_QUESTIONS,
   SUBMISSIONS_PAGE,
   type FormDocument,
+  type FormQuestion,
   type SubmissionAnswer,
   type SubmissionCrm,
   type SubmissionPage,
@@ -23,13 +27,13 @@ import {
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import * as z from 'zod';
-import { checkId } from '../engine/ids.ts';
+import { checkId, uuidList } from '../engine/ids.ts';
 import { queueFormWebhooks } from '../webhooks/queue.ts';
 import { readRecords, updateRecord } from '../engine/records.ts';
 import { currentItems, loadAttributes, loadAttributesById } from '../engine/values.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { can, fieldLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -37,6 +41,7 @@ import { attributeVisible, visibleRecords } from '../access/visibility.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { withdrawSubmissionNotices } from '../notifications/notify.ts';
+import { writeAudit } from '../members/audit.ts';
 import { UNKNOWN_FORM } from './forms.ts';
 import {
   FORMS_PROCESS,
@@ -46,7 +51,7 @@ import {
   requiredFieldFailure,
   siteFieldFailure,
 } from './process.ts';
-import { canSeeForm, loadForm, loadForms, loadVersions, millis } from './shared.ts';
+import { canSeeForm, loadForm, loadForms, loadVersions, millis, pauseIfFull } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
 
@@ -143,7 +148,11 @@ const verdictOf = (spam: unknown): SubmissionSummary['verdict'] => {
  * checked on its own object, read from the record itself: a form's target can change between versions, and
  * Add to CRM files with the live one, so the records of one form's submissions may sit on several objects.
  */
-export async function visibleRows(tx: WorkspaceTx, scope: EngineScope, rows: readonly Row[]): Promise<readonly Row[]> {
+export async function visibleRows<T extends Pick<Row, 'mainRecordId'>>(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  rows: readonly T[],
+): Promise<readonly T[]> {
   const manages = can(scope.access, 'forms.manage');
   const withRecord = [...new Set(rows.flatMap((row) => (row.mainRecordId === null ? [] : [row.mainRecordId])))];
   const found =
@@ -178,21 +187,36 @@ export async function displays(
  * is absent). A filed question's attribute is on its version's target; a version that keeps submissions
  * only files none.
  */
-export function answersOf(scope: EngineScope, document: FormDocument, stored: unknown): SubmissionAnswer[] {
+/**
+ * Whether a question's answer is hidden from the reader (AC-573): it is saved on a field they may not see, or on the
+ * deal (forms fixes 2) when they can't read Deals or that field. Submissions leaves such an answer out, and so does
+ * Analytics.
+ */
+export function answerHidden(scope: EngineScope, document: FormDocument, question: FormQuestion): boolean {
+  const attributeId = question.filedOn?.attributeId;
+  if (attributeId === undefined) return false;
+  const on =
+    question.filedOn?.objectRole === 'deal' ? document.targets.deal?.objectId : document.targets.main?.objectId;
+  return on === undefined || fieldLevel(scope.access, { id: attributeId, objectId: on }) === 'hidden';
+}
+
+export function answersOf(
+  scope: EngineScope,
+  document: FormDocument,
+  stored: unknown,
+  options: { readonly withSkipped?: boolean } = {},
+): SubmissionAnswer[] {
   const answers = record(stored);
-  const objectId = document.targets.main?.objectId;
   return document.questions.flatMap((question): SubmissionAnswer[] => {
-    if (!Object.hasOwn(answers, question.key)) return [];
+    // A question the visitor skipped is left out, unless the reader asked for every question (one submission's
+    // panel says "No answer" for it); a hidden one is a link's tag, never a question someone skipped.
+    if (!Object.hasOwn(answers, question.key) && (options.withSkipped !== true || question.answerType === 'hidden')) {
+      return [];
+    }
     const attributeId = question.filedOn?.attributeId;
     // An answer saved on the deal (forms fixes 2) is read as the deal's field, so a reader without Deals, or with
     // that field hidden, never sees it.
-    const on = question.filedOn?.objectRole === 'deal' ? document.targets.deal?.objectId : objectId;
-    if (
-      attributeId !== undefined &&
-      (on === undefined || fieldLevel(scope.access, { id: attributeId, objectId: on }) === 'hidden')
-    ) {
-      return [];
-    }
+    if (answerHidden(scope, document, question)) return [];
     return [
       {
         questionId: question.id,
@@ -200,7 +224,7 @@ export function answersOf(scope: EngineScope, document: FormDocument, stored: un
         label: question.label,
         answerType: question.answerType,
         ...(attributeId === undefined ? {} : { attributeId }),
-        value: answers[question.key],
+        value: Object.hasOwn(answers, question.key) ? answers[question.key] : null,
       },
     ];
   });
@@ -428,7 +452,7 @@ export async function viewIn(
   const [visible] = await visibleRows(tx, scope, [row]);
   if (visible === undefined) throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
-  const answers = version === undefined ? [] : answersOf(scope, version.document, row.answers);
+  const answers = version === undefined ? [] : answersOf(scope, version.document, row.answers, { withSkipped: true });
   const touched = await tx
     .select({
       recordId: formSubmissionRecords.recordId,
@@ -910,6 +934,7 @@ export async function deleteSubmission(
         .update(formSubmissions)
         .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
         .where(eq(formSubmissions.id, row.id));
+      await auditSubmissions(context, 'form.submissions_deleted', row.formId, 1);
     },
     hooks,
   );
@@ -927,6 +952,11 @@ export async function restoreSubmission(
     scope,
     async (context) => {
       const { tx } = context;
+      // A form with an answer limit is locked before the submission, as the send path and Delete form lock it first.
+      const capped = await lockCappedForm(
+        tx,
+        (await viewIn(tx, scope, checkId(input.submissionId, UNKNOWN_SUBMISSION), true)).formId,
+      );
       const row = await lockedSubmission(tx, scope, input.submissionId, true);
       const restored = await tx
         .update(formSubmissions)
@@ -934,7 +964,165 @@ export async function restoreSubmission(
         .where(and(eq(formSubmissions.id, row.id), isNotNull(formSubmissions.deletedAt)))
         .returning({ id: formSubmissions.id });
       if (restored.length === 0) throw refuse('FORM_STATE', NOT_DELETED);
+      await auditSubmissions(context, 'form.submissions_restored', row.formId, 1);
+      if (capped !== undefined) await pauseIfFull(context, capped.formId, capped.document);
       return viewIn(tx, scope, row.id);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * One History row for a Delete or its Undo (forms fixes 3), one a request however many it touched: the form and how
+ * many, never which submissions or their answers.
+ */
+async function auditSubmissions(
+  context: Pick<WriteContext, 'tx' | 'scope'>,
+  action: 'form.submissions_deleted' | 'form.submissions_restored',
+  formId: string,
+  submissions: number,
+): Promise<void> {
+  await writeAudit(context.tx, context.scope.workspaceId, context.scope.actor, {
+    action,
+    targetType: 'form',
+    targetId: formId,
+    after: { submissions },
+  });
+}
+
+/**
+ * Before an Undo puts submissions back (forms fixes 3): a live form whose live version closes after N answers is
+ * locked, as the send path locks it, and answered with that version, so the Undo can pause it in the same write once it
+ * holds N again (`pauseIfFull`, which notes the `forms` change). A form with no limit is never locked, as a send leaves
+ * it unlocked. Called before any submission is locked: every form writer locks the form first.
+ */
+async function lockCappedForm(
+  tx: WorkspaceTx,
+  formId: string,
+): Promise<{ readonly formId: string; readonly document: FormDocument } | undefined> {
+  const capOf = async (form: Awaited<ReturnType<typeof loadForm>>) => {
+    if (form?.status !== 'live' || form.liveVersionId === null) return undefined;
+    const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+    return live?.document.closing?.after === undefined ? undefined : { formId: form.id, document: live.document };
+  };
+  if ((await capOf(await loadForm(tx, formId))) === undefined) return undefined;
+  // Read again under the lock: a Publish or a Pause meanwhile decides.
+  return capOf(await loadForm(tx, formId, true));
+}
+
+/** What a bulk Delete or its Undo naming more than `DELETE_SUBMISSIONS_MAX` submissions answers. */
+export const TOO_MANY_SUBMISSIONS = `Pick at most ${DELETE_SUBMISSIONS_MAX.toLocaleString('en')} submissions at a time.`;
+
+/** The ids a bulk call names, once each and in id order (so two calls lock their rows in the same order), checked. */
+function bulkIds(submissionIds: readonly string[]): string[] {
+  const ids = [...new Set(submissionIds)];
+  if (ids.length === 0 || ids.length > DELETE_SUBMISSIONS_MAX)
+    throw inputInvalid('submissionIds', TOO_MANY_SUBMISSIONS);
+  return ids.map((id) => checkId(id, UNKNOWN_SUBMISSION)).sort();
+}
+
+/**
+ * The named submissions of a form the member may see, locked in id order: the deleted ones (`deleted`) or the others.
+ * An id that isn't this form's, is hidden from the member or is in the other state is simply absent, never told apart.
+ */
+async function lockedRows(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  formId: string,
+  ids: readonly string[],
+  deleted: boolean,
+): Promise<readonly Row[]> {
+  const form = await readableForm(tx, scope, formId);
+  const named = (among: readonly string[]) =>
+    and(
+      eq(formSubmissions.formId, form.id),
+      inArray(formSubmissions.id, [...among]),
+      deleted ? isNotNull(formSubmissions.deletedAt) : isNull(formSubmissions.deletedAt),
+    );
+  // Only the rows the member may see are locked (review): a hidden one being filed never waits on this write.
+  const seen = await visibleRows(tx, scope, await tx.select(COLUMNS).from(formSubmissions).where(named(ids)));
+  if (seen.length === 0) return [];
+  // Locked in id order, the state read again under the lock: one that moved meanwhile is left out.
+  return tx
+    .select(COLUMNS)
+    .from(formSubmissions)
+    .where(named(seen.map((row) => row.id)))
+    .orderBy(formSubmissions.id)
+    .for('update');
+}
+
+/**
+ * Deletes many of one form's submissions in one write (forms fixes 3), by the same rules as `deleteSubmission`:
+ * `forms.manage`, soft (kept `DELETED_SUBMISSIONS_KEPT_DAYS` for Undo), the records they made stay, their
+ * notifications go. One still being filed is left as it is and counted in `stillFiling`; one the member can't see, of
+ * another form, or already deleted is counted in `skipped`. Answers the ids it deleted, which Undo
+ * (`restoreSubmissions`) sends back.
+ */
+export async function deleteSubmissions(
+  scope: EngineScope,
+  input: { readonly formId: string; readonly submissionIds: readonly string[] },
+  hooks: readonly AfterWrite[] = [],
+): Promise<DeleteSubmissionsResult> {
+  requirePermission(scope, 'forms.manage');
+  const ids = bulkIds(input.submissionIds);
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const rows = await lockedRows(tx, scope, input.formId, ids, false);
+      // One still being filed waits for its filing, as a single delete refuses it (state review).
+      const isFiling = (row: Row) => row.state === 'received' || row.state === 'processing';
+      const stillFiling = rows.filter(isFiling).length;
+      const deleted = rows.filter((row) => !isFiling(row));
+      const deletedIds = deleted.map((row) => row.id);
+      const formId = deleted[0]?.formId;
+      if (formId !== undefined) {
+        // Their notifications go with them: the inboxes showing one hear of it.
+        await withdrawSubmissionNotices(context, sql`n.submission_id = any(${uuidList(deletedIds)})`);
+        await tx
+          .update(formSubmissions)
+          .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+          .where(inArray(formSubmissions.id, deletedIds));
+        await auditSubmissions(context, 'form.submissions_deleted', formId, deletedIds.length);
+      }
+      return { deletedIds, stillFiling, skipped: ids.length - deletedIds.length - stillFiling };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * Undo for a bulk Delete (forms fixes 3): puts back those of the named submissions that are still in the bin and the
+ * member may see, as `restoreSubmission` does one; their notices stay withdrawn. Answers the ids it put back and how
+ * many it couldn't.
+ */
+export async function restoreSubmissions(
+  scope: EngineScope,
+  input: { readonly formId: string; readonly submissionIds: readonly string[] },
+  hooks: readonly AfterWrite[] = [],
+): Promise<RestoreSubmissionsResult> {
+  requirePermission(scope, 'forms.manage');
+  const ids = bulkIds(input.submissionIds);
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      // A form with an answer limit is locked before its submissions, as the send path and Delete form lock it first.
+      const capped = await lockCappedForm(tx, (await readableForm(tx, scope, input.formId)).id);
+      const rows = await lockedRows(tx, scope, input.formId, ids, true);
+      const restoredIds = rows.map((row) => row.id);
+      const formId = rows[0]?.formId;
+      if (formId !== undefined) {
+        await tx
+          .update(formSubmissions)
+          .set({ deletedAt: null, updatedAt: sql`now()` })
+          .where(inArray(formSubmissions.id, restoredIds));
+        await auditSubmissions(context, 'form.submissions_restored', formId, restoredIds.length);
+        if (capped !== undefined) await pauseIfFull(context, capped.formId, capped.document);
+      }
+      return { restoredIds, skipped: ids.length - restoredIds.length };
     },
     hooks,
   );

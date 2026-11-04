@@ -98,6 +98,46 @@ export function DeleteFormDialog({ data, slug, form, onClose, onDone }: FormConf
   );
 }
 
+/** What the server answers a pause. */
+type Paused = Awaited<ReturnType<DataLayer['forms']['setStatus']>>;
+
+/**
+ * "Pause “Contact us”?": turning a form off ends something (it stops taking submissions and its link says it is
+ * closed), so the forms list asks first (lane 3c; the owner's rule, 21 October 2026). Cancel (ESC), then Pause form.
+ */
+export function PauseFormDialog({ data, slug, form, onClose, onDone }: FormConfirmProps<Paused>) {
+  const { shown, isBusy, failure, commit } = useCommit(
+    form,
+    (each) => data.forms.setStatus(slug, each.id, 'paused'),
+    onDone,
+  );
+  if (shown === undefined) return null;
+  return (
+    <Modal
+      title={strings.pauseTitle(shown.name)}
+      variant="confirm"
+      isOpen={form !== undefined}
+      isBusy={isBusy}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && !isBusy) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy}>
+            {strings.cancel}
+          </Button>
+          <Button variant="primary" isPending={isBusy} onPress={commit}>
+            {strings.pauseFormAction}
+          </Button>
+        </>
+      }
+    >
+      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+      <p>{strings.pauseText}</p>
+    </Modal>
+  );
+}
+
 /** What the server answers a new secret. */
 type Rotated = Awaited<ReturnType<DataLayer['forms']['rotateSecret']>>;
 

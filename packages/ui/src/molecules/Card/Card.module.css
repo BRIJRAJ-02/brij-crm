@@ -88,6 +88,12 @@
     padding-inline: var(--space-16);
   }
 
+  /* A card that is its header alone (a form's email question in Analytics: its count, never its answers) keeps the
+     same room under the header as above it, rather than its description against the bottom edge. */
+  .head:last-child {
+    padding-block-end: var(--space-12);
+  }
+
   .heading {
     display: flex;
     flex: 1;

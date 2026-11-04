@@ -401,6 +401,12 @@
     box-shadow: var(--shadow-focus);
   }
 
+  /* A refused underlined answer: the danger line takes focus's place rather than a blue one stacking under it
+     (critique, 5 November 2026), the doubled line kept while it has focus. After the focus rules it outranks. */
+  .root[data-variant='underline'][data-invalid] .box:focus-within {
+    box-shadow: 0 var(--border-width-thick) 0 var(--danger);
+  }
+
   /* A read only title reached with Tab shows no caret, so keyboard focus
      outlines it in accent-line; writing in an editable one stays ring free. */
   .root[data-variant='title'][data-readonly] .box:has([data-focus-visible]) {
@@ -416,6 +422,14 @@
 
   .root[data-align='end'] .input {
     text-align: end;
+  }
+
+  /* The quiet line under a title (variant="title" size="sm"): the same no box field, in body type and secondary
+     colour, so a form's line under its headline reads as its subtitle rather than a boxed input. */
+  .root[data-variant='title'][data-size='sm'] .input {
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
   }
 
   /* In a popover (a grid cell's editor, a list's search) the popover's own edge frames the field: its focus is

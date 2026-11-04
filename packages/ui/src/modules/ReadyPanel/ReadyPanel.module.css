@@ -109,20 +109,95 @@
     flex: none;
   }
 
-  /* The pill (a form's live dialog and Share tab): the address in a fully rounded pill, the host and path muted and
-     the page's own name strong, so the part that is theirs reads first. */
-  .root[data-variant='pill'] .address {
-    padding-inline: var(--space-12);
-    border-radius: var(--radius-full);
+  /* Share (a form's live dialog and its Share tab, 5 November 2026): one narrow centred column, as a share dialog
+     is drawn. The QR code first, centred; the address and Copy link at the control height, one radius; then one row
+     of equal buttons; then the onward row. The panel is the size container its rows answer to. */
+  .root[data-variant='share'] {
+    container-type: inline-size;
+    inline-size: 100%;
+    max-inline-size: var(--size-page-card);
+    margin-inline: auto;
   }
 
-  .root[data-variant='pill'] .addressStart {
+  .hero {
+    display: flex;
+    justify-content: center;
+  }
+
+  .root[data-variant='share'] .link {
+    flex-wrap: nowrap;
+  }
+
+  .root[data-variant='share'] .address {
+    flex: 1 1 auto;
+    block-size: var(--size-control);
+  }
+
+  .root[data-variant='share'] .addressStart {
     color: var(--text-secondary);
   }
 
-  .root[data-variant='pill'] .addressEnd {
+  .root[data-variant='share'] .addressEnd {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* The ways to pass it on: one row of equal buttons, each the row's share; two to a row only where four would
+     cut their words (a dialog on a phone with a share sheet). Three always keep one row. */
+  .ways {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: var(--space-8);
+  }
+
+  @container (inline-size < 480px) {
+    .ways:has(> :nth-child(4)) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-auto-flow: row;
+    }
+  }
+
+  /* Narrower still (a card on a phone): one button a row, each the column's width, as a dialog's footer stacks. */
+  @container (inline-size < 320px) {
+    .ways,
+    .ways:has(> :nth-child(4)) {
+      grid-template-columns: minmax(0, 1fr);
+      grid-auto-flow: row;
+    }
+  }
+
+  /* Onward: a row with a chevron, a list row rather than a stray underlined link. */
+  .onward {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    block-size: var(--size-row);
+    padding-inline: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    text-decoration: none;
+    outline: none;
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .onwardLabel {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    color: var(--text);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .onward[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .onward[data-focus-visible] {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
   }
 
   /* The QR and the preview share a height (the QR's), side by side; a narrow slot stacks them. */
@@ -221,9 +296,14 @@
     .check {
       animation: none;
     }
+
+    .onward {
+      transition: none;
+    }
   }
 
   @media (forced-colors: active) {
+    .onward,
     .address,
     .preview {
       border-color: CanvasText;

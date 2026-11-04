@@ -1,4 +1,4 @@
-import { useContext, useId, useRef, type ReactNode } from 'react';
+import { useContext, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { mergeProps, useFocusRing, useHover, useRadio } from 'react-aria';
 import { Button as AriaButton, RadioGroup, RadioGroupStateContext } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -91,6 +91,11 @@ export interface ChoiceSelectProps extends ChoiceTilesBase {
    * off.
    */
   readonly autoFocus?: boolean;
+  /**
+   * Enter on a tile, or a double click, picks it and goes on with it (forms fixes 3: the form template gallery, where
+   * Use <name> is the dialog's primary): the same as pressing that primary. Left out, Enter does nothing, as a radio.
+   */
+  readonly onConfirm?: (id: string) => void;
 }
 
 /** A choice grid whose tiles each start something at once (a block kind adds that block). */
@@ -213,11 +218,14 @@ function SelectTile({
   isLarge = false,
   isWide = false,
   autoFocus = false,
+  onConfirm,
 }: {
   readonly tile: ChoiceTile;
   readonly showsDescription: boolean;
   readonly keepsPicture: boolean;
   readonly isLarge?: boolean;
+  /** Enter or a double click goes on with this tile (the grid's `onConfirm`). */
+  readonly onConfirm?: ((id: string) => void) | undefined;
   /** Takes focus as it mounts (the grid's `autoFocus`, on the chosen or first tile). */
   readonly autoFocus?: boolean;
   /** A wide tile (`tileWidth="wide"`): its mark beside both its name and its line. */
@@ -248,9 +256,20 @@ function SelectTile({
   const { focusProps, isFocusVisible } = useFocusRing();
   const { hoverProps, isHovered } = useHover({ isDisabled });
   const tall = showsDescription && keepsPicture && tile.thumbnail !== undefined;
+  const confirm = () => {
+    if (onConfirm === undefined || isDisabled) return;
+    state.setSelectedValue(tile.id);
+    onConfirm(tile.id);
+  };
+  const confirmOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (onConfirm === undefined || event.key !== 'Enter') return;
+    event.preventDefault();
+    confirm();
+  };
   return (
     <label
       {...mergeProps(labelProps, hoverProps)}
+      {...(onConfirm === undefined ? {} : { onDoubleClick: confirm })}
       className={styles.tile}
       data-tile=""
       data-mode="select"
@@ -264,7 +283,11 @@ function SelectTile({
       data-hovered={isHovered || undefined}
       data-focus-visible={isFocusVisible || undefined}
     >
-      <input {...mergeProps(inputProps, focusProps)} ref={inputRef} className={styles.input} />
+      <input
+        {...mergeProps(inputProps, focusProps, { onKeyDown: confirmOnEnter })}
+        ref={inputRef}
+        className={styles.input}
+      />
       <Picture tile={tile} isCompact={showsDescription && !tall} />
       <span id={nameId} className={styles.name}>
         {tile.name}
@@ -348,6 +371,7 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
             isLarge={isLarge}
             isWide={props.tileWidth === 'wide'}
             autoFocus={tile.id === focusId}
+            onConfirm={props.onConfirm}
           />
         </WithTip>
       ))}

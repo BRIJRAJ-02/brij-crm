@@ -32,7 +32,7 @@ New. Settings pages (#39, #42), dashboard tiles (#52) and the template and onboa
 
 ## States
 
-Inline or page; on a page, `md` or `sm` wide. With or without an eyebrow. Its content brings the rest (Skeleton, EmptyState). `isBusy` marks the card `aria-busy` while a Skeleton stands in.
+Inline or page; on a page, `md` or `sm` wide. With or without an eyebrow. A header alone (no content, no footer) keeps `space-12` under it as above it (a form question's count in Analytics, lane 3c). Its content brings the rest (Skeleton, EmptyState). `isBusy` marks the card `aria-busy` while a Skeleton stands in.
 
 ## Keyboard
 

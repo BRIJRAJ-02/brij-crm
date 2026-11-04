@@ -48,6 +48,12 @@ export interface HostedFormPreviewProps {
    * open in the builder (5 November 2026), so the preview shows what the visitor will read after sending.
    */
   readonly ending?: PreviewEnding;
+  /**
+   * `thumbnail` draws the form small, a picture of it for a choice tile (the form template gallery, forms fixes 3,
+   * after Miro's and Typeform's template grids): laid out at a panel's width, then shown at half size, cropped to
+   * its tile, hidden from assistive tech (the tile names it) and never pressed.
+   */
+  readonly size?: 'thumbnail';
 }
 
 /** Where an editable part sits over the ground, in pixels from its corner. */
@@ -72,6 +78,7 @@ export function HostedFormPreview({
   brand,
   onTextChange,
   ending,
+  size,
 }: HostedFormPreviewProps) {
   const layout = form.layout ?? 'classic';
   const shared = {
@@ -84,7 +91,12 @@ export function HostedFormPreview({
   // The ground in the form's own look, so a short form's colour fills the phone to its foot (spec 0058). A change
   // of layout starts the preview again, from its first step.
   return (
-    <div className={styles.ground} data-theme={form.look.colour}>
+    <div
+      className={styles.ground}
+      data-theme={form.look.colour}
+      data-size={size}
+      {...(size === 'thumbnail' ? { 'aria-hidden': true, inert: true } : {})}
+    >
       {layout === 'classic' ? (
         <HostedForm key={`${mode}-${layout}`} {...shared} />
       ) : (

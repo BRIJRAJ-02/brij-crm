@@ -1,5 +1,6 @@
 import type { KeyboardEvent, ReactNode } from 'react';
-import { FieldError, RadioButton, RadioField, RadioGroup as AriaRadioGroup, Text } from 'react-aria-components';
+import { RadioButton, RadioField, RadioGroup as AriaRadioGroup, Text } from 'react-aria-components';
+import { FieldError } from '../FieldError/FieldError.tsx';
 import { FieldLabel } from '../FieldLabel/FieldLabel.tsx';
 import { Icon } from '../Icon/Icon.tsx';
 import type { IconName } from '../Icon/icons.ts';
@@ -166,9 +167,7 @@ export function RadioGroup({
         {children}
       </span>
       {/* React Aria takes a given id over its own, and the group's aria-describedby follows it. */}
-      <FieldError className={styles.error} {...(errorId === undefined ? {} : { id: errorId })}>
-        {error}
-      </FieldError>
+      {error !== undefined && <FieldError {...(errorId === undefined ? {} : { id: errorId })}>{error}</FieldError>}
     </AriaRadioGroup>
   );
 }

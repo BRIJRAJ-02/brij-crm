@@ -1,8 +1,12 @@
-import { useId, useRef, type ReactNode } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
+import { Link as AriaLink } from 'react-aria-components';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import type { IconName } from '../../atoms/Icon/icons.ts';
 import { QrCode } from '../../atoms/QrCode/QrCode.tsx';
+import { safeHref } from '../../lib/safe-href.ts';
+import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import styles from './ReadyPanel.module.css';
 import { strings } from './strings.ts';
 
@@ -48,13 +52,31 @@ export interface ReadyPanelProps {
   readonly copyVariant?: 'primary' | 'secondary';
   /**
    * `panel` (the default): the link under its label in a box, Copy and Share, and the QR code in its own band.
-   * `pill`: the link as one read only pill (the address's start muted, the page's own name strong) with Copy and a
-   * quiet Open, no label over it and no QR band, for a caller that shows its own row of ways to share under it (a
-   * form's live dialog and its Share tab, 5 November 2026).
+   * `share`: one narrow centred column, as a share dialog is drawn (Calendly's, Tally's): the QR code first, then
+   * the address with Copy link beside it (the one primary), then one row of equal buttons, Email, WhatsApp, More
+   * (the device's share sheet, where there is one) and QR code (download as PNG or SVG), then `onward` as a row. A
+   * form's live dialog and its Share tab draw it (the owner, 5 November 2026).
    */
-  readonly variant?: 'panel' | 'pill';
-  /** `pill`: the page to open in a new tab, the quiet Open beside Copy: a real link, so it middle clicks and copies. */
-  readonly openHref?: string;
+  readonly variant?: 'panel' | 'share';
+  /**
+   * `share`: saves the code as an image, handed the code's own SVG. While it runs the QR code button is busy; a
+   * rejection is the caller's to say (a toast). Left out, the panel offers no download.
+   */
+  readonly onDownloadQr?: (kind: ReadyPanelQrKind, code: SVGSVGElement) => Promise<void>;
+  /** `share`: one more place to go, a row with a chevron under the buttons ("Put it on your site"). */
+  readonly onward?: ReadyPanelOnward;
+}
+
+/** The two images the QR code saves as. */
+export type ReadyPanelQrKind = 'png' | 'svg';
+
+/** ReadyPanel's `onward` row: where it goes, and what it does on the way (close the dialog it sits in). */
+export interface ReadyPanelOnward {
+  readonly label: string;
+  /** A path in the app (routed) or a link out. */
+  readonly href: string;
+  readonly icon?: IconName;
+  readonly onPress?: () => void;
 }
 
 /**
@@ -79,12 +101,26 @@ export function ReadyPanel({
   actions,
   copyVariant = 'primary',
   variant = 'panel',
-  openHref,
+  onDownloadQr,
+  onward,
 }: ReadyPanelProps) {
-  const isPill = variant === 'pill';
+  const isShare = variant === 'share';
   const titleId = useId();
   const linkId = useId();
   const linkRef = useRef<HTMLSpanElement>(null);
+  const codeRef = useRef<SVGSVGElement>(null);
+  const [saving, setSaving] = useState<ReadyPanelQrKind | undefined>(undefined);
+  const download = (kind: ReadyPanelQrKind) => {
+    const code = codeRef.current;
+    if (code === null || onDownloadQr === undefined || saving !== undefined) return;
+    setSaving(kind);
+    onDownloadQr(kind, code)
+      .catch(() => undefined)
+      .finally(() => {
+        setSaving(undefined);
+      });
+  };
+  const onwardHref = onward === undefined ? undefined : safeHref(onward.href);
   const canShare = onShare !== undefined || (typeof navigator !== 'undefined' && typeof navigator.share === 'function');
   const share = () => {
     if (onShare !== undefined) {
@@ -120,7 +156,12 @@ export function ReadyPanel({
           </div>
         </div>
       )}
-      {!isPill && (
+      {isShare && (
+        <div className={styles.hero}>
+          <QrCode ref={codeRef} value={link} label={qrLabel} size="sm" />
+        </div>
+      )}
+      {!isShare && (
         <span id={linkId} className={styles.linkLabel} data-probe="edge">
           {linkLabel}
         </span>
@@ -128,7 +169,7 @@ export function ReadyPanel({
       <div
         className={styles.link}
         role="group"
-        {...(isPill ? { 'aria-label': linkLabel } : { 'aria-labelledby': linkId })}
+        {...(isShare ? { 'aria-label': linkLabel } : { 'aria-labelledby': linkId })}
         data-probe="edge row"
       >
         <span ref={linkRef} className={styles.address}>
@@ -145,22 +186,67 @@ export function ReadyPanel({
           value={link}
           label={strings.copyLink}
           announcement={strings.linkCopied}
-          size="lg"
+          size={isShare ? 'md' : 'lg'}
           variant={copyVariant}
           sourceRef={linkRef}
         />
-        {isPill && openHref !== undefined && (
-          <ButtonLink icon="external-link" variant="ghost" size="lg" href={openHref} isExternal>
-            {strings.open}
-          </ButtonLink>
-        )}
-        {!isPill && canShare && (
+        {!isShare && canShare && (
           <Button icon="share" size="lg" onPress={share}>
             {strings.share}
           </Button>
         )}
       </div>
-      {!isPill && (
+      {isShare && (
+        <div className={styles.ways} role="group" aria-label={strings.sendLink}>
+          <ButtonLink
+            icon="mail"
+            href={`mailto:?subject=${encodeURIComponent(shareTitle ?? title ?? link)}&body=${encodeURIComponent(link)}`}
+            isExternal
+          >
+            {strings.email}
+          </ButtonLink>
+          <ButtonLink icon="message-square" href={`https://wa.me/?text=${encodeURIComponent(link)}`} isExternal>
+            {strings.whatsapp}
+          </ButtonLink>
+          {canShare && (
+            <Button icon="share" onPress={share}>
+              {strings.more}
+            </Button>
+          )}
+          {onDownloadQr !== undefined && (
+            <MenuTrigger>
+              <Button icon="download" isPending={saving !== undefined} label={strings.qrCodeName}>
+                {strings.qrCode}
+              </Button>
+              <Menu
+                label={strings.downloadQr}
+                onAction={(key) => {
+                  download(key === 'svg' ? 'svg' : 'png');
+                }}
+              >
+                <MenuItem id="png" icon="download">
+                  {strings.downloadPng}
+                </MenuItem>
+                <MenuItem id="svg" icon="download">
+                  {strings.downloadSvg}
+                </MenuItem>
+              </Menu>
+            </MenuTrigger>
+          )}
+        </div>
+      )}
+      {isShare && onward !== undefined && (
+        <AriaLink
+          className={styles.onward}
+          {...(onwardHref === undefined ? {} : { href: onwardHref })}
+          {...(onward.onPress === undefined ? {} : { onPress: onward.onPress })}
+        >
+          <Icon name={onward.icon ?? 'code'} size="sm" />
+          <span className={styles.onwardLabel}>{onward.label}</span>
+          <Icon name="chevron-right" size="sm" />
+        </AriaLink>
+      )}
+      {!isShare && (
         <div className={styles.visual} data-probe="edge" data-alone={preview === undefined || undefined}>
           <div className={styles.qr}>
             <QrCode value={link} label={qrLabel} size="sm" />

@@ -1,4 +1,13 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { FocusScope, mergeProps, useFocusVisible, useKeyboard } from 'react-aria';
 import { Dialog, Heading } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -14,6 +23,13 @@ export type PanelWidth = 'md' | 'lg';
 
 /** `sheet` runs the page's full height against its end; `floating` sits inset from the edges on `radius-xl`, for the record panel. */
 export type PanelVariant = 'sheet' | 'floating';
+
+/**
+ * How a panel asks the page it opens over to make room for it (`pushesPage`): AppShell provides it, narrowing its main
+ * column by the panel's width while one is open, and the call answers the function that gives the room back. Absent
+ * outside AppShell (a story, a page of its own), where a panel simply lies over the page.
+ */
+export const PanelPushContext = createContext<((width: PanelWidth) => () => void) | undefined>(undefined);
 
 /** Props for Panel. */
 export interface PanelProps {
@@ -44,6 +60,20 @@ export interface PanelProps {
    * above or below in the list the panel was opened from (the record panel).
    */
   readonly onStep?: (step: 'previous' | 'next') => void;
+  /**
+   * The page beside it narrows by its width while it is open (AppShell's main column, bars and all), so nothing on the
+   * page is hidden under it: a submission opened beside its table keeps the table's search and the editor's header in
+   * view. A window too narrow for both (AppShell's compact width) lays it over the page as before. For the `sheet`
+   * variant: a floating panel sits inset from the edge, and the page would give up its width only.
+   */
+  readonly pushesPage?: boolean;
+  /**
+   * `back` draws the close button as Back, an arrow at the head's start, in place of the X at its end: a panel that
+   * fills a phone's screen, where the way out is looked for at the top left. It still calls `onClose`.
+   */
+  readonly closeAs?: 'close' | 'back';
+  /** Back's name, when it says where it goes ("Back to submissions"); "Back" otherwise. */
+  readonly backLabel?: string;
 }
 
 type Phase = 'open' | 'exiting' | 'closed';
@@ -92,8 +122,17 @@ export function Panel({
   isFlush = false,
   isStacked = false,
   onStep,
+  pushesPage = false,
+  closeAs = 'close',
+  backLabel,
 }: PanelProps) {
   const ref = useRef<HTMLElement>(null);
+  const push = useContext(PanelPushContext);
+  // Room is asked for while it is open, and given back as it starts to leave, so the page widens under its exit.
+  useEffect(() => {
+    if (!pushesPage || !isOpen || push === undefined) return;
+    return push(width);
+  }, [pushesPage, isOpen, push, width]);
   const subtitleId = useId();
   const phase = usePresence(isOpen, ref);
   const { isFocusVisible } = useFocusVisible();
@@ -134,6 +173,9 @@ export function Panel({
       >
         <Dialog className={styles.dialog} {...(subtitle === undefined ? {} : { 'aria-describedby': subtitleId })}>
           <header className={styles.head}>
+            {closeAs === 'back' && (
+              <Button variant="ghost" size="sm" icon="arrow-left" label={backLabel ?? strings.back} onPress={onClose} />
+            )}
             {leading}
             {subtitle === undefined ? (
               <Heading slot="title" className={styles.title}>
@@ -151,7 +193,7 @@ export function Panel({
             )}
             <span className={styles.actions}>
               {actions}
-              <Button variant="ghost" icon="x" label={strings.close} onPress={onClose} />
+              {closeAs === 'close' && <Button variant="ghost" icon="x" label={strings.close} onPress={onClose} />}
             </span>
           </header>
           <div className={styles.body} data-flush={isFlush || undefined} data-stacked={isStacked || undefined}>

@@ -151,6 +151,7 @@ describe('@crm/ui', () => {
       'Popover',
       'PreviewFrame',
       'PreviewLayout',
+      'PreviewPage',
       'ProgressBar',
       'ProviderMark',
       'PublishBar',

@@ -159,6 +159,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
     ...((count?.review ?? 0) === 0 ? {} : { reviewCount: count?.review }),
     ...(count?.last === undefined || count.last === null ? {} : { lastSubmissionAt: count.last }),
     submissionCount: count?.total ?? 0,
+    questionCount: draft.document.questions.filter((question) => question.answerType !== 'hidden').length,
     updatedAt: form.updatedAt,
     createdAt: form.createdAt,
     draftNumber: draft.number,
@@ -240,6 +241,11 @@ export async function listForms(
           number | null
         >`(select v.number from ${formVersions} v where v.workspace_id = ${forms.workspaceId} and v.id = ${forms.liveVersionId})`,
         updatedAt: sql<string>`${millis('forms.updated_at')}`,
+        // The draft's questions, a hidden one left out (a link's tag, not something asked): the card's meta line.
+        questionCount: sql<number>`(select count(*)::int from ${formVersions} v,
+          jsonb_array_elements(coalesce(v.document -> 'questions', '[]'::jsonb)) q
+          where v.workspace_id = ${forms.workspaceId} and v.id = ${forms.draftVersionId}
+            and q ->> 'answerType' is distinct from 'hidden')`,
       })
       .from(forms)
       .where(input.archived ? eq(forms.status, 'archived') : ne(forms.status, 'archived'))
@@ -264,6 +270,7 @@ export async function listForms(
         ...((count?.review ?? 0) === 0 ? {} : { reviewCount: count?.review }),
         ...(count?.last === undefined || count.last === null ? {} : { lastSubmissionAt: count.last }),
         submissionCount: count?.total ?? 0,
+        questionCount: row.questionCount,
         updatedAt: row.updatedAt,
       };
     });
@@ -1068,7 +1075,8 @@ export async function publishForm(
   requirePermission(scope, 'forms.manage');
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       let form = await visibleForm(tx, scope, input.formId, true);
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you publish it.');
       checkRevision(form, input.expectedRevision);
@@ -1171,7 +1179,7 @@ export async function publishForm(
         true,
       );
       // A version that closes after fewer answers than the form already has goes live closed (forms fixes 2).
-      await pauseIfFull(tx, form.id, draft.document);
+      await pauseIfFull(context, form.id, draft.document);
       const published = await loadForm(tx, form.id);
       if (published === undefined) throw new Error('The form went away under its publish.');
       return viewOf(tx, scope, published);
@@ -1240,7 +1248,8 @@ export async function applyFormSettings(
   requirePermission(scope, 'forms.manage');
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const form = await visibleForm(tx, scope, input.formId, true);
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
@@ -1314,7 +1323,7 @@ export async function applyFormSettings(
           true,
         );
         // Closes after fewer answers than it has: closed now.
-        if (input.settings.closing !== undefined) await pauseIfFull(tx, form.id, nextLive);
+        if (input.settings.closing !== undefined) await pauseIfFull(context, form.id, nextLive);
       }
       const saved = await loadForm(tx, form.id);
       if (saved === undefined) throw new Error('The form went away under its change.');
@@ -1456,7 +1465,8 @@ export async function setFormStatus(
   requirePermission(scope, 'forms.manage');
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const form = await visibleForm(tx, scope, input.formId, true);
       const next = nextStatus(form, input.status);
       if (next === undefined) {
@@ -1476,6 +1486,8 @@ export async function setFormStatus(
         }
       }
       await touchForm(tx, scope, form.id, { status: next, archivedAt: next === 'archived' ? sql`now()` : null }, false);
+      // Other tabs hear of it (forms fixes 3): one `forms` row naming nothing, as an automatic pause stores.
+      context.record({ forms: [form.id] });
       const moved = await loadForm(tx, form.id);
       if (moved === undefined) throw new Error('The form went away under its change.');
       return viewOf(tx, scope, moved);

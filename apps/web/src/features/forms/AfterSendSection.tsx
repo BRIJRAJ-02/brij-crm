@@ -1,7 +1,7 @@
 // Brief
 // Purpose: what happens after someone sends a form (T39, 5 November 2026), at the end of the Form tab, read as
-// sentences: each rule "If Budget is Under $1k → A different thank-you message", then "Everyone else sees
-// [Thank you page]"; then the score, once a question gives points.
+// sentences: each rule "If Budget is Under $1k → A different thank-you message", then one card of labelled rows,
+// Show [Thank you page] and Message (forms fixes 3); then the score, once a question gives points.
 // Main task: say what each person sees next, in one place, each part changed where it is read.
 // Leaves out: which step jumps where (each step's own logic, above).
 import type { BookingPageView, FormDocument, FormTargetChoices, RoutingRule } from '@crm/data';
@@ -97,7 +97,7 @@ function factsOf(draft: FormDocument): readonly Fact[] {
 
 /**
  * After they send, as sentences (T39): the rules first, in the order they are tried ("If … → …"), each in a card
- * with its ⋯, then one quiet "+ Send some people somewhere else", then what everyone else sees. A thank-you message
+ * with its ⋯, under a head holding "+ Add a route", then what everyone else sees as labelled rows. A thank-you message
  * only a step's jump reaches has its own card, saying which step sends people there.
  */
 export function AfterSendSection(props: AfterSendSectionProps) {
@@ -122,7 +122,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
   // A thank-you message switched away from is kept here, so switching back brings its words back.
   const parked = useRef(new Map<string, FormEnding>());
 
-  /** + Send some people somewhere else: a ready rule to a new thank-you message (or a page, or a link), focused. */
+  /** + Add a route: a ready rule to a new thank-you message (or a page, or a link), focused. */
   const addRule = () => {
     if (isRulesFull || ready === undefined) return;
     const ruleId = newId();
@@ -570,33 +570,39 @@ export function AfterSendSection(props: AfterSendSectionProps) {
 
   return (
     <SettingsStack variant="plain">
-      <SectionBar title={strings.afterSend} />
+      {/* The section's head holds the way to add a route (forms fixes 3, after Calendly's Routes card): a secondary
+          button, never faint text floating over the card. */}
+      <SectionBar
+        title={strings.afterSend}
+        {...(isReadOnly
+          ? {}
+          : {
+              end:
+                cantAdd === undefined ? (
+                  <Button ref={addRef} variant="secondary" icon="plus" onPress={addRule}>
+                    {strings.sendSome}
+                  </Button>
+                ) : (
+                  <Tooltip content={cantAdd}>
+                    <Button ref={addRef} variant="secondary" icon="plus" isDisabled>
+                      {strings.sendSome}
+                    </Button>
+                  </Tooltip>
+                ),
+            })}
+      />
       {rules.map(ruleCard)}
       {loose.map(looseCard)}
-      {!isReadOnly && (
-        <span>
-          {cantAdd === undefined ? (
-            <Button ref={addRef} variant="ghost" icon="plus" onPress={addRule}>
-              {strings.sendSome}
-            </Button>
-          ) : (
-            <Tooltip content={cantAdd}>
-              <Button ref={addRef} variant="ghost" icon="plus" isDisabled>
-                {strings.sendSome}
-              </Button>
-            </Tooltip>
-          )}
-        </span>
-      )}
-      <Card>
+      {/* Everyone (else): one card of labelled rows (forms fixes 3). */}
+      <Card {...(rules.length > 0 || loose.length > 0 ? { title: strings.everyoneElse } : {})}>
         <AfterDefault
           slug={slug}
           draft={draft}
           pages={pages.status}
           pageList={pageList}
           usable={usable}
-          hasRules={rules.length > 0 || loose.length > 0}
           isFocused={props.focusRow === AFTER_ROW}
+          hasRules={rules.length > 0 || loose.length > 0}
           isReadOnly={isReadOnly}
           showGaps={showGaps}
           onDraftChange={onDraftChange}
@@ -673,7 +679,7 @@ interface AfterDefaultProps {
   readonly pages: 'ready' | 'loading' | 'error' | 'no-access';
   readonly pageList: readonly BookingPageView[];
   readonly usable: readonly BookingPageView[];
-  /** Some rule sends people elsewhere: the line reads "Everyone else". */
+  /** Some route sends people elsewhere: Show is named "Show everyone else". */
   readonly hasRules: boolean;
   /** Brought into focus as the tab shows (a link to it). */
   readonly isFocused: boolean;
@@ -688,9 +694,9 @@ interface AfterDefaultProps {
 type AfterKind = FormDocument['after']['kind'];
 
 /**
- * "Everyone sees [Thank you page]" (T39): one sentence, its words edited under it; a booking page reads "Everyone
- * sees [A booking page] [Intro call] after [5 seconds]", a link "Everyone sees [A link] [https://…]". Switching keeps
- * what each choice held, so going back loses nothing.
+ * What everyone (else) sees, as labelled rows in its card (forms fixes 3, the owner: the sentence read unfinished):
+ * Show [Thank you page], then Message; a booking page adds Booking page and Countdown, a link its Address. Switching
+ * keeps what each choice held, so going back loses nothing. The routes above keep their sentences.
  */
 function AfterDefault({
   slug,
@@ -789,13 +795,13 @@ function AfterDefault({
           {strings.pageGone(!isReadOnly)}
         </Callout>
       )}
-      <Sentence>
-        {hasRules ? strings.everyoneElseSees : strings.everyoneSees}
+      <SettingsRow title={strings.afterShow} control="compact">
         <Select
           triggerRef={kindRef}
-          label={strings.everyoneGets}
+          // Named for what its row says (label in name): "Show everyone", "Show everyone else" once a route exists.
+          label={strings.showEveryone(hasRules)}
           isLabelHidden
-          variant="inline"
+          size="sm"
           savesOnPick
           items={[
             { id: 'message', label: strings.afterKindThanks },
@@ -808,12 +814,14 @@ function AfterDefault({
             if (value === 'message' || value === 'redirect' || value === 'booking') choose(value);
           }}
         />
-        {after.kind === 'booking' && !isBookingPending && (
-          <>
+      </SettingsRow>
+      {after.kind === 'booking' && !isBookingPending && (
+        <>
+          <SettingsRow title={strings.bookingPage} control="field">
             <Select
               label={strings.bookingPage}
               isLabelHidden
-              variant="inline"
+              size="sm"
               savesOnPick
               items={[
                 ...usable.map((page) => ({ id: page.id, label: page.title })),
@@ -839,14 +847,16 @@ function AfterDefault({
                 );
               }}
             />
+          </SettingsRow>
+          <SettingsRow title={strings.countdown} control="compact">
             <Select
               label={strings.countdown}
               isLabelHidden
-              variant="inline"
+              size="sm"
               savesOnPick
               items={COUNTDOWNS.map((seconds) => ({
                 id: String(seconds),
-                label: seconds === 0 ? strings.countdownInLine : strings.countdownAfterInLine(seconds),
+                label: seconds === 0 ? strings.countdownAtOnce : strings.countdownAfter(seconds),
               }))}
               value={String(after.countdownSeconds)}
               isReadOnly={isReadOnly}
@@ -860,30 +870,36 @@ function AfterDefault({
                 );
               }}
             />
-          </>
-        )}
-      </Sentence>
+          </SettingsRow>
+        </>
+      )}
       {isBookingPending && usable.length > 0 && (
-        <Select
-          label={strings.bookingPage}
-          placeholder={strings.pickBookingPage}
-          items={usable.map((page) => ({ id: page.id, label: strings.pageItem(page.title, page.durations[0] ?? 30) }))}
-          value={null}
-          isReadOnly={isReadOnly}
-          onChange={(id) => {
-            if (id === null) return;
-            setBookingPending(false);
-            onDraftChange((before) => ({
-              ...before,
-              after: {
-                kind: 'booking',
-                bookingPageId: id,
-                countdownSeconds: kept.countdownSeconds,
-                message: before.after.kind === 'redirect' ? kept.message : before.after.message,
-              },
-            }));
-          }}
-        />
+        <SettingsRow title={strings.bookingPage} control="field">
+          <Select
+            label={strings.bookingPage}
+            isLabelHidden
+            placeholder={strings.pickBookingPage}
+            items={usable.map((page) => ({
+              id: page.id,
+              label: strings.pageItem(page.title, page.durations[0] ?? 30),
+            }))}
+            value={null}
+            isReadOnly={isReadOnly}
+            onChange={(id) => {
+              if (id === null) return;
+              setBookingPending(false);
+              onDraftChange((before) => ({
+                ...before,
+                after: {
+                  kind: 'booking',
+                  bookingPageId: id,
+                  countdownSeconds: kept.countdownSeconds,
+                  message: before.after.kind === 'redirect' ? kept.message : before.after.message,
+                },
+              }));
+            }}
+          />
+        </SettingsRow>
       )}
       {isBookingPending && usable.length === 0 && (
         <EmptyState
@@ -905,24 +921,27 @@ function AfterDefault({
         </EmptyState>
       )}
       {isBookingPending ? null : after.kind === 'redirect' ? (
-        <Field
-          label={strings.linkAddress}
-          {...(redirectError === undefined ? {} : { error: redirectError })}
-          type="url"
-          value={after.url}
-          onBlur={() => {
-            setAddressLeft(true);
-          }}
-          isRequired
-          isReadOnly={isReadOnly}
-          onChange={(url) => {
-            onDraftChange((before) => ({ ...before, after: { kind: 'redirect', url } }));
-          }}
-        />
+        <SettingsRow title={strings.linkAddress} control="field">
+          <Field
+            label={strings.linkAddress}
+            isLabelHidden
+            {...(redirectError === undefined ? {} : { error: redirectError })}
+            type="url"
+            value={after.url}
+            onBlur={() => {
+              setAddressLeft(true);
+            }}
+            isRequired
+            isReadOnly={isReadOnly}
+            onChange={(url) => {
+              onDraftChange((before) => ({ ...before, after: { kind: 'redirect', url } }));
+            }}
+          />
+        </SettingsRow>
       ) : after.kind === 'message' ? (
+        // Its words take the card's width under their label (a SettingsRow column was too narrow for a message).
         <Field
-          label={strings.thankYou}
-          isLabelHidden
+          label={strings.afterMessage}
           placeholder={strings.thankYouDefault}
           isMultiline
           value={after.message}

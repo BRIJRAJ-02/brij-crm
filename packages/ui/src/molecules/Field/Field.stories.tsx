@@ -329,6 +329,14 @@ export const Title: Story = {
         error="Keep the title to 200 characters."
       />
       <Field label="Disabled title" isLabelHidden variant="title" isWrapping isDisabled defaultValue="Kickoff call" />
+      <Field
+        label="Line under it"
+        isLabelHidden
+        variant="title"
+        size="sm"
+        isWrapping
+        placeholder="Add a line under it"
+      />
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
@@ -383,6 +391,25 @@ export const UnderlineStates: Story = {
       <Field label="Job title" variant="underline" isDisabled />
     </Stage>
   ),
+};
+
+/** Underline refused and focused: the doubled line is danger too, never blue under red (5 November 2026). */
+export const UnderlineInvalidFocused: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="dialog">
+      <Field label="Work email" variant="underline" value="ada@" error="Enter an email address." />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const input = canvas.getByRole('textbox', { name: 'Work email' });
+    await userEvent.click(input);
+    await expect(input).toHaveFocus();
+    const box = input.parentElement;
+    const style = box === null ? undefined : getComputedStyle(box);
+    // The line under the words and the focus line under it are one colour: the border's.
+    await expect(style?.boxShadow ?? '').toContain(style?.borderBottomColor ?? 'none');
+  },
 };
 
 export const OptionalMark: Story = {

@@ -265,7 +265,12 @@
     padding-block-start: 0;
   }
 
-  .stack[data-variant='plain'] > .row {
+  .stack[data-variant='flush'] {
+    padding-block-start: 0;
+  }
+
+  .stack[data-variant='plain'] > .row,
+  .stack[data-variant='flush'] > .row {
     padding-block-start: 0;
     border-block-start: none;
   }

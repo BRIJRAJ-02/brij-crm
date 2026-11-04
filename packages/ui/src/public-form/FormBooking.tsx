@@ -121,7 +121,7 @@ export function FormBooking({ state, mode, heading, url, seconds, text, summary 
             setHeld(false);
           }}
         >
-          <Button variant="primary" size="lg" ref={primary} onPress={go}>
+          <Button variant="primary" size="public" ref={primary} onPress={go}>
             {words.bookATime}
           </Button>
           {!isStaying && !hasGone && (

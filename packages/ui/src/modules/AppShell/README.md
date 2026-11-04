@@ -27,6 +27,7 @@ New. The artifact composed its screens by hand from the shell pieces; every scre
 - A skip link ("Skip to content") comes first in the tab order and shows while it has focus; it jumps past the sidebar to the main column.
 - Below `bp-page-compact` (1024px) the sidebar folds to its rail and stays folded, through `AppShellContext` (`isCompact`).
 - The view is a size container (`container-type: inline-size`), so a view adapts to its own width; the panel takes its content's width.
+- A Panel opened with `pushesPage` asks the shell for room (`PanelPushContext`): the main column takes `data-pushed` and gives up the panel's width at its end, bars and all, so the panel never covers the page's tools. It snaps rather than slides (animating the padding would lay the page out again every frame); the panel's own slide carries the motion. Not at the compact width, where a panel fills the screen.
 
 ## States
 

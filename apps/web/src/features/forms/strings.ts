@@ -47,6 +47,8 @@ export const strings = {
   turnOffFailed: (name: string) => `Couldn’t pause ${name}. It’s still live.`,
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
+  /** Under a list with more to load: how many are shown so far. */
+  submissionsShown: (n: number) => `${count(n, 'submission', 'submissions')} shown`,
   noSubmissionsYet: 'No submissions yet',
   /** A draft card's one action: back into its builder to finish it and publish. */
   editDraft: 'Edit',
@@ -57,12 +59,26 @@ export const strings = {
   addressPending: '/f/…',
   thisMonth: (n: number) => `${count(n, 'submission', 'submissions')} this month`,
   spam: (n: number) => `${new Intl.NumberFormat().format(n)} spam`,
-  accepting: 'Taking answers',
+  accepting: 'Taking submissions',
   notAccepting: 'Paused',
+  /** The list card's state badge for a form never published (lane 3c: a badge, never a greyed title). */
+  draftBadge: 'Draft',
+  /** The card's meta line (lane 3c, Klaviyo's list): "5 questions · edited 2h ago · 4 submissions". */
+  editedAgo: (when: string) => `edited ${when}`,
+  /** The list's sort (lane 3c), the record lists' sort chip: by when it changed, or by name. */
+  sortLabel: 'Sort forms',
+  sortUpdated: 'Updated',
+  sortName: 'Name',
+  /** Turning a form off from the list asks first: it ends something (lane 3c). */
+  pauseForm: 'Pause',
+  resumeForm: 'Resume',
+  pauseTitle: (name: string) => `Pause “${name}”?`,
+  pauseText: 'It stops taking submissions until you resume it. Its link says it’s closed.',
+  pauseFormAction: 'Pause form',
   /** The forms list (forms fix a9): when the last answer came, a form's answers since the reader last looked, and
    * the way to its Submissions. */
   lastAnswer: (when: string) => `last ${when}`,
-  newAnswers: 'New answers',
+  newAnswers: 'New submissions',
   openSubmissions: 'Submissions',
   openSubmissionsOf: (name: string) => `Open the submissions to ${name}`,
   notPublishedYet: 'Not published',
@@ -94,7 +110,12 @@ export const strings = {
   formLine: 'Line under the title',
   formLinePlaceholder: 'Add a line under it (optional)',
   previewOpen: 'Preview',
-  previewNotLive: 'Preview, not live. Answers are checked here, and nothing is sent.',
+  previewNotLive: 'Preview · nothing is sent',
+  /** The full page Preview's bar (lane 3c): the way back, and Desktop or Phone. */
+  backToEditor: 'Back to editor',
+  previewDevice: 'Preview on',
+  previewDesktop: 'Desktop',
+  previewPhone: 'Phone',
   publish: 'Publish',
   /** The ⋯ menu's way back to the live form, and its confirm (it loses work, so it asks first). */
   discardChanges: 'Discard changes',
@@ -158,8 +179,6 @@ export const strings = {
   theme: 'Brand',
   themeBrand: 'Workspace brand',
   themePlain: 'Plain',
-  /** The one button over the preview that holds the look (5 November 2026): Colour, Corners and Colours. */
-  design: 'Design',
   /** Said under Brand colours while the workspace has neither a colour nor a logo saved. */
   themeBrandEmpty: 'Add your logo and colour in Settings › Brand.',
   /** The workspace logo over the form reads as nothing: the headline beside it already names the form. */
@@ -176,24 +195,17 @@ export const strings = {
   liveTitle: 'Your form is live',
   /** The live dialog's one line (T44): the form's own name, then "is live". */
   liveTitleOf: (name: string) => `${name} is live`,
-  /** The live dialog's line on where answers go: "Answers go to People · 1 new field: Budget". */
+  /** The live dialog's footer line on where answers go, Change after it: "Answers go to People · 1 new field: Budget". */
   liveFiling: (objectName: string, made: readonly string[]) =>
     made.length === 0
-      ? `Answers go to ${objectName}.`
-      : `Answers go to ${objectName} · ${made.length === 1 ? '1 new field' : `${String(made.length)} new fields`}: ${made.join(', ')}.`,
+      ? `Answers go to ${objectName}`
+      : `Answers go to ${objectName} · ${made.length === 1 ? '1 new field' : `${String(made.length)} new fields`}: ${made.join(', ')}`,
   /** Opens where the live dialog's line is changed (Settings › CRM). */
   changeFiling: 'Change',
-  /** The live dialog's quiet way to the Share tab's embeds. */
+  /** The live dialog's row to the Share tab's embeds. */
   putOnSite: 'Put it on your site',
   qrLabel: 'QR code for the form’s link',
-  qrDownload: 'Download the QR code',
-  qrPng: 'PNG',
-  qrSvg: 'SVG',
   qrDownloadFailed: 'The QR code didn’t download. Try again.',
-  sendLink: 'Send the link',
-  sendEmail: 'Email',
-  sendWhatsapp: 'WhatsApp',
-  sendMore: 'More',
   name: 'Name',
   /** An example of a name, never the name an unnamed form gets: Publish refuses a blank one. */
   namePlaceholder: 'Contact us',
@@ -294,25 +306,31 @@ export const strings = {
   copyLineDefault: 'Thanks, we got it. We will come back to you soon.',
   /** Closes (forms fix b2): when the form stops taking answers by itself, and what it says then. */
   closesRow: 'Closes',
-  closesHelp: 'Stop taking answers on a day, or after enough have come in. Pause stops it now.',
+  closesHelp: 'Stop taking submissions on a day, or after enough have come in. Pause stops it now.',
   closesNever: 'Never',
   closesOnDate: 'On a date',
-  closesAfterCount: 'After a number of answers',
+  closesAfterCount: 'After a number of submissions',
   closesDay: 'Last day',
   closesPast: 'Pick today or a day to come.',
   closesCountError: (max: number) => `Give a whole number from 1 to ${max.toLocaleString('en')}.`,
   /** Under a setting that waits for Publish on a live form (forms review): said, not only in a hover tip. */
-  closesCount: 'Number of answers',
+  closesCount: 'Number of submissions',
   closedMessageRow: 'Message when closed',
-  closedMessageDefault: 'This form isn’t taking answers right now.',
+  closedMessageDefault: 'This form isn’t taking enquiries right now.',
   /** Settings' groups (the owner, 5 November 2026: less text never means less structure). */
   groupForm: 'Form',
   groupCrm: 'CRM',
   groupEmails: 'Emails',
-  groupAnswers: 'Answers',
+  groupAnswers: 'Submissions',
   /** How long the workspace keeps answers (critique b S2): said here, changed in Settings › General. */
-  keptRow: 'Answers kept',
-  keptHelp: 'How long every form’s answers are kept is set for the whole workspace, in Settings › General.',
+  keptRow: 'Keep submissions',
+  keptHelp:
+    'Set for the whole workspace: every form keeps them this long, and Settings › General says the same. Older ones are deleted nightly; the people they made stay.',
+  /** Under Keep submissions: it is the workspace's, so its reach is said in view. */
+  keptAllForms: 'Every form in this workspace',
+  keptEveryForm: 'This applies to every form in the workspace.',
+  /** Settings › Spam with nothing caught: the way to the filter anyway (lane 3c). */
+  spamView: 'View spam',
   keptForever: 'Until deleted',
   keptMonths: (months: number) => `For ${String(months)} months`,
   /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
@@ -323,6 +341,14 @@ export const strings = {
     'Saving to Deals keeps no person, so there is no one to email back. Save to People with a deal instead; answers saved on the deal stay there.',
   dealsMove: 'Save to People',
   alsoDealTip: 'Each submission also adds a deal, linked to the person and their company.',
+  /**
+   * Turning Also create a deal off when questions are saved on the deal (forms fixes 3): they become Not filed, and
+   * turning it back on doesn't file them again, so it asks first rather than offering an Undo that can't put them back.
+   */
+  dealOffTitle: 'Stop creating deals?',
+  dealOffText: (questions: number) =>
+    `${questions === 1 ? '1 question is' : `${String(questions)} questions are`} saved on the deal. ${questions === 1 ? 'Its answers' : 'Their answers'} will stay with each submission instead, and turning deals back on won’t save ${questions === 1 ? 'it' : 'them'} on the deal again.`,
+  dealOffAction: 'Stop creating deals',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
     `Changes here go live when you publish. Until then, submissions are still saved to ${objectName}.`,
@@ -380,7 +406,7 @@ export const strings = {
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
   /** The Share tab's first Card: the form's link (not "Share" again under the Share tab). */
-  linkTitle: 'Link',
+  linkTitle: 'Share the link',
   shareTip: 'Opens the form on its own page.',
   link: 'Link',
   copy: 'Copy',
@@ -413,6 +439,9 @@ export const strings = {
   embedButtonText: 'Contact us',
   embedSnippet: 'Embed snippet',
   advancedTitle: 'For developers',
+  advancedHint: 'Prefill links, your own HTML, allowed sites and signed posts.',
+  advancedOpen: 'Open',
+  advancedOpenName: 'Open For developers',
   ownFormTitle: 'Your own HTML',
   ownFormSnippet: 'Form HTML',
   taggingText:
@@ -622,9 +651,16 @@ export const strings = {
   restoredSome: (n: number, of: number) => `Restored ${String(n)} of ${String(of)}.`,
   restoredMany: (n: number) =>
     n === 1 ? 'Submission restored.' : `${count(n, 'submission', 'submissions')} restored.`,
-  deletingMany: 'Deleting…',
   deletedMany: (n: number) => `${count(n, 'submission', 'submissions')} deleted.`,
-  deletedSome: (done: number, of: number) => `Deleted ${String(done)} of ${String(of)}; the rest are still picked.`,
+  /** Said after a bulk delete when some could not be deleted here (gone already, or not this form's). */
+  deleteSkipped: (n: number) => (n === 1 ? 'One couldn’t be deleted.' : `${String(n)} couldn’t be deleted.`),
+  /** Over what one delete takes (forms fixes 3). */
+  deleteTooMany: (most: number) => `Pick at most ${String(most)} to delete at once.`,
+  /** Said after a bulk delete when some were still being added to the CRM, so they stayed (forms fixes 3). */
+  stillFilingKept: (n: number) =>
+    n === 1
+      ? 'One is still being added to the CRM, so it stays.'
+      : `${String(n)} are still being added to the CRM, so they stay.`,
   /** Marks the answers not saved on the record, when some were. */
   notSavedMark: 'Not saved',
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
@@ -756,7 +792,7 @@ export const strings = {
   analyticsNoMedian: 'No finishes yet',
   analyticsQuestion: 'Question',
   analyticsSummary: 'Headline figures',
-  analyticsCompletions: 'Finished',
+  analyticsSubmissions: 'Submissions',
   analyticsDirect: 'Direct',
   analyticsEmpty: 'No visits yet',
   analyticsEmptyText: 'Numbers show here once people open the form.',
@@ -766,10 +802,6 @@ export const strings = {
   analyticsNoneInRange: 'No visits in this period',
   analyticsNoneInRangeText: 'Try a longer period.',
   analyticsFailed: 'Analytics didn’t load',
-  /** A question card's chip (AC-6322): "82% answered", or nothing at all when nobody reached it. */
-  analyticsChip: (answered: string) => `${answered} answered`,
-  /** What the chip's percentage is of, as its tooltip: the denominator, which the card has no room to say. */
-  analyticsReached: (answered: string, reached: string) => `${answered} of the ${reached} who reached this question`,
 
   status: {
     draft: 'Not published',
@@ -781,14 +813,18 @@ export const strings = {
   // page sit at the end of a form. Endings, routing and the score live here, never in Settings.
   afterSend: 'After they send',
   /** The one line of what everyone gets (T39): "Everyone sees [Thank you page]", "Everyone else" once a rule exists. */
-  everyoneSees: 'Everyone sees',
-  everyoneElseSees: 'Everyone else sees',
-  everyoneGets: 'What everyone else sees',
+  /** What everyone gets, as labelled rows (forms fixes 3): Show, then Message, Booking page or Address. */
+  afterShow: 'Show',
+  afterMessage: 'Message',
+  /** The default card's title once a rule sends some people elsewhere. */
+  everyoneElse: 'Everyone else',
+  /** Show's own name, said as its row reads (label in name). */
+  showEveryone: (isElse: boolean) => (isElse ? 'Show everyone else' : 'Show everyone'),
   afterKindThanks: 'Thank you page',
-  afterKindBooking: 'A booking page',
-  afterKindLink: 'A link',
-  /** The quiet line that adds a rule. */
-  sendSome: 'Send some people somewhere else',
+  afterKindBooking: 'Booking page',
+  afterKindLink: 'Link',
+  /** The button in After they send's head that adds a rule. */
+  sendSome: 'Add a route',
   sendSomeNeedsQuestion: 'Add a question with choices first, so a rule has something to read.',
   rulesFull: (most: number) => `A form holds ${String(most)} rules.`,
   /** A rule's destination, after its arrow. */
@@ -805,8 +841,6 @@ export const strings = {
   ruleDeleted: 'Rule deleted.',
   addCondition: 'Add a condition',
   /** A booking page's countdown, in the sentence: "after 5 seconds". */
-  countdownInLine: 'at once',
-  countdownAfterInLine: (seconds: number) => `after ${String(seconds)} seconds`,
   ifWord: 'If',
   /** A used question deleted with the rules that read it (T41), one Undo for both. */
   deletedWithRules: (label: string, count: number) =>
@@ -818,6 +852,8 @@ export const strings = {
       : `${String(count)} rules named that choice, so they went too.`,
   /** The Logic count in the Questions header (T41): every rule, and how many need a look. */
   logicButton: (count: number) => `Logic · ${String(count)}`,
+  /** Why Logic · n is off: no question or step carries a rule (forms fixes 3). */
+  logicNone: 'No question has rules yet. Add one from a question’s ⋯.',
   logicButtonWarn: (count: number, warnings: number) => `Logic · ${String(count)}, ${String(warnings)} to check`,
   /** A thank-you message only a step's jump reaches: said, with where its rule is changed. */
   sentByStep: (step: string) => `${step} sends some people to this thank-you message`,
@@ -842,7 +878,7 @@ export const strings = {
   saveAnswersTo: 'Save answers to',
   onlySubmissions: 'Only in Submissions',
   emailEach: 'Email each submission to',
-  acceptingRow: 'Taking answers',
+  acceptingRow: 'Taking submissions',
   acceptingHelp: 'Turn off to close the form. Visitors see that it is closed.',
   spamRow: 'Spam',
   linkHelp: 'Links with the old address keep working.',
@@ -852,5 +888,32 @@ export const strings = {
   savingChangedToast: (where: string) => `Answers will save to ${where} once you publish.`,
   savingOffToast: 'Answers will stay in Submissions once you publish.',
   // Analytics (T22)
-  analyticsFinishedOf: (finished: string, started: string) => `${finished} of ${started} who started finished`,
+  analyticsFinishedOf: (finished: string, started: string) => `${finished} of ${started} who started`,
+  // Analytics, lane 3c: four figures with a line each, and the Answers section (Sprig's results, Tally's insights).
+  analyticsStarted: (started: string) => `${started} started`,
+  analyticsInPeriod: (days: number) => `In the last ${String(days)}\u00a0days`,
+  analyticsNoStarts: 'No starts counted yet',
+  analyticsCountingSince: (day: string) => `Counted since ${day}`,
+  analyticsTimeLine: 'First answer to send',
+  analyticsAnswers: 'Answers',
+  analyticsResponses: (n: number, shown: string) => (n === 1 ? '1 response' : `${shown} responses`),
+  /** A Submissions figure past what the read counts ("5,000+"), and the Answers line then. */
+  analyticsAtLeast: (shown: string) => `${shown}+`,
+  analyticsAnswersLatest: (shown: string) => `From the latest ${shown} submissions.`,
+  analyticsNoAnswers: 'Nobody answered this yet',
+  analyticsAnswersOf: (question: string) => `Answers to ${question}`,
+  analyticsLatestOf: (question: string) => `Latest answers to ${question}`,
+  analyticsLatest: 'Latest answers',
+  analyticsAnswer: 'Answer',
+  analyticsShare: 'Share',
+  analyticsBar: 'Share of responses',
+  analyticsPicked: 'Picked',
+  analyticsPickedOf: (count: string, total: string) => `${count} of ${total}`,
+  // The submission panel (lane 3c)
+  backToSubmissions: 'Back to submissions',
+  openRecord: (name: string) => `Open ${name}`,
+  analyticsYes: 'Yes',
+  analyticsNo: 'No',
+  analyticsAgreed: 'Agreed',
+  analyticsNotAgreed: 'Not agreed',
 } as const;

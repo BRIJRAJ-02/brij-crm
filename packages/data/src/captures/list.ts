@@ -222,6 +222,13 @@ export function createCaptureList<Item extends { readonly id: string }>(deps: Ca
         },
       } satisfies CaptureListView<Item>,
 
+      /** Someone else changed the list (a live event): read again now when held, else when next held. */
+      changed() {
+        epoch += 1;
+        isStale = true;
+        if (held > 0) read().catch(() => undefined);
+      },
+
       async write<Answer>(write: ListWrite<Item, Answer>): Promise<Answer> {
         epoch += 1;
         writing += 1;
@@ -266,6 +273,10 @@ export function createCaptureList<Item extends { readonly id: string }>(deps: Ca
     /** Sends a write, showing it in the list as `write` says; answers what the server did, or rejects as it did. */
     write: <Answer>(workspace: string, write: ListWrite<Item, Answer>): Promise<Answer> =>
       listOf(workspace).write(write),
+    /** A live event says the workspace's list changed: a held one reads again now, any other when next held. */
+    changed: (workspace: string): void => {
+      lists.get(workspace)?.changed();
+    },
     /** Forgets every list (sign out). */
     clear: () => {
       lists.clear();

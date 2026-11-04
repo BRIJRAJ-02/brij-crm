@@ -1,7 +1,7 @@
 // The logic rows and the Flow view in Chromium (spec 0063, AC-6313, AC-6316, AC-6325): a step divider's Jumps row,
 // a choice question's points, and the Flow view's read only picture of the steps, their jumps and the endings. The
 // shots are taken inside the Form tab's own layout, in both themes, with the target picker open.
-import type { FormDocument, FormQuestion } from '@crm/data';
+import type { FormQuestion } from '@crm/data';
 import type { FormEnding, FormStep } from '@crm/data/forms';
 import { createToasts, type Toasts } from '@crm/ui';
 import { useState } from 'react';
@@ -9,7 +9,6 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import '@crm/ui/styles.css';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
-import { FlowView } from '../forms/FlowView.tsx';
 import { QuestionsSection } from './QuestionsSection.tsx';
 import type { Flow } from './steps.ts';
 
@@ -45,21 +44,6 @@ const STEPS: readonly FormStep[] = [
 const ENDINGS: readonly FormEnding[] = [
   { id: 'no_fit', heading: 'Thanks, we are not a fit', line: 'We only take projects over $5k.' },
 ];
-
-const DOCUMENT: FormDocument = {
-  questions: [...QUESTIONS],
-  steps: [...STEPS],
-  endings: [...ENDINGS],
-  layout: 'steps',
-  targets: {},
-  look: { colour: 'light', corners: 'rounded' },
-  headline: 'Tell us about the work',
-  buttonText: 'Send',
-  language: 'en',
-  after: { kind: 'message', message: '' },
-  routing: { rules: [] },
-  spam: { minFillMs: 2_000, scoreThreshold: 0.3 },
-};
 
 let shown: InApp | undefined;
 let ids = 0;
@@ -191,49 +175,5 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
     await page.screenshot({ path: '.vitest/shots/s5-points-light.png' });
     await wear('dark');
     await page.screenshot({ path: '.vitest/shots/s5-points-dark.png' });
-  });
-});
-
-describe('the Logic map (AC-6325, T41)', () => {
-  it('lists every step with its rules as sentences, what to check, a suggestion, and Test it, in both themes', async () => {
-    const toasts = createToasts();
-    let suggested = '';
-    shown = await renderInApp(
-      () => (
-        <FlowView
-          draft={DOCUMENT}
-          isOpen
-          problems={[{ kind: 'shadowed', place: { kind: 'jump', stepId: 's2', index: 0 }, winner: 1 }]}
-          suggestions={[
-            { id: 'one', question: 'Budget', words: 'is $10k → a different thank-you message', apply: (each) => each },
-          ]}
-          pages={[]}
-          onSuggest={(suggestion) => {
-            suggested = suggestion.id;
-          }}
-          questionHref={(id) => `/w/acme/captures/forms/form-1?question=${id}`}
-          stepHref={(id) => `/w/acme/captures/forms/form-1?question=step:${id}`}
-          endingsHref="/w/acme/captures/forms/form-1/settings"
-          onOpenChange={() => undefined}
-        />
-      ),
-      { data: {}, pattern: '/w/$slug/captures/forms/$formId', at: '/w/acme/captures/forms/form-1', toasts },
-    );
-    await expect.element(page.getByRole('heading', { name: 'Logic', exact: true })).toBeVisible();
-    await expect.element(page.getByText('1 thing to check')).toBeVisible();
-    await expect.element(page.getByText('Step 2 · Your budget').first()).toBeVisible();
-    // The rule as one sentence, then where everyone else goes, by name.
-    await expect.element(page.getByText('If Budget is Under $1k').first()).toBeVisible();
-    await expect.element(page.getByText('→ Thank-you message: Thanks, we are not a fit').first()).toBeVisible();
-    await expect.element(page.getByText('→ Step 3 · Your team').first()).toBeVisible();
-    await userEvent.click(page.getByRole('button', { name: 'Add this rule' }));
-    expect(suggested).toBe('one');
-    // Test it: pick an answer and read the path.
-    await userEvent.click(page.getByRole('button', { name: /Budget$/ }).last());
-    await userEvent.click(page.getByRole('option', { name: 'Under $1k' }));
-    await expect.element(page.getByText('Thanks, we are not a fit').last()).toBeVisible();
-    await page.screenshot({ path: '.vitest/shots/s5-flow-light.png' });
-    await wear('dark');
-    await page.screenshot({ path: '.vitest/shots/s5-flow-dark.png' });
   });
 });

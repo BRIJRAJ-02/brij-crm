@@ -98,7 +98,9 @@ export const StepErrors: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(canvas.getByLabelText('Your name')).toHaveFocus());
-    await waitFor(() => expect(canvas.getByText('2 answers need a look')).toBeInTheDocument());
+    // Each problem under its own question, and no summary repeating them (the design critique, 5 November 2026).
+    await expect(canvas.getAllByText('Answer this question.')).toHaveLength(2);
+    await expect(canvas.queryByText(/need(s)? a look/)).toBeNull();
     await expect(canvas.getByRole('progressbar', { name: 'Step 1 of 3' })).toBeInTheDocument();
   },
 };
@@ -148,26 +150,31 @@ export const StepsDarkSquare: Story = {
 export const Conversational: Story = {
   args: { form: ONE_BY_ONE },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Start' }));
     await expect(canvas.getByRole('progressbar', { name: '1 of 7' })).toBeInTheDocument();
     await expect(canvas.getByRole('textbox', { name: 'Your name' })).toBeInTheDocument();
   },
 };
 
-/** Enter goes on to the next question, which takes focus; an optional one says so. */
-/** One at a time opens on its welcome screen (T42): the headline once, its line, Start and "press Enter ↵". */
-export const ConversationalWelcome: Story = {
+/**
+ * One at a time opens straight on its first question (the owner, 5 November 2026): no welcome screen and no Start,
+ * the headline small above question 1, and OK as tall as the field's public size, wider than tall.
+ */
+export const ConversationalOpensOnQuestion: Story = {
+  parameters: { crm: { screenshot: false } },
   args: { form: ONE_BY_ONE },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: 'Start' })).toBeInTheDocument();
-    await expect(canvas.queryByRole('textbox')).toBeNull();
+    await expect(canvas.queryByRole('button', { name: 'Start' })).toBeNull();
+    await expect(canvas.getByRole('heading', { name: ONE_BY_ONE.headline })).toBeVisible();
+    await expect(canvas.getByRole('textbox', { name: 'Your name' })).toBeInTheDocument();
+    const ok = canvas.getByRole('button', { name: /OK/ }).getBoundingClientRect();
+    await expect(ok.width).toBeGreaterThanOrEqual(2 * ok.height);
   },
 };
 
+/** Enter goes on to the next question, which takes focus; an optional one says so. */
 export const ConversationalNext: Story = {
   args: { form: ONE_BY_ONE },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Start' }));
     await userEvent.type(canvas.getByRole('textbox', { name: 'Your name' }), 'Ada Lovelace{Enter}');
     await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Work email' })).toHaveFocus());
     await userEvent.type(canvas.getByRole('textbox', { name: 'Work email' }), 'ada@example.com{Enter}');
@@ -180,10 +187,32 @@ export const ConversationalNext: Story = {
 export const ConversationalError: Story = {
   args: { form: ONE_BY_ONE },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Start' }));
     await userEvent.click(canvas.getByRole('button', { name: /OK/ }));
     await waitFor(() => expect(canvas.getByText('Answer this question.')).toBeInTheDocument());
     await expect(canvas.getByRole('progressbar', { name: '1 of 7' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * One at a time with Finish later (a page that keeps fills): its words start on OK's edge (`align="start"`), not
+ * offset by the quiet button's own inset.
+ */
+export const ConversationalFinishLater: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    form: ONE_BY_ONE,
+    onSave: () =>
+      Promise.resolve({
+        resumeToken: 'a'.repeat(43),
+        resumeUrl: `https://forms.example.com/f/enquiry?resume=${'a'.repeat(43)}`,
+        expiresAt: '2026-12-03T00:00:00.000Z',
+      }),
+  },
+  play: async ({ canvas }) => {
+    const later = await canvas.findByRole('button', { name: /Finish later/ });
+    const ok = canvas.getByRole('button', { name: /OK/ });
+    const label = later.querySelector('span') ?? later;
+    await expect(Math.abs(label.getBoundingClientRect().left - ok.getBoundingClientRect().left)).toBeLessThanOrEqual(2);
   },
 };
 
@@ -202,7 +231,6 @@ export const ConversationalChoice: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Start' }));
     await userEvent.click(canvas.getByRole('radio', { name: '5k to 20k' }));
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(canvas.getByRole('progressbar', { name: '2 of 2' })).toBeInTheDocument());
@@ -261,7 +289,6 @@ export const ConversationalPicks: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Start' }));
     await userEvent.click(canvas.getByRole('radio', { name: 'Over 20k' }));
     await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Your name' })).toHaveFocus());
     await expect(canvas.getByRole('progressbar', { name: '2 of 2' })).toBeInTheDocument();
@@ -278,7 +305,6 @@ export const ConversationalLongAnswer: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Start' }));
     await userEvent.type(canvas.getByRole('textbox', { name: 'Your name' }), 'Ada{Enter}');
     const message = canvas.getByRole('textbox', { name: 'What do you need? (optional)' });
     await waitFor(() => expect(message).toHaveFocus());
@@ -310,7 +336,6 @@ export const ConversationalDescription: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Start' }));
     await expect(canvas.getByText('As you would like us to address you.')).toBeInTheDocument();
     await expect(canvas.getByRole('group', { name: 'Your name' })).toHaveAccessibleDescription(
       'As you would like us to address you.',

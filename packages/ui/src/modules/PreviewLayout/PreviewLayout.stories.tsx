@@ -11,7 +11,8 @@ import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkPage } from '../LinkPage/LinkPage.tsx';
 import { HostedFormPreview } from '../HostedFormPreview/HostedFormPreview.tsx';
-import { EditorStatus, PhonePreview, PreviewFrame, PreviewLayout } from './PreviewLayout.tsx';
+import { SectionBar } from '../../molecules/SectionBar/SectionBar.tsx';
+import { EditorStatus, PhonePreview, PreviewFrame, PreviewLayout, PreviewPage } from './PreviewLayout.tsx';
 
 const FORM: PublicForm = {
   key: 'contact-us',
@@ -444,6 +445,53 @@ export const WideShare: Story = {
 };
 
 /**
+ * On a sunken canvas (`previewSurface="canvas"`), the frame as tall as what it shows and centred, the heading left to
+ * screen readers; and laid out at a laptop's width (`previewDevice="desktop"`). Forms fixes 3, the form editor.
+ */
+export const CanvasDesktop: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout
+        previewShare="wide"
+        previewSurface="canvas"
+        previewDevice="desktop"
+        preview={
+          <LinkPage
+            isPreview
+            person={{ name: 'Anish Gupta', id: 'anish' }}
+            blocks={[{ kind: 'link', id: 'site', title: 'timefix.com', href: 'https://www.timefix.com', hue: 'sky' }]}
+          />
+        }
+      >
+        <Card title="Blocks">
+          <Field label="Title" value="timefix.com" />
+        </Card>
+      </PreviewLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('complementary', { name: 'Preview' })).toBeInTheDocument();
+  },
+};
+
+/** The same canvas at a phone's width (the default device). */
+export const CanvasPhone: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout
+        previewShare="wide"
+        previewSurface="canvas"
+        preview={<LinkPage isPreview person={{ name: 'Anish Gupta', id: 'anish' }} blocks={[]} />}
+      >
+        <Card title="Blocks">
+          <Field label="Title" value="timefix.com" />
+        </Card>
+      </PreviewLayout>
+    </Stage>
+  ),
+};
+
+/**
  * The phone on its own (`PhonePreview`): no "Preview" heading and no
  * controls, for a place whose own title already says what the page is (first
  * run, spec 0036). A page that fits, and one that runs past the phone's foot,
@@ -467,6 +515,25 @@ export const PhoneOnItsOwn: Story = {
   ),
 };
 
+/**
+ * The phone filling a pane given to it alone (`size="pane"`, forms fixes 3): the form template gallery's side pane,
+ * where the capped phone sat small in a tall empty pane. No breath above or below, and no page card cap.
+ */
+export const PhoneFillsPane: Story = {
+  render: () => (
+    <Stage height="page" width="narrow">
+      <PhonePreview size="pane">
+        <LinkPage
+          isPreview
+          person={{ name: 'Ada Lovelace', id: 'ada' }}
+          address={{ label: 'timefix.com/ada', value: 'https://timefix.com/ada' }}
+          blocks={[{ kind: 'page', id: 'intro', title: 'Intro call', href: '/ada/intro', facts: '30 min' }]}
+        />
+      </PhonePreview>
+    </Stage>
+  ),
+};
+
 /** A draft's Preview in a tab of its own (spec 0068): the frame alone, the window's full height, still inert. */
 export const PageSize: Story = {
   parameters: { crm: { screenshot: false } },
@@ -479,4 +546,49 @@ export const PageSize: Story = {
     const frame = await waitFor(() => canvas.getByTitle('Preview of Intro call'));
     await expect(frame).toHaveAttribute('tabindex', '-1');
   },
+};
+
+/**
+ * A form's Preview in a tab of its own (lane 3c): the bar, the banner, then the page in exactly the height left, so
+ * the form's foot ends at the window's foot; `device="phone"` draws it in the editors' phone.
+ */
+function PreviewPageExample({ device }: { readonly device: 'desktop' | 'phone' }) {
+  return (
+    <Stage height="page" width="fill">
+      <PreviewPage
+        device={device}
+        bar={
+          <SectionBar
+            variant="bar"
+            isTitleQuiet
+            start={
+              <Button variant="ghost" icon="arrow-left">
+                Back to editor
+              </Button>
+            }
+            title="Contact us"
+          />
+        }
+        banner={
+          <Callout placement="banner" tone="info">
+            Preview · nothing is sent
+          </Callout>
+        }
+      >
+        <HostedFormPreview form={FORM} mode="page" logo={LOGO} />
+      </PreviewPage>
+    </Stage>
+  );
+}
+
+export const PreviewPageDesktop: Story = {
+  render: () => <PreviewPageExample device="desktop" />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Contact us' })).toBeInTheDocument();
+    await expect(canvas.getByText('Preview · nothing is sent')).toBeInTheDocument();
+  },
+};
+
+export const PreviewPagePhone: Story = {
+  render: () => <PreviewPageExample device="phone" />,
 };

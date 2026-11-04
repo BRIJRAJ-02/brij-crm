@@ -37,8 +37,7 @@
      as the whole screen, and the answer in a larger type, drawn from the spacing scale as the touch sizes are until
      the design system has an answer size. The lines under them (the error, Saved) take the label size the card
      worked out, so they stay small. */
-  .form[data-layout='conversational'],
-  .welcome {
+  .form[data-layout='conversational'] {
     --size-input: calc(2 * var(--space-24));
     --text-body: 400 var(--space-20) / var(--space-32) var(--font-sans);
 
@@ -50,8 +49,7 @@
      transform only, about a quarter second; under reduced motion a crossfade alone. */
   /* The two never share a frame (critique c, 8): the leaving one goes in the exit's time, then this one comes in,
      a little blurred as it starts, over the dialog's time. */
-  .form[data-enter],
-  .welcome[data-enter] {
+  .form[data-enter] {
     animation: step-in var(--duration-modal) var(--ease-out) var(--duration-exit) backwards;
   }
 
@@ -121,21 +119,20 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* The welcome screen (T42): the headline, its line, then Start, a step apart; it leaves upwards like a question. */
-  .welcome {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-32);
+  @media (pointer: coarse) {
+    .actions[data-layout='conversational'] {
+      --size-input: calc(var(--space-20) + var(--space-24));
+    }
   }
 
-  /* "press Enter ↵" beside Start and OK, quiet, and only where there is a keyboard. */
+  /* "press Enter ↵" beside OK: small and quiet (the app's label size, never the question's), centred on the
+     button, and only where there is a keyboard. */
   .enter {
     display: inline-flex;
     gap: var(--space-4);
     align-items: center;
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    color: var(--text-tertiary);
+    font: 400 var(--space-12) / var(--space-16) var(--font-sans);
   }
 
   @media (pointer: coarse) {
@@ -154,13 +151,26 @@
     margin-block-start: var(--space-24);
   }
 
+  /* On a page the arrows and the place sit at the window's foot at every width (critique, 5 November 2026: at 390
+     they floated mid page under a short question), the end side on a wide window, a full width bar on a phone, over
+     the page's ground so the foot scrolls clear under it. */
+  .nav[data-mode='page'] {
+    position: fixed;
+    z-index: var(--z-sticky);
+    inset-block-end: 0;
+    inset-inline: 0;
+    justify-content: flex-end;
+    margin: 0;
+    padding: var(--space-12) var(--space-20);
+    background: var(--surface);
+  }
+
   @media (width >= 1024px) {
     .nav[data-mode='page'] {
-      position: fixed;
-      z-index: var(--z-sticky);
       inset-block-end: var(--space-24);
-      inset-inline-end: var(--space-24);
-      margin: 0;
+      inset-inline: auto var(--space-24);
+      padding: 0;
+      background: none;
     }
   }
 
@@ -188,8 +198,13 @@
     margin-block-start: var(--space-4);
   }
 
-  /* One at a time the block reads from its start edge, so Saved and Finish later sit under OK, not in the middle. */
+  /* One at a time the block reads from its start edge, so Saved and Finish later sit under OK, not in the middle.
+     Its buttons take the form's public size back, the same as Continue and Send in Classic and Steps, rather than
+     the question's larger field. */
   .actions[data-layout='conversational'] {
+    --size-input: calc(2 * var(--space-20));
+    --text-body: 400 var(--space-16) / var(--space-24) var(--font-sans);
+
     align-items: flex-start;
   }
 

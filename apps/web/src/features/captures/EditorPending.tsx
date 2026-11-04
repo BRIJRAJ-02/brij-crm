@@ -26,23 +26,13 @@ export interface EditorPendingProps {
   };
   /** The shown tab's own skeleton, in place of the cards and preview (a form's Submissions: its table's rows). */
   readonly content?: ReactNode;
-  /** The sidebar row the page belongs to (Forms for a form's editor). */
-  readonly currentPage?: 'captures' | 'forms';
 }
 
 /**
  * The editor's layout with skeleton content: the TopBar loading, each card titled and busy, and the preview's
  * place, so the editor lands where its skeleton stood.
  */
-export function EditorPending({
-  title,
-  icon,
-  cards,
-  notices,
-  tabs,
-  content,
-  currentPage = 'captures',
-}: EditorPendingProps) {
+export function EditorPending({ title, icon, cards, notices, tabs, content }: EditorPendingProps) {
   const layout = content ?? (
     <PreviewLayout preview={<Skeleton shape="block" />} {...(notices === undefined ? {} : { notices })}>
       {cards.map((card) => (
@@ -54,7 +44,7 @@ export function EditorPending({
   );
   return (
     <WorkspacePage
-      currentPage={currentPage}
+      currentPage="captures"
       page={{
         topBar: <TopBar title={title} icon={icon} isLoading />,
         body:

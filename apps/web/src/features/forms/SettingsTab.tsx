@@ -31,6 +31,7 @@ import {
   DatePicker,
   Field,
   InfoTip,
+  Modal,
   Select,
   SettingsRow,
   SettingsSection,
@@ -40,7 +41,8 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { generalSettingsHref } from '../settings/nav.ts';
+import { useCan } from '../workspace/WorkspacePage.tsx';
+import { KeepSubmissionsRow } from './KeepSubmissions.tsx';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
@@ -291,7 +293,8 @@ export function SettingsTab({
   onSettingsChange,
   keepMonths,
 }: SettingsTabProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const canChangeWorkspace = useCan('workspace.manage');
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
 
@@ -438,9 +441,25 @@ export function SettingsTab({
   const ownerError = settings.fieldError('owner') ?? ownerProblem;
   const notifyError = settings.fieldError('notifyMemberIds');
   const tip = (label: string, text: string) => <InfoTip label={label}>{text}</InfoTip>;
+  // Also create a deal, turned off (forms fixes 3): questions saved on the deal become Not filed, and turning it back
+  // on doesn't save them there again, so no Undo could put them back. With any saved there it asks first (the house
+  // rule: an ending action asks in a Modal unless Undo works); with none, it just turns off.
+  const [isDealOffOpen, setDealOffOpen] = useState(false);
+  const dealQuestions = draft.questions.filter((question) => question.filedOn?.objectRole === 'deal').length;
+  const setDeal = (isOn: boolean) => {
+    if (deals === undefined) return;
+    onSettingsChange({ deal: isOn }, (before) => {
+      const { deal: _deal, ...rest } = before.targets;
+      if (isOn) return { ...before, targets: { ...rest, deal: { objectId: deals.id } } };
+      // No deal, so nothing is saved on one: those answers stay with the submission.
+      return { ...before, targets: rest, questions: before.questions.map(offDeal) };
+    });
+  };
 
   return (
-    <SettingsStack width="readable">
+    // The full width Settings › General uses (lane 3c): the labels at the start, the controls at the end, no dead
+    // column beside a 780px one.
+    <SettingsStack>
       <SettingsSection title={strings.groupForm}>
         {isPublished && (
           <>
@@ -477,7 +496,8 @@ export function SettingsTab({
                 onSubmit={settings.leaveAddress}
                 {...(linkError === undefined ? {} : { error: linkError })}
               />
-              <CopyButton value={link} label={strings.copyLink} isIconOnly />
+              {/* At the field's own height: one control height on the row (lane 3c). */}
+              <CopyButton value={link} label={strings.copyLink} isIconOnly size="lg" />
             </SettingsRow>
           </>
         )}
@@ -630,16 +650,38 @@ export function SettingsTab({
               isSelected={draft.targets.deal !== undefined}
               isReadOnly={isReadOnly}
               onChange={(isOn) => {
-                onSettingsChange({ deal: isOn }, (before) => {
-                  const { deal: _deal, ...rest } = before.targets;
-                  if (isOn) return { ...before, targets: { ...rest, deal: { objectId: deals.id } } };
-                  // No deal, so nothing is saved on one: those answers stay with the submission.
-                  return { ...before, targets: rest, questions: before.questions.map(offDeal) };
-                });
+                if (!isOn && dealQuestions > 0) {
+                  setDealOffOpen(true);
+                  return;
+                }
+                setDeal(isOn);
               }}
             />
           </SettingsRow>
         )}
+        <Modal
+          title={strings.dealOffTitle}
+          variant="confirm"
+          tone="danger"
+          isOpen={isDealOffOpen}
+          onOpenChange={setDealOffOpen}
+          actions={
+            <>
+              <Button slot="close">{strings.cancel}</Button>
+              <Button
+                variant="danger-solid"
+                onPress={() => {
+                  setDealOffOpen(false);
+                  setDeal(false);
+                }}
+              >
+                {strings.dealOffAction}
+              </Button>
+            </>
+          }
+        >
+          <p>{strings.dealOffText(dealQuestions)}</p>
+        </Modal>
         {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
         {isFiling && (
           <SettingsRow title={strings.owner} meta={tip(strings.owner, ownerTip)} control="field">
@@ -746,12 +788,21 @@ export function SettingsTab({
       </SettingsSection>
       <SettingsSection title={strings.groupAnswers}>
         {/* How long answers are kept is the workspace's (Settings › General); the form says it, and where to change it. */}
+        {/* The workspace's own setting, under its own name, as a field height Select (lane 3c): it was a 26px
+            button off to Settings › General among field height controls. */}
         {keepMonths !== undefined && (
-          <SettingsRow title={strings.keptRow} meta={tip(strings.keptRow, strings.keptHelp)}>
-            <ButtonLink variant="secondary" href={generalSettingsHref(slug)}>
-              {keepMonths === null ? strings.keptForever : strings.keptMonths(keepMonths)}
-            </ButtonLink>
-          </SettingsRow>
+          <KeepSubmissionsRow
+            data={data}
+            slug={slug}
+            months={keepMonths}
+            canChange={canChangeWorkspace && !isReadOnly}
+            onSaved={(message, undo) => {
+              toasts.toast({ tone: 'success', message, action: { label: strings.undo, onAction: undo } });
+            }}
+            onFailed={(message) => {
+              toasts.toast({ tone: 'danger', message });
+            }}
+          />
         )}
         {isPublished && (
           // Review opens where something waits: Needs review first, else Spam; with neither, it says so instead of
@@ -761,14 +812,15 @@ export function SettingsTab({
             meta={tip(strings.spamRow, strings.spamSummary)}
             {...(form.reviewCount === undefined && form.spamCount === 0 ? { description: strings.spamNone } : {})}
           >
-            {(form.reviewCount !== undefined || form.spamCount > 0) && (
-              <ButtonLink
-                href={`${formHref(slug, form.id, 'submissions')}&state=${form.reviewCount === undefined ? 'spam' : 'needs_review'}`}
-                variant="secondary"
-              >
-                {strings.spamReview}
-              </ButtonLink>
-            )}
+            {/* Review opens where something waits; with nothing caught, View spam still opens the filter, so where
+                spam goes is never a guess (lane 3c). At the field's height, as every control here. */}
+            <ButtonLink
+              href={`${formHref(slug, form.id, 'submissions')}&state=${form.reviewCount === undefined ? 'spam' : 'needs_review'}`}
+              variant="secondary"
+              size="lg"
+            >
+              {form.reviewCount !== undefined || form.spamCount > 0 ? strings.spamReview : strings.spamView}
+            </ButtonLink>
           </SettingsRow>
         )}
       </SettingsSection>

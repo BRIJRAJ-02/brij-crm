@@ -79,6 +79,10 @@ let shown: InApp | undefined;
 const used: string[] = [];
 /** What Delete and Undo asked the server for, in order. */
 const calls: string[] = [];
+/** Whether a bulk delete is refused, so the rows come back. */
+let deleteRefused = false;
+/** Holds a bulk delete's answer until the test lets it land, so the rows can be seen gone meanwhile. */
+let landDelete: (() => void) | undefined;
 /** Whether the small export is refused as too large, so the job takes it. */
 let exportTooLarge = false;
 
@@ -92,6 +96,8 @@ afterEach(() => {
   used.length = 0;
   calls.length = 0;
   exportTooLarge = false;
+  deleteRefused = false;
+  landDelete = undefined;
 });
 
 async function show(open: SubmissionView | undefined, spamCount = 2) {
@@ -108,6 +114,21 @@ async function show(open: SubmissionView | undefined, spamCount = 2) {
       delete: (_slug: string, submissionId: string) => {
         calls.push(`delete ${submissionId}`);
         return Promise.resolve({ deleted: true });
+      },
+      deleteMany: (_slug: string, _formId: string, ids: readonly string[]) => {
+        calls.push(`deleteMany ${ids.join(',')}`);
+        if (deleteRefused) {
+          return Promise.reject(Object.assign(new Error('Try again.'), { name: 'DataError', code: 'INTERNAL' }));
+        }
+        return new Promise((resolve) => {
+          landDelete = () => {
+            resolve({ deletedIds: [...ids], stillFiling: 0, skipped: 0 });
+          };
+        });
+      },
+      restoreMany: (_slug: string, _formId: string, ids: readonly string[]) => {
+        calls.push(`restoreMany ${ids.join(',')}`);
+        return Promise.resolve({ restoredIds: [...ids], skipped: 0 });
       },
       exportNow: () => {
         calls.push('exportNow');
@@ -178,9 +199,11 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     await expect.poll(() => app.router.state.location.href).toContain(`submission=${id(2)}`);
   });
 
-  it('deletes in one click, asking nothing, and Undo puts it back and opens it again (forms fixes 2)', async () => {
+  it('deletes from ⋯ asking nothing, and Undo puts it back and opens it again (forms fixes 2, lane 3c)', async () => {
     const app = await show(OPEN);
-    await userEvent.click(page.getByRole('button', { name: 'Delete', exact: true }));
+    // Delete sits in the footer's ⋯ (lane 3c): the footer's end holds the one primary.
+    await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'More actions' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Delete' }));
     expect(page.getByRole('button', { name: 'Delete submission' }).query()).toBeNull();
     expect(calls).toEqual([`delete ${id(1)}`]);
     await expect.element(page.getByText('Submission deleted.')).toBeVisible();
@@ -188,6 +211,29 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     await expect.poll(() => calls).toEqual([`delete ${id(1)}`, `restore ${id(1)}`]);
     await expect.element(page.getByText('Submission restored.')).toBeVisible();
     await expect.poll(() => app.router.state.location.href).toContain(`submission=${id(1)}`);
+  });
+
+  it('deletes the picked ones in one request, gone at once, and one Undo brings them back (forms fixes 3)', async () => {
+    await show(undefined);
+    await userEvent.click(page.getByRole('checkbox', { name: 'Select All' }), { force: true });
+    await userEvent.click(page.getByRole('button', { name: 'Delete', exact: true }));
+    expect(calls.filter((call) => call.startsWith('deleteMany'))).toHaveLength(1);
+    // Gone at once, while the request is still out.
+    await expect.element(page.getByRole('row').filter({ hasText: 'Ada Lovelace' })).not.toBeInTheDocument();
+    landDelete?.();
+    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+    await expect.poll(() => calls.filter((call) => call.startsWith('restoreMany'))).toHaveLength(1);
+    await expect.element(page.getByRole('row').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
+  });
+
+  it('brings the rows back, still picked, when a bulk delete is refused (forms fixes 3)', async () => {
+    deleteRefused = true;
+    await show(undefined);
+    await userEvent.click(page.getByRole('checkbox', { name: 'Select All' }), { force: true });
+    await userEvent.click(page.getByRole('button', { name: 'Delete', exact: true }));
+    await expect.element(page.getByText('Try again.')).toBeVisible();
+    await expect.element(page.getByRole('row').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
+    await expect.element(page.getByRole('checkbox', { name: 'Select All' })).toBeChecked();
   });
 
   it('reads each row as two lines on a phone, with nothing to scroll sideways (forms fixes 2)', async () => {
@@ -201,8 +247,9 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
       expect(person.width).toBeLessThanOrEqual(1);
       const selectAll = document.querySelector('thead [data-handle]')?.getBoundingClientRect();
       expect(selectAll?.width ?? 0).toBeGreaterThan(1);
-      const frame = document.querySelector('[data-phone="rows"]')?.parentElement;
-      expect(frame === null || frame === undefined ? 0 : frame.scrollWidth - frame.clientWidth).toBeLessThanOrEqual(0);
+      // The table's own frame (its rows run out to the tab's edges, so the frame, not its parent, is the box to check).
+      const frame = document.querySelector('[data-phone="rows"]');
+      expect(frame === null ? 0 : frame.scrollWidth - frame.clientWidth).toBeLessThanOrEqual(0);
       // The person on the first line, when under it.
       const name = row.getByRole('rowheader').element().getBoundingClientRect();
       const when = row.getByRole('gridcell').nth(2).element().getBoundingClientRect();

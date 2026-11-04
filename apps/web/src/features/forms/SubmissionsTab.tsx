@@ -14,8 +14,10 @@ import {
   type SubmissionView,
 } from '@crm/data';
 import {
+  AppShellContext,
   Menu,
   MenuItem,
+  MenuSeparator,
   MenuTrigger,
   Avatar,
   Badge,
@@ -40,11 +42,11 @@ import {
   TruncatedText,
   type TableColumn,
 } from '@crm/ui';
+import { DELETE_SUBMISSIONS_MAX } from '@crm/data/forms';
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
 import { formatDate, StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useContext, useEffect, useState } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { recordLinks } from '../records/timeline.ts';
 import { AnswerList, answerText, holdsFile, PhoneAnswer } from '../questions/AnswerList.tsx';
@@ -54,7 +56,6 @@ import { spamReason } from './spam-reason.ts';
 import { markSeen } from './seen.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
-import { useFormToolbarSlot } from './toolbarSlot.ts';
 
 /** Props for the Submissions tab: what its route loaded through the data layer. */
 export interface SubmissionsTabProps {
@@ -98,6 +99,7 @@ const ALL = 'all';
 
 /** The email column's id: a question's id is lower case letters, digits, - and _, so none looks like it. */
 const EMAIL_COLUMN = ':email';
+
 const FILTERS: readonly SubmissionState[] = ['processed', 'needs_review', 'spam', 'failed'];
 
 /** Each state's dot: filed green, a look needed orange, failed red, the rest gray. */
@@ -140,7 +142,6 @@ export function SubmissionsTab({
   hasSubmissions,
   spamCount = 0,
 }: SubmissionsTabProps) {
-  const slot = useFormToolbarSlot();
   // Opening the answers clears the form's New on the list, for this reader in this browser (forms critique c).
   useEffect(() => {
     markSeen(slug, formId);
@@ -165,7 +166,16 @@ export function SubmissionsTab({
     more.for === page
       ? more
       : { for: page, items: [], ...(page.nextCursor === undefined ? {} : { next: page.nextCursor }) };
-  const rows = [...page.items, ...held.items];
+  // Deleted here and not yet confirmed or brought back (forms fixes 3): hidden at once, shown again on a refusal or
+  // an Undo.
+  const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
+  const rows = [...page.items, ...held.items].filter((submission) => !gone.has(submission.id));
+  const hide = (ids: readonly string[]) => {
+    setGone((before) => new Set([...before, ...ids]));
+  };
+  const unhide = (ids: readonly string[]) => {
+    setGone((before) => new Set([...before].filter((id) => !ids.includes(id))));
+  };
   const [busy, setBusy] = useState<string | undefined>(undefined);
   // Adding many at once asks first (the confirms rule, 21 October 2026); one from the panel stays one click.
   // The picked ids stay while the dialog plays its exit, so its title keeps its count.
@@ -301,6 +311,18 @@ export function SubmissionsTab({
   };
   // Who sent the open submission: their record's name, the name they gave, or their email.
   const sender = open === undefined ? undefined : (open.mainRecord?.name ?? nameOf(open) ?? open.email);
+  const { isCompact } = useContext(AppShellContext);
+  // The record the open submission made or found, when the reader can open it: the panel's primary.
+  const openHref = open?.crm.state === 'linked' ? link(open.crm.record.objectId, open.crm.record.recordId) : undefined;
+  // What the state asks of the open submission (Release, Retry, Add to CRM, Save answers to the CRM) is the footer's
+  // one primary; Open the person is then a secondary beside it.
+  const hasStateAction =
+    open !== undefined &&
+    (open.state === 'spam' ||
+      open.state === 'needs_review' ||
+      open.state === 'failed' ||
+      (open.crm.state === 'not_in_crm' && open.crm.canAddToCrm) ||
+      (!isFiling && open.state === 'processed'));
   // Search narrows the rows loaded so far, by the person's name or email.
   const needle = query.trim().toLowerCase();
   const shown =
@@ -348,11 +370,16 @@ export function SubmissionsTab({
   const hasEmailColumn = nameQuestion !== undefined && shown.some((submission) => submission.email !== undefined);
   const columns: readonly TableColumn[] = [
     // On a phone each row is two lines (forms fixes 2): the person, then when and its state; the rest open with it.
-    { id: 'person', label: strings.person, isRowHeader: true, isInline: true, phone: 'title' },
+    // Every column is as wide as its content, as People's are, and the last takes what is left, so the values sit
+    // side by side from the start edge (the owner, 5 November 2026: even columns made Person huge and the values
+    // float apart).
+    { id: 'person', label: strings.person, isRowHeader: true, isInline: true, phone: 'title', size: 'fit' },
     // When and State lead after the person, so a long email or answer scrolling the table sideways never hides them.
-    { id: 'when', label: strings.when },
-    { id: 'state', label: strings.state },
-    ...(hasEmailColumn ? [{ id: EMAIL_COLUMN, label: strings.email, phone: 'hidden' as const }] : []),
+    { id: 'when', label: strings.when, size: 'fit' },
+    { id: 'state', label: strings.state, size: 'fit' },
+    ...(hasEmailColumn
+      ? [{ id: EMAIL_COLUMN, label: strings.email, phone: 'hidden' as const, size: 'fit' as const }]
+      : []),
     // The questions the list carries answers for (the server sends each row's first answers), in the form's order,
     // but the one the Person column already says. A question earns a column when some row answered it.
     ...questions
@@ -365,8 +392,11 @@ export function SubmissionsTab({
           }),
       )
       .slice(0, ANSWER_COLUMNS)
-      .map((question) => ({ id: question.id, label: question.label, phone: 'hidden' as const })),
+      .map((question) => ({ id: question.id, label: question.label, phone: 'hidden' as const, size: 'fit' as const })),
   ];
+  const sized: readonly TableColumn[] = columns.map((column, index) =>
+    index === columns.length - 1 ? { ...column, size: 'fill' } : column,
+  );
 
   /** Marks every picked submission spam, or not spam, one after another, with progress in the bar. */
   const settleAll = (kind: 'spam' | 'release') => {
@@ -432,62 +462,78 @@ export function SubmissionsTab({
   };
 
   /**
-   * Deletes the picked submissions one after another, with progress in the bar, as the other bulk actions run, then
-   * offers Undo for every one deleted (forms fixes 2: deletes are soft, so it asks nothing first). A refusal stops
-   * there and says why; the ones not deleted yet stay picked.
+   * Undo of a bulk delete (forms fixes 3): one request. The rows come back at once and go again if the request is
+   * refused.
+   */
+  const undoDeleteMany = (ids: readonly string[]) => {
+    unhide(ids);
+    data.submissions.restoreMany(slug, formId, ids).then(
+      (result) => {
+        toasts.toast({ tone: 'success', message: strings.restoredMany(result.restoredIds.length) });
+        void router.invalidate();
+      },
+      (error: unknown) => {
+        hide(ids);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+      },
+    );
+  };
+
+  /**
+   * Deletes the picked submissions in one request (forms fixes 3), at once on screen: the rows go as it is pressed,
+   * then the toast offers Undo for every one deleted (deletes are soft, so it asks nothing first). A refusal brings
+   * them back, still picked; one still being added to the CRM stays, and the toast says so.
    */
   const deleteAll = (ids: readonly string[]) => {
     if (bulk !== undefined) return;
-    let done = 0;
-    setBulk({ label: strings.deletingMany, value: 0 });
-    const step = (index: number): Promise<void> => {
-      const id = ids[index];
-      if (id === undefined) return Promise.resolve();
-      return data.submissions.delete(slug, id).then(() => {
-        done += 1;
-        setBulk({ label: strings.deletingMany, value: Math.round((done / ids.length) * 100) });
-        return step(index + 1);
-      });
-    };
-    step(0).then(
-      () => {
-        setBulk(undefined);
-        setSelected(new Set());
+    // Over what one request takes: said at once, nothing hidden first (review, forms fixes 3).
+    if (ids.length > DELETE_SUBMISSIONS_MAX) {
+      toasts.toast({ tone: 'danger', message: strings.deleteTooMany(DELETE_SUBMISSIONS_MAX) });
+      return;
+    }
+    hide(ids);
+    setSelected(new Set());
+    // The bar that held Delete goes with the selection, so focus goes to the page's heading, not the body.
+    focusLater(() => pageHeading(document));
+    // The open one may be among them: the panel closes with it, and opens again if the delete is refused.
+    const closedId = open !== undefined && ids.includes(open.id) ? open.id : undefined;
+    if (closedId !== undefined) go(undefined);
+    data.submissions.deleteMany(slug, formId, ids).then(
+      (result) => {
+        const deleted = result.deletedIds;
+        const kept = ids.filter((id) => !deleted.includes(id));
+        if (kept.length > 0) unhide(kept);
+        const why = [
+          ...(result.stillFiling > 0 ? [strings.stillFilingKept(result.stillFiling)] : []),
+          ...(result.skipped > 0 ? [strings.deleteSkipped(result.skipped)] : []),
+        ];
         toasts.toast({
-          tone: 'success',
-          message: strings.deletedMany(done),
-          action: {
-            label: strings.undo,
-            onAction: () => {
-              undoDelete(ids, false);
-            },
-          },
-        });
-        // The bar that held Delete goes with the selection, so focus goes to the page's heading, not the body.
-        focusLater(() => pageHeading(document));
-        // The open one may be among them: the panel closes with it.
-        if (open !== undefined && ids.includes(open.id)) go(undefined);
-        else void router.invalidate();
-      },
-      (error: unknown) => {
-        setBulk(undefined);
-        setSelected(new Set(ids.slice(done)));
-        const reason = isDataError(error) ? error.message : strings.failedText;
-        toasts.toast({
-          tone: 'danger',
-          message: done === 0 ? reason : `${strings.deletedSome(done, ids.length)} ${reason}`,
-          ...(done === 0
+          tone: kept.length > 0 ? 'info' : 'success',
+          message: [strings.deletedMany(deleted.length), ...why].join(' '),
+          ...(deleted.length === 0
             ? {}
             : {
                 action: {
                   label: strings.undo,
                   onAction: () => {
-                    undoDelete(ids.slice(0, done), false);
+                    undoDeleteMany(deleted);
                   },
                 },
               }),
         });
-        void router.invalidate();
+        // Once the page reads again they are gone from it anyway, so they leave the hidden set (one restored
+        // elsewhere later shows again). With the panel closed, its own navigation already read the page.
+        const reread = closedId === undefined ? router.invalidate() : Promise.resolve();
+        void reread.then(() => {
+          unhide(deleted);
+        });
+      },
+      (error: unknown) => {
+        // Nothing was deleted: the rows come back, still picked, and the open one opens again.
+        unhide(ids);
+        setSelected(new Set(ids));
+        if (closedId !== undefined) go(closedId);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
       },
     );
   };
@@ -669,6 +715,7 @@ export function SubmissionsTab({
         );
       }
       case EMAIL_COLUMN:
+        // Plain text, never the email's link chip: a row has one click target, which opens it (forms fix a10).
         return <TruncatedText>{submission.email ?? ''}</TruncatedText>;
       case 'state':
         return <StatusDot hue={stateHue(submission, isFiling)}>{stateLabel(submission, isFiling)}</StatusDot>;
@@ -685,9 +732,10 @@ export function SubmissionsTab({
 
   return (
     <>
-      {/* The filter and search sit at the end of the tab strip, as Captures' do: no row of their own. */}
-      {/* Before the first submission there is nothing to search, filter or export: only the empty state shows. */}
-      {isEmpty ? null : slot === null ? toolbar : createPortal(toolbar, slot)}
+      {/* The search, filter and Export sit in a row of their own under the tabs, where People and Companies keep
+          theirs, at the controls' one height (the owner, 5 November 2026). Before the first submission there is
+          nothing to search, filter or export: only the empty state shows. */}
+      {isEmpty ? null : toolbar}
       {state === undefined && waiting > 0 && (
         <Callout
           tone="warning"
@@ -750,7 +798,6 @@ export function SubmissionsTab({
           <Button
             variant="danger"
             icon="trash"
-            isPending={bulk?.label === strings.deletingMany}
             onPress={() => {
               deleteAll(picked.map((submission) => submission.id));
             }}
@@ -771,7 +818,7 @@ export function SubmissionsTab({
       ) : (
         <Table
           label={strings.tabSubmissions}
-          columns={columns}
+          columns={sized}
           rows={shown}
           getRowId={(submission) => submission.id}
           renderCell={cell}
@@ -779,6 +826,19 @@ export function SubmissionsTab({
           // Tally's and Typeform's response tables do, rather than pushing When and State off the page.
           isScrollable
           phoneLayout="rows"
+          // The rows run out to the tab's edges, the checkbox on the tabs' line, with the count under them as the
+          // records grid's footer says it; Load more sits beside the count while there are more.
+          edge="page"
+          footer={
+            <>
+              {held.next === undefined ? strings.submissionCount(shown.length) : strings.submissionsShown(shown.length)}
+              {held.next !== undefined && (
+                <Button variant="ghost" onPress={loadMore} isPending={busy === 'more'}>
+                  {strings.loadMore}
+                </Button>
+              )}
+            </>
+          }
           {...(canManage
             ? {
                 selected,
@@ -808,20 +868,24 @@ export function SubmissionsTab({
           }
         />
       )}
-      {held.next !== undefined && (
-        <Button onPress={loadMore} isPending={busy === 'more'}>
-          {strings.loadMore}
-        </Button>
-      )}
       {open !== undefined && (
         <Panel
           title={sender ?? strings.submission}
-          {...(sender === undefined ? {} : { leading: <Avatar name={sender} isDecorative /> })}
+          // On a phone the panel is the whole screen: its close is Back, at the head's start, where a phone looks for
+          // the way out (lane 3c), and the avatar gives it the room.
+          {...(isCompact
+            ? { closeAs: 'back' as const, backLabel: strings.backToSubmissions }
+            : sender === undefined
+              ? {}
+              : { leading: <Avatar name={sender} isDecorative /> })}
+          // The exact moment it came, not "4 hours ago" (lane 3c): the list says how long ago.
           subtitle={
             <>
-              {formName} · <RelativeTime value={open.receivedAt} />
+              {formName} · <RelativeTime value={open.receivedAt} variant="moment" />
             </>
           }
+          // The table, its search and the editor's header narrow beside it rather than sliding under it (lane 3c).
+          pushesPage
           actions={
             <>
               <StatusDot hue={stateHue(open, isFiling)}>{stateLabel(open, isFiling)}</StatusDot>
@@ -859,19 +923,29 @@ export function SubmissionsTab({
           }}
           {...(canManage
             ? {
-                // Delete keeps the footer's start, away from the main action; a failed one keeps Retry in view and
-                // folds its other choices into More, so the footer never holds four buttons on a phone.
+                // One ⋯ at the footer's start holds Delete (with its Undo) and, on a failed one, its other choices,
+                // so the footer's end carries one primary: Open the person, or what the state asks (lane 3c).
                 footerStart: (
-                  <Button
-                    variant="danger"
-                    icon="trash"
-                    isPending={busy === 'delete'}
-                    onPress={() => {
-                      act('delete', open.id);
-                    }}
-                  >
-                    {strings.deleteSubmission}
-                  </Button>
+                  <MenuTrigger>
+                    <Button icon="ellipsis" label={strings.moreActions} isPending={busy === 'delete'} />
+                    <Menu
+                      label={strings.moreActions}
+                      onAction={(key) => {
+                        if (key === 'add') addToCrm([open.id]);
+                        if (key === 'spam') act('spam', open.id);
+                        if (key === 'delete') act('delete', open.id);
+                      }}
+                    >
+                      {open.state === 'failed' && open.crm.state === 'not_in_crm' && open.crm.canAddToCrm ? (
+                        <MenuItem id="add">{strings.addToCrm}</MenuItem>
+                      ) : null}
+                      {open.state === 'failed' ? <MenuItem id="spam">{strings.markSpam}</MenuItem> : null}
+                      {open.state === 'failed' ? <MenuSeparator /> : null}
+                      <MenuItem id="delete" icon="trash" isDanger>
+                        {strings.deleteSubmission}
+                      </MenuItem>
+                    </Menu>
+                  </MenuTrigger>
                 ),
                 footer: (
                   <>
@@ -881,26 +955,9 @@ export function SubmissionsTab({
                       </Button>
                     )}
                     {open.state === 'failed' ? (
-                      <>
-                        <MenuTrigger>
-                          <Button icon="ellipsis" label={strings.moreActions} />
-                          <Menu
-                            label={strings.moreActions}
-                            onAction={(key) => {
-                              if (key === 'add') addToCrm([open.id]);
-                              if (key === 'spam') act('spam', open.id);
-                            }}
-                          >
-                            {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm ? (
-                              <MenuItem id="add">{strings.addToCrm}</MenuItem>
-                            ) : null}
-                            <MenuItem id="spam">{strings.markSpam}</MenuItem>
-                          </Menu>
-                        </MenuTrigger>
-                        <Button variant="primary" isPending={busy === 'retry'} onPress={() => act('retry', open.id)}>
-                          {strings.retry}
-                        </Button>
-                      </>
+                      <Button variant="primary" isPending={busy === 'retry'} onPress={() => act('retry', open.id)}>
+                        {strings.retry}
+                      </Button>
                     ) : (
                       <>
                         {open.state !== 'spam' && (
@@ -918,6 +975,12 @@ export function SubmissionsTab({
                         {!isFiling && open.state === 'processed' && (
                           <ButtonLink variant="primary" href={formHref(slug, formId, 'settings')}>
                             {strings.turnOnCrm}
+                          </ButtonLink>
+                        )}
+                        {/* The person it made or found, one press away: the panel's primary (lane 3c, Attio's peek). */}
+                        {openHref !== undefined && open.crm.state === 'linked' && (
+                          <ButtonLink variant={hasStateAction ? 'secondary' : 'primary'} href={openHref}>
+                            {strings.openRecord(open.crm.record.name)}
                           </ButtonLink>
                         )}
                       </>
@@ -1005,8 +1068,13 @@ function SubmissionDetail({
     return answer === undefined ? [] : [answer];
   });
   const source = cameFromOf(submission);
+  // Every question comes, the skipped ones as "No answer" (lane 3c); filing is said over those answered.
+  const answered = submission.answers.filter((answer) => answerText(answer) !== '');
+  // A company answer reads as the company it was saved on, through the field set's chip (lane 3c).
+  const company = submission.records.find((touched) => touched.role === 'company');
+  const companyHref = company === undefined ? undefined : link(company.record.objectId, company.record.recordId);
   // A kept answer isn't on the record (forms fix a4): it counts as not saved until Use new writes it.
-  const filing = answerFiling(submission.answers, submission.crm, isFiling, [
+  const filing = answerFiling(answered, submission.crm, isFiling, [
     ...submission.refused,
     ...submission.kept.map((each) => ({ questionId: each.questionId })),
   ]);
@@ -1082,7 +1150,20 @@ function SubmissionDetail({
       >
         <AnswerList
           answers={submission.answers}
-          markOf={(answer) => (filing.marked.has(answer.questionId) ? filing.mark : undefined)}
+          markOf={(answer) =>
+            filing.marked.has(answer.questionId) && answerText(answer) !== '' ? filing.mark : undefined
+          }
+          {...(company === undefined
+            ? {}
+            : {
+                displayOf: (answer: SubmissionView['answers'][number]) =>
+                  answer.key === 'company' && answerText(answer) !== '' ? (
+                    <RecordChip
+                      display={company.record}
+                      {...(companyHref === undefined ? {} : { href: companyHref })}
+                    />
+                  ) : undefined,
+              })}
         />
       </FieldGroup>
       {(submission.records.length > 0 || submission.crm.state === 'filing') && (

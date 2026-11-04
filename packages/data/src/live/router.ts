@@ -25,6 +25,7 @@ export const LIVE_KINDS = [
   'calendars',
   'time_off',
   'automations',
+  'forms',
   'files',
   'visits',
 ] as const satisfies readonly ChangeEvent['kind'][];

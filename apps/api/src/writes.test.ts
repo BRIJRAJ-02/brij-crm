@@ -2709,7 +2709,8 @@ Object.assign(WRITES, {
   'forms.setStatus': async (m: Member, mutationId: string) => {
     const form = await formOn(m, true);
     await m.client.forms.setStatus({ workspace: m.slug, formId: form.id, status: 'paused', mutationId });
-    return [];
+    // Other tabs hear a form's status changed (forms fixes 3): one row naming nothing.
+    return [{ kind: 'forms', mutation_id: mutationId }];
   },
   'forms.updateSettings': async (m: Member, mutationId: string) => {
     const form = await formOn(m);
@@ -2833,6 +2834,35 @@ Object.assign(WRITES, {
     const submissionId = await storedSubmission(m, form.id, 'spam');
     await m.client.submissions.delete({ workspace: m.slug, submissionId, mutationId: newId() });
     await m.client.submissions.restore({ workspace: m.slug, submissionId, mutationId });
+    return [];
+  },
+  // Bulk Delete and its Undo (forms fixes 3): soft, so no record changes and no row, as one delete.
+  'submissions.deleteMany': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'spam');
+    await m.client.submissions.deleteMany({
+      workspace: m.slug,
+      formId: form.id,
+      submissionIds: [submissionId],
+      mutationId,
+    });
+    return [];
+  },
+  'submissions.restoreMany': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'spam');
+    await m.client.submissions.deleteMany({
+      workspace: m.slug,
+      formId: form.id,
+      submissionIds: [submissionId],
+      mutationId: newId(),
+    });
+    await m.client.submissions.restoreMany({
+      workspace: m.slug,
+      formId: form.id,
+      submissionIds: [submissionId],
+      mutationId,
+    });
     return [];
   },
 });
@@ -3548,6 +3578,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'submissions.retry': 3,
   'submissions.delete': 3,
   'submissions.restore': 4,
+  'submissions.deleteMany': 3,
+  'submissions.restoreMany': 4,
   'submissions.useNewAnswer': 4,
   'submissions.undoUseNewAnswer': 5,
 };
