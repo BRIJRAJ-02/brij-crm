@@ -16,6 +16,7 @@ import {
 } from '@crm/contracts/menu';
 import type { OptionGroup, PublicMenu, SnapshotItem, SnapshotMenu } from '@crm/contracts';
 import { useId, useState } from 'react';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
@@ -137,8 +138,8 @@ export function ItemSheet({
       {item.diet.length === 0 ? null : (
         <ul className={styles.dietList} aria-label={strings.dietary}>
           {item.diet.map((mark) => (
-            <li key={mark} className={styles.dietMark}>
-              {strings.diet[mark]}
+            <li key={mark}>
+              <Badge text={strings.diet[mark]} size="chip" isWhole />
             </li>
           ))}
         </ul>
@@ -205,13 +206,13 @@ export function ItemSheet({
         ) : (
           <ul className={styles.dietList}>
             {contains.map((name) => (
-              <li key={name} className={styles.dietMark}>
-                {name}
+              <li key={name}>
+                <Badge text={name} size="chip" isWhole />
               </li>
             ))}
             {may.map((name) => (
-              <li key={name} className={styles.dietMark} data-may="">
-                {strings.mayContainChip(name)}
+              <li key={name}>
+                <Badge text={strings.mayContainChip(name)} size="chip" isWhole />
               </li>
             ))}
           </ul>

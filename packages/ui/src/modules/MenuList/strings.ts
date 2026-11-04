@@ -20,6 +20,7 @@ export const strings = {
   removeOne: (name: string) => `Remove one ${name}`,
   quantityOf: (name: string) => `How many ${name}`,
   allergens: 'Allergens',
+  allergenAsk: 'Tell your server about any allergy before you order.',
   yourPicks: 'Your selection',
   close: 'Close',
   noMenu: 'This menu is empty for now.',

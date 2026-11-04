@@ -24,7 +24,7 @@
     --scale-press: var(--scale-enter);
     --label-swap: var(--duration-popover);
 
-    min-block-size: 100%;
+    min-block-size: 100dvh;
     background: var(--look-ground);
     color: var(--look-text);
     font-family: var(--menu-face, var(--font-sans));
@@ -52,7 +52,8 @@
     --on-accent: var(--look-on-accent);
     --link: var(--look-accent);
     --focus-ring: var(--look-accent);
-    --shadow-focus: 0 0 0 var(--border-width-thick) color-mix(in oklab, var(--look-accent) 40%, transparent);
+    /* The ring in the full ink (the Warm accent is the ink, so a 40% mix fell under 3:1 on the near white ground). */
+    --shadow-focus: 0 0 0 var(--border-width-thick) var(--look-accent);
 
     padding-block-end: calc(var(--size-bar) * 2);
   }
@@ -107,16 +108,6 @@
     background: var(--look-card);
   }
 
-  /* The table a QR code named, in the eyebrow: a small chip in the ink. */
-  .table {
-    padding: 0 var(--space-6);
-    border-radius: var(--radius-sm);
-    background: var(--look-accent);
-    color: var(--look-on-accent);
-    font: var(--text-label-strong);
-    text-transform: none;
-  }
-
   /* The header: the place (and table) as an eyebrow, the menu's name and its line, the menus when there are several. */
   .head {
     display: flex;
@@ -139,7 +130,7 @@
     margin: 0;
     color: var(--look-quiet);
     font: var(--text-label-strong);
-    letter-spacing: var(--tracking-kbd);
+    letter-spacing: var(--tracking-label-strong);
     text-transform: uppercase;
   }
 
@@ -231,11 +222,33 @@
     gap: var(--space-4);
   }
 
+  /* A link's target (a sub section's heading) lands clear of the glass bar. */
   .heading {
     margin: 0;
+    scroll-margin-block-start: calc(var(--size-bar) + var(--space-8));
     font: var(--text-heading);
     font-family: var(--menu-display-face, var(--menu-face, var(--font-sans)));
     letter-spacing: var(--tracking-heading);
+  }
+
+  /* Under the pills the pill shows the section's name: the heading stays for screen readers only. */
+  .heading[data-hidden] {
+    position: absolute;
+    inline-size: var(--border-width-hairline);
+    block-size: var(--border-width-hairline);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .heading:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* The pills' row, a hash link's target: it lands clear of the glass bar. */
+  .pills {
+    scroll-margin-block-start: calc(var(--size-bar) + var(--space-8));
   }
 
   /* A sub section's name: a heading of its own over a hairline, as checklabs' sub category. */
@@ -346,7 +359,7 @@
     order: 1;
     inline-size: var(--thumb);
     block-size: var(--thumb);
-    border-radius: calc(var(--radius-xl) + var(--space-2));
+    border-radius: var(--radius-xl);
     object-fit: cover;
     background: var(--look-chip);
   }
@@ -356,7 +369,7 @@
     inline-size: 100%;
     block-size: auto;
     aspect-ratio: 1;
-    border-radius: calc(var(--radius-xl) * 2 - var(--space-4));
+    border-radius: var(--radius-xl);
   }
 
   .item[data-sold-out] .thumb {
@@ -394,22 +407,16 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
+  /* Sold out reads as such on the words too, not only the photo. */
+  .item[data-sold-out] .itemName,
+  .item[data-sold-out] .price {
+    color: var(--look-quiet);
+  }
 
   .marks {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-4);
-  }
-
-  /* A dish's marks (Vegan), Popular and Sold out: small cream pills. */
-  .markPill,
-  .badge,
-  .soldOut {
-    padding: 0 var(--space-6);
-    border-radius: var(--radius-full);
-    background: var(--look-chip);
-    color: var(--look-text);
-    font: var(--text-label-strong);
   }
 
   /* The + : a round button in the ink with a ring of the card round it, on the photo's corner or at the row's end.
@@ -477,7 +484,7 @@
   .allergenLabel {
     color: var(--look-text);
     font: var(--text-label-strong);
-    letter-spacing: var(--tracking-kbd);
+    letter-spacing: var(--tracking-label-strong);
     text-transform: uppercase;
   }
 

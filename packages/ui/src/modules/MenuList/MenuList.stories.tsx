@@ -65,6 +65,10 @@ export const Default: Story = {
     // A dish with no choices adds from its row; its + turns into a stepper and the picks bar rises.
     await userEvent.click(canvas.getByRole('button', { name: 'Add Burrata, blood orange, chilli to your selection' }));
     await expect(canvas.getByRole('group', { name: 'How many Burrata, blood orange, chilli' })).toBeInTheDocument();
+    // Focus follows to the stepper's + that took the lone +'s place.
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: 'Add another Burrata, blood orange, chilli' })).toHaveFocus(),
+    );
     await expect(canvas.getByRole('button', { name: /View selection/ })).toHaveTextContent('£12.94');
   },
 };

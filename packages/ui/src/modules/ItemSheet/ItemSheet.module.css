@@ -76,14 +76,6 @@
     list-style: none;
   }
 
-  .dietMark {
-    padding: var(--space-2) var(--space-8);
-    border-radius: var(--radius-full);
-    background: var(--surface-sunken);
-    color: var(--text);
-    font: var(--text-label-strong);
-  }
-
   .group {
     display: flex;
     flex-direction: column;
@@ -117,12 +109,6 @@
     margin: 0;
     color: var(--text-secondary);
     font: var(--text-label);
-  }
-
-  /* A "may contain" chip: the same chip, outlined, so it reads lighter than a "contains" one. */
-  .dietMark[data-may] {
-    border: var(--border-width-hairline) dashed var(--border);
-    background: transparent;
   }
 
   /* The foot: stays in view at the bottom of the sheet, over the words, on the sheet's own card; the reason Add waits

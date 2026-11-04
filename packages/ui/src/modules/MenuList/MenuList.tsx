@@ -8,8 +8,9 @@
 // through props: the page's entry reads the menu and keeps the selection.
 import { EU_ALLERGENS, formatPrice, nextOpening, openAt, servingAt } from '@crm/contracts/menu';
 import type { PublicMenu, SnapshotItem, SnapshotSection, SnapshotSubsection } from '@crm/contracts';
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { UNSAFE_PortalProvider } from 'react-aria';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
@@ -25,6 +26,7 @@ import {
   type GuestPick,
   type MenuPhotoHref,
 } from '../ItemSheet/ItemSheet.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { useNow } from '../../provider/context.ts';
 import styles from './MenuList.module.css';
 import { strings } from './strings.ts';
@@ -150,25 +152,53 @@ export function MenuList({
   const next = status.open ? undefined : nextOpening(place.hours, now, place.timeZone);
   const address = [place.addressLine, place.city, place.postcode].filter((part) => part !== undefined).join(', ');
 
-  const sections = useMemo(() => current?.menu.sections ?? [], [current]);
+  // A section with no dish left to show gets no pill (it would open on nothing).
+  const sections = useMemo(
+    () =>
+      (current?.menu.sections ?? []).filter((section) =>
+        sectionItems(section).some((id) => menu.menu.items[id] !== undefined),
+      ),
+    [current, menu.menu.items],
+  );
   // One section at a time, chosen from the pills (checklabs' categories); a menu changed under it starts at its first.
   const [sectionId, setSectionId] = useState<string | undefined>(undefined);
   const shownSection = sections.find((section) => section.id === sectionId) ?? sections[0];
-  // A link to a section (`#h-<id>`, a section's or sub section's heading) opens its pill and scrolls to it (owner, 5
-  // Nov 2026), on the first draw and whenever the hash changes; a sub section opens the section that holds it.
+  // A link to a section (`#h-<id>`, a section's or sub section's heading) opens its pill and brings it into view with
+  // focus (owner, 5 Nov 2026), on the first draw and on every hash change, never on a menu redrawn under the guest; a
+  // sub section opens the section that holds it. The scroll waits for the chosen panel to mount (the layout effect).
+  const sectionsRef = useRef(sections);
+  useEffect(() => {
+    sectionsRef.current = sections;
+  }, [sections]);
+  const [target, setTarget] = useState<{ readonly id: string; readonly isSection: boolean } | undefined>(undefined);
   useEffect(() => {
     const follow = () => {
-      const id = decodeURIComponent(window.location.hash.replace(/^#h-/, ''));
-      if (id === '' || id === window.location.hash) return;
-      const owner = sections.find((section) => section.id === id || section.sections.some((sub) => sub.id === id));
+      const hash = window.location.hash;
+      if (!hash.startsWith('#h-')) return;
+      const id = decodeURIComponent(hash.slice(3));
+      const owner = sectionsRef.current.find(
+        (section) => section.id === id || section.sections.some((sub) => sub.id === id),
+      );
       if (owner === undefined) return;
       setSectionId(owner.id);
-      requestAnimationFrame(() => document.getElementById(`h-${id}`)?.scrollIntoView({ block: 'start' }));
+      setTarget({ id, isSection: owner.id === id });
     };
     follow();
     window.addEventListener('hashchange', follow);
     return () => window.removeEventListener('hashchange', follow);
-  }, [sections]);
+  }, []);
+  const pillsRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (target === undefined) return;
+    // A section: the pill row, so the chosen pill shows, and focus on that pill. A sub section: its heading.
+    const node = target.isSection
+      ? (pillsRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? undefined)
+      : (document.getElementById(`h-${target.id}`) ?? undefined);
+    if (node === undefined) return;
+    node.scrollIntoView({ block: 'start', inline: 'nearest' });
+    node.focus({ preventScroll: true });
+    setTarget(undefined);
+  }, [target, shownSection?.id]);
   const headingId = useId();
   // The allergens this menu's dishes name, in the EU list's order (ported from checklabs' allergen footer).
   const menuAllergens = EU_ALLERGENS.filter((code) =>
@@ -236,7 +266,7 @@ export function MenuList({
           <div key={block.id} className={index === 0 ? styles.block : styles.sub}>
             <SectionHead
               section={block}
-              level={index === 0 ? 2 : isTabbed ? 2 : 3}
+              level={index === 0 ? 2 : 3}
               isNamed={!(isTabbed && index === 0)}
               menu={menu}
               now={now}
@@ -307,7 +337,12 @@ export function MenuList({
             <div className={styles.titles}>
               <p className={styles.eyebrow}>
                 {entering(place.name, 1, 'inline')}
-                {table === undefined ? null : <span className={styles.table}>{table}</span>}
+                {table === undefined ? null : (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <Badge text={table} tone="accent" isWhole />
+                  </>
+                )}
               </p>
               <h1 className={styles.name} id={headingId}>
                 {entering(isUnavailable || current === undefined ? business.name : current.menu.name, 1, 'inline')}
@@ -395,19 +430,21 @@ export function MenuList({
             ) : sections.length === 1 || shownSection === undefined ? (
               sections.map((section) => <div key={section.id}>{sectionBody(section, false)}</div>)
             ) : (
-              <Tabs
-                label={strings.sections}
-                variant="pills"
-                tabs={sections.map((section) => ({ id: section.id, label: section.name }))}
-                selectedKey={shownSection.id}
-                onSelectionChange={setSectionId}
-              >
-                {sections.map((section) => (
-                  <TabPanel key={section.id} id={section.id}>
-                    {sectionBody(section, true)}
-                  </TabPanel>
-                ))}
-              </Tabs>
+              <div ref={pillsRef} className={styles.pills}>
+                <Tabs
+                  label={strings.sections}
+                  variant="pills"
+                  tabs={sections.map((section) => ({ id: section.id, label: section.name }))}
+                  selectedKey={shownSection.id}
+                  onSelectionChange={setSectionId}
+                >
+                  {sections.map((section) => (
+                    <TabPanel key={section.id} id={section.id}>
+                      {sectionBody(section, true)}
+                    </TabPanel>
+                  ))}
+                </Tabs>
+              </div>
             )}
             {isUnavailable || current?.menu.note === undefined ? null : (
               <p className={styles.note}>{current.menu.note}</p>
@@ -415,7 +452,8 @@ export function MenuList({
             {isUnavailable || menuAllergens.length === 0 ? null : (
               <p className={styles.allergenFoot}>
                 <span className={styles.allergenLabel}>{strings.allergens}</span>
-                {menuAllergens.map((code) => strings.allergen[code]).join(', ')}
+                <span>{menuAllergens.map((code) => strings.allergen[code]).join(', ')}</span>
+                <span>{strings.allergenAsk}</span>
               </p>
             )}
           </main>
@@ -482,7 +520,7 @@ function SectionHead({
 }: {
   readonly section: SnapshotSubsection;
   readonly level: 2 | 3;
-  /** False under the pills, where the pill already names the section. */
+  /** False under the pills, where the pill already shows the section's name: the heading is for screen readers. */
   readonly isNamed: boolean;
   readonly menu: PublicMenu;
   readonly now: Date;
@@ -492,13 +530,16 @@ function SectionHead({
   const serving = servingAt(section.serving, now, menu.place.timeZone);
   return (
     <div className={styles.sectionHead}>
-      {isNamed ? (
-        <Heading className={styles.heading} data-level={level} id={`h-${section.id}`}>
-          {section.name}
-        </Heading>
-      ) : (
-        <span id={`h-${section.id}`} />
-      )}
+      {/* Under the pills the pill shows the section's name, so its heading is there for screen readers only. */}
+      <Heading
+        className={styles.heading}
+        data-level={level}
+        data-hidden={isNamed ? undefined : ''}
+        id={`h-${section.id}`}
+        tabIndex={-1}
+      >
+        {section.name}
+      </Heading>
       {section.description === undefined ? null : <p className={styles.sectionAbout}>{section.description}</p>}
       {serving.now ? null : (
         <p className={styles.sectionNote}>
@@ -522,19 +563,46 @@ function AddControl({
   readonly onAdd: () => void;
   readonly onRemove: () => void;
 }) {
-  if (count === 0)
-    return (
-      <span className={styles.add}>
-        <Button variant="primary" icon="plus" isRound label={strings.addOne(item.name)} onPress={onAdd} />
-      </span>
-    );
+  // The + gives way to the stepper on the first add, and comes back on the last remove: focus follows to the control
+  // now in that place (the stepper's +, or the + again), so a keyboard never drops to the page's top.
+  const [host, setHost] = useState<HTMLSpanElement | null>(null);
+  const refocus = () => focusLater(() => host?.querySelector<HTMLElement>('button:last-of-type'));
   return (
-    <span className={styles.add} data-stepper="" role="group" aria-label={strings.quantityOf(item.name)}>
-      <Button variant="ghost" icon="minus" isRound label={strings.removeOne(item.name)} onPress={onRemove} />
-      <span className={styles.addCount}>
-        <NumberPop value={String(count)} />
-      </span>
-      <Button variant="ghost" icon="plus" isRound label={strings.addAnother(item.name)} onPress={onAdd} />
+    <span
+      ref={setHost}
+      className={styles.add}
+      data-stepper={count === 0 ? undefined : ''}
+      {...(count === 0 ? {} : { role: 'group', 'aria-label': strings.quantityOf(item.name) })}
+    >
+      {count === 0 ? (
+        <Button
+          variant="primary"
+          icon="plus"
+          isRound
+          label={strings.addOne(item.name)}
+          onPress={() => {
+            onAdd();
+            refocus();
+          }}
+        />
+      ) : (
+        <>
+          <Button
+            variant="ghost"
+            icon="minus"
+            isRound
+            label={strings.removeOne(item.name)}
+            onPress={() => {
+              onRemove();
+              if (count === 1) refocus();
+            }}
+          />
+          <span className={styles.addCount}>
+            <NumberPop value={String(count)} />
+          </span>
+          <Button variant="ghost" icon="plus" isRound label={strings.addAnother(item.name)} onPress={onAdd} />
+        </>
+      )}
     </span>
   );
 }
@@ -581,17 +649,15 @@ function ItemCard({
         <span className={styles.itemText}>
           <span className={styles.itemName}>
             {item.name}
-            {item.featured ? <span className={styles.badge}>{strings.featured}</span> : null}
-            {isSoldOut ? <span className={styles.soldOut}>{strings.soldOut}</span> : null}
+            {item.featured ? <Badge text={strings.featured} size="chip" isWhole /> : null}
+            {isSoldOut ? <Badge text={strings.soldOut} size="chip" dot="red" isWhole /> : null}
           </span>
           {item.description === undefined ? null : <span className={styles.itemAbout}>{item.description}</span>}
           {price === undefined ? null : <span className={styles.price}>{price}</span>}
           {marks.length === 0 ? null : (
             <span className={styles.marks}>
               {marks.map((mark) => (
-                <span key={mark} className={styles.markPill}>
-                  {mark}
-                </span>
+                <Badge key={mark} text={mark} size="chip" isWhole />
               ))}
             </span>
           )}

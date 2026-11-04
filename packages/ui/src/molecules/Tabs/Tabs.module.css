@@ -299,11 +299,13 @@
     border-block-end: none;
   }
 
+  /* A ring's width of room at the ends, so the first and last pill's focus ring isn't cut by the scroller. */
   .bar[data-variant='pills'] .list {
     align-items: center;
     gap: var(--space-8);
     padding-block: var(--space-2);
-    padding-inline: 0;
+    padding-inline: var(--border-width-thick);
+    scroll-padding-inline: var(--border-width-thick);
   }
 
   .bar[data-variant='pills'] .tab {
@@ -312,10 +314,30 @@
     border: var(--border-width-hairline) solid var(--text);
     border-radius: var(--radius-full);
     color: var(--text);
+    /* The words change colour with the fill's slide, so they never sit light on the ground while it travels. */
+    transition: color var(--duration-move) var(--ease-in-out);
   }
 
   .bar[data-variant='pills'] .tab[data-selected] {
     color: var(--surface-raised);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .bar[data-variant='pills'] .tab[data-hovered]:not([data-selected]) {
+      background: var(--surface-hover);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar[data-variant='pills'] .tab {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .bar[data-variant='pills'] .tab[data-selected] {
+      color: HighlightText;
+    }
   }
 
   .bar[data-variant='pills'] .tab[data-focus-visible] {
