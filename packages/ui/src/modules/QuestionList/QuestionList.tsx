@@ -1,4 +1,4 @@
-import { Fragment, useId, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useId, useRef, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Button as AriaButton, GridList, GridListItem } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -139,9 +139,45 @@ export function QuestionList({
 }: QuestionListProps) {
   const headingId = useId();
 
-  // Enter in an open card's single line field never submits a form the list sits in.
+  // A menu or popover opened from a card (its type menu, its ⋯) is drawn elsewhere in the page but its focus events
+  // reach the list through React: kept out, so the list never takes focus moving in a menu as focus in a row, and
+  // never pulls focus back to a row as the menu closes (forms QA, 5 November 2026).
+  const keepPortalFocus = (event: FocusEvent<HTMLDivElement>) => {
+    if (event.target instanceof Node && !event.currentTarget.contains(event.target)) event.stopPropagation();
+  };
+
+  // Keys pressed in an open card's controls are theirs: Enter or Space on its type menu or its ⋯ never also presses
+  // the row (which took focus back from the menu as it opened), and a menu's own keys never move between rows.
+  const keepKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+    const isPortal = event.target instanceof Node && !event.currentTarget.contains(event.target);
+    if (isPortal || event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+  };
+
+  // Enter in an open card's single line field never submits a form the list sits in. Tab past a card's last control
+  // goes on into the next card, and Shift Tab before its first back into the one above (forms QA): the grid keeps
+  // one row in the tab order, so Tab would otherwise leave the whole list.
   const keepEnter = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault();
+    if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const row = target.closest('[role="row"]');
+    if (row === null) return;
+    const grid = row.closest('[role="grid"]');
+    if (grid === null) return;
+    const rows = [...grid.querySelectorAll('[role="row"]')];
+    const inRow = tabbables(row);
+    const at = inRow.indexOf(target);
+    // From the row itself Tab goes into it as usual; only past its last control, or before its first, does it chain.
+    const isLast = target === row ? inRow.length === 0 : at === inRow.length - 1;
+    const isFirst = target !== row && at === 0;
+    const near = rows[rows.indexOf(row) + (event.shiftKey ? -1 : 1)];
+    if (near === undefined || (event.shiftKey ? !isFirst : !isLast)) return;
+    const stops = tabbables(near);
+    const goal = event.shiftKey ? stops.at(-1) : stops[0];
+    if (goal === undefined) return;
+    event.preventDefault();
+    focusInCard(goal);
   };
 
   return (
@@ -286,7 +322,15 @@ export function QuestionList({
                   )}
                   {hasOpenHead ? (
                     <>
-                      <div className={styles.openHead}>{openHead}</div>
+                      <CardPart
+                        className={styles.openHead}
+                        onFocus={keepPortalFocus}
+                        onBlur={keepPortalFocus}
+                        onKeyDown={keepKeys}
+                        onKeyUp={keepKeys}
+                      >
+                        {openHead}
+                      </CardPart>
                       {item.hasProblem === true && (
                         <span className={styles.problem}>
                           <Icon name="circle-alert" size="sm" />
@@ -370,10 +414,16 @@ export function QuestionList({
                   )}
                 </div>
                 {isOpen && (
-                  <div className={styles.body}>
+                  <CardPart
+                    className={styles.body}
+                    onFocus={keepPortalFocus}
+                    onBlur={keepPortalFocus}
+                    onKeyDown={keepKeys}
+                    onKeyUp={keepKeys}
+                  >
                     {renderOpen(item.id)}
                     <Footer start={renderFooterStart?.(item.id)} end={renderFooter?.(item.id)} />
-                  </div>
+                  </CardPart>
                 )}
               </GridListItem>
             );
@@ -381,6 +431,68 @@ export function QuestionList({
         </GridList>
       </SortableList>
     </section>
+  );
+}
+
+/** Props for a part of an open card that holds the caller's controls. */
+interface CardPartProps {
+  readonly className: string | undefined;
+  readonly children: ReactNode;
+  readonly onFocus: (event: FocusEvent<HTMLDivElement>) => void;
+  readonly onBlur: (event: FocusEvent<HTMLDivElement>) => void;
+  readonly onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+  readonly onKeyUp: (event: KeyboardEvent<HTMLDivElement>) => void;
+}
+
+/** React Aria's FocusScope asks a list to take back focus it restores; the event a menu sends as it closes. */
+const FOCUS_RESTORE = 'react-aria-focus-scope-restore';
+
+/**
+ * A part of an open card holding the caller's controls (its head, its editor). A menu opened from one of them gives
+ * focus back to its own trigger as it closes: the list is kept from taking that over and sending focus to the row
+ * (forms QA, 5 November 2026: after picking a type by keyboard, focus landed on the card, not the type).
+ */
+function CardPart({ className, children, ...handlers }: CardPartProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (node === null) return;
+    const keep = (event: Event) => {
+      event.stopPropagation();
+    };
+    node.addEventListener(FOCUS_RESTORE, keep);
+    return () => {
+      node.removeEventListener(FOCUS_RESTORE, keep);
+    };
+  }, []);
+  return (
+    <div ref={ref} className={className} {...handlers}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Focuses a control inside a card (forms QA, 5 November 2026): its row first, so the list knows which card holds
+ * focus, then the control. Focused alone, the list took focus arriving from outside as entering at its first row
+ * and moved it there, so a new question's words, or the next card's controls, lost focus to the first question.
+ */
+export function focusInCard(element: HTMLElement): void {
+  const row = element.closest('[role="row"]');
+  if (row instanceof HTMLElement && !row.contains(document.activeElement)) row.focus({ preventScroll: true });
+  element.focus();
+}
+
+/** The controls inside `root` that Tab stops on, in order: not disabled, not taken out of the tab order, drawn. */
+function tabbables(root: Element): HTMLElement[] {
+  return [
+    ...root.querySelectorAll<HTMLElement>('button, [href], input, textarea, select, [tabindex]:not([role="row"])'),
+  ].filter(
+    (each) =>
+      !each.hasAttribute('disabled') &&
+      each.getAttribute('tabindex') !== '-1' &&
+      each.getAttribute('aria-hidden') !== 'true' &&
+      each.getClientRects().length > 0,
   );
 }
 

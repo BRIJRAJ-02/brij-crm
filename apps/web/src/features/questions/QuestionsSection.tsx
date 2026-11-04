@@ -26,6 +26,7 @@ import {
   DatePicker,
   Field,
   FieldGroup,
+  focusInCard,
   focusLater,
   Menu,
   MenuItem,
@@ -1296,13 +1297,18 @@ function QuestionHead({
 }: QuestionHeadProps) {
   const labelRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   // A question just added takes focus without jumping, then glides into view (at once with reduced motion).
+  // After the type menu that made it has closed and handed focus back (forms QA: by keyboard, focus stayed behind).
   useEffect(() => {
     if (!isJustAdded) return;
-    const input = labelRef.current;
-    if (input === null) return;
-    input.focus({ preventScroll: true });
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    input.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+    focusLater(() => {
+      const input = labelRef.current;
+      if (input === null) return null;
+      const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      input.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+      // Its card first, so the list keeps focus here rather than taking it to its first question.
+      focusInCard(input);
+      return input;
+    });
   }, [isJustAdded]);
   const isConsent = question.answerType === 'consent';
   const typeName = strings.answerTypes[CHOICE_FAMILY.has(question.answerType) ? 'choice' : question.answerType];

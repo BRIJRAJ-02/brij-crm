@@ -119,4 +119,49 @@ describe('the question card (T40)', () => {
     await expect.poll(() => latest.length).toBe(2);
     await expect.element(page.getByRole('button', { name: 'Add a question' })).toHaveFocus();
   });
+
+  it('works by keyboard alone: the new question takes focus, then Tab goes type, Required, ⋯ and on (forms QA)', async () => {
+    await show();
+    // Your name open, so the new question goes under it, before Anything else?.
+    (page.getByRole('button', { name: /^Your name/ }).element() as HTMLElement).focus();
+    await userEvent.keyboard('{Enter}');
+    const add = page.getByRole('button', { name: 'Add a question' });
+    (add.element() as HTMLElement).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByRole('menu')).toBeVisible();
+    await userEvent.keyboard('{Enter}');
+    const words = page.getByRole('textbox', { name: 'Question', exact: true });
+    await expect.element(words).toHaveFocus();
+    await userEvent.keyboard('What is your budget?');
+    await expect.element(words).toHaveValue('What is your budget?');
+    // Shift Tab reaches its type, Tab its body and footer: Required, then its ⋯, then the next card.
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await expect.element(page.getByRole('button', { name: /^Answer type/ })).toHaveFocus();
+    // Its type by the keyboard: the menu, a type picked by its first letters, and focus back on the type.
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByRole('menu')).toBeVisible();
+    await userEvent.keyboard('Number');
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByRole('button', { name: 'Answer type: Number' })).toHaveFocus();
+    await userEvent.keyboard('{Tab}');
+    await expect.element(words).toHaveFocus();
+    const stops: string[] = [];
+    for (let at = 0; at < 6; at += 1) {
+      await userEvent.keyboard('{Tab}');
+      const active = document.activeElement;
+      stops.push(active?.getAttribute('aria-label') ?? active?.getAttribute('role') ?? active?.tagName ?? '');
+      if (
+        active?.getAttribute('role') === 'switch' ||
+        (active instanceof HTMLInputElement && active.type === 'checkbox')
+      ) {
+        await userEvent.keyboard(' ');
+        await expect.poll(() => latest.find((each) => each.label === 'What is your budget?')?.required).toBe(true);
+      }
+      if (active?.getAttribute('aria-label')?.startsWith('More for') === true) break;
+    }
+    expect(stops.at(-1)).toBe('More for What is your budget?');
+    await userEvent.keyboard('{Tab}');
+    // On to the next card.
+    expect(document.activeElement?.closest('[role="row"]')?.textContent).toContain('Anything else?');
+  });
 });

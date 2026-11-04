@@ -48,6 +48,7 @@ Each question is a hairline card, space-8 apart (owner feedback F27, 20 October 
 
 ## Keyboard
 
+- By keyboard alone (forms QA, 5 November 2026): Tab past a card's last control goes on into the next card, and Shift Tab before its first back into the one above, so the whole list is reachable without the arrows. A menu opened from an open card (its type, its ⋯) gives focus back to its own trigger, never to the row, and its keys never move between rows; Enter or Space on a card's control never also presses the row. `focusInCard(element)` focuses a control inside a card with its row first, so the list doesn't take focus arriving from outside to its first question (a new question's words).
 - The arrow keys move between questions (with a question itself focused); Tab moves within one: its handle, its head and, when open, its fields; Enter or Space on the header opens and closes it.
 - On the handle: Space or Enter lifts the question, the arrows move it while the others slide out of its way, Space or Enter drops it, Esc puts it back. Each step is announced.
 - Keys typed in an open question's fields stay in the field: the list is in `tab` mode, so a row never takes arrows or type ahead from its children.

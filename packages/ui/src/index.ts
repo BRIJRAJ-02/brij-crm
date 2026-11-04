@@ -525,7 +525,12 @@ export {
   type OptionsEditorOption,
   type OptionsEditorProps,
 } from './modules/OptionsEditor/OptionsEditor.tsx';
-export { QuestionList, type QuestionListItem, type QuestionListProps } from './modules/QuestionList/QuestionList.tsx';
+export {
+  focusInCard,
+  QuestionList,
+  type QuestionListItem,
+  type QuestionListProps,
+} from './modules/QuestionList/QuestionList.tsx';
 export {
   editorRuleOf,
   ruleOf,
