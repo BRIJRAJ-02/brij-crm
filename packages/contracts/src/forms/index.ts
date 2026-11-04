@@ -12,6 +12,7 @@ export * from './forms.ts';
 export * from './breaks.ts';
 export * from './partials.ts';
 export * from './path.ts';
+export * from './picture.ts';
 export * from './presets.ts';
 export * from './public.ts';
 export * from './publish.ts';

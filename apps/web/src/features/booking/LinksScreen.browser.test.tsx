@@ -17,6 +17,9 @@ import { page, userEvent } from 'vitest/browser';
 import { deferred, emptyCaptureList, openDialog, renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { LinksScreen } from './LinksScreen.tsx';
 
+/** A working day's hours. */
+const DAY = ['09:00', '17:00'] as const;
+
 /** A booking page as the list holds it. */
 function pageOf(id: string, title: string): BookingPageView {
   return {
@@ -26,6 +29,12 @@ function pageOf(id: string, title: string): BookingPageView {
     description: '',
     durations: [30],
     location: { type: 'video' },
+    // Weekdays nine to five: the card's picture tints the days its hours book.
+    availability: {
+      timeZone: 'Europe/London',
+      weekly: { mon: [DAY], tue: [DAY], wed: [DAY], thu: [DAY], fri: [DAY], sat: [], sun: [] },
+      overrides: [],
+    },
     status: 'live',
     hoursMode: 'mine',
     isPrivate: false,
