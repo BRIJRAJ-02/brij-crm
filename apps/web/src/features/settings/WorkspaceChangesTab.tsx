@@ -28,9 +28,9 @@ import { strings } from './history-strings.ts';
  * takes the room left and wraps; When keeps to its widest time.
  */
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'who', label: strings.who, isInline: true, size: 'fit' },
-  { id: 'change', label: strings.change, isRowHeader: true, size: 'fill' },
-  { id: 'when', label: strings.when, size: 'fit' },
+  { id: 'who', label: strings.who, isInline: true, size: 'fit', phone: 'meta' },
+  { id: 'change', label: strings.change, isRowHeader: true, size: 'fill', phone: 'title' },
+  { id: 'when', label: strings.when, size: 'fit', phone: 'meta' },
 ];
 
 /** A day's table's name: "Workspace changes, Today". */
@@ -126,6 +126,8 @@ export function WorkspaceChangesTab({ log, now = clock }: WorkspaceChangesTabPro
             renderCell={renderCell}
             // The column labels head the first day alone; the days under it continue the same table.
             isHeaderHidden={index > 0}
+            // On a phone each change is two lines, the sentence over who and when, never squeezed into a column.
+            phoneLayout="rows"
           />
         </SettingsSection>
       ))}
