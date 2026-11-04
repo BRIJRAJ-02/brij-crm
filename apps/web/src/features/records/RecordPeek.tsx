@@ -332,7 +332,14 @@ function LoadedPeek(
     {
       id: 'activity',
       label: strings.activity,
-      content: <ActivityTab feed={sources.feed} feedFor={feedFor} link={link} />,
+      content: (
+        <ActivityTab
+          feed={sources.feed}
+          feedFor={feedFor}
+          link={link}
+          {...(canEdit ? { onLogActivity: () => setLog('new') } : {})}
+        />
+      ),
     },
     {
       id: 'notes',
