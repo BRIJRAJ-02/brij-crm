@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useId, useRef, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Button as AriaButton, GridList, GridListItem } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
@@ -337,16 +338,14 @@ export function QuestionList({
                           {strings.hasProblem}
                         </span>
                       )}
-                      <AriaButton
-                        className={styles.close}
-                        aria-expanded
-                        aria-label={strings.close(name)}
+                      <Button
+                        variant="ghost"
+                        icon="chevron-up"
+                        label={strings.close(name)}
                         onPress={() => {
                           onOpenChange(item.id, false);
                         }}
-                      >
-                        <Icon name="chevron-up" size="sm" />
-                      </AriaButton>
+                      />
                     </>
                   ) : (
                     <AriaButton

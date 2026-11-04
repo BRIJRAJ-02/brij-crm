@@ -344,7 +344,7 @@ export const OpenHead: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('textbox', { name: 'Question' })).toHaveValue('Budget');
-    await expect(canvas.getByRole('button', { name: 'Close Budget' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByRole('button', { name: 'Close Budget' })).toBeVisible();
   },
 };
 

@@ -86,7 +86,7 @@ describe('the question card (T40)', () => {
     // One card open at a time: Your name closed as the new one opened.
     expect(page.getByRole('button', { name: 'Close Your name' }).query()).toBeNull();
     // The type is a small menu at the head's start.
-    await expect.element(page.getByRole('button', { name: 'Answer type: Email' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Email, answer type' })).toBeVisible();
     // Its words name a field the object has, so the answer goes there; nothing new is made.
     await userEvent.type(words, 'Email');
     await expect.poll(() => latest[1]?.filedOn?.attributeId).toBe(EMAIL_FIELD);
@@ -136,13 +136,13 @@ describe('the question card (T40)', () => {
     await expect.element(words).toHaveValue('What is your budget?');
     // Shift Tab reaches its type, Tab its body and footer: Required, then its ⋯, then the next card.
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
-    await expect.element(page.getByRole('button', { name: /^Answer type/ })).toHaveFocus();
+    await expect.element(page.getByRole('button', { name: /answer type$/ })).toHaveFocus();
     // Its type by the keyboard: the menu, a type picked by its first letters, and focus back on the type.
     await userEvent.keyboard('{Enter}');
     await expect.element(page.getByRole('menu')).toBeVisible();
     await userEvent.keyboard('Number');
     await userEvent.keyboard('{Enter}');
-    await expect.element(page.getByRole('button', { name: 'Answer type: Number' })).toHaveFocus();
+    await expect.element(page.getByRole('button', { name: 'Number, answer type' })).toHaveFocus();
     await userEvent.keyboard('{Tab}');
     await expect.element(words).toHaveFocus();
     const stops: string[] = [];

@@ -68,7 +68,7 @@ test.describe('the form journey’s edges', () => {
     const { slug, form } = await withForm(page, 'required');
     await page.goto(`/w/${slug}/captures/forms/${form.id}`);
     // The type first (T40), then the words in the card's head, then Required in its footer.
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
     await page.getByRole('switch', { name: 'Required' }).last().click();
@@ -188,7 +188,7 @@ test.describe('the form journey’s edges', () => {
     // Meanwhile the owner adds a required question and publishes.
     await page.goto(`/w/${slug}/captures/forms/${form.id}`);
     // The type first (T40), then the words in the card's head, then Required in its footer.
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
     await page.getByRole('switch', { name: 'Required' }).last().click();

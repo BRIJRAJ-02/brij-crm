@@ -1060,6 +1060,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             question={question}
             allowed={allowed}
             isLocked={isLocked(question)}
+            {...(props.locked === undefined ? {} : { lockReason: props.locked.reason })}
             isReadOnly={isReadOnly}
             // A question just added, or one a publish refused, takes focus and comes into view.
             isJustAdded={justAdded === id || problem?.questionId === id}
@@ -1266,6 +1267,8 @@ interface QuestionHeadProps {
   readonly allowed: ReadonlySet<AnswerType>;
   /** A question that stays as it is: its type can't change. */
   readonly isLocked: boolean;
+  /** Why it stays, said on its type. */
+  readonly lockReason?: string;
   readonly isReadOnly: boolean;
   /** Just added: its words take focus, and the card comes into view. */
   readonly isJustAdded: boolean;
@@ -1287,6 +1290,7 @@ function QuestionHead({
   question,
   allowed,
   isLocked,
+  lockReason,
   isReadOnly,
   isJustAdded,
   problem,
@@ -1312,17 +1316,24 @@ function QuestionHead({
   }, [isJustAdded]);
   const isConsent = question.answerType === 'consent';
   const typeName = strings.answerTypes[CHOICE_FAMILY.has(question.answerType) ? 'choice' : question.answerType];
+  // Its type, said and changeable at a glance (UX review): the icon, the type's name and a chevron.
   const typeButton = (
     <Button
       variant="ghost"
+      size="sm"
       icon={TYPE_ICONS[question.answerType]}
+      iconRight="chevrons-up-down"
       label={strings.typeMenu(typeName)}
       isDisabled={isReadOnly || isLocked}
-    />
+    >
+      {typeName}
+    </Button>
   );
   return (
     <>
-      {isReadOnly || isLocked ? (
+      {isLocked && lockReason !== undefined ? (
+        <Tooltip content={lockReason}>{typeButton}</Tooltip>
+      ) : isReadOnly || isLocked ? (
         typeButton
       ) : (
         <TypeMenu label={strings.answerType} allowed={allowed} current={question.answerType} onPick={onType}>

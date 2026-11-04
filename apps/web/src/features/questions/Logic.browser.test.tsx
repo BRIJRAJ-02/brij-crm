@@ -205,7 +205,7 @@ describe('the Logic map (AC-6325, T41)', () => {
           isOpen
           problems={[{ kind: 'shadowed', place: { kind: 'jump', stepId: 's2', index: 0 }, winner: 1 }]}
           suggestions={[
-            { id: 'one', words: 'Show a different thank-you message when Budget is $10k', apply: (each) => each },
+            { id: 'one', question: 'Budget', words: 'is $10k → a different thank-you message', apply: (each) => each },
           ]}
           pages={[]}
           onSuggest={(suggestion) => {

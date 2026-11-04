@@ -196,7 +196,7 @@ export const strings = {
   afterChoice: 'What they see next',
   showMessage: 'Message',
   sendToAddress: 'Web page',
-  thankYou: 'Thank you message',
+  thankYou: 'Thank-you message',
   thankYouDefault: 'Thank you. We will come back to you at the address you gave.',
   redirectUrl: 'Web address',
   redirectHint: 'Starts with https://',
@@ -609,14 +609,11 @@ export const strings = {
   flowEdit: 'Edit',
   flowClose: 'Close',
   suggestionsTitle: 'Suggestions',
-  suggestionTerm: 'One click',
   suggestionAdd: 'Add this rule',
-  suggestMessage: (question: string, choice: string) =>
-    `Show a different thank-you message when ${question} is ${choice}`,
-  suggestBook: (question: string, choice: string, page: string) =>
-    `Send people whose ${question} is ${choice} on to book ${page}`,
-  suggestLow: (question: string, below: string) =>
-    `Show a different thank-you message when ${question} is less than ${below}`,
+  /** A suggestion, after its question (UX review: short, the question quoted as its term). */
+  suggestMessage: (choice: string) => `is ${choice} → a different thank-you message`,
+  suggestBook: (choice: string, page: string) => `is ${choice} → book ${page}`,
+  suggestLow: (below: string) => `is less than ${below} → a different thank-you message`,
   suggestionAdded: 'Rule added to After they send.',
   testTitle: 'Test it',
   testLine: 'Pick answers to see the path a visitor takes. Nothing is sent.',
@@ -712,8 +709,9 @@ export const strings = {
   logicButton: (count: number) => `Logic · ${String(count)}`,
   logicButtonWarn: (count: number, warnings: number) => `Logic · ${String(count)}, ${String(warnings)} to check`,
   /** A thank-you message only a step's jump reaches: said, with where its rule is changed. */
-  sentByStep: (step: string) => `${step} sends people here`,
-  nothingSendsHere: 'Nothing sends people here yet',
+  sentByStep: (step: string) => `${step} sends some people to this thank-you message`,
+  editTheRule: 'Edit the rule',
+  nothingSendsHere: 'Nothing sends people to this thank-you message yet',
   sendPeopleHere: 'Send people here',
   messageMenu: 'Thank-you message actions',
   deleteMessage: 'Delete',

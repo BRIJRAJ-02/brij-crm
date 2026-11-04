@@ -123,7 +123,7 @@ describe('After they send (T39)', () => {
     await expect
       .element(page.getByRole('button', { name: /What everyone else sees/ }))
       .toHaveTextContent('Thank you page');
-    const words = page.getByRole('textbox', { name: 'Thank you message' });
+    const words = page.getByRole('textbox', { name: 'Thank-you message' });
     await expect.element(words).toHaveValue('Thanks, we will be in touch.');
     // No Score line while no question gives points, and no header actions.
     expect(page.getByText('Score', { exact: true }).query()).toBeNull();

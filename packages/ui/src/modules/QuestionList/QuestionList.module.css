@@ -513,34 +513,7 @@
     min-inline-size: 0;
   }
 
-  .close {
-    display: inline-grid;
-    flex: none;
-    place-items: center;
-    inline-size: var(--size-input);
-    block-size: var(--size-input);
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-    outline: none;
-  }
-
-  .close[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
-  }
-
   @media (hover: hover) and (pointer: fine) {
-    .close {
-      transition: background-color var(--duration-hover) var(--ease-hover);
-    }
-
-    .close:hover {
-      background: var(--surface-hover);
-      color: var(--text);
-    }
-
     /* With its own head the open card keeps the grip in the line before the type menu, never over it. */
     .row[data-open-head] .handle {
       position: static;

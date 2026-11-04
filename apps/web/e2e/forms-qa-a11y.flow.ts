@@ -93,13 +93,13 @@ test.describe('forms QA: accessibility', () => {
     await expect(fresh).toHaveValue('What is your budget?');
 
     // Its type is the small menu just before its words.
-    const type = page.getByRole('button', { name: /^Answer type/ }).last();
+    const type = page.getByRole('button', { name: /answer type$/ }).last();
     await shiftTabTo(page, type);
     await page.keyboard.press('Enter');
     await expect(page.getByRole('menu').first()).toBeVisible();
     await page.keyboard.type('Number');
     await page.keyboard.press('Enter');
-    await expect(type).toHaveAccessibleName('Answer type: Number');
+    await expect(type).toHaveAccessibleName('Number, answer type');
 
     const required = page.getByRole('switch', { name: 'Required' }).last();
     await tabTo(page, required);

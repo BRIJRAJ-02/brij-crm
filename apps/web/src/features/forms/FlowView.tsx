@@ -147,7 +147,7 @@ export function FlowView({
             <DescriptionList
               items={suggestions.map((suggestion) => ({
                 id: suggestion.id,
-                term: strings.suggestionTerm,
+                term: `“${suggestion.question}”`,
                 description: (
                   <>
                     {suggestion.words}{' '}

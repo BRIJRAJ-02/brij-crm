@@ -27,7 +27,7 @@ test.describe('the form journey', () => {
     const formUrl = page.url().replace(/\?.*$/, '');
 
     // A question mapped onto an attribute People already has.
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your role?');
     // Save answer to is under the question's ⋯ (T40), Keep with the answer until a field is picked.

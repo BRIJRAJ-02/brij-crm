@@ -893,14 +893,13 @@ export function FormEditor(props: FormEditorProps) {
                       <Button
                         variant="ghost"
                         icon={logicIssues.length > 0 ? 'triangle-alert' : 'git-branch'}
-                        {...(logicIssues.length > 0
-                          ? { label: strings.logicButtonWarn(logicCount(draft), logicIssues.length) }
-                          : {})}
                         onPress={() => {
                           setFlowOpen(true);
                         }}
                       >
-                        {strings.logicButton(logicCount(draft))}
+                        {logicIssues.length > 0
+                          ? strings.logicButtonWarn(logicCount(draft), logicIssues.length)
+                          : strings.logicButton(logicCount(draft))}
                       </Button>
                     ),
                   })}
@@ -1027,6 +1026,7 @@ export function FormEditor(props: FormEditorProps) {
               newId={() => data.forms.newId()}
               onDraftChange={setDraft}
               showGaps={showGaps}
+              stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
               {...(props.question === AFTER_ROW ? { focusRow: AFTER_ROW } : {})}
               {...(shown?.endingId === undefined
                 ? {}

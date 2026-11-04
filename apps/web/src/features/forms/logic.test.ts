@@ -263,16 +263,16 @@ describe('Test it: the path for chosen answers (T41)', () => {
 
 describe('one click suggestions (T41)', () => {
   const words = {
-    message: (question: string, choice: string) => `${question} is ${choice}: a different thank-you message`,
-    book: (question: string, choice: string, page: string) => `${question} is ${choice}: book ${page}`,
-    low: (question: string, below: string) => `${question} under ${below}`,
+    message: (choice: string) => `is ${choice}: a different thank-you message`,
+    book: (choice: string, page: string) => `is ${choice}: book ${page}`,
+    low: (below: string) => `under ${below}`,
     heading: 'Thanks',
   };
 
   it('offers a thank-you message and a booking page on the choice question, and each makes a sound rule', () => {
     const form = doc([NAME, BUDGET]);
     const offered = logicSuggestions(form, [{ id: 'p1', title: 'Intro call' }], words);
-    expect(offered.map((each) => each.words)).toEqual([
+    expect(offered.map((each) => `${each.question} ${each.words}`)).toEqual([
       'Budget is Under $1k: a different thank-you message',
       'Budget is $10k+: book Intro call',
     ]);
@@ -290,6 +290,14 @@ describe('one click suggestions (T41)', () => {
       routing: { rules: [{ id: 'r', when: is('budget', '$5k'), then: to('https://a.example') }] },
     });
     expect(logicSuggestions(ruled, [], words)).toEqual([]);
-    expect(logicSuggestions(doc([RATING]), [], words).map((each) => each.words)).toEqual(['How was it? under 4']);
+    expect(logicSuggestions(doc([RATING]), [], words).map((each) => `${each.question} ${each.words}`)).toEqual([
+      'How was it? under 4',
+    ]);
+    // Nor on a question a step's rule already reads.
+    const stepped = doc([BUDGET], {
+      layout: 'steps',
+      steps: [{ id: 's1', startsAt: 'budget', jumps: [{ when: is('budget', '$5k'), to: { ending: 'e' } }] }],
+    });
+    expect(logicSuggestions(stepped, [], words)).toEqual([]);
   });
 });

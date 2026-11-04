@@ -56,7 +56,7 @@ export const strings = {
   /** The question card's footer switch (critique c: one word everywhere). */
   required: 'Required',
   /** The type menu at the start of an open question's head. */
-  typeMenu: (type: string) => `Answer type: ${type}`,
+  typeMenu: (type: string) => `${type}, answer type`,
   /** The groups the type menu lists (critique c: a short, grouped list, picked first). */
   typeGroups: {
     text: 'Text',
@@ -167,7 +167,7 @@ export const strings = {
   /** Where a step goes when no jump matched (or when it has none): the next step, or the end of the form. */
   otherwiseGoTo: (where: string) => `Otherwise, go to ${where}`,
   /** The end of the form as a place to go: the thank you. */
-  theEnd: 'the thank you page',
+  theEnd: 'After they send',
   /** A new ending Add logic made, when there was nowhere further down to jump to. */
   newEndingHeading: 'Thanks for your answers',
   stepShowWhenHint: 'Show this step only when earlier answers match. Its answers are not kept when it is skipped.',

@@ -643,6 +643,8 @@ export function testPath(document: FormDocument, answers: Readonly<Record<string
 /** One click suggestion (T41): what it says, and the change it makes, given fresh ids. */
 export interface LogicSuggestion {
   readonly id: string;
+  /** The question it reads, as its term. */
+  readonly question: string;
   readonly words: string;
   readonly apply: (document: FormDocument, ids: { readonly rule: string; readonly ending: string }) => FormDocument;
 }
@@ -657,16 +659,23 @@ export function logicSuggestions(
   document: FormDocument,
   pages: readonly { readonly id: string; readonly title: string }[],
   words: {
-    readonly message: (question: string, choice: string) => string;
-    readonly book: (question: string, choice: string, page: string) => string;
-    readonly low: (question: string, below: string) => string;
+    readonly message: (choice: string) => string;
+    readonly book: (choice: string, page: string) => string;
+    readonly low: (below: string) => string;
     readonly heading: string;
   },
 ): readonly LogicSuggestion[] {
   const rules = document.routing.rules;
   if (rules.length >= ROUTING_RULES_MAX) return [];
   const facts = questionFacts(document.questions);
-  const used = new Set(rules.flatMap((rule) => rule.when.rules.map((condition) => condition.key)));
+  // Every question some rule already reads, of any kind (UX review): a step's or a question's jumps too.
+  const used = new Set(
+    [
+      ...rules.map((rule) => rule.when),
+      ...document.steps.flatMap((step) => (step.jumps ?? []).map((jump) => jump.when)),
+      ...document.questions.flatMap((question) => (question.jumps ?? []).map((jump) => jump.when)),
+    ].flatMap((when) => when.rules.map((condition) => condition.key)),
+  );
   const question = ruleQuestion(document.questions);
   const fact = question === undefined ? undefined : facts.find((each) => each.key === question.key);
   const out: LogicSuggestion[] = [];
@@ -697,7 +706,8 @@ export function logicSuggestions(
     if (first !== undefined && canEnd) {
       out.push({
         id: `message:${fact.key}`,
-        words: words.message(label, first.label),
+        question: label,
+        words: words.message(first.label),
         apply: ruleTo(
           { join: 'all', rules: [{ key: fact.key, op: 'is', value: first.id }] },
           { kind: 'ending', endingId: '' },
@@ -708,7 +718,8 @@ export function logicSuggestions(
     if (last !== undefined && last !== first && page !== undefined) {
       out.push({
         id: `book:${fact.key}`,
-        words: words.book(label, last.label, page.title),
+        question: label,
+        words: words.book(last.label, page.title),
         apply: ruleTo(
           { join: 'all', rules: [{ key: fact.key, op: 'is', value: last.id }] },
           { kind: 'book', bookingPageId: page.id, message: '' },
@@ -720,7 +731,8 @@ export function logicSuggestions(
       const below = String(range.from + Math.ceil((range.to - range.from) * 0.65));
       out.push({
         id: `low:${fact.key}`,
-        words: words.low(label, below),
+        question: label,
+        words: words.low(below),
         apply: ruleTo(
           { join: 'all', rules: [{ key: fact.key, op: 'less_than', value: below }] },
           { kind: 'ending', endingId: '' },

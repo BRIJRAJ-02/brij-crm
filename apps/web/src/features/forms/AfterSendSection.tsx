@@ -5,7 +5,14 @@
 // Main task: say what each person sees next, in one place, each part changed where it is read.
 // Leaves out: which step jumps where (each step's own logic, above).
 import type { BookingPageView, FormDocument, FormTargetChoices, RoutingRule } from '@crm/data';
-import { FORM_ENDINGS_MAX, ROUTING_RULES_MAX, SCORE_FACT, SCORED_TYPES, type FormEnding } from '@crm/data/forms';
+import {
+  CONDITIONS_MAX,
+  FORM_ENDINGS_MAX,
+  ROUTING_RULES_MAX,
+  SCORE_FACT,
+  SCORED_TYPES,
+  type FormEnding,
+} from '@crm/data/forms';
 import { useCaptureList } from '@crm/data/react';
 import {
   Button,
@@ -68,6 +75,8 @@ export interface AfterSendSectionProps {
   readonly problem?: { readonly endingId: string; readonly message: string };
   /** A field still being typed blocks Publish: show its message whether or not it was left yet. */
   readonly showGaps: boolean;
+  /** A step's row on the Form tab, for Edit the rule on a thank-you message only a step sends people to. */
+  readonly stepHref?: (stepId: string) => string;
 }
 
 /** The facts a rule here may read: every question, and the score once a question gives points. */
@@ -324,7 +333,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
     const then = rule.then;
     const ending = then.kind === 'ending' ? endings.find((each) => each.id === then.endingId) : undefined;
     const name = strings.ruleName(place + 1);
-    const canAddCondition = rule.when.rules.length < 5;
+    const canAddCondition = rule.when.rules.length < CONDITIONS_MAX;
     const isOnlyDelete = !canAddCondition && rules.length === 1;
     // Delete alone is no menu (no single item menus): the bin itself.
     const menu = isReadOnly ? undefined : isOnlyDelete ? (
@@ -462,19 +471,19 @@ export function AfterSendSection(props: AfterSendSectionProps) {
   // The step a jump to this thank-you message sits on, for its card's line.
   const flow = { questions: draft.questions, steps: draft.steps };
   const places = stepPlaces(flow);
-  const sentBy = (endingId: string) => {
+  const sentBy = (endingId: string): { readonly name: string; readonly stepId?: string } | undefined => {
     const step = draft.steps.find((each) =>
       (each.jumps ?? []).some((jump) => 'ending' in jump.to && jump.to.ending === endingId),
     );
-    if (step !== undefined) return questionStrings.stepName(places.get(step.id)?.number ?? 1, step.title);
+    if (step !== undefined) {
+      return { name: questionStrings.stepName(places.get(step.id)?.number ?? 1, step.title), stepId: step.id };
+    }
     const question = draft.questions.find((each) =>
       (each.jumps ?? []).some((jump) => 'ending' in jump.to && jump.to.ending === endingId),
     );
     return question === undefined
       ? undefined
-      : question.label === ''
-        ? questionStrings.untitledQuestion
-        : question.label;
+      : { name: question.label === '' ? questionStrings.untitledQuestion : question.label };
   };
 
   const looseCard = (ending: FormEnding) => {
@@ -515,8 +524,14 @@ export function AfterSendSection(props: AfterSendSectionProps) {
     return (
       <Card key={ending.id}>
         {problem?.endingId === ending.id && <Callout tone="danger">{problem.message}</Callout>}
-        <Sentence lead={strings.ifWord} {...(menu === undefined ? {} : { end: menu })}>
-          {`${by === undefined ? strings.nothingSendsHere : strings.sentByStep(by)} ${strings.thenArrow} ${strings.toMessage}`}
+        {/* Said plainly, not as a second copy of the step's rule (UX review), with the way to that rule. */}
+        <Sentence lead="" {...(menu === undefined ? {} : { end: menu })}>
+          {by === undefined ? strings.nothingSendsHere : strings.sentByStep(by.name)}
+          {by?.stepId !== undefined && props.stepHref !== undefined && (
+            <ButtonLink variant="ghost" size="sm" href={props.stepHref(by.stepId)}>
+              {strings.editTheRule}
+            </ButtonLink>
+          )}
         </Sentence>
         <EndingFields
           ending={ending}

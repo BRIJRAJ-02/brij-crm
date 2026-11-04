@@ -40,7 +40,7 @@ test.describe('the booking journey', () => {
     // Questions: answers go to People, and a required question is filed on a new People attribute.
     await page.getByRole('tab', { name: 'Questions' }).click();
     await expect(page.getByRole('button', { name: /Where the answers go/ })).toContainText('People');
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).fill('What do you want to cover?');
     // A new question is kept with the booking until the host says otherwise (B3); here they file it on People, from
