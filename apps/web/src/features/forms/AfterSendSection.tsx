@@ -939,30 +939,28 @@ function AfterDefault({
           />
         </SettingsRow>
       ) : after.kind === 'message' ? (
-        <SettingsRow title={strings.afterMessage} control="field">
-          <Field
-            label={strings.thankYou}
-            isLabelHidden
-            placeholder={strings.thankYouDefault}
-            isMultiline
-            value={after.message}
-            maxLength={2_000}
-            isReadOnly={isReadOnly}
-            {...(onEditThanks === undefined
-              ? {}
-              : {
-                  onFocus: () => {
-                    onEditThanks(true);
-                  },
-                  onBlur: () => {
-                    onEditThanks(false);
-                  },
-                })}
-            onChange={(message) => {
-              onDraftChange((before) => ({ ...before, after: { kind: 'message', message } }));
-            }}
-          />
-        </SettingsRow>
+        // Its words take the card's width under their label (a SettingsRow column was too narrow for a message).
+        <Field
+          label={strings.afterMessage}
+          placeholder={strings.thankYouDefault}
+          isMultiline
+          value={after.message}
+          maxLength={2_000}
+          isReadOnly={isReadOnly}
+          {...(onEditThanks === undefined
+            ? {}
+            : {
+                onFocus: () => {
+                  onEditThanks(true);
+                },
+                onBlur: () => {
+                  onEditThanks(false);
+                },
+              })}
+          onChange={(message) => {
+            onDraftChange((before) => ({ ...before, after: { kind: 'message', message } }));
+          }}
+        />
       ) : null}
     </>
   );

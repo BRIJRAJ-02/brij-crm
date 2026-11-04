@@ -124,7 +124,7 @@ describe('After they send (T39)', () => {
   it('says which thank-you message is being edited, so the preview shows it (T47)', async () => {
     edited = [];
     await show(DRAFT);
-    await userEvent.click(page.getByRole('textbox', { name: 'Thank-you message' }));
+    await userEvent.click(page.getByRole('textbox', { name: 'Message' }));
     await expect.poll(() => edited[0]).toBe('default');
     await userEvent.click(page.getByRole('button', { name: 'Add a route' }));
     await expect.poll(() => latest.endings?.length).toBe(1);
@@ -140,7 +140,7 @@ describe('After they send (T39)', () => {
     await expect.element(page.getByRole('heading', { name: 'After they send' })).toBeVisible();
     await expect.element(page.getByText('Show', { exact: true })).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Show everyone/ })).toHaveTextContent('Thank you page');
-    const words = page.getByRole('textbox', { name: 'Thank-you message' });
+    const words = page.getByRole('textbox', { name: 'Message' });
     await expect.element(words).toHaveValue('Thanks, we will be in touch.');
     // No Score line while no question gives points.
     expect(page.getByText('Score', { exact: true }).query()).toBeNull();

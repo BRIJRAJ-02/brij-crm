@@ -38,6 +38,7 @@ import {
   HostedFormPreview,
   type HostedFormPreviewProps,
   PreviewLayout,
+  SegmentedControl,
   type PreviewTextChange,
   TabPanel,
   Tabs,
@@ -191,6 +192,8 @@ export function FormEditor(props: FormEditorProps) {
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // Logic · n shows only the cards that carry rules (forms fixes 3, the design critic: a map that said only Edit).
   const [isLogicOnly, setLogicOnly] = useState(false);
+  // The screen the preview lays the form out at (forms fixes 3): this tab's own choice, not the form's.
+  const [device, setDevice] = useState<'phone' | 'desktop'>('phone');
   // The name, link, owner and who is emailed: each saves on its own on the Settings tab, with no Save.
   const settings = useFormSettings({
     slug,
@@ -1227,6 +1230,9 @@ export function FormEditor(props: FormEditorProps) {
       notices={notices}
       // The phone beside the questions from a laptop's width up (critique c, blocker 1): two fifths of the width.
       previewShare="wide"
+      // On a sunken canvas, the frame as tall as the form (forms fixes 3, the design critic: a white slab in dark).
+      previewSurface="canvas"
+      previewDevice={device}
       // Every tab reads top to bottom, full width; only the Form tab keeps the preview (the owner, 22 October 2026).
       bodyLayout="stack"
       {...(current === 'form'
@@ -1251,15 +1257,31 @@ export function FormEditor(props: FormEditorProps) {
               ),
             // The look, upfront over the preview it changes (forms fixes 3): Mode, Corners and Brand, no click away.
             previewControls: (
-              <LookControls
-                look={draft.look}
-                isReadOnly={!canManage}
-                {...(props.brand === undefined ? {} : { brand: props.brand })}
-                slug={slug}
-                onChange={(look) => {
-                  setDraft((before) => ({ ...before, look }));
-                }}
-              />
+              <>
+                {/* Desktop or Phone (forms fixes 3, the design critic): the form laid out at either, as Tally's and
+                    Typeform's previews switch. Phone first, as most visitors fill it in on one. */}
+                <SegmentedControl
+                  label={strings.previewDevice}
+                  size="compact"
+                  segments={[
+                    { value: 'phone', label: strings.previewPhone, icon: 'smartphone', isIconOnly: true },
+                    { value: 'desktop', label: strings.previewDesktop, icon: 'monitor', isIconOnly: true },
+                  ]}
+                  value={device}
+                  onChange={(value) => {
+                    if (value === 'phone' || value === 'desktop') setDevice(value);
+                  }}
+                />
+                <LookControls
+                  look={draft.look}
+                  isReadOnly={!canManage}
+                  {...(props.brand === undefined ? {} : { brand: props.brand })}
+                  slug={slug}
+                  onChange={(look) => {
+                    setDraft((before) => ({ ...before, look }));
+                  }}
+                />
+              </>
             ),
           }
         : {})}
