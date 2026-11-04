@@ -62,6 +62,16 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     expect(turn.text).toBe('Great, tomorrow at 3:00 PM it is. What’s your name and email?');
   });
 
+  it('says which details it waits on, so the prompt box can ask for them', () => {
+    expect(words(['tomorrow at 3pm']).asks).toBe('details');
+    expect(words(['tomorrow at 3pm', 'ada@example.com']).asks).toBe('name');
+    expect(words(['tomorrow at 3pm', "I'm Ada Lovelace"]).asks).toBe('email');
+    expect(words(['tomorrow at 3pm', "I'm Ada Lovelace", 'ada@example.com'], { needsPhone: true }).asks).toBe('phone');
+    // Nothing held, or everything read back: nothing asked.
+    expect(words(['next tuesday afternoon']).asks).toBeUndefined();
+    expect(words(["I'm Ada Lovelace", 'tomorrow at 3pm', 'ada@example.com']).asks).toBeUndefined();
+  });
+
   it('reads a bare morning hour that missed as the afternoon', () => {
     expect(words(['friday at 4']).state.held).toBe(at('2026-10-23T16:00'));
     expect(words(['friday at 4am']).state.held).toBeUndefined();

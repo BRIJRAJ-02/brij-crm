@@ -340,7 +340,9 @@ export function BookingFrame({
               </div>
               {isCovered && (
                 <div key={view} className={styles.cover}>
-                  <div className={styles.coverBody}>{cover}</div>
+                  <div className={styles.coverBody} data-view={view}>
+                    {cover}
+                  </div>
                   {coverFooter !== undefined && <div className={styles.footer}>{coverFooter}</div>}
                 </div>
               )}
