@@ -467,6 +467,25 @@ export const PhoneOnItsOwn: Story = {
   ),
 };
 
+/**
+ * The phone filling a pane given to it alone (`size="pane"`, forms fixes 3): the form template gallery's side pane,
+ * where the capped phone sat small in a tall empty pane. No breath above or below, and no page card cap.
+ */
+export const PhoneFillsPane: Story = {
+  render: () => (
+    <Stage height="page" width="narrow">
+      <PhonePreview size="pane">
+        <LinkPage
+          isPreview
+          person={{ name: 'Ada Lovelace', id: 'ada' }}
+          address={{ label: 'timefix.com/ada', value: 'https://timefix.com/ada' }}
+          blocks={[{ kind: 'page', id: 'intro', title: 'Intro call', href: '/ada/intro', facts: '30 min' }]}
+        />
+      </PhonePreview>
+    </Stage>
+  ),
+};
+
 /** A draft's Preview in a tab of its own (spec 0068): the frame alone, the window's full height, still inert. */
 export const PageSize: Story = {
   parameters: { crm: { screenshot: false } },

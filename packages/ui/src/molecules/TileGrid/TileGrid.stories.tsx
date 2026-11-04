@@ -432,6 +432,42 @@ export const ChoiceAutoFocus: Story = {
   },
 };
 
+/** A template list that says which tile it went on with, as the gallery's Use would. */
+function Confirming() {
+  const [confirmed, setConfirmed] = useState<string | undefined>(undefined);
+  return (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="Start a form"
+        showsDescription
+        tileWidth="wide"
+        defaultValue="blank"
+        onConfirm={setConfirmed}
+        tiles={[
+          { id: 'blank', name: 'Blank form', icon: 'plus', description: 'Start from an empty page.' },
+          { id: 'feedback', name: 'Feedback', icon: 'message-square', description: 'A rating, and why.' },
+        ]}
+      />
+      <p>{`Used: ${confirmed ?? 'none'}`}</p>
+    </Stage>
+  );
+}
+
+/** `onConfirm` on a select grid: Enter on a tile, or a double click, picks it and goes on with it. */
+export const ChoiceConfirm: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <Confirming />,
+  play: async ({ canvas }) => {
+    await userEvent.dblClick(canvas.getByText('Feedback'));
+    await expect(canvas.getByText('Used: feedback')).toBeVisible();
+    await expect(canvas.getByRole('radio', { name: 'Feedback' })).toBeChecked();
+    canvas.getByRole('radio', { name: 'Blank form' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(canvas.getByText('Used: blank')).toBeVisible();
+  },
+};
+
 /** Action mode: each tile starts something at once (Add block). A description reaches screen readers and a tooltip. */
 export const ChoiceAction: Story = {
   parameters: { crm: { screenshot: false } },

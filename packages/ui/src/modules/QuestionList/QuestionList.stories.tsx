@@ -348,6 +348,55 @@ export const OpenHead: Story = {
   },
 };
 
+/**
+ * The open card's actions in its head (actionsIn="head", forms fixes 3, after Typeform's and Sprig's cards): the type
+ * as one labelled menu at the start, Required and the ⋯ at the end, the question's words the body's first field.
+ */
+export const ActionsInHead: Story = {
+  render: () => (
+    <Stage width="fill">
+      <QuestionList
+        label="Questions"
+        items={QUESTIONS}
+        openIds={new Set(['budget'])}
+        onOpenChange={() => undefined}
+        actionsIn="head"
+        renderOpenHead={() => (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="chevron-down"
+            iconRight="chevrons-up-down"
+            label="Dropdown, answer type"
+          >
+            Dropdown
+          </Button>
+        )}
+        renderOpen={(id) => (
+          <>
+            <Field
+              label="Question"
+              isLabelHidden
+              size="lg"
+              value={QUESTIONS.find((item) => item.id === id)?.label ?? ''}
+            />
+            <Field label="Placeholder" size="sm" placeholder="Placeholder text (optional)" />
+          </>
+        )}
+        renderFooterStart={() => <Checkbox label="Required" />}
+        renderFooter={() => <Button variant="ghost" icon="ellipsis" label="More for Budget" />}
+        onMove={() => undefined}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Dropdown, answer type' })).toBeVisible();
+    await expect(canvas.getByRole('checkbox', { name: 'Required' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'More for Budget' })).toBeVisible();
+    await expect(canvas.getByRole('textbox', { name: 'Question' })).toHaveValue('Budget');
+  },
+};
+
 /** Gaps kept in view (gaps="shown", T39): a quiet + between cards, for touch and the keyboard as well as a pointer. */
 export const GapsShown: Story = {
   render: () => (

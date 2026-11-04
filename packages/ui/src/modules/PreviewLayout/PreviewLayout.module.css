@@ -198,6 +198,16 @@
     max-block-size: var(--size-page-card);
   }
 
+  /* PhonePreview size="pane": a pane given to the preview alone, so the phone takes its whole height. */
+  .preview[data-place='bare'][data-size='pane'] {
+    padding-block: 0;
+  }
+
+  .preview[data-place='bare'][data-size='pane'] .stage {
+    flex: 1 1 0;
+    max-block-size: none;
+  }
+
   /* The phone: its outline at the scaled size, the page inside laid out at the phone's own size. */
   .phone {
     box-sizing: content-box;

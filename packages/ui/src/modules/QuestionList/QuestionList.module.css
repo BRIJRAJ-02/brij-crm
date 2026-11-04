@@ -497,7 +497,8 @@
 
   /* An open question's own head (renderOpenHead, T40): the caller's type menu and the question's field, in the
      place of the tile and the two lines, then the chevron as its own button that closes the card. */
-  .openHead {
+  .openHead,
+  .openHeadFit {
     display: flex;
     flex: 1;
     gap: var(--space-8);
@@ -511,6 +512,15 @@
   .openHead > :last-child {
     flex: 1;
     min-inline-size: 0;
+  }
+
+  /* With the actions in the head (actionsIn="head") the head is `openHeadFit`: the type menu keeps its own width and
+     the head's parts sit at its end, Required and the ⋯, then the chevron. */
+  .headActions {
+    display: flex;
+    flex: none;
+    gap: var(--space-8);
+    align-items: center;
   }
 
   @media (hover: hover) and (pointer: fine) {

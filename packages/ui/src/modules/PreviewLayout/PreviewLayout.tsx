@@ -420,6 +420,8 @@ interface PhoneColumnProps {
   readonly headingId?: string;
   readonly controls?: ReactNode;
   readonly note?: ReactNode;
+  /** `pane` (bare only): the phone takes its pane's whole height (PhonePreview's `size`). */
+  readonly size?: 'pane';
   /** What the phone shows. */
   readonly children: ReactNode;
 }
@@ -430,13 +432,14 @@ interface PhoneColumnProps {
  * fit the room left under them (never above 1). When what it shows runs past the phone's foot (a long form), the
  * screen scrolls, and takes focus so the keyboard can scroll it too.
  */
-function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumnProps) {
+function PhoneColumn({ place, headingId, controls, note, size, children }: PhoneColumnProps) {
   const { ref, scale, height } = usePhoneFit();
   const { ref: screenRef, isOverflowing } = useOverflow();
   return (
     <div
       className={styles.preview}
       data-place={place}
+      data-size={size}
       style={{
         '--phone-width': `${String(PHONE.width)}px`,
         '--phone-height': `${String(height)}px`,
@@ -471,6 +474,12 @@ function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumn
 export interface PhonePreviewProps {
   /** What the phone shows: a page drawn at a phone's width, which is then scaled to the room there is. */
   readonly children: ReactNode;
+  /**
+   * `pane` lets the phone take its pane's whole height, with no breath above and below and no page card cap: a side
+   * pane given to the preview alone (the form template gallery, forms fixes 3, where the capped phone sat small in a
+   * tall empty pane). Left out, the phone keeps a page card's height, centred.
+   */
+  readonly size?: 'pane';
 }
 
 /**
@@ -484,8 +493,12 @@ export interface PhonePreviewProps {
  * It fills the room its container gives it, and the page inside it scrolls
  * when it runs past the phone's foot.
  */
-export function PhonePreview({ children }: PhonePreviewProps) {
-  return <PhoneColumn place="bare">{children}</PhoneColumn>;
+export function PhonePreview({ children, size }: PhonePreviewProps) {
+  return (
+    <PhoneColumn place="bare" {...(size === undefined ? {} : { size })}>
+      {children}
+    </PhoneColumn>
+  );
 }
 
 /**
