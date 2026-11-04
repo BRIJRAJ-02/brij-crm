@@ -631,9 +631,12 @@ export const strings = {
   restoredSome: (n: number, of: number) => `Restored ${String(n)} of ${String(of)}.`,
   restoredMany: (n: number) =>
     n === 1 ? 'Submission restored.' : `${count(n, 'submission', 'submissions')} restored.`,
-  deletingMany: 'Deleting…',
   deletedMany: (n: number) => `${count(n, 'submission', 'submissions')} deleted.`,
-  deletedSome: (done: number, of: number) => `Deleted ${String(done)} of ${String(of)}; the rest are still picked.`,
+  /** Said after a bulk delete when some were still being added to the CRM, so they stayed (forms fixes 3). */
+  stillFilingKept: (n: number) =>
+    n === 1
+      ? 'One is still being added to the CRM, so it stays.'
+      : `${String(n)} are still being added to the CRM, so they stay.`,
   /** Marks the answers not saved on the record, when some were. */
   notSavedMark: 'Not saved',
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
