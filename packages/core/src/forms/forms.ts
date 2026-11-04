@@ -840,6 +840,30 @@ function checkDraft(form: FormRow, document: FormDocument): void {
   }
 }
 
+/**
+ * Refuses Also create a deal (forms fix a3) unless the form saves to the standard People and the deal goes to the
+ * workspace's standard Deals, live, that the saver may write: a submission then makes the deal beside the person.
+ */
+async function checkDealTarget(tx: WorkspaceTx, scope: EngineScope, document: FormDocument): Promise<void> {
+  const deal = document.targets.deal;
+  if (deal === undefined) return;
+  const main = document.targets.main;
+  const refusal = refuseOn(
+    'CONFIG_INVALID',
+    'A deal is made beside a person. Save submissions to People first.',
+    'deal',
+  );
+  if (main === undefined || !(await isPeopleObject(tx, main.objectId))) throw refusal;
+  const [found] = await tx
+    .select({ standardKey: objects.standardKey, archivedAt: objects.archivedAt })
+    .from(objects)
+    .where(eq(objects.id, deal.objectId));
+  if (found?.standardKey !== 'deals' || found.archivedAt !== null) {
+    throw refuseOn('CONFIG_INVALID', 'Deals is not available in this workspace.', 'deal');
+  }
+  await checkObject(tx, scope.access, deal.objectId, 'write');
+}
+
 /** Saves `document` as the draft, starting the next version when the draft is the live one. */
 async function writeDraft(tx: WorkspaceTx, scope: EngineScope, form: FormRow, document: FormDocument): Promise<void> {
   const by = actorRow(scope.actor);
@@ -931,6 +955,7 @@ export async function saveFormDraft(
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
       checkDraft(form, input.document);
+      await checkDealTarget(tx, scope, input.document);
       await checkFormAddresses(tx, scope.workspaceId, input.document, options.publicOrigins ?? []);
       // A form's conditions never read a person's or a company's field (its editor offers none), refused in publish's
       // words: every member who sees the form reads its draft, so a stored one would show them a field's id and the
@@ -997,6 +1022,7 @@ export async function publishForm(
       const draft = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
       if (draft === undefined) throw new Error('The draft version went away.');
       checkDraft(form, draft.document);
+      await checkDealTarget(tx, scope, draft.document);
       await checkBookingTarget(tx, scope, draft.document, 'live');
       await checkFormRoutes(tx, scope, draft.document.routing.rules, 'live');
       // Again on publish (spec 0056, AC-5612): a redirect that has come to name another workspace's page is refused.
@@ -1292,6 +1318,55 @@ function fileDefaults(
   });
 }
 
+/**
+ * The draft's remembered filings with the object it files onto now added (forms fix a2): each filed question's
+ * attribute on that object, by question id. An object with nothing filed keeps what was remembered for it.
+ */
+function rememberFiling(document: FormDocument): Readonly<Record<string, Readonly<Record<string, string>>>> {
+  const before = document.filedBefore ?? {};
+  const objectId = document.targets.main?.objectId;
+  if (objectId === undefined) return before;
+  const now = Object.fromEntries(
+    document.questions.flatMap((question) =>
+      question.filedOn === undefined ? [] : [[question.id, question.filedOn.attributeId] as const],
+    ),
+  );
+  return Object.keys(now).length === 0 ? before : { ...before, [objectId]: now };
+}
+
+/** The document with its remembered filings, left out when there are none, so an old document reads as it did. */
+function withFiledBefore(
+  document: FormDocument,
+  filedBefore: Readonly<Record<string, Readonly<Record<string, string>>>>,
+): FormDocument {
+  const { filedBefore: _old, ...rest } = document;
+  return Object.keys(filedBefore).length === 0 ? rest : { ...rest, filedBefore: { ...filedBefore } };
+}
+
+/**
+ * Puts back where each question was saved on an object it is moved back to: only onto an attribute still live
+ * there, that the question's answers still fit, that no other question holds, and only for a question not filed or
+ * kept off the CRM since.
+ */
+function restoreFiling(
+  questions: readonly FormQuestion[],
+  remembered: Readonly<Record<string, string>> | undefined,
+  live: readonly AttributeDef[],
+): FormQuestion[] {
+  if (remembered === undefined) return [...questions];
+  const byId = new Map(live.map((attribute) => [attribute.id, attribute]));
+  const used = new Set(questions.flatMap((question) => question.filedOn?.attributeId ?? []));
+  return questions.map((question) => {
+    const attributeId = remembered[question.id];
+    const attribute = attributeId === undefined ? undefined : byId.get(attributeId);
+    if (question.filedOn !== undefined || attribute === undefined || used.has(attribute.id)) return question;
+    if (!fitsAttribute(question.answerType, attribute.type)) return question;
+    used.add(attribute.id);
+    const { kept: _kept, ...rest } = question;
+    return { ...rest, filedOn: { objectRole: 'main' as const, attributeId: attribute.id } };
+  });
+}
+
 /** A question filed nowhere: kept with the submission only. */
 function unfiled(question: FormQuestion): FormQuestion {
   const { filedOn, ...rest } = question;
@@ -1338,8 +1413,14 @@ export async function setFormTarget(
       const draft = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
       if (draft === undefined) throw new Error('The draft version went away.');
       let document: FormDocument;
+      // The mapping on the object it leaves is remembered, and the one it comes back to put back (forms fix a2):
+      // trying Deals and returning to People never loses where Description was saved.
+      const filedBefore = rememberFiling(draft.document);
       if (objectId === null) {
-        document = { ...draft.document, questions: draft.document.questions.map(unfiled), targets: {} };
+        document = withFiledBefore(
+          { ...draft.document, questions: draft.document.questions.map(unfiled), targets: {} },
+          filedBefore,
+        );
       } else {
         const object = await writableObject(tx, scope, objectId);
         const attributes = await loadAttributes(tx, objectId);
@@ -1347,11 +1428,21 @@ export async function setFormTarget(
         const kept = draft.document.questions.map((question) =>
           question.filedOn !== undefined && attributes.has(question.filedOn.attributeId) ? question : unfiled(question),
         );
-        document = {
-          ...draft.document,
-          questions: fileDefaults(kept, attributes, object.primaryAttributeId),
-          targets: { main: { objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
-        };
+        const restored = restoreFiling(kept, filedBefore[objectId], fileable(attributes));
+        const { [objectId]: _back, ...remembered } = filedBefore;
+        const isPeople = await isPeopleObject(tx, objectId);
+        const deal = isPeople ? draft.document.targets.deal : undefined;
+        document = withFiledBefore(
+          {
+            ...draft.document,
+            questions: fileDefaults(restored, attributes, object.primaryAttributeId),
+            targets: {
+              main: { objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) },
+              ...(deal === undefined ? {} : { deal }),
+            },
+          },
+          remembered,
+        );
       }
       if (objectId === form.mainObjectId && sameDraft(draft.document, document)) return viewOf(tx, scope, form);
       await tx.update(forms).set({ mainObjectId: objectId }).where(eq(forms.id, form.id));

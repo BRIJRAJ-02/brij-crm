@@ -562,12 +562,14 @@ export function FormEditor(props: FormEditorProps) {
     else if (step.kind === 'ask') setRetargetAsk(step.ask);
   };
 
-  const retarget = (objectId: string | null) => {
+  const retarget = (objectId: string | null, isUndo = false) => {
     if (isRetargeting) return;
     setRetargeting(true);
     const settled = () => {
       setRetargeting(false);
     };
+    // Where it saved before, for Undo (forms fix a2): the server remembered the mapping, so going back restores it.
+    const before = draft.targets.main?.objectId ?? null;
     flush()
       .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision))
       .then(async (view) => {
@@ -578,6 +580,18 @@ export function FormEditor(props: FormEditorProps) {
         latest.current = next;
         setTarget(choices);
         settled();
+        if (isUndo) return;
+        const toName = objects.find((object) => object.id === objectId)?.pluralName ?? strings.thisObject;
+        toasts.toast({
+          tone: 'success',
+          message: objectId === null ? strings.retargetOffDone : strings.retargetDone(toName),
+          action: {
+            label: strings.undo,
+            onAction: () => {
+              retarget(before, true);
+            },
+          },
+        });
       })
       .catch((error: unknown) => {
         settled();
@@ -765,6 +779,15 @@ export function FormEditor(props: FormEditorProps) {
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
             onStatusChange={setStatus}
+            onDealChange={(dealObjectId) => {
+              setDraft((before) => {
+                const { deal: _deal, ...rest } = before.targets;
+                return {
+                  ...before,
+                  targets: dealObjectId === undefined ? rest : { ...rest, deal: { objectId: dealObjectId } },
+                };
+              });
+            }}
           />
         );
       case 'install':

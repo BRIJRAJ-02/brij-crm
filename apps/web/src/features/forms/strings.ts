@@ -234,17 +234,25 @@ export const strings = {
   mappingQuestion: 'Question',
   mappingSavedAs: 'Saved as',
   retargetFailed: 'That didn’t change where submissions go.',
-  retargetTitle: 'Change which object submissions are saved to?',
-  retargetOffTitle: 'Stop saving submissions to the CRM?',
-  /** One line each (spec 0058, AC-18): what the change loses. */
-  retargetText: (to: string) => `Only questions matching a field on ${to} stay saved.`,
-  retargetOffText: 'New submissions make no record. Answers stay with them.',
+  retargetTitle: (to: string) => `Save answers to ${to}?`,
+  retargetOffTitle: 'Stop saving answers to the CRM?',
+  /**
+   * What the change does to the questions saved now, named (forms fix a2, 5 November 2026): they are remembered, so
+   * switching back saves them where they were.
+   */
+  retargetText: (questions: string, from: string) =>
+    `${questions} stop saving to ${from}. Switching back restores them.`,
+  retargetDone: (to: string) => `Answers now save to ${to}.`,
+  retargetOffDone: 'Answers now stay in Submissions.',
+  /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
+  alsoDeal: 'Also create a deal',
+  alsoDealTip: 'Each submission also adds a deal, linked to the person and their company. Goes live with Publish.',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
     `Changes here go live when you publish. Until then, submissions are still saved to ${objectName}.`,
   savingWaitsKeptOnly:
     'Changes here go live when you publish. Until then, submissions are still kept with the form only.',
-  retargetAction: 'Change object',
+  retargetAction: (to: string) => `Save to ${to}`,
   retargetOffAction: 'Stop saving',
   filedOn: (object: string, attribute: string) => `${object} › ${attribute}`,
   keptOnly: 'Kept with the submission only',

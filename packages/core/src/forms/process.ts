@@ -24,7 +24,7 @@ import { isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
 import { companyFilingTarget } from '../engine/filing.ts';
-import { insertRecord, updateRecord } from '../engine/records.ts';
+import { insertRecord, readRecords, updateRecord } from '../engine/records.ts';
 import { uniqueKeyOf } from '../engine/unique.ts';
 import { currentItems, isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -1041,7 +1041,20 @@ export async function processSubmission(
         ),
       ),
   });
-  await settle(tx, submission.id, filed);
+  // Also create a deal (forms fix a3): beside the person, linked to them and their company, never failing the person.
+  const deal =
+    filed.kind === 'filed' && isPeople && document.targets.deal !== undefined
+      ? await fileDeal(context, {
+          form,
+          submissionId: submission.id,
+          personId: filed.recordId,
+          peopleObjectId: target.objectId,
+          peopleAttributes: attributes,
+          dealObjectId: document.targets.deal.objectId,
+          ...(filed.assignment.memberId === undefined ? {} : { ownerMemberId: filed.assignment.memberId }),
+        })
+      : undefined;
+  await settle(tx, submission.id, filed, deal?.ok === false ? { dealFailure: deal.failure } : {});
   // Each consent ticked becomes a consent record on the person, in this same transaction (AC-1053).
   if (filed.kind === 'filed' && isPeople && consents.kind === 'given') {
     await recordConsents(tx, {
@@ -1053,6 +1066,135 @@ export async function processSubmission(
   }
   await tellTeam(context, rules, submission.id);
   await tellVisitor(context, submission.id);
+}
+
+/** What a deal that couldn't be made says on its submission; the person is still filed. */
+export const DEAL_NOT_MADE = 'The person was saved, but their deal couldn’t be made.';
+
+/** What making a submission's deal ended as: its record, or why not. */
+export type DealFiled =
+  { readonly ok: true; readonly recordId: string } | { readonly ok: false; readonly failure: string };
+
+/** The record a person links on a relationship attribute now, if any (their company, read from either end). */
+async function linkedOn(tx: WorkspaceTx, recordId: string, attribute: AttributeDef | undefined) {
+  if (attribute?.relationshipId === undefined || attribute.relationshipId === null) return undefined;
+  const found = await tx.execute<{ id: string }>(sql`
+    select case when from_record_id = ${recordId}::uuid then to_record_id else from_record_id end::text as id
+    from record_links
+    where relationship_id = ${attribute.relationshipId}::uuid and active_until is null
+      and (from_record_id = ${recordId}::uuid or to_record_id = ${recordId}::uuid)
+    limit 1
+  `);
+  return found.rows[0]?.id;
+}
+
+/** A person's name as the deal takes it: their display name, else their first email, else the form's name. */
+async function dealName(tx: WorkspaceTx, scope: EngineScope, personId: string, formName: string): Promise<string> {
+  const [view] = await readRecords(tx, scope.access, [personId], { attributeIds: [] });
+  const name = view?.display.name.trim() ?? '';
+  return (name === '' ? formName : name).slice(0, 200);
+}
+
+/**
+ * Makes one deal for a submission (forms fix a3, 5 November 2026): on the standard Deals, named after the person,
+ * linked to them and to the company filing gave them, owned by the person's owner from this filing (else the form's
+ * maker, since Deals requires an owner). The form writes it with exactly those fields (`formAccess`'s `also`
+ * reaching the person's and the company's own side of each link), in its own savepoint: a refusal makes no deal and
+ * leaves the person filed, the submission saying why (`DEAL_NOT_MADE`).
+ */
+async function fileDeal(
+  context: WriteContext,
+  input: {
+    readonly form: FormRow;
+    readonly submissionId: string;
+    readonly personId: string;
+    readonly peopleObjectId: string;
+    readonly peopleAttributes: ReadonlyMap<string, AttributeDef>;
+    readonly dealObjectId: string;
+    readonly ownerMemberId?: string;
+  },
+): Promise<DealFiled> {
+  const { tx } = context;
+  const dealAttributes = await loadAttributes(tx, input.dealObjectId);
+  const live = (slug: string) =>
+    [...dealAttributes.values()].find((attribute) => attribute.apiSlug === slug && !isArchivedNow(attribute));
+  const name = live('name');
+  const people = live('associated_people');
+  const companyLink = live('associated_company');
+  const owner = live('owner');
+  if (name === undefined || people?.type !== 'record_reference') return { ok: false, failure: DEAL_NOT_MADE };
+  const personCompany = [...input.peopleAttributes.values()].find((attribute) => attribute.apiSlug === 'company');
+  const companyId = await linkedOn(tx, input.personId, personCompany);
+  const companyObjectId =
+    companyId === undefined
+      ? undefined
+      : (
+          await tx.execute<{ object_id: string }>(
+            sql`select object_id::text from records where id = ${companyId}::uuid and deleted_at is null`,
+          )
+        ).rows[0]?.object_id;
+  const ownerId = input.ownerMemberId ?? input.form.createdById ?? undefined;
+  const values = new Map<string, unknown>([
+    [name.id, await dealName(tx, context.scope, input.personId, input.form.name)],
+    [people.id, [{ objectId: input.peopleObjectId, recordId: input.personId }]],
+  ]);
+  if (companyLink?.type === 'record_reference' && companyId !== undefined && companyObjectId !== undefined) {
+    const reference = { objectId: companyObjectId, recordId: companyId };
+    values.set(companyLink.id, companyLink.isMulti ? [reference] : reference);
+  }
+  if (owner?.type === 'actor_reference' && ownerId !== undefined) {
+    const member = { type: 'member', id: ownerId };
+    values.set(owner.id, owner.isMulti ? [member] : member);
+  }
+  // Each link's other side: People's Associated deals, and the company's.
+  const sides = async (objectId: string, pair: string | null | undefined) => {
+    const all = await loadAttributes(tx, objectId);
+    const side = [...all.values()].find(
+      (attribute) => attribute.relationshipId === pair && attribute.objectId !== input.dealObjectId,
+    );
+    return { objectId, attributeIds: [...all.keys()], writable: new Set(side === undefined ? [] : [side.id]) };
+  };
+  const also = [
+    await sides(input.peopleObjectId, people.relationshipId),
+    ...(companyObjectId === undefined || companyLink === undefined
+      ? []
+      : [await sides(companyObjectId, companyLink.relationshipId)]),
+  ];
+  const writer = actingAs(
+    context,
+    enterAsForm(
+      context.scope,
+      input.form.id,
+      formAccess(input.form.id, {
+        objectId: input.dealObjectId,
+        attributeIds: [...dealAttributes.keys()],
+        // The values it writes, and the ones the deal takes from their defaults (Stage starts at its first stage).
+        writable: new Set([
+          ...values.keys(),
+          ...[...dealAttributes.values()]
+            .filter((attribute) => attribute.defaultValue !== null && attribute.defaultValue !== undefined)
+            .map((attribute) => attribute.id),
+        ]),
+        also,
+      }),
+    ),
+  );
+  const written = await writeSkipping(writer, values, (inner, given) =>
+    insertRecord(inner, { objectId: input.dealObjectId, values: given }),
+  );
+  if (!written.ok) return { ok: false, failure: DEAL_NOT_MADE };
+  await tx
+    .insert(formSubmissionRecords)
+    .values({
+      workspaceId: context.scope.workspaceId,
+      submissionId: input.submissionId,
+      objectId: input.dealObjectId,
+      recordId: written.value.recordId,
+      action: 'created',
+      role: 'deal',
+    })
+    .onConflictDoNothing();
+  return { ok: true, recordId: written.value.recordId };
 }
 
 /** A stored assignment as filing's `previous`, when there is one. */

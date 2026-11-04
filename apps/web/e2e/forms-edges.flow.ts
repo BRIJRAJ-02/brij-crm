@@ -90,21 +90,27 @@ test.describe('the form journey’s edges', () => {
     await visitor.context().close();
   });
 
-  test('changing which object a filed form saves to asks first, and moves it once confirmed', async ({ page }) => {
+  test('changing which object a filed form saves to asks first, moves it, and Undo puts the mapping back', async ({
+    page,
+  }) => {
     test.setTimeout(180_000);
     const { slug, form } = await withForm(page, 'retarget');
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=settings`);
     const target = page.getByRole('button', { name: /Save answers to$/ }).last();
     await expect(target).toContainText('People');
     await target.click();
-    await page.getByRole('option', { name: 'Deals', exact: true }).click();
-    const confirm = page.getByRole('alertdialog', { name: 'Change which object submissions are saved to?' });
+    // Deals is a switch under People (forms fix a3), so the move is to Companies.
+    await page.getByRole('option', { name: 'Companies', exact: true }).click();
+    const confirm = page.getByRole('dialog', { name: 'Save answers to Companies?' });
     await expect(confirm).toBeVisible();
-    await confirm.getByRole('button', { name: 'Change object' }).click();
+    await confirm.getByRole('button', { name: 'Save to Companies' }).click();
     await expect(confirm).toBeHidden();
-    await expect(target).toContainText('Deals');
+    await expect(target).toContainText('Companies');
     // Focus isn't dropped on the page: it lands on the editor's More actions.
     await expect(page.getByRole('button', { name: 'More actions' })).toBeFocused();
+    // Undo goes back to People with every question saved where it was (forms fix a2).
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(target).toContainText('People');
   });
 
   test('a send that trips the bot trap is kept as spam, and Not spam files it', async ({ page, browser }) => {

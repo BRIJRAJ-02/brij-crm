@@ -72,14 +72,14 @@ test.describe('the form journey', () => {
     await expect(row).toHaveCount(1, { timeout: 30_000 });
     await expect(row).toContainText('Rear admiral');
 
-    // Changing which object the form saves to would unfile the question: asked first; Cancel keeps People.
+    // Changing which object the form saves to moves the saved questions: asked first, naming them; Cancel keeps People.
     await page.goto(`${formUrl}?tab=settings`);
     await page
       .getByRole('button', { name: /Save answers to$/ })
       .last()
       .click();
     await page.getByRole('option', { name: 'Companies', exact: true }).click();
-    const confirm = page.getByRole('alertdialog', { name: 'Change which object submissions are saved to?' });
+    const confirm = page.getByRole('dialog', { name: 'Save answers to Companies?' });
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(confirm).toBeHidden();

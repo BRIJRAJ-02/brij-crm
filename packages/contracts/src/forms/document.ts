@@ -341,7 +341,19 @@ export const FormDocument = z
     /** Where submissions go in the CRM: `main` is the object each one adds or updates. Absent, they stay in Submissions only. */
     targets: z.strictObject({
       main: z.strictObject({ objectId: Uuid, matchAttributeId: Uuid.optional() }).optional(),
+      /**
+       * Also create a deal (forms fix a3, 5 November 2026): with People as `main`, each submission also makes a
+       * record on this object (the standard Deals), named after the person and linked to them and their company.
+       * Absent on every document written before it, which makes no deal.
+       */
+      deal: z.strictObject({ objectId: Uuid }).optional(),
     }),
+    /**
+     * Where each question was saved on an object the form moved away from (forms fix a2, 5 November 2026): by
+     * object id, each question's attribute there. Moving back puts them back, so trying another object never loses
+     * a mapping for good. Only the server writes it (`setFormTarget`); it never reaches a visitor.
+     */
+    filedBefore: z.record(Uuid, z.record(z.string().max(64), Uuid)).optional(),
     /** Classic, Steps or One at a time (spec 0063, AC-6302): in the version, so a visitor mid fill never sees it change. */
     layout: z.enum(FORM_LAYOUTS).default('classic'),
     /** The breaks between steps, in the questions' order. Drawn only by Steps. */
@@ -388,6 +400,13 @@ export const FormDocument = z
     saveProgress: z.boolean().optional(),
   })
   .superRefine((document, context) => {
+    if (document.targets.deal !== undefined && document.targets.main === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['targets', 'deal'],
+        message: 'A deal is made beside the person. Save submissions to People first.',
+      });
+    }
     const seen = { ids: new Set<string>(), keys: new Set<string>(), attributes: new Set<string>() };
     let files = 0;
     let signatures = 0;

@@ -31,6 +31,7 @@ const MEMBERS: readonly MemberSummary[] = [
   { id: BEA, name: 'Bea Brown', email: 'bea@acme.com' },
 ];
 
+const DEALS = '0199f0a0-0000-7000-8000-0000000000de';
 const OBJECTS = [
   {
     id: PEOPLE,
@@ -42,6 +43,19 @@ const OBJECTS = [
     standardKey: 'people',
     access: 'write',
     position: 0,
+    isStandard: true,
+    isArchived: false,
+  },
+  {
+    id: DEALS,
+    apiSlug: 'deals',
+    singularName: 'Deal',
+    pluralName: 'Deals',
+    icon: 'handshake',
+    hue: 'green',
+    standardKey: 'deals',
+    access: 'write',
+    position: 2,
     isStandard: true,
     isArchived: false,
   },
@@ -211,6 +225,9 @@ function Editor({ initial }: { readonly initial: FormView }) {
         onStatusChange={(status) => {
           statuses.push(status);
         }}
+        onDealChange={(dealObjectId) => {
+          deals.push(dealObjectId);
+        }}
       />
     </>
   );
@@ -220,6 +237,7 @@ let shown: InApp | undefined;
 /** What the tab asked the editor for: where answers are saved, and opening or closing the form. */
 const retargets: (string | null)[] = [];
 const statuses: string[] = [];
+const deals: (string | undefined)[] = [];
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -230,6 +248,7 @@ afterEach(() => {
   shown = undefined;
   retargets.length = 0;
   statuses.length = 0;
+  deals.length = 0;
 });
 
 async function show(
@@ -403,6 +422,18 @@ describe('Settings as plain rows (T21)', () => {
     await saving.click();
     await page.getByRole('listbox').getByRole('option', { name: 'Only in Submissions' }).click();
     expect(retargets).toEqual([null]);
+  });
+
+  it('offers Also create a deal under People instead of Deals as a place of its own (forms fix a3)', async () => {
+    await show(formView({}), []);
+    const saving = page.getByRole('button', { name: /Save answers to$/ }).last();
+    await saving.click();
+    expect(page.getByRole('listbox').getByRole('option', { name: 'Deals' }).query()).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    const deal = page.getByRole('switch', { name: 'Also create a deal' });
+    await expect.element(deal).not.toBeChecked();
+    (deal.element() as HTMLElement).click();
+    expect(deals).toEqual([DEALS]);
   });
 
   it('closes and opens the form from Accepting submissions', async () => {

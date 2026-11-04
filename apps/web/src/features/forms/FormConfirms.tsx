@@ -195,11 +195,13 @@ export function RemoveSiteDialog({ site, onRemove, onClose }: RemoveSiteDialogPr
   );
 }
 
-/** What a retarget would lose: how many questions are saved onto the object now, its name, and the one it moves to. */
+/** What a retarget changes: the questions saved onto the object now, by label, its name, and the one it moves to. */
 export interface RetargetAsk {
   /** The object asked for; null turns saving to the CRM off. */
   readonly objectId: string | null;
   readonly filedCount: number;
+  /** The questions saved now, by label, named in the dialog (forms fix a2). */
+  readonly filedLabels: readonly string[];
   readonly objectName: string;
   /** The object asked for, by name; unused when `objectId` is null. */
   readonly nextName: string;
@@ -214,28 +216,26 @@ interface RetargetDialogProps {
 }
 
 /**
- * "Change where submissions are saved?": the questions saved onto the object
- * now lose where they are saved, and a change can't be taken back, so it is
- * confirmed like the other endings. Only asked when something would be lost:
- * with no question saved anywhere, the change stays one click.
+ * "Save answers to Deals?": names the questions that stop saving to the object now. Nothing is lost (forms fix a2,
+ * 5 November 2026): the server remembers each object's mapping and puts it back on the way back, and the page's toast
+ * offers Undo. So it is a plain confirm with a normal button, not a red one. Only asked when questions are saved now;
+ * with none the change stays one click.
  *
- * Unlike the confirms above, it closes as soon as it is answered rather than
- * waiting for the server. The change is the page's own save (flush, then the
- * new target, then the object's fields), so its progress shows on the
- * Settings card behind (`isBusy`), and a refusal comes back as that page's
- * toast or its "changed by someone else" notice. Keeping the dialog open
- * would hold Esc for the whole round trip with nothing more to say in it.
+ * It closes as soon as it is answered rather than waiting for the server. The change is the page's own save (flush,
+ * then the new target, then the object's fields), so its progress shows on the Settings row behind, and a refusal
+ * comes back as that page's toast or its "changed by someone else" notice.
  */
 export function RetargetFormDialog({ ask, onClose, onConfirm }: RetargetDialogProps) {
   const [last, setLast] = useState<RetargetAsk | undefined>(undefined);
   if (ask !== undefined && ask !== last) setLast(ask);
   const shown = ask ?? last;
   if (shown === undefined) return null;
+  const isOff = shown.objectId === null;
+  const questions = strings.questionList(shown.filedLabels);
   return (
     <Modal
-      title={shown.objectId === null ? strings.retargetOffTitle : strings.retargetTitle}
+      title={isOff ? strings.retargetOffTitle : strings.retargetTitle(shown.nextName)}
       variant="confirm"
-      tone="danger"
       isOpen={ask !== undefined}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
@@ -244,19 +244,18 @@ export function RetargetFormDialog({ ask, onClose, onConfirm }: RetargetDialogPr
         <>
           <Button slot="close">{strings.cancel}</Button>
           <Button
-            variant="danger-solid"
-            icon={shown.objectId === null ? 'x' : 'refresh-cw'}
+            variant="primary"
             onPress={() => {
               onConfirm(shown.objectId);
               onClose();
             }}
           >
-            {shown.objectId === null ? strings.retargetOffAction : strings.retargetAction}
+            {isOff ? strings.retargetOffAction : strings.retargetAction(shown.nextName)}
           </Button>
         </>
       }
     >
-      <p>{shown.objectId === null ? strings.retargetOffText : strings.retargetText(shown.nextName)}</p>
+      <p>{strings.retargetText(questions, shown.objectName)}</p>
     </Modal>
   );
 }

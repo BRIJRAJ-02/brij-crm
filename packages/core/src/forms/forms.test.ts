@@ -93,7 +93,8 @@ async function workspace() {
   const system = testScope({ db, workspaceId: created.workspaceId, actor: SYSTEM_ACTOR });
   const query = <T extends Record<string, unknown>>(text: ReturnType<typeof sql>) =>
     db.withWorkspace(created.workspaceId, (tx) => tx.execute<T>(text)).then((result) => result.rows);
-  return { scope, system, ownerId: created.memberId, people, attribute, query };
+  const deals = created.objects.deals ?? '';
+  return { scope, system, ownerId: created.memberId, people, deals, attribute, query };
 }
 
 type Workspace = Awaited<ReturnType<typeof workspace>>;
@@ -767,6 +768,74 @@ describe('the content checks and Needs review (AC-563, AC-584, the spam follow-u
 });
 
 describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-565, AC-567)', () => {
+  it('keeps each object’s mapping when Save to moves away and back (forms fix a2)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const toDeals = await setFormTarget(w.scope, {
+      formId: live.id,
+      mainObjectId: w.deals,
+      expectedRevision: live.revision,
+    });
+    // On Deals nothing of People's mapping is filed, but it is remembered.
+    expect(toDeals.draft.questions.find((each) => each.key === 'about')?.filedOn).toBeUndefined();
+    expect(toDeals.draft.filedBefore?.[w.people]?.about).toBe(w.attribute('people.description'));
+    const back = await setFormTarget(w.scope, {
+      formId: live.id,
+      mainObjectId: w.people,
+      expectedRevision: toDeals.revision,
+    });
+    expect(back.draft.questions.find((each) => each.key === 'about')?.filedOn?.attributeId).toBe(
+      w.attribute('people.description'),
+    );
+    expect(back.draft.questions.find((each) => each.key === 'title')?.filedOn?.attributeId).toBe(
+      w.attribute('people.job_title'),
+    );
+    expect(back.draft.filedBefore?.[w.people]).toBeUndefined();
+  });
+
+  it('also creates a deal linked to the person and their company (forms fix a3)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, (document) => ({
+      ...document,
+      targets: { ...document.targets, deal: { objectId: w.deals } },
+    }));
+    await submit(live.publicKey, body({ name: 'Grace Hopper', email: 'grace@navy-labs.com', why: 'A demo' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const view = await getSubmission(w.scope, { submissionId: submission.id });
+    expect(view.state).toBe('processed');
+    const deal = view.records.find((each) => each.role === 'deal');
+    expect(deal).toMatchObject({ action: 'created', record: { name: 'Grace Hopper' } });
+    const [record] = await getRecords(w.scope, { ids: [deal?.record.recordId ?? ''] });
+    expect(record?.values[w.attribute('deals.associated_people')]).toEqual([
+      expect.objectContaining({ recordId: view.mainRecord?.recordId }),
+    ]);
+    expect(record?.values[w.attribute('deals.associated_company')]).toMatchObject({
+      objectId: expect.any(String) as string,
+    });
+    expect(record?.values[w.attribute('deals.owner')]).toEqual({ type: 'member', id: w.ownerId });
+  });
+
+  it('refuses Also create a deal on a form that doesn’t save to People (forms fix a3)', async () => {
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId(), name: 'Deal form' });
+    const moved = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: w.deals,
+      expectedRevision: created.revision,
+    });
+    expect(
+      await refusalOf(
+        saveFormDraft(w.scope, {
+          formId: created.id,
+          document: { ...moved.draft, targets: { ...moved.draft.targets, deal: { objectId: w.deals } } },
+          expectedRevision: moved.revision,
+        }),
+      ),
+    ).toMatchObject([{ code: 'CONFIG_INVALID', field: 'deal' }]);
+  });
+
   it('creates the person as the form, with the owner, and records it on the submission and the timeline', async () => {
     const w = await workspace();
     const live = await liveForm(w);

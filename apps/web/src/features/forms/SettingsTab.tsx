@@ -201,6 +201,8 @@ export interface SettingsTabProps {
   readonly isRetargeting: boolean;
   /** Opens or closes the form (Pause, Resume): what the header's menu does too, as a setting. */
   readonly onStatusChange: (status: 'live' | 'paused') => void;
+  /** Also create a deal (forms fix a3): the Deals object to make one on, or undefined to make none. Saved as the draft. */
+  readonly onDealChange: (dealObjectId: string | undefined) => void;
 }
 
 /** The answers saved nowhere but the form's Submissions: Save answers to's first choice. */
@@ -225,6 +227,7 @@ export function SettingsTab({
   onRetarget,
   isRetargeting,
   onStatusChange,
+  onDealChange,
 }: SettingsTabProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const rotations = useCaptureList(data.rotations.view(slug));
@@ -310,8 +313,14 @@ export function SettingsTab({
     !(chosenGroup !== undefined && takers(chosenGroup) === 0);
   // Save answers to: the objects a submission can add to, then Only in Submissions, apart. One control for what was a
   // switch and a picker.
-  const liveObjects = objects.filter((object) => !object.isArchived && object.access === 'write');
+  const writable = objects.filter((object) => !object.isArchived && object.access === 'write');
   const savingTo = draft.targets.main?.objectId ?? KEEP_ONLY;
+  // Deals is a switch under People, not a place of its own (forms fix a3): saving to Deals made no person, so the
+  // email went nowhere. A form already saving to Deals keeps it listed, so its choice still shows.
+  const people = writable.find((object) => object.standardKey === 'people');
+  const deals = writable.find((object) => object.standardKey === 'deals');
+  const liveObjects = writable.filter((object) => people === undefined || object !== deals || object.id === savingTo);
+  const offersDeal = people !== undefined && deals !== undefined && savingTo === people.id;
   const link = data.forms.hostedUrl(settings.values.address);
   const linkError = settings.fieldError('slug');
   const nameError = settings.fieldError('name');
@@ -382,6 +391,19 @@ export function SettingsTab({
           }}
         />
       </SettingsRow>
+      {offersDeal && (
+        <SettingsRow title={strings.alsoDeal} meta={tip(strings.alsoDeal, strings.alsoDealTip)}>
+          <Switch
+            label={strings.alsoDeal}
+            isLabelHidden
+            isSelected={draft.targets.deal !== undefined}
+            isReadOnly={isReadOnly}
+            onChange={(isOn) => {
+              onDealChange(isOn ? deals.id : undefined);
+            }}
+          />
+        </SettingsRow>
+      )}
       {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
       {isFiling && (
         <SettingsRow title={strings.owner} meta={tip(strings.owner, ownerTip)} control="field">
