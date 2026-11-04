@@ -531,7 +531,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
       <Card key={ending.id}>
         {problem?.endingId === ending.id && <Callout tone="danger">{problem.message}</Callout>}
         {/* Said plainly, not as a second copy of the step's rule (UX review), with the way to that rule. */}
-        <Sentence lead="" {...(menu === undefined ? {} : { end: menu })}>
+        <Sentence {...(menu === undefined ? {} : { end: menu })}>
           {by === undefined ? strings.nothingSendsHere : strings.sentByStep(by.name)}
           {by?.stepId !== undefined && props.stepHref !== undefined && (
             <ButtonLink variant="ghost" size="sm" href={props.stepHref(by.stepId)}>
@@ -787,7 +787,7 @@ function AfterDefault({
           {strings.pageGone(!isReadOnly)}
         </Callout>
       )}
-      <Sentence lead="">
+      <Sentence>
         {hasRules ? strings.everyoneElseSees : strings.everyoneSees}
         <Select
           triggerRef={kindRef}

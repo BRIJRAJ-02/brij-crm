@@ -56,3 +56,17 @@ export const Narrow: Story = {
     </Stage>
   ),
 };
+
+/** No lead: a line that stands alone ("Otherwise → Step 3") starts at its own edge, with no empty column before it. */
+export const NoLead: Story = {
+  render: () => (
+    <Stage width="fill">
+      <Sentence lead="If">
+        <Select label="Question" variant="inline" items={[{ id: 'budget', label: 'Budget' }]} value="budget" />
+        is
+        <Select label="Value" variant="inline" items={[{ id: 'low', label: 'Under $1k' }]} value="low" />
+      </Sentence>
+      <Sentence>Otherwise → Step 3</Sentence>
+    </Stage>
+  ),
+};
