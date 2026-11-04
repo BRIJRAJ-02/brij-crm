@@ -53,7 +53,7 @@ import {
   useFormatSettings,
   useKeyboardPlatform,
   focusLater,
-  ShortcutTooltip,
+  DateNav,
   Skeleton,
   WeekCalendar,
   type BookingListGroup,
@@ -68,7 +68,6 @@ import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { availabilityHref, calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
 import { TimeOffDialog } from '../booking/TimeOffDialog.tsx';
-import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
 import {
@@ -97,7 +96,9 @@ import {
 } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingMove } from './useBookingMove.ts';
-import type { HostsChoice } from './toolbarSlot.ts';
+import { useBookingsHosts, useBookingsNewPage, useCanConnectCalendar, type HostsChoice } from './toolbarSlot.ts';
+import { bookingsTabHref } from './tabs.ts';
+import { useIsPhoneWidth } from './narrow.ts';
 import {
   addDays,
   bookingPieces,
@@ -281,8 +282,9 @@ function FilterMenu({
   /** The list: which meetings show is chosen here too. */
   readonly hasSources?: boolean;
 }) {
-  const hasLinks = pages.length >= 2;
-  if (!hasLinks && !hasSources) return null;
+  // Always shown, so the bar keeps one shape (the bookings critique, A13): with no page there is nothing to filter
+  // by, and it says so by being off.
+  const hasLinks = pages.length >= 1;
   const count =
     (search.link === undefined ? 0 : 1) + (hasSources && search.source !== 'all' && search.link === undefined ? 1 : 0);
   // A link's bookings are bookings only (calendar events have no page), so Show says so while one is picked.
@@ -291,7 +293,9 @@ function FilterMenu({
   return (
     <>
       <MenuTrigger>
-        <Button icon="list-filter">{count === 0 ? strings.filter : strings.filterCount(count)}</Button>
+        <Button icon="list-filter" isDisabled={!hasLinks && !hasSources}>
+          {count === 0 ? strings.filter : strings.filterCount(count)}
+        </Button>
         <Menu label={strings.filterMenu}>
           {hasSources && (
             <MenuSection
@@ -340,6 +344,71 @@ function FilterMenu({
         />
       )}
     </>
+  );
+}
+
+/** A calendar view: the picked day, the week, or the team's day. */
+type CalendarViewName = 'day' | 'week' | 'team';
+
+/** Each view's name, on the switch and in the View menu. */
+const VIEW_LABEL: Record<CalendarViewName, string> = {
+  day: strings.dayView,
+  week: strings.weekView,
+  team: strings.teamView,
+};
+
+/**
+ * Day · Week · Team, and an admin's Mine · Everyone, as one View menu on a phone (the bookings critique, A14): two
+ * switches and the week's controls took about 250px of the screen there. The button names the view it shows.
+ */
+function ViewMenu({
+  view,
+  views,
+  onView,
+  hosts,
+}: {
+  readonly view: CalendarViewName;
+  readonly views: readonly CalendarViewName[];
+  readonly onView: (next: CalendarViewName) => void;
+  readonly hosts: HostsChoice | undefined;
+}) {
+  const first = (keys: ReadonlySet<string | number>) => [...keys].map(String)[0];
+  return (
+    <MenuTrigger>
+      <Button icon="eye" iconRight="chevron-down" label={strings.viewMenuLabel(VIEW_LABEL[view])}>
+        {VIEW_LABEL[view]}
+      </Button>
+      <Menu label={strings.calendarView}>
+        <MenuSection
+          label={strings.calendarView}
+          selectionMode="single"
+          selectedKeys={[view]}
+          onSelectionChange={(keys) => {
+            const next = views.find((each) => each === first(keys));
+            if (next !== undefined) onView(next);
+          }}
+        >
+          {views.map((each) => (
+            <MenuItem key={each} id={each}>
+              {VIEW_LABEL[each]}
+            </MenuItem>
+          ))}
+        </MenuSection>
+        {hosts !== undefined && (
+          <MenuSection
+            label={strings.hostsLabel}
+            selectionMode="single"
+            selectedKeys={[hosts.value]}
+            onSelectionChange={(keys) => {
+              hosts.onChange(first(keys) === 'all' ? 'all' : 'mine');
+            }}
+          >
+            <MenuItem id="mine">{strings.hosts.mine}</MenuItem>
+            <MenuItem id="all">{strings.hosts.all}</MenuItem>
+          </MenuSection>
+        )}
+      </Menu>
+    </MenuTrigger>
   );
 }
 
@@ -1467,7 +1536,19 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const jumpRef = useRef<HTMLButtonElement>(null);
   // Day or Week (D and W), in the address (`v=day`), so a reload or a shared link keeps it: the day view is the
   // picked day across the width.
-  const view = search.view === 'team' && props.team === undefined ? 'day' : (search.view ?? 'week');
+  // Under 600px it opens on Day (the bookings critique, A14): seven columns there are slivers.
+  const isPhone = useIsPhoneWidth();
+  const view = search.view === 'team' && props.team === undefined ? 'day' : (search.view ?? (isPhone ? 'day' : 'week'));
+  // Team only where there is a team to see, or someone who could invite one (AC-764's empty state).
+  const views: readonly CalendarViewName[] =
+    props.team === undefined || (props.team.members.length < 2 && !canInvite)
+      ? ['day', 'week']
+      : ['day', 'week', 'team'];
+  // Mine or Everyone, which the strip's switch holds on a wider page and the View menu on a phone.
+  const hostsChoice = useBookingsHosts();
+  // The layout's New booking page, for the empty Calendar's one action; and whether Connect calendar may show.
+  const newPage = useBookingsNewPage();
+  const canConnectCalendar = useCanConnectCalendar();
   // Where the Team day's issue counts sit in the bar (AC-1436), drawn by the day itself.
   const [issuesSlot, setIssuesSlot] = useState<HTMLElement | null>(null);
   const setView = (next: 'week' | 'day' | 'team') => {
@@ -1561,42 +1642,35 @@ function WeekView(props: BookingsCalendarScreenProps) {
       variant="bar"
       start={
         <>
-          {/* Secondary: the page's one primary is New (the owner, 22 October 2026). */}
-          <ShortcutTooltip content={strings.goToToday} kbd={WEEK_KEYS.today}>
-            <Button variant="secondary" onPress={() => go('today')}>
-              {isThisWeek
+          {/* The one date stepper (DateNav, the Roster's too, the bookings critique A13). Today is secondary: the
+              page's one primary is New (the owner, 22 October 2026). */}
+          <DateNav
+            today={{
+              label: isThisWeek
                 ? strings.today
                 : strings.todayOn(
                     new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone }).format(now),
-                  )}
-            </Button>
-          </ShortcutTooltip>
-          <ShortcutTooltip
-            content={view === 'week' ? strings.previousWeek : strings.previousDay}
-            kbd={WEEK_KEYS.previous}
-          >
-            <Button
-              variant="ghost"
-              icon="chevron-left"
-              label={view === 'week' ? strings.previousWeek : strings.previousDay}
-              onPress={() => go('previous')}
-            />
-          </ShortcutTooltip>
-          <ShortcutTooltip content={view === 'week' ? strings.nextWeek : strings.nextDay} kbd={WEEK_KEYS.next}>
-            <Button
-              variant="ghost"
-              icon="chevron-right"
-              label={view === 'week' ? strings.nextWeek : strings.nextDay}
-              onPress={() => go('next')}
-            />
-          </ShortcutTooltip>
-          <Button
-            ref={jumpRef}
-            variant="ghost"
-            icon="calendar-days"
-            label={strings.goToDate}
-            isExpanded={isJumpOpen}
-            onPress={() => setJumpOpen((open) => !open)}
+                  ),
+              hint: strings.goToToday,
+              kbd: WEEK_KEYS.today,
+              onPress: () => go('today'),
+            }}
+            previous={{
+              label: view === 'week' ? strings.previousWeek : strings.previousDay,
+              kbd: WEEK_KEYS.previous,
+              onPress: () => go('previous'),
+            }}
+            next={{
+              label: view === 'week' ? strings.nextWeek : strings.nextDay,
+              kbd: WEEK_KEYS.next,
+              onPress: () => go('next'),
+            }}
+            jump={{
+              label: strings.goToDate,
+              ref: jumpRef,
+              isExpanded: isJumpOpen,
+              onPress: () => setJumpOpen((open) => !open),
+            }}
           />
           <Popover
             triggerRef={jumpRef}
@@ -1638,22 +1712,23 @@ function WeekView(props: BookingsCalendarScreenProps) {
       }
       end={
         <>
-          <SegmentedControl
-            label={strings.calendarView}
-            size="compact"
-            value={view}
-            onChange={(next) => {
-              if (next === 'day' || next === 'week' || next === 'team') setView(next);
-            }}
-            segments={[
-              { value: 'day', label: strings.dayView, kbd: WEEK_KEYS.day },
-              { value: 'week', label: strings.weekView, kbd: WEEK_KEYS.week },
-              // Team only where there is a team to see, or someone who could invite one (AC-764's empty state).
-              ...(props.team === undefined || (props.team.members.length < 2 && !canInvite)
-                ? []
-                : [{ value: 'team', label: strings.teamView }]),
-            ]}
-          />
+          {isPhone ? (
+            <ViewMenu view={view} views={views} onView={setView} hosts={view === 'team' ? undefined : hostsChoice} />
+          ) : (
+            <SegmentedControl
+              label={strings.calendarView}
+              size="compact"
+              value={view}
+              onChange={(next) => {
+                if (next === 'day' || next === 'week' || next === 'team') setView(next);
+              }}
+              segments={views.map((each) => ({
+                value: each,
+                label: VIEW_LABEL[each],
+                ...(each === 'team' ? {} : { kbd: WEEK_KEYS[each] }),
+              }))}
+            />
+          )}
           {view === 'team' && props.team !== undefined ? (
             <TeamFilterMenu search={search} members={props.team.members} onSearch={onSearch} />
           ) : (
@@ -1903,6 +1978,31 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const weekEnd = days.at(-1) ?? search.week;
   const isWeekEmpty = blocks.length === 0;
   const next = isWeekEmpty && nextBooking?.after === weekEnd ? nextBooking.day : undefined;
+  // No booking page at all and nothing on the week (the bookings critique, B-02): the grid could only stay empty, so
+  // the page says what makes it fill, with the one action that does.
+  if (isWeekEmpty && pages.length === 0 && newPage !== undefined) {
+    return framed(
+      <EmptyState
+        layout="fill"
+        icon="calendar-clock"
+        title={strings.noPagesTitle}
+        actions={
+          <>
+            <Button variant="primary" icon="plus" onPress={newPage}>
+              {strings.makeBookingPage}
+            </Button>
+            {canConnectCalendar && hasNoCalendar && (
+              <ButtonLink variant="secondary" icon="calendar-plus" href={calendarsHref(slug)}>
+                {strings.connectCalendar}
+              </ButtonLink>
+            )}
+          </>
+        }
+      >
+        {strings.noPagesText}
+      </EmptyState>,
+    );
+  }
   return (
     <>
       {isWeekEmpty && props.upcoming !== undefined && (
@@ -2531,8 +2631,10 @@ export function BookingsListScreen({
   actions,
   hosts,
   openFirst,
-  canConnectCalendar = true,
+  canConnectCalendar: canConnectProp = true,
 }: BookingsListScreenProps) {
+  // Off with calendar sync off for the deployment, as the layout knows (the bookings critique, A2).
+  const canConnectCalendar = useCanConnectCalendar() && canConnectProp;
   const personHref = usePersonHref(slug, objects);
   // The member's zone (their Preferences, else the browser's): each row's day band and time.
   // One clock for every time on the screen (C13): the member's language and zone, as the week and the card read them.
@@ -2684,7 +2786,7 @@ export function BookingsListScreen({
                 actions={
                   tab === 'upcoming' ? (
                     <>
-                      <ButtonLink variant="primary" icon="link" href={linksHref(slug)}>
+                      <ButtonLink variant="primary" icon="link" href={bookingsTabHref(slug, 'pages')}>
                         {strings.shareBookingPage}
                       </ButtonLink>
                       {canConnectCalendar && calendarList.status === 'ready' && !hasCalendar && (

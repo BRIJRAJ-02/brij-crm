@@ -5,7 +5,7 @@
 // Leaves out: drawing a span on the week (the calendar's own way into the same dialog) and the tabs (the layout's).
 import type { BookingPageView } from '@crm/data';
 import { useCalendar, useCalendarList, useCaptureList } from '@crm/data/react';
-import { Button, ButtonLink, TopBar, useFormatSettings } from '@crm/ui';
+import { Button, Menu, MenuItem, MenuTrigger, TopBar, useFormatSettings } from '@crm/ui';
 import { useMatch, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { SCHEDULING_HUE } from '../scheduling.ts';
@@ -18,7 +18,7 @@ import { weekRange } from './week.ts';
 import { useFirstDay } from '../workspace/first-day.ts';
 import { useCan, useWorkspaceObjects } from '../workspace/WorkspacePage.tsx';
 import { peopleSearchOf } from './people.ts';
-import { linksHref, pageEditorHref } from '../booking/links.ts';
+import { pageEditorHref } from '../booking/links.ts';
 import { NewPageDialog } from '../booking/NewPageDialog.tsx';
 
 /** Props for BookingsTopBar. */
@@ -29,14 +29,20 @@ export interface BookingsTopBarProps {
    * meeting, so the screen has one primary (the owner, 22 October 2026).
    */
   readonly actionSlot?: ((element: HTMLElement | null) => void) | undefined;
+  /** New booking page is open: the layout holds it, so Pages and the Calendar's empty state open the same dialog. */
+  readonly isAddingPage: boolean;
+  /** New › Booking page. */
+  readonly onAddPage: () => void;
+  /** The dialog closed, made or not. */
+  readonly onAddPageClose: () => void;
 }
 
 /**
  * Bookings' TopBar: the tile, Bookings, and New at the end (no count: the list pages every meeting, so it has no total). New reads
- * New on every tab, named New meeting, at one place and one width. A meeting goes on a booking page, so with none
- * on yet New opens New booking page instead of sitting turned off (the owner, 22 October 2026).
+ * New on every tab, at one place and one width, and opens a menu: Booking page or Meeting (the bookings critique,
+ * B-02). A meeting goes on a booking page, so with none on yet Meeting is turned off with the reason under it.
  */
-export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
+export function BookingsTopBar({ slug, actionSlot, isAddingPage, onAddPage, onAddPageClose }: BookingsTopBarProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   // The week on screen: the Calendar's, else this week.
   const { timeZone } = useFormatSettings();
@@ -54,8 +60,6 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
   const pages = useCaptureList(data.bookingPages.view(slug));
   const calendar = useCalendar(data.calendar.view(slug));
   const [meeting, setMeeting] = useState<DrawnSpan | undefined>(undefined);
-  // With no booking page on yet, New makes one first (a meeting goes on a page), rather than sitting turned off.
-  const [isAddingPage, setAddingPage] = useState(false);
   const navigate = useNavigate();
   const canBookTeams = useCan('booking.admin');
   // The member's own pages (an admin's, everyone's): a workspace link they may only see isn't theirs to book on.
@@ -119,36 +123,37 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
     });
   };
 
-  // Pages but none on: New goes to them to turn one on, rather than making another.
+  // New is a menu (the bookings critique, B-02): a booking page, or a meeting on one. With no page on yet, Meeting
+  // stays in the menu, turned off with the reason under it, so New never sits turned off itself.
   const hasPage = pages.status === 'ready' && pages.items.some((page) => page.canChange);
-  const button =
-    hasNoPage && hasPage ? (
-      <ButtonLink variant="primary" icon="plus" label={strings.turnOnPageFirst} href={linksHref(slug)}>
+  const meetingReason = !hasNoPage ? undefined : hasPage ? strings.turnOnPageFirst : strings.makePageFirst;
+  const button = (
+    <MenuTrigger>
+      <Button variant="primary" icon="plus" iconRight="chevron-down" label={strings.newMenu} isPending={isFinding}>
         {strings.newButton}
-      </ButtonLink>
-    ) : hasNoPage ? (
-      <Button
-        variant="primary"
-        icon="plus"
-        label={strings.newPageFirst}
-        onPress={() => {
-          setAddingPage(true);
+      </Button>
+      <Menu
+        label={strings.newMenu}
+        placement="bottom end"
+        onAction={(key) => {
+          if (key === 'page') onAddPage();
+          if (key === 'meeting') open();
         }}
       >
-        {strings.newButton}
-      </Button>
-    ) : (
-      <Button
-        variant="primary"
-        icon="plus"
-        label={strings.newMeeting}
-        isDisabled={bookable.length === 0}
-        isPending={isFinding}
-        onPress={open}
-      >
-        {strings.newButton}
-      </Button>
-    );
+        <MenuItem id="page" icon="link">
+          {strings.newBookingPage}
+        </MenuItem>
+        <MenuItem
+          id="meeting"
+          icon="calendar-plus"
+          isDisabled={meetingReason !== undefined}
+          {...(meetingReason === undefined ? {} : { description: meetingReason })}
+        >
+          {strings.newMeetingItem}
+        </MenuItem>
+      </Menu>
+    </MenuTrigger>
+  );
   return (
     <TopBar title={strings.title} icon="calendar-days" hue={SCHEDULING_HUE}>
       {actionSlot !== undefined ? <div ref={actionSlot} /> : button}
@@ -157,11 +162,9 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
         slug={slug}
         canBookTeams={canBookTeams}
         isOpen={isAddingPage}
-        onClose={() => {
-          setAddingPage(false);
-        }}
+        onClose={onAddPageClose}
         onCreated={(page) => {
-          setAddingPage(false);
+          onAddPageClose();
           void navigate({ to: pageEditorHref(slug, page.id) });
           // The page opens under Captures, where every booking page lives: said, so the jump isn't a mystery (B1).
           toasts.toast({ tone: 'success', message: strings.pageMadeWhere(page.title) });

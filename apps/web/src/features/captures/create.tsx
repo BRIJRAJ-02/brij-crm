@@ -26,7 +26,11 @@ export interface CapturesCreate {
   readonly isPending: boolean;
 }
 
-const CapturesCreateContext = createContext<CapturesCreate | undefined>(undefined);
+/**
+ * The chosen tab's New. Exported for Bookings › Pages, which draws the same Links list outside Captures and gives it
+ * Bookings' own New booking page.
+ */
+export const CapturesCreateContext = createContext<CapturesCreate | undefined>(undefined);
 
 /** The chosen tab's New, inside the Captures layout; undefined outside it. */
 export const useCapturesCreate = () => useContext(CapturesCreateContext);

@@ -738,10 +738,10 @@ describe('the list rows', () => {
     );
     await expect.element(page.getByRole('link', { name: 'Connect a calendar' }).first()).toBeVisible();
     expect(document.querySelector('aside[aria-label="Calendars"]')).toBeNull();
-    // Without a calendar there are only bookings, so there is no Show to pick (Q71), and with one link no Filter.
-    expect([...document.querySelectorAll('button')].some((button) => button.textContent.startsWith('Filter'))).toBe(
-      false,
-    );
+    // Without a calendar there are only bookings, so there is no Show to pick (Q71), and with no link nothing to
+    // filter by: Filter stays in the bar, off, so the bar keeps one shape (the bookings critique, A13).
+    const filter = [...document.querySelectorAll('button')].find((button) => button.textContent.startsWith('Filter'));
+    expect(filter?.disabled).toBe(true);
   });
 
   it('with no calendar connected, reads a source left in the address as All, so the list can’t empty unseen', async () => {

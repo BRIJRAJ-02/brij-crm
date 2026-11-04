@@ -19,6 +19,7 @@ import { useState, type ReactNode } from 'react';
 import type { BookingsSearch } from './search.ts';
 import { strings } from './strings.ts';
 import { calendarsHref } from '../booking/links.ts';
+import { useCanConnectCalendar } from './toolbarSlot.ts';
 
 /** Where the open or folded panel is kept, per browser. */
 const PANEL_KEY = 'crm.bookings.calendarsPanel';
@@ -88,6 +89,9 @@ export function CalendarsToggle({
   /** The calendars read and none is connected. */
   readonly hasNoCalendar: boolean;
 }) {
+  const canConnect = useCanConnectCalendar();
+  // Calendar sync off for the deployment: no link to a page that can only say so.
+  if (hasNoCalendar && !canConnect) return null;
   if (hasNoCalendar)
     return (
       // Its label stays on a phone too: the icon alone, under New, would read as a new event.
@@ -161,6 +165,7 @@ export function CalendarsFrame({
   children,
 }: CalendarsFrameProps) {
   const state = useCalendarList(calendars);
+  const canConnect = useCanConnectCalendar();
   const accounts = accountsOnWeek(state);
   const all = accounts.flatMap((account) => account.calendars);
   const picked = search.cal === undefined ? undefined : new Set(search.cal);
@@ -186,9 +191,11 @@ export function CalendarsFrame({
     ) : state.status === 'error' ? (
       <Callout tone="danger">{state.message === '' ? strings.calendarsFailed : state.message}</Callout>
     ) : state.accounts.length === 0 ? (
-      <Callout tone="info" actions={<Link href={calendarsHref(slug)}>{strings.connectCalendar}</Link>}>
-        {strings.noCalendarConnected}
-      </Callout>
+      canConnect ? (
+        <Callout tone="info" actions={<Link href={calendarsHref(slug)}>{strings.connectCalendar}</Link>}>
+          {strings.noCalendarConnected}
+        </Callout>
+      ) : null
     ) : (
       <>
         {fellBack !== undefined && destination !== undefined && (

@@ -6,6 +6,7 @@ export const strings = {
   /** The page's tab strip, as Captures has: its name, read by screen readers, and each tab. */
   pageTabsLabel: 'Bookings',
   pageTabs: {
+    pages: 'Pages',
     calendar: 'Calendar',
     list: 'List',
     availability: 'Availability',
@@ -45,6 +46,8 @@ export const strings = {
   goToToday: 'Go to today',
   /** The bar's Day and Week switch. */
   calendarView: 'View',
+  /** The phone's View menu, named with the view it shows: "View: Day". */
+  viewMenuLabel: (view: string) => `View: ${view}`,
   dayView: 'Day',
   weekView: 'Week',
   /** An empty week's way on: the day of the reader's next booking after it. */
@@ -59,6 +62,10 @@ export const strings = {
   weekLoading: 'Loading this week…',
   /** The week grid's quiet line when nothing is on it. */
   noMeetingsWeek: 'No meetings this week',
+  /** The Calendar with no booking page and nothing on it (B-02): its EmptyState and its one action. */
+  noPagesTitle: 'No booking pages yet',
+  noPagesText: 'Make a page people book you on. Their bookings show here.',
+  makeBookingPage: 'Make a booking page',
   nothingOnWeek: (calendar: string) => `Nothing on ${calendar} this week`,
   /** The same in the day view, while the day shown is empty. */
   noMeetingsDay: 'No meetings this day',
@@ -233,13 +240,16 @@ export const strings = {
   },
   bookSomeoneIn: 'Book someone in',
   newMeeting: 'New meeting',
-  /** The TopBar's New: it reads New, as Captures' does, and is named New meeting. */
+  /** The TopBar's New: it reads New, as Captures' does, and opens a menu of what to make. */
   newButton: 'New',
-  /** Why the TopBar's New is off: a meeting goes on a booking page that is on. */
-  /** New's name when booking pages exist but none is on: it opens them. */
-  turnOnPageFirst: 'Turn on a booking page to book someone in',
-  /** New's name with no booking page yet: it makes one first. */
-  newPageFirst: 'New booking page, to book someone in',
+  /** New's menu, for screen readers. */
+  newMenu: 'New booking page or meeting',
+  newBookingPage: 'Booking page',
+  newMeetingItem: 'Meeting',
+  /** Why New › Meeting is off when booking pages exist but none is on. */
+  turnOnPageFirst: 'Turn on a booking page first',
+  /** Why New › Meeting is off with no booking page yet. */
+  makePageFirst: 'Make a booking page first',
   /** What the TopBar's count counts, for screen readers: "4 upcoming bookings". */
   with: 'With',
   theirName: 'Their name',
