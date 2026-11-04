@@ -60,6 +60,8 @@ export function confirmationRows(
       if (!onPath.has(question.key)) return [];
       const given = answers[question.key];
       if (given === undefined) return [];
+      // A consent left unticked is not something they sent (forms fix b9): their copy says nothing of it.
+      if (question.answerType === 'consent' && given !== true) return [];
       const label = recall(question.label, { answers, score }).trim().slice(0, 200);
       const value =
         question.answerType === 'signature' ? SIGNED_WORD : answerWords(given, question.answerType).slice(0, 4_000);
