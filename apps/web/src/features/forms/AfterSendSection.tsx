@@ -322,7 +322,21 @@ export function AfterSendSection(props: AfterSendSectionProps) {
     const then = rule.then;
     const ending = then.kind === 'ending' ? endings.find((each) => each.id === then.endingId) : undefined;
     const name = strings.ruleName(place + 1);
-    const menu = isReadOnly ? undefined : (
+    const canAddCondition = rule.when.rules.length < 5;
+    const isOnlyDelete = !canAddCondition && rules.length === 1;
+    // Delete alone is no menu (no single item menus): the bin itself.
+    const menu = isReadOnly ? undefined : isOnlyDelete ? (
+      <Tooltip content={strings.deleteRule}>
+        <Button
+          variant="ghost-danger"
+          icon="trash"
+          label={`${strings.deleteRule} ${name}`}
+          onPress={() => {
+            removeRule(rule);
+          }}
+        />
+      </Tooltip>
+    ) : (
       <MenuTrigger>
         <Button variant="ghost" icon="ellipsis" label={strings.ruleMenu(place + 1)} />
         <Menu
@@ -336,7 +350,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
             if (key === 'delete') removeRule(rule);
           }}
         >
-          {rule.when.rules.length < 5 && (
+          {canAddCondition && (
             <MenuItem id="condition" icon="plus">
               {strings.addCondition}
             </MenuItem>
@@ -458,8 +472,20 @@ export function AfterSendSection(props: AfterSendSectionProps) {
 
   const looseCard = (ending: FormEnding) => {
     const by = sentBy(ending.id);
+    const canSend = !isRulesFull && ready !== undefined;
     const menu =
-      isReadOnly || by !== undefined ? undefined : (
+      isReadOnly || by !== undefined ? undefined : !canSend ? (
+        <Tooltip content={strings.deleteMessage}>
+          <Button
+            variant="ghost-danger"
+            icon="trash"
+            label={strings.messageDelete}
+            onPress={() => {
+              removeLoose(ending);
+            }}
+          />
+        </Tooltip>
+      ) : (
         <MenuTrigger>
           <Button variant="ghost" icon="ellipsis" label={strings.messageMenu} />
           <Menu
@@ -469,11 +495,9 @@ export function AfterSendSection(props: AfterSendSectionProps) {
               if (key === 'delete') removeLoose(ending);
             }}
           >
-            {!isRulesFull && ready !== undefined && (
-              <MenuItem id="send" icon="git-branch">
-                {strings.sendPeopleHere}
-              </MenuItem>
-            )}
+            <MenuItem id="send" icon="git-branch">
+              {strings.sendPeopleHere}
+            </MenuItem>
             <MenuSeparator />
             <MenuItem id="delete" icon="trash" isDanger>
               {strings.deleteMessage}

@@ -124,6 +124,7 @@ export const strings = {
   /** A step header's ⋯ menu. */
   stepMenu: (name: string) => `${name} options`,
   renameStep: 'Rename',
+  renameStepNamed: (name: string) => `Rename ${name}`,
   /** Joins a step's questions to the step above it (the break goes). */
   mergeUp: 'Merge with the step above',
   stepMerged: (name: string) => `Merged ${name} into the step above.`,

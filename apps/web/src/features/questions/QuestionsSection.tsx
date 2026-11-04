@@ -789,6 +789,23 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     const canShowIf = !isLead && step?.showWhen === undefined && questionFacts(earlier).length > 0;
     const canMerge = !isLead && !isFirstStep(flow, stepId) && hasLeadHeader;
     const canMergeAfterLead = !isLead && !hasLeadHeader;
+    // Rename alone is no menu (item 5: no single item menus): the pencil itself.
+    if (addLogic === undefined && !canShowIf && !canMerge && !canMergeAfterLead) {
+      return (
+        <Tooltip content={strings.renameStep}>
+          <Button
+            ref={refFor(`step:${stepId}:menu`)}
+            variant="ghost"
+            icon="pencil"
+            label={strings.renameStepNamed(name)}
+            onPress={() => {
+              const id = ensureStep(stepId);
+              if (id !== undefined) setRenaming({ stepId: id, text: step?.title ?? '' });
+            }}
+          />
+        </Tooltip>
+      );
+    }
     return (
       <MenuTrigger>
         <Button ref={refFor(`step:${stepId}:menu`)} variant="ghost" icon="ellipsis" label={strings.stepMenu(name)} />

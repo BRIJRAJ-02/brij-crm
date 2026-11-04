@@ -698,6 +698,7 @@ export const strings = {
   sendPeopleHere: 'Send people here',
   messageMenu: 'Thank-you message actions',
   deleteMessage: 'Delete',
+  messageDelete: 'Delete this thank-you message',
   messageDeleted: 'Thank-you message deleted.',
   insertAnswer: 'Insert an answer',
   insertScore: 'Score',
