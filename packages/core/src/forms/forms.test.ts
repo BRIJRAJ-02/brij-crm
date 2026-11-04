@@ -1182,7 +1182,13 @@ describe('the submissions screen’s reads (AC-572, AC-573)', () => {
     const first = await listSubmissions(w.scope, { formId: live.id, limit: 2 });
     expect(first.items).toHaveLength(2);
     const rest = await listSubmissions(w.scope, { formId: live.id, limit: 2, cursor: first.nextCursor ?? '' });
-    expect([...first.items, ...rest.items].map((item) => item.id)).toEqual(ids.map((row) => row.id).reverse());
+    // All leaves spam out (forms fix a8): the three real ones, newest first.
+    expect([...first.items, ...rest.items].map((item) => item.id)).toEqual(
+      ids
+        .filter((row) => row.state !== 'spam')
+        .map((row) => row.id)
+        .reverse(),
+    );
     expect(
       (await listSubmissions(w.scope, { formId: live.id, state: 'spam' })).items.map((item) => item.email),
     ).toEqual(['bot@example.com']);

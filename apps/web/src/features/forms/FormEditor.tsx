@@ -825,6 +825,7 @@ export function FormEditor(props: FormEditorProps) {
             followJob={jobs.follow}
             isFiling={form.live?.targets.main !== undefined}
             hasSubmissions={form.submissionCount > 0}
+            spamCount={form.spamCount}
           />
         );
       default:

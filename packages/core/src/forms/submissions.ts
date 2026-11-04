@@ -243,7 +243,10 @@ export async function readableForm(tx: WorkspaceTx, scope: EngineScope, formId: 
   return form;
 }
 
-/** A page of a form's submissions, newest first, optionally one state only (AC-572). */
+/**
+ * A page of a form's submissions, newest first, optionally one state only (AC-572). With no state, spam is left out
+ * (forms fix a8: it sat among real answers); the Spam filter shows it.
+ */
 export async function listSubmissions(
   scope: EngineScope,
   input: {
@@ -263,7 +266,7 @@ export async function listSubmissions(
       .where(
         and(
           eq(formSubmissions.formId, form.id),
-          input.state === undefined ? undefined : eq(formSubmissions.state, input.state),
+          input.state === undefined ? sql`${formSubmissions.state} <> 'spam'` : eq(formSubmissions.state, input.state),
           after === undefined
             ? undefined
             : and(

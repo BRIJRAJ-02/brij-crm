@@ -47,6 +47,7 @@ import { recordLinks } from '../records/timeline.ts';
 import { AnswerList, answerText, holdsFile } from '../questions/AnswerList.tsx';
 import { answerFiling, notSavedReasons } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
+import { spamReason } from './spam-reason.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
 import { useFormToolbarSlot } from './toolbarSlot.ts';
@@ -76,6 +77,8 @@ export interface SubmissionsTabProps {
   readonly isFiling: boolean;
   /** Whether the form has any submission at all, spam included; without one the tab shows only its empty state. */
   readonly hasSubmissions: boolean;
+  /** Spam waiting in the form: All leaves it out, and a chip opens the Spam filter (forms fix a8). */
+  readonly spamCount?: number;
 }
 
 /** How many answers get a column of their own; the rest are in the open submission. */
@@ -131,6 +134,7 @@ export function SubmissionsTab({
   followJob,
   isFiling,
   hasSubmissions,
+  spamCount = 0,
 }: SubmissionsTabProps) {
   const slot = useFormToolbarSlot();
   const [query, setQuery] = useState('');
@@ -506,6 +510,18 @@ export function SubmissionsTab({
               );
             }}
           />
+          {/* All leaves spam out (forms fix a8): one quiet way to it, counted. */}
+          {state === undefined && spamCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                go(undefined, 'spam');
+              }}
+            >
+              {strings.spamChip(spamCount)}
+            </Button>
+          )}
           {canManage && rows.length > 0 && exportButton}
         </>
       }
@@ -883,6 +899,11 @@ function SubmissionDetail({
   /** The kept answer being written now. */
   readonly usingNew?: string;
 }) {
+  // Why a submission sits in Spam or Needs review, in one line (forms fix a8).
+  const why =
+    submission.state === 'spam' || submission.state === 'needs_review'
+      ? spamReason(submission.signals, submission.state)
+      : undefined;
   const keptAnswers = submission.kept.flatMap((each) => {
     const answer = submission.answers.find((one) => one.questionId === each.questionId);
     return answer === undefined ? [] : [answer];
@@ -897,6 +918,7 @@ function SubmissionDetail({
           {submission.failure}
         </Callout>
       )}
+      {why !== undefined && <Callout tone="info">{why}</Callout>}
       {submission.filesRemovedOn !== undefined && submission.answers.some(holdsFile) && (
         // Its files are kept so a real one can be released with them (late trap #52), but a bot may have sent them.
         <Callout tone="warning" title={strings.spamFilesTitle}>

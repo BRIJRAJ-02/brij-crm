@@ -306,7 +306,7 @@ export const strings = {
   noticesOthers: (count: number) => (count === 1 ? '1 other person' : `${String(count)} other people`),
   noticesOthersHint: 'People you can’t see in this workspace',
   spamTitle: 'Spam',
-  spamSummary: 'On. Doubtful sends wait for review.',
+  spamSummary: 'On. Bots go to Spam, and doubtful sends wait in Needs review for you.',
   detailsTitle: 'Details',
   spamReview: 'Review',
   settingsFailed: 'That didn’t save.',
@@ -539,7 +539,7 @@ export const strings = {
   markingSpam: 'Marking as spam…',
   markingNotSpam: 'Marking as not spam…',
   markedSpamMany: (n: number) => `${count(n, 'submission', 'submissions')} marked as spam.`,
-  releasedMany: (n: number) => `${count(n, 'submission', 'submissions')} marked as not spam. They are being processed.`,
+  releasedMany: (n: number) => `${count(n, 'submission', 'submissions')} marked as not spam.`,
   review: 'Review',
   needReview: (n: number) => `${count(n, 'submission needs', 'submissions need')} your review.`,
   searchSubmissions: 'Search submissions',
@@ -564,6 +564,20 @@ export const strings = {
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
   spamFilesTitle: 'Our spam check caught this',
   spamFiles: (day: string) => `Open files only if you trust the sender. Removed on ${day} unless marked Not spam.`,
+  /** All leaves spam out; this chip opens it (forms fix a8). */
+  spamChip: (n: number) => `${String(n)} spam`,
+  /** Why a submission is in Spam or Needs review, in one line (forms fix a8). */
+  spamWhy: {
+    bot: 'Our bot check caught it: it was filled in too fast or by a script.',
+    captcha: 'It didn’t pass the robot check.',
+    links: 'It is full of links.',
+    name: 'The name looks made up.',
+    email: 'It uses a throwaway email address.',
+    repeated: 'The same thing was sent several times.',
+    limit: 'Too many sends came from this address today.',
+    marked: 'Someone marked it as spam.',
+    doubtful: 'It looked doubtful, so it waits for you to say.',
+  },
   /** Export names what it exports when rows are picked (forms fix a7). */
   exportSelected: (n: number) => `Export ${String(n)} selected`,
   /** The Submissions tab's own failure (forms fix a6): the form stays, the tab says it and offers Try again. */
@@ -592,7 +606,7 @@ export const strings = {
   answersSomeSaved: (saved: number, total: number) => `${String(saved)} of ${String(total)} saved on the record`,
   /** Under Records while the job adds it. */
   answersFiling: 'Adding it to the CRM now.',
-  released: 'Released. It is being processed.',
+  released: 'Marked as not spam.',
   markedSpam: 'Marked as spam.',
   retried: 'Processing it again.',
   submissionDeleted: 'Submission deleted.',
