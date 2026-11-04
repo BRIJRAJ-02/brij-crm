@@ -178,4 +178,24 @@ describe('the question card (T40)', () => {
       .poll(() => latest.find((each) => each.answerType === 'rating')?.options)
       .toEqual({ count: 7, lowLabel: 'Poor', highLabel: 'Superb' });
   });
+
+  it('adds a quiet description under the question from its ⋯, and leaving it empty takes it away', async () => {
+    await show();
+    await userEvent.click(page.getByRole('button', { name: /^Anything else\?/ }));
+    await userEvent.click(page.getByRole('button', { name: 'More for Anything else?' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Add a description' }));
+    const line = page.getByRole('textbox', { name: 'Description' });
+    await expect.element(line).toHaveFocus();
+    await userEvent.fill(line, 'Anything we should know before we call.');
+    await expect
+      .poll(() => latest.find((each) => each.id === 'notes')?.description)
+      .toBe('Anything we should know before we call.');
+    // Once it has one, the menu doesn't offer another.
+    await userEvent.click(page.getByRole('button', { name: 'More for Anything else?' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Add a description' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.fill(line, '');
+    await userEvent.keyboard('{Tab}');
+    await expect.poll(() => latest.find((each) => each.id === 'notes')?.description).toBeUndefined();
+  });
 });

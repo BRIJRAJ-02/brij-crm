@@ -316,10 +316,16 @@ export function QuestionSlot({
   question,
   state,
   children,
+  isDescriptionShown = true,
 }: {
   readonly question: PublicQuestion;
   readonly state: HostedFormState;
   readonly children: ReactNode;
+  /**
+   * Draws the question's description under its control, in the secondary colour (Classic and Steps, where the label
+   * is the control's own). One at a time draws it under its large heading instead, so it passes false there.
+   */
+  readonly isDescriptionShown?: boolean;
 }) {
   const hint = state.hints[question.key];
   const error = state.errors[question.key];
@@ -355,6 +361,9 @@ export function QuestionSlot({
       onBlur={(event) => state.blur(question, event)}
     >
       {children}
+      {isDescriptionShown && question.description !== undefined && question.description !== '' && (
+        <p className={styles.description}>{state.read(question.description)}</p>
+      )}
       {question.answerType === 'email' && (
         <div className={styles.suggestion} aria-live="polite">
           {hint !== undefined && (

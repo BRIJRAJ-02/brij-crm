@@ -81,6 +81,10 @@ export const strings = {
   // Spec 0067: its answers show beside Insights' sources.
   sourceQuestion: 'Use as “How did you hear about us” in Insights',
   duplicateQuestion: 'Duplicate',
+  /** A quiet line under a question (5 November 2026): its ⋯ item, and the line's own name and prompt. */
+  addDescription: 'Add a description',
+  description: 'Description',
+  descriptionPlaceholder: 'A line under the question',
   deleteQuestion: 'Delete',
   questionDeleted: (label: string) => `Deleted “${label}”.`,
   questionDeletedFiled: (label: string, filed: string) => `Deleted “${label}”. Its answers went to ${filed}.`,

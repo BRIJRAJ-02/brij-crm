@@ -194,6 +194,11 @@ export const FormQuestion = z.strictObject({
    */
   choiceKeys: z.array(OptionKey).max(FORM_CHOICES_MAX).optional(),
   placeholder: z.string().trim().max(80, { error: 'Keep a placeholder to 80 characters.' }).optional(),
+  /**
+   * A quiet line under the question (5 November 2026, Typeform's and Tally's description): what it means or why it
+   * is asked. Absent on every question saved before it existed; empty while the builder has it open and unwritten.
+   */
+  description: z.string().trim().max(280, { error: 'Keep a description to 280 characters.' }).optional(),
   required: z.boolean(),
   /** Absent: not filed, kept with the enquiry. */
   filedOn: FiledOn.optional(),

@@ -422,3 +422,17 @@ describe('publishProblem on an empty form (a Blank template, AC-6323)', () => {
     );
   });
 });
+
+describe('a question’s description (5 November 2026)', () => {
+  it('is optional, so every document saved before it still parses, and holds up to 280 characters', () => {
+    const base = { id: 'q1', key: 'budget', label: 'Budget', answerType: 'short_text', required: false };
+    expect(FormDocument.parse({ questions: [base], targets: {} }).questions[0]?.description).toBeUndefined();
+    expect(
+      FormDocument.parse({ questions: [{ ...base, description: 'A rough number is fine.' }], targets: {} }).questions[0]
+        ?.description,
+    ).toBe('A rough number is fine.');
+    expect(
+      FormDocument.safeParse({ questions: [{ ...base, description: 'x'.repeat(281) }], targets: {} }).success,
+    ).toBe(false);
+  });
+});

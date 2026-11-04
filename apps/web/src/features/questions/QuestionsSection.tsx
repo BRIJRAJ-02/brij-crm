@@ -1248,6 +1248,9 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                   onChange((before) => changeQuestion(before, id, { points: startingPoints(question) }, liveIds));
                 }
                 if (key === 'logic') addLogic?.();
+                if (key === 'description') {
+                  onChange((before) => changeQuestion(before, id, { description: '' }, liveIds));
+                }
                 if (key === 'source') onChange((before) => markSource(before, id, question.source !== true));
                 if (key === 'duplicate') {
                   const copy = newId();
@@ -1260,6 +1263,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               {canShowIf && (
                 <MenuItem id="show" icon="eye">
                   {strings.showOnlyIf}
+                </MenuItem>
+              )}
+              {props.keptWith === 'submission' && question.description === undefined && (
+                <MenuItem id="description" icon="file-text">
+                  {strings.addDescription}
                 </MenuItem>
               )}
               {addLogic !== undefined && (
@@ -1526,8 +1534,34 @@ function QuestionEditor({
   const toType = (type: AnswerType) => {
     onChange(typeChange(question, attributes, type));
   };
+  // A description just added is empty: its line takes focus as it appears, so its words are typed at once.
+  const descriptionRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  const isDescriptionNew = question.description === '';
+  useEffect(() => {
+    if (isDescriptionNew) focusLater(() => descriptionRef.current);
+  }, [isDescriptionNew]);
   return (
     <>
+      {/* The quiet line under the question, once added: left empty, it goes again. */}
+      {question.description !== undefined && (
+        <Field
+          ref={descriptionRef}
+          label={strings.description}
+          isLabelHidden
+          size="sm"
+          isWrapping
+          placeholder={strings.descriptionPlaceholder}
+          value={question.description}
+          maxLength={280}
+          isReadOnly={isReadOnly}
+          onChange={(description) => {
+            onChange({ description });
+          }}
+          onBlur={() => {
+            if (question.description?.trim() === '') onChange({ description: null });
+          }}
+        />
+      )}
       {isChoice && (
         <ChoicesEditor
           choices={choices}

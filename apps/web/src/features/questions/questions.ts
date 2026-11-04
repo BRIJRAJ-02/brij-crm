@@ -162,6 +162,8 @@ export interface QuestionChange {
   readonly points?: FormQuestion['points'] | null;
   /** With One at a time (spec 0063, AC-6313): its rules, "After this question", or null for none. */
   readonly jumps?: FormQuestion['jumps'] | null;
+  /** The quiet line under it: new words (empty while just added and unwritten), or null for none. */
+  readonly description?: string | null;
 }
 
 /**
@@ -194,8 +196,10 @@ export function changeQuestion(
       options: hadOptions,
       points: hadPoints,
       jumps: hadJumps,
+      description: hadDescription,
       ...rest
     } = question;
+    const description = change.description === null ? undefined : (change.description ?? hadDescription);
     const jumps = change.jumps === null ? undefined : (change.jumps ?? hadJumps);
     const merged = Object.fromEntries(
       Object.entries({ ...hadOptions, ...change.options }).filter(
@@ -254,6 +258,7 @@ export function changeQuestion(
       ...(options === undefined ? {} : { options }),
       ...(points === undefined ? {} : { points: points === 'value' ? points : [...points] }),
       ...(jumps === undefined || jumps.length === 0 ? {} : { jumps: [...jumps] }),
+      ...(description === undefined ? {} : { description }),
     };
   });
   return renamedKeys(questions, changed).reduce((list, [from, to]) => renameShowWhen(list, from, to), changed);
