@@ -7864,8 +7864,20 @@ export function createDataLayer({
        * as a `forms.export` job. `id` is minted once per press (`newId`), so a
        * retry makes one export.
        */
-      export: (workspace: string, id: string, formId: string, select: SubmissionSelection): Promise<ExportView> =>
-        call((options) => api.submissions.export({ workspace, id, formId, select, mutationId: mintId() }, options)),
+      export: async (
+        workspace: string,
+        id: string,
+        formId: string,
+        select: SubmissionSelection,
+      ): Promise<ExportView> => {
+        const view = await call((options) =>
+          api.submissions.export({ workspace, id, formId, select, mutationId: mintId() }, options),
+        );
+        // Followed as any job this tab started (forms fix a7): live, or read again on a timer while live updates are
+        // paused, so its end is heard either way and Download is offered.
+        await followJob(workspace, view.jobId);
+        return view;
+      },
       /** One export again: its row count once written, and where it downloads from. */
       getExport: (workspace: string, exportId: string): Promise<ExportView> =>
         call((options) => api.submissions.getExport({ workspace, exportId }, options)),

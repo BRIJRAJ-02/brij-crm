@@ -564,6 +564,8 @@ export const strings = {
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
   spamFilesTitle: 'Our spam check caught this',
   spamFiles: (day: string) => `Open files only if you trust the sender. Removed on ${day} unless marked Not spam.`,
+  /** Export names what it exports when rows are picked (forms fix a7). */
+  exportSelected: (n: number) => `Export ${String(n)} selected`,
   /** The Submissions tab's own failure (forms fix a6): the form stays, the tab says it and offers Try again. */
   submissionsFailedTitle: 'Submissions didn’t load',
   /** A submission that went to a record already there (forms fix a4): a tag in the list. */

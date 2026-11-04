@@ -155,7 +155,11 @@ export function FormEditor(props: FormEditorProps) {
   const [isRetargeting, setRetargeting] = useState(false);
   // A blocked Publish shows every incomplete Settings field's message at once, wherever it was pressed from.
   const [showGaps, setShowGaps] = useState(false);
-  const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
+  const heldJobs = useMemo(
+    () => ({ get: (jobId: string) => data.jobs.get(slug, jobId), follow: data.jobs.follow }),
+    [data, slug],
+  );
+  const jobs = useJobFollower(data.jobs.view(slug, 'mine'), heldJobs);
   // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // The Flow view (spec 0063, AC-6325): the steps, their jumps and the endings, read only, from the Form tab.

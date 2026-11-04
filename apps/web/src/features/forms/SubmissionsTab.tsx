@@ -425,10 +425,14 @@ export function SubmissionsTab({
     );
   };
 
-  /** Exports the picked rows, or else what the filter shows, as CSV; the file downloads once its job is done. */
+  /**
+   * Exports the picked rows, or else what the filter shows, as CSV (forms fix a7): one toast that says it is being
+   * prepared, then turns into Download, which saves the file in place rather than opening a tab.
+   */
   const exportCsv = () => {
     // The picked rows; else what the table shows when a search narrows it; else the filter.
     const ids = (picked.length > 0 ? picked : query.trim() === '' ? [] : shown).map((submission) => submission.id);
+    const preparing = toasts.toast({ tone: 'info', message: strings.exportStarted, isBusy: true });
     data.submissions
       .export(
         slug,
@@ -440,8 +444,8 @@ export function SubmissionsTab({
       )
       .then(
         (view) => {
-          toasts.toast({ tone: 'info', message: strings.exportStarted });
           followJob(view.jobId, (job) => {
+            toasts.dismiss(preparing);
             toasts.toast(
               job.status === 'succeeded'
                 ? {
@@ -450,8 +454,7 @@ export function SubmissionsTab({
                     action: {
                       label: strings.download,
                       onAction: () => {
-                        // A new tab, so an expired file's error never replaces the app.
-                        window.open(view.downloadPath, '_blank', 'noopener');
+                        downloadFile(view.downloadPath, view.fileName);
                       },
                     },
                   }
@@ -460,15 +463,17 @@ export function SubmissionsTab({
           });
         },
         (error: unknown) => {
+          toasts.dismiss(preparing);
           toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
         },
       );
   };
 
-  // One clear action for the rows: Export, only when there are rows. Form wide actions live in the top bar's menu.
+  // One clear action for the rows: Export, only when there are rows, naming the picked ones when some are.
+  const exportLabel = picked.length > 0 ? strings.exportSelected(picked.length) : strings.exportButton;
   const exportButton = (
-    <Button icon="download" label={strings.exportButton} isLabelCollapsible onPress={exportCsv}>
-      {strings.exportButton}
+    <Button icon="download" label={exportLabel} isLabelCollapsible onPress={exportCsv}>
+      {exportLabel}
     </Button>
   );
 
@@ -988,4 +993,18 @@ function SubmissionDetail({
       )}
     </>
   );
+}
+
+/**
+ * Saves a file the server sends as an attachment, in place (forms fix a7): an anchor with `download`, so the page
+ * stays and no tab opens. An expired file's error comes back as the browser's own failed download.
+ */
+function downloadFile(href: string, fileName: string): void {
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = fileName;
+  anchor.rel = 'noopener';
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
 }

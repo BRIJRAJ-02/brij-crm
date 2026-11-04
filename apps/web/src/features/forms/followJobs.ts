@@ -4,6 +4,12 @@ import type { JobView, JobsView } from '@crm/data';
 import { useJobs } from '@crm/data/react';
 import { useEffect, useRef } from 'react';
 
+/** The jobs the data layer holds one by one (`data.jobs.get` and `follow` for one workspace). */
+export interface HeldJobs {
+  readonly get: (jobId: string) => JobView | undefined;
+  readonly follow: (listener: () => void) => () => void;
+}
+
 /** The statuses a job never leaves. */
 const FINISHED: readonly JobView['status'][] = ['succeeded', 'failed', 'cancelled'];
 
@@ -12,7 +18,7 @@ const FINISHED: readonly JobView['status'][] = ['succeeded', 'failed', 'cancelle
  * which calls `onDone` once with the job when it finishes. `job(id)` reads one
  * for its progress.
  */
-export function useJobFollower(view: JobsView) {
+export function useJobFollower(view: JobsView, held?: HeldJobs) {
   const snapshot = useJobs(view);
   const waiting = useRef(new Map<string, (job: JobView) => void>());
   // The latest jobs, so `follow` can answer at once for a job that finished before it was followed.
@@ -27,6 +33,20 @@ export function useJobFollower(view: JobsView) {
       }
     }
   }, [snapshot]);
+  // A job this tab started is also held one by one, and read again on a timer while live updates are paused (forms
+  // fix a7: an export waited forever with them paused). Its end is heard from there too, once.
+  useEffect(() => {
+    if (held === undefined) return undefined;
+    return held.follow(() => {
+      for (const [jobId, done] of waiting.current) {
+        const job = held.get(jobId);
+        if (job !== undefined && FINISHED.includes(job.status)) {
+          waiting.current.delete(jobId);
+          done(job);
+        }
+      }
+    });
+  }, [held]);
   return {
     follow: (jobId: string, onDone: (job: JobView) => void) => {
       const known = latest.current.find((each) => each.id === jobId);
