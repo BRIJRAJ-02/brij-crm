@@ -412,12 +412,24 @@ export function useHostedForm({
     [],
   );
 
+  // Questions on screen before the first answer: a look is not a start (critique c, 4: every view counted as a
+  // start, since a form's first questions are reached the moment it draws). They are said once it starts.
+  const waiting = useRef<string[]>([]);
   const count = (event: HostedFormCount) => {
     if (preview || onCount === undefined) return;
     const token = event.kind === 'start' ? 'start' : `reach:${event.questionId}`;
     if (counted.current.has(token)) return;
+    if (event.kind === 'reach' && !counted.current.has('start')) {
+      if (!waiting.current.includes(event.questionId)) waiting.current.push(event.questionId);
+      return;
+    }
     counted.current.add(token);
     onCount(event);
+    if (event.kind === 'start') {
+      const held = waiting.current;
+      waiting.current = [];
+      for (const questionId of held) count({ kind: 'reach', questionId });
+    }
   };
   const isClosed = form.status === 'paused' || view.kind === 'closed';
 

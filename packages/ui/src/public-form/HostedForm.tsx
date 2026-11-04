@@ -1,6 +1,6 @@
 import { Button } from '../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
-import type { PublicForm } from '@crm/contracts/forms';
+import { isBlank, type PublicForm } from '@crm/contracts/forms';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import {
@@ -20,7 +20,7 @@ import { BookingView, useLoadedBooking } from './BookingView.tsx';
 import type { HostedRemoveUpload, HostedUpload } from './files.ts';
 import { useEffect } from 'react';
 import { FinishLater } from './FinishLater.tsx';
-import { Question } from './Question.tsx';
+import { answerOf, Question } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
 import {
   type HostedFill,
@@ -121,11 +121,15 @@ export function HostedForm({
   });
   const { words, preview } = state;
   const loadedBooking = useLoadedBooking();
-  // Classic puts every shown question on screen at once, so they are all reached the moment the form is.
-  // An answer that hides a later one leaves it uncounted, which is what the drop off bar should show.
-  const onScreen = form.questions
-    .filter((question) => state.shown.has(question.key) && question.answerType !== 'hidden')
-    .map((question) => question.id);
+  // Classic puts every shown question on screen at once, so seeing one says nothing: a question is reached once
+  // it, or one after it, holds an answer (critique c, 4), and the furthest answered is where a visitor stopped.
+  const shownQuestions = form.questions.filter(
+    (question) => state.shown.has(question.key) && question.answerType !== 'hidden',
+  );
+  const furthest = shownQuestions.findLastIndex(
+    (question) => !isBlank(answerOf(question, state.answers[question.key])),
+  );
+  const onScreen = shownQuestions.slice(0, furthest + 1).map((question) => question.id);
   useEffect(() => {
     if (state.view.kind === 'form' && !state.isClosed) state.reached(onScreen);
   });

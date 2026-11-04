@@ -52,31 +52,40 @@ const options = () => ({ mode: 'page' as const, onCount: (count: HostedFormCount
 /** The ids counted as reached, in the order they were counted. */
 const reached = () => counted.flatMap((count) => (count.kind === 'reach' ? [count.questionId] : []));
 
-it('counts a Classic form’s questions as reached once, and no start until one is answered', async () => {
+it('counts nothing but a look until an answer: then the start, and a Classic question once answered (critique c)', async () => {
   drawn = mountHostedForm(host, FORM, options());
-  await expect.poll(reached).toEqual(['q-name', 'q-email', 'q-company']);
-  expect(counted.filter((count) => count.kind === 'start')).toHaveLength(0);
+  await expect.poll(() => host.querySelectorAll('input').length).toBeGreaterThan(0);
+  // A look is not a start, and seeing every question at once reaches none of them.
+  expect(counted).toEqual([]);
 
   const name = host.querySelector('input');
   if (name === null) throw new Error('the form drew no input');
   await userEvent.fill(name, 'Ada');
+  await expect.poll(() => counted.filter((count) => count.kind === 'start')).toHaveLength(1);
+  // The start comes first, then the furthest answered question.
+  expect(counted[0]?.kind).toBe('start');
+  await expect.poll(reached).toEqual(['q-name']);
 
-  await expect.poll(() => counted.filter((count) => count.kind === 'start')).toHaveLength(1);
-  // A second answer is the same visit still going, not a second start, and no question is reached twice.
-  const email = host.querySelectorAll('input')[1];
-  if (email === undefined) throw new Error('the form drew one input');
-  await userEvent.fill(email, 'ada@example.com');
-  await expect.poll(() => counted.filter((count) => count.kind === 'start')).toHaveLength(1);
-  expect(reached()).toEqual(['q-name', 'q-email', 'q-company']);
+  // A later answer reaches it and those before it, once each; still one start.
+  const company = host.querySelectorAll('input')[2];
+  if (company === undefined) throw new Error('the form drew too few inputs');
+  await userEvent.fill(company, 'Acme');
+  await expect.poll(reached).toEqual(['q-name', 'q-email', 'q-company']);
+  expect(counted.filter((count) => count.kind === 'start')).toHaveLength(1);
 });
 
-it('counts only the step on screen, so a question never reached is never counted (AC-6321)', async () => {
+it('counts only the step on screen, once the visitor has started, so a question never reached is never counted (AC-6321)', async () => {
   const stepped: PublicForm = {
     ...FORM,
     layout: 'steps',
     steps: [{ keys: ['name', 'email'] }, { id: 'more', title: 'Your company', keys: ['company'] }],
   };
   drawn = mountHostedForm(host, stepped, options());
+  await expect.poll(() => host.querySelectorAll('input').length).toBeGreaterThan(0);
+  expect(counted).toEqual([]);
+  const name = host.querySelector('input');
+  if (name === null) throw new Error('the form drew no input');
+  await userEvent.fill(name, 'Ada');
   // The first step's two, and not the second step's one: the visitor has not been given it.
   await expect.poll(reached).toEqual(['q-name', 'q-email']);
 });

@@ -626,24 +626,17 @@ export const strings = {
   analyticsFaster: (by: string) => `${by} faster`,
   analyticsSlower: (by: string) => `${by} slower`,
   analyticsNoMedian: 'No finishes yet',
-  analyticsDay: 'Day',
-  analyticsChart: (days: number) => `Views per day over the last ${String(days)} days`,
-  analyticsDropOff: 'Where people stop',
-  analyticsDropOffChart: 'People who stopped on each question',
   analyticsQuestion: 'Question',
-  /** A question's place in the form, as the drop off chart's axis label: "Q4". */
-  analyticsQuestionAt: (at: number) => `Q${String(at)}`,
   analyticsSummary: 'Headline figures',
-  analyticsLeft: 'Stopped here',
-  analyticsSources: 'Where they come from',
-  analyticsSource: 'Source',
   analyticsCompletions: 'Finished',
   analyticsDirect: 'Direct',
   analyticsEmpty: 'No visits yet',
-  analyticsEmptyText: 'Share the form’s link to see how it performs.',
+  analyticsEmptyText: 'Numbers show here once people open the form.',
+  analyticsShareIt: 'Share the form',
+  analyticsUnnamed: 'A question with no words',
+  analyticsLastDays: (days: number) => `the last ${String(days)} days`,
   analyticsNoneInRange: 'No visits in this period',
   analyticsNoneInRangeText: 'Try a longer period.',
-  analyticsNoSources: 'Nothing yet',
   analyticsFailed: 'Analytics didn’t load',
   /** A question card's chip (AC-6322): "82% answered", or nothing at all when nobody reached it. */
   analyticsChip: (answered: string) => `${answered} answered`,
@@ -707,7 +700,4 @@ export const strings = {
   savingOffToast: 'Answers will stay in Submissions once you publish.',
   // Analytics (T22)
   analyticsFinishedOf: (finished: string, started: string) => `${finished} of ${started} who started finished`,
-  analyticsAllFinished: 'Everyone who started finished.',
-  analyticsSourceLine: (views: string, finished: string, count: number) =>
-    `${views} ${count === 1 ? 'view' : 'views'} · ${finished} finished`,
 } as const;

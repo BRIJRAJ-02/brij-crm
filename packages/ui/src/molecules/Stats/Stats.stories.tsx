@@ -103,3 +103,23 @@ export const Loading: Story = {
     await expect(canvas.getByRole('group', { name: 'This week' })).toHaveAttribute('aria-busy', 'true');
   },
 };
+
+/** Cards: each figure on Card's surface, one row that wraps, over the cards that explain them. */
+export const Cards: Story = {
+  args: {
+    label: 'Last 30 days',
+    variant: 'cards',
+    items: [
+      { id: 'views', label: 'Views', value: '128' },
+      { id: 'starts', label: 'Starts', value: '64' },
+      { id: 'finished', label: 'Finished', value: '41' },
+      { id: 'completion', label: 'Completion', value: '64%' },
+      { id: 'median', label: 'Median time', value: '1m 12s' },
+    ],
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <Stats {...args} />
+    </Stage>
+  ),
+};
