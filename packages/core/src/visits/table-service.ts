@@ -232,15 +232,30 @@ export async function readTableService(
   return row === undefined ? undefined : { serviceId: row.id, variantId: row.variant_id, rules: rulesOf(row) };
 }
 
-/** The place's hours and live tables, as the checklist reads them; NOT_FOUND for a place that isn't there. */
-async function placeFacts(tx: WorkspaceTx, placeId: string) {
-  const [place] = (
-    await tx.execute<{ hours: PlaceHoursShape; time_zone: string; public_key: string }>(
-      sql`select hours, time_zone, public_key from places where id = ${placeId}::uuid`,
-    )
-  ).rows;
-  if (place === undefined) throw refuse('NOT_FOUND', 'That place doesn’t exist.');
-  const tables = (
+/**
+ * The party sizes a guest is offered online (AC-6550): the rules' range, narrowed at both ends to the sizes an online
+ * table seats, alone or joined. A place whose smallest table seats two never offers a party of one. Undefined when no
+ * online table seats any size in the range.
+ */
+export function guestPartyRange(
+  tables: readonly PlannerResource[],
+  rules: Pick<TableRules, 'partyMin' | 'partyMax'>,
+): { readonly min: number; readonly max: number } | undefined {
+  const online = tables.filter((table) => table.online !== false);
+  const sizes = Array.from({ length: rules.partyMax - rules.partyMin + 1 }, (_, index) => rules.partyMin + index);
+  const seated = sizes.filter((size) => partyGroups(online, 'table', size).length > 0);
+  // Joining tables for a party smaller than any one table takes is never what a guest is offered.
+  const alone = seated.filter((size) =>
+    online.some((table) => table.kind === 'table' && table.minCapacity <= size && size <= table.maxCapacity),
+  );
+  const min = alone[0] ?? seated[0];
+  const max = seated.at(-1);
+  return min === undefined || max === undefined ? undefined : { min, max };
+}
+
+/** The place's live tables, as planner resources with nothing busy. */
+export async function placeTables(tx: WorkspaceTx, placeId: string): Promise<readonly PlannerResource[]> {
+  return (
     await tx.execute<{
       id: string;
       min_capacity: number;
@@ -263,6 +278,17 @@ async function placeFacts(tx: WorkspaceTx, placeId: string) {
     online: row.online,
     busy: [],
   }));
+}
+
+/** The place's hours and live tables, as the checklist reads them; NOT_FOUND for a place that isn't there. */
+async function placeFacts(tx: WorkspaceTx, placeId: string) {
+  const [place] = (
+    await tx.execute<{ hours: PlaceHoursShape; time_zone: string; public_key: string }>(
+      sql`select hours, time_zone, public_key from places where id = ${placeId}::uuid`,
+    )
+  ).rows;
+  if (place === undefined) throw refuse('NOT_FOUND', 'That place doesn’t exist.');
+  const tables = await placeTables(tx, placeId);
   return { hours: place.hours, zone: place.time_zone, publicKey: place.public_key, tables };
 }
 

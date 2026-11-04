@@ -14,6 +14,7 @@ import { addResource, addService, addStaff, visitWorkspace, waiterScope } from '
 import { bookVisit, visitTimes } from './book.ts';
 import {
   getTableSetup,
+  guestPartyRange,
   listServiceDay,
   saveTableSetup,
   setupSteps,
@@ -115,6 +116,29 @@ describe('setup (B7 lite)', () => {
       done: false,
       fix: 'Open at least as long as a table is held, or shorten the hold.',
     });
+  });
+
+  it('offers guests only the party sizes a table seats', () => {
+    const table = (id: string, min: number, max: number, extra: { joins?: string[]; online?: boolean } = {}) => ({
+      id,
+      kind: 'table' as const,
+      minCapacity: min,
+      maxCapacity: max,
+      joins: extra.joins ?? [],
+      order: 0,
+      busy: [],
+      ...(extra.online === undefined ? {} : { online: extra.online }),
+    });
+    // The smallest table seats two: no party of one.
+    expect(guestPartyRange([table('a', 2, 4)], { partyMin: 1, partyMax: 8 })).toEqual({ min: 2, max: 4 });
+    // Two joined tables seat six; a table kept off line doesn't count.
+    expect(
+      guestPartyRange([table('a', 2, 4, { joins: ['b'] }), table('b', 2, 2), table('c', 1, 1, { online: false })], {
+        partyMin: 1,
+        partyMax: 8,
+      }),
+    ).toEqual({ min: 2, max: 6 });
+    expect(guestPartyRange([table('a', 6, 8)], { partyMin: 1, partyMax: 4 })).toBeUndefined();
   });
 });
 
