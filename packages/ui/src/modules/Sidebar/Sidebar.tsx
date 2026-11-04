@@ -234,12 +234,9 @@ export function Sidebar(props: SidebarProps) {
                   },
                 }
               : {
-                  // An item's grip and More join the tab order only while the item holds focus (forms fixes 2).
-                  onFocus: () => {
-                    applyRowStops(bodyRef.current);
-                  },
-                  onBlur: () => {
-                    applyRowStops(bodyRef.current);
+                  // An item's grip and More are out of the tab order; Right and Left reach them (forms fixes 2).
+                  onKeyDown: (event: KeyboardEvent) => {
+                    moveInRow(event);
                   },
                 })}
           >
@@ -365,22 +362,16 @@ function useArrowKeys(bodyRef: { readonly current: HTMLDivElement | null }, isOn
 }
 
 /**
- * An item's grip and More are tab stops only while focus is on that item (its link, grip or More): Tab goes link,
- * grip, More on the item in hand and link to link past the rest, so the sidebar is about one stop per item rather
- * than three (forms fixes 2, the critique's ~40 stops). A pointer, and the arrow keys inside an open menu, are
- * unchanged. Runs after every render and as focus moves, so a row that arrives later joins in.
+ * An item's grip and More are never tab stops (forms fixes 2, the critique's ~40 stops): Tab goes item to item, one
+ * stop each, and from an item Right moves to its grip and More, Left back, Escape back to the item. They show while
+ * the item holds focus, as on hover. A pointer is unchanged. Runs after every render, so a row that arrives later
+ * joins in.
  */
 function applyRowStops(body: HTMLElement | null) {
   if (body === null) return;
-  // React Aria's FocusScope moves focus a frame after the blur, so the row is read once focus has landed.
-  queueMicrotask(() => {
-    for (const row of body.querySelectorAll<HTMLElement>('[data-row-stops]')) {
-      const holds = row.contains(document.activeElement);
-      for (const control of row.querySelectorAll<HTMLElement>('[data-row-actions] button')) {
-        control.tabIndex = holds ? 0 : -1;
-      }
-    }
-  });
+  for (const control of body.querySelectorAll<HTMLElement>('[data-row-stops] [data-row-actions] button')) {
+    control.tabIndex = -1;
+  }
 }
 
 /** Keeps `applyRowStops` after every render of the body. */
@@ -388,6 +379,28 @@ function useRowStops(bodyRef: { readonly current: HTMLDivElement | null }, isOn:
   useLayoutEffect(() => {
     if (isOn) applyRowStops(bodyRef.current);
   });
+}
+
+/** Right and Left inside an item's row: from the item to its grip and More and back; Escape back to the item. */
+function moveInRow(event: KeyboardEvent) {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Escape') return;
+  const at = document.activeElement;
+  if (!(at instanceof HTMLElement)) return;
+  const row = at.closest<HTMLElement>('[data-row-stops]');
+  if (row === null) return;
+  const item = row.querySelector<HTMLElement>(':scope > a, :scope > button');
+  const controls = [...row.querySelectorAll<HTMLElement>('[data-row-actions] button')];
+  const stops = [...(item === null ? [] : [item]), ...controls];
+  const index = stops.indexOf(at);
+  if (index === -1) return;
+  // A grip that is lifted moves the item with the arrows: leave those keys to it.
+  if (at.closest('[data-lifted]') !== null) return;
+  const next =
+    event.key === 'Escape' ? (index === 0 ? undefined : item) : stops[index + (event.key === 'ArrowRight' ? 1 : -1)];
+  if (next === undefined || next === null) return;
+  event.preventDefault();
+  next.focus();
 }
 
 /** Up and Down (and Home and End) move focus between the body's items, and the one focused becomes the tab stop. */

@@ -159,23 +159,25 @@ describe('a sidebar drag', () => {
   });
 });
 
-// An item's grip and More join the tab order only on the item in hand (forms fixes 2): about one stop per item.
+// An item's grip and More are out of the tab order (forms fixes 2): one stop per item, Right and Left reach them.
 describe('the sidebar’s tab stops', () => {
-  it('reaches a grip only from its own item, so Tab goes link to link past the rest', async () => {
+  it('keeps every grip out of the tab order, and reaches one from its item with Right, and back with Left', async () => {
     await render(<Records order={['Companies', 'People', 'Deals']} onReorder={vi.fn()} />);
     await frame();
-    const stops = () => ['Companies', 'People', 'Deals'].map((name) => grip(name).tabIndex);
-    expect(stops()).toEqual([-1, -1, -1]);
+    expect(['Companies', 'People', 'Deals'].map((name) => grip(name).tabIndex)).toEqual([-1, -1, -1]);
     const people = document.querySelector<HTMLElement>('a[href="/people"]');
-    people?.focus();
-    await frame();
-    expect(stops()).toEqual([-1, 0, -1]);
-    grip('People').focus();
-    await frame();
-    expect(stops()).toEqual([-1, 0, -1]);
-    document.querySelector<HTMLElement>('a[href="/deals"]')?.focus();
-    await frame();
-    expect(stops()).toEqual([-1, -1, 0]);
+    if (people === null) throw new Error('No People item.');
+    people.focus();
+    const press = (key: string) => {
+      document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    };
+    press('ArrowRight');
+    expect(grip('People')).toHaveFocus();
+    press('ArrowLeft');
+    expect(people).toHaveFocus();
+    press('ArrowRight');
+    press('Escape');
+    expect(people).toHaveFocus();
   });
 });
 
