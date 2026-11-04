@@ -85,6 +85,8 @@ export function NewPageDialog({
   const [custom, setCustom] = useState('');
   // Just me, always first and chosen (the owner, 4 November 2026: nothing else is ever pre-selected).
   const [type, setType] = useState<PageType>('me');
+  // More types, folded until opened; held open while its type is the one chosen, so the choice never hides.
+  const [isMoreOpen, setMoreOpen] = useState(false);
   const isTeamLink = kind === 'team-link' && onTeamLink !== undefined;
   const isWorkspace = kind === 'workspace' && canBookTeams;
   const isPage = !isTeamLink && !isWorkspace;
@@ -144,6 +146,7 @@ export function NewPageDialog({
     setLength('30');
     setCustom('');
     setType('me');
+    setMoreOpen(false);
     setRotationId(null);
     setRotationError(undefined);
     setErrors({});
@@ -338,7 +341,12 @@ export function NewPageDialog({
             />
           </FieldGroup>
           {canManaged && (
-            <Disclosure title={strings.moreTypes} variant="quiet" defaultExpanded={false}>
+            <Disclosure
+              title={strings.moreTypes}
+              variant="quiet"
+              isExpanded={isMoreOpen || type === 'managed'}
+              onExpandedChange={setMoreOpen}
+            >
               <TileGrid
                 variant="choice"
                 label={strings.moreTypes}

@@ -32,6 +32,11 @@ export function TeamLinksMenu({ slug }: TeamLinksMenuProps) {
   const hasWorkspaceItems = canCopy || workspace?.canChange === true || (workspace === undefined && canBookTeams);
   if (!hasWorkspaceItems && !canMakeTeamLink) return null;
   const copy = (link: string) => {
+    // No clipboard outside a secure context: said, rather than failing without a word.
+    if (typeof navigator.clipboard === 'undefined') {
+      toasts.toast({ tone: 'danger', message: strings.copyFailed });
+      return;
+    }
     navigator.clipboard.writeText(link).then(
       () => toasts.toast({ tone: 'success', message: strings.workspaceLinkCopied }),
       () => toasts.toast({ tone: 'danger', message: strings.copyFailed }),
@@ -59,7 +64,7 @@ export function TeamLinksMenu({ slug }: TeamLinksMenuProps) {
               </MenuItem>
             )}
             {workspace?.canChange === true && (
-              <MenuItem id="edit" icon="pencil">
+              <MenuItem id="edit" icon="pencil" description={strings.editWorkspaceLinkLine}>
                 {strings.editWorkspaceLink}
               </MenuItem>
             )}

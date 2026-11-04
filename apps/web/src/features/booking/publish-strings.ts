@@ -9,7 +9,7 @@ export const publishStrings = {
   viewPage: 'View page',
   insights: 'Insights',
   versions: 'Versions',
-  discard: 'Discard changes',
+  discard: 'Discard unpublished changes',
   published: (title: string) => `Published ${title}.`,
   /** The first Publish's moment, as a form's: the page's name, live. */
   liveTitle: (title: string) => `${title} is live`,
@@ -17,12 +17,12 @@ export const publishStrings = {
   putOnSite: 'Put it on your site',
   /** Versions: each published version, the live one marked, any other brought back as the draft. */
   versionsTitle: 'Versions',
-  versionsLoading: 'Reading versions',
+  versionsNone: 'No published versions yet',
   versionLive: 'Live',
   restore: 'Restore',
   close: 'Close',
   /** Discard changes asks first. */
-  discardTitle: 'Discard your changes?',
+  discardTitle: 'Discard unpublished changes?',
   discardText: 'Guests keep seeing the page as it is now.',
   discardKeep: 'Keep my changes',
   discardConfirm: 'Discard changes',

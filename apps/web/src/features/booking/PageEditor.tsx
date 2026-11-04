@@ -40,6 +40,8 @@ import {
   CopyButton,
   DescriptionList,
   EditorStatus,
+  EmptyState,
+  focusLater,
   Field,
   InfoTip,
   Link,
@@ -51,7 +53,6 @@ import {
   SegmentedControl,
   Select,
   SettingsRow,
-  SettingsSection,
   SettingsStack,
   Skeleton,
   Switch,
@@ -368,6 +369,11 @@ export function PageEditor({
   // Publish pressed with unsaved changes: they save first, and the save that lands publishes.
   const publishAfterSave = useRef(false);
   const [isVersionsOpen, setVersionsOpen] = useState(false);
+  const [isVersionsFailed, setVersionsFailed] = useState(false);
+  // The header's ⋯: where focus goes once Publish or the live dialog has left (as the forms editor's `moreRef`).
+  const moreRef = useRef<HTMLButtonElement>(null);
+  // Preview pressed over unsaved changes: the tab it opened, which goes to the preview once the save lands.
+  const previewAfterSave = useRef<Window | undefined>(undefined);
   const [isDiscardAsked, setDiscardAsked] = useState(false);
   const [publishProblem, setPublishProblem] = useState<
     { readonly message: string; readonly field?: string } | undefined
@@ -721,13 +727,21 @@ export function PageEditor({
     const wasDraft = isDraftPage(current);
     data.bookingPages
       .publish(slug, current.id)
-      .then((next) => (wasDraft ? data.bookingPages.update(slug, current.id, { status: 'live' }) : next))
+      .then((published) => {
+        // What was published shows at once, so a refused go live below never leaves changes on screen that are gone.
+        takePage(published);
+        return wasDraft ? data.bookingPages.update(slug, current.id, { status: 'live' }) : published;
+      })
       .then(
         (next) => {
           takePage(next);
           setPublishing(false);
           if (wasDraft) setLiveShown(next);
-          else toasts.toast({ tone: 'success', message: publishStrings.published(next.title) });
+          else {
+            toasts.toast({ tone: 'success', message: publishStrings.published(next.title) });
+            // Publish has left the header: focus goes to ⋯ rather than falling to the page, as a form's does.
+            focusLater(() => moreRef.current);
+          }
         },
         (error: unknown) => {
           setPublishing(false);
@@ -753,6 +767,8 @@ export function PageEditor({
       .then(resetTo, () => toasts.toast({ tone: 'danger', message: publishStrings.discardFailed }));
   };
   const readVersions = () => {
+    setVersions(undefined);
+    setVersionsFailed(false);
     data.bookingPages.versions(slug, page.id).then(
       (list) =>
         setVersions(
@@ -762,7 +778,7 @@ export function PageEditor({
             label: publishStrings.versionLabel(one.publishedBy, new Date(one.publishedAt)),
           })),
         ),
-      () => toasts.toast({ tone: 'danger', message: publishStrings.versionsFailed }),
+      () => setVersionsFailed(true),
     );
   };
   const restore = (version: number) => {
@@ -809,6 +825,10 @@ export function PageEditor({
           setJustSaved(true);
           // Publish pressed over unsaved changes: the save landed, so what it saved goes out now.
           if (publishAfterSave.current) publish(next);
+          // Preview pressed over unsaved changes: its tab shows them now.
+          const opened = previewAfterSave.current;
+          previewAfterSave.current = undefined;
+          if (opened !== undefined) opened.location.href = pagePreviewHref(slug, next.id);
         } else
           toasts.toast({
             tone: 'success',
@@ -819,8 +839,12 @@ export function PageEditor({
       },
       (error: unknown) => {
         setSaving(false);
-        // A refused save publishes nothing: the bar says why, and Publish waits for the next press.
+        // A refused save publishes nothing: the bar says why, and Publish waits for the next press. A preview tab
+        // opened for it shows what is saved.
         publishAfterSave.current = false;
+        const opened = previewAfterSave.current;
+        previewAfterSave.current = undefined;
+        if (opened !== undefined) opened.location.href = pagePreviewHref(slug, page.id);
         // Pause and Resume aren't part of the save bar's changes: their failure says so in a toast.
         if (patch.status !== undefined) {
           setDraft((current) => ({ ...current, status: page.status }));
@@ -993,15 +1017,25 @@ export function PageEditor({
               {...(isDraft ? {} : { link: publicBookingUrl(page) })}
               // The page as the draft has it, in a new tab (what guests will see once published).
               preview={
-                <ButtonLink
-                  href={pagePreviewHref(slug, page.id)}
-                  isExternal
+                <Button
                   icon="eye"
                   isLabelCollapsible
                   label={publishStrings.preview}
+                  onPress={() => {
+                    // The tab opens at once (a popup must come from the press), and loads once the draft is saved.
+                    const opened = window.open('', '_blank');
+                    if (opened === null) return;
+                    opened.opener = null;
+                    if (isPageDirty && blockedReason === undefined) {
+                      previewAfterSave.current = opened;
+                      if (saveAll()) return;
+                      previewAfterSave.current = undefined;
+                    }
+                    opened.location.href = pagePreviewHref(slug, page.id);
+                  }}
                 >
                   {publishStrings.preview}
-                </ButtonLink>
+                </Button>
               }
               // Publish, the page's one primary, while there is something guests don't see yet.
               {...(!isLocked && (isDraft || hasUnpublished)
@@ -1026,6 +1060,7 @@ export function PageEditor({
                 // An editor changes the page but never deletes it (AC-1331).
                 ...(isLocked || page.isEditor === true ? {} : { onDelete: () => setDeleting(true) }),
                 deleteLabel: strings.deletePage,
+                triggerRef: moreRef,
                 extra: [
                   ...(isDraft || page.status !== 'live'
                     ? []
@@ -1060,6 +1095,10 @@ export function PageEditor({
                             setSharing(true);
                           },
                         },
+                      ]),
+                  ...(isLocked || isDraft
+                    ? []
+                    : [
                         {
                           id: 'versions',
                           label: publishStrings.versions,
@@ -1071,7 +1110,7 @@ export function PageEditor({
                         },
                       ]),
                   // Back to what guests see, once there is something unpublished to lose (it asks first).
-                  ...(!isLocked && changes.length > 0
+                  ...(!isLocked && !isDraft && changes.length > 0
                     ? [
                         {
                           id: 'discard',
@@ -1182,10 +1221,13 @@ export function PageEditor({
                       <LiveDialog
                         slug={slug}
                         page={liveShown}
-                        onClose={() => setLiveShown(undefined)}
+                        onClose={() => {
+                          setLiveShown(undefined);
+                          focusLater(() => moreRef.current);
+                        }}
                         onPutOnSite={() => {
                           setLiveShown(undefined);
-                          onTabChange('page');
+                          onTabChange('share');
                         }}
                       />
                       <Modal
@@ -1194,8 +1236,12 @@ export function PageEditor({
                         onOpenChange={setVersionsOpen}
                         actions={<Button slot="close">{publishStrings.close}</Button>}
                       >
-                        {versions === undefined ? (
+                        {isVersionsFailed ? (
+                          <EmptyState tone="error" title={publishStrings.versionsFailed} onRetry={readVersions} />
+                        ) : versions === undefined ? (
                           <Skeleton lines={3} />
+                        ) : versions.length === 0 ? (
+                          <EmptyState title={publishStrings.versionsNone} icon="clock" />
                         ) : (
                           <SettingsStack variant="plain">
                             {versions.map((one) => (
@@ -1315,7 +1361,7 @@ export function PageEditor({
                     // Plain rows under small group headers, as a form's Settings tab (critic A8, 4 Nov 2026): a label on
                     // the left with its help in a tip, the control on the right.
                     <SettingsStack width="readable">
-                      <SettingsSection title={strings.details}>
+                      <Card title={strings.details}>
                         <SettingsRow title={strings.description} control="field">
                           <Field
                             label={strings.description}
@@ -1334,6 +1380,7 @@ export function PageEditor({
                         <SettingsRow title={strings.opensIn} meta={tip(strings.opensIn, strings.opensInHelp)}>
                           <SegmentedControl
                             label={strings.opensIn}
+                            size="compact"
                             segments={[
                               { value: 'month', label: strings.opensInViews.month },
                               { value: 'list', label: strings.opensInViews.list },
@@ -1348,8 +1395,8 @@ export function PageEditor({
                             }}
                           />
                         </SettingsRow>
-                      </SettingsSection>
-                      <SettingsSection title={strings.linkSection}>
+                      </Card>
+                      <Card title={strings.linkSection}>
                         {page.handle !== undefined && !draft.isPrivate && !isWorkspace ? (
                           // The full address, the part after the owner's handle editable (22 Oct 2026); Copy takes the
                           // saved link, so it waits while the address has unsaved changes.
@@ -1442,6 +1489,7 @@ export function PageEditor({
                           >
                             <SegmentedControl
                               label={strings.whoCanBook}
+                              size="compact"
                               segments={[
                                 { value: 'public', label: strings.publicPage },
                                 { value: 'link', label: strings.linkOnly },
@@ -1460,7 +1508,7 @@ export function PageEditor({
                             />
                           </SettingsRow>
                         )}
-                      </SettingsSection>
+                      </Card>
                       {/* Requests waiting for a Confirm (spec 0062, AC-6203): shown while any wait, even once
                           confirm-first is off, and on its own while it is on. */}
                       <RequestsCard
@@ -1476,9 +1524,9 @@ export function PageEditor({
                     // Every way to hand the page out, in one place (critic A21, 4 Nov 2026): its link through the
                     // forms' own share part, then the snippet, one-time links, the social links and the link page.
                     <SettingsStack width="readable">
-                      <SettingsSection title={strings.shareLinkSection}>
+                      <Card title={strings.shareLinkSection}>
                         {isDraft ? (
-                          <SettingsRow title={strings.shareLinkSection} description={strings.publishToShare}>
+                          <SettingsRow title={strings.notPublished} description={strings.publishToShare}>
                             {!isLocked && (
                               <Button onPress={publishNow} isPending={isPublishing}>
                                 {publishStrings.publish}
@@ -1488,7 +1536,7 @@ export function PageEditor({
                         ) : (
                           <ShareBlock name={page.title} link={savedLink} />
                         )}
-                      </SettingsSection>
+                      </Card>
                       {/* The snippet for someone else's site (spec 0062, L3). */}
                       <EmbedCard
                         script={data.forms.embedUrl()}
@@ -1522,7 +1570,7 @@ export function PageEditor({
                       {page.handle !== undefined && !draft.isPrivate && isOwnPage && (
                         // Where it sits on the owner's link page at /<handle> (spec 0051): a Public page joins it by
                         // itself, and its place and heading are set on the link page, with the rest of the page.
-                        <SettingsSection title={strings.linkPage}>
+                        <Card title={strings.linkPage}>
                           <SettingsRow
                             title={strings.onLinkPage}
                             meta={tip(strings.onLinkPage, strings.onLinkPageLine)}
@@ -1531,13 +1579,13 @@ export function PageEditor({
                               {strings.editLinkPage}
                             </ButtonLink>
                           </SettingsRow>
-                        </SettingsSection>
+                        </Card>
                       )}
                     </SettingsStack>
                   )}
                   {shown === 'meeting' && (
                     <SettingsStack width="readable">
-                      <SettingsSection title={strings.meeting}>
+                      <Card title={strings.meeting}>
                         <SettingsRow title={strings.title} control="field">
                           <Field
                             label={strings.title}
@@ -1669,7 +1717,7 @@ export function PageEditor({
                             />
                           </SettingsRow>
                         )}
-                      </SettingsSection>
+                      </Card>
                       <PageDestination
                         destination={data.calendar.pageDestination(slug, page.id)}
                         calendars={data.calendar.calendars(slug)}
@@ -1680,7 +1728,7 @@ export function PageEditor({
                       />
                       {/* What happens once a booking is made, on the tab about the meeting itself (the owner, 27
                           October 2026). One row per setting (critic A1: two switches had shared one row). */}
-                      <SettingsSection title={strings.afterBooking}>
+                      <Card title={strings.afterBooking}>
                         <SettingsRow title={strings.addToCrm} meta={tip(strings.addToCrm, strings.addToCrmHelp)}>
                           <Switch
                             label={strings.addToCrm}
@@ -1707,6 +1755,7 @@ export function PageEditor({
                         <SettingsRow title={strings.thenShow}>
                           <SegmentedControl
                             label={strings.thenShow}
+                            size="compact"
                             segments={[
                               { value: 'confirmation', label: strings.afterChoices.confirmation },
                               { value: 'redirect', label: strings.afterChoices.redirect },
@@ -1754,11 +1803,11 @@ export function PageEditor({
                             </SettingsRow>
                           </>
                         )}
-                      </SettingsSection>
+                      </Card>
                     </SettingsStack>
                   )}
                   {shown === 'questions' && (
-                    <>
+                    <SettingsStack width="readable">
                       {targets === undefined && !isLocked && (
                         <Callout
                           tone="danger"
@@ -1834,10 +1883,10 @@ export function PageEditor({
                         isReadOnly={readOnly('questions')}
                         {...(shownProblem === undefined ? {} : { problem: shownProblem })}
                       />
-                    </>
+                    </SettingsStack>
                   )}
                   {isTeam && shown === 'hosts' && (
-                    <>
+                    <SettingsStack width="readable">
                       <Callout tone="info">{publishStrings.goesLive}</Callout>
                       <HostsCard
                         data={data}
@@ -1886,7 +1935,7 @@ export function PageEditor({
                           onNotice?.(routingStrings.saved);
                         }}
                       />
-                    </>
+                    </SettingsStack>
                   )}
                   {shown === 'hours' && (
                     // Hours and Limits as one Availability tab (critic A6, 4 Nov 2026), the forms Settings width.
@@ -1986,7 +2035,7 @@ export function PageEditor({
                         settingsHref={calendarsHref(slug)}
                       />
 
-                      <SettingsSection title={strings.limitGroups.buffers}>
+                      <Card title={strings.limitGroups.buffers}>
                         {limitRow(
                           strings.bufferBefore,
                           strings.limitHelp.before,
@@ -2001,8 +2050,8 @@ export function PageEditor({
                           String(draft.bufferAfter),
                           (id) => change({ bufferAfter: Number(id ?? 0) }),
                         )}
-                      </SettingsSection>
-                      <SettingsSection title={strings.limitGroups.window}>
+                      </Card>
+                      <Card title={strings.limitGroups.window}>
                         {limitRow(
                           strings.notice,
                           strings.limitHelp.notice,
@@ -2014,8 +2063,8 @@ export function PageEditor({
                         {limitRow(strings.window, strings.limitHelp.ahead, WINDOW, String(draft.windowDays), (id) =>
                           change({ windowDays: Number(id ?? 60) }),
                         )}
-                      </SettingsSection>
-                      <SettingsSection title={strings.limitGroups.changes}>
+                      </Card>
+                      <Card title={strings.limitGroups.changes}>
                         {limitRow(
                           strings.cancelCutoff,
                           strings.limitHelp.cancelCutoff,
@@ -2030,8 +2079,8 @@ export function PageEditor({
                           String(draft.moveCutoffMinutes),
                           (id) => change({ moveCutoffMinutes: Number(id ?? 0) }),
                         )}
-                      </SettingsSection>
-                      <SettingsSection title={strings.limitGroups.pace}>
+                      </Card>
+                      <Card title={strings.limitGroups.pace}>
                         {limitRow(
                           strings.dailyLimit,
                           strings.limitHelp.daily,
@@ -2046,7 +2095,7 @@ export function PageEditor({
                           draft.slotStep === null ? 'duration' : String(draft.slotStep),
                           (id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null }),
                         )}
-                      </SettingsSection>
+                      </Card>
                     </SettingsStack>
                   )}
                 </PreviewLayout>
@@ -2098,7 +2147,7 @@ function LiveDialog({
       }
     >
       <ShareBlock name={live.title} link={publicBookingUrl(live)}>
-        <Link href={pageEditorHref(slug, live.id, 'page')} onPress={onPutOnSite}>
+        <Link href={pageEditorHref(slug, live.id, 'share')} onPress={onPutOnSite}>
           {publishStrings.putOnSite}
         </Link>
       </ShareBlock>

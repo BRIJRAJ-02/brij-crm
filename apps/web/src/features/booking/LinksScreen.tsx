@@ -183,7 +183,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       colourKey: page.id,
       facts: factsOf(page),
       // The link Copy link copies, as a path.
-      address: publicBookingPath(page),
+      ...(isDraft ? {} : { address: publicBookingPath(page) }),
       // Off shows in the muted title and the switch; the badge is for what they can't say.
       ...(isPending
         ? { badge: strings.copying }
@@ -214,7 +214,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
               hint: page.status === 'live' ? strings.takingBookings : strings.notTakingBookings,
             },
           }),
-      copyValue: publicBookingUrl(page),
+      ...(isDraft ? {} : { copyValue: publicBookingUrl(page) }),
       actions: (
         <>
           {/* Off, there is nothing to open: the muted title and the switch say why. */}
