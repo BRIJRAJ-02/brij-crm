@@ -84,9 +84,7 @@ test.describe('the public booking page, accessible', () => {
     await visitor.context().close();
   });
 
-  test('BUG: books with the keyboard alone, focus landing on the next thing to do at each step', async ({
-    browser,
-  }) => {
+  test('books with the keyboard alone, focus landing on the next thing to do at each step', async ({ browser }) => {
     test.setTimeout(120_000);
     const visitor = await (await browser.newContext({ reducedMotion: 'reduce' })).newPage();
     await visitor.goto(address);
@@ -105,18 +103,11 @@ test.describe('the public booking page, accessible', () => {
     steps.push(`Tab stops to the first time: ${String(stops)}`);
     await visitor.keyboard.press('Enter');
     steps.push(`after a time: ${await focused(visitor)}`);
-    // BUG (B-14): the Book button sits after every time of the day in Tab order, so after Enter on the first of 14
-    // times a keyboard user tabs through the other 13 to reach it (Calendly puts Next beside the chosen time, Cal.com
-    // moves on at once). Fix (UI, SlotList or BookingPage): Enter on a time moves focus to Book (or the details), or
-    // Book renders straight after the chosen time. Today the walk goes on so the rest of the flow is still checked.
+    // B-14, fixed (bookings fix lane P): the day's times are one tab stop with the arrows between them, and Enter on
+    // a time picks it and puts focus on Book, as Cal.com moves on at once.
     const book = visitor.getByRole('button', { name: /^Book / });
-    let toBook = 0;
-    while (toBook < 60 && !(await book.evaluate((el) => el === document.activeElement))) {
-      await visitor.keyboard.press('Tab');
-      toBook += 1;
-    }
-    steps.push(`Tab stops from the chosen time to Book: ${String(toBook)}`);
     await expect(book).toBeFocused();
+    steps.push('Tab stops from the chosen time to Book: 0');
     await visitor.keyboard.press('Enter');
     // The first empty field takes focus as the details arrive.
     await expect(visitor.getByLabel('Your name')).toBeFocused();
@@ -133,7 +124,6 @@ test.describe('the public booking page, accessible', () => {
     await expect.poll(() => focused(visitor)).toMatch(/^h1|^h2/);
     steps.push(`after Confirm: ${await focused(visitor)}`);
     note('focus', steps.join(' | '));
-    expect.soft(toBook, 'Book is at most one Tab from the chosen time').toBeLessThanOrEqual(1);
     await visitor.context().close();
   });
 });
@@ -183,7 +173,7 @@ test.describe('the public booking page on a phone', () => {
     await browser.close();
   });
 
-  test('BUG: every day and time is at least 24 by 24 (WCAG 2.5.8), the times at least 44 tall', async () => {
+  test('every day and time is at least 24 by 24 (WCAG 2.5.8), the times at least 44 tall', async () => {
     const { browser, page } = await phone();
     await page.goto(address);
     await expect(month(page)).toBeVisible({ timeout: 30_000 });
@@ -201,9 +191,9 @@ test.describe('the public booking page on a phone', () => {
       .getByRole('button')
       .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
     note('time heights', JSON.stringify([...new Set(times)]));
-    // BUG (B-16, nice): the times are 42px tall at 390, two short of the 44 Apple and Material ask for under a finger
-    // (WCAG 2.5.8's 24 is met). Fix (UI, SlotList): a min block size of 44 under a coarse pointer.
-    for (const height of times) expect.soft(height).toBeGreaterThanOrEqual(44);
+    // B-16, fixed (bookings fix lane P): under a coarse pointer every time is at least 44 tall, as Apple and Material
+    // ask for under a finger (WCAG 2.5.8's 24 was already met).
+    for (const height of times) expect(height).toBeGreaterThanOrEqual(44);
     await browser.close();
   });
 
