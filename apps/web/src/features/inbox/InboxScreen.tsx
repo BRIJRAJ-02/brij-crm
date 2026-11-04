@@ -1,10 +1,11 @@
 // Brief
 // Purpose: everything that needs the person in this workspace, on `/w/$slug/inbox`: mentions, replies, tasks given to them
 // or due today, and new submissions to the forms they're told about.
-// Main task: open each new one where it lives (the comment's thread, the task), and clear the inbox as they go.
+// Main task: open each new one where it lives (the comment's thread, the task), and clear the inbox as they go: one
+// bulk action (Mark all done), and Undo on every done or back-to-inbox change (Linear's inbox).
 // Leaves out: email and digest settings (Settings › Account › Notifications), other people's notifications, search.
-import type { InboxList, MemberSummary, NotificationView, ObjectSummary } from '@crm/data';
-import { useInboxList, useInboxUnread } from '@crm/data/react';
+import type { DataError, InboxList, InboxMark, MemberSummary, NotificationView, ObjectSummary } from '@crm/data';
+import { useInboxList } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
@@ -22,6 +23,7 @@ import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router'
 import { useMemo, useRef } from 'react';
 import { notificationSettingsHref } from '../settings/nav.ts';
 import { TaskDialog } from '../tasks/TaskDialog.tsx';
+import { UNDO_MS } from '../tasks/undo-delete.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { targetOf, toNotificationItem } from './entries.ts';
 import { notificationKind, type InboxKind, type InboxSearch } from './search.ts';
@@ -92,14 +94,13 @@ function useNotificationItems(
  * The inbox (spec 0038, AC-1169 to AC-1173): the person's notifications newest
  * first, Inbox or Done, filtered by kind and unread only (all kept in the
  * address); a row opens what it is about and marks it read, its menu and keys
- * mark it; Mark all as read clears the tab and kind shown.
+ * mark it; Mark all done clears the inbox tab and kind shown, with Undo.
  */
 export function InboxScreen({ slug, search, list, objects, members, meId }: InboxScreenProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const router = useRouter();
   const state = useInboxList(list);
-  const unread = useInboxUnread(data.inbox.unread(slug)) ?? 0;
   const status = search.status ?? 'inbox';
   const kind = notificationKind(search.kind);
   const loadMore = state.hasMore && !state.isLoadingMore ? list.loadMore : undefined;
@@ -145,11 +146,55 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
     go(filtersOnly({}));
   };
 
+  /**
+   * A change that moves notifications between Inbox and Done, shown at once with Undo for 10 seconds, which puts each
+   * back exactly as it was. `before` is what changed, as it was; a refused change takes the toast back (the data layer
+   * says why).
+   */
+  const withUndo = (
+    message: string,
+    change: Promise<{ readonly error?: DataError; readonly before: readonly NotificationView[] }>,
+  ) => {
+    const key = toasts.toast(
+      {
+        tone: 'success',
+        message,
+        action: {
+          label: strings.undo,
+          onAction: () => {
+            // After the change landed, so the restore never races it.
+            void change.then(({ error, before }) => {
+              if (error !== undefined || before.length === 0) return;
+              void data.inbox.restore(slug, before);
+            });
+          },
+        },
+      },
+      { timeout: UNDO_MS },
+    );
+    void change.then(({ error }) => {
+      if (error !== undefined) toasts.dismiss(key);
+    });
+  };
+  const mark = (id: string, change: InboxMark) => {
+    const view = state.items.find((each) => each.id === id);
+    const sent = data.inbox.mark(slug, [id], change);
+    // Read and unread change in place, so the row itself is the undo; done and back to the inbox move it away.
+    if (view === undefined || change.done === undefined) return;
+    withUndo(
+      change.done ? strings.markedDone : strings.movedToInbox,
+      sent.then((error) => (error === undefined ? { before: [view] } : { error, before: [] })),
+    );
+  };
+  const markAllDone = () => {
+    const sent = data.inbox.markAllRead(slug, 'inbox', kind, true);
+    withUndo(strings.markedAllDone, sent);
+  };
+
   const isFiltered = kind !== undefined || search.unread === 1;
   const kindLabel = search.kind === undefined ? undefined : KINDS.find((each) => each.value === search.kind)?.label;
-  // Mark all as read marks the tab and kind shown: on while something there is unread, as far as it has loaded.
-  const hasUnread = unread > 0 && (state.hasMore || state.items.some((each) => each.readAt === undefined));
-  // Mark all done empties the inbox tab (and kind) shown: there while it holds anything.
+  // Mark all done empties the inbox tab (and kind) shown: there while it holds anything. It is the bar's one bulk
+  // action (done is read too); the Done tab has none.
   const hasItems = status === 'inbox' && state.items.length > 0;
   const tabLabel = status === 'done' ? strings.done : strings.inbox;
   let emptyTitle: string | undefined;
@@ -162,24 +207,9 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
       page={{
         topBar: (
           <TopBar title={strings.inbox} icon="inbox">
-            {/* Each shows only while it would do something: no disabled button to explain. */}
-            {hasUnread && (
-              <Button
-                icon="check"
-                onPress={() => {
-                  void data.inbox.markAllRead(slug, status, kind);
-                }}
-              >
-                {strings.markAllRead}
-              </Button>
-            )}
+            {/* Only while it would do something: no disabled button to explain. */}
             {hasItems && (
-              <Button
-                icon="circle-check"
-                onPress={() => {
-                  void data.inbox.markAllRead(slug, status, kind, true);
-                }}
-              >
+              <Button icon="circle-check" onPress={markAllDone}>
                 {strings.markAllDone}
               </Button>
             )}
@@ -237,9 +267,7 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
               status={state.status}
               onRetry={list.retry}
               onAction={open}
-              onMark={(id, mark) => {
-                void data.inbox.mark(slug, [id], mark);
-              }}
+              onMark={mark}
               {...(emptyTitle === undefined ? {} : { emptyTitle })}
               {...(isFiltered
                 ? { emptyIcon: 'list-filter' as const }

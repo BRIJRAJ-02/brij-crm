@@ -428,6 +428,7 @@ import type {
   InboxFilter,
   InboxList,
   InboxMark,
+  InboxMarked,
   InboxSettings,
   InboxStore,
   NotificationSettingsChange,
@@ -1030,6 +1031,7 @@ export type {
   InboxList,
   InboxListState,
   InboxMark,
+  InboxMarked,
   InboxSettings,
   InboxSettingsState,
   NotificationSettingsChange,
@@ -7185,13 +7187,19 @@ export function createDataLayer({
       /** Marks notifications read or unread, done or back in the inbox, at once (AC-1171). */
       mark: async (workspace: string, ids: readonly string[], mark: InboxMark): Promise<DataError | undefined> =>
         (await inboxStore()).mark(workspace, ids, mark),
-      /** Marks every unread notification of a tab (and kind) read; with `done`, every one of the inbox done (Mark all done). */
+      /**
+       * Marks every unread notification of a tab (and kind) read; with `done`, every one of the inbox done (Mark all
+       * done). Answers the refusal, if any, and the ones it changed as they were, for `restore` (Undo).
+       */
       markAllRead: async (
         workspace: string,
         status: NotificationStatus,
         kind?: NotificationKind,
         done?: boolean,
-      ): Promise<DataError | undefined> => (await inboxStore()).markAllRead(workspace, status, kind, done),
+      ): Promise<InboxMarked> => (await inboxStore()).markAllRead(workspace, status, kind, done),
+      /** Puts notifications back exactly as they were before a mark (its Undo); answers the first refusal, if any. */
+      restore: async (workspace: string, before: readonly NotificationView[]): Promise<DataError | undefined> =>
+        (await inboxStore()).restore(workspace, before),
       /** The member's email settings for the workspace (AC-1179). Read it through `useNotificationSettings`. */
       settings: async (workspace: string): Promise<InboxSettings> => (await inboxStore()).settings(workspace),
       /** Saves some switches at once; a refusal puts them back with a toast. */
