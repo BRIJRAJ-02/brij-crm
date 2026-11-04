@@ -44,16 +44,18 @@ type Story = StoryObj<typeof meta>;
 /** A live booking page: its colour dot, the facts, the link, the switch, Copy link, Open and the menu. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
-  play: async ({ canvas, args }) => {
+  play: async ({ canvas, canvasElement, args }) => {
     await expect(canvas.getByRole('link', { name: 'Intro call' })).toBeInTheDocument();
     await expect(canvas.getByText('30 min · One on one')).toBeInTheDocument();
+    // Its colour is a small dot before the title, never a stripe (T3, 4 November 2026).
+    await expect(canvasElement.querySelector('[data-dot]')).not.toBeNull();
     await userEvent.click(canvas.getByRole('switch', { name: 'Intro call is on' }));
     await expect(args.toggle?.onChange).toHaveBeenCalledWith(false);
     await expect(canvas.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
   },
 };
 
-/** Off: quieter, its title muted (its edge keeps its colour), with no Off badge (the switch says it). */
+/** Off: quieter, its title muted (its dot keeps its colour), with no Off badge (the switch says it). */
 export const Off: Story = {
   args: {
     isOff: true,
@@ -117,7 +119,7 @@ export const Form: Story = {
   play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByText('12 submissions · 2 spam')).toBeInTheDocument();
     // A form has no colour of its own, so no dot (T3, 4 November 2026).
-    await expect(canvasElement.querySelector('article span[aria-hidden="true"]:first-child')).toBeNull();
+    await expect(canvasElement.querySelector('[data-dot]')).toBeNull();
     // The tooltip waits out its open delay; a busy runner can miss the first hover, so it hovers again until shown.
     const toggle = canvas.getByRole('switch', { name: 'Accepting submissions on Contact us' });
     await waitFor(

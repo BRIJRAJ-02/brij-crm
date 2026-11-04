@@ -102,7 +102,7 @@ export function LinkCard({
         <div className={styles.head}>
           <div className={styles.titleRow}>
             {/* The link's colour, as a small quiet dot before its title: a mark, never a state. */}
-            {edge !== undefined && <span className={styles.dot} aria-hidden="true" />}
+            {edge !== undefined && <span className={styles.dot} data-dot="" aria-hidden="true" />}
             <Heading className={styles.heading}>
               {safe === undefined ? (
                 <span id={titleId} className={styles.title}>
