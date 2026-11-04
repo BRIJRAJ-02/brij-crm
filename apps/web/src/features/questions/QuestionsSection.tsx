@@ -172,6 +172,11 @@ export interface QuestionsSectionProps {
   readonly canCreate?: boolean;
   readonly isReadOnly: boolean;
   /**
+   * Questions every visitor is asked that aren't the list's to change (a booking page's Name, Email and Notes, critic
+   * A7): shown first, locked, so the count and the list say what a visitor really meets.
+   */
+  readonly fixed?: readonly QuestionListItem[];
+  /**
    * A form's New step dividers (spec 0063, AC-6303), in the list among the questions: given, the list draws them,
    * moves questions and dividers together through `onChange`, and offers Add a step. A booking page has none.
    */
@@ -989,6 +994,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   return (
     <QuestionList
       label={strings.questions}
+      {...(props.fixed === undefined ? {} : { fixedItems: props.fixed })}
       actions={
         <>
           {props.actionsStart}

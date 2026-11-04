@@ -1915,6 +1915,30 @@ export function PageEditor({
                       )}
                       {draft.questions.length > 0 && <Callout tone="info">{strings.chatAsks}</Callout>}
                       <QuestionsSection
+                        // What every guest is asked before these (critic A7): shown first, locked, so the count and
+                        // the list say what a guest really meets.
+                        fixed={[
+                          {
+                            id: 'fixed-name',
+                            label: strings.fixedName,
+                            typeLabel: questionStrings.answerTypes.short_text,
+                            typeIcon: 'type',
+                            isRequired: true,
+                          },
+                          {
+                            id: 'fixed-email',
+                            label: strings.fixedEmail,
+                            typeLabel: questionStrings.answerTypes.email,
+                            typeIcon: 'mail',
+                            isRequired: true,
+                          },
+                          {
+                            id: 'fixed-notes',
+                            label: strings.fixedNotes,
+                            typeLabel: questionStrings.answerTypes.long_text,
+                            typeIcon: 'file-text',
+                          },
+                        ]}
                         questions={draft.questions}
                         onChange={(update) => {
                           setJustSaved(false);

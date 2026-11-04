@@ -101,6 +101,24 @@
   /* The questions as hairline cards, space-8 apart: at the builder's full
      width a card bounds each question and, once open, the editor inside it,
      where hairline divided rows ran together (owner feedback, 20 October 2026). */
+  /* The questions always asked (fixedItems): the same cards, first, in the list's rhythm, never moving or opening. */
+  .fixedList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .fixedHead {
+    display: flex;
+    gap: var(--space-12);
+    align-items: center;
+    min-block-size: calc(var(--size-row) + 2 * var(--space-12));
+    padding-inline: var(--space-12);
+  }
+
   .list {
     display: flex;
     flex-direction: column;

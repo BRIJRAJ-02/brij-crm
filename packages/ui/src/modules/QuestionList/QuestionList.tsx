@@ -76,6 +76,13 @@ export interface QuestionListProps {
   /** An open card's footer, at its start, on the same row: a choice that closes the editor, such as Required. */
   readonly renderFooterStart?: (id: string) => ReactNode;
   readonly items: readonly QuestionListItem[];
+  /**
+   * Questions always asked, which nobody words, moves or removes (a booking page's Name, Email and Notes, critic A7,
+   * 5 November 2026): drawn first as the same closed card, with a lock where the chevron sits and no grip, never
+   * opening. They count in the heading's number, since the visitor is asked them too. Why a prop and not an item
+   * kind: they sit outside the reorderable grid, so no move, drop line or keyboard pick up ever reaches them.
+   */
+  readonly fixedItems?: readonly QuestionListItem[];
   /** The questions shown open. */
   readonly openIds: ReadonlySet<string>;
   /** A card's header was pressed: open it, or close it. */
@@ -137,6 +144,7 @@ export function QuestionList({
   onStepPress,
   renderOpenHead,
   gaps = 'hover',
+  fixedItems = [],
 }: QuestionListProps) {
   const headingId = useId();
 
@@ -189,7 +197,10 @@ export function QuestionList({
         </h2>
         {/* Questions only: a step break is not one more question. */}
         {!isCountHidden && (
-          <Badge count={items.filter((item) => item.kind !== 'step' && item.kind !== 'note').length} label={label} />
+          <Badge
+            count={fixedItems.length + items.filter((item) => item.kind !== 'step' && item.kind !== 'note').length}
+            label={label}
+          />
         )}
         {(actions !== undefined || wideActions !== undefined) && (
           <span className={styles.actions}>
@@ -198,6 +209,31 @@ export function QuestionList({
           </span>
         )}
       </header>
+      {fixedItems.length > 0 && (
+        <ul className={styles.fixedList} aria-label={strings.alwaysAsked}>
+          {fixedItems.map((item) => (
+            <li key={item.id} className={styles.row}>
+              <div className={styles.fixedHead}>
+                {item.typeIcon !== undefined && (
+                  <span className={styles.tile}>
+                    <Icon name={item.typeIcon} tile="gray" />
+                  </span>
+                )}
+                <span className={styles.text}>
+                  <span className={styles.title}>
+                    <span className={styles.name}>{item.label}</span>
+                    {item.isRequired === true && <span className={styles.required}>{strings.required}</span>}
+                  </span>
+                  {item.typeLabel !== undefined && <span className={styles.meta}>{item.typeLabel}</span>}
+                </span>
+                <span className={styles.chevron}>
+                  <Icon name="lock" size="sm" label={strings.alwaysAsked} />
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
       <SortableList
         ids={items.map((item) => item.id)}
         nameOf={(id) => {

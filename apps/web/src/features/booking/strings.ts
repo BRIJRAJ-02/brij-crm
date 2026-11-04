@@ -125,6 +125,10 @@ export const strings = {
   addToCrmHelp: 'Each guest is found or added in the CRM.',
   opensInHelp: 'The view guests see first. They can switch.',
   anyTime: 'Any time',
+  /** The Questions tab's locked rows (critic A7): what every guest is asked first. */
+  fixedName: 'Name',
+  fixedEmail: 'Email',
+  fixedNotes: 'Anything the host should know',
   availabilityTab: 'Availability',
   shareTab: 'Share',
   hostsTab: 'Hosts',
