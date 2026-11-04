@@ -346,6 +346,9 @@ export function useHostedForm({
   const [alert, setAlert] = useState('');
   // The file questions with a file still going: the form won't send until they are in.
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+  // The file questions whose file didn't upload (forms fix b8), and whether Send was already pressed once with them.
+  const [failedFiles, setFailedFiles] = useState<ReadonlySet<string>>(new Set());
+  const [isWarnedNoFile, setWarnedNoFile] = useState(false);
   const [trap, setTrap] = useState('');
   const [view, setView] = useState<HostedFormView>({ kind: 'form' });
   const [round, setRound] = useState(0);
@@ -572,6 +575,14 @@ export function useHostedForm({
       setAlert(words.fileBusy);
       return;
     }
+    // A file that didn't upload is never left behind in silence (forms fix b8): the first press says so, the next
+    // sends the rest without it.
+    const missingFile = form.questions.some((question) => failedFiles.has(question.key) && shown.has(question.key));
+    if (missingFile && !isWarnedNoFile) {
+      setWarnedNoFile(true);
+      setAlert(words.sendWithoutFile);
+      return;
+    }
     const result = checkAll(form.questions);
     if (!result.ok) {
       setSubmitted(true);
@@ -701,6 +712,16 @@ export function useHostedForm({
                 if (current.has(key) === isBusy) return current;
                 const next = new Set(current);
                 if (isBusy) next.add(key);
+                else next.delete(key);
+                return next;
+              });
+            },
+            setFailed: (key, isFailed) => {
+              setWarnedNoFile(false);
+              setFailedFiles((current) => {
+                if (current.has(key) === isFailed) return current;
+                const next = new Set(current);
+                if (isFailed) next.add(key);
                 else next.delete(key);
                 return next;
               });
