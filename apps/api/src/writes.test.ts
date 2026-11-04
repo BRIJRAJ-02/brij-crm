@@ -2370,7 +2370,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       url: 'https://meet.example.com/abc-defg-hij',
       mutationId,
     });
-    return [{ kind: 'records', object_id: m.people.id }];
+    // The booking's own rows, as a no show's (its person, and its `bookings` row from the server lane, B-17).
+    return [
+      { kind: 'records', object_id: m.people.id },
+      { kind: 'bookings', item_ids: [] },
+    ];
   },
   // A booking linked to a deal by hand (polish F2): settings like a no show, so the link stores no row of its own.
   'bookings.link': async (m, mutationId) => {
