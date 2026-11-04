@@ -13,8 +13,12 @@ import { strings } from './strings.ts';
 export function answerText(answer: Pick<SubmissionAnswer, 'value'> & { readonly answerType?: string }): string {
   // The shared reading (spec 0063): a file's name, a phone's number, the picks, an address, a date and time, a
   // ranking in its order. A signature shows as its file below, so its words are its file's name.
-  const answerType = answer.answerType === 'ranking' ? { answerType: 'ranking' } : {};
-  return answerWords(answer.value, { yes: strings.yes, no: strings.no, ...answerType });
+  // Its type, so a ranking numbers its order and a consent reads Agreed (forms fix b9).
+  return answerWords(answer.value, {
+    yes: strings.yes,
+    no: strings.no,
+    ...(answer.answerType === undefined ? {} : { answerType: answer.answerType }),
+  });
 }
 
 /** Whether an answer holds a stored file (by its value's shape, as `answerText` reads it). */
@@ -50,6 +54,22 @@ function answerValue(answer: SubmissionAnswer): ReactNode {
     );
   }
   if (answer.answerType !== 'phone') return text;
+  return <PhoneAnswer answer={answer} text={text} surface="panel" />;
+}
+
+/**
+ * A phone answer through the field set, spaced for reading, with its flag; any other shape as its words. The list's
+ * cell uses it too (forms critique a: the table showed "+12025550143" where the panel showed "+1 202-555-0143").
+ */
+export function PhoneAnswer({
+  answer,
+  text,
+  surface,
+}: {
+  readonly answer: SubmissionAnswer;
+  readonly text: string;
+  readonly surface: 'panel' | 'card';
+}) {
   // A phone the field set can read is a stored { number, country }; anything else shows as its words.
   const phone = PhoneValue.safeParse(answer.value);
   if (!phone.success) return text;
@@ -65,7 +85,7 @@ function answerValue(answer: SubmissionAnswer): ReactNode {
         isReadOnly: true,
       }}
       value={phone.data}
-      surface="panel"
+      surface={surface}
     />
   );
 }

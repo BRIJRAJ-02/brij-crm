@@ -45,7 +45,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pageHeading } from '../navigation/focus.ts';
 import { recordLinks } from '../records/timeline.ts';
-import { AnswerList, answerText, holdsFile } from '../questions/AnswerList.tsx';
+import { AnswerList, answerText, holdsFile, PhoneAnswer } from '../questions/AnswerList.tsx';
 import { answerFiling, notSavedReasons } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { spamReason } from './spam-reason.ts';
@@ -592,6 +592,9 @@ export function SubmissionsTab({
       default: {
         // An answer column: this question's answer, cut to the cell, the whole of it in a tooltip when cut.
         const answer = submission.firstAnswers.find((each) => each.questionId === column);
+        // A phone reads as the panel shows it, spaced with its flag (forms critique a).
+        if (answer?.answerType === 'phone')
+          return <PhoneAnswer answer={answer} text={answerText(answer)} surface="card" />;
         return <TruncatedText>{answer === undefined ? '' : answerText(answer)}</TruncatedText>;
       }
     }
