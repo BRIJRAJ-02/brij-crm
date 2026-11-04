@@ -1,8 +1,8 @@
-import { useCallback, useId, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { Dialog, DialogTrigger, Heading, Modal as AriaModal, ModalOverlay } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { FooterKeysContext, type FooterKeys } from '../../atoms/Button/footer-keys.ts';
+import { FOOTER_PRESS_ATTRIBUTE, FooterKeysContext, type FooterKeys } from '../../atoms/Button/footer-keys.ts';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -10,6 +10,7 @@ import { InPopover } from '../Popover/Popover.tsx';
 import styles from './Modal.module.css';
 import { strings } from './strings.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
+import { useKeyboardPlatform } from '../../provider/context.ts';
 
 /** Props for ModalTrigger. */
 export interface ModalTriggerProps {
@@ -124,6 +125,45 @@ export interface ModalProps {
 }
 
 /**
+ * ⌘↵ (Ctrl+Enter elsewhere) anywhere in the dialog presses its footer's primary that acts on press (the footer
+ * marks it), as a library Form's ⌘↵ sends its submit: so a Save that is not a Form's submit keeps the key it shows.
+ * On the document, after the dialog's own controls have had the key: one that used it (a comment's send, a tile's
+ * Enter, a Form's submit) prevents or stops it, and the footer leaves it alone. Only a key pressed inside this
+ * dialog counts, never one in a dialog opened over it. The control in use commits on blur first, so the value just
+ * typed is the one saved; a primary that is off or busy is left unpressed.
+ */
+function usePressOnKey(foot: HTMLDivElement | null) {
+  const platform = useKeyboardPlatform();
+  useEffect(() => {
+    if (foot === null) return;
+    const dialog = foot.closest('[role="dialog"], [role="alertdialog"]');
+    if (dialog === null) return;
+    const doc = foot.ownerDocument;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = platform === 'mac' ? event.metaKey : event.ctrlKey;
+      if (!mod || event.key !== 'Enter' || event.isComposing || event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[role="dialog"], [role="alertdialog"]') !== dialog) return;
+      const pressed = [...foot.querySelectorAll<HTMLButtonElement>(`[${FOOTER_PRESS_ATTRIBUTE}]`)].at(-1);
+      if (pressed === undefined || pressed.disabled || pressed.getAttribute('aria-disabled') === 'true') return;
+      event.preventDefault();
+      const active = doc.activeElement;
+      if (active instanceof HTMLElement && active !== pressed) active.blur();
+      timer = setTimeout(() => {
+        if (pressed.isConnected && !pressed.disabled && pressed.getAttribute('aria-disabled') !== 'true')
+          pressed.click();
+      }, 0);
+    };
+    doc.addEventListener('keydown', onKeyDown);
+    return () => {
+      doc.removeEventListener('keydown', onKeyDown);
+      clearTimeout(timer);
+    };
+  }, [foot, platform]);
+}
+
+/**
  * A dialog over the page, which waits for an answer: a confirm, a short form,
  * a larger task. Its title bar holds the title and a close button (an alert
  * asks with its buttons only). It sits at a fixed distance from the top, so a
@@ -208,7 +248,12 @@ export function Modal({
     submitForm: strings.submitLongKey,
     // A plain confirm (Sign out) opens on its primary, so Enter answers it; an alert keeps focus on itself.
     ...(isConfirm && !isAlert ? { primary: strings.submitKey } : {}),
+    // Any other dialog's primary that acts on press (Save, Done, Start) is pressed by ⌘↵ from anywhere in it, as a
+    // Form's submit is sent; never in an alert, whose commit destroys.
+    ...(!isConfirm && !isAlert ? { press: strings.submitLongKey } : {}),
   };
+  const [foot, setFoot] = useState<HTMLDivElement | null>(null);
+  usePressOnKey(foot);
   return (
     <ModalOverlay
       className={styles.scrim}
@@ -287,7 +332,7 @@ export function Modal({
             body
           )}
           {actions !== undefined && (
-            <div className={styles.foot}>
+            <div className={styles.foot} ref={setFoot}>
               {footerStart !== undefined ? (
                 <div className={styles.footerStart}>{footerStart}</div>
               ) : (

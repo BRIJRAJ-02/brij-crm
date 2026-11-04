@@ -14,7 +14,7 @@ import { keyShortcuts, type KeyboardPlatform } from '../Kbd/shortcuts.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 import { Spinner } from '../Spinner/Spinner.tsx';
 import { TooltipKbdContext } from '../Tooltip/tooltip-kbd.ts';
-import { useFooterRole } from './footer-keys.ts';
+import { FOOTER_PRESS_ATTRIBUTE, useFooterRole } from './footer-keys.ts';
 import styles from './Button.module.css';
 
 /** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours. */
@@ -294,7 +294,7 @@ function PlainButton(props: ButtonProps) {
   const face: ButtonFace = props;
   const platform = useKeyboardPlatform();
   // In a Modal's footer, Cancel shows ESC and the submit its key unless the caller names its own; a plain
-  // confirm's primary shows ↵ and takes focus.
+  // confirm's primary shows ↵ and takes focus; any other dialog's onPress primary shows ⌘↵, which the Modal presses.
   const footer = useFooterRole({ kbd: props.kbd, slot, type, form, variant: props.variant });
   const kbd = footer.kbd;
   const look: ButtonLook = kbd === props.kbd ? props : { ...props, kbd };
@@ -316,6 +316,7 @@ function PlainButton(props: ButtonProps) {
       {...(props.isExpanded === true && props.controls !== undefined ? { 'aria-controls': props.controls } : {})}
       {...(props.isExpanded === true ? { 'data-expanded': '' } : {})}
       {...(props.autoFocus === true || footer.autoFocus ? { autoFocus: true } : {})}
+      {...(footer.isPressedByKey ? { [FOOTER_PRESS_ATTRIBUTE]: '' } : {})}
       {...shortcutAttribute(kbd ?? tooltipKbd, platform)}
       {...lookAttributes(props, face)}
     >
