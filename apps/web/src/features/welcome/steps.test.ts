@@ -22,7 +22,13 @@ describe('first run’s steps', () => {
 
   it('leave out Your booking page for someone who already has one, and always ask Your link', () => {
     // A handle is made with every membership, so Your link is where its owner takes it or changes it.
-    expect(welcomeSteps(true, false, { booking: true })).toEqual(['about', 'workspace', 'handle', 'calendar', 'invite']);
+    expect(welcomeSteps(true, false, { booking: true })).toEqual([
+      'about',
+      'workspace',
+      'handle',
+      'calendar',
+      'invite',
+    ]);
   });
 
   it('never repeat the setup for another workspace: no booking page, link page, calendar or invite again', () => {

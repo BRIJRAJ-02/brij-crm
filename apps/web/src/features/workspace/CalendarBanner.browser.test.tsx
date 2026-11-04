@@ -72,10 +72,9 @@ describe('the stopped calendar banner', () => {
 
   it('offers Open calendars where it can’t reconnect: sync off, or the provider not offered here', async () => {
     await renderBanner({ status: 'ready', enabled: false, providers: [], max: 6, connections: [stopped('google')] });
-    await expect.element(page.getByRole('link', { name: 'Open calendars' })).toHaveAttribute(
-      'href',
-      '/w/acme/bookings/calendars',
-    );
+    await expect
+      .element(page.getByRole('link', { name: 'Open calendars' }))
+      .toHaveAttribute('href', '/w/acme/bookings/calendars');
     expect(page.getByRole('button', { name: 'Reconnect' }).elements()).toEqual([]);
     shown?.unmount();
     await renderBanner({
