@@ -183,7 +183,7 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
           }
         : {})}
     >
-      {view !== undefined && view.available && !view.canManage && <Callout>{strings.appsReadOnly}</Callout>}
+      {view !== undefined && view.available && !view.canManage && <Callout tone="info">{strings.appsReadOnly}</Callout>}
       {body()}
       <Modal
         isOpen={asking?.kind === 'needs-menu'}
