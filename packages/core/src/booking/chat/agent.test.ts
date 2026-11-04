@@ -157,6 +157,8 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     expect(words(['tomorrow at 3pm', 'www.spam.example, leo@x.io']).state.name).toBeUndefined();
     expect(words(['tomorrow at 3pm', 'Leo\u0007Park leo@x.io']).state.name).toBeUndefined();
     expect(words(['tomorrow at 3pm', 'Leo\u0007Park leo@x.io']).state.email).toBe('leo@x.io');
+    // Nor a name past the book input's 200 characters, which a chat booking never parses again.
+    expect(words(['tomorrow at 3pm', `${'L'.repeat(120)} ${'P'.repeat(120)} leo@x.io`]).state.name).toBeUndefined();
   });
 
   it('asks for a phone number on a phone page', () => {
