@@ -37,7 +37,7 @@ export const strings = {
   },
   back: 'Back',
   continue: 'Continue',
-  /** Why Continue is off on the columns step. */
+  /** What Continue says on the columns step when no column has a field. */
   matchOneFirst: 'Choose a field for at least one column to go on.',
   // Upload (AC-1112)
   /** The upload card's picture of a file: a header row over two rows (not this object's own columns). */
@@ -74,8 +74,9 @@ export const strings = {
   targetLabel: (header: string) => `Where ${header} goes`,
   noSample: 'No values',
   /** A required field no column fills (guarded here, not at Start). */
-  matchRequiredFirst: 'Match a column to each required field to go on.',
   requiredMissing: (title: string) => `${title} is required`,
+  /** Before Continue: a required field with no column yet, said quietly. */
+  requiredUnmatched: (title: string) => `${title} needs a column`,
   matchAColumn: (title: string) => `Match a column to ${title}`,
   matchAColumnShort: 'Match a column',
   updateOnly: 'Only update records I have',
@@ -217,6 +218,8 @@ export const strings = {
   downloadRefused: 'Download',
   refusedFile: (fileName: string) => `${fileName.replace(/\.[^.]+$/u, '')} not imported.csv`,
   viewRecords: (pluralName: string) => `View ${pluralName.toLowerCase()}`,
+  /** An import into a list: its way on opens the list, by its own name. */
+  viewList: (name: string) => `View ${name}`,
   undo: 'Undo import',
   undoTitle: 'Undo this import?',
   /** What Undo import does, in two short lines: "12 to the trash. 3 reverted, unless edited since." */

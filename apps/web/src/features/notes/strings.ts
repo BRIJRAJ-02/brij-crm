@@ -4,6 +4,8 @@ import { sharedStrings } from '@crm/ui';
 export const strings = {
   notes: 'Notes',
   newNote: 'New note',
+  /** New note on the Notes page: the record it is written on. */
+  noteRecord: 'Record',
   untitled: 'Untitled note',
   /** The Notes tab with none yet. */
   noNotes: 'No notes yet',

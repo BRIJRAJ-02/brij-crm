@@ -659,7 +659,16 @@ function RecordScreen({
   }, [commandMenu, commandName, slug, object.apiSlug, recordId]);
   let tabContent: ReactNode;
   if (tab === 'activity') {
-    tabContent = <ActivityTab feed={feed} feedFor={feedFor} link={link} taskHref={taskHref} onAddPerson={addPerson} />;
+    tabContent = (
+      <ActivityTab
+        feed={feed}
+        feedFor={feedFor}
+        link={link}
+        taskHref={taskHref}
+        onAddPerson={addPerson}
+        {...(canAddTasks ? { onLogActivity: () => openLog('new') } : {})}
+      />
+    );
   } else if (tab === 'comments') {
     tabContent = (
       <CommentsTab

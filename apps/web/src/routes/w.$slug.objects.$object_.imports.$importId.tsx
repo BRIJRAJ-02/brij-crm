@@ -8,9 +8,9 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 
 // One import's summary (spec 0040, AC-1127): `/w/$slug/objects/$object/imports/$importId`,
 // kept for its undo window. The loader reads the import (following its jobs,
-// so the page shows their progress live) and its first page of refused rows
-// through the data layer. One the person may not see, or that doesn't exist,
-// shows the same not found page (AC-1137).
+// so the page shows their progress live), its first page of refused rows, and
+// the list it went into, if any, through the data layer. One the person may
+// not see, or that doesn't exist, shows the same not found page (AC-1137).
 export const Route = createFileRoute('/w/$slug/objects/$object_/imports/$importId')({
   // Coming back reads the import afresh: its job may have ended since, changing its counts and its undo.
   shouldReload: ({ cause }) => cause === 'enter',
@@ -24,7 +24,22 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/imports/$importI
         context.data.imports.rows(params.slug, params.importId),
       ]);
       if (initial.objectId !== object.id) return { screen: undefined };
-      return { screen: { object, initial, refused: page.rows, nextCursor: page.nextCursor } };
+      // An import into a list ends on that list (the foolproof pass): its name, icon and View <list>.
+      const list =
+        initial.listId === undefined
+          ? undefined
+          : (await context.data.lists.all(params.slug).catch(() => [])).find(
+              (each) => each.id === initial.listId && !each.isArchived,
+            );
+      return {
+        screen: {
+          object,
+          initial,
+          refused: page.rows,
+          nextCursor: page.nextCursor,
+          ...(list === undefined ? {} : { list }),
+        },
+      };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') return { screen: undefined };
       throw error;

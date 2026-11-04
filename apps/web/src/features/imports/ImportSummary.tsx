@@ -2,13 +2,14 @@
 // Purpose: one import's page: its progress while it runs, then what it did, kept for its 7 day undo window.
 // Main task: see how many rows were created, updated and not imported, and why; undo the import if it was wrong.
 // Leaves out: editing the import's settings, running it again, and the imported records themselves (View records
-// opens the table on today's new records, newest first, as a draft).
+// opens the table on today's new records, newest first, as a draft; an import into a list opens the list).
 import {
   isDataError,
   type DataLayer,
   type ImportRowRefusal,
   type ImportView,
   type JobView,
+  type ListView,
   type ObjectSummary,
 } from '@crm/data';
 import { CSV_BOM, csvLine } from '@crm/data/imports';
@@ -34,6 +35,7 @@ import { createView } from '../views/query.ts';
 import { objectHref, viewHref } from '../workspace/objects.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { saveCsv } from './download.ts';
+import { importHome } from './paths.ts';
 import { n, strings } from './strings.ts';
 
 /** Props for an import's summary: what its route loaded through the data layer. */
@@ -45,6 +47,8 @@ export interface ImportSummaryProps {
   /** The first page of rows not imported, or imported with a note. */
   readonly refused: readonly ImportRowRefusal[];
   readonly nextCursor: number | undefined;
+  /** The list the rows went into (spec 0048, AC-4833): the page is the list's, and its way on opens the list. */
+  readonly list?: ListView | undefined;
 }
 
 const FINISHED: readonly string[] = ['succeeded', 'failed', 'cancelled'];
@@ -79,7 +83,16 @@ function outcomeTitle(view: ImportView, job: JobView | undefined, undoJob: JobVi
 }
 
 /** One import's page (AC-1125, AC-1127 to AC-1129): live progress, the counts, the rows not imported, and Undo. */
-export function ImportSummary({ data, slug, object, initial, refused: firstRefused, nextCursor }: ImportSummaryProps) {
+export function ImportSummary({
+  data,
+  slug,
+  object,
+  initial,
+  refused: firstRefused,
+  nextCursor,
+  list,
+}: ImportSummaryProps) {
+  const home = importHome(slug, object, list);
   const navigate = useNavigate();
   const [view, setView] = useState(initial);
   const [refused, setRefused] = useState(firstRefused);
@@ -206,9 +219,14 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
    * View records: the object's table on the records made today, newest
    * first, as an unsaved draft of its table view (no filter by import
    * exists), so the rows just imported lead. The object's page when that
-   * can't be built.
+   * can't be built. An import into a list opens the list.
    */
   const viewRecords = async () => {
+    // Into a list: the list itself, where its new entries show (Attio).
+    if (home.id === 'list') {
+      void navigate({ href: home.href });
+      return;
+    }
     const fallback = objectHref(slug, object);
     try {
       const views = data.views.list(slug, object.id);
@@ -257,9 +275,9 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
   const topBar = (
     <TopBar
       title={strings.summaryTitle(view.fileName)}
-      icon={object.icon}
-      hue={object.hue}
-      crumbs={[{ id: 'object', label: object.pluralName, href: objectHref(slug, object) }]}
+      icon={home.icon}
+      hue={home.hue}
+      crumbs={[{ id: home.id, label: home.name, href: home.href }]}
     />
   );
 
@@ -297,7 +315,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
                 </Button>
               )}
               <Button variant="primary" onPress={() => void viewRecords()}>
-                {strings.viewRecords(object.pluralName)}
+                {home.id === 'list' ? strings.viewList(home.name) : strings.viewRecords(home.name)}
               </Button>
             </>
           }
@@ -372,5 +390,6 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
     </PageColumn>
   );
 
-  return <WorkspacePage currentObject={object.apiSlug} page={{ topBar, body }} />;
+  // Into a list, the sidebar marks nothing, as on the list's own page.
+  return <WorkspacePage {...(home.id === 'object' ? { currentObject: object.apiSlug } : {})} page={{ topBar, body }} />;
 }
