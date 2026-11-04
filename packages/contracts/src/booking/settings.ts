@@ -170,9 +170,25 @@ export function defaultAvailability(timeZone: string): BookingAvailability {
   };
 }
 
-/** Where the meeting happens: the calendar's video link, a call to the visitor's number, an address, or custom text. */
+/**
+ * A host's own meeting link for a video page (critic B-07, 5 November 2026): an https address, for a host with no
+ * calendar that makes one. Guests get it only once booked, in their confirmation, never on the page before.
+ */
+export const MeetingLink = z
+  .url({ error: 'Give the meeting link, starting https://.' })
+  .max(2_048)
+  .refine((value) => URL.canParse(value) && new URL(value).protocol === 'https:', {
+    error: 'Give the meeting link, starting https://.',
+  });
+/** A host's own meeting link. */
+export type MeetingLink = z.infer<typeof MeetingLink>;
+
+/**
+ * Where the meeting happens: video (the calendar's link, or the host's own `link` when given), a call to the
+ * visitor's number, an address, or custom text.
+ */
 export const BookingLocation = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('video') }),
+  z.object({ type: z.literal('video'), link: MeetingLink.optional() }),
   z.object({ type: z.literal('phone') }),
   z.object({
     type: z.literal('address'),

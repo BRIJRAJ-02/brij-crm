@@ -109,7 +109,7 @@ import {
   routeBooking,
   type BookingRouting,
 } from '../routing/booking.ts';
-import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
+import { enqueueBookingMail, ownMeetingLink, recordEvent } from './mail-queue.ts';
 import { checkOneOffLink, oneOffStateOf, oneOffTokenHash, useOneOffLink } from './one-off-links.ts';
 import { ensureManageToken, managePath, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { queueBookingWebhook } from '../webhooks/queue.ts';
@@ -249,9 +249,9 @@ function initialsOf(name: string): string {
   return `${first}${last}`.toUpperCase();
 }
 
-/** The location a visitor may see. */
+/** The location a visitor may see: a host's own meeting link is never on the page, only in a booking's emails. */
 function publicLocation(page: PageRecord): PublicLocation {
-  return page.location;
+  return page.location.type === 'video' ? { type: 'video' } : page.location;
 }
 
 /** Reads account pictures (schema auth, through the identity login): the public page's host picture. */
@@ -1027,7 +1027,7 @@ function eventDescription(page: PageRecord, input: PublicBookInput): string {
 function eventLocation(page: PageRecord, input: PublicBookInput): string | undefined {
   switch (page.location.type) {
     case 'video':
-      return undefined;
+      return page.location.link;
     case 'phone':
       return input.phone === undefined || input.phone === '' ? undefined : `Phone: ${input.phone}`;
     default:
@@ -1561,7 +1561,8 @@ export async function bookPublicSlot(
             .filter((guest) => guest !== input.email)
             .map((guest) => ({ email: guest, name: guest })),
         ],
-        video: page.location.type === 'video',
+        // A host's own meeting link stands in for one the calendar would make (critic B-07).
+        video: page.location.type === 'video' && ownMeetingLink(page.location) === undefined,
         ...(eventLocation(page, input) === undefined ? {} : { location: eventLocation(page, input) }),
       });
     } catch (error) {
@@ -1574,7 +1575,7 @@ export async function bookPublicSlot(
   }
   // The outcome, and the emails (after the event, so the confirmation knows whether the calendar already invited them).
   await inWorkspace(entry.scope, async (tx) => {
-    await recordEvent(tx, booked.bookingId, written);
+    await recordEvent(tx, booked.bookingId, written, ownMeetingLink(page.location));
     await enqueueBookingMail(tx, booked.bookingId, ['confirmed']);
   });
   return booked;

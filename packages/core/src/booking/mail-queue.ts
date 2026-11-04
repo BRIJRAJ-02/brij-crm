@@ -50,18 +50,25 @@ export async function recordEvent(
   tx: WorkspaceTx,
   bookingId: string,
   written: WrittenEvent | undefined,
+  /** The page's own meeting link (critic B-07): the booking's link when the calendar made none. */
+  ownLink?: string,
 ): Promise<void> {
   await tx
     .update(bookings)
     .set(
       written === undefined
-        ? { eventFailedAt: sql`now()` }
+        ? { eventFailedAt: sql`now()`, ...(ownLink === undefined ? {} : { videoUrl: ownLink }) }
         : {
             meetingId: written.meetingId ?? null,
-            videoUrl: written.videoUrl ?? null,
+            videoUrl: written.videoUrl ?? ownLink ?? null,
             eventFailedAt: null,
             updatedAt: sql`now()`,
           },
     )
     .where(eq(bookings.id, bookingId));
+}
+
+/** A video page's own meeting link, when its host gave one (critic B-07). */
+export function ownMeetingLink(location: { readonly type: string; readonly link?: string }): string | undefined {
+  return location.type === 'video' ? location.link : undefined;
 }

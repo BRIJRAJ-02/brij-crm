@@ -4,7 +4,7 @@
 // the race: several visitors booking one slot at once get exactly one booking.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import type { PublicBookInput } from '@crm/contracts';
+import { BookingLocation, type PublicBookInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { enterBookingByToken, enterBookingPage, enterPublicForm, type BookingEntry } from '../access/door.ts';
 import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
@@ -224,6 +224,23 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
     expect(await refusalOf(getPublicBookingPage(entry))).toMatchObject({ code: 'BOOKING_CLOSED' });
     expect(await refusalOf(enterBookingPage({ db }, 'AAAAAAAAAAAAAAAA'))).toMatchObject({ code: 'NOT_FOUND' });
     expect(await refusalOf(enterBookingPage({ db }, 'not a key'))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('keeps a host’s own meeting link off the page and puts it on the booking (critic B-07, 5 Nov 2026)', async () => {
+    const w = await workspace();
+    const link = 'https://meet.example.com/ada-intro';
+    const { page, entry } = await livePage(w, { location: { type: 'video', link } });
+    expect(page.location).toEqual({ type: 'video', link });
+    // The page a guest reads says video, never the link: that comes with a booking.
+    expect((await getPublicBookingPage(entry)).location).toEqual({ type: 'video' });
+    const booked = await bookPublicSlot(entry, deps(), bookInput());
+    const stored = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ video_url: string | null }>(sql`select video_url from bookings where id = ${booked.bookingId}`),
+    );
+    expect(stored.rows[0]?.video_url).toBe(link);
+    // The contract takes https only.
+    expect(BookingLocation.safeParse({ type: 'video', link: 'http://meet.example.com/x' }).success).toBe(false);
+    expect(BookingLocation.safeParse({ type: 'video', link: 'javascript:alert(1)' }).success).toBe(false);
   });
 
   it('answers a guest on a draft as if there were no page, and pausing a draft keeps it a draft (4 Nov 2026)', async () => {
