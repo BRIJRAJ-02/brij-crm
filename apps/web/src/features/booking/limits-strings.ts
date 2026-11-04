@@ -4,12 +4,12 @@
 export const LIMIT_RANGES = { day: { min: 1, max: 50 }, week: { min: 1, max: 200 } } as const;
 
 /**
- * The numbers each limit's Select offers after No limit: 1 to 10 a day, and a week those plus the round numbers a
- * week's limit takes. All inside `LIMIT_RANGES`.
+ * The numbers each limit's Select offers after No limit: 1 to 10, then round numbers up to each range's top, so a
+ * salon or clinic still sets a real cap (50 a day, 200 a week). All inside `LIMIT_RANGES`.
  */
 export const LIMIT_CHOICES = {
-  day: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-  week: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50],
+  day: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50],
+  week: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200],
 } as const;
 
 const meetings = (count: number) => (count === 1 ? '1 meeting' : `${String(count)} meetings`);

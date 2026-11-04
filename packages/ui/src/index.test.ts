@@ -278,6 +278,7 @@ describe('@crm/ui', () => {
       'useFormatSettings',
       'useKeyboardPlatform',
       'useNow',
+      'usePhoneWidth',
       'usePhotoCrop',
       'weekRangeLabel',
     ]);

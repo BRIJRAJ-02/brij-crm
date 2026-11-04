@@ -58,7 +58,6 @@ function BookingsRoute() {
   // A tab whose primary action is its own takes the TopBar's end in place of New meeting (one primary per
   // screen): Availability's New schedule, the Roster's Set usual hours, Round robin's New group, Calendars' Connect.
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
-  const ownsAction = OWN_ACTION.has(tab);
   // Mine or Everyone (the owner's ask of 29 October 2026): an admin's choice, and anyone's whose scheduling reach
   // sees a colleague (spec 0037, AC-1262), kept here so Calendar and List share it and its switch stands still on
   // the strip as they swap.
@@ -74,15 +73,19 @@ function BookingsRoute() {
   const { data } = useRouteContext({ from: '__root__' });
   const calendar = useCalendar(data.calendar.view(slug));
   const canConnectCalendar = calendar.status !== 'ready' || calendar.enabled || calendar.connections.length > 0;
+  // The tab itself waits for the answer, so with sync off it never draws and then leaves the strip.
+  const showsCalendars = calendar.status === 'ready' && canConnectCalendar;
+  // Calendars has no Connect with sync off, so New keeps the TopBar's end there rather than leaving it empty (A5).
+  const ownsAction = OWN_ACTION.has(tab) && (tab !== 'calendars' || canConnectCalendar);
   const tabs = useMemo(
     () =>
       BOOKINGS_TABS.filter(
         (each) =>
           (each !== 'roster' || (access !== undefined && rosterIsShown(access))) &&
           (each !== 'routing' || canRoute) &&
-          (each !== 'calendars' || canConnectCalendar || tab === 'calendars'),
+          (each !== 'calendars' || showsCalendars || tab === 'calendars'),
       ),
-    [access, canRoute, canConnectCalendar, tab],
+    [access, canRoute, showsCalendars, tab],
   );
   const { hosts: value, choose } = useHostsChoice(slug, isAdmin);
   const hosts = useMemo(() => (isAdmin ? { value, onChange: choose } : undefined), [isAdmin, value, choose]);

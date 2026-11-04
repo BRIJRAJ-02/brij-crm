@@ -24,7 +24,7 @@ New (the bookings critique, A13, 5 November 2026). The Calendar and the Roster e
 />
 ```
 
-- `today` is a secondary Button, never off, so the arrows after it never move under the pointer. Its label can carry the date while another week shows ("Today · 19 Oct").
+- `today` is a secondary Button, never off once the screen has loaded (`isDisabled` only for a loading bar), so the arrows after it never move under the pointer. Its label can carry the date while another week shows ("Today · 19 Oct").
 - `previous` and `next` are ghost icon Buttons with their name in a tooltip, and their key with it when they have one (`ShortcutTooltip`, which also sets `aria-keyshortcuts`). `isDisabled` at the first or last place there is to go.
 - `jump` is the Go to date button; the screen draws the Popover and month it opens, with this button as its trigger.
 - `weekRangeLabel(monday, locale)` is the one format for a week's dates: "2 – 8 November 2026", short months only across a year.

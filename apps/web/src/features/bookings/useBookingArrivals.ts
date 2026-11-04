@@ -8,6 +8,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { arrivalStrings } from './arrival-strings.ts';
 import { bookingsTabHref } from './tabs.ts';
+import { hourOf } from './week.ts';
 
 /** Toasts each booking a guest makes on the member's pages while Bookings is open. */
 export function useBookingArrivals(slug: string): void {
@@ -27,7 +28,8 @@ export function useBookingArrivals(slug: string): void {
           weekday: 'short',
           day: 'numeric',
           month: 'short',
-          hour: 'numeric',
+          // One clock with the List's (C13): two digit hours on a 24 hour clock.
+          hour: hourOf(language),
           minute: '2-digit',
           timeZone: zone,
         }).format(new Date(arrival.startsAt));

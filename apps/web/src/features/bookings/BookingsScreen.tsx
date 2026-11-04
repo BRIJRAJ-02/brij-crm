@@ -54,6 +54,7 @@ import {
   useKeyboardPlatform,
   focusLater,
   DateNav,
+  usePhoneWidth,
   Skeleton,
   WeekCalendar,
   type BookingListGroup,
@@ -98,8 +99,8 @@ import { strings } from './strings.ts';
 import { useBookingMove } from './useBookingMove.ts';
 import { useBookingsHosts, useBookingsNewPage, useCanConnectCalendar, type HostsChoice } from './toolbarSlot.ts';
 import { bookingsTabHref } from './tabs.ts';
-import { useIsPhoneWidth } from './narrow.ts';
 import {
+  hourOf,
   addDays,
   bookingPieces,
   dayKeyOf,
@@ -203,13 +204,6 @@ function whenOf(startsAt: string, endsAt: string, locale: string, zone: string):
     timeZone: zone,
   }).format(new Date(startsAt));
   return `${day} · ${timeRange(startsAt, endsAt, locale, zone)}`;
-}
-
-/** Hours as the language's clock writes them: two digits on a 24 hour clock ("04:30", C13), else as they come. */
-function hourOf(locale: string): 'numeric' | '2-digit' {
-  return (new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hour12 ?? false)
-    ? 'numeric'
-    : '2-digit';
 }
 
 /** When a booking was made, on the member's clock: "2 Nov, 14:03". */
@@ -1537,7 +1531,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
   // Day or Week (D and W), in the address (`v=day`), so a reload or a shared link keeps it: the day view is the
   // picked day across the width.
   // Under 600px it opens on Day (the bookings critique, A14): seven columns there are slivers.
-  const isPhone = useIsPhoneWidth();
+  const isPhone = usePhoneWidth();
   const view = search.view === 'team' && props.team === undefined ? 'day' : (search.view ?? (isPhone ? 'day' : 'week'));
   // Team only where there is a team to see, or someone who could invite one (AC-764's empty state).
   const views: readonly CalendarViewName[] =
@@ -2657,6 +2651,13 @@ export function BookingsListScreen({
   // A colleague's booking (an admin's view, a team page) names its host rather than "You".
   const me = useMyAccess()?.memberId;
   const [openId, setOpenId] = useState<string | undefined>(openFirst === undefined ? undefined : `b:${openFirst}`);
+  // A later link to one booking while the List is already open (the arrival toast's Open, a second Inbox link) opens
+  // it too: the address changes without the screen mounting again.
+  const [askedOpen, setAskedOpen] = useState(openFirst);
+  if (openFirst !== askedOpen) {
+    setAskedOpen(openFirst);
+    if (openFirst !== undefined) setOpenId(`b:${openFirst}`);
+  }
   // A row's Reschedule or Cancel (B-06): its dialog, drawn here, with focus back on the row's title once it closes.
   const [rowAsk, setRowAsk] = useState<
     { readonly booking: BookingListItem; readonly kind: 'move' | 'cancel'; readonly opening: number } | undefined

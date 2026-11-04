@@ -2,13 +2,12 @@
 // Purpose: the Pages · Calendar · List · Roster · Availability · Round robin · Routing · Calendars bar under Bookings' TopBar, in the row People's ViewBar takes, one tab per child route, with that tab's tools at its end, as Captures has.
 // Main task: switch between the week calendar, the list, the member's own hours, the team's week and the rest, each with its own address.
 // Leaves out: what each tab shows (its child route renders that into the chosen panel, and portals its tools into the strip's end).
-import { TabPanel, Tabs } from '@crm/ui';
+import { TabPanel, Tabs, usePhoneWidth } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 import { BOOKINGS_TABS, bookingsTabHref, isBookingsPageTab, type BookingsPageTab } from './tabs.ts';
 import { HostsSwitch } from './HostsSwitch.tsx';
-import { useIsPhoneWidth } from './narrow.ts';
 import { BookingsToolbarSlot, type HostsChoice } from './toolbarSlot.ts';
 
 /** Props for BookingsTabs. */
@@ -34,7 +33,7 @@ export interface BookingsTabsProps {
 export function BookingsTabs({ slug, tab, tabs = BOOKINGS_TABS, children, hosts }: BookingsTabsProps) {
   const navigate = useNavigate();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
-  const isPhone = useIsPhoneWidth();
+  const isPhone = usePhoneWidth();
   return (
     <BookingsToolbarSlot.Provider value={slot}>
       <Tabs

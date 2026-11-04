@@ -23,6 +23,8 @@ export interface DateNavProps {
     readonly hint: string;
     readonly onPress: () => void;
     readonly kbd?: string;
+    /** Only while the screen loads, when there is nowhere to go yet. */
+    readonly isDisabled?: boolean;
   };
   readonly previous: Step;
   readonly next: Step;
@@ -62,7 +64,11 @@ function StepButton({ step, icon }: { readonly step: Step; readonly icon: 'chevr
  */
 export function DateNav({ today, previous, next, jump }: DateNavProps) {
   const todayButton = (
-    <Button variant="secondary" onPress={today.onPress}>
+    <Button
+      variant="secondary"
+      onPress={today.onPress}
+      {...(today.isDisabled === undefined ? {} : { isDisabled: today.isDisabled })}
+    >
       {today.label}
     </Button>
   );

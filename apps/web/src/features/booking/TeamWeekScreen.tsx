@@ -897,7 +897,7 @@ export function TeamWeekPending({ week }: { readonly week?: string | undefined }
               variant="bar"
               start={
                 <DateNav
-                  today={{ label: words.today, hint: words.goToThisWeek, onPress: () => undefined }}
+                  today={{ label: words.today, hint: words.goToThisWeek, isDisabled: true, onPress: () => undefined }}
                   previous={{ label: words.previousWeek, isDisabled: true, onPress: () => undefined }}
                   next={{ label: words.nextWeek, isDisabled: true, onPress: () => undefined }}
                 />

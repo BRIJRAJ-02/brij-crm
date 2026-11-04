@@ -854,7 +854,7 @@ export function MeetingLinkDialog({
       actions={
         <>
           <Button slot="close" isDisabled={busy}>
-            {strings.cancel}
+            {strings.close}
           </Button>
           <Button variant="primary" type="submit" form={formId} kbd="⌘↵" isPending={busy}>
             {busy ? strings.savingMeetingLink : strings.saveMeetingLink}

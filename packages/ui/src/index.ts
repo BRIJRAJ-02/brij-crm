@@ -136,6 +136,8 @@ export {
   type MonthCalendarProps,
 } from './molecules/DatePicker/DatePicker.tsx';
 export { DateNav, weekRangeLabel, type DateNavProps } from './molecules/DateNav/DateNav.tsx';
+/** Whether the window is a phone's width, for a screen choosing a default or a control by it. */
+export { usePhoneWidth } from './lib/phone-width.ts';
 export {
   DescriptionList,
   type DescriptionItem,

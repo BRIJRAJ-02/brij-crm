@@ -274,6 +274,8 @@ export const strings = {
   message: 'Message',
   messagePlaceholder: 'Grabbing the hour we talked about.',
   cancel: 'Cancel',
+  /** A dialog's dismiss beside a booking's own Cancel (the meeting link's), so one word never means two things. */
+  close: 'Close',
   bookIt: 'Book it',
   booking: 'Booking',
   whoWith: 'Enter their name.',
