@@ -250,6 +250,7 @@ describe('@crm/ui', () => {
       'formatDate',
       'formatDay',
       'formatFileSize',
+      'formatRelative',
       'iconOf',
       'isRefusal',
       'isSocialLinksDraftChanged',
@@ -273,6 +274,7 @@ describe('@crm/ui', () => {
       'useFileHref',
       'useFormatSettings',
       'useKeyboardPlatform',
+      'useNow',
       'usePhotoCrop',
     ]);
   });
