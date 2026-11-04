@@ -18,8 +18,16 @@ import { memberBookings } from '../booking/slots.ts';
 import { readTeamDay } from '../booking/team-day.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
+import { removeMember } from '../members/members.ts';
 import { rollingWeek } from '../../test/dates-kit.ts';
-import { addService, addStaff, allWeek, visitWorkspace, type VisitWorkspace } from '../../test/visits-kit.ts';
+import {
+  addMember,
+  addService,
+  addStaff,
+  allWeek,
+  visitWorkspace,
+  type VisitWorkspace,
+} from '../../test/visits-kit.ts';
 import { bookVisit, visitTimes, type VisitBookInput } from './book.ts';
 import { loadVisitInputs } from './load.ts';
 import { linkStaffMember } from './staff-link.ts';
@@ -256,6 +264,34 @@ describe('linking a staff profile to a member (Rules settled: No cross table gua
 });
 
 describe('the security review (4 Nov 2026)', () => {
+  it('unlinks a removed member’s staff profile, audited, and its own time off closes its times again', async () => {
+    const { w, cut } = await salon();
+    await w.sql(sql`update staff set archived_at = now() where member_id is not null`);
+    const bea = await addMember(w, 'Bea');
+    const ben = await addStaff(w, 'Ben', { memberId: bea, position: 1 });
+    await w.sql(sql`insert into staff_time_off (workspace_id, staff_id, starts_at, ends_at, reason)
+      values (${w.workspaceId}::uuid, ${ben}::uuid, ${at('09:00')}::timestamptz, ${at('12:00')}::timestamptz, 'training')`);
+    const firstTime = async () =>
+      (await visitTimes(w.owner, visitDeps, { placeId: w.placeId, items: [cut], party: 1, date: DAY }))[0]?.start.slice(
+        11,
+        16,
+      );
+    // Linked, the member's time decides and the profile's own time off is ignored.
+    expect(await firstTime()).toBe('09:00');
+    await removeMember(w.owner, { memberId: bea });
+    const [row] = (
+      await w.sql<{ member_id: string | null }>(sql`select member_id::text from staff where id = ${ben}::uuid`)
+    ).rows;
+    expect(row).toEqual({ member_id: null });
+    expect(await firstTime()).toBe('12:00');
+    const audits = (
+      await w.sql<{ after: unknown }>(
+        sql`select after from audit_events where workspace_id = ${w.workspaceId}::uuid and after->>'hospitality' = 'staff.unlinked'`,
+      )
+    ).rows;
+    expect(audits).toEqual([{ after: { hospitality: 'staff.unlinked', staffId: ben } }]);
+  });
+
   it('refuses an Undo of a cancel once a meeting took the gap, under the person lock', async () => {
     const { w, cut, entry } = await salon();
     const booked = await bookVisit(w.owner, visitDeps, visit(w, cut, at('10:00')));

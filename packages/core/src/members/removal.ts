@@ -24,6 +24,7 @@ import { recentsRemoval } from '../search/recents.ts';
 import { teamsRemoval } from '../teams/teams.ts';
 import { viewsRemoval } from '../views/manage.ts';
 import { insightSharesRemoval } from '../insights/shares.ts';
+import { staffLinkRemoval } from '../visits/staff-link.ts';
 import type { AuditSource } from './audit.ts';
 import { countUnvouched, revokeUnvouched } from './invitations.ts';
 import type { RemovalCounts, RemovalEffect } from './removal-effect.ts';
@@ -134,6 +135,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   skillsRemoval,
   // Spec 0067: their Insights share links are revoked.
   insightSharesRemoval,
+  // Spec 0066, AC-6606: a staff profile linked to them is unlinked, back on its own time off.
+  staffLinkRemoval,
 ];
 
 /**
@@ -165,8 +168,6 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   workspace_apps_installed_by: 'history: who installed a business app (spec 0065, H0)',
   reservation_alerts_member:
     'their own new reservation email choice: reservation emails go to active members only (spec 0066 B7)',
-  staff_member:
-    'a staff profile is the business’s own record (spec 0066, B0); its link to a member who left is history, changed by hand',
   forms_owner:
     'the form keeps working; its submissions get no owner while this one has left (owner_removed, spec 0023)',
   bookings_host: 'their bookings stay for admins to hand on (AC-815)',

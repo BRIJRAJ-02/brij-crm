@@ -9,8 +9,11 @@ import type { EngineScope } from '../access/mint.ts';
 import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
 import { postgresError, refuse } from '../engine/refusals.ts';
+import { actorRow } from '../engine/scope.ts';
 import { runWrite } from '../engine/write.ts';
 import { auditSetup, hospitalityMember } from '../hospitality/gate.ts';
+import { writeAudits, type AuditEntry } from '../members/audit.ts';
+import type { RemovalEffect } from '../members/removal-effect.ts';
 import { requireVisitApp } from './book.ts';
 import { personLockKeys } from './locks.ts';
 
@@ -111,3 +114,34 @@ export async function linkStaffMember(
   });
   return result;
 }
+
+/**
+ * A removed member's staff profile is unlinked (spec 0066, AC-6606; security review, 4 Nov 2026). The link is live,
+ * not history: while it holds, the profile's time comes from the member's meetings, blocks and calendars and its own
+ * time off is ignored, so a member who left would keep deciding when the business's staff member is free. The profile
+ * stays, the business's own record, back on its own time off; each one unlinked gets a `staff.unlinked` row, as an
+ * unlink by hand does. Runs whatever the visit app's state, since a link outlives the app being removed.
+ */
+export const staffLinkRemoval: RemovalEffect = {
+  feature: 'staff links',
+  constraints: ['staff_member'],
+  run: async ({ tx, scope }, memberId, source) => {
+    const unlinked = await tx.execute<{ id: string }>(sql`
+      update staff set member_id = null, updated_at = now(), updated_by_member_id = ${actorRow(scope.actor).memberId}::uuid
+      where workspace_id = ${scope.workspaceId}::uuid and member_id = ${memberId}::uuid
+      returning id::text
+    `);
+    await writeAudits(
+      tx,
+      scope.workspaceId,
+      scope.actor,
+      unlinked.rows.map((row): AuditEntry => ({
+        action: 'workspace.updated',
+        targetType: 'workspace',
+        targetId: scope.workspaceId,
+        after: { hospitality: 'staff.unlinked', staffId: row.id },
+      })),
+      source,
+    );
+  },
+};
