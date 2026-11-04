@@ -26,6 +26,7 @@ import {
   RelativeTime,
   Skeleton,
   Tooltip,
+  ViewOnlyTag,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -267,7 +268,6 @@ export function NoteWindow(props: NoteWindowProps) {
             {state.refusal.message}
           </Callout>
         )}
-        {!state.canChange && <Callout tone="info">{strings.readOnly}</Callout>}
         {!state.isNew && (state.links.length > 0 || isLinking) && (
           <LinksField
             slug={slug}
@@ -348,6 +348,8 @@ export function NoteWindow(props: NoteWindowProps) {
       {...(status === undefined ? {} : { status })}
       headerActions={
         <>
+          {/* A note the reader may only read: one tag in the title bar, never a note over the text. */}
+          {isReady && !state.canChange && <ViewOnlyTag reason={strings.readOnly} />}
           {isReady && state.saveState === 'failed' && state.refusal === undefined && (
             <Button variant="ghost" size="sm" onPress={session.retry}>
               {strings.retry}

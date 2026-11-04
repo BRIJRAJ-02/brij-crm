@@ -323,6 +323,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
           </EmptyState>
         ) : (
           <EmptyState
+            layout="block"
             title={strings.emptyTitle}
             // No groups yet: New group is the page's one primary, here; the help sits once, beside the page's title.
             {...(canManage ? { actions: newButton } : {})}

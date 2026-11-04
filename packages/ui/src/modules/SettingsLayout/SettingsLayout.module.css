@@ -118,7 +118,7 @@
     min-inline-size: 0;
   }
 
-  /* View only: a quiet tag and its InfoTip, beside the title or at the head of a body under a bar. */
+  /* View only: a quiet tag and its lock, beside the title or at the head of a body under a bar. */
   .viewOnly {
     display: inline-flex;
     flex: none;

@@ -1,5 +1,3 @@
-import { strings as shared } from '../../lib/strings.ts';
-
 /** DataGrid's built in copy. */
 export const strings = {
   selectRow: (name: string) => `Select ${name}`,
@@ -59,7 +57,6 @@ export const strings = {
   rowNoLongerMatches: 'Doesn’t match this view',
   empty: 'No records yet',
   failed: 'Couldn’t load these records',
-  failedText: shared.couldntDoThat,
   noAccess: 'You don’t have access to this view',
   noAccessText: 'Ask a workspace admin to share it with you.',
   notLoaded: 'Scroll to load these rows first.',

@@ -235,7 +235,8 @@ describe('Everyone on the roster: its dialog', () => {
       ),
       { data, pattern: '/w/$slug/bookings/round-robin', at: '/w/acme/bookings/round-robin' },
     );
-    await expect.element(page.getByText(rotationStrings.rosterNote(4, 5))).toBeVisible();
+    // The switches are the explanation: no count line over them.
+    await expect.element(page.getByRole('row').first()).toBeVisible();
     expect(page.getByRole('button', { name: new RegExp(rotationStrings.addMember) }).elements()).toHaveLength(0);
     expect(page.getByRole('row').elements()).toHaveLength(PEOPLE.length + 1);
     await checkEverywhere('roster-dialog', () => document.querySelector('[role="dialog"]'));

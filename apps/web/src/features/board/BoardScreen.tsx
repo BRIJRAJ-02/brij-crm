@@ -268,6 +268,7 @@ export function BoardScreen(props: BoardScreenProps) {
               />
             ) : outcome.kind === 'nothing-to-group' ? (
               <EmptyState
+                layout="fill"
                 title={strings.nothingToGroupTitle(object.pluralName)}
                 // Only owners and admins change the schema (spec 0009, AC-136); others see the title alone.
                 {...(canChangeSchema

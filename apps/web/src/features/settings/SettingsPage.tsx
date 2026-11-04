@@ -23,7 +23,7 @@ interface SettingsPageBase {
   /** Beside the title: a Standard or Custom badge. */
   readonly meta?: ReactNode;
   /**
-   * The viewer may look but not change anything here: a "View only" tag beside the title, whose InfoTip gives this
+   * The viewer may look but not change anything here: a "View only" tag beside the title, whose lock gives this
    * reason ("Only owners and admins can change this."). In place of a callout in the body.
    */
   readonly viewOnly?: string;

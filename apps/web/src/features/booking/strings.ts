@@ -227,7 +227,6 @@ export const strings = {
   /** Why the Schedule picker waits: its hours have changes not saved yet. */
   saveHoursFirst: 'Save or discard the changes to these hours first.',
   followOwnerHint: 'This page books by its owner’s schedule.',
-  readOnlyTitle: 'You can view this page',
   readOnlyText: 'Only its owner or a workspace admin can change it.',
   timeZone: 'Time zone',
   timeZoneText: 'These hours follow this zone.',

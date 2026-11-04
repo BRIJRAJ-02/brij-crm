@@ -231,7 +231,9 @@ export function ObjectSettingsScreen({
             (accessPage === undefined ? (
               <AccessTabPending />
             ) : accessPage === 'no-access' ? (
-              <EmptyState title={teamStrings.noAccessTitle}>{teamStrings.noAccessText}</EmptyState>
+              <EmptyState tone="locked" title={teamStrings.noAccessTitle}>
+                {teamStrings.noAccessText}
+              </EmptyState>
             ) : accessPage === 'failed' ? (
               <EmptyState
                 tone="error"

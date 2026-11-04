@@ -288,7 +288,6 @@ export const strings = {
   settingsFailed: 'That didn’t save.',
 
   // Install tab
-  readOnlyTitle: 'You can view this form',
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
   shareTip: 'Opens the form on its own page.',
@@ -313,8 +312,6 @@ export const strings = {
   embedFloatingWords: 'Change its words in data-timefix-text.',
   /** The words on the popup's and the corner's button, until the site changes them. */
   embedButtonText: 'Contact us',
-  /** Spec 0063 s5 / 0062 L3 (the owner, 2 November 2026): a form that books afterwards needs no second snippet. */
-  embedBooks: 'After it’s sent, this form opens your booking page. One snippet covers both steps.',
   embedSnippet: 'Embed snippet',
   advancedTitle: 'For developers',
   ownFormTitle: 'Your own HTML',

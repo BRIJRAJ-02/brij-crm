@@ -150,7 +150,12 @@ export function Board({
     );
   }
   if (columns.length === 0 && addColumn === undefined) {
-    return <EmptyState title={strings.noColumns}>{strings.noColumnsBody}</EmptyState>;
+    // The board is the whole surface, so its having no columns says so in its middle.
+    return (
+      <EmptyState layout="block" title={strings.noColumns}>
+        {strings.noColumnsBody}
+      </EmptyState>
+    );
   }
   // An archived option shows only while it still has cards. Other empty columns follow the
   // setting, and show while a card is moving, so there is always somewhere to drop it.

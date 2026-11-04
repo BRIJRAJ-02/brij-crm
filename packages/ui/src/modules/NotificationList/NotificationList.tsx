@@ -84,11 +84,6 @@ export interface NotificationListProps {
   readonly onRetry?: () => void;
   /** What an empty list says, in place of "You’re all caught up.". */
   readonly emptyTitle?: string;
-  /**
-   * @deprecated The empty list is one quiet row with no mark (5 November 2026), so this draws nothing. Kept only
-   * until the Inbox stops passing it.
-   */
-  readonly emptyIcon?: 'inbox' | 'check' | 'list-filter';
   /** Under the empty title: Clear filters. */
   readonly emptyActions?: ReactNode;
 }

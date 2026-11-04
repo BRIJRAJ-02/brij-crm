@@ -6,7 +6,6 @@
 import type { FormQuestion, FormView } from '@crm/data';
 import {
   Button,
-  Callout,
   Card,
   Code,
   DescriptionList,
@@ -199,9 +198,6 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           copyLabel={strings.copyEmbed}
           value={embed}
         />
-        {/* Ask first, then book (the owner, 2 November 2026): the embed carries the booking step with it. Said only
-            when it does, since the setting lives on another tab; no line advertises it when it doesn't. */}
-        {shown.after.kind === 'booking' && <Callout tone="info">{strings.embedBooks}</Callout>}
       </Card>
       {/* A quiet fold at the foot, its cards flush with the cards above it (one left edge, AC-1), spaced as they are. */}
       <Disclosure title={strings.advancedTitle} variant="quiet">

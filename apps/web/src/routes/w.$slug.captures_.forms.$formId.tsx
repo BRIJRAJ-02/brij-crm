@@ -1,9 +1,9 @@
 import { isDataError, type SubmissionState } from '@crm/data';
-import { EmptyState, LoadingNow, TopBar } from '@crm/ui';
+import { ButtonLink, EmptyState, LoadingNow, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { EditorPending } from '../features/captures/EditorPending.tsx';
 import { FormEditor } from '../features/forms/FormEditor.tsx';
-import { FORM_TABS, type FormTab } from '../features/forms/paths.ts';
+import { FORM_TABS, formsHref, type FormTab } from '../features/forms/paths.ts';
 import { strings } from '../features/forms/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
@@ -130,7 +130,16 @@ function FormRoute() {
         page={{
           topBar: <TopBar title={strings.missingTitle} icon="clipboard-list" />,
           body: (
-            <EmptyState layout="block" title={strings.missingTitle}>
+            <EmptyState
+              layout="block"
+              title={strings.missingTitle}
+              // A dead end gets a way back.
+              actions={
+                <ButtonLink href={formsHref(slug)} variant="secondary">
+                  {strings.backToForms}
+                </ButtonLink>
+              }
+            >
               {strings.missingText}
             </EmptyState>
           ),

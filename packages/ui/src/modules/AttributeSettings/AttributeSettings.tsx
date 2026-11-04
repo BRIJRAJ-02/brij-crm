@@ -1137,7 +1137,7 @@ function DefaultSetting({
     return (
       <>
         {editorFor(strings.defaultValue)}
-        {note !== undefined && <Callout tone="info">{note}</Callout>}
+        {note !== undefined && <Callout tone="warning">{note}</Callout>}
       </>
     );
   }
