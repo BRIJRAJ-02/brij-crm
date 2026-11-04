@@ -477,6 +477,109 @@
     border-end-end-radius: 0;
   }
 
+  /* An open question's own head (renderOpenHead, T40): the caller's type menu and the question's field, in the
+     place of the tile and the two lines, then the chevron as its own button that closes the card. */
+  .openHead {
+    display: flex;
+    flex: 1;
+    gap: var(--space-8);
+    align-items: center;
+    min-inline-size: 0;
+    padding-block: var(--space-8);
+    padding-inline: var(--space-4);
+  }
+
+  /* The question's own field takes the head's room after the type menu. */
+  .openHead > :last-child {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .close {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-input);
+    block-size: var(--size-input);
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    outline: none;
+  }
+
+  .close[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .close {
+      transition: background-color var(--duration-hover) var(--ease-hover);
+    }
+
+    .close:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+
+    /* With its own head the open card keeps the grip in the line before the type menu, never over it. */
+    .row[data-open-head] .handle {
+      position: static;
+      opacity: 1;
+      translate: none;
+    }
+
+    .row[data-open-head] .head {
+      padding-inline-start: var(--space-4);
+    }
+
+    .row[data-open-head] .head:hover {
+      background: var(--surface-selected);
+    }
+  }
+
+  /* A question's logic on its second line (T41): "Shown if Role is Designer", with the branch mark before it. */
+  .logic {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    vertical-align: bottom;
+  }
+
+  /* Gaps kept in view (gaps="shown", T39): the cards part to hold the action, which stays quiet until pointed at;
+     the dashed line shows only while it is pointed at or focused. Touch sees it as everyone else does. */
+  .list[data-gaps='shown'] {
+    gap: var(--space-24);
+  }
+
+  .list[data-gaps='shown'] .gap {
+    inset-block-start: calc(-1 * var(--space-24));
+    block-size: var(--space-24);
+    opacity: 1;
+  }
+
+  .list[data-gaps='shown'] .gap::before {
+    opacity: 0;
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  .list[data-gaps='shown'] .gap:focus-within::before {
+    opacity: 1;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .list[data-gaps='shown'] .gap:hover::before {
+      opacity: 1;
+    }
+  }
+
+  @media (hover: none) {
+    .list[data-gaps='shown'] .gap {
+      display: flex;
+    }
+  }
+
   @media (forced-colors: active) {
     .row[data-focus-visible],
     .toggle[data-focus-visible],

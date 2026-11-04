@@ -311,3 +311,59 @@ export const WithGap: Story = {
 export const StepOpen: Story = {
   render: () => <SampleQuestions withStep initialOpen={['step:company']} />,
 };
+
+/**
+ * An open question with its own head (renderOpenHead, T40): the type as a small icon menu at its start and the
+ * question typed in the head itself; the chevron stays, as its own button that closes the card.
+ */
+export const OpenHead: Story = {
+  render: () => (
+    <Stage width="fill">
+      <QuestionList
+        label="Questions"
+        items={QUESTIONS}
+        openIds={new Set(['budget'])}
+        onOpenChange={() => undefined}
+        renderOpenHead={(id) => (
+          <>
+            <Button variant="ghost" icon="chevrons-up-down" label="Answer type: Dropdown" />
+            <Field
+              label="Question"
+              isLabelHidden
+              size="lg"
+              value={QUESTIONS.find((item) => item.id === id)?.label ?? ''}
+            />
+          </>
+        )}
+        renderOpen={() => (
+          <Field label="Placeholder" isLabelHidden size="sm" placeholder="Placeholder text (optional)" />
+        )}
+        onMove={() => undefined}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Question' })).toHaveValue('Budget');
+    await expect(canvas.getByRole('button', { name: 'Close Budget' })).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
+/** Gaps kept in view (gaps="shown", T39): a quiet + between cards, for touch and the keyboard as well as a pointer. */
+export const GapsShown: Story = {
+  render: () => (
+    <Stage width="fill">
+      <QuestionList
+        label="Questions"
+        items={QUESTIONS}
+        gaps="shown"
+        openIds={new Set<string>()}
+        onOpenChange={() => undefined}
+        renderOpen={() => null}
+        renderGap={(id) => (id === 'name' ? null : <Button variant="ghost" size="sm" icon="plus" label="Add here" />)}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('button', { name: 'Add here' })).toHaveLength(3);
+  },
+};

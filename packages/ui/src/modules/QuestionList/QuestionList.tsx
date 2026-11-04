@@ -91,6 +91,17 @@ export interface QuestionListProps {
   readonly renderStepTitle?: (id: string) => ReactNode;
   /** A step header's name was pressed: the form builder shows that step in its preview. */
   readonly onStepPress?: (id: string) => void;
+  /**
+   * An open question's head, in place of its tile and two lines (T40, 5 November 2026: the question typed in the
+   * header row): the caller's type menu and the question's own field. The chevron stays, as its own button that
+   * closes the card. Undefined or null keeps the closed head's look.
+   */
+  readonly renderOpenHead?: (id: string) => ReactNode;
+  /**
+   * `shown` keeps each gap's action in view, quietly, rather than only on hover or focus (T39: "adding a step in
+   * between feels like a find"): the cards part a little further to hold it, and touch sees it too.
+   */
+  readonly gaps?: 'hover' | 'shown';
 }
 
 /**
@@ -118,6 +129,8 @@ export function QuestionList({
   renderStepEnd,
   renderStepTitle,
   onStepPress,
+  renderOpenHead,
+  gaps = 'hover',
 }: QuestionListProps) {
   const headingId = useId();
 
@@ -166,8 +179,10 @@ export function QuestionList({
             renderGap,
             renderStepEnd,
             renderStepTitle,
+            renderOpenHead,
           ]}
           className={styles.list}
+          data-gaps={gaps}
           keyboardNavigationBehavior="tab"
         >
           {(item) => {
@@ -229,6 +244,8 @@ export function QuestionList({
                 </GridListItem>
               );
             }
+            const openHead = isOpen ? renderOpenHead?.(item.id) : undefined;
+            const hasOpenHead = openHead !== undefined && openHead !== null && openHead !== false;
             return (
               <GridListItem
                 id={item.id}
@@ -236,6 +253,7 @@ export function QuestionList({
                 className={styles.row}
                 data-gap={gapNode === null ? undefined : true}
                 data-open={isOpen || undefined}
+                data-open-head={hasOpenHead || undefined}
                 data-problem={item.hasProblem === true || undefined}
               >
                 {gapNode}
@@ -245,61 +263,90 @@ export function QuestionList({
                       <SortableRowGrip id={item.id} label={strings.move(name)} />
                     </span>
                   )}
-                  <AriaButton
-                    className={styles.toggle}
-                    aria-expanded={isOpen}
-                    onPress={() => {
-                      onOpenChange(item.id, !isOpen);
-                    }}
-                  >
-                    {item.typeIcon !== undefined && (
-                      <span className={styles.tile}>
-                        <Icon name={item.typeIcon} tile="gray" />
-                      </span>
-                    )}
-                    <span className={styles.text}>
-                      <span className={styles.title}>
-                        <span className={styles.name} data-untitled={item.label === '' || undefined}>
-                          {name}
+                  {hasOpenHead ? (
+                    <>
+                      <div className={styles.openHead}>{openHead}</div>
+                      {item.hasProblem === true && (
+                        <span className={styles.problem}>
+                          <Icon name="circle-alert" size="sm" />
+                          {strings.hasProblem}
                         </span>
-                        {item.isRequired === true && <span className={styles.required}>{strings.required}</span>}
-                        {item.hasProblem === true && (
-                          <span className={styles.problem}>
-                            <Icon name="circle-alert" size="sm" />
-                            {strings.hasProblem}
+                      )}
+                      <AriaButton
+                        className={styles.close}
+                        aria-expanded
+                        aria-label={strings.close(name)}
+                        onPress={() => {
+                          onOpenChange(item.id, false);
+                        }}
+                      >
+                        <Icon name="chevron-up" size="sm" />
+                      </AriaButton>
+                    </>
+                  ) : (
+                    <AriaButton
+                      className={styles.toggle}
+                      aria-expanded={isOpen}
+                      onPress={() => {
+                        onOpenChange(item.id, !isOpen);
+                      }}
+                    >
+                      {item.typeIcon !== undefined && (
+                        <span className={styles.tile}>
+                          <Icon name={item.typeIcon} tile="gray" />
+                        </span>
+                      )}
+                      <span className={styles.text}>
+                        <span className={styles.title}>
+                          <span className={styles.name} data-untitled={item.label === '' || undefined}>
+                            {name}
                           </span>
-                        )}
+                          {item.isRequired === true && <span className={styles.required}>{strings.required}</span>}
+                          {item.hasProblem === true && (
+                            <span className={styles.problem}>
+                              <Icon name="circle-alert" size="sm" />
+                              {strings.hasProblem}
+                            </span>
+                          )}
+                        </span>
+                        <span className={styles.meta}>
+                          {/* Each part stays whole: a narrow column breaks the line between parts, never inside one. */}
+                          {[
+                            ...(item.typeLabel === undefined ? [] : [item.typeLabel]),
+                            ...(item.note === undefined || item.note === '' ? [] : [item.note]),
+                            ...(item.choiceCount === undefined
+                              ? []
+                              : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
+                            ...(item.filed === undefined ? [] : [item.filed]),
+                            ...(item.condition === undefined
+                              ? []
+                              : [
+                                  <span key="logic" className={styles.logic}>
+                                    <Icon name="git-branch" size="sm" />
+                                    {item.condition}
+                                  </span>,
+                                ]),
+                            ...(item.stat === undefined
+                              ? []
+                              : [
+                                  <span key="stat" title={item.statTitle}>
+                                    {item.stat}
+                                  </span>,
+                                ]),
+                          ].map((part, at) => (
+                            // The separator stays outside the part, so its spaces are where a line may break.
+                            <Fragment key={at}>
+                              {at === 0 ? null : strings.separator}
+                              <span className={styles.part}>{part}</span>
+                            </Fragment>
+                          ))}
+                        </span>
                       </span>
-                      <span className={styles.meta}>
-                        {/* Each part stays whole: a narrow column breaks the line between parts, never inside one. */}
-                        {[
-                          ...(item.typeLabel === undefined ? [] : [item.typeLabel]),
-                          ...(item.note === undefined || item.note === '' ? [] : [item.note]),
-                          ...(item.choiceCount === undefined
-                            ? []
-                            : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
-                          ...(item.filed === undefined ? [] : [item.filed]),
-                          ...(item.condition === undefined ? [] : [item.condition]),
-                          ...(item.stat === undefined
-                            ? []
-                            : [
-                                <span key="stat" title={item.statTitle}>
-                                  {item.stat}
-                                </span>,
-                              ]),
-                        ].map((part, at) => (
-                          // The separator stays outside the part, so its spaces are where a line may break.
-                          <Fragment key={at}>
-                            {at === 0 ? null : strings.separator}
-                            <span className={styles.part}>{part}</span>
-                          </Fragment>
-                        ))}
+                      <span className={styles.chevron} aria-hidden="true">
+                        <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size="sm" />
                       </span>
-                    </span>
-                    <span className={styles.chevron} aria-hidden="true">
-                      <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size="sm" />
-                    </span>
-                  </AriaButton>
+                    </AriaButton>
+                  )}
                 </div>
                 {isOpen && (
                   <div className={styles.body}>

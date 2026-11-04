@@ -177,7 +177,9 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
     await userEvent.click(page.getByRole('button', { name: /^Budget\s*Required/ }));
     // No points until asked (T20, Typeform's score): Give points is one click to 1, 2, 3.
     expect(page.getByRole('textbox', { name: 'Points for Under $1k' }).query()).toBeNull();
-    await userEvent.click(page.getByRole('button', { name: 'Give points' }));
+    // Under the question's one ⋯ (T40): the footer holds Required and the menu only.
+    await userEvent.click(page.getByRole('button', { name: 'More for Budget' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Give points' }));
     await expect.element(page.getByRole('textbox', { name: 'Points for Under $1k' })).toHaveValue('1');
     await expect.element(page.getByRole('textbox', { name: 'Points for $10k' })).toHaveValue('3');
     await userEvent.fill(page.getByRole('textbox', { name: 'Points for $10k' }), '5');

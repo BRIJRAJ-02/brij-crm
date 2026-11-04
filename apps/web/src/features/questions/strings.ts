@@ -53,6 +53,31 @@ export const strings = {
   takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,
   cantWrite: 'You can’t write to this',
   mustAnswer: 'Visitors must answer',
+  /** The question card's footer switch (critique c: one word everywhere). */
+  required: 'Required',
+  /** The type menu at the start of an open question's head. */
+  typeMenu: (type: string) => `Answer type: ${type}`,
+  /** The groups the type menu lists (critique c: a short, grouped list, picked first). */
+  typeGroups: {
+    text: 'Text',
+    choice: 'Choices and scores',
+    time: 'Dates and places',
+    more: 'More',
+    presets: 'Ready-made',
+  },
+  /** The placeholder, edited in place under the question, quiet. */
+  placeholderInline: 'Placeholder text (optional)',
+  /** An open question's one ⋯. */
+  questionActions: (name: string) => `More for ${name}`,
+  keepWithAnswer: 'Keep with the answer',
+  keepWithBooking: 'Keep with the booking',
+  newField: (title: string, objectName: string) => `New field on ${objectName}: ${title}`,
+  newFieldUnnamed: (objectName: string) => `New field on ${objectName}`,
+  insightsSource: 'Use in Insights as “How did you hear about us”',
+  /** One Choice type (critique c): its two ways to show, as switches. */
+  pickMore: 'Let people pick more than one',
+  asDropdown: 'Show as a dropdown',
+  lockedQuestion: 'This question stays',
   // Spec 0067: its answers show beside Insights' sources.
   sourceQuestion: 'Use as “How did you hear about us” in Insights',
   duplicateQuestion: 'Duplicate',

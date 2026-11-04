@@ -144,9 +144,10 @@ describe('Steps as pages (AC-6303, T20)', () => {
       { id: 's1', startsAt: 'name' },
       { id: 's2', startsAt: 'company' },
     ]);
-    // Split here, from the open question's footer (the gap over a card does the same on hover).
+    // Start a new step here, from the open question's ⋯.
     await userEvent.click(page.getByRole('button', { name: /^Team size/ }));
-    await userEvent.click(page.getByRole('button', { name: 'Start a new step here' }));
+    await userEvent.click(page.getByRole('button', { name: 'More for Team size' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Start a new step here' }));
     const title = page.getByRole('textbox', { name: 'Step title' });
     await expect.element(title).toHaveFocus();
     await userEvent.type(title, 'Your team');
@@ -174,7 +175,7 @@ describe('Steps as pages (AC-6303, T20)', () => {
 });
 
 describe('the questions header at a phone’s width (spec 0058, AC-1)', () => {
-  it('keeps Add a question and the menu on screen, with no sideways scroll', async () => {
+  it('keeps Add a question on screen, with no sideways scroll', async () => {
     await page.viewport(390, 844);
     try {
       await open('steps', [
@@ -182,8 +183,7 @@ describe('the questions header at a phone’s width (spec 0058, AC-1)', () => {
         { id: 's2', startsAt: 'company' },
       ]);
       const add = page.getByRole('button', { name: 'Add a question' }).element();
-      const more = page.getByRole('button', { name: 'More question actions' }).element();
-      for (const each of [add, more]) {
+      for (const each of [add]) {
         const box = each.getBoundingClientRect();
         expect(box.right).toBeLessThanOrEqual(390);
         expect(box.width).toBeGreaterThan(0);

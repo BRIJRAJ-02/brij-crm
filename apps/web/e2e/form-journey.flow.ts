@@ -28,15 +28,15 @@ test.describe('the form journey', () => {
 
     // A question mapped onto an attribute People already has.
     await page.getByRole('button', { name: 'Add a question' }).click();
+    await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your role?');
-    await page
-      .getByRole('button', { name: /Save answer to$/ })
-      .last()
-      .click();
-    await page.getByRole('option', { name: 'Job title', exact: true }).click();
-    await expect(page.getByRole('listbox')).toBeHidden();
-    // Where the answer is saved shows in the question's editor, not on its row (T17).
-    await expect(page.getByRole('button', { name: /Save answer to$/ }).last()).toContainText('Job title');
+    // Save answer to is under the question's ⋯ (T40), Keep with the answer until a field is picked.
+    await page.getByRole('button', { name: 'More for What is your role?' }).click();
+    await page.getByRole('menuitem', { name: /^Save answer to/ }).click();
+    await page.getByRole('menuitem', { name: 'Job title', exact: true }).click();
+    await page.getByRole('button', { name: 'More for What is your role?' }).click();
+    await expect(page.getByRole('menuitem', { name: /^Save answer to/ })).toContainText('Job title');
+    await page.keyboard.press('Escape');
 
     // Named on the page, as its one title (Tally's way): the headline, which an Untitled form takes as its name too.
     // Then the first publish is one click, with nothing asked.

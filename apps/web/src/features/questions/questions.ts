@@ -35,6 +35,48 @@ export function addQuestion(questions: Questions, id: string): FormQuestion[] {
   return [...questions, question];
 }
 
+/**
+ * A new question of `answerType` at `index` (the end when past it), no words yet, optional (T40, critique c: the type
+ * is picked first, and the question goes under the one being edited). A choice type starts with no choices.
+ */
+export function insertQuestion(
+  questions: Questions,
+  id: string,
+  answerType: AnswerType,
+  index: number,
+): FormQuestion[] {
+  const question: FormQuestion = {
+    id,
+    key: freeKey('question', keysOf(questions)),
+    label: '',
+    answerType,
+    required: false,
+    update: 'fill',
+    ...(CHOICE_TYPES.includes(answerType) ? { choices: [] } : {}),
+  };
+  const at = Math.max(0, Math.min(index, questions.length));
+  return [...questions.slice(0, at), question, ...questions.slice(at)];
+}
+
+/**
+ * The field a question's words name, when it has never been filed or kept by hand (T40: Save answer to is "Keep with
+ * the answer" unless the question matches a field the object already has, such as Email or Company): the same
+ * match the first publish makes, one question at a time. Undefined when nothing matches.
+ */
+export function matchingField(
+  questions: Questions,
+  id: string,
+  label: string,
+  attributes: readonly FormAttributeChoice[],
+): string | undefined {
+  const probe = questions.map((question): FormQuestion => {
+    if (question.id !== id) return question;
+    const { kept: _kept, filedOn: _filed, ...rest } = question;
+    return { ...rest, label };
+  });
+  return fileByLabel(probe, attributes).find((question) => question.id === id)?.filedOn?.attributeId;
+}
+
 /** A preset's question at the end, not filed, its key made free. */
 export function addPreset(questions: Questions, preset: QuestionPreset, id: string): FormQuestion[] {
   const question: FormQuestion = {
