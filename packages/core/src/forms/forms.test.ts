@@ -211,6 +211,50 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     ]);
   });
 
+  it('a draft saved back to what is live is the live version again: Discard changes leaves nothing to publish', async () => {
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId() });
+    const published = await publishForm(w.scope, {
+      formId: created.id,
+      expectedRevision: created.revision,
+      name: 'Contact us',
+      slug: 'contact-us-discard',
+    });
+    const live = published.live;
+    if (live === undefined) throw new Error('A published form has a live document.');
+    const edited = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: { ...live, headline: 'Talk to us' },
+      expectedRevision: published.revision,
+    });
+    expect(edited).toMatchObject({ hasUnpublished: true });
+    // The live document as the editor holds it: keys in another order, which jsonb ignores.
+    const reordered = Object.fromEntries(Object.entries(live).reverse()) as typeof live;
+    const discarded = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: reordered,
+      expectedRevision: edited.revision,
+    });
+    expect(discarded).toMatchObject({ hasUnpublished: false, liveVersionNumber: 1 });
+    expect(discarded.draft.headline).toBe(live.headline);
+    expect(discarded.revision).toBeGreaterThan(edited.revision);
+    // Saving the live document again changes nothing, and the next edit starts a draft as before.
+    const again = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: live,
+      expectedRevision: discarded.revision,
+    });
+    expect(again).toMatchObject({ hasUnpublished: false, revision: discarded.revision });
+    const next = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: { ...live, headline: 'Once more' },
+      expectedRevision: again.revision,
+    });
+    // The discarded draft is gone, so the new one takes its number again.
+    expect(next).toMatchObject({ hasUnpublished: true, liveVersionNumber: 1, draftNumber: 2 });
+    expect(next.live?.headline).toBe(live.headline);
+  });
+
   it('refuses a stale save, a taken address, and every change from a member without forms.manage', async () => {
     const w = await workspace();
     const created = await createForm(w.scope, { id: newId() });
