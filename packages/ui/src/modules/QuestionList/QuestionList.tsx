@@ -16,7 +16,12 @@ export interface QuestionListItem {
    * on the ground, no card ("Step 2 · About you"), so the list reads as pages of question cards. It moves and is
    * announced as a question is; its end holds the caller's menu (`renderStepEnd`).
    */
-  readonly kind?: 'question' | 'step';
+  readonly kind?: 'question' | 'step' | 'note';
+  /*
+   * `note` draws what the caller renders (`renderOpen`) in a hairline box on the ground, with no head and no grip,
+   * where it sits among the rows: a step's rules under the step's last question (critique c, 7: a rule is read
+   * after the questions it reads). It never moves; the rows move around it.
+   */
   /** The question; empty shows "Untitled question", muted. */
   readonly label: string;
   /**
@@ -146,7 +151,9 @@ export function QuestionList({
           {label}
         </h2>
         {/* Questions only: a step break is not one more question. */}
-        {!isCountHidden && <Badge count={items.filter((item) => item.kind !== 'step').length} label={label} />}
+        {!isCountHidden && (
+          <Badge count={items.filter((item) => item.kind !== 'step' && item.kind !== 'note').length} label={label} />
+        )}
         {(actions !== undefined || wideActions !== undefined) && (
           <span className={styles.actions}>
             {wideActions !== undefined && <span className={styles.wide}>{wideActions}</span>}
@@ -191,6 +198,20 @@ export function QuestionList({
             const gap = renderGap?.(item.id);
             const gapNode =
               gap === undefined || gap === null || gap === false ? null : <div className={styles.gap}>{gap}</div>;
+            if (item.kind === 'note') {
+              return (
+                <GridListItem
+                  id={item.id}
+                  textValue={name}
+                  className={styles.row}
+                  data-kind="note"
+                  data-gap={gapNode === null ? undefined : true}
+                >
+                  {gapNode}
+                  <div className={styles.stepBody}>{renderOpen(item.id)}</div>
+                </GridListItem>
+              );
+            }
             if (item.kind === 'step') {
               const renaming = renderStepTitle?.(item.id);
               const isRenaming = renaming !== undefined && renaming !== null && renaming !== false;

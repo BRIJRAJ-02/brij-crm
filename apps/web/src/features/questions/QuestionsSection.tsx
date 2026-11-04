@@ -200,6 +200,9 @@ export interface StepsProps {
 
 /** A divider's row id in the list: apart from the questions' ids, which share their pattern. */
 const STEP_ROW = 'step:';
+/** A step's rules row, under its last question. */
+const AFTER_ROW = 'after-step:';
+const afterOfRow = (rowId: string) => (rowId.startsWith(AFTER_ROW) ? rowId.slice(AFTER_ROW.length) : undefined);
 const stepOfRow = (rowId: string) => (rowId.startsWith(STEP_ROW) ? rowId.slice(STEP_ROW.length) : undefined);
 
 /** Where it goes' two choices that are not a field: a new field made on Save, and the answer kept off the CRM. */
@@ -559,7 +562,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           },
         ]
       : [];
-  const items: readonly QuestionListItem[] = !isStepped
+  const headed: readonly QuestionListItem[] = !isStepped
     ? questionItems
     : [
         ...leadRow,
@@ -582,17 +585,26 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           ];
         }),
       ];
+  // A step's rules sit under its last question (critique c, 7: read after the questions they read), as a note row:
+  // "After this step: If … → …, Otherwise → …".
+  const items: readonly QuestionListItem[] = !isStepped
+    ? headed
+    : headed.flatMap((item, at): QuestionListItem[] => {
+        const next = headed[at + 1];
+        if (item.kind === 'step' || (next !== undefined && next.kind !== 'step')) return [item];
+        // The last question of a step: the step it is in is the nearest header above it.
+        const header = headed.slice(0, at).findLast((each) => each.kind === 'step');
+        const stepId = header === undefined ? undefined : stepOfRow(header.id);
+        const step = breaks.steps.find((each) => each.id === stepId);
+        if (step === undefined || (step.jumps?.length ?? 0) === 0) return [item];
+        return [item, { id: `${AFTER_ROW}${step.id}`, kind: 'note', label: strings.afterStep(header?.label ?? '') }];
+      });
 
   // A step with logic shows it under its header, always: its rules are what the header is about.
   const shownOpen: ReadonlySet<string> = new Set([
     ...openIds,
     ...(breaks?.steps ?? [])
-      .filter(
-        (step) =>
-          (step.jumps?.length ?? 0) > 0 ||
-          step.showWhen !== undefined ||
-          warningsAt({ kind: 'step', stepId: step.id }).length > 0,
-      )
+      .filter((step) => step.showWhen !== undefined || warningsAt({ kind: 'step', stepId: step.id }).length > 0)
       .map((step) => `${STEP_ROW}${step.id}`),
   ]);
 
@@ -636,6 +648,23 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     const at = items.findIndex((item) => item.id === rowId);
     if (at <= 0 || isFull) return null;
     const previous = items[at - 1];
+    // After a step's rules the next gap belongs to the next step: the end of this one is the gap above its rules.
+    if (previous?.kind === 'note') return null;
+    const noteOf = afterOfRow(rowId);
+    if (noteOf !== undefined) {
+      const ahead = items.slice(at + 1).find((item) => item.kind === undefined || item.kind === 'question');
+      return (
+        <TypeMenu
+          label={strings.addHere}
+          allowed={allowed}
+          onPick={(type) => {
+            addAt(type, ahead === undefined ? {} : { beforeId: ahead.id });
+          }}
+        >
+          <Button variant="ghost" size="sm" icon="plus" label={strings.addHere} />
+        </TypeMenu>
+      );
+    }
     const rowStep = stepOfRow(rowId);
     // The question the new one goes before: this row's, or the first of the step this header opens.
     const beforeId =
@@ -964,13 +993,15 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           }
         : {})}
       renderOpen={(id) => {
-        const stepId = stepOfRow(id);
+        const afterId = afterOfRow(id);
+        const stepId = stepOfRow(id) ?? afterId;
         if (stepId !== undefined) {
           const step = breaks?.steps.find((each) => each.id === stepId);
           if (step === undefined || breaks === undefined || flow === undefined) return null;
           const stepWarnings = warningsAt({ kind: 'step', stepId });
+          // Its header holds its Show only if and what is wrong with it; its rules sit under its last question.
           if (
-            (step.jumps?.length ?? 0) === 0 &&
+            afterId === undefined &&
             step.showWhen === undefined &&
             stepProblem?.stepId !== stepId &&
             stepWarnings.length === 0
@@ -979,6 +1010,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           }
           return (
             <StepEditor
+              part={afterId === undefined ? 'head' : 'after'}
               step={step}
               earlier={questionsBefore(flow, stepId)}
               // A jump decides once its own step has been answered, so it reads that step's questions too.
@@ -1186,10 +1218,14 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         : {
             onMove: (id: string, index: number) => {
               const stepId = stepOfRow(id);
-              if (stepId === LEAD) return;
+              if (stepId === LEAD || afterOfRow(id) !== undefined) return;
               if (breaks !== undefined && isStepped) {
-                // The lead header (no break yet) holds a row of its own: moves count without it.
-                const at = leadRow.length > 0 ? Math.max(0, index - 1) : index;
+                // The lead header (no break yet) and the rules rows hold rows of their own: moves count without them.
+                const notes = items
+                  .filter((item) => item.id !== id)
+                  .slice(0, index)
+                  .filter((item) => item.kind === 'note').length;
+                const at = Math.max(0, index - notes - (leadRow.length > 0 ? 1 : 0));
                 breaks.onChange((before) => moveItem(before, stepId ?? id, at));
                 return;
               }
@@ -2059,6 +2095,8 @@ interface StepEditorProps {
   /** What is wrong with the step's logic, and with each of its rules (T41). */
   readonly warnings: readonly string[];
   readonly jumpWarnings: (index: number) => readonly string[];
+  /** `head`: its Show only if and warnings, under its header; `after`: its rules, under its last question. */
+  readonly part: 'head' | 'after';
 }
 
 /**
@@ -2079,8 +2117,28 @@ function StepEditor({
   onAddRule,
   warnings,
   jumpWarnings,
+  part,
 }: StepEditorProps) {
   const key = `step:${step.id}`;
+  if (part === 'after') {
+    return (
+      <JumpRules
+        stepId={step.id}
+        jumps={step.jumps ?? []}
+        readable={readable}
+        choices={jumpTargets}
+        {...(nextName === undefined ? {} : { nextName })}
+        isReadOnly={isReadOnly}
+        refFor={refFor}
+        focusOn={focusOn}
+        onChange={(jumps) => {
+          onChange({ jumps: [...jumps] });
+        }}
+        onAddRule={onAddRule}
+        warnings={jumpWarnings}
+      />
+    );
+  }
   return (
     <>
       {warnings.map((warning) => (
@@ -2107,21 +2165,6 @@ function StepEditor({
           }}
         />
       )}
-      <JumpRules
-        stepId={step.id}
-        jumps={step.jumps ?? []}
-        readable={readable}
-        choices={jumpTargets}
-        {...(nextName === undefined ? {} : { nextName })}
-        isReadOnly={isReadOnly}
-        refFor={refFor}
-        focusOn={focusOn}
-        onChange={(jumps) => {
-          onChange({ jumps: [...jumps] });
-        }}
-        onAddRule={onAddRule}
-        warnings={jumpWarnings}
-      />
     </>
   );
 }

@@ -133,6 +133,12 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
     await openBuilder();
     // A step with logic shows it, always (T20), as sentences (T41): "If … → …", then a visible Otherwise.
     await expect.element(page.getByText('After this step', { exact: true })).toBeVisible();
+    // Under the step's last question, read after what it reads (critique c, 7), and before the next step.
+    const order = (text: string) =>
+      [...document.querySelectorAll('[role="row"]')].findIndex((row) => row.textContent.trim().startsWith(text));
+    expect(order('After this step')).toBeGreaterThan(order('Budget'));
+    expect(order('Budget')).toBeGreaterThan(-1);
+    expect(order('After this step')).toBeLessThan(order('Step 3 · Your team'));
     await expect.element(page.getByText('Otherwise → Step 3 · Your team')).toBeVisible();
     const target = page.getByRole('button', { name: /Jump to, Jump 1$/ });
     await userEvent.click(target);

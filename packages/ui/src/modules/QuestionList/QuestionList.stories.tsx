@@ -367,3 +367,30 @@ export const GapsShown: Story = {
     await expect(canvas.getAllByRole('button', { name: 'Add here' })).toHaveLength(3);
   },
 };
+
+/** A note among the rows (kind note): a step's rules, under its last question, in a hairline box with no head. */
+const WITH_NOTE: readonly QuestionListItem[] = [
+  ...QUESTIONS.slice(0, 3),
+  { id: 'after', kind: 'note', label: 'After Step 1' },
+  ...QUESTIONS.slice(3),
+];
+
+export const WithNote: Story = {
+  render: () => (
+    <Stage width="fill">
+      <QuestionList
+        label="Questions"
+        items={WITH_NOTE}
+        openIds={new Set<string>()}
+        onOpenChange={() => undefined}
+        renderOpen={(id) => (id === 'after' ? <span>If Budget is Under $1k → Thanks, we are not a fit</span> : null)}
+        onMove={() => undefined}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('If Budget is Under $1k → Thanks, we are not a fit')).toBeVisible();
+    // A note is not a question: the count stays at the questions.
+    await expect(canvas.getByText('4')).toBeVisible();
+  },
+};

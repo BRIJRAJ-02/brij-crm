@@ -121,6 +121,13 @@
     background: transparent;
   }
 
+  /* A note (kind note): what the caller draws, in the step body's box, on the ground, never a card. */
+  .row[data-kind='note'] {
+    overflow: visible;
+    border: none;
+    background: transparent;
+  }
+
   .row[data-kind='step']:not(:first-child) {
     margin-block-start: var(--space-12);
   }
@@ -202,7 +209,7 @@
     margin-inline-start: auto;
   }
 
-  /* A step's logic, under its header, on the ground, in line with its name. */
+  /* A step's logic, under its header (or, as a note, under its last question), on the ground. */
   .stepBody {
     display: flex;
     flex-direction: column;

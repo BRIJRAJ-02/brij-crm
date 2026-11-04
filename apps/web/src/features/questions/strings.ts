@@ -141,6 +141,8 @@ export const strings = {
   // way to say "after this, jump to".
   /** The quiet heading over a step's jumps. */
   logic: 'After this step',
+  /** The rules row's name, under a step's last question. */
+  afterStep: (step: string) => `After ${step}`,
   /** A rule's arrow, between its conditions and where it sends people. */
   thenArrow: '→',
   pickWhere: 'Pick where',
