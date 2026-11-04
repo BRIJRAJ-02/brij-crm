@@ -33,6 +33,7 @@ import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from 
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { appendChunk, checkRecordsSource, writeHeader } from '../exports/chunks.ts';
+import { writeAudit } from '../members/audit.ts';
 import { loadVersions } from './shared.ts';
 import { answersOf, COLUMNS, crmOf, displays, formFiles, readableForm, visibleRows, type Row } from './submissions.ts';
 
@@ -273,6 +274,14 @@ export async function startSubmissionsExport(
         })
         .returning(EXPORT_COLUMNS);
       if (row === undefined) throw new Error('The export row was not stored.');
+      // Visitors' answers leave the workspace: History says who took them (forms fixes 3), as a download at once does.
+      // No count: the one above includes rows the job leaves out as hidden from this member (security review).
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: 'form.exported',
+        targetType: 'form',
+        targetId: form.id,
+        after: { way: 'background' },
+      });
       return viewOf(row);
     },
     hooks,
@@ -614,6 +623,14 @@ export async function exportSubmissionsNow(
     // One answer the size of a function's response is a file for the job, which writes it in parts.
     if (Buffer.byteLength(csv) > EXPORT_NOW_BYTES_MAX) throw refuse('JOB_TOO_LARGE', EXPORT_NOW_TOO_LARGE);
     const day = await tx.execute<{ day: string }>(sql`select to_char(now() at time zone 'UTC', 'YYYY-MM-DD') as day`);
+    // Visitors' answers leave the workspace (forms fixes 3): one History row, as the background export writes, in the
+    // transaction that read them, so a download that failed leaves none.
+    await writeAudit(tx, scope.workspaceId, scope.actor, {
+      action: 'form.exported',
+      targetType: 'form',
+      targetId: form.id,
+      after: { submissions: shown.length, way: 'download' },
+    });
     return { fileName: fileNameFor(form.name, day.rows[0]?.day ?? 'today'), csv };
   });
 }

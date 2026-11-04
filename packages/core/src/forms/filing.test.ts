@@ -377,6 +377,16 @@ describe('the CSV export', () => {
     const now = await exportSubmissionsNow(w.scope, { formId: live.id, select: { kind: 'filter' } });
     expect(now.fileName).toBe(started.fileName);
     expect(now.csv.split('\r\n').slice(1)).toEqual(text.split('\r\n').slice(1));
+    // Both leave one History row naming the form, who and how many (forms fixes 3); a refused one leaves none.
+    const exported = () =>
+      w.query<{ after: { submissions?: number; way: string } }>(
+        sql`select after from audit_events where action = 'form.exported' and target_id = ${live.id}
+            order by at, id`,
+      );
+    expect((await exported()).map((row) => row.after)).toEqual([
+      { way: 'background' },
+      { submissions: 2, way: 'download' },
+    ]);
     // More than it takes at once is refused, so the screen starts the job instead.
     await w.query(sql`
       insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, state, answers)
@@ -388,6 +398,7 @@ describe('the CSV export', () => {
     expect(
       await refusalOf(exportSubmissionsNow(w.scope, { formId: live.id, select: { kind: 'filter' } })),
     ).toMatchObject([{ code: 'JOB_TOO_LARGE' }]);
+    expect(await exported()).toHaveLength(2);
 
     // Anyone else: as if it didn't exist.
     expect(await refusalOf(getExport(w.other, { exportId }))).toMatchObject([{ code: 'NOT_FOUND' }]);

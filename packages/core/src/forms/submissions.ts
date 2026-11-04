@@ -6,6 +6,9 @@
 // see are left out, the same rule as everywhere else (hidden means absent).
 import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import {
+  DELETE_SUBMISSIONS_MAX,
+  type DeleteSubmissionsResult,
+  type RestoreSubmissionsResult,
   SPAM_FILES_KEPT_DAYS,
   SubmissionContext,
   SUBMISSION_SUMMARY_QUESTIONS,
@@ -23,7 +26,7 @@ import {
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import * as z from 'zod';
-import { checkId } from '../engine/ids.ts';
+import { checkId, uuidList } from '../engine/ids.ts';
 import { queueFormWebhooks } from '../webhooks/queue.ts';
 import { readRecords, updateRecord } from '../engine/records.ts';
 import { currentItems, loadAttributes, loadAttributesById } from '../engine/values.ts';
@@ -935,6 +938,115 @@ export async function restoreSubmission(
         .returning({ id: formSubmissions.id });
       if (restored.length === 0) throw refuse('FORM_STATE', NOT_DELETED);
       return viewIn(tx, scope, row.id);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** What a bulk Delete or its Undo naming more than `DELETE_SUBMISSIONS_MAX` submissions answers. */
+export const TOO_MANY_SUBMISSIONS = `Pick at most ${DELETE_SUBMISSIONS_MAX.toLocaleString('en')} submissions at a time.`;
+
+/** The ids a bulk call names, once each and in id order (so two calls lock their rows in the same order), checked. */
+function bulkIds(submissionIds: readonly string[]): string[] {
+  const ids = [...new Set(submissionIds)];
+  if (ids.length === 0 || ids.length > DELETE_SUBMISSIONS_MAX)
+    throw inputInvalid('submissionIds', TOO_MANY_SUBMISSIONS);
+  return ids.map((id) => checkId(id, UNKNOWN_SUBMISSION)).sort();
+}
+
+/**
+ * The named submissions of a form the member may see, locked in id order: the deleted ones (`deleted`) or the others.
+ * An id that isn't this form's, is hidden from the member or is in the other state is simply absent, never told apart.
+ */
+async function lockedRows(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  formId: string,
+  ids: readonly string[],
+  deleted: boolean,
+): Promise<readonly Row[]> {
+  const form = await readableForm(tx, scope, formId);
+  const named = (among: readonly string[]) =>
+    and(
+      eq(formSubmissions.formId, form.id),
+      inArray(formSubmissions.id, [...among]),
+      deleted ? isNotNull(formSubmissions.deletedAt) : isNull(formSubmissions.deletedAt),
+    );
+  // Only the rows the member may see are locked (review): a hidden one being filed never waits on this write.
+  const seen = await visibleRows(tx, scope, await tx.select(COLUMNS).from(formSubmissions).where(named(ids)));
+  if (seen.length === 0) return [];
+  // Locked in id order, the state read again under the lock: one that moved meanwhile is left out.
+  return tx
+    .select(COLUMNS)
+    .from(formSubmissions)
+    .where(named(seen.map((row) => row.id)))
+    .orderBy(formSubmissions.id)
+    .for('update');
+}
+
+/**
+ * Deletes many of one form's submissions in one write (forms fixes 3), by the same rules as `deleteSubmission`:
+ * `forms.manage`, soft (kept `DELETED_SUBMISSIONS_KEPT_DAYS` for Undo), the records they made stay, their
+ * notifications go. One still being filed is left as it is and counted in `stillFiling`; one the member can't see, of
+ * another form, or already deleted is counted in `skipped`. Answers the ids it deleted, which Undo
+ * (`restoreSubmissions`) sends back.
+ */
+export async function deleteSubmissions(
+  scope: EngineScope,
+  input: { readonly formId: string; readonly submissionIds: readonly string[] },
+  hooks: readonly AfterWrite[] = [],
+): Promise<DeleteSubmissionsResult> {
+  requirePermission(scope, 'forms.manage');
+  const ids = bulkIds(input.submissionIds);
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const rows = await lockedRows(tx, scope, input.formId, ids, false);
+      // One still being filed waits for its filing, as a single delete refuses it (state review).
+      const isFiling = (row: Row) => row.state === 'received' || row.state === 'processing';
+      const stillFiling = rows.filter(isFiling).length;
+      const deletedIds = rows.filter((row) => !isFiling(row)).map((row) => row.id);
+      if (deletedIds.length > 0) {
+        // Their notifications go with them: the inboxes showing one hear of it.
+        await withdrawSubmissionNotices(context, sql`n.submission_id = any(${uuidList(deletedIds)})`);
+        await tx
+          .update(formSubmissions)
+          .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+          .where(inArray(formSubmissions.id, deletedIds));
+      }
+      return { deletedIds, stillFiling, skipped: ids.length - deletedIds.length - stillFiling };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * Undo for a bulk Delete (forms fixes 3): puts back those of the named submissions that are still in the bin and the
+ * member may see, as `restoreSubmission` does one; their notices stay withdrawn. Answers the ids it put back and how
+ * many it couldn't.
+ */
+export async function restoreSubmissions(
+  scope: EngineScope,
+  input: { readonly formId: string; readonly submissionIds: readonly string[] },
+  hooks: readonly AfterWrite[] = [],
+): Promise<RestoreSubmissionsResult> {
+  requirePermission(scope, 'forms.manage');
+  const ids = bulkIds(input.submissionIds);
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const rows = await lockedRows(tx, scope, input.formId, ids, true);
+      const restoredIds = rows.map((row) => row.id);
+      if (restoredIds.length > 0) {
+        await tx
+          .update(formSubmissions)
+          .set({ deletedAt: null, updatedAt: sql`now()` })
+          .where(inArray(formSubmissions.id, restoredIds));
+      }
+      return { restoredIds, skipped: ids.length - restoredIds.length };
     },
     hooks,
   );

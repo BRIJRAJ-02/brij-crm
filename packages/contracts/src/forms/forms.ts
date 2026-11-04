@@ -487,6 +487,41 @@ export const AddToCrmResult = z.object({
 /** What Add to CRM started. */
 export type AddToCrmResult = z.infer<typeof AddToCrmResult>;
 
+/** The most submissions one bulk Delete (or its Undo) names (forms fixes 3). */
+export const DELETE_SUBMISSIONS_MAX = 500;
+
+/**
+ * Delete, or its Undo, for many of one form's submissions in one request (forms fixes 3): the Submissions tab's bulk
+ * bar. Ids that aren't the form's, that the member can't see, or that are already in that state are left out.
+ */
+export const SubmissionsWriteInput = WorkspaceScoped.extend({
+  formId: Uuid,
+  submissionIds: z.array(Uuid).min(1).max(DELETE_SUBMISSIONS_MAX),
+  mutationId: Uuid,
+});
+/** Delete, or its Undo, for many submissions. */
+export type SubmissionsWriteInput = z.infer<typeof SubmissionsWriteInput>;
+
+/**
+ * What a bulk Delete did: the ids it deleted (Undo sends exactly these to `restoreMany`), how many were still being
+ * filed (left as they were: try again in a moment), and how many it left out for any other reason.
+ */
+export const DeleteSubmissionsResult = z.object({
+  deletedIds: z.array(Uuid),
+  stillFiling: z.number().int().min(0),
+  skipped: z.number().int().min(0),
+});
+/** What a bulk Delete did. */
+export type DeleteSubmissionsResult = z.infer<typeof DeleteSubmissionsResult>;
+
+/** What a bulk Undo did: the ids it put back, and how many it couldn't (no longer deleted, or removed for good). */
+export const RestoreSubmissionsResult = z.object({
+  restoredIds: z.array(Uuid),
+  skipped: z.number().int().min(0),
+});
+/** What a bulk Undo did. */
+export type RestoreSubmissionsResult = z.infer<typeof RestoreSubmissionsResult>;
+
 /**
  * Which earlier submissions Sync old records applies the current mapping to:
  * `all` filed or failed ones, or `unfiled` only (failed, or whose record is
@@ -676,4 +711,8 @@ export const submissionsContract = {
   delete: oc.input(SubmissionWriteInput).output(z.object({ deleted: z.literal(true) })),
   /** Undo a delete (forms fixes 2): deletes are soft, so the submission comes back as it was. */
   restore: oc.input(SubmissionWriteInput).output(SubmissionView),
+  /** Delete many of one form's submissions at once (forms fixes 3): soft, as `delete`, at most 500 a call. */
+  deleteMany: oc.input(SubmissionsWriteInput).output(DeleteSubmissionsResult),
+  /** Undo a bulk Delete: puts back the ids it answered, as `restore` does one. */
+  restoreMany: oc.input(SubmissionsWriteInput).output(RestoreSubmissionsResult),
 };

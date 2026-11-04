@@ -215,6 +215,7 @@ const SENTENCES: SentenceTemplates = {
   'form.created': (entry, w) => actor(`made the form ${w.thing(entry.target)}`),
   'form.owner_changed': (entry, w) => actor(`changed who gets ${w.thing(entry.target)}’s leads`),
   'form.notify_changed': (entry, w) => actor(`changed who is emailed ${w.thing(entry.target)}’s new submissions`),
+  'form.exported': (entry, w) => actor(`exported the submissions of ${w.thing(entry.target)}`),
   // Lists (spec 0048): "Ada made the list Sales pipeline".
   'list.created': (entry, w) => actor(`made the list ${w.thing(entry.target)}`),
   'list.updated': (entry, w) => actor(`changed the list ${w.thing(entry.target)}`),

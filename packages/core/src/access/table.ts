@@ -553,6 +553,9 @@ export const ACCESS_TABLE = {
   // Forms fixes 2: Undo of a delete, Use new and its Undo change a submission (and, for Use new, its record through
   // the member's own access), so they are forms.manage writes like the other submission edits.
   restoreSubmission: { permission: 'forms.manage' },
+  // Forms fixes 3: bulk Delete and its Undo, the same rule as one.
+  deleteSubmissions: { permission: 'forms.manage' },
+  restoreSubmissions: { permission: 'forms.manage' },
   useNewAnswer: { permission: 'forms.manage' },
   undoUseNewAnswer: { permission: 'forms.manage' },
   // Settings a form's version holds, live at once: a publish of those settings, so forms.manage like Publish.

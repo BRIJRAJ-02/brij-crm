@@ -6,12 +6,14 @@
 // person for two racing submissions), its timeline entry, and the
 // submissions screen's reads and actions.
 import { randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { sql } from 'drizzle-orm';
 import { createWebhook } from '../webhooks/endpoints.ts';
 import { decodeWebhookKey } from '../webhooks/signing.ts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { FormDocument, type FormQuestion, type SubmitBody } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import { enterPublicForm } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
 import { createAttribute, editAttribute } from '../attributes/attributes.ts';
@@ -19,6 +21,7 @@ import { createObject } from '../objects/objects.ts';
 import { bookingTargetProblem, createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { getActivity } from '../engine/activity.ts';
 import { newId } from '../engine/ids.ts';
+import { outboxHook } from '../engine/outbox.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord, getRecords, setValues } from '../engine/records.ts';
 import { SYSTEM_ACTOR } from '../engine/scope.ts';
@@ -51,7 +54,9 @@ import { workspacePublicKey } from './shared.ts';
 import type { CaptchaVerdict } from './spam.ts';
 import {
   deleteSubmission,
+  deleteSubmissions,
   restoreSubmission,
+  restoreSubmissions,
   getSubmission,
   listSubmissions,
   markSubmissionSpam,
@@ -64,7 +69,7 @@ import {
   CHANGED_SINCE,
 } from './submissions.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 const registry = jobKinds({ environment: 'local' });
 
@@ -545,6 +550,77 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     const past = await liveForm(w, (document) => ({ ...document, closing: { at: '2020-01-01T00:00:00.000Z' } }));
     const late = await enterPublicForm({ db }, past.publicKey);
     expect((await getPublicForm(late.scope, { formId: late.formId })).status).toBe('paused');
+  });
+
+  it('tells other tabs when a form pauses: by Pause, or by the send that fills it (forms fixes 3)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, (document) => ({ ...document, closing: { after: 2 } }));
+    const stored = async () =>
+      w.query<{ kind: string; n: number }>(
+        sql`select kind::text, count(*)::int as n from outbox where workspace_id = ${w.scope.workspaceId}
+            and kind = 'forms' group by kind`,
+      );
+    const send = async (email: string) => {
+      const { scope, formId } = await enterPublicForm({ db }, live.publicKey);
+      return submitForm(
+        scope,
+        registry,
+        { formId, body: body({ name: 'Visitor', email }), captcha: off, answersKey: 'a-test-answers-key' },
+        [outboxHook()],
+      );
+    };
+    // A send that leaves a place stores no forms row; the send that takes the last one pauses the form and stores one,
+    // in its own write.
+    await send('ada@example.com');
+    expect(await stored()).toEqual([]);
+    await send('grace@example.com');
+    expect((await getForm(w.scope, { formId: live.id })).status).toBe('paused');
+    expect(await stored()).toEqual([{ kind: 'forms', n: 1 }]);
+    // Pause and Resume by hand store the same row; a status that doesn't move stores none.
+    const other = await liveForm(w);
+    await setFormStatus(w.scope, { formId: other.id, status: 'paused' }, [outboxHook()]);
+    await setFormStatus(w.scope, { formId: other.id, status: 'paused' }, [outboxHook()]);
+    expect(await stored()).toEqual([{ kind: 'forms', n: 2 }]);
+  });
+
+  it('pauses forms already full when it deploys, and only those (migration 0176, forms fixes 3)', async () => {
+    const w = await workspace();
+    // Two live forms that close after 2 answers, each holding 2 (one of them only once spam and deleted are left
+    // out), as before a send paused a full form, and one holding 1.
+    const full = await liveForm(w, (document) => ({ ...document, closing: { after: 2 } }));
+    const padded = await liveForm(w, (document) => ({ ...document, closing: { after: 2 } }));
+    const room = await liveForm(w, (document) => ({ ...document, closing: { after: 2 } }));
+    const uncapped = await liveForm(w);
+    const store = async (formId: string, state: string, deleted = false) =>
+      w.query(sql`
+        insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, state, answers, deleted_at)
+        select workspace_id, id, live_version_id, gen_random_uuid(), ${state}, '{}'::jsonb,
+          ${deleted ? sql`now()` : sql`null`}
+        from forms where id = ${formId}::uuid`);
+    for (const formId of [full.id, full.id, padded.id, padded.id, room.id, uncapped.id, uncapped.id, uncapped.id]) {
+      await store(formId, 'held');
+    }
+    await store(padded.id, 'spam');
+    await store(room.id, 'spam');
+    await store(room.id, 'held', true);
+    const migration = await readFile(
+      new URL('../../../db/migrations/0176_pause_full_forms.sql', import.meta.url),
+      'utf8',
+    );
+    // This workspace's forms only: other suites share the database.
+    const scoped = migration
+      .replaceAll('--> statement-breakpoint', '')
+      .replace(
+        `AND "f"."status" = 'live'`,
+        `AND "f"."status" = 'live' AND "f"."workspace_id" = '${w.scope.workspaceId}'`,
+      );
+    expect(scoped).toContain(w.scope.workspaceId);
+    await testQuery(ownerUrl, `begin; ${scoped} commit;`);
+    const status = async (formId: string) => (await getForm(w.scope, { formId })).status;
+    expect(await status(full.id)).toBe('paused');
+    expect(await status(padded.id)).toBe('paused');
+    expect(await status(room.id)).toBe('live');
+    expect(await status(uncapped.id)).toBe('live');
   });
 
   it('tells the guest form the workspace’s country: the one it set, else its time zone’s (forms fixes 2)', async () => {
@@ -1581,6 +1657,48 @@ describe('the submissions screen’s reads (AC-572, AC-573)', () => {
     expect(await refusalOf(restoreSubmission(w.scope, { submissionId: processed.id }))).toMatchObject([
       { code: 'FORM_STATE' },
     ]);
+  });
+
+  it('deletes many in one write, leaving one still being filed, and Undo puts them back (forms fixes 3)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    for (const email of ['ada@example.com', 'grace@example.com', 'alan@example.com']) {
+      await submit(live.publicKey, body({ name: 'Visitor', email }));
+    }
+    const ids = await submissionIds(w, live.id);
+    const [waiting, ...rest] = ids;
+    if (waiting === undefined) throw new Error('A submission expected.');
+    for (const row of rest) await processNow(w, row.id);
+    const elsewhere = await liveForm(w);
+    await submit(elsewhere.publicKey, body({ name: 'Other', email: 'other@example.com' }));
+    const [theirs] = await submissionIds(w, elsewhere.id);
+    if (theirs === undefined) throw new Error('A submission expected.');
+    const named = [...ids.map((row) => row.id), theirs.id, newId()];
+    // forms.manage, as one delete: a member is refused before anything is read.
+    const member = rescope(w.scope, { role: 'member' });
+    expect(await refusalOf(deleteSubmissions(member, { formId: live.id, submissionIds: named }))).toMatchObject([
+      { code: 'FORBIDDEN' },
+    ]);
+    // The one still being filed stays; another form's and an unknown id are left out, never told apart.
+    const deleted = await deleteSubmissions(w.scope, { formId: live.id, submissionIds: named });
+    expect(deleted).toEqual({ deletedIds: rest.map((row) => row.id).sort(), stillFiling: 1, skipped: 2 });
+    expect((await listSubmissions(w.scope, { formId: live.id })).items.map((item) => item.id)).toEqual([waiting.id]);
+    expect((await listSubmissions(w.scope, { formId: elsewhere.id })).items).toHaveLength(1);
+    // Undo: the ids it answered come back; a second Undo finds nothing to put back.
+    expect(await restoreSubmissions(w.scope, { formId: live.id, submissionIds: deleted.deletedIds })).toEqual({
+      restoredIds: deleted.deletedIds,
+      skipped: 0,
+    });
+    expect((await listSubmissions(w.scope, { formId: live.id })).items).toHaveLength(3);
+    expect(await restoreSubmissions(w.scope, { formId: live.id, submissionIds: deleted.deletedIds })).toEqual({
+      restoredIds: [],
+      skipped: deleted.deletedIds.length,
+    });
+    // Another workspace's form is as good as missing.
+    const outside = await workspace();
+    expect(
+      await refusalOf(deleteSubmissions(outside.scope, { formId: live.id, submissionIds: deleted.deletedIds })),
+    ).toMatchObject([{ code: 'NOT_FOUND' }]);
   });
 });
 

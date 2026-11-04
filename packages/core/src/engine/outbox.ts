@@ -69,6 +69,7 @@ export interface OutboxEvent {
     | 'calendars'
     | 'time_off'
     | 'automations'
+    | 'forms'
     | 'files';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
@@ -381,6 +382,8 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   if (change.timeOff.length > 0) rows.push({ kind: 'time_off', ...NO_IDS, coarse: false });
   // An automation or a run's outcome changed (parity #53): one row naming nothing.
   if (change.automations.length > 0) rows.push({ kind: 'automations', ...NO_IDS, coarse: false });
+  // A form's status changed (forms fixes 3): one row naming nothing, so open editors and the Forms list read again.
+  if (change.forms.length > 0) rows.push({ kind: 'forms', ...NO_IDS, coarse: false });
   // A member's own sidebar (spec 0034): one row naming the members whose rows the write changed, nothing else.
   if (change.nav.length > 0) {
     rows.push({ kind: 'nav', ...NO_IDS, itemIds: [...change.nav].sort(byId), coarse: false });

@@ -81,6 +81,7 @@ export const AUDIT_KINDS = {
     'form.created',
     'form.owner_changed',
     'form.notify_changed',
+    'form.exported',
     'booking.record_linked',
     'booking.record_unlinked',
     'delegation.granted',
