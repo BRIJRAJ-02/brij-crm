@@ -148,6 +148,7 @@ export function HostedFormSteps({
   onEmailResume,
   resumedStepId,
   now = Date.now,
+  previewEnding,
   logo = TIMEFIX_LOGO,
   previewStep,
   brand,
@@ -183,6 +184,7 @@ export function HostedFormSteps({
     onSave,
     onEmailResume,
     now,
+    previewEnding,
     // A refusal for an earlier step goes back to it, where its errors show.
     onRefused: (keys) => {
       const at = groups.findIndex((group) => group.questions.some((question) => keys.includes(question.key)));
@@ -354,9 +356,7 @@ export function HostedFormSteps({
       <div ref={welcomeRef} className={styles.welcome} data-enter={moved}>
         <FormHeader form={form} mode={mode} heading={refs.heading} />
         <div className={styles.buttons} data-layout={layout}>
-          {/* Focus starts here on the form's own page (T42), so Enter is the first key that works; never in a site,
-              where it would scroll the visitor's page to the form. */}
-          <Button variant="primary" size="lg" onPress={start} autoFocus={mode === 'page'}>
+          <Button variant="primary" size="lg" onPress={start}>
             {words.start}
           </Button>
           <EnterHint words={words} />
@@ -372,7 +372,13 @@ export function HostedFormSteps({
           </div>
         ) : null}
         {!isOpen ? (
-          <FormHeader form={form} mode={mode} heading={refs.heading} isSubheadingShown={index === 0} />
+          <FormHeader
+            form={form}
+            mode={mode}
+            heading={refs.heading}
+            isSubheadingShown={index === 0}
+            isVisuallyHidden={embedLook?.isTitleHidden === true}
+          />
         ) : (
           // One at a time the welcome screen showed the headline: each question keeps it for screen readers only.
           <VisuallyHidden>
@@ -503,6 +509,7 @@ export function HostedFormSteps({
                 variant="primary"
                 size="lg"
                 type={preview ? 'button' : 'submit'}
+                isDisabled={state.isClosedMidFill}
                 {...(isOpen ? (isLast ? {} : { iconRight: 'check' as const }) : { isFullWidth: 'center' as const })}
               >
                 {state.isSending ? words.sending : isLast ? form.buttonText : isOpen ? words.ok : words.next}
@@ -515,7 +522,7 @@ export function HostedFormSteps({
         {/* One at a time's arrows and place (T42, Typeform's way): up to the question before, down on to the next
             (through the same check as OK), and "2 of 6"; at the window's foot on a page, under the form elsewhere. */}
         {isOpen && groups.length > 1 && (
-          <nav className={styles.nav} data-mode={mode} aria-label={place}>
+          <nav className={styles.nav} data-mode={mode} aria-label={words.questionsNav}>
             <span className={styles.place} aria-hidden="true">
               {words.questionOf(index + 1, total)}
             </span>

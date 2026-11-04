@@ -183,20 +183,10 @@
     outline: none;
   }
 
-  /* A site's inline embed (the Share tab's switches): a clear ground, so the site's own background shows through,
-     and the headline kept for screen readers only, since the site has its own. */
+  /* A site's inline embed (the Share tab's switch): a clear ground, so the site's own background shows through. */
   :root[data-ground='none'],
   .root[data-ground='none'] {
     background: transparent;
-  }
-
-  .root[data-head='none'] .header {
-    position: absolute;
-    inline-size: var(--border-width-hairline);
-    block-size: var(--border-width-hairline);
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   /* A template's face for the headline (spec 0068); the questions stay in the body face, as every control does. */

@@ -353,13 +353,18 @@
     box-shadow: none;
   }
 
-  /* Focus thickens the line by a hairline, under it, so the field moves nothing. */
+  /* Focus doubles the line, under it, so the field moves nothing and the change reads at a glance. */
   .root[data-variant='underline'] .box:focus-within {
-    box-shadow: 0 var(--border-width-hairline) 0 var(--accent-line);
+    box-shadow: 0 var(--border-width-thick) 0 var(--accent-line);
   }
 
   .root[data-variant='underline'][data-invalid] .box {
     border-color: var(--danger);
+  }
+
+  /* Read only: the plain border's line, so it never reads as waiting for an answer. */
+  .root[data-variant='underline'][data-readonly] .box {
+    border-color: var(--border);
   }
 
   .root[data-size='lg'] .input {

@@ -153,7 +153,8 @@ export function PageInsights({ stats, started, steps, stepLabel, sources, days, 
           columns={[
             { id: 'source', label: strings.source, isRowHeader: true, size: 'fill' },
             { id: 'views', label: strings.views, align: 'end', size: 'fit' },
-            ...(hasBars ? [{ id: 'bar', label: strings.share }] : []),
+            // Bars once there are enough views to compare, as the stops have them from enough starts.
+            ...(totalViews >= BARS_FROM_STARTS ? [{ id: 'bar', label: strings.shareOfViews }] : []),
             { id: 'finished', label: strings.finished, align: 'end' as const, size: 'fit' as const },
           ]}
           rows={sources}

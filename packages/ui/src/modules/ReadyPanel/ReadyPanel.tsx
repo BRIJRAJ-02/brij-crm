@@ -1,5 +1,5 @@
 import { useId, useRef, type ReactNode } from 'react';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { QrCode } from '../../atoms/QrCode/QrCode.tsx';
@@ -53,8 +53,8 @@ export interface ReadyPanelProps {
    * form's live dialog and its Share tab, 5 November 2026).
    */
   readonly variant?: 'panel' | 'pill';
-  /** `pill`: opens the link (in a new tab); the quiet Open beside Copy. */
-  readonly onOpen?: () => void;
+  /** `pill`: the page to open in a new tab, the quiet Open beside Copy: a real link, so it middle clicks and copies. */
+  readonly openHref?: string;
 }
 
 /**
@@ -79,7 +79,7 @@ export function ReadyPanel({
   actions,
   copyVariant = 'primary',
   variant = 'panel',
-  onOpen,
+  openHref,
 }: ReadyPanelProps) {
   const isPill = variant === 'pill';
   const titleId = useId();
@@ -149,10 +149,10 @@ export function ReadyPanel({
           variant={copyVariant}
           sourceRef={linkRef}
         />
-        {isPill && onOpen !== undefined && (
-          <Button icon="external-link" variant="ghost" size="lg" onPress={onOpen}>
+        {isPill && openHref !== undefined && (
+          <ButtonLink icon="external-link" variant="ghost" size="lg" href={openHref} isExternal>
             {strings.open}
-          </Button>
+          </ButtonLink>
         )}
         {!isPill && canShare && (
           <Button icon="share" size="lg" onPress={share}>

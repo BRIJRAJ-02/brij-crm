@@ -53,14 +53,7 @@ export function ShareBlock({ name, link, children }: ShareBlockProps) {
       });
   };
   return (
-    <ReadyPanel
-      variant="pill"
-      link={link}
-      shareTitle={name}
-      onOpen={() => {
-        window.open(link, '_blank', 'noopener');
-      }}
-    >
+    <ReadyPanel variant="pill" link={link} shareTitle={name} openHref={link}>
       <QrCode ref={codeRef} value={link} label={strings.qrLabel} size="sm">
         <ButtonGroup label={strings.sendLink} layout="row">
           <ButtonLink

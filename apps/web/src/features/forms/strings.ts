@@ -158,6 +158,13 @@ export const strings = {
   liveTitle: 'Your form is live',
   /** The live dialog's one line (T44): the form's own name, then "is live". */
   liveTitleOf: (name: string) => `${name} is live`,
+  /** The live dialog's line on where answers go: "Answers go to People · 1 new field: Budget". */
+  liveFiling: (objectName: string, made: readonly string[]) =>
+    made.length === 0
+      ? `Answers go to ${objectName}.`
+      : `Answers go to ${objectName} · ${made.length === 1 ? '1 new field' : `${String(made.length)} new fields`}: ${made.join(', ')}.`,
+  /** Opens where the live dialog's line is changed (Settings › CRM). */
+  changeFiling: 'Change',
   /** The live dialog's quiet way to the Share tab's embeds. */
   putOnSite: 'Put it on your site',
   qrLabel: 'QR code for the form’s link',
@@ -302,6 +309,8 @@ export const strings = {
   readOnlyTitle: 'You can view this form',
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
+  /** The Share tab's first Card: the form's link (not "Share" again under the Share tab). */
+  linkTitle: 'Link',
   shareTip: 'Opens the form on its own page.',
   link: 'Link',
   copy: 'Copy',

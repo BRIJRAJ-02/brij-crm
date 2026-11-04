@@ -19,7 +19,7 @@ New. Picking In the page, Popup or Corner button was a choice made blind: the ti
 ```
 
 - `mode`: `inline` draws the form's box among the site's lines (its headline unless `isTitleHidden`, two fields and the button in the accent; with `isTransparent` no ground or hairline, so the site's background shows); `popup` draws the site's own button with `words`, plain, since its look is the site's; `floating` draws our corner button at the page's end corner in `colour` and `words`.
-- `colour` is a `#rgb` or `#rrggbb` (anything else draws the accent), set through the CSSOM as `--brand-accent`, as the public pages' previews set theirs.
+- `colour` is a `#rgb` or `#rrggbb` (anything else draws the accent), set through the CSSOM as `--brand-accent`, as the public pages' previews set theirs, with its words in white or ink, whichever reads better (`--brand-on-accent`), as the embed script picks them on the real site.
 - It is one image (`role="img"`, named by `label`); nothing in it takes focus or a press.
 
 ## States

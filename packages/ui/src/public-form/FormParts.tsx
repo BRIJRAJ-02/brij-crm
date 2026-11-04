@@ -84,7 +84,6 @@ export function FormGround({
         data-mode={mode}
         data-frame={kind}
         data-ground={embedLook?.isTransparent === true ? 'none' : undefined}
-        data-head={embedLook?.isTitleHidden === true ? 'none' : undefined}
         {...(isLoading ? { 'aria-busy': true } : {})}
         {...(mode === 'preview' ? { inert: true } : {})}
       >
@@ -183,14 +182,17 @@ export function FormHeader({
   mode,
   heading,
   isSubheadingShown = true,
+  isVisuallyHidden = false,
 }: {
   readonly form: PublicForm;
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
   readonly isSubheadingShown?: boolean;
+  /** Kept for screen readers only: a site's inline embed asked to leave the headline to the site. */
+  readonly isVisuallyHidden?: boolean;
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
-  return (
+  const header = (
     <header className={styles.header}>
       <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
         {form.headline}
@@ -198,6 +200,7 @@ export function FormHeader({
       {isSubheadingShown && form.subheading !== undefined && <p className={styles.subheading}>{form.subheading}</p>}
     </header>
   );
+  return isVisuallyHidden ? <VisuallyHidden>{header}</VisuallyHidden> : header;
 }
 
 /**
@@ -401,6 +404,7 @@ export function ErrorSummary({
 /** A failure that isn't about a question ("That did not go through…"), in one alert line. */
 export function FormAlert({ state }: { readonly state: HostedFormState }) {
   const [isCopied, setCopied] = useState(false);
+  const [isCopyFailed, setCopyFailed] = useState(false);
   return (
     <>
       <p className={styles.alert} role="alert">
@@ -412,13 +416,20 @@ export function FormAlert({ state }: { readonly state: HostedFormState }) {
           <Button
             icon={isCopied ? 'check' : 'copy'}
             onPress={() => {
-              void navigator.clipboard.writeText(state.answersText()).then(() => {
-                setCopied(true);
-              });
+              navigator.clipboard.writeText(state.answersText()).then(
+                () => {
+                  setCopied(true);
+                },
+                // A browser that refuses the clipboard: say so, so nobody leaves thinking their words are kept.
+                () => {
+                  setCopyFailed(true);
+                },
+              );
             }}
           >
             {isCopied ? state.words.copiedLink : state.words.copyAnswers}
           </Button>
+          {isCopyFailed && <span className={styles.alert}>{state.words.copyAnswersFailed}</span>}
         </span>
       )}
     </>

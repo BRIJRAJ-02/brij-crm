@@ -81,7 +81,7 @@ describe('the live dialog after the first publish (AC-6, T44)', () => {
     await expect.element(page.getByRole('group', { name: 'Link' })).toBeVisible();
     await expect.element(page.getByText('apply', { exact: true })).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Copy link/ })).toBeVisible();
-    await expect.element(page.getByRole('button', { name: 'Open' })).toBeVisible();
+    await expect.element(page.getByRole('link', { name: 'Open' })).toBeVisible();
     // The share row: the QR code with PNG and SVG, Email and WhatsApp.
     await expect.element(page.getByRole('img', { name: 'QR code for the form’s link' })).toBeInTheDocument();
     await expect.element(page.getByRole('button', { name: 'PNG' })).toBeVisible();
@@ -97,5 +97,21 @@ describe('the live dialog after the first publish (AC-6, T44)', () => {
     expect(primaries.map((button) => button.getAttribute('aria-label') ?? button.textContent)).toHaveLength(1);
     expect(primaries[0]?.textContent).toContain('Copy link');
     await expect.element(page.getByRole('button', { name: /^Done/ })).toHaveFocus();
+  });
+
+  it('says once what the first publish set up in the CRM, with Change', async () => {
+    shown = await renderInApp(
+      () => (
+        <ReadyDialog
+          slug="acme"
+          form={LIVE}
+          filing={{ objectName: 'People', made: ['Budget'] }}
+          onClose={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/captures/forms/$formId', at: '/w/acme/captures/forms/form-1' },
+    );
+    await expect.element(page.getByText('Answers go to People · 1 new field: Budget.')).toBeVisible();
+    await expect.element(page.getByRole('link', { name: 'Change' })).toBeVisible();
   });
 });

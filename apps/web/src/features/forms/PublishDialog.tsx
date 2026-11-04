@@ -6,7 +6,7 @@
 // Leaves out: the embed code (one quiet row to the Share tab, where it is set up with a preview), the name and
 // where answers go (Settings), and later publishes (a toast is enough).
 import type { FormView } from '@crm/data';
-import { Button, Link, Modal } from '@crm/ui';
+import { Button, Callout, Link, Modal } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { formHref } from './paths.ts';
@@ -20,10 +20,18 @@ export interface ReadyDialogProps {
   /** The form just put live; undefined while the dialog is closed. */
   readonly form: FormView | undefined;
   readonly onClose: () => void;
+  /** What the first publish set up in the CRM: where answers go, and the fields it made for them. */
+  readonly filing?: LiveFiling;
+}
+
+/** Where a first publish files answers (the object's name) and the fields it made for them, by name. */
+export interface LiveFiling {
+  readonly objectName: string;
+  readonly made: readonly string[];
 }
 
 /** "<Form> is live": the link as a pill with Copy, the share row, a quiet way to the embeds, and Done. */
-export function ReadyDialog({ slug, form, onClose }: ReadyDialogProps) {
+export function ReadyDialog({ slug, form, onClose, filing }: ReadyDialogProps) {
   const { data } = useRouteContext({ from: '__root__' });
   // The last form stays while the Modal plays its exit.
   const [last, setLast] = useState(form);
@@ -48,6 +56,19 @@ export function ReadyDialog({ slug, form, onClose }: ReadyDialogProps) {
         </Button>
       }
     >
+      {/* What the publish set up, said once, with the way to change it (5 November 2026: was only a toast). */}
+      {filing !== undefined && filing.objectName !== '' && (
+        <Callout
+          tone="info"
+          actions={
+            <Link href={formHref(slug, live.id, 'settings')} onPress={onClose}>
+              {strings.changeFiling}
+            </Link>
+          }
+        >
+          {strings.liveFiling(filing.objectName, filing.made)}
+        </Callout>
+      )}
       <ShareBlock name={live.name} link={data.forms.hostedUrl(live.publicKey)}>
         <Link href={formHref(slug, live.id, 'share')} onPress={onClose}>
           {strings.putOnSite}

@@ -130,6 +130,11 @@
     content: counter(choice, upper-alpha);
   }
 
+  /* A choice that names its own key (a yes or no's Y and N) shows that one. */
+  .choices[data-variant='letters'] .circle[data-letter]::before {
+    content: attr(data-letter);
+  }
+
   .dot {
     inline-size: var(--space-6);
     block-size: var(--space-6);

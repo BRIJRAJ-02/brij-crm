@@ -39,7 +39,7 @@ New. Nothing in the library showed a finished thing with its link: LinkCard show
 - Motion: the panel eases in on opacity and a `space-8` rise, and the mark pops on opacity and scale, from the modal's duration and curve. Under reduced motion both appear at once, with no fade (spec 0058, AC-2).
 - The caller passes the address it already has; the panel makes no request.
 
-- `variant="pill"` draws the link as one read only pill, fully rounded, the host and path muted and the page's own name strong, with Copy and a quiet Open (`onOpen`) beside it; no label over it (the group is named "Link") and no QR band, because the caller shows its own row of ways to share under it, the QR among them (a form's live dialog and Share tab, T44, 5 November 2026). With neither `title` nor `message` the panel draws no head at all, so a dialog whose title already says "<Form> is live" says it once. Why a variant: the same link row, Copy and address cutting; only the label, the QR band and Share give way.
+- `variant="pill"` draws the link as one read only pill, fully rounded, the host and path muted and the page's own name strong, with Copy and a quiet Open beside it, a real link to `openHref` in a new tab; no label over it (the group is named "Link") and no QR band, because the caller shows its own row of ways to share under it, the QR among them (a form's live dialog and Share tab, T44, 5 November 2026). With neither `title` nor `message` the panel draws no head at all, so a dialog whose title already says "<Form> is live" says it once. Why a variant: the same link row, Copy and address cutting; only the label, the QR band and Share give way.
 
 ## States
 

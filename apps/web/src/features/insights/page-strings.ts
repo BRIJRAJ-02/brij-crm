@@ -7,10 +7,11 @@ export const pageStrings = {
   stopsTable: 'How far people got',
   reached: 'Reached',
   share: 'Of those who started',
+  shareOfViews: 'Of all views',
   lost: 'Stopped here',
   nobodyStopped: 'Everyone who started finished.',
   worstStop: (name: string, stopped: string, reached: string) =>
-    `Most people stop at “${name}”: ${stopped} of the ${reached} who got there.`,
+    `Biggest drop: “${name}”, ${stopped} of the ${reached} who got there.`,
   ofStarted: (reached: string, started: string) => `${reached} of ${started} who started`,
   ofViews: (views: string, total: string) => `${views} of ${total} views`,
   overTime: 'Views over time',

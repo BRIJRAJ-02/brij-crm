@@ -104,6 +104,17 @@ export interface HostedFormSettings {
   readonly onEmailResume?: ((resumeToken: string) => Promise<boolean>) | undefined;
   /** A fill the visitor is coming back to: its answers are already in `prefill`, this is the step they left on. */
   readonly resumedStepId?: string | undefined;
+  /**
+   * In the builder's preview only: the thank you, or an ending by its words, drawn in the form's place while the
+   * owner has it open (5 November 2026). `{}` is the plain thank you.
+   */
+  readonly previewEnding?: PreviewEnding | undefined;
+}
+
+/** What the builder's preview shows in the form's place: an ending's heading and line, or neither for the thank you. */
+export interface PreviewEnding {
+  readonly heading?: string | undefined;
+  readonly line?: string | undefined;
 }
 
 /** What a save sends: the answers so far and the step they are on. */
@@ -332,6 +343,7 @@ export function useHostedForm({
   onEmailResume,
   now,
   onRefused,
+  previewEnding,
 }: HostedFormSettings): {
   readonly state: HostedFormState;
   readonly refs: HostedFormRefs;
@@ -770,7 +782,17 @@ export function useHostedForm({
             },
           },
     isClosed,
-    view,
+    // The builder's open ending stands in for the form in its preview; a visitor's page never has one.
+    view:
+      preview && previewEnding !== undefined
+        ? {
+            kind: 'thanks',
+            text: previewEnding.line ?? '',
+            ...(previewEnding.heading === undefined || previewEnding.heading === ''
+              ? {}
+              : { heading: previewEnding.heading }),
+          }
+        : view,
     round,
     trap,
     setTrap,

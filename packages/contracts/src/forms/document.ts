@@ -15,6 +15,7 @@ import {
   FORM_QUESTIONS_MAX,
   OPTION_KEY,
   QUESTION_KEY,
+  RATING_COUNT,
 } from './answer-types.ts';
 import { stepsOfBreaks, type ResolvedStep } from './breaks.ts';
 import { FORM_ENDINGS_MAX, FORM_LAYOUTS, FORM_LOOK_THEMES, FORM_STEP_TITLE_MAX, STEP_JUMPS_MAX } from './path.ts';
@@ -56,6 +57,13 @@ export const FormQuestionOptions = z.strictObject({
   latest: z.iso.date({ error: 'Give the latest day as a date.' }).optional(),
   from: z.union([z.literal(0), z.literal(1)]).optional(),
   to: z.union([z.literal(5), z.literal(7), z.literal(10)]).optional(),
+  /** A rating's number of stars, 3 to 10; 5 when absent. Its ends' words are `lowLabel` and `highLabel`, as a scale's. */
+  count: z
+    .number()
+    .int()
+    .min(RATING_COUNT.min, { error: 'Use at least 3 stars.' })
+    .max(RATING_COUNT.max, { error: 'Use at most 10 stars.' })
+    .optional(),
   lowLabel: z.string().trim().max(40, { error: 'Keep an end’s words to 40 characters.' }).optional(),
   highLabel: z.string().trim().max(40, { error: 'Keep an end’s words to 40 characters.' }).optional(),
   min: z.number().int().min(1).max(FORM_CHOICES_MAX).optional(),

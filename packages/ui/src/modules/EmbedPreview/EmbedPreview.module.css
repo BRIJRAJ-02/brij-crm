@@ -101,7 +101,7 @@
     border-radius: var(--radius-full);
     background: var(--brand-accent, var(--accent));
     box-shadow: var(--shadow-md);
-    color: var(--on-accent);
+    color: var(--brand-on-accent, var(--on-accent));
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);
     text-overflow: ellipsis;

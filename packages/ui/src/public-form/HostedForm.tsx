@@ -31,6 +31,7 @@ import {
   type HostedSubmission,
   type HostedSubmitOutcome,
   type PrefillValue,
+  type PreviewEnding,
 } from './use-hosted-form.ts';
 
 export { FormLoading, FormMessage } from './FormParts.tsx';
@@ -70,6 +71,8 @@ export interface HostedFormProps {
   readonly resumedStepId?: string | undefined;
   /** The clock, for the fill time (tests pass their own). */
   readonly now?: () => number;
+  /** The builder's preview: the thank you or an ending drawn in the form's place while it is open. */
+  readonly previewEnding?: PreviewEnding | undefined;
   /** The Timefix wordmark under the form; the web app serves these two by default. */
   readonly logo?: ProductLogo;
   /**
@@ -79,7 +82,8 @@ export interface HostedFormProps {
   readonly brand?: PageBrand;
   /**
    * How a site's inline embed asked to draw it (T44's Share tab): `isTransparent` leaves the ground clear so the
-   * site's own background shows, `isTitleHidden` keeps the headline for screen readers only (the site has its own).
+   * site's own background shows, `isTitleHidden` keeps the headline for screen readers only (FormHeader's
+   * `isVisuallyHidden`; the site has its own).
    */
   readonly embedLook?: EmbedLook;
 }
@@ -112,6 +116,7 @@ export function HostedForm({
   onSave,
   onEmailResume,
   now = Date.now,
+  previewEnding,
   logo = TIMEFIX_LOGO,
   brand,
   embedLook,
@@ -130,6 +135,7 @@ export function HostedForm({
     onSave,
     onEmailResume,
     now,
+    previewEnding,
   });
   const { words, preview } = state;
   const loadedBooking = useLoadedBooking();
@@ -165,7 +171,12 @@ export function HostedForm({
   else {
     body = (
       <>
-        <FormHeader form={form} mode={mode} heading={refs.heading} />
+        <FormHeader
+          form={form}
+          mode={mode}
+          heading={refs.heading}
+          isVisuallyHidden={embedLook?.isTitleHidden === true}
+        />
         <VisuallyHidden>
           <span aria-live="polite">{state.shownNote}</span>
         </VisuallyHidden>
@@ -199,7 +210,14 @@ export function HostedForm({
           <div className={styles.actions}>
             <ErrorSummary state={state} />
             <FormAlert state={state} />
-            <Button variant="primary" size="lg" type={preview ? 'button' : 'submit'} isFullWidth="center">
+            <Button
+              variant="primary"
+              size="lg"
+              type={preview ? 'button' : 'submit'}
+              isFullWidth="center"
+              // Closed while they filled it in: nothing more to send, only their answers to keep.
+              isDisabled={state.isClosedMidFill}
+            >
               {state.isSending ? words.sending : form.buttonText}
             </Button>
             <FinishLater state={state} language={form.language} />

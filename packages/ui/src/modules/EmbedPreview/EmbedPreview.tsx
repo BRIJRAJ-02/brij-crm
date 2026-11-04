@@ -1,3 +1,4 @@
+import { contrastRatio } from '@crm/contracts/brand-colour';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { usePageVariables } from '../../lib/page-variables.ts';
 import styles from './EmbedPreview.module.css';
@@ -42,7 +43,21 @@ export function EmbedPreview({
   label,
 }: EmbedPreviewProps) {
   const hex = sixDigits(colour);
-  const variables = usePageVariables(hex === undefined ? undefined : [['--brand-accent', hex]]);
+  // The words on it in whichever of white or ink reads better, as the embed script picks them on the real site.
+  const on =
+    hex === undefined
+      ? undefined
+      : contrastRatio(hex, '#ffffff') >= contrastRatio(hex, '#111318')
+        ? '#ffffff'
+        : '#111318';
+  const variables = usePageVariables(
+    hex === undefined || on === undefined
+      ? undefined
+      : [
+          ['--brand-accent', hex],
+          ['--brand-on-accent', on],
+        ],
+  );
   return (
     <div ref={variables} className={styles.root} role="img" aria-label={label} data-mode={mode}>
       <div className={styles.bar} aria-hidden="true">

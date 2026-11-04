@@ -176,7 +176,7 @@ export function ShareTab({ slug, form, isReadOnly, onFormChange }: ShareTabProps
     <>
       {/* Row 1 (T44, S4): the link, the same block as the live dialog: one pill, Copy, its QR code and the ways to
           send it. */}
-      <Card title={strings.shareTitle}>
+      <Card title={strings.linkTitle}>
         <ShareBlock name={form.name} link={link} />
       </Card>
       {/* Row 2 (b6): how it shows on a site, the made up site beside the choices showing the pick, and the snippet

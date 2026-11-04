@@ -132,6 +132,9 @@ export interface FormStrings {
   readonly enterKey: string;
   /** When a form closes while it is being filled in: keeps what the visitor wrote (forms QA, 5 November 2026). */
   readonly copyAnswers: string;
+  readonly copyAnswersFailed: string;
+  /** One at a time's arrows and place, as a landmark: always the same name. */
+  readonly questionsNav: string;
   /** A yes or no question's two answers, drawn as two choices (critique c, 9). */
   readonly yes: string;
   readonly no: string;
@@ -275,6 +278,8 @@ const EN: FormStrings = {
   pressEnter: 'press',
   enterKey: 'Enter ↵',
   copyAnswers: 'Copy my answers',
+  copyAnswersFailed: 'Couldn’t copy. Select your answers and copy them instead.',
+  questionsNav: 'Questions',
   yes: 'Yes',
   no: 'No',
   previousQuestion: 'Previous question',

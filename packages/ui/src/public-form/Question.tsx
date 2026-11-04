@@ -44,15 +44,11 @@ export function labelOf(question: PublicQuestion, words: FormStrings, read?: (te
 }
 
 /**
- * "(optional)" after an optional question's label; a tick box, a consent or a yes or no is never marked, since blank
+ * "(optional)" after an optional question's label; a tick box or a consent is never marked, since blank
  * is an answer.
  */
 export function asideOf(question: PublicQuestion, words: FormStrings): string | undefined {
-  const marked =
-    question.required ||
-    question.answerType === 'checkbox' ||
-    question.answerType === 'yes_no' ||
-    question.answerType === 'consent';
+  const marked = question.required || question.answerType === 'checkbox' || question.answerType === 'consent';
   return marked ? undefined : words.optional;
 }
 
@@ -68,7 +64,9 @@ export function answerOf(question: PublicQuestion, value: unknown): unknown {
     if (phone === undefined || phone.national.trim() === '') return undefined;
     return { number: toE164(phone.country, phone.national), country: phone.country };
   }
-  if (question.answerType === 'checkbox' || question.answerType === 'yes_no' || question.answerType === 'consent') {
+  // A yes or no is what was picked, or nothing: unpicked is not No.
+  if (question.answerType === 'yes_no') return typeof value === 'boolean' ? value : undefined;
+  if (question.answerType === 'checkbox' || question.answerType === 'consent') {
     return value === true;
   }
   // A date and time is the moment the visitor's own clock reads it as, with their zone (spec 0063).
@@ -224,7 +222,7 @@ export function Question({
       );
     case 'yes_no':
       // Two answers to pick, Yes and No, as a choice is drawn (critique c, 9: a switch read as a setting, not a
-      // question). Nothing picked still sends No, as the switch's off did, so the answer means what it meant.
+      // question), with Y and N as their keys. Nothing picked sends nothing: unpicked is not No.
       return (
         <RadioGroup
           {...labelProps}
@@ -235,8 +233,12 @@ export function Question({
           onChange={(picked) => onChange(picked === 'yes')}
           {...errorProps}
         >
-          <Radio value="yes">{words.yes}</Radio>
-          <Radio value="no">{words.no}</Radio>
+          <Radio value="yes" letter={words.yes.charAt(0).toUpperCase()}>
+            {words.yes}
+          </Radio>
+          <Radio value="no" letter={words.no.charAt(0).toUpperCase()}>
+            {words.no}
+          </Radio>
         </RadioGroup>
       );
     case 'phone': {
@@ -279,7 +281,14 @@ export function Question({
           label={isLabelHidden && aside !== undefined ? `${label} ${aside}` : label}
           value={typeof value === 'number' ? value : null}
           onChange={(next) => onChange(next ?? undefined)}
-          field={{ aside, error, isLabelHidden }}
+          // Its number of stars and its end words (5 November 2026), as a Scale has them.
+          {...(question.options?.count === undefined ? {} : { count: question.options.count })}
+          field={{
+            aside,
+            error,
+            isLabelHidden,
+            ends: { start: question.options?.lowLabel, end: question.options?.highLabel },
+          }}
         />
       );
     case 'scale': {

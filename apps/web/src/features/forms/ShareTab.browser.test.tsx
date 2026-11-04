@@ -75,7 +75,7 @@ describe('the Share tab (AC-11, T44)', () => {
     await draw();
     await expect.element(page.getByRole('group', { name: 'Link' })).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Copy link/ })).toBeVisible();
-    await expect.element(page.getByRole('button', { name: 'Open' })).toBeVisible();
+    await expect.element(page.getByRole('link', { name: 'Open' })).toBeVisible();
     await expect.element(page.getByRole('img', { name: 'QR code for the form’s link' })).toBeInTheDocument();
     await expect.element(page.getByRole('button', { name: 'PNG' })).toBeVisible();
     expect(page.getByRole('link', { name: 'Email' }).element().getAttribute('href')).toMatch(/^mailto:/);

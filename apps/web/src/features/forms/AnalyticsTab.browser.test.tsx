@@ -94,7 +94,7 @@ describe('the Analytics tab (T45)', () => {
     ).toEqual(['Views', 'Starts', 'Finished', 'Completion', 'Median time']);
     await expect.element(figures.getByText('63%')).toBeVisible();
     await expect
-      .element(page.getByText('Most people stop at “What budget do you have in mind?”: 2 of the 7 who got there.'))
+      .element(page.getByText('Biggest drop: “What budget do you have in mind?”, 2 of the 7 who got there.'))
       .toBeVisible();
     // The questions by name, never Q1 to Q3, and a bar per question from five starts.
     const stops = page
@@ -119,7 +119,7 @@ describe('the Analytics tab (T45)', () => {
       ],
       bySource: [{ source: 'direct', views: 2, completions: 1 }],
     });
-    await expect.element(page.getByText('Most people stop at “Your name”: 1 of the 2 who got there.')).toBeVisible();
+    await expect.element(page.getByText('Biggest drop: “Your name”, 1 of the 2 who got there.')).toBeVisible();
     expect(document.querySelectorAll('[role="meter"]')).toHaveLength(0);
     expect(page.getByRole('img').query()).toBeNull();
   });

@@ -5,6 +5,7 @@ import { Field } from '../../molecules/Field/Field.tsx';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
 import { HostedForm } from '../../public-form/HostedForm.tsx';
 import { HostedFormSteps } from '../../public-form/HostedFormSteps.tsx';
+import type { PreviewEnding } from '../../public-form/use-hosted-form.ts';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
 import type { PageBrand } from '../BookingFrame/BookingFrame.tsx';
 import styles from './HostedFormPreview.module.css';
@@ -42,6 +43,11 @@ export interface HostedFormPreviewProps {
    * pressing either opens a small popover by it with its words. The rest stays inert. Left out, nothing is editable.
    */
   readonly onTextChange?: (change: PreviewTextChange) => void;
+  /**
+   * The thank you (`{}`) or an ending (its heading and line), drawn in the form's place while the owner has it
+   * open in the builder (5 November 2026), so the preview shows what the visitor will read after sending.
+   */
+  readonly ending?: PreviewEnding;
 }
 
 /** Where an editable part sits over the ground, in pixels from its corner. */
@@ -58,13 +64,22 @@ interface Spot {
  * in the form's own layout (Classic, Steps or One at a time, spec 0063). It
  * sits on the form's own ground, which fills whatever height it is given.
  */
-export function HostedFormPreview({ form, mode = 'preview', logo, step, brand, onTextChange }: HostedFormPreviewProps) {
+export function HostedFormPreview({
+  form,
+  mode = 'preview',
+  logo,
+  step,
+  brand,
+  onTextChange,
+  ending,
+}: HostedFormPreviewProps) {
   const layout = form.layout ?? 'classic';
   const shared = {
     form,
     mode,
     ...(logo === undefined ? {} : { logo }),
     ...(brand === undefined ? {} : { brand }),
+    ...(ending === undefined || mode !== 'preview' ? {} : { previewEnding: ending }),
   };
   // The ground in the form's own look, so a short form's colour fills the phone to its foot (spec 0058). A change
   // of layout starts the preview again, from its first step.

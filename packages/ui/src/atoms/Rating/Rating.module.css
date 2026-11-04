@@ -81,10 +81,22 @@
   }
 
   /* A form's question (field): the label over the stars, the error under them, as a radio group's question. */
+  /* As wide as its stars, so a form's Rating's end words sit under the two ends of the row. */
   .form {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+    inline-size: fit-content;
+  }
+
+  /* A form's Rating's end words, under the stars at their two ends, as a Scale's are. */
+  .ends {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .error {

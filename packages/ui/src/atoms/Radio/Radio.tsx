@@ -22,16 +22,21 @@ export interface RadioProps {
    */
   readonly preview?: ReactNode;
   readonly isDisabled?: boolean;
+  /**
+   * `letters`: the key that picks this choice and shows in its key, in place of its place letter (A, B, C): a yes or
+   * no's Y and N, Typeform's way. One character.
+   */
+  readonly letter?: string;
 }
 
 /** One choice in a RadioGroup. */
-export function Radio({ value, children, description, icon, preview, isDisabled = false }: RadioProps) {
+export function Radio({ value, children, description, icon, preview, isDisabled = false, letter }: RadioProps) {
   // What sits under the label, read as its description: a card's value, else the line of words.
   const under = preview ?? description;
   return (
     <RadioField className={styles.field} value={value} isDisabled={isDisabled}>
       <RadioButton className={styles.radio}>
-        <span className={styles.circle} aria-hidden="true">
+        <span className={styles.circle} aria-hidden="true" {...(letter === undefined ? {} : { 'data-letter': letter })}>
           <span className={styles.dot} />
         </span>
         <span className={styles.label} data-described={under === undefined ? undefined : ''}>
@@ -92,10 +97,18 @@ function letterAt(event: KeyboardEvent): number {
   return code >= 0 && code < 26 ? code : -1;
 }
 
-/** `letters`: a letter key picks its choice, as a press on it would, and focus follows it. */
+/**
+ * `letters`: a letter key picks its choice, as a press on it would, and focus follows it: the choice that names the
+ * key as its own `letter`, else the one at that place.
+ */
 function pickByLetter(event: KeyboardEvent<HTMLElement>) {
   const at = letterAt(event);
-  const input = at === -1 ? undefined : event.currentTarget.querySelectorAll('input')[at];
+  if (at === -1) return;
+  const named = event.currentTarget
+    .querySelector(`[data-letter="${event.key.toUpperCase()}"]`)
+    ?.parentElement?.querySelector('input');
+  const hasNamed = event.currentTarget.querySelector('[data-letter]') !== null;
+  const input = hasNamed ? (named ?? undefined) : event.currentTarget.querySelectorAll('input')[at];
   if (input === undefined || input.disabled) return;
   event.preventDefault();
   input.focus();
