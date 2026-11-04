@@ -18,6 +18,7 @@ import {
   scoreOf,
   storedContext,
   SubmitBody,
+  zoneCountry,
   type Facts,
   type FormDocument,
   type FormEnding,
@@ -369,6 +370,17 @@ function publicRow(form: FormRow | undefined): FormRow & { liveVersionId: string
   return { ...form, liveVersionId: form.liveVersionId };
 }
 
+/** The workspace's country for a guest form (forms fixes 2): the one it set, else its time zone's. */
+export async function workspaceCountry(tx: WorkspaceTx, workspaceId: string): Promise<string | undefined> {
+  const [row] = (
+    await tx.execute<{ country: string | null; time_zone: string }>(
+      sql`select country, time_zone from workspaces where id = ${workspaceId}::uuid`,
+    )
+  ).rows;
+  if (row === undefined) return undefined;
+  return row.country ?? zoneCountry(row.time_zone);
+}
+
 /** A live form as its hosted page renders it (AC-587, AC-659); a paused one with no questions (AC-662). */
 export async function getPublicForm(
   scope: EngineScope,
@@ -381,13 +393,15 @@ export async function getPublicForm(
     if (live === undefined) throw new Error('A live form names a version that is gone.');
     // Closed by Pause, or by its own closing rule (forms fix b2): either way the page shows the closed message.
     const isClosed = form.status === 'paused' || isClosedByRule(live.document);
+    const country = await workspaceCountry(tx, scope.workspaceId);
     const rendered = publicFormOf(live.document, {
       publicKey: form.publicKey,
       status: isClosed ? 'paused' : 'live',
       versionNumber: live.number,
       ...(input.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: input.recaptchaSiteKey }),
     });
-    return isClosed ? { ...rendered, questions: [] } : rendered;
+    const placed = country === undefined ? rendered : { ...rendered, country };
+    return isClosed ? { ...placed, questions: [] } : placed;
   });
 }
 

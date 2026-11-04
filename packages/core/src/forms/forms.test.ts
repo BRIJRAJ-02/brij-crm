@@ -545,6 +545,18 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect((await getPublicForm(late.scope, { formId: late.formId })).status).toBe('paused');
   });
 
+  it('tells the guest form the workspace’s country: the one it set, else its time zone’s (forms fixes 2)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const visitor = await enterPublicForm({ db }, live.publicKey);
+    await w.query(sql`update workspaces set time_zone = 'UTC', country = null where id = ${w.scope.workspaceId}`);
+    expect((await getPublicForm(visitor.scope, { formId: visitor.formId })).country).toBeUndefined();
+    await w.query(sql`update workspaces set time_zone = 'Asia/Kolkata' where id = ${w.scope.workspaceId}`);
+    expect((await getPublicForm(visitor.scope, { formId: visitor.formId })).country).toBe('IN');
+    await w.query(sql`update workspaces set country = 'GB' where id = ${w.scope.workspaceId}`);
+    expect((await getPublicForm(visitor.scope, { formId: visitor.formId })).country).toBe('GB');
+  });
+
   it('pauses and resumes, archives and restores, duplicates and deletes a form', async () => {
     const w = await workspace();
     const live = await liveForm(w);
