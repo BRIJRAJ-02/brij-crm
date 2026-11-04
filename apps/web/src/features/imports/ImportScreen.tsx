@@ -1244,12 +1244,14 @@ function ColumnsStep({
 }: ColumnsStepProps) {
   // Checked when Continue is pressed, never before (the foolproof pass): until then an unmatched required field is a
   // quiet row with its Match a column, and Continue is always there to press.
-  const [isTried, setTried] = useState(false);
+  // Each press that stops counts, so the rows mount again and focus lands on the first one's Match a column.
+  const [tries, setTried] = useState(0);
+  const isTried = tries > 0;
   const block = columnsBlock(matched, required, isCreating);
   const shownBlock = isTried ? block : undefined;
   const tryContinue = () => {
     if (block !== undefined) {
-      setTried(true);
+      setTried((count) => count + 1);
       return;
     }
     onContinue();
@@ -1311,11 +1313,12 @@ function ColumnsStep({
       {/* Guarded here, not at Start: a required field no column fills would refuse every new row. Quiet until
           Continue is pressed with it unmatched, then an error. */}
       {isCreating &&
-        required.map((attribute) => (
+        required.map((attribute, index) => (
           <Callout
-            key={`required-${attribute.id}`}
+            key={`required-${attribute.id}-${shownBlock === 'required' ? String(tries) : 'quiet'}`}
             tone={requiredTone(shownBlock === 'required')}
-            {...(shownBlock === 'required' ? { isAnnounced: true } : {})}
+            // An error the person caused, with focus already on its way on: said politely (Callout's README).
+            {...(shownBlock === 'required' ? { isPolite: true } : {})}
             {...(choices.some((choice) => choice.attribute.id === attribute.id) && freeColumns.length > 0
               ? {
                   actions: (
@@ -1326,6 +1329,7 @@ function ColumnsStep({
                       size="sm"
                       items={freeColumns}
                       value={null}
+                      autoFocus={shownBlock === 'required' && index === 0}
                       onChange={(id) => {
                         if (id !== null) onTarget(Number(id), { attributeId: attribute.id });
                       }}

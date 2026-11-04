@@ -19,7 +19,7 @@ export const strings = {
   addStageField: 'Add Stage',
   addingStageField: 'Adding Stage…',
   stageTitle: 'Stage',
-  stageFieldAdded: 'Stage added.',
+  stageFieldAdded: (title: string) => `${title} added.`,
   stageFieldFailed: (why: string) => `Couldn’t add Stage. ${why}`,
   /** Past 50 options (AC-494). */
   tooManyTitle: 'Boards show up to 50 columns',

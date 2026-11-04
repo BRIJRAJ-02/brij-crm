@@ -173,9 +173,10 @@ export function BoardScreen(props: BoardScreenProps) {
     if (isAddingStage) return;
     setAddingStage(true);
     try {
+      let made = '';
       for (let attempt = 1; ; attempt += 1) {
         try {
-          await data.attributes.create(slug, stageField(object.id, data.attributes.newId, attempt));
+          made = (await data.attributes.create(slug, stageField(object.id, data.attributes.newId, attempt))).title;
           break;
         } catch (error: unknown) {
           if (!(isDataError(error) && error.code === 'SLUG_TAKEN') || attempt >= 5) throw error;
@@ -183,7 +184,7 @@ export function BoardScreen(props: BoardScreenProps) {
       }
       // Pending until the board is back, so the button never shows enabled beside "added".
       await router.invalidate();
-      toasts.toast({ tone: 'success', message: strings.stageFieldAdded });
+      toasts.toast({ tone: 'success', message: strings.stageFieldAdded(made) });
     } catch (error: unknown) {
       toasts.toast({
         tone: 'danger',
@@ -318,7 +319,8 @@ export function BoardScreen(props: BoardScreenProps) {
                         {isAddingStage ? strings.addingStageField : strings.addStageField}
                       </Button>
                     )}
-                    {showAsTable(!canChangeSchema)}
+                    {/* The page's one primary stays New <record> where there is one. */}
+                    {showAsTable(!canChangeSchema && object.access !== 'write')}
                   </>
                 }
               />
@@ -341,8 +343,8 @@ export function BoardScreen(props: BoardScreenProps) {
                         {restoringId === outcome.id ? strings.restoringGroup : strings.restoreGroup(outcome.title)}
                       </Button>
                     )}
-                    {/* Readers' one way out, so it leads for them. */}
-                    {showAsTable(!canChangeSchema)}
+                    {/* Readers' one way out, so it leads for them (beside no New <record>). */}
+                    {showAsTable(!canChangeSchema && object.access !== 'write')}
                   </>
                 }
               >
@@ -350,7 +352,7 @@ export function BoardScreen(props: BoardScreenProps) {
                 {canChangeSchema ? undefined : strings.groupArchivedTextReader}
               </EmptyState>
             ) : (
-              <EmptyState icon="kanban" title={strings.tooManyTitle} actions={showAsTable(true)}>
+              <EmptyState icon="kanban" title={strings.tooManyTitle} actions={showAsTable(object.access !== 'write')}>
                 {strings.tooManyText(outcome.title, outcome.count.toLocaleString())}
               </EmptyState>
             )}
