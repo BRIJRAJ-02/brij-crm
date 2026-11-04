@@ -307,8 +307,24 @@ function SectionBody({
       : isUnpriced(item)
         ? { badge: strings.noPriceBadge }
         : {}),
-    ...(draft.canEdit
+    ...(!draft.canEdit
       ? {
+          // Run service can still mark a dish sold out from its row (AC-6526), and nothing else.
+          actions: (
+            <MenuTrigger>
+              <Button variant="ghost" icon="ellipsis" label={strings.moreFor(item.name)} />
+              <Menu
+                label={strings.moreFor(item.name)}
+                onAction={() => flipSoldOut(store, slug, item, !item.soldOut, toasts, said)}
+              >
+                <MenuItem id="sold" icon={item.soldOut ? 'circle-check' : 'circle-slash'}>
+                  {item.soldOut ? strings.markAvailable : strings.markSoldOut}
+                </MenuItem>
+              </Menu>
+            </MenuTrigger>
+          ),
+        }
+      : {
           actions: (
             <MenuTrigger>
               <Button variant="ghost" icon="ellipsis" label={strings.moreFor(item.name)} />
@@ -349,8 +365,7 @@ function SectionBody({
               </Menu>
             </MenuTrigger>
           ),
-        }
-      : {}),
+        }),
   }));
   return (
     <>
@@ -449,9 +464,13 @@ function AddDishes({
   const [active, setActive] = useState(-1);
   // "+ Add item" under the block (checklabs'), turning into the search or create field in place.
   const [isAdding, setAdding] = useState(false);
-  // The field takes focus as it replaces the button that opened it.
+  const addButton = useRef<HTMLButtonElement>(null);
+  const wasAdding = useRef(false);
+  // The field takes focus as it replaces the button that opened it, and the button takes it back when the field goes.
   useEffect(() => {
     if (isAdding) anchor.current?.focus();
+    else if (wasAdding.current) addButton.current?.focus();
+    wasAdding.current = isAdding;
   }, [isAdding]);
   const anchor = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const listId = useId();
@@ -499,7 +518,7 @@ function AddDishes({
   };
   if (!isAdding)
     return (
-      <Button variant="ghost" icon="plus" onPress={() => setAdding(true)}>
+      <Button ref={addButton} variant="ghost" icon="plus" onPress={() => setAdding(true)}>
         {strings.addDishButton}
       </Button>
     );
@@ -507,9 +526,6 @@ function AddDishes({
     <>
       <Field
         ref={anchor}
-        onBlur={() => {
-          if (query.trim() === '') setAdding(false);
-        }}
         label={strings.addDish}
         icon="search"
         placeholder={strings.addDishPlaceholder}
@@ -536,13 +552,13 @@ function AddDishes({
             choice.kind === 'place'
               ? {
                   key: choice.item.id,
-                  leading: <Avatar name={choice.item.name} id={choice.item.id} size="xs" isDecorative />,
+                  leading: <DishThumb slug={slug} item={choice.item} size="xs" />,
                   label: choice.item.name,
                   detail: priceLine(choice.item, draft.currency, draft.places[0]?.locale ?? 'en-GB'),
                 }
               : {
                   key: 'create',
-                  leading: <Avatar name={typed} id="create" size="xs" isDecorative />,
+                  leading: <Icon name="plus" size="sm" />,
                   label: strings.createDish(typed),
                 },
           )}
@@ -557,12 +573,20 @@ function AddDishes({
 }
 
 /** A dish row's leading tile: its photo, or a quiet photo mark in its place. */
-export function DishThumb({ slug, item }: { readonly slug: string; readonly item: Dish }) {
+export function DishThumb({
+  slug,
+  item,
+  size = 'sm',
+}: {
+  readonly slug: string;
+  readonly item: Dish;
+  readonly size?: 'xs' | 'sm';
+}) {
   return (
     <Avatar
       name={item.name}
       id={item.id}
-      size="sm"
+      size={size}
       shape="square"
       hue="gray"
       isDecorative

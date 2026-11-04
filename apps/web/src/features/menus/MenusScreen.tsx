@@ -15,6 +15,7 @@ import {
   MenuItem,
   MenuTrigger,
   MenuList,
+  MenuSection,
   Modal,
   PreviewLayout,
   SegmentedControl,
@@ -222,26 +223,40 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
         toasts.toast({ tone: hidden ? 'info' : 'success', message: hidden ? strings.hiddenToast : strings.shownToast });
     });
   const statusText = !isLive ? strings.statusDraft : draft.hidden ? strings.statusHidden : strings.statusLive;
-  // At a phone's width the bar keeps the title, Live or Hidden, More and Publish; the count waits in the review.
-  // The menu being edited, picked in the header (checklabs' editor names its menu there); New menu at the list's foot.
+  // The menu being edited, picked in the header beside the title (checklabs' editor names its menu there): the menus
+  // to choose from, then New menu as an action of its own (a menu, as the saved view switcher, not a listbox value).
   const picker =
     current === undefined ? null : (
-      <Select
-        label={strings.menuPicker}
-        isLabelHidden
-        variant="inline"
-        items={[
-          ...menus.map((menu) => ({ id: menu.id, label: menu.name })),
-          ...(draft.canEdit && draft.menus.length < 30
-            ? [{ id: 'new', label: strings.newMenu, icon: 'plus' as const, isApart: true }]
-            : []),
-        ]}
-        value={current.id}
-        onChange={(id) => {
-          if (id === 'new') newMenu();
-          else if (id !== null) go({ menu: id });
-        }}
-      />
+      <MenuTrigger>
+        <Button variant="ghost" iconRight="chevron-down" label={strings.menuPicker}>
+          {current.name}
+        </Button>
+        <Menu label={strings.menuPicker} onAction={(key) => (key === 'new' ? newMenu() : undefined)}>
+          <MenuSection
+            label={strings.menuList}
+            isLabelHidden
+            selectionMode="single"
+            selectedKeys={[current.id]}
+            onSelectionChange={(keys) => {
+              const [id] = [...keys];
+              if (id !== undefined && id !== current.id) go({ menu: String(id) });
+            }}
+          >
+            {menus.map((menu) => (
+              <MenuItem key={menu.id} id={menu.id}>
+                {menu.name}
+              </MenuItem>
+            ))}
+          </MenuSection>
+          {draft.canEdit && draft.menus.length < 30 ? (
+            <MenuSection label={strings.newMenu} isLabelHidden>
+              <MenuItem id="new" icon="plus">
+                {strings.newMenu}
+              </MenuItem>
+            </MenuSection>
+          ) : null}
+        </Menu>
+      </MenuTrigger>
     );
   const status =
     isLive && draft.canEdit ? (
@@ -454,15 +469,22 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   {strings.emptyMenusLine}
                 </EmptyState>
               ) : tab === 'settings' ? (
-                <SettingsTab
-                  store={store}
-                  slug={slug}
-                  draft={draft}
-                  menuId={current.id}
-                  {...(placeHours === undefined ? {} : { placeHours })}
-                  onOpen={setOpen}
-                  said={said}
-                />
+                <>
+                  <span>
+                    <Button variant="ghost" icon="arrow-left" onPress={() => go({ tab: 'structure' })}>
+                      {strings.backToMenu}
+                    </Button>
+                  </span>
+                  <SettingsTab
+                    store={store}
+                    slug={slug}
+                    draft={draft}
+                    menuId={current.id}
+                    {...(placeHours === undefined ? {} : { placeHours })}
+                    onOpen={setOpen}
+                    said={said}
+                  />
+                </>
               ) : (
                 <Tabs
                   label={strings.menuSettings}
