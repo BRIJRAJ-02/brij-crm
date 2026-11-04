@@ -125,7 +125,6 @@ export function MenuList({
   const isUnavailable = menu.hidden === true;
   const reservePath =
     menu.reservePath !== undefined && /^\/r\/[A-Za-z0-9_-]{16}$/.test(menu.reservePath) ? menu.reservePath : undefined;
-  const phoneHref = menu.place.phone === undefined ? undefined : `tel:${menu.place.phone.replace(/[^0-9+]/g, '')}`;
   const { place, business } = menu;
   const { currency } = menu.menu;
   const locale = place.locale;
@@ -372,18 +371,12 @@ export function MenuList({
                   <Icon name="utensils" />
                 </span>
                 <h2 className={styles.unavailableTitle}>{strings.unavailable}</h2>
-                {reservePath !== undefined || phoneHref !== undefined ? (
+                {/* Call is the phone line in the header above, never a second button here. */}
+                {reservePath !== undefined ? (
                   <div className={styles.unavailableActions}>
-                    {reservePath === undefined ? null : (
-                      <ButtonLink href={reservePath} variant="primary" icon="calendar-check">
-                        {strings.reserve}
-                      </ButtonLink>
-                    )}
-                    {phoneHref === undefined || place.phone === undefined ? null : (
-                      <ButtonLink href={phoneHref} icon="phone" label={strings.call(place.phone)}>
-                        {strings.callShort}
-                      </ButtonLink>
-                    )}
+                    <ButtonLink href={reservePath} variant="primary" icon="calendar-check">
+                      {strings.reserve}
+                    </ButtonLink>
                   </div>
                 ) : (
                   <p>{strings.unavailableLater}</p>

@@ -62,5 +62,4 @@ export const strings = {
   unavailable: 'This menu isn’t available right now',
   unavailableLater: 'Please check back soon.',
   reserve: 'Reserve a table',
-  callShort: 'Call',
 } as const;
