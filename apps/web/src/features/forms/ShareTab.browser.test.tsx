@@ -71,14 +71,19 @@ async function draw() {
 }
 
 describe('the Share tab (AC-11, T44)', () => {
-  it('leads with the block the live dialog uses, under a heading: the QR code, Copy link and the ways to send it', async () => {
+  it('leads with the block the live dialog uses, under a heading: Copy link, the ways to send it and the QR code beside them', async () => {
     await draw();
     await expect.element(page.getByRole('heading', { name: 'Share the link' })).toBeVisible();
     await expect.element(page.getByRole('group', { name: 'Link' })).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Copy link/ })).toBeVisible();
     await expect.element(page.getByRole('img', { name: 'QR code for the form’s link' })).toBeInTheDocument();
-    await expect.element(page.getByRole('button', { name: /^QR code/ })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /^Download QR code/ })).toBeVisible();
     expect(page.getByRole('link', { name: 'Email' }).element().getAttribute('href')).toMatch(/^mailto:/);
+    // On a wide card the code sits beside the link, at the card's right edge, not under it.
+    const field = page.getByRole('group', { name: 'Link' }).element().getBoundingClientRect();
+    const code = page.getByRole('img', { name: 'QR code for the form’s link' }).element().getBoundingClientRect();
+    expect(code.left).toBeGreaterThan(field.right);
+    expect(code.top).toBeLessThan(field.bottom);
   });
 
   it('offers the three ways as tiles, the made up site and the snippet following the one picked', async () => {
@@ -86,6 +91,20 @@ describe('the Share tab (AC-11, T44)', () => {
     const tiles = page.getByRole('radiogroup', { name: 'How it shows' });
     await expect.element(tiles.getByRole('radio', { name: 'In the page' })).toBeChecked();
     expect(tiles.getByRole('radio').all()).toHaveLength(3);
+    // The three stack as a column, their switches under them, the made up site beside the column.
+    const boxes = tiles
+      .getByRole('radio')
+      .all()
+      .map((radio) => radio.element().closest('label')?.getBoundingClientRect());
+    const [first, second] = boxes;
+    expect(first !== undefined && second !== undefined && second.top >= first.bottom).toBe(true);
+    const site = page.getByRole('img', { name: 'How the form sits on your site' }).element().getBoundingClientRect();
+    const switchBox = page
+      .getByRole('switch', { name: /Clear background/ })
+      .element()
+      .getBoundingClientRect();
+    expect(site.left).toBeGreaterThan(tiles.element().getBoundingClientRect().right);
+    expect(switchBox.top).toBeGreaterThan(tiles.element().getBoundingClientRect().bottom);
     await expect.element(page.getByRole('img', { name: 'How the form sits on your site' })).toBeVisible();
     expect(snippetCode()).not.toContain('data-timefix-mode');
 

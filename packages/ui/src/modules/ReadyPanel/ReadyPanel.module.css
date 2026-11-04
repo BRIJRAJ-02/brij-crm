@@ -109,19 +109,28 @@
     flex: none;
   }
 
-  /* Share (a form's live dialog and its Share tab, 5 November 2026): one narrow centred column, as a share dialog
-     is drawn. The QR code first, centred; the address and Copy link at the control height, one radius; then one row
-     of equal buttons; then the onward row. The panel is the size container its rows answer to. */
+  /* Share (a form's live dialog and its Share tab, the owner, 5 November 2026: "this can be better"): the link is the
+     hero, its address and Copy link at the input's height; under it one tidy row of ways to send it; the QR code sits
+     beside them on a light tile of its own with its download right under it. Two columns where the panel is wide
+     (the Share tab's card), one where it is narrow (the live dialog, a phone), the code then a row of its own at the
+     foot with its download beside it. On a card the code sits on the card's right edge, as the site preview under
+     it does, so the two cards share their edges. The panel is the size container. */
   .root[data-variant='share'] {
     container-type: inline-size;
     inline-size: 100%;
-    max-inline-size: var(--size-page-card);
-    margin-inline: auto;
   }
 
-  .hero {
+  .body {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    gap: var(--space-16);
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    min-inline-size: 0;
   }
 
   .root[data-variant='share'] .link {
@@ -130,7 +139,6 @@
 
   .root[data-variant='share'] .address {
     flex: 1 1 auto;
-    block-size: var(--size-control);
   }
 
   .root[data-variant='share'] .addressStart {
@@ -142,26 +150,77 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  /* The ways to pass it on: one row of equal buttons, each the row's share; two to a row only where four would
-     cut their words (a dialog on a phone with a share sheet). Three always keep one row. */
+  /* The ways to pass it on: one row of equal buttons, each as wide as the widest word needs, from the left edge. */
   .ways {
     display: grid;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
     gap: var(--space-8);
+    inline-size: fit-content;
+    max-inline-size: 100%;
   }
 
-  @container (inline-size < 480px) {
-    .ways:has(> :nth-child(4)) {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-auto-flow: row;
+  /* The code and its download. Narrow: a row, the tile then Download beside it at the tile's foot. */
+  .code {
+    display: flex;
+    gap: var(--space-12);
+    align-items: flex-end;
+  }
+
+  /* A quiet light tile, the code's quiet zone and a little more inside it, in either theme: scanners want dark on
+     light. The tile carries the light theme's tokens. In a light app it is the surface with a hairline; in a dark one
+     the light theme's sunken grey-blue, softer than white beside dark surfaces and still about 15 to 1 against the
+     modules, at a small size so it reads as a code card rather than a slab. */
+  .tile {
+    display: flex;
+    flex: none;
+    box-sizing: border-box;
+    padding: var(--space-4);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+  }
+
+  :root[data-theme='dark'] .tile {
+    border-color: transparent;
+    background: var(--surface-sunken);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .tile {
+      border-color: transparent;
+      background: var(--surface-sunken);
     }
   }
 
-  /* Narrower still (a card on a phone): one button a row, each the column's width, as a dialog's footer stacks. */
+  /* Wide (the Share tab's card): the link and the ways on the left, from the top, so the link starts right under the
+     card's title as every card's first line does; the code on the right with its download under it, centred on the
+     tile. */
+  @container (inline-size >= 480px) {
+    .body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--space-24);
+      align-items: start;
+    }
+
+    .code {
+      flex-direction: column;
+      gap: var(--space-4);
+      align-items: center;
+    }
+  }
+
+  /* Narrow (a card on a phone): the ways take the column's width, equal; three still fit one row. */
+  @container (inline-size < 480px) {
+    .ways {
+      inline-size: auto;
+    }
+  }
+
+  /* Narrower still: one button a row, each the column's width, as a dialog's footer stacks. */
   @container (inline-size < 320px) {
-    .ways,
-    .ways:has(> :nth-child(4)) {
+    .ways {
       grid-template-columns: minmax(0, 1fr);
       grid-auto-flow: row;
     }
@@ -305,6 +364,7 @@
   @media (forced-colors: active) {
     .onward,
     .address,
+    .tile,
     .preview {
       border-color: CanvasText;
     }
