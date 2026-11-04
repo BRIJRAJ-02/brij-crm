@@ -2148,7 +2148,10 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
       to_char(l.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at
     from form_submission_records l
     join forms f on f.workspace_id = l.workspace_id
-      and f.id = (select s.form_id from form_submissions s where s.workspace_id = l.workspace_id and s.id = l.submission_id)
+      and f.id = (
+        select s.form_id from form_submissions s
+        where s.workspace_id = l.workspace_id and s.id = l.submission_id and s.deleted_at is null
+      )
     where l.record_id = $1::uuid
       and true and true
     order by l.created_at desc, ('submission:' || l.submission_id::text || ':' || l.role) collate "C"
