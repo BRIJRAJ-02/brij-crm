@@ -2362,6 +2362,11 @@ export function createDataLayer({
   followBookings(router, (workspace) => {
     refreshBookings(workspace);
   });
+  // The same event may bring a new booking for this member: Bookings' "New booking" toast reads its notices (B-12),
+  // coalesced with the host's `notifications` event from the same write into one read.
+  router.on('bookings', (workspace) => {
+    bookingArrivals.changed(workspace);
+  });
   /**
    * A member's booking write under a mutation id this tab knows (B-17): its `bookings` echo (and, for a booking made
    * here, its person's `records` echo, `echoes`) is skipped, since each such write reads every held Bookings view
@@ -2440,7 +2445,7 @@ export function createDataLayer({
     void namesMe(workspace, event.memberIds).then((named) => {
       if (!named) return;
       unreadCounts.refresh(workspace);
-      // A guest's booking tells its host here (B-12): Bookings' "New booking" toast, and its lists read again.
+      // A guest's booking tells its host here (B-12): Bookings' "New booking" toast (the lists read on `bookings`).
       bookingArrivals.changed(workspace);
       void inbox?.then((store) => {
         store.changed(workspace, event);
@@ -2812,9 +2817,7 @@ export function createDataLayer({
         )
         .then((page) => page.items),
     watch,
-    refresh: (workspace) => {
-      refreshBookings(workspace);
-    },
+    // No `refresh`: the same write's `bookings` event reads the held lists in place (`followBookings`), once.
   });
   /** A booking or a calendar changed: every held Bookings read of the workspace reads again. */
   const reloadBookings = (workspace: string) => {

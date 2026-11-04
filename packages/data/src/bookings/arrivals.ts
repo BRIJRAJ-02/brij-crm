@@ -1,7 +1,7 @@
 // New bookings as they arrive (bookings fix lane O, B-12): what the Bookings screens' "New booking" toast hears. A
 // guest's booking writes a `booking` notification for each host in the booking's own write (migration 0179), and that
 // write's `notifications` change event names the host, so this needs no event of its own: on each such event naming
-// the member (and on a `bookings` event, once the server sends one), it reads the member's unread booking notices
+// the member (and on each `bookings` event), it reads the member's unread booking notices
 // and hands on each one made after the newest it already knew (a watermark on `createdAt`, with the ids made at that
 // very moment, so a tie is never told twice). The first read after a listener starts only learns the watermark, so
 // opening Bookings never toasts old news, and an older notice coming into view (a newer one marked read elsewhere)
@@ -28,8 +28,11 @@ export interface ArrivalsDeps {
   readonly read: (workspace: string) => Promise<readonly NotificationView[]>;
   /** Listens to the workspace's change events while someone listens here; the answer stops. */
   readonly watch: (workspace: string) => () => void;
-  /** Bookings' held reads read again, so the lists show the new booking with the toast. */
-  readonly refresh: (workspace: string) => void;
+  /**
+   * Bookings' held reads read again, so the lists show the new booking with the toast. Left out where the `bookings`
+   * change event already reads them in place (`bookings/live.ts`), so a new booking never reads them twice.
+   */
+  readonly refresh?: (workspace: string) => void;
   /** The timer, for tests. */
   readonly later?: (work: () => void, ms: number) => () => void;
 }
@@ -105,7 +108,7 @@ export function createBookingArrivals(deps: ArrivalsDeps): BookingArrivals {
             ]),
           };
           if (first || fresh.length === 0) return;
-          deps.refresh(workspace);
+          deps.refresh?.(workspace);
           // Oldest first, so two that came together toast in the order they were made.
           for (const view of [...fresh].reverse()) {
             const arrival = arrivalOf(view);
