@@ -6,9 +6,27 @@
 // Leaves out: everything a visitor meets (the words, what happens after they send, the look), on the Form tab beside
 // the preview; each question's filing (set on the question).
 import type { FormDocument, FormTargetChoices, FormView, MemberSummary, ObjectSummary } from '@crm/data';
-import { CONFIRMATION_LINE_MAX, CONFIRMATION_SUBJECT_MAX, FORM_SLUG } from '@crm/data/forms';
+import {
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+  FORM_SLUG,
+} from '@crm/data/forms';
+import { closingKind, dayOfClosing, closingOnDay, type ClosingKind } from './closing.ts';
 import { useCaptureList } from '@crm/data/react';
-import { Avatar, ButtonLink, CopyButton, Field, InfoTip, Select, SettingsRow, SettingsStack, Switch } from '@crm/ui';
+import {
+  Avatar,
+  ButtonLink,
+  CopyButton,
+  DatePicker,
+  Field,
+  InfoTip,
+  Select,
+  SettingsRow,
+  SettingsStack,
+  Switch,
+} from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { formHref } from './paths.ts';
@@ -208,6 +226,15 @@ export interface SettingsTabProps {
   readonly onDraftChange: (change: (before: FormDocument) => FormDocument) => void;
 }
 
+/** What Closes › After a number of answers starts at. */
+const DEFAULT_CLOSE_AFTER = 100;
+
+/** A week from today, `YYYY-MM-DD`, where Closes › On a date starts. */
+const nextWeek = () => {
+  const at = new Date(Date.now() + 7 * 86_400_000);
+  return `${String(at.getFullYear())}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
+};
+
 /** The answers saved nowhere but the form's Submissions: Save answers to's first choice. */
 const KEEP_ONLY = 'submissions-only';
 
@@ -310,6 +337,7 @@ export function SettingsTab({
   const isPublished = form.liveVersionNumber !== undefined;
   const hasEmailQuestion = draft.questions.some((question) => question.answerType === 'email');
   const copyOn = draft.confirmation?.on === true;
+  const closing = closingKind(draft.closing);
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
   const ownerIsTold =
     isFiling &&
@@ -513,6 +541,80 @@ export function SettingsTab({
           />
         </SettingsRow>
       )}
+      {/* When it stops by itself (forms fix b2): never, on a day, or after a number of answers; and what it says. */}
+      <SettingsRow title={strings.closesRow} meta={tip(strings.closesRow, strings.closesHelp)} control="field">
+        <Select
+          label={strings.closesRow}
+          isLabelHidden
+          savesOnPick
+          items={[
+            { id: 'never', label: strings.closesNever },
+            { id: 'date', label: strings.closesOnDate },
+            { id: 'count', label: strings.closesAfterCount },
+          ]}
+          value={closing}
+          isReadOnly={isReadOnly}
+          onChange={(id) => {
+            if (id === null || id === closing) return;
+            const kind = id as ClosingKind;
+            onDraftChange((before) => {
+              const { closing: _was, ...rest } = before;
+              if (kind === 'never') return rest;
+              return {
+                ...rest,
+                closing: kind === 'date' ? { at: closingOnDay(nextWeek()) } : { after: DEFAULT_CLOSE_AFTER },
+              };
+            });
+          }}
+        />
+      </SettingsRow>
+      {closing === 'date' && (
+        <SettingsRow title={strings.closesDay} control="field">
+          <DatePicker
+            label={strings.closesDay}
+            isLabelHidden
+            value={dayOfClosing(draft.closing?.at)}
+            isReadOnly={isReadOnly}
+            onChange={(day) => {
+              if (day === null) return;
+              onDraftChange((before) => ({ ...before, closing: { at: closingOnDay(day) } }));
+            }}
+          />
+        </SettingsRow>
+      )}
+      {closing === 'count' && (
+        <SettingsRow title={strings.closesCount} control="field">
+          <Field
+            label={strings.closesCount}
+            isLabelHidden
+            inputMode="numeric"
+            value={String(draft.closing?.after ?? DEFAULT_CLOSE_AFTER)}
+            isReadOnly={isReadOnly}
+            onChange={(text) => {
+              const n = Number.parseInt(text.replace(/\D/g, ''), 10);
+              if (!Number.isFinite(n)) return;
+              const after = Math.min(Math.max(n, 1), CLOSE_AFTER_MAX);
+              onDraftChange((before) => ({ ...before, closing: { after } }));
+            }}
+          />
+        </SettingsRow>
+      )}
+      <SettingsRow title={strings.closedMessageRow} control="field">
+        <Field
+          label={strings.closedMessageRow}
+          isLabelHidden
+          value={draft.closedMessage ?? ''}
+          placeholder={strings.closedMessageDefault}
+          maxLength={CLOSED_MESSAGE_MAX}
+          isReadOnly={isReadOnly}
+          onChange={(text) => {
+            onDraftChange((before) => {
+              const { closedMessage: _was, ...rest } = before;
+              return text.trim() === '' ? rest : { ...rest, closedMessage: text };
+            });
+          }}
+        />
+      </SettingsRow>
       {isPublished && (
         <SettingsRow title={strings.spamRow} meta={tip(strings.spamRow, strings.spamSummary)}>
           <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">

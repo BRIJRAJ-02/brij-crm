@@ -502,6 +502,32 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     ]);
   });
 
+  it('closes by itself after a number of answers, or on its day, with its own message (forms fix b2)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, (document) => ({
+      ...document,
+      closing: { after: 1 },
+      closedMessage: 'Sign ups are full. See you next year.',
+    }));
+    const visitor = await enterPublicForm({ db }, live.publicKey);
+    expect((await getPublicForm(visitor.scope, { formId: visitor.formId })).status).toBe('live');
+    const first = body({ name: 'Ada', email: 'ada@example.com' });
+    await submit(live.publicKey, first);
+    expect(await getPublicForm(visitor.scope, { formId: visitor.formId })).toMatchObject({
+      status: 'paused',
+      questions: [],
+      closedMessage: 'Sign ups are full. See you next year.',
+    });
+    expect(await refusalOf(submit(live.publicKey, body({ email: 'grace@example.com' })))).toMatchObject([
+      { code: 'FORM_CLOSED' },
+    ]);
+    // The first send, retried, still gets its answer: it landed before the form closed.
+    await submit(live.publicKey, first);
+    const past = await liveForm(w, (document) => ({ ...document, closing: { at: '2020-01-01T00:00:00.000Z' } }));
+    const late = await enterPublicForm({ db }, past.publicKey);
+    expect((await getPublicForm(late.scope, { formId: late.formId })).status).toBe('paused');
+  });
+
   it('pauses and resumes, archives and restores, duplicates and deletes a form', async () => {
     const w = await workspace();
     const live = await liveForm(w);

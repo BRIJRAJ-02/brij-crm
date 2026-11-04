@@ -8,6 +8,7 @@
 import {
   BOOKING_COUNTDOWN,
   checkAnswers,
+  closedByRule,
   FREE_TIME_LIMIT_MS,
   NO_FREE_TIME_MESSAGE,
   RoutingStep,
@@ -341,6 +342,32 @@ export async function handoffSubmission(
 /** What a form that isn't taking enquiries answers at its link (AC-549, AC-662). */
 export const FORM_CLOSED_MESSAGE = 'This form isn’t taking enquiries right now.';
 
+/**
+ * Whether a live form's own closing rule has closed it (forms fix b2): its moment has passed, or it holds as many
+ * answers (spam left out) as it closes after. Counts only when the rule names a number, and stops at that number.
+ */
+async function isClosedByRule(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
+  const closing = document.closing;
+  if (closing === undefined) return false;
+  const now = new Date();
+  if (closedByRule(document, { now, answers: 0 })) return true;
+  if (closing.after === undefined) return false;
+  const counted = await tx.execute<{ n: number }>(sql`
+    select count(*)::int as n from (
+      select 1 from form_submissions where form_id = ${formId}::uuid and state <> 'spam' limit ${closing.after}
+    ) kept
+  `);
+  return closedByRule(document, { now, answers: counted.rows[0]?.n ?? 0 });
+}
+
+/** Whether this send's idempotency key already stored a submission on the form (a retry, answered as before). */
+async function alreadySent(tx: WorkspaceTx, formId: string, body: SubmitBody): Promise<boolean> {
+  const found = await tx.execute(sql`
+    select 1 from form_submissions where form_id = ${formId}::uuid and idempotency_key = ${body.idempotencyKey} limit 1
+  `);
+  return found.rows.length > 0;
+}
+
 /** Refuses (a programming error) any scope but the one the form's own public key made. */
 function checkPublicScope(scope: EngineScope, formId: string): void {
   const { principal } = scope.access;
@@ -367,13 +394,15 @@ export async function getPublicForm(
     const form = publicRow(await loadForm(tx, input.formId));
     const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
     if (live === undefined) throw new Error('A live form names a version that is gone.');
+    // Closed by Pause, or by its own closing rule (forms fix b2): either way the page shows the closed message.
+    const isClosed = form.status === 'paused' || (await isClosedByRule(tx, form.id, live.document));
     const rendered = publicFormOf(live.document, {
       publicKey: form.publicKey,
-      status: form.status === 'paused' ? 'paused' : 'live',
+      status: isClosed ? 'paused' : 'live',
       versionNumber: live.number,
       ...(input.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: input.recaptchaSiteKey }),
     });
-    return form.status === 'paused' ? { ...rendered, questions: [] } : rendered;
+    return isClosed ? { ...rendered, questions: [] } : rendered;
   });
 }
 
@@ -547,6 +576,11 @@ export async function submitForm(
       if (form.status !== 'live') throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
       const current = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
       if (current === undefined) throw new Error('A live form names a version that is gone.');
+      // Its own closing rule, against the live version (forms fix b2). The idempotent replay below answers a send
+      // that landed before it closed, so a retried send still gets its answer.
+      if ((await isClosedByRule(tx, form.id, current.document)) && !(await alreadySent(tx, form.id, body))) {
+        throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
+      }
       // The version the visitor filled in (AC-6302): a form published again while they filled it in is checked,
       // filed and routed as the version they saw, as long as that version was published on this form. An unknown
       // number, or none (a site's own form), is checked against the live one.

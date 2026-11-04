@@ -407,6 +407,9 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
     language: document.language,
     look: document.look,
     questions: document.questions.map((question) => publicQuestionOf(question, readsScore(document))),
+    ...(document.closedMessage === undefined || document.closedMessage === ''
+      ? {}
+      : { closedMessage: document.closedMessage }),
     ...layoutOf(document),
     ...((document.endings ?? []).length === 0
       ? {}

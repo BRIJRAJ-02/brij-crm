@@ -288,7 +288,7 @@ export function FormClosed({
   const Heading = mode === 'page' ? 'h1' : 'h2';
   return (
     <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
-      {state.words.closed}
+      {state.closedLine}
     </Heading>
   );
 }

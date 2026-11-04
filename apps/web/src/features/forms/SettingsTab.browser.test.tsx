@@ -229,6 +229,7 @@ function Editor({ initial }: { readonly initial: FormView }) {
           const next = change(form.draft);
           deals.push(next.targets.deal?.objectId);
           copies.push(next.confirmation?.on);
+          closings.push(next.closing);
           setForm({ ...form, draft: next });
         }}
       />
@@ -242,6 +243,7 @@ const retargets: (string | null)[] = [];
 const statuses: string[] = [];
 const deals: (string | undefined)[] = [];
 const copies: (boolean | undefined)[] = [];
+const closings: FormDocument['closing'][] = [];
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -254,6 +256,7 @@ afterEach(() => {
   statuses.length = 0;
   deals.length = 0;
   copies.length = 0;
+  closings.length = 0;
 });
 
 async function show(
@@ -450,6 +453,17 @@ describe('Settings as plain rows (T21)', () => {
       .element(page.getByRole('textbox', { name: 'Subject' }))
       .toHaveAttribute('placeholder', 'We got your message');
     await expect.element(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
+  });
+
+  it('closes after a number of answers, chosen from Closes (forms fix b2)', async () => {
+    await show(formView({}), []);
+    const closes = page.getByRole('button', { name: /Closes$/ }).last();
+    await expect.element(closes).toHaveTextContent('Never');
+    await closes.click();
+    await page.getByRole('listbox').getByRole('option', { name: 'After a number of answers' }).click();
+    expect(closings).toEqual([{ after: 100 }]);
+    await expect.element(page.getByRole('textbox', { name: 'Number of answers' })).toHaveValue('100');
+    await expect.element(page.getByRole('textbox', { name: 'Message when closed' })).toBeVisible();
   });
 
   it('closes and opens the form from Accepting submissions', async () => {

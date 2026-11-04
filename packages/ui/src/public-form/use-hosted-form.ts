@@ -167,6 +167,8 @@ export interface HostedFormState {
   /** The page's file calls for a file question, where it has them (never in a preview). */
   readonly files: HostedFileHandlers | undefined;
   readonly isClosed: boolean;
+  /** What a closed form says: the owner's own words (forms fix b2), else the language's line. */
+  readonly closedLine: string;
   readonly view: HostedFormView;
   readonly round: number;
   readonly trap: string;
@@ -705,6 +707,7 @@ export function useHostedForm({
             },
           },
     isClosed,
+    closedLine: form.closedMessage ?? words.closed,
     view,
     round,
     trap,

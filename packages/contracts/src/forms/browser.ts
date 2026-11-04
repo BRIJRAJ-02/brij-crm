@@ -33,7 +33,12 @@ export type {
   SubmitResult,
 } from './public.ts';
 export type { SubmissionContext, SubmitContext } from './context.ts';
-export { CONFIRMATION_LINE_MAX, CONFIRMATION_SUBJECT_MAX } from './confirmation.ts';
+export {
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+} from './confirmation.ts';
 // The template gallery's shapes (spec 0063, AC-6323), as types only: the tile's preview is drawn by a library
 // component, and the ids and the Zod schemas stay out of the hosted page's bundle.
 export type { FormTemplateId, FormTemplatePreview, FormTemplatePreviewRow, FormTemplateSummary } from './templates.ts';

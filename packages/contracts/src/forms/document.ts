@@ -21,7 +21,12 @@ import { FORM_ENDINGS_MAX, FORM_LAYOUTS, FORM_LOOK_THEMES, FORM_STEP_TITLE_MAX, 
 import { POINTS_LIMIT, SCORED_TYPES } from './score.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
-import { CONFIRMATION_LINE_MAX, CONFIRMATION_SUBJECT_MAX } from './confirmation.ts';
+import {
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+} from './confirmation.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 
 /** A question's id inside its document: stable across versions, never shown. */
@@ -297,7 +302,12 @@ export const FormSpam = z.strictObject({
 /** The bot checks' settings. */
 export type FormSpam = z.infer<typeof FormSpam>;
 
-export { CONFIRMATION_LINE_MAX, CONFIRMATION_SUBJECT_MAX } from './confirmation.ts';
+export {
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+} from './confirmation.ts';
 
 /**
  * The visitor's confirmation email (spec 0063, AC-6318): off by default. When
@@ -396,6 +406,27 @@ export const FormDocument = z
      * time, off for Classic until it grows past `SAVE_PROGRESS_CLASSIC_MIN` questions.
      */
     saveProgress: z.boolean().optional(),
+    /**
+     * When it stops taking answers by itself (forms fix b2, 5 November 2026): at a moment, after a number of
+     * answers (spam left out), or both, whichever comes first. Absent: only Pause closes it.
+     */
+    closing: z
+      .strictObject({
+        at: z.iso.datetime({ offset: true }).optional(),
+        after: z
+          .number()
+          .int({ error: 'Give a whole number of answers.' })
+          .min(1, { error: 'Close after at least one answer.' })
+          .max(CLOSE_AFTER_MAX)
+          .optional(),
+      })
+      .optional(),
+    /** What a closed form (paused, or past `closing`) says to a visitor; the language's own line when absent. */
+    closedMessage: z
+      .string()
+      .trim()
+      .max(CLOSED_MESSAGE_MAX, { error: `Keep the message to ${String(CLOSED_MESSAGE_MAX)} characters.` })
+      .optional(),
   })
   .superRefine((document, context) => {
     if (document.targets.deal !== undefined && document.targets.main === undefined) {
@@ -639,4 +670,18 @@ export function savesProgress(document: Pick<FormDocument, 'layout' | 'questions
   if (document.saveProgress !== undefined) return document.saveProgress;
   if (document.layout !== 'classic') return true;
   return document.questions.length > SAVE_PROGRESS_CLASSIC_MIN;
+}
+
+/**
+ * Whether a form's own closing rule has closed it (forms fix b2): its moment has passed, or it holds as many
+ * answers as it closes after. `answers` is the form's count of stored submissions, spam left out. Pure.
+ */
+export function closedByRule(
+  document: Pick<FormDocument, 'closing'>,
+  input: { readonly now: Date; readonly answers: number },
+): boolean {
+  const closing = document.closing;
+  if (closing === undefined) return false;
+  if (closing.at !== undefined && Date.parse(closing.at) <= input.now.getTime()) return true;
+  return closing.after !== undefined && input.answers >= closing.after;
 }

@@ -252,6 +252,16 @@ export const strings = {
   copySubjectDefault: 'We got your message',
   copyLine: 'Message',
   copyLineDefault: 'Thanks, we got it. We will come back to you soon.',
+  /** Closes (forms fix b2): when the form stops taking answers by itself, and what it says then. */
+  closesRow: 'Closes',
+  closesHelp: 'Stop taking answers on a day, or after enough have come in. Pause stops it now. Goes live with Publish.',
+  closesNever: 'Never',
+  closesOnDate: 'On a date',
+  closesAfterCount: 'After a number of answers',
+  closesDay: 'Last day',
+  closesCount: 'Number of answers',
+  closedMessageRow: 'Message when closed',
+  closedMessageDefault: 'This form isn’t taking answers right now.',
   /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
   alsoDeal: 'Also create a deal',
   alsoDealTip: 'Each submission also adds a deal, linked to the person and their company. Goes live with Publish.',
