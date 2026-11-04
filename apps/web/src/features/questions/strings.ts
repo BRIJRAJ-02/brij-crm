@@ -35,33 +35,33 @@ export const strings = {
   /** Where it goes' InfoTip on a question. */
   whereItGoesHelp: 'The record field this answer fills in.',
   whereItGoesExample: 'Point a Job title question at Job title, and each person who answers gets it on their record.',
-  notFiled: 'Not filed, kept with the submission',
-  notFiledShort: 'Not filed',
+  notFiled: 'Kept with the submission only',
+  notFiledShort: 'Not saved',
   willCreate: (title: string, objectName: string) => `Creates “${title}” on ${objectName}`,
   willCreateShort: (title: string) => `Creates “${title}”`,
   /** The Create choice before the question has words to name its field by. */
   willCreateUnnamed: (objectName: string) => `Creates a field on ${objectName} from this question`,
-  cantCreate: 'You can’t add attributes, so this stays with the submission.',
+  cantCreate: 'You can’t add fields, so this stays with the submission.',
   /** Save couldn't make some planned attributes: those questions stay unfiled. */
   notCreated: (titles: readonly string[], objectName: string, keptWith: 'booking' | 'submission' = 'booking') =>
     titles.length === 1
       ? `Couldn’t add “${titles[0] ?? ''}” to ${objectName}, so its answers stay with the ${keptWith}.`
-      : `Couldn’t add ${String(titles.length)} attributes to ${objectName}, so their answers stay with the ${keptWith}.`,
-  undoFailed: 'Couldn’t undo that. The questions are still filed.',
+      : `Couldn’t add ${String(titles.length)} fields to ${objectName}, so their answers stay with the ${keptWith}.`,
+  undoFailed: 'Couldn’t undo that. The answers still save to those fields.',
   createdAttributes: (count: number, objectName: string) =>
-    count === 1 ? `Added 1 attribute to ${objectName}.` : `Added ${String(count)} attributes to ${objectName}.`,
+    count === 1 ? `Added 1 field to ${objectName}.` : `Added ${String(count)} fields to ${objectName}.`,
   takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,
   cantWrite: 'You can’t write to this',
   mustAnswer: 'Visitors must answer',
   // Spec 0067: its answers show beside Insights' sources.
-  sourceQuestion: 'Show in Insights as how they heard (one a form)',
+  sourceQuestion: 'Use as “How did you hear about us” in Insights',
   duplicateQuestion: 'Duplicate',
   deleteQuestion: 'Delete',
   questionDeleted: (label: string) => `Deleted “${label}”.`,
   questionDeletedFiled: (label: string, filed: string) => `Deleted “${label}”. Its answers went to ${filed}.`,
   undo: 'Undo',
   filedLine: (objectName: string, title: string) => `${objectName} › ${title}`,
-  goneAttribute: 'An attribute that no longer exists',
+  goneAttribute: 'A field that no longer exists',
   // The new answer types' options (spec 0063)
   dateRange: 'Days offered',
   earliest: 'Earliest day',
@@ -153,10 +153,10 @@ export const strings = {
   no: 'No',
   /** Marks a booking's answers the person record didn't take (spec 0057, AC-5712). */
   notSavedMark: 'Not saved',
-  notFiledBooking: 'Not filed, kept with the booking',
+  notFiledBooking: 'Kept with the booking only',
   whereItGoesHelpBooking: 'The booker’s field this answer fills in.',
-  cantCreateBooking: 'You can’t add attributes, so this stays with the booking.',
-  offCrm: 'Turn on Add to the CRM to file answers on the person.',
+  cantCreateBooking: 'You can’t add fields, so this stays with the booking.',
+  offCrm: 'Turn on Add to the CRM to save answers on the person.',
 
   // Jumps and points (spec 0063, AC-6313, AC-6316, AC-6325)
   jumps: 'Jumps',
