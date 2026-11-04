@@ -6,8 +6,8 @@
 // for a free one, said once the page opened there; once an address is typed a click outside keeps the dialog; a move
 // whose page couldn't open says where it went (announced, focus on Close), sends nothing more, says no "now at", and
 // leaves General locked with the same warning and Reload at the top; there is no Save bar and no browser
-// confirm on leaving, and a name still typed then is saved; a member reads one note and finds the fields locked; the
-// delete confirm says what happens in the open; axe is clean at 390 in light and dark.
+// confirm on leaving, and a name still typed then is saved; a member finds the fields locked, with no note over
+// them; the delete confirm says what happens in the open; axe is clean at 390 in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
 import { dataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
@@ -460,11 +460,12 @@ describe('keeping submissions (spec 0023, AC-1054)', () => {
 });
 
 describe('a member', () => {
-  it('reads one note, and finds the fields locked with no Change', async () => {
+  it('finds the fields locked with no Change, and no note over them', async () => {
     await renderGeneral({ asMember: true });
-    await expect.element(page.getByText(strings.readOnly)).toBeVisible();
-    expect(page.getByText(strings.readOnly).elements()).toHaveLength(1);
     await expect.element(nameField()).toHaveAttribute('readonly');
+    // Who changes it is a "View only" tag in the page's header bar (which this harness doesn't mount), never a note
+    // over the fields.
+    expect(page.getByText(strings.readOnly).elements()).toHaveLength(0);
     expect(page.getByRole('button', { name: strings.changeAddressLabel }).elements()).toEqual([]);
     expect(page.getByRole('button', { name: strings.deleteAction }).elements()).toEqual([]);
   });
@@ -495,7 +496,7 @@ describe('General at 390', () => {
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
       shown?.unmount();
       await renderGeneral({ asMember: true });
-      await expect.element(page.getByText(strings.readOnly)).toBeVisible();
+      await expect.element(nameField()).toHaveAttribute('readonly');
       expect(await axeViolations()).toEqual([]);
     });
   }
