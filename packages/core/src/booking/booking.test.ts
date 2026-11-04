@@ -226,6 +226,25 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
     expect(await refusalOf(enterBookingPage({ db }, 'not a key'))).toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('answers a guest on a draft as if there were no page, and pausing a draft keeps it a draft (4 Nov 2026)', async () => {
+    const w = await workspace();
+    const page = await createBookingPage(
+      w.owner,
+      { id: newId(), title: 'Secret plans', timeZone: 'UTC', isDraft: true },
+      NOW,
+    );
+    const entry = await enterBookingPage({ db }, page.publicKey);
+    // Nothing of it reaches a guest, not even that it exists: its facts and its times both answer NOT_FOUND.
+    expect(await refusalOf(getPublicBookingPage(entry))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(mondaySlots(entry))).toMatchObject({ code: 'NOT_FOUND' });
+    // Paused from the list, it is still a draft; only going live publishes it.
+    const paused = await updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'paused' } });
+    expect(paused.pausedReason).toBe('draft');
+    const live = await updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'live' } });
+    expect(live.pausedReason).toBeUndefined();
+    expect((await getPublicBookingPage(entry)).title).toBe('Secret plans');
+  });
+
   it('opens in the view its host chose, and in Month until one is chosen (owner, 25 Oct 2026)', async () => {
     const w = await workspace();
     const { page, entry } = await livePage(w);

@@ -1175,8 +1175,14 @@ export async function updatePageIn(
         ...(settings.windowDays === undefined ? {} : { windowDays: settings.windowDays }),
         ...(settings.dailyLimit === undefined ? {} : { dailyLimit: settings.dailyLimit }),
         ...(settings.slotStep === undefined ? {} : { slotStep: settings.slotStep }),
-        // A status set by a person clears the system's reason for a pause (spec 0031, AC-814).
-        ...(settings.status === undefined ? {} : { status: settings.status, pausedReason: null }),
+        // A status set by a person clears the system's reason for a pause (spec 0031, AC-814); a draft stays a
+        // draft until it goes live, so pausing one never makes it read as published.
+        ...(settings.status === undefined
+          ? {}
+          : {
+              status: settings.status,
+              ...(settings.status === 'live' || page.pausedReason !== 'draft' ? { pausedReason: null } : {}),
+            }),
         ...(settings.scheduleId === undefined
           ? {}
           : { scheduleId: settings.scheduleId, hoursMode: settings.scheduleId === null ? 'mine' : 'own' }),
