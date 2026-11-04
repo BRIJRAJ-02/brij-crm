@@ -2,7 +2,7 @@
 // Purpose: Captures' one New, owned by the Captures layout, so it sits in the TopBar at one place and one width on both tabs, loading or not.
 // Main task: make a booking page on Links (its dialog, then its editor) and a form on Forms (its template gallery, then its builder).
 // Leaves out: the lists themselves (each tab's screen) and what a new page or form holds (their editors).
-import { Button, Tooltip } from '@crm/ui';
+import { Button } from '@crm/ui';
 import { useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { linksHref, managedPageHref, pageEditorHref } from '../booking/links.ts';
@@ -142,19 +142,12 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
  */
 export function CapturesNewButton() {
   const create = useCapturesCreate();
-  if (create === undefined) return null;
-  const button = (
-    <Button
-      variant="primary"
-      icon="plus"
-      label={create.label}
-      isPending={create.isPending}
-      isDisabled={create.create === undefined}
-      {...(create.create === undefined ? {} : { onPress: create.create })}
-    >
+  // Someone who may not make forms doesn't see New on Forms at all (forms fix a10): a faded button whose reason
+  // only a hover could find read as broken. The forms they may open are still listed.
+  if (create?.create === undefined) return null;
+  return (
+    <Button variant="primary" icon="plus" label={create.label} isPending={create.isPending} onPress={create.create}>
       {bookingStrings.newButton}
     </Button>
   );
-  if (create.refusal === undefined) return button;
-  return <Tooltip content={create.refusal}>{button}</Tooltip>;
 }

@@ -313,6 +313,8 @@ export const strings = {
 
   // Install tab
   readOnlyTitle: 'You can view this form',
+  /** In the bar, for a member who may only view a live form's answers (forms fix a10). */
+  viewOnly: 'View only',
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
   shareTip: 'Opens the form on its own page.',

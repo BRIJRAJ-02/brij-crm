@@ -27,6 +27,7 @@ import {
   Button,
   ButtonLink,
   Callout,
+  Badge,
   EditorStatus,
   EmptyState,
   Field,
@@ -264,6 +265,7 @@ export function FormEditor(props: FormEditorProps) {
   }
 
   const isPublished = form.liveVersionNumber !== undefined;
+  const viewOnly = !canManage && isPublished;
 
   // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
   // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
@@ -639,7 +641,10 @@ export function FormEditor(props: FormEditorProps) {
       title={form.name}
       icon="clipboard-list"
       crumbs={[{ id: 'forms', label: strings.forms, href: formsHref(slug) }]}
-      meta={<EditorStatus tone={status.tone} text={status.text} />}
+      // A member who may only view a live form sees its answers, and says so in the bar (forms fix a10).
+      meta={
+        viewOnly ? <Badge text={strings.viewOnly} isWhole /> : <EditorStatus tone={status.tone} text={status.text} />
+      }
     >
       <EditorActions
         // A draft has no link yet: Copy link shows from the first publish, as the forms list shows it.
@@ -724,7 +729,14 @@ export function FormEditor(props: FormEditorProps) {
 
   // Before the first publish, Form and Settings: what happens after sending, routing and the owner are set before
   // anyone fills it in (late trap #47); Install and Submissions wait for a live form.
-  const current: FormTab = isPublished || tab === 'settings' ? tab : 'form';
+  // A member who may only view a live form gets its Submissions and Analytics, not a locked builder (forms fix a10).
+  const current: FormTab = viewOnly
+    ? tab === 'analytics'
+      ? 'analytics'
+      : 'submissions'
+    : isPublished || tab === 'settings'
+      ? tab
+      : 'form';
   const notices = (
     <>
       {form.status === 'paused' && (
@@ -740,7 +752,7 @@ export function FormEditor(props: FormEditorProps) {
       {current !== 'settings' && form.live?.after.kind === 'booking' && (
         <AfterPageNotice slug={slug} formId={form.id} live={form.live} />
       )}
-      {!canManage && (
+      {!canManage && !viewOnly && (
         <Callout tone="info" title={strings.readOnlyTitle}>
           {strings.readOnlyText}
         </Callout>
@@ -825,7 +837,8 @@ export function FormEditor(props: FormEditorProps) {
             followJob={jobs.follow}
             isFiling={form.live?.targets.main !== undefined}
             hasSubmissions={form.submissionCount > 0}
-            spamCount={form.spamCount}
+            // Spam is for those who manage forms: a member's count would name rows they can't open.
+            spamCount={canManage ? form.spamCount : 0}
           />
         );
       default:
@@ -1113,11 +1126,17 @@ export function FormEditor(props: FormEditorProps) {
                   if ((FORM_TABS as readonly string[]).includes(value)) goTab(value as FormTab);
                 }}
                 tabs={[
-                  { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
-                  { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
+                  ...(viewOnly
+                    ? []
+                    : [
+                        { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
+                        { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
+                      ]),
+                  ...(isPublished && !viewOnly
+                    ? [{ id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') }]
+                    : []),
                   ...(isPublished
                     ? [
-                        { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
                         {
                           id: 'submissions',
                           label: strings.tabSubmissions,
@@ -1132,7 +1151,12 @@ export function FormEditor(props: FormEditorProps) {
                     : []),
                 ]}
               >
-                {(isPublished ? FORM_TABS : (['form', 'settings'] as const)).map((id) => (
+                {(viewOnly
+                  ? (['submissions', 'analytics'] as const)
+                  : isPublished
+                    ? FORM_TABS
+                    : (['form', 'settings'] as const)
+                ).map((id) => (
                   <TabPanel key={id} id={id} variant="fill">
                     {id === current && layout}
                   </TabPanel>
