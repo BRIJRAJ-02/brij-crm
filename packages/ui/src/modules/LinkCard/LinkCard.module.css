@@ -15,7 +15,8 @@
    surface-sunken (faintly tinted with the link's colour when it has one) over a hairline, holds a sheet the width
    of half a panel (a form's thumbnail is laid out at a panel's width and shown at half size), its top corners
    rounded, shadow-md, its foot cut by the stage. On hover (a fine pointer) the sheet lifts space-4 in
-   duration-move with ease-out, so the card answers the pointer; reduced motion keeps it still. The facts line can
+   duration-move with ease-out, so the card answers the pointer; reduced motion keeps it still; an off card's stage
+   loses its colour. The facts line can
    start with the link's status as a StatusDot, a middle dot after it; the footer's start can hold one control of
    the card's own (`lead`) in the address's place; Copy link can be a quiet ghost icon. */
 @layer components {
@@ -238,6 +239,11 @@
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
     transition: translate var(--duration-move) var(--ease-out);
+  }
+
+  /* Off (a paused page or form), the picture loses its colour as the title goes quiet: it isn't taking anyone. */
+  .root[data-off] .stage {
+    filter: saturate(0);
   }
 
   @media (hover: hover) and (pointer: fine) {

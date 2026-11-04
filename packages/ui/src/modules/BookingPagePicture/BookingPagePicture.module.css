@@ -1,0 +1,125 @@
+/* BookingPagePicture: a booking page in miniature on LinkCard's sheet. A space-12 inset; a head of the page's mark
+   (a space-16 circle in its dot colour) beside its title (text-label-strong, one line, cut) over its lengths
+   (text-label, text-tertiary); then a month of seven columns across the sheet, each day a space-16 circle:
+   open days tinted with the page's colour, closed ones border-subtle, one open day solid in the colour (the
+   pick). Tokens only; it never moves. */
+@layer components {
+  .root {
+    --picture-hue: var(--dot-gray);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    box-sizing: border-box;
+    padding: var(--space-12);
+    color: var(--text);
+  }
+
+  .root[data-hue='red'] {
+    --picture-hue: var(--dot-red);
+  }
+
+  .root[data-hue='orange'] {
+    --picture-hue: var(--dot-orange);
+  }
+
+  .root[data-hue='yellow'] {
+    --picture-hue: var(--dot-yellow);
+  }
+
+  .root[data-hue='lime'] {
+    --picture-hue: var(--dot-lime);
+  }
+
+  .root[data-hue='green'] {
+    --picture-hue: var(--dot-green);
+  }
+
+  .root[data-hue='sky'] {
+    --picture-hue: var(--dot-sky);
+  }
+
+  .root[data-hue='blue'] {
+    --picture-hue: var(--dot-blue);
+  }
+
+  .root[data-hue='purple'] {
+    --picture-hue: var(--dot-purple);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .mark {
+    flex: none;
+    inline-size: var(--space-16);
+    block-size: var(--space-16);
+    border-radius: var(--radius-full);
+    background: var(--picture-hue);
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .title,
+  .lengths {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .title {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .lengths {
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .month {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--space-6) var(--space-4);
+  }
+
+  .day {
+    justify-self: center;
+    inline-size: var(--space-16);
+    block-size: var(--space-16);
+    border-radius: var(--radius-full);
+    background: var(--border-subtle);
+  }
+
+  .day[data-day='blank'] {
+    background: none;
+  }
+
+  .day[data-day='open'] {
+    background: color-mix(in oklab, var(--picture-hue) 30%, var(--surface-raised));
+  }
+
+  .day[data-day='picked'] {
+    background: var(--picture-hue);
+  }
+
+  @media (forced-colors: active) {
+    .mark,
+    .day[data-day='picked'] {
+      background: CanvasText;
+    }
+
+    .day[data-day='open'] {
+      outline: var(--border-width-hairline) solid CanvasText;
+    }
+  }
+}
