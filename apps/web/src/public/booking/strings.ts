@@ -31,6 +31,16 @@ export const strings = {
   timeName: (time: string, day: string, minutes: number) => `${time}, ${day}, ${String(minutes)} minutes`,
   book: 'Book',
   bookAt: (day: string, time: string) => `Book ${day} at ${time}`,
+  /** The Book band's quiet line while no time is picked (critic A10): a wide page only, a phone shows no band. */
+  pickTime: 'Pick a time',
+  /** The page's rules, stated plainly in the rail (bookings critics, 4 Nov 2026). */
+  noticeRule: (minutes: number) =>
+    minutes % 1440 === 0 && minutes >= 1440
+      ? `Can’t be booked within ${String(minutes / 1440)} ${minutes === 1440 ? 'day' : 'days'}`
+      : minutes % 60 === 0
+        ? `Can’t be booked within ${String(minutes / 60)} ${minutes === 60 ? 'hour' : 'hours'}`
+        : `Can’t be booked within ${String(minutes)} minutes`,
+  windowRule: (days: number) => `Up to ${String(days)} days ahead`,
   /** A page that confirms each booking first (spec 0062, AC-6203). */
   request: 'Request',
   requestAt: (day: string, time: string) => `Request ${day} at ${time}`,
@@ -72,6 +82,12 @@ export const strings = {
    */
   chatGreeting: (who: { readonly label: string; readonly isTeam: boolean }, title: string, minutes: number) =>
     `Hi, ${who.isTeam ? `it’s ${who.label}` : `I’m ${who.label}`}. When suits you for a ${String(minutes)} min ${title}?`,
+  /** The chat's name over its first line (critic B-10): what it is, in the host's name. */
+  chatAssistant: (host: string) => `${host}’s booking assistant`,
+  /** Few of the host's times fall in the visitor's daytime (critic B-10): said once, in the greeting. */
+  chatOffHours: (isTeam: boolean) => `Most of ${isTeam ? 'our' : 'my'} open times fall outside your daytime.`,
+  /** The note, folded into the confirm card. */
+  chatCardNote: (note: string) => `Note: ${note.length > 60 ? `${note.slice(0, 59)}…` : note}`,
   chatNoTimes: (isTeam: boolean) => `${isTeam ? 'We’re' : 'I’m'} fully booked right now. Check back soon.`,
   chatSuggestions: ['Something later', 'Next week'] as readonly string[],
   /**
@@ -131,6 +147,8 @@ export const strings = {
     gone: 'That time is no longer available. Pick another.',
     /** A next times chip whose time went between the link page drawing it and this page reading them (AC-6110). */
     atGone: 'That time was just taken. Here are the others.',
+    /** A next times link whose time is already past (critic B-08). */
+    atPast: 'That time has passed. Here are the next ones.',
     tooMany: 'Too many attempts just now. Wait a moment and try again.',
     closed: 'This page isn’t taking bookings any more.',
     failed: 'That did not go through. Try again in a moment.',
@@ -143,6 +161,10 @@ export const strings = {
   noTimesText: 'Check back soon.',
   unreachable: 'Times unavailable. Try again shortly.',
   paused: 'Nothing is bookable here right now.',
+  /** A paused page whose host we know (critic B-09). */
+  pausedBy: (host: string) => `${host} isn’t taking bookings here right now`,
+  pausedText: 'Their other pages may still be open.',
+  seePage: (host: string) => `See ${host}’s page`,
   /** A one off link with nothing left to book (spec 0062, AC-6204). */
   linkUsedTitle: 'This link has been used',
   linkUsedText: 'Ask whoever sent it for a new one.',
@@ -151,8 +173,8 @@ export const strings = {
   invitationText: 'Ask whoever sent you here for a link.',
   notFoundTitle: 'Page not found',
   notFoundText: 'There’s nothing at this address.',
-  failedTitle: 'This page didn’t load',
-  failedText: 'Check your connection and try again.',
+  failedTitle: 'Couldn’t reach this page',
+  failedText: 'Check your connection, then try again.',
   retry: 'Try again',
   // The visitor's calendar (spec 0028).
   showAllTimes: 'Show all times',

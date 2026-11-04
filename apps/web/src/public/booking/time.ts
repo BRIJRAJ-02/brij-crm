@@ -183,6 +183,9 @@ export function longDate(instant: string, zone: string, locale: string): string 
   }).format(new Date(instant));
 }
 
+/** The hour the small hours end: before it, tomorrow's first hours are still tonight as people say it. */
+const SMALL_HOURS_END = 4;
+
 /** How far a moment is from now, said plainly: "In 3 minutes", "Tomorrow morning", "In 5 days". */
 export function relativeLabel(instant: string, now: number, zone: string, locale: string): string {
   const at = Date.parse(instant);
@@ -197,6 +200,8 @@ export function relativeLabel(instant: string, now: number, zone: string, locale
     const hour = Number(
       new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', hourCycle: 'h23' }).format(at),
     );
+    // The small hours belong to tonight as people say it (critic B-17): 12:00 AM read as "Tomorrow morning".
+    if (hour < SMALL_HOURS_END) return 'Tonight, after midnight';
     const part = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
     return `${relative.format(1, 'day').replace(/^./, (first) => first.toUpperCase())} ${part}`;
   }

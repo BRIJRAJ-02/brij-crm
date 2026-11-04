@@ -45,6 +45,18 @@ export interface ManagePageProps {
   readonly isWelcome: boolean;
   readonly locale: string;
   readonly now: () => number;
+  /**
+   * `card`: the booking page's last step, inside its own card right after Confirm (critic C1), drawn at once from
+   * the booking the page already read (`initial`). Left out, the guest's own page.
+   */
+  readonly placement?: 'page' | 'card';
+  /** The booking as the page just read it: drawn at once, with no loading state. */
+  readonly initial?: PublicManagedBooking;
+  /**
+   * Inside a site's embed (critic B-01): the receipt is read only, and its one action opens this guest page in a new
+   * tab, since the guest's token never stays in someone else's frame.
+   */
+  readonly manageHref?: string;
 }
 
 type Loaded =
@@ -90,10 +102,20 @@ function messageOf(error: unknown): string {
 }
 
 /** The guest page. */
-export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
+export function ManagePage({
+  token,
+  isWelcome,
+  locale,
+  now,
+  placement = 'page',
+  initial,
+  manageHref,
+}: ManagePageProps) {
   const client = useMemo(() => createBookingClient({ origin: globalThis.location.origin }), []);
   const changes = useMemo(() => createManageClient({ origin: globalThis.location.origin }), []);
-  const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
+  const [loaded, setLoaded] = useState<Loaded>(
+    initial === undefined ? { state: 'loading' } : { state: 'ready', booking: initial },
+  );
   // Try again after a failed load reads it once more.
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState<'moved' | 'cancelled' | undefined>(undefined);
@@ -113,11 +135,13 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
   // The page the Timefix link names in its tags: the guest's page just after booking, or when they come back to it.
   const brandPage = isWelcome ? 'booking_confirmation' : 'booking_manage';
   useEffect(() => {
+    // Handed the booking already (the booking page's last step): nothing to read until Try again asks.
+    if (initial !== undefined && attempt === 0) return;
     client.managed(token).then(
       (booking) => setLoaded({ state: 'ready', booking }),
       (error: unknown) => setLoaded({ state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' }),
     );
-  }, [client, token, attempt]);
+  }, [client, token, attempt, initial]);
   const titleOf = (state: Loaded): string | undefined => {
     if (state.state !== 'ready') {
       if (state.state === 'loading') return undefined;
@@ -230,6 +254,7 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
     <BookingReceipt
       // A move or a cancel draws the receipt again, its changes closed.
       key={`${booking.start}|${booking.state}`}
+      placement={placement}
       state={booking.state}
       isWelcome={isWelcome && notice === undefined}
       hostName={booking.hostName}
@@ -302,42 +327,57 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
               </Callout>
             ),
           })}
-      {...(booking.canChange
+      {...(booking.canChange && manageHref !== undefined
         ? {
+            // In a site's embed: the changes open on the guest's own page, in a tab of its own (critic B-01).
             changes: (
-              <BookingChanges
-                title={booking.title}
-                hostName={booking.hostName}
-                guests={booking.guests}
-                canMove={booking.canMove}
-                // Inside the page's cutoffs a change is the host's (spec 0062, AC-6202): one line says so.
-                canCancel={booking.cancelTooLate !== true}
-                {...(booking.state === 'requested'
-                  ? {}
-                  : booking.cancelTooLate === true
-                    ? { lockedNote: changeStrings.tooLateCancel }
-                    : booking.moveTooLate === true
-                      ? { lockedNote: changeStrings.tooLateMove }
-                      : {})}
-                moveNote={changeStrings.timesIn(zoneDisplay(zone, now()))}
-                move={
-                  <MovePicker
-                    client={changes}
-                    token={token}
-                    booking={booking}
-                    locale={locale}
-                    timeZone={zone}
-                    now={now}
-                    onMove={(start) => changes.move(token, start).then((answer) => changed(answer.booking, 'moved'))}
-                  />
-                }
-                onInvite={invite}
-                onRemove={remove}
-                onCancel={cancel}
-              />
+              <ButtonLink href={manageHref} isExternal icon="external-link" isFullWidth="center">
+                {changeStrings.manage}
+              </ButtonLink>
             ),
           }
-        : {})}
+        : booking.canChange
+          ? {
+              changes: (
+                <BookingChanges
+                  title={booking.title}
+                  hostName={booking.hostName}
+                  guests={booking.guests}
+                  canMove={booking.canMove}
+                  // Only a booking with a calendar event behind it is said to come off both calendars (critic B-18).
+                  isOnCalendar={booking.videoUrl !== undefined}
+                  // Inside the page's cutoffs a change is the host's (spec 0062, AC-6202): one line says so.
+                  canCancel={booking.cancelTooLate !== true}
+                  {...(booking.state === 'requested'
+                    ? {}
+                    : booking.cancelTooLate === true
+                      ? { lockedNote: changeStrings.tooLateCancel }
+                      : booking.moveTooLate === true
+                        ? { lockedNote: changeStrings.tooLateMove }
+                        : !booking.canMove
+                          ? // Moving is closed (the page paused, or its moves used): say so, not just a missing button
+                            // (critic B-09).
+                            { lockedNote: changeStrings.moveClosed(booking.hostName) }
+                          : {})}
+                  moveNote={changeStrings.timesIn(zoneDisplay(zone, now()))}
+                  move={
+                    <MovePicker
+                      client={changes}
+                      token={token}
+                      booking={booking}
+                      locale={locale}
+                      timeZone={zone}
+                      now={now}
+                      onMove={(start) => changes.move(token, start).then((answer) => changed(answer.booking, 'moved'))}
+                    />
+                  }
+                  onInvite={invite}
+                  onRemove={remove}
+                  onCancel={cancel}
+                />
+              ),
+            }
+          : {})}
     />
   );
 }
@@ -498,7 +538,8 @@ function MovePicker({
           ? changeStrings.moving
           : time === undefined
             ? changeStrings.pickNewTime
-            : changeStrings.moveTo(timeLabel(time, timeZone, locale, hour12), dayHeading)}
+            : // The day is the heading right above it: the button names the time alone (critic A10).
+              changeStrings.moveTo(timeLabel(time, timeZone, locale, hour12))}
       </Button>
     </>
   );

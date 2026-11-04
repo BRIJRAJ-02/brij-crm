@@ -195,7 +195,7 @@ describe('a next times chip’s time (spec 0061, AC-6110)', () => {
     expect(host?.textContent).not.toContain('Your name');
   });
 
-  it('says so for a time no read can cover, rather than waiting in silence', async () => {
+  it('says a time already gone by has passed, rather than waiting in silence (critic B-08)', async () => {
     const start = tomorrow();
     fakeApi('month', [start]);
     // Yesterday: before the first read's window, so no answer could ever hold it.
@@ -203,7 +203,7 @@ describe('a next times chip’s time (spec 0061, AC-6110)', () => {
     show();
     await loaded();
     await loaded();
-    expect(host?.textContent).toContain('That time was just taken. Here are the others.');
+    expect(host?.textContent).toContain('That time has passed. Here are the next ones.');
   });
 
   it('opens as it always did for an address whose at is no instant', async () => {

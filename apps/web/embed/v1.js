@@ -183,6 +183,10 @@
     '.sk i{display:block;block-size:12px;border-radius:6px;background:var(--tfx-sk);animation:tfx-pulse 1.2s ease-in-out infinite alternate}' +
     '.sk i:nth-child(1){inline-size:60%;block-size:20px}.sk i:nth-child(2n){block-size:32px}.sk i:last-child{inline-size:100%;block-size:36px}' +
     '[data-ready] .sk{display:none}' +
+    // A booking page's stand in is booking shaped (critic A20): the host's face and two lines, then a month of tiles,
+    // where a form's is a few fields. Its tiles stop growing at a laptop month's size in a wide frame.
+    '.sb{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-content:start}.sb i{grid-column:1/-1}' +
+    '.sk u{display:block;aspect-ratio:1;max-height:64px;border-radius:8px;background:var(--tfx-sk);animation:tfx-pulse 1.2s infinite alternate}' +
     '@keyframes tfx-pulse{from{opacity:.55}to{opacity:1}}' +
     // `block-size:100dvh` beside `inset:0`: on a phone the viewport shrinks as the address bar slides away, and a
     // panel measured in `vh` keeps the taller figure, so its foot (the submit button, the Book button) sits below
@@ -196,6 +200,9 @@
     'transform-origin:var(--tfx-ox,50%) var(--tfx-oy,50%);' +
     'transform:scale(.98);transition:transform 240ms ease-out}' +
     '.veil[data-open] .panel{transform:none}' +
+    // A booking page in the middle panel gets a laptop's width (critic B-11), so it lays out its month and times side
+    // by side rather than a phone's column in a box. Phones take the whole screen below.
+    '@media (min-width:641px){.bk:not([data-side]) .panel{inline-size:min(1000px,calc(100% - 32px))}}' +
     // A panel opened from a button grows out of that button: the origin is the button's middle, so the corner
     // the eye was on is the corner that expands. Opened from anywhere else the origin stays the middle.
     '.veil[data-grow] .panel{transform:scale(.88)}' +
@@ -248,7 +255,7 @@
     // they won: the middle panel stayed at 88% of its size and a phone's sat 16px low with its foot off screen.
     '.veil[data-open][data-grow] .panel{transform:none}' +
     '@media (prefers-reduced-motion:reduce){.veil,.panel,iframe{transition:opacity 160ms ease-out}' +
-    '.veil .panel,.veil[data-side] .panel,.veil[data-grow] .panel{transform:none}.sk i{animation:none}}';
+    '.veil .panel,.veil[data-side] .panel,.veil[data-grow] .panel{transform:none}.sk i,.sk u{animation:none}}';
 
   var LIGHT = ':host{--tfx-bg:#ffffff;--tfx-fg:#1f2329;--tfx-sk:#eceef2;--tfx-line:#e6e8ec}';
   var DARK = ':host{--tfx-bg:#16181d;--tfx-fg:#e7e9ee;--tfx-sk:#2a2e36;--tfx-line:#2a2e36}';
@@ -321,10 +328,7 @@
     var made = frameFor(kind, key, 'inline', holder);
     made.frame.loading = 'lazy';
     made.frame.setAttribute('scrolling', 'no');
-    var skeleton = document.createElement('div');
-    skeleton.className = 'sk';
-    skeleton.setAttribute('aria-hidden', 'true');
-    skeleton.innerHTML = '<i></i><i></i><i></i><i></i><i></i>';
+    var skeleton = standIn(kind);
     box.appendChild(made.frame);
     box.appendChild(skeleton);
     parts.root.appendChild(box);
@@ -337,6 +341,17 @@
         box.setAttribute('data-ready', '');
       },
     });
+  }
+
+  // What stands in while a frame loads: a form's few fields, or a booking page's face, lines and month.
+  function standIn(kind) {
+    var skeleton = document.createElement('div');
+    skeleton.className = 'sk';
+    skeleton.setAttribute('aria-hidden', 'true');
+    skeleton.innerHTML =
+      kind === 'booking' ? '<i></i><i></i>' + new Array(36).join('<u></u>') : '<i></i><i></i><i></i><i></i><i></i>';
+    if (kind === 'booking') skeleton.className = 'sk sb';
+    return skeleton;
   }
 
   // A frame that never says its height (offline, blocked) gives way to a plain link to its own page.
@@ -376,7 +391,7 @@
     if (dialogs[name]) return dialogs[name];
     var parts = shell(element.getAttribute('data-timefix-theme'));
     var veil = document.createElement('div');
-    veil.className = 'veil';
+    veil.className = kind === 'booking' ? 'veil bk' : 'veil';
     if (side) veil.setAttribute('data-side', '');
     veil.hidden = true;
     var panel = document.createElement('div');
@@ -415,10 +430,7 @@
     panel.appendChild(start);
     panel.appendChild(head);
     panel.appendChild(made.frame);
-    var skeleton = document.createElement('div');
-    skeleton.className = 'sk';
-    skeleton.setAttribute('aria-hidden', 'true');
-    skeleton.innerHTML = '<i></i><i></i><i></i><i></i><i></i>';
+    var skeleton = standIn(kind);
     panel.appendChild(skeleton);
     panel.appendChild(end);
     stall(panel, skeleton, kind, key, made.frame);
@@ -426,6 +438,7 @@
     parts.root.appendChild(veil);
     document.body.appendChild(parts.host);
     var back = null;
+    var opener = null;
     var overflow = '';
     var padding = '';
     var shut = function () {
@@ -440,6 +453,7 @@
         },
         matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 120,
       );
+      if (opener) opener.style.visibility = '';
       if (back && back.focus) back.focus();
     };
     var dialog = {
@@ -471,6 +485,10 @@
             veil.setAttribute('data-grow', '');
           }
         }
+        // A corner launcher steps out of sight while its panel is up, and back on close (critic A20): it showed
+        // through the veil, under the dialog.
+        opener = from && from.className === 'fab' ? from : null;
+        if (opener) opener.style.visibility = 'hidden';
         requestAnimationFrame(function () {
           veil.setAttribute('data-open', '');
         });
@@ -723,6 +741,7 @@
       if (data.type === 'height' && typeof data.height === 'number' && isFinite(data.height) && data.height > 0) {
         entry.height(Math.max(0, Math.min(Math.ceil(data.height), MAX_HEIGHT)));
       } else if (data.type === 'close' && entry.close) entry.close();
+      // `booked` (critic B-01) is the site's own to hear: the frame posts it to this page's origin, naming no guest.
       return;
     }
   });

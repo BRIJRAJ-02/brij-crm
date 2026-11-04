@@ -51,8 +51,8 @@ describe('ManagePage', () => {
       .mockResolvedValueOnce(answer(500, { code: 'INTERNAL', message: 'Something went wrong.' }))
       .mockResolvedValue(answer(404, { code: 'NOT_FOUND', message: 'Not found.' }));
     show();
-    await expect.element(page.getByRole('heading', { level: 1, name: 'This page didn’t load' })).toBeVisible();
-    expect(document.title).toBe('This page didn’t load · Timefix');
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Couldn’t reach this page' })).toBeVisible();
+    expect(document.title).toBe('Couldn’t reach this page · Timefix');
     await page.getByRole('button', { name: 'Try again' }).click();
     await expect
       .element(page.getByRole('heading', { level: 1, name: 'This link doesn’t open a booking' }))

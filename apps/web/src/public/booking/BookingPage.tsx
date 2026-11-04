@@ -15,6 +15,7 @@ import {
   isDataError,
   withPreviewDraft,
   type PublicBookingPage,
+  type PublicManagedBooking,
   type PublicSlots,
   type PublicViewerAnswer,
   type SlotsOverlay,
@@ -71,7 +72,6 @@ import {
   rangeLabel,
   startOfDay,
   timeLabel,
-  zoneDisplay,
   zoneName,
 } from './time.ts';
 import { openingOf } from './at-param.ts';
@@ -86,6 +86,9 @@ const VisitorBar = lazy(() => visitorModule.then((module) => ({ default: module.
 // Book by chat (spec 0042) loads only when Chat is first chosen.
 const ChatPanel = lazy(() => import('./ChatPanel.tsx').then((module) => ({ default: module.ChatPanel })));
 const BookingDetails = lazy(() => detailsModule.then((module) => ({ default: module.BookingDetails })));
+// The receipt the card turns into once booked (critic C1): the guest page's own module, fetched as Confirm is pressed.
+const loadManage = () => import('./ManagePage.tsx');
+const ManagePage = lazy(() => loadManage().then((module) => ({ default: module.ManagePage })));
 
 /** One minute in milliseconds. */
 const MINUTE_MS = 60_000;
@@ -148,6 +151,16 @@ export interface BookingPageProps {
    * Opens the guest page once booked, with where a redirect page sends the visitor next (spec 0062, AC-6201).
    */
   readonly onBooked: (manageToken: string, redirectUrl?: string) => void;
+  /**
+   * Booked, and the receipt is drawn in the card itself (critic C1): the entry shows the guest page's address in
+   * place, or inside a site's embed tells the site. Left out, every booking goes through `onBooked`.
+   */
+  readonly onBookedHere?: (manageToken: string) => void;
+  /**
+   * Inside a site's embed (critic B-01): the guest page's address, which the in-card receipt opens in a new tab as
+   * its one action rather than offering the changes inside someone else's frame.
+   */
+  readonly manageHrefOf?: (manageToken: string) => string;
   /** A one off link's token from the address's fragment (spec 0062, AC-6204). */
   readonly oneOffToken?: string;
   /**
@@ -206,6 +219,8 @@ export function BookingPage({
   handoff,
   oneOffToken,
   onBooked,
+  onBookedHere,
+  manageHrefOf,
   onAddress,
 }: BookingPageProps) {
   const client = useMemo(() => createBookingClient({ origin: globalThis.location.origin }), []);
@@ -257,6 +272,13 @@ export function BookingPage({
   const [viewer, setViewer] = useState<PublicViewerAnswer | undefined>(undefined);
   // The last preview message, kept until the page loads to lay it over.
   const [preview, setPreview] = useState<unknown>(undefined);
+  // A failed first read is tried again once, quietly, before the page says it couldn't reach it (critic B-14).
+  const quietRetries = useRef(1);
+  const [attempt, setAttempt] = useState(0);
+  // A page that turned out closed, with whose it is when the read said (critic B-09).
+  const [closedHost, setClosedHost] = useState<{ readonly name: string; readonly image?: string } | undefined>(
+    undefined,
+  );
   const load = useCallback(() => {
     // The first chunk's times, beside the facts (EarlySlots): only when the page opens on that chunk.
     const zone = back.chosen.zone ?? timeZone;
@@ -294,6 +316,7 @@ export function BookingPage({
           // A page that books only through a form, reached without one (spec 0037, AC-1388): its closed state. The
           // host's own editor preview still draws it.
           if (page.formOnly === true && !isEditorPreview) {
+            setClosedHost({ name: page.hostName, ...(page.hostImage === undefined ? {} : { image: page.hostImage }) });
             setLoaded({ state: 'closed' });
             return;
           }
@@ -320,11 +343,18 @@ export function BookingPage({
         },
         (error: unknown) => {
           const code = isDataError(error) ? error.code : undefined;
-          setLoaded({ state: code === 'NOT_FOUND' ? 'gone' : code === 'BOOKING_CLOSED' ? 'closed' : 'failed' });
+          const state = code === 'NOT_FOUND' ? 'gone' : code === 'BOOKING_CLOSED' ? 'closed' : 'failed';
+          if (state === 'failed' && quietRetries.current > 0) {
+            quietRetries.current -= 1;
+            globalThis.setTimeout(() => setAttempt((count) => count + 1), QUIET_RETRY_MS);
+            return;
+          }
+          setLoaded({ state });
         },
       );
   }, [client, publicKey, handoff, oneOffToken, isEditorPreview, onAddress, back, timeZone, now, addressPath]);
-  useEffect(load, [load]);
+  // A quiet retry (`attempt`) reads again with the same `load`.
+  useEffect(load, [load, attempt]);
   useEffect(() => {
     if (isPreview) return;
     let isCurrent = true;
@@ -381,6 +411,8 @@ export function BookingPage({
           now={now}
           startedAt={startedAt}
           onBooked={onBooked}
+          {...(onBookedHere === undefined ? {} : { onBookedHere })}
+          {...(manageHrefOf === undefined ? {} : { manageHrefOf })}
           onEnded={ended}
           {...(loaded.early === undefined ? {} : { early: loaded.early })}
           chosen={back.chosen}
@@ -403,8 +435,26 @@ export function BookingPage({
       return <LoadingBooking locale={locale} timeZone={timeZone} now={now} />;
     case 'gone':
       return <BookingMessage title={strings.notFoundTitle}>{strings.notFoundText}</BookingMessage>;
-    case 'closed':
-      return <BookingMessage title={strings.paused} />;
+    case 'closed': {
+      // Whose page it is, and the way on to their link page (critic B-09): a handle address names it.
+      const handle = linkPageOf(addressPath);
+      return (
+        <BookingMessage
+          title={closedHost === undefined ? strings.paused : strings.pausedBy(closedHost.name)}
+          {...(closedHost === undefined ? {} : { host: closedHost })}
+          {...(handle === undefined
+            ? {}
+            : {
+                action: {
+                  href: handle,
+                  label: strings.seePage(closedHost?.name.split(/\s+/u)[0] ?? handle.slice(1)),
+                },
+              })}
+        >
+          {handle === undefined ? undefined : strings.pausedText}
+        </BookingMessage>
+      );
+    }
     case 'failed':
       return (
         <BookingMessage
@@ -413,11 +463,18 @@ export function BookingPage({
             setLoaded({ state: 'loading' });
             load();
           }}
-        >
-          {strings.failedText}
-        </BookingMessage>
+        />
       );
   }
+}
+
+/** How long the quiet second try waits after a failed first read (critic B-14). */
+const QUIET_RETRY_MS = 900;
+
+/** The link page a handle address belongs to (`/ada/intro-call` is Ada's, `/ada`); a `/b/<key>` address has none. */
+function linkPageOf(path: string): string | undefined {
+  const match = /^\/([a-z0-9][a-z0-9-]{1,38}[a-z0-9])\/[a-z0-9][a-z0-9-]{0,59}\/?$/.exec(path);
+  return match?.[1] === undefined ? undefined : `/${match[1]}`;
 }
 
 /** The view switch's segments: Month, List or Chat, the same three the loaded page offers. */
@@ -455,7 +512,7 @@ export function LoadingBooking({
   // The host's default comes with the facts, which this shape can't wait for, so it holds the place the page took
   // here last time (a choice made on it, else its host's default as it was then), and Month for a page never met.
   const [view, setView] = useState<SlotView>(() => openedBefore(addressPath) ?? 'month');
-  const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
+  const [hour12] = useState(() => savedHour12() ?? localeUses12h(locale));
   const today = dayKey(now(), timeZone);
   // A page that opens on chat fetches the chat's code at once, beside the page's read, not after it.
   useEffect(() => {
@@ -472,27 +529,16 @@ export function LoadingBooking({
       isLoading
     />
   );
-  const bookBar = (
-    <Button variant="primary" size="lg" isFullWidth="center" isDisabled>
-      {strings.book}
-    </Button>
-  );
+  // Book is not there until a time is picked: its band says so quietly, as the loaded page's does.
+  const bookBar = null;
   return (
     <BookingFrame
       isEmbedded={isEmbedded()}
       claimHref={CLAIM_URL}
       heading={strings.chooseTime}
+      footerWaiting={strings.pickTime}
       toolbar={
         <>
-          <SegmentedControl
-            label={strings.clock}
-            value={hour12 ? '12' : '24'}
-            onChange={(next) => {
-              setHour12(next === '12');
-              saveHour12(next === '12');
-            }}
-            segments={clockSegments}
-          />
           <SegmentedControl
             label={strings.view}
             value={view}
@@ -583,6 +629,8 @@ function Booking({
   handoff,
   oneOffToken,
   onBooked,
+  onBookedHere,
+  manageHrefOf,
   onEnded,
   chosen,
   at,
@@ -620,6 +668,8 @@ function Booking({
   readonly startedAt: number;
   readonly prefill?: Prefill;
   readonly onBooked: (manageToken: string, redirectUrl?: string) => void;
+  readonly onBookedHere?: (manageToken: string) => void;
+  readonly manageHrefOf?: (manageToken: string) => string;
   /** A one off link's token (spec 0062, AC-6204): sent with the booking, never in an address. */
   readonly oneOffToken?: string;
   /** The page was deleted or paused since it loaded, or its one off link was used meanwhile. */
@@ -697,6 +747,12 @@ function Booking({
     readonly back: boolean;
   }>({ step: 'pick', attempt: '', back: false });
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  // Booked, with the receipt drawn in the card (critic C1): the guest page's token and the booking as it now stands.
+  const [booked, setBooked] = useState<{ readonly token: string; readonly booking: PublicManagedBooking } | undefined>(
+    undefined,
+  );
+  // Book, so Enter on a time can hand it focus (critic C7, QA B-14).
+  const bookButton = useRef<HTMLButtonElement>(null);
   // Whether a next times chip's time has been answered (spec 0061, AC-6110): once a visit, whatever happens next.
   const isAtDone = useRef(at === undefined);
   // "Not you?": no name, no email and no overlay for the rest of the visit.
@@ -714,7 +770,8 @@ function Booking({
   const zones = useMemo(() => zoneItems(zone, now(), clockNow), [zone, now, clockNow]);
   // The tab names the meeting and the host: "Intro call with Ada · Timefix".
   useEffect(() => {
-    document.title = `${page.title} with ${page.hostName} · ${strings.product}`;
+    // As the share preview names it (critic C3): "Intro call with Ada Lovelace".
+    document.title = `${page.title} with ${page.hostName}`;
   }, [page.title, page.hostName]);
 
   useEffect(() => {
@@ -797,7 +854,8 @@ function Booking({
               ? (next.get(wanted) ?? []).find((start) => Date.parse(start) === asked && !hidden.has(start))
               : undefined;
             if (match === undefined) {
-              setNotice(strings.errors.atGone);
+              // A time already gone by is said as such, not as taken (critic B-08).
+              setNotice(asked <= now() ? strings.errors.atPast : strings.errors.atGone);
               // Back's own path: focus lands on the chosen day, where the times the line promises are.
               setStep({ step: 'pick', attempt: '', back: true });
             } else {
@@ -899,6 +957,27 @@ function Booking({
   const dayHeading = day === undefined ? '' : dayLabels(day, locale).short;
   const times = day === undefined ? [] : (byDay.get(day) ?? []);
 
+  /**
+   * Where a booking lands (critic C1): a redirect page goes on as before (`onBooked`); anything else reads the booking
+   * now and, once called, draws its receipt as the card's last step, sliding in where the details were, while the
+   * address becomes the guest page's. A read that fails falls back to opening the guest page.
+   */
+  const arrival = (token: string, redirectUrl?: string): (() => void) => {
+    if (redirectUrl !== undefined || onBookedHere === undefined) return () => onBooked(token, redirectUrl);
+    const ready = Promise.all([client.managed(token), loadManage()]);
+    // Settled either way before anyone waits on it, so a failure is never an unhandled rejection.
+    ready.catch(() => undefined);
+    return () => {
+      ready.then(
+        ([booking]) => {
+          setBooked({ token, booking });
+          onBookedHere(token);
+        },
+        () => onBooked(token),
+      );
+    };
+  };
+
   const book = (values: BookingDetailsValues): Promise<BookingDetailsOutcome> => {
     if (time === undefined) return Promise.resolve({ kind: 'failed', message: strings.errors.failed });
     const needsPhone = page.location.type === 'phone';
@@ -920,12 +999,13 @@ function Booking({
         ...(oneOffToken === undefined ? {} : { oneOffToken }),
       })
       .then(
-        (booked): BookingDetailsOutcome => {
-          // The receipt opens once Confirm has shown Booked for a beat.
+        (answer): BookingDetailsOutcome => {
+          // The receipt opens once Confirm has shown Booked for a beat; it is read meanwhile.
+          const arrive = arrival(answer.manageToken, answer.redirectUrl);
           return {
             kind: 'done',
             next: () => {
-              onBooked(booked.manageToken, booked.redirectUrl);
+              arrive();
             },
           };
         },
@@ -980,7 +1060,9 @@ function Booking({
       );
   };
 
-  const isDetails = step.step === 'details' && time !== undefined;
+  const isDetails = booked === undefined && step.step === 'details' && time !== undefined;
+  // The steps after the times (the details, then the receipt) draw over the whole card and say when in the rail.
+  const isPastTimes = isDetails || booked !== undefined;
   // Insights (spec 0067, AC-6702): each step this visit reached, once (a time picked, then the details), never from
   // the editor's preview. The server keeps only the furthest, so going back sends nothing worth counting.
   const reachedSteps = useRef(new Set<string>());
@@ -990,13 +1072,26 @@ function Booking({
     reachedSteps.current.add(reachedStep);
     client.event(page.publicKey, { kind: 'step', step: reachedStep });
   }, [client, page.publicKey, isEditorPreview, reachedStep]);
+  // The clock (12h or 24h), in the time zone list's foot (critic A24): the picker's corner keeps the view alone.
+  const clockSwitch = (
+    <SegmentedControl
+      label={strings.clock}
+      value={hour12 ? '12' : '24'}
+      onChange={(next) => {
+        setHour12(next === '12');
+        saveHour12(next === '12');
+      }}
+      segments={clockSegments}
+    />
+  );
   const facts: BookingFact[] = [];
-  if (isDetails) {
-    const end = new Date(Date.parse(time) + duration * 60_000).toISOString();
+  const chosenStart = booked?.booking.start ?? time;
+  if (isPastTimes && chosenStart !== undefined) {
+    const end = new Date(Date.parse(chosenStart) + duration * 60_000).toISOString();
     facts.push({
       id: 'when',
       icon: 'calendar',
-      children: `${dayLabels(dayKey(Date.parse(time), zone), locale).short}, ${rangeLabel(time, end, zone, locale, hour12)}`,
+      children: `${dayLabels(dayKey(Date.parse(chosenStart), zone), locale).short}, ${rangeLabel(chosenStart, end, zone, locale, hour12)}`,
     });
   }
   facts.push(
@@ -1004,7 +1099,7 @@ function Booking({
       id: 'meeting',
       icon: page.location.type === 'video' ? 'video' : page.location.type === 'phone' ? 'phone' : 'map-pin',
       children:
-        page.durations.length > 1 && !isDetails ? (
+        page.durations.length > 1 && !isPastTimes ? (
           <SegmentedControl
             label={strings.length}
             value={String(duration)}
@@ -1024,8 +1119,11 @@ function Booking({
     {
       id: 'zone',
       icon: 'globe',
-      children: isDetails ? (
-        `${zoneDisplay(zone, now())} · ${clockNow}`
+      // One format on every step (critic C4): the zone's name, then its offset and the time there, quietly, as the
+      // picker shows them; only the pick step can change it.
+      ...(isPastTimes ? { aside: `${offsetLabel(zone, now())} · ${clockNow}` } : {}),
+      children: isPastTimes ? (
+        zoneName(zone)
       ) : (
         // The picker's list loads on the first hover, focus or press (or once the page is idle): a visitor rarely
         // opens it, and its code was a tenth of the page's first load styles. Until then the same trigger stands in.
@@ -1043,10 +1141,29 @@ function Booking({
             setZone(next);
             resetChoice();
           }}
+          // The clock goes with the zone (critic A24), as Calendly keeps it: in the list's foot, out of the picker's
+          // corner. Book by chat follows it too.
+          popoverFoot={clockSwitch}
         />
       ),
     },
   );
+  // The page's rules, said plainly under the facts while the times show (bookings critics, 4 Nov 2026): how soon
+  // and how far ahead it books. The notice is read only when the page's answer carries it.
+  const noticeMinutes =
+    'minNoticeMinutes' in page && typeof page.minNoticeMinutes === 'number' && page.minNoticeMinutes > 0
+      ? page.minNoticeMinutes
+      : undefined;
+  if (!isPastTimes)
+    facts.push({
+      id: 'rules',
+      icon: 'clock',
+      isQuiet: true,
+      children: [
+        ...(noticeMinutes === undefined ? [] : [strings.noticeRule(noticeMinutes)]),
+        strings.windowRule(page.windowDays),
+      ].join(' · '),
+    });
   // The visitor we know (from their sign in or the Google account they connected), unless they said Not you.
   const person = notYou ? undefined : viewer?.viewer;
   const known = person === undefined ? undefined : { name: person.name, email: person.email };
@@ -1303,23 +1420,14 @@ function Booking({
       })}
       value={time}
       onChange={setTime}
+      // Enter on a time picks it and hands focus to Book (critic C7, QA B-14).
+      onCommit={() => {
+        globalThis.requestAnimationFrame(() => bookButton.current?.focus());
+      }}
       hour12={hour12}
       layout={layout}
       isLoading={isLoading}
       drawKey={`${day ?? ''}|${zone}`}
-    />
-  );
-  // The picker's corner (spec 0058, AC-24, as Cal.com's): the clock and the view in one compact group, so the times
-  // below carry nothing but the day and its times. Both stay in reach in every view, by keyboard as before.
-  const clockSwitch = (
-    <SegmentedControl
-      label={strings.clock}
-      value={hour12 ? '12' : '24'}
-      onChange={(next) => {
-        setHour12(next === '12');
-        saveHour12(next === '12');
-      }}
-      segments={clockSegments}
     />
   );
   const viewSwitch = (
@@ -1341,19 +1449,15 @@ function Booking({
       ]}
     />
   );
-  const controls = (
-    <>
-      {clockSwitch}
-      {viewSwitch}
-    </>
-  );
+  const controls = viewSwitch;
 
+  // Book, once a time is picked (critic A10): until then its band holds a quiet line, and on a phone nothing.
   const bookBar = (
     <Button
+      ref={bookButton}
       variant="primary"
       size="lg"
       isFullWidth="center"
-      isDisabled={time === undefined}
       onPress={() => {
         setNotice(undefined);
         setStep({ step: 'details', attempt: crypto.randomUUID(), back: false });
@@ -1376,7 +1480,7 @@ function Booking({
       </Callout>
     );
 
-  if (message !== undefined && detailsStep === undefined) {
+  if (message !== undefined && detailsStep === undefined && booked === undefined) {
     // Nothing to pick in any view: the message alone, the same card whichever view is chosen.
     return (
       <BookingFrame {...frame} isEmbedded={isEmbedded()} heading={strings.chooseTime} toolbar={controls} view={view}>
@@ -1388,7 +1492,23 @@ function Booking({
 
   // The month is the card in every view: List and Book by chat (spec 0042) draw over it, in exactly its box, so a
   // switch between views moves nothing on the page (the owner, 25 October 2026).
+  // The receipt, as the card's last step (critic C1): the guest page's own module, drawn from the booking just read.
+  const bookedStep =
+    booked === undefined ? undefined : (
+      <Suspense fallback={null}>
+        <ManagePage
+          token={booked.token}
+          isWelcome
+          locale={locale}
+          now={now}
+          placement="card"
+          initial={booked.booking}
+          {...(manageHrefOf === undefined ? {} : { manageHref: manageHrefOf(booked.token) })}
+        />
+      </Suspense>
+    );
   const cover =
+    bookedStep ??
     detailsStep ??
     (view === 'list' ? (
       <>
@@ -1424,7 +1544,7 @@ function Booking({
               setDuration(minutes);
               resetChoice();
             }}
-            onBooked={onBooked}
+            onBooked={(token) => arrival(token)()}
             // The greeting's zone chip opens the rail's own picker, where every view changes the zone.
             onZone={() => {
               const trigger = document.querySelector<HTMLElement>('aside button[aria-haspopup="listbox"]');
@@ -1441,19 +1561,21 @@ function Booking({
   return (
     <BookingFrame
       isEmbedded={isEmbedded()}
-      {...(isDetails ? withoutBar : frame)}
-      heading={strings.chooseTime}
+      {...(isPastTimes ? withoutBar : frame)}
+      // The chat's own name over it (critic C16), not "Choose a time".
+      heading={view === 'chat' && !isPastTimes ? strings.chat : strings.chooseTime}
       toolbar={controls}
-      view={isDetails ? 'details' : view}
-      {...(isDetails
+      view={booked !== undefined ? 'booked' : isDetails ? 'details' : view}
+      {...(isPastTimes
         ? { coverPlace: 'card' as const, enter: 'forward' as const }
         : step.back
           ? { enter: 'back' as const }
           : {})}
       aside={slotList('column')}
       footer={bookBar}
+      {...(time === undefined ? { footerWaiting: strings.pickTime } : {})}
       {...(cover === undefined ? {} : { cover })}
-      {...(view === 'list' && !isDetails ? { coverFooter: bookBar } : {})}
+      {...(view === 'list' && !isPastTimes ? { coverFooter: bookBar } : {})}
     >
       {noticeLine}
       <MonthTiles
