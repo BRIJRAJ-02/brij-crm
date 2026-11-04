@@ -55,8 +55,14 @@ export const strings = {
   addressPending: '/f/…',
   thisMonth: (n: number) => `${count(n, 'submission', 'submissions')} this month`,
   spam: (n: number) => `${new Intl.NumberFormat().format(n)} spam`,
-  accepting: 'Live',
+  accepting: 'Taking answers',
   notAccepting: 'Paused',
+  /** The forms list (forms fix a9): when the last answer came, a form's answers since the reader last looked, and
+   * the way to its Submissions. */
+  lastAnswer: (when: string) => `last ${when}`,
+  newAnswers: 'New answers',
+  openSubmissions: 'Submissions',
+  openSubmissionsOf: (name: string) => `Open the submissions to ${name}`,
   notPublishedYet: 'Not published',
   /** Why Copy link is off on a form never published. */
   acceptingOf: (name: string) => `${name} is live`,

@@ -40,7 +40,7 @@ import {
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
 import { formatDate, StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pageHeading } from '../navigation/focus.ts';
 import { recordLinks } from '../records/timeline.ts';
@@ -48,6 +48,7 @@ import { AnswerList, answerText, holdsFile } from '../questions/AnswerList.tsx';
 import { answerFiling, notSavedReasons } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { spamReason } from './spam-reason.ts';
+import { markSeen } from './seen.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
 import { useFormToolbarSlot } from './toolbarSlot.ts';
@@ -137,6 +138,10 @@ export function SubmissionsTab({
   spamCount = 0,
 }: SubmissionsTabProps) {
   const slot = useFormToolbarSlot();
+  // Opening the answers clears the form's New on the list, for this reader in this browser (forms critique c).
+  useEffect(() => {
+    markSeen(slug, formId);
+  }, [slug, formId, page]);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [bulk, setBulk] = useState<{ readonly label: string; readonly value: number } | undefined>(undefined);

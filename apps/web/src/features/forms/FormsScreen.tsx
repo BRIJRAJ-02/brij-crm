@@ -12,8 +12,11 @@ import {
   MenuItem,
   MenuSeparator,
   MenuTrigger,
+  formatRelative,
   SpotIllustration,
   Tooltip,
+  useFormatSettings,
+  useNow,
   type LinkGridCard,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -25,6 +28,7 @@ import { useCan } from '../workspace/WorkspacePage.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
 import { DeleteFormDialog } from './FormConfirms.tsx';
 import { formHref } from './paths.ts';
+import { hasNewAnswers } from './seen.ts';
 import { strings } from './strings.ts';
 
 /** With no forms: a still drawing of a form, one line and New form (spec 0058, AC-8). */
@@ -44,16 +48,22 @@ export interface FormsScreenProps {
  * A form's facts: what to do first while it is a draft; then its submissions, with spam when there is some
  * ("12 submissions · 2 spam"), or "No submissions yet".
  */
-function factsOf(form: FormSummary): readonly string[] {
+function factsOf(form: FormSummary, last: string | undefined): readonly string[] {
   // A draft's badge (Not published) and its Edit say it all: no line repeating them.
   if (form.liveVersionNumber === undefined) return [];
   if (form.submissionCount === 0) return [strings.noSubmissionsYet];
-  return [strings.submissionCount(form.submissionCount), ...(form.spamCount > 0 ? [strings.spam(form.spamCount)] : [])];
+  // How many, and when the last came (forms fix a9, Tally's and Typeform's lists); spam is counted in Submissions.
+  return [strings.submissionCount(form.submissionCount), ...(last === undefined ? [] : [strings.lastAnswer(last)])];
 }
 
-/** Its grey badge: Not published until its first publish. Off needs none (the muted title and the switch say it). */
-function badgeOf(form: FormSummary): { readonly badge?: string } {
-  return form.liveVersionNumber === undefined ? { badge: strings.notPublishedYet } : {};
+/**
+ * Its badge: Not published until its first publish; Paused once paused (forms fix b2: a muted card with an
+ * unlabelled switch didn't say it); New when an answer came since the reader last opened its Submissions.
+ */
+function badgeOf(form: FormSummary, isNew: boolean): { readonly badge?: string } {
+  if (form.liveVersionNumber === undefined) return { badge: strings.notPublishedYet };
+  if (form.status === 'paused') return { badge: strings.notAccepting };
+  return isNew ? { badge: strings.newAnswers } : {};
 }
 
 /** Captures › Forms: New form, then one card per form, newest change first, read from the data layer's held list. */
@@ -61,6 +71,8 @@ export function FormsScreen({ slug }: FormsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const canManage = useCan('forms.manage');
   const list = useCaptureList(data.forms.view(slug));
+  const { locale, timeZone, dateFormat } = useFormatSettings();
+  const now = useNow();
   const create = useCapturesCreate();
   const [deleting, setDeleting] = useState<FormSummary | undefined>(undefined);
 
@@ -103,10 +115,15 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       title: form.name,
       href: formHref(slug, form.id),
       // No colour mark: a form has no colour of its own, and one picked from its id identified nothing (T3).
-      facts: factsOf(form),
+      facts: factsOf(
+        form,
+        form.lastSubmissionAt === undefined
+          ? undefined
+          : formatRelative(form.lastSubmissionAt, now, locale, timeZone, dateFormat),
+      ),
       // A draft has no link yet: its generated address only becomes real on the first publish.
       ...(isPending ? { address: strings.addressPending } : isPublished ? { address: `/f/${form.publicKey}` } : {}),
-      ...(isPending ? { badge: strings.copying } : badgeOf(form)),
+      ...(isPending ? { badge: strings.copying } : badgeOf(form, hasNewAnswers(slug, form, now))),
       isOff: !isLive,
       isPending,
       // Accepting is a published form's: a draft shows no switch, its badge and facts say what to do.
@@ -134,6 +151,18 @@ export function FormsScreen({ slug }: FormsScreenProps) {
             <ButtonLink size="lg" icon="pencil" label={strings.editFormOf(form.name)} href={formHref(slug, form.id)}>
               {strings.editDraft}
             </ButtonLink>
+          )}
+          {/* Its answers, one press from the list (forms fix a9): the count names them, this opens them. */}
+          {isPublished && !isPending && (
+            <Tooltip content={strings.openSubmissions}>
+              <ButtonLink
+                variant="ghost"
+                size="lg"
+                icon="inbox"
+                label={strings.openSubmissionsOf(form.name)}
+                href={formHref(slug, form.id, 'submissions')}
+              />
+            </Tooltip>
           )}
           {isLive && (
             <Tooltip content={strings.openInNewTab} isDisabled={isPending}>
