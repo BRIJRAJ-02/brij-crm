@@ -337,9 +337,9 @@
     box-shadow: none;
   }
 
-  /* A page's own title (a note's): no box, border, fill or ring, in the note
-     title type, so it reads as the page's heading and not as a form. The caret
-     marks focus, as in a document. Read only it stays plain text (after the
+  /* A page's own title (a note's): no box, border or fill at rest, in the note
+     title type, so it reads as the page's heading and not as a form; under the
+     pointer a soft fill, and focused the field's ring (rules at the end). Read only it stays plain text (after the
      read only box it undoes), and a refusal shows as the line under it. */
   .root[data-variant='title'] .box {
     block-size: auto;
