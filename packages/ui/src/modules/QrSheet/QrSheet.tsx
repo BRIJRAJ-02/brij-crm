@@ -25,8 +25,12 @@ export interface QrSheetProps {
   readonly colour?: string;
   /** The line under the table's name; "Scan for the menu" unless given. */
   readonly scanLine?: string;
-  /** What sits above the sheets on screen (the per page choice, Print): never printed. */
+  /** What sits above the sheets on screen, at the start (a way back, a summary): never printed. */
   readonly controls?: ReactNode;
+  /** The sheet's own actions above it on screen, at the end (the per page choice, Print): never printed. */
+  readonly actions?: ReactNode;
+  /** A notice above the sheets on screen (the menu isn't live yet): never printed. */
+  readonly notice?: ReactNode;
 }
 
 /** The cards split into sheets of `size`. */
@@ -86,12 +90,28 @@ function Face({
  * reads the right way up once folded). Light on white whatever the app's theme. Prints with the browser's own print
  * and print CSS: one sheet a page, no margins, nothing else of the page.
  */
-export function QrSheet({ venue, logoSrc, cards, perPage, colour, scanLine = strings.scan, controls }: QrSheetProps) {
+export function QrSheet({
+  venue,
+  logoSrc,
+  cards,
+  perPage,
+  colour,
+  scanLine = strings.scan,
+  controls,
+  actions,
+  notice,
+}: QrSheetProps) {
   const logo = safeImageSrc(logoSrc);
   const sheets = sheetsOf(cards, perPage);
   return (
     <div className={styles.root} data-theme="light">
-      {controls === undefined ? null : <div className={styles.controls}>{controls}</div>}
+      {controls === undefined && actions === undefined ? null : (
+        <div className={styles.controls}>
+          <div className={styles.group}>{controls}</div>
+          <div className={styles.group}>{actions}</div>
+        </div>
+      )}
+      {notice === undefined ? null : <div className={styles.notice}>{notice}</div>}
       {sheets.map((sheet, index) => (
         <section
           key={sheet[0]?.id ?? index}

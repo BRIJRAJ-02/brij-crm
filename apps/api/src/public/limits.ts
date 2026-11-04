@@ -69,10 +69,10 @@ export const MENU_LIMITS = {
   rendersPerKey: { max: 600, windowMs: 60_000 },
   /**
    * A table QR's code read (spec 0065, H2): a guest scans once and the page reads it once, so 20 a minute per address
-   * is plenty for a table of phones behind one router and stops anyone walking codes; 600 a minute per menu key.
+   * is plenty for a table of phones behind one router. No per key window: the key is printed on every table, and
+   * with 122 bit codes there is nothing to walk, so a key wide window would only let strangers switch scans off.
    */
   tablesPerAddress: { max: 20, windowMs: 60_000 },
-  tablesPerKey: { max: 600, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 
 /** The least time a person takes from opening the page to booking. */

@@ -535,13 +535,12 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
     await test.step('download every code as one zip', async () => {
       const zip = page.waitForEvent('download');
       await page.getByRole('button', { name: 'Download all' }).click();
-      await page.getByRole('menuitem', { name: 'PNG images (.zip)' }).click();
       expect((await zip).suggestedFilename()).toMatch(/\.zip$/);
       await expect(page.getByText('Downloaded 4 codes.')).toBeVisible();
     });
 
     await test.step('the print sheet: tent cards, two or four to a sheet', async () => {
-      await page.getByRole('link', { name: 'Print sheet' }).click();
+      await page.getByRole('link', { name: 'Print table cards' }).click();
       await expect(page.getByRole('region', { name: 'Page 1 of 2' })).toBeVisible();
       await expect(page.getByRole('article', { name: 'Table 1' })).toBeVisible();
       await shot(page, 'qr-05-print-two');
@@ -567,8 +566,11 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
       await expect(guest.getByText('Table 1', { exact: true })).toBeVisible();
       await shot(guest, 'qr-08-guest-table');
       await phone.close();
-      await page.reload();
-      await expect(page.getByRole('row', { name: /Table 1.*1 scan/ })).toBeVisible();
+      const after = await rpc<{ tables: { label: string; scans: number }[] }>(page, 'hospitality/qrCodes', {
+        workspace: slug,
+        placeId,
+      });
+      expect(after.tables.find((table) => table.label === 'T1')?.scans).toBe(1);
     });
 
     await test.step('a new code asks first; the old print then opens the menu with no table', async () => {
@@ -585,6 +587,90 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
       await guest.waitForTimeout(1000);
       await expect(guest.getByText('Table 1', { exact: true })).toBeHidden();
       await guest.close();
+    });
+
+    await test.step('reservations online, for the link page’s Reserve block', async () => {
+      await rpc(page, 'hospitality/install', {
+        workspace: slug,
+        app: 'table_seating',
+        withNeeded: false,
+        mutationId: crypto.randomUUID(),
+      });
+      const setup = await rpc<{ rules: Record<string, unknown> }>(page, 'tables/setup', { workspace: slug, placeId });
+      await rpc(page, 'tables/saveSetup', {
+        workspace: slug,
+        placeId,
+        rules: { ...setup.rules, partyMax: 4, online: true },
+        mutationId: crypto.randomUUID(),
+      });
+    });
+
+    let publicPage = '';
+    await test.step('the link page gets a Menu block and a Reserve a table block, then Publish', async () => {
+      await page.goto(`/w/${slug}/link-page`);
+      await expect(page.getByRole('heading', { level: 1, name: 'Link page' })).toBeVisible();
+      publicPage =
+        (await page
+          .getByRole('group', { name: 'Share online' })
+          .getByRole('link', { name: 'Open' })
+          .getAttribute('href')) ?? '';
+      await page.getByRole('button', { name: 'Edit page' }).click();
+      await page.getByRole('button', { name: 'Add item' }).click();
+      const add = page.getByRole('dialog', { name: 'Add to your link page' });
+      await add.getByRole('radio', { name: /^Menu/ }).check({ force: true });
+      await expect(add.getByLabel('Label')).toHaveAttribute('placeholder', 'Our menu');
+      await shot(page, 'blocks-01-menu-editor');
+      await add.getByRole('button', { name: /^Add item/ }).click();
+      await expect(add).toBeHidden();
+      await page.getByRole('button', { name: 'Add item' }).click();
+      await add.getByRole('radio', { name: /^Reserve a table/ }).check({ force: true });
+      await add.getByRole('button', { name: /^Add item/ }).click();
+      await expect(add).toBeHidden();
+      await expect(page.getByText(/Menu · /).first()).toBeVisible();
+      await expect(page.getByText(/Reserve a table · /).first()).toBeVisible();
+      await shot(page, 'blocks-02-editor-rows');
+      await page.getByRole('button', { name: 'Done' }).click();
+      await rpc(page, 'profile/publish', { workspace: slug, mutationId: crypto.randomUUID() });
+    });
+
+    await test.step('a visitor sees the menu’s first dishes and Reserve a table, each opening its page', async () => {
+      const visitorContext = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        ...(process.env.FLOW_COLOR_SCHEME === 'dark' ? { colorScheme: 'dark' as const } : {}),
+      });
+      const visitor = await visitorContext.newPage();
+      await visitor.goto(publicPage.replace(/^https?:\/\/[^/]+/, ''));
+      const menuRow = visitor.getByRole('link', { name: /Our menu.*Soup £6\.50 · Risotto £14\.50 · Tart £7\.00/ });
+      await expect(menuRow).toHaveAttribute('href', `/m/${menuKey}`);
+      await expect(visitor.getByRole('link', { name: /Reserve a table/ })).toHaveAttribute('href', /^\/r\//);
+      await shot(visitor, 'blocks-03-public');
+      await visitorContext.close();
+    });
+
+    await test.step('the menu hidden: the block goes, and the menu page says so in its own look', async () => {
+      await rpc(page, 'menu/setHidden', { workspace: slug, hidden: true, mutationId: crypto.randomUUID() });
+      const visitorContext = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        ...(process.env.FLOW_COLOR_SCHEME === 'dark' ? { colorScheme: 'dark' as const } : {}),
+      });
+      const visitor = await visitorContext.newPage();
+      await visitor.goto(publicPage.replace(/^https?:\/\/[^/]+/, ''));
+      await expect(visitor.getByRole('link', { name: /Reserve a table/ })).toBeVisible();
+      await expect(visitor.getByRole('link', { name: /Our menu/ })).toHaveCount(0);
+      await expect
+        .poll(
+          async () => {
+            await visitor.goto(`/m/${menuKey}`);
+            return visitor.getByRole('heading', { name: 'This menu isn’t available right now' }).count();
+          },
+          { timeout: 20_000 },
+        )
+        .toBeGreaterThan(0);
+      await expect(visitor.getByRole('link', { name: 'Reserve a table' })).toHaveAttribute('href', /^\/r\//);
+      await expect(visitor.getByText('Soup')).toHaveCount(0);
+      await shot(visitor, 'hidden-01-menu');
+      await visitorContext.close();
+      await rpc(page, 'menu/setHidden', { workspace: slug, hidden: false, mutationId: crypto.randomUUID() });
     });
   });
 });

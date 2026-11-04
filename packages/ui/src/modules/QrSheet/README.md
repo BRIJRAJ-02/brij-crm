@@ -15,7 +15,12 @@ New. Menu QR prints a code for every table (AC-6543: "a Print page lays out tabl
   cards={tables.map((table) => ({ id: table.id, name: 'Table 4', value: 'https://timefix.com/m/KEY?t=CODE' }))}
   perPage={2}
   colour={accent}
-  controls={<>{perPageChoice}<Button onPress={() => print()}>Print</Button></>}
+  controls={
+    <>
+      {perPageChoice}
+      <Button onPress={() => print()}>Print</Button>
+    </>
+  }
 />
 ```
 
@@ -23,12 +28,12 @@ New. Menu QR prints a code for every table (AC-6543: "a Print page lays out tabl
 - `perPage`: `2` (each card half an A4 sheet, a wide tent) or `4` (a quarter each, a small tent). A narrow card (under 480px, a quarter sheet or a phone) stacks the code over the words, centred, and leaves the logo out.
 - `logoSrc`: the venue's logo, from our own origin (`safeImageSrc`); it sits above the venue's name and in the code's centre. Without one, the venue's initial in a round mark, and a plain code.
 - `colour`: the modules' colour, only while it keeps 4.5 to 1 on white (QrCode's rule); otherwise black.
-- `controls`: what sits above the sheets on screen (the per page choice, Print). It never prints.
+- `controls` and `actions`: what sits above the sheets on screen, at the start (a way back, a summary) and at the end (the per page choice, Print); `notice` a line under them (the menu isn't live). None of them prints.
 - Each card is two faces with a dashed fold line between them; the back face is drawn upside down, so once folded into a tent both sides read the right way up. The card's own dashed edges are the cut lines.
 
 ## Print
 
-`@page` is A4 with no margins, and each sheet is the page's whole width at A4's ratio with a page break after it, so one sheet fills one printed page. In print the controls, the grey ground and the paper shadow go. The sheet carries `data-theme="light"` and every code `ground="paper"`, so a dark app prints (and previews) on white.
+A named page (`page: qr-sheet`, `@page qr-sheet`) is A4 with no margins, so nothing else in the app prints differently; each sheet is the page's whole width at A4's ratio with a page break after it, so one sheet fills one printed page, and its cards sit inside a `space-32` margin (about 8mm) that home printers can reach. In print the controls, the grey ground and the paper shadow go. The sheet carries `data-theme="light"` and every code `ground="paper"`, so a dark app prints (and previews) on white.
 
 ## States
 

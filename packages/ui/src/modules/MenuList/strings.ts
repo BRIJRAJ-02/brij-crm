@@ -60,14 +60,7 @@ export const strings = {
   },
   /** A hidden menu's page (Live or Hidden, spec 0065): what it says, and the ways still open. */
   unavailable: 'This menu isn’t available right now',
-  unavailableWays: (canReserve: boolean, canCall: boolean) =>
-    canReserve && canCall
-      ? 'You can still book a table, or give us a call.'
-      : canReserve
-        ? 'You can still book a table.'
-        : canCall
-          ? 'Give us a call and we’ll help.'
-          : 'Please check back soon.',
+  unavailableLater: 'Please check back soon.',
   reserve: 'Reserve a table',
   callShort: 'Call',
 } as const;

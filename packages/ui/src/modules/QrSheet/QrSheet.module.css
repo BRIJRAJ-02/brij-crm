@@ -24,8 +24,22 @@
     inline-size: min(100%, var(--size-dialog-wide));
   }
 
+  .group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-12);
+  }
+
+  .notice {
+    inline-size: min(100%, var(--size-dialog-wide));
+  }
+
+  /* The cards sit inside a margin most home printers can print to (about 8mm), the page itself having none. */
   .sheet {
     display: grid;
+    padding: var(--space-32);
+    page: qr-sheet;
     grid-template-rows: repeat(2, 1fr);
     inline-size: min(100%, var(--size-dialog-wide));
     aspect-ratio: 210 / 297;
@@ -56,9 +70,9 @@
     padding: var(--space-16) var(--space-20);
   }
 
-  /* The fold: the line between the two faces. */
+  /* The fold: the line between the two faces. The back face is turned, so its start edge is the middle. */
   .face[data-side='back'] {
-    border-block-end: var(--border-width-hairline) dashed var(--border-strong);
+    border-block-start: var(--border-width-hairline) dashed var(--border-strong);
     rotate: 180deg;
   }
 
@@ -153,7 +167,8 @@
       background: none;
     }
 
-    .controls {
+    .controls,
+    .notice {
       display: none;
     }
 
@@ -164,7 +179,8 @@
   }
 }
 
-@page {
+/* A named page, so only the sheets print on A4 with no margin; every other page prints as it always did. */
+@page qr-sheet {
   size: A4;
   margin: 0;
 }

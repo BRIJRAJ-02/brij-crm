@@ -488,8 +488,8 @@ export const ProfilePlaceFacts = z.object({
   name: z.string(),
   status: z.enum(['live', 'paused']),
   reason: z.enum(['app', 'unpublished', 'hidden', 'offline']).optional(),
-  /** The page the block opens on our own origin (`/m/<key>` or `/r/<key>`), for the editor's preview and link. */
-  path: z.string(),
+  /** The page the block opens on our own origin (`/m/<key>` or `/r/<key>`), only while it is live. */
+  path: z.string().optional(),
 });
 /** What the editor knows of a Menu or Reserve block's place. */
 export type ProfilePlaceFacts = z.infer<typeof ProfilePlaceFacts>;

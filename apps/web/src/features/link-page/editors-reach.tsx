@@ -21,6 +21,7 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
+import { businessSettingsHref } from '../settings/nav.ts';
 import {
   heldPicture,
   PICTURE_TYPES,
@@ -826,7 +827,7 @@ function PlaceChooser({
         layout="row"
         icon="store"
         title={words.noPlacesTitle}
-        actions={<ButtonLink href={`/w/${slug}/settings/apps`}>{words.openApps}</ButtonLink>}
+        actions={<ButtonLink href={businessSettingsHref(slug)}>{words.openBusiness}</ButtonLink>}
       >
         {words.noPlacesText}
       </EmptyState>
@@ -840,26 +841,28 @@ function PlaceChooser({
         focusesFirstField={focusFirst}
       >
         {editing === undefined ? (
-          <Select
-            label={words.place}
-            searchLabel={words.placeSearch}
-            hint={which === 'menu' ? words.menuHint : words.reserveHint}
-            items={choices.choices.map((choice) => {
-              const each = factsOf(choice);
-              return {
-                id: choice.placeId,
-                label: each?.name ?? '',
-                icon: 'store' as const,
-                description: each?.status === 'paused' ? words.placeOff(each.reason) : '',
-              };
-            })}
-            value={picked}
-            onChange={(next) => {
-              setPicked(next);
-              setProblems((held) => ({ ...held, placeId: undefined }));
-            }}
-            {...errorOf(problems, 'placeId')}
-          />
+          // One place is picked already: nothing to ask. Several, and the owner picks one.
+          choices.choices.length < 2 ? null : (
+            <Select
+              label={words.place}
+              searchLabel={words.placeSearch}
+              items={choices.choices.map((choice) => {
+                const each = factsOf(choice);
+                return {
+                  id: choice.placeId,
+                  label: each?.name ?? '',
+                  icon: 'store' as const,
+                  description: each?.status === 'paused' ? words.placeOff(each.reason) : '',
+                };
+              })}
+              value={picked}
+              onChange={(next) => {
+                setPicked(next);
+                setProblems((held) => ({ ...held, placeId: undefined }));
+              }}
+              {...errorOf(problems, 'placeId')}
+            />
+          )
         ) : (
           <Field label={words.place} isReadOnly readOnlyReason={words.placeFixed} value={editing.place?.name ?? ''} />
         )}
@@ -869,7 +872,6 @@ function PlaceChooser({
           name="label"
           value={label}
           placeholder={fallback}
-          hint={words.labelHint(fallback)}
           maxLength={60}
           onChange={(next) => {
             setLabel(next);

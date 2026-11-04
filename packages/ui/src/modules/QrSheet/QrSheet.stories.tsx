@@ -41,13 +41,11 @@ export const FourPerPage: Story = {
 export const WithControls: Story = {
   args: {
     colour: '#1f5fd6',
-    controls: (
-      <>
-        <span>4 tables</span>
-        <Button variant="primary" icon="printer">
-          Print
-        </Button>
-      </>
+    controls: <span>4 tables</span>,
+    actions: (
+      <Button variant="primary" icon="printer">
+        Print
+      </Button>
     ),
   },
 };

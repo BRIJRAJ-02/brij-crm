@@ -7,20 +7,12 @@
 import type { HospitalityStore, PlaceQrCodes } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import { tableDisplayName } from '@crm/contracts/menu';
-import {
-  Button,
-  ButtonGroup,
-  ButtonLink,
-  EmptyState,
-  QrSheet,
-  SegmentedControl,
-  Skeleton,
-  VisuallyHidden,
-} from '@crm/ui';
+import { Button, ButtonLink, EmptyState, QrSheet, SegmentedControl, VisuallyHidden } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { placeTablesHref } from '../settings/nav.ts';
 import { tableMenuAddress } from './codes.ts';
 import { qrPageHref, type QrLook } from './look.ts';
+import { MenuState } from './QrScreen.tsx';
 import { strings } from './strings.ts';
 
 /** The sheet for one place: its codes as tent cards, the per sheet choice and Print above, never printed. */
@@ -46,31 +38,43 @@ export function QrPrintScreen({
       {strings.back}
     </ButtonLink>
   );
-  if (state.status === 'loading') return <Skeleton shape="block" />;
+  if (state.status === 'loading') {
+    return (
+      <main>
+        <EmptyState title={strings.printTitle} isLoading />
+      </main>
+    );
+  }
   if (state.status === 'error') {
     return (
-      <EmptyState tone="error" title={strings.failed} onRetry={held.retry} actions={back}>
-        {state.error.message}
-      </EmptyState>
+      <main>
+        <EmptyState tone="error" title={strings.failed} onRetry={held.retry} actions={back}>
+          {state.error.message}
+        </EmptyState>
+      </main>
     );
   }
   const codes: PlaceQrCodes = state.value;
   if (codes.tables.length === 0) {
     return (
-      <EmptyState
-        icon="qr-code"
-        title={strings.noTables}
-        actions={
-          <ButtonLink href={placeTablesHref(slug, placeId)} variant="primary" icon="plus">
-            {strings.addTables}
-          </ButtonLink>
-        }
-      >
-        {strings.noTablesText}
-      </EmptyState>
+      <main>
+        <EmptyState
+          icon="qr-code"
+          title={strings.noTables}
+          actions={
+            <>
+              {back}
+              <ButtonLink href={placeTablesHref(slug, placeId)} variant="primary" icon="plus">
+                {strings.addTables}
+              </ButtonLink>
+            </>
+          }
+        >
+          {strings.noTablesText}
+        </EmptyState>
+      </main>
     );
   }
-  const sheets = Math.ceil(codes.tables.length / perPage);
   return (
     <main>
       <VisuallyHidden>
@@ -86,24 +90,22 @@ export function QrPrintScreen({
         perPage={perPage}
         {...(look.colour === undefined ? {} : { colour: look.colour })}
         {...(look.logoSrc === undefined ? {} : { logoSrc: look.logoSrc })}
-        controls={
+        notice={codes.menuState === 'live' ? undefined : <MenuState slug={slug} codes={codes} />}
+        controls={back}
+        actions={
           <>
-            {back}
-            <p>{strings.sheetSummary(codes.tables.length, sheets)}</p>
-            <ButtonGroup label={strings.printTitle}>
-              <SegmentedControl
-                label={strings.perPage}
-                segments={[
-                  { value: '2', label: strings.two },
-                  { value: '4', label: strings.four },
-                ]}
-                value={String(perPage)}
-                onChange={(next) => setPerPage(next === '4' ? 4 : 2)}
-              />
-              <Button variant="primary" icon="printer" onPress={() => globalThis.print()}>
-                {strings.printNow}
-              </Button>
-            </ButtonGroup>
+            <SegmentedControl
+              label={strings.perPage}
+              segments={[
+                { value: '2', label: strings.two },
+                { value: '4', label: strings.four },
+              ]}
+              value={String(perPage)}
+              onChange={(next) => setPerPage(next === '4' ? 4 : 2)}
+            />
+            <Button variant="primary" icon="printer" onPress={() => globalThis.print()}>
+              {strings.printNow}
+            </Button>
           </>
         }
       />

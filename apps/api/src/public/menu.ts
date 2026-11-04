@@ -187,19 +187,16 @@ export function mountPublicMenu(app: Hono<{ Variables: Variables }>, deps: Publi
     const key = c.req.param('key');
     const code = c.req.param('code');
     if (!MENU_KEY_PATTERN.test(key) || !TABLE_CODE_PATTERN.test(code)) return nothingHere();
-    for (const [name, rule] of [
-      [`menu:table:${addressKey(c.get('clientIp'))}`, MENU_LIMITS.tablesPerAddress],
-      [`menu:table-key:${key}`, MENU_LIMITS.tablesPerKey],
-    ] as const) {
-      if (!deps.limiter(name, rule).allowed) {
-        return uncached('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
-      }
+    if (!deps.limiter(`menu:table:${addressKey(c.get('clientIp'))}`, MENU_LIMITS.tablesPerAddress).allowed) {
+      return uncached('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
     }
     const entry = await enterMenuPage({ db: deps.db }, key);
     if (entry === undefined) return nothingHere();
     const userAgent = c.req.header('user-agent');
+    // Only the menu page's own read counts a scan: another site can't add counts by embedding the address.
+    const site = c.req.header('sec-fetch-site');
     const visitor =
-      deps.visitorKey === undefined || isMachine(userAgent)
+      deps.visitorKey === undefined || isMachine(userAgent) || (site !== undefined && site !== 'same-origin')
         ? undefined
         : visitorId(deps.visitorKey, {
             day: utcDay(deps.now?.() ?? new Date()),

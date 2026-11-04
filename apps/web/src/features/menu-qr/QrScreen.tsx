@@ -12,7 +12,6 @@ import {
   ButtonGroup,
   ButtonLink,
   Callout,
-  Card,
   CopyButton,
   EmptyState,
   Menu,
@@ -37,9 +36,10 @@ import { qrPrintHref, type QrLook } from './look.ts';
 import { codeFile, codeFileName, tableMenuAddress, zipCodes, type DrawnCode } from './codes.ts';
 import { strings } from './strings.ts';
 
-const COLUMNS: readonly TableColumn[] = [
+/** The list's columns: Area only while some table has one. */
+const columnsFor = (hasAreas: boolean): readonly TableColumn[] => [
   { id: 'table', label: strings.table, isRowHeader: true, size: 'fill' },
-  { id: 'area', label: strings.area },
+  ...(hasAreas ? [{ id: 'area', label: strings.area }] : []),
   { id: 'scans', label: strings.scans, align: 'end', size: 'fit' },
   { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
 ];
@@ -153,25 +153,18 @@ function PlaceCodes({
       {placeSwitch}
       {hasTables && (
         <>
-          <MenuTrigger>
-            <Button icon="download" isPending={zipping !== undefined}>
-              {strings.downloadAll}
-            </Button>
-            <Menu
-              label={strings.downloadAll}
-              onAction={(key) => {
-                if (key === 'png' || key === 'svg') setZipping(key);
-              }}
-            >
-              <MenuItem id="png" icon="image">
-                {strings.allPng}
-              </MenuItem>
-              <MenuItem id="svg" icon="file-code">
-                {strings.allSvg}
-              </MenuItem>
-            </Menu>
-          </MenuTrigger>
-          <ButtonLink href={qrPrintHref(slug, place.id)} variant="primary" icon="printer">
+          {/* One click with the preset: every table, PNG at 512 pixels, one zip. SVG is in each code's dialog. */}
+          <Button
+            icon="download"
+            label={strings.downloadAll}
+            isPending={zipping !== undefined}
+            onPress={() => setZipping('png')}
+          />
+          <ButtonLink
+            href={qrPrintHref(slug, place.id)}
+            variant={codes?.menuState === 'live' ? 'primary' : 'secondary'}
+            icon="printer"
+          >
             {strings.print}
           </ButtonLink>
         </>
@@ -207,63 +200,56 @@ function PlaceCodes({
         body: (
           <PageColumn>
             <MenuState slug={slug} codes={value} />
-            <Card title={place.name} description={strings.intro}>
-              <Table
-                label={strings.title}
-                columns={COLUMNS}
-                rows={tables}
-                getRowId={(table) => table.id}
-                onRowAction={(id) => setShown(id)}
-                renderCell={(table, column) => {
-                  if (column === 'table') return tableDisplayName(table.label);
-                  if (column === 'area') return table.areaName ?? '';
-                  if (column === 'scans') return strings.scanCount(table.scans);
-                  const name = tableDisplayName(table.label);
-                  return (
-                    <ButtonGroup label={strings.actionsFor(name)}>
-                      <Button
-                        size="sm"
-                        icon="qr-code"
-                        onPress={() => setShown(table.id)}
-                        label={strings.showCodeFor(name)}
+            <Table
+              label={strings.title}
+              columns={columnsFor(tables.some((table) => table.areaName !== undefined))}
+              rows={tables}
+              getRowId={(table) => table.id}
+              onRowAction={(id) => setShown(id)}
+              renderCell={(table, column) => {
+                if (column === 'table') return tableDisplayName(table.label);
+                if (column === 'area') return table.areaName ?? '';
+                if (column === 'scans') return String(table.scans);
+                const name = tableDisplayName(table.label);
+                return (
+                  <ButtonGroup label={strings.actionsFor(name)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="qr-code"
+                      onPress={() => setShown(table.id)}
+                      label={strings.showCodeFor(name)}
+                    />
+                    <MenuTrigger>
+                      <Button variant="ghost" size="sm" icon="ellipsis" label={strings.actionsFor(name)} />
+                      <Menu
+                        label={strings.actionsFor(name)}
+                        onAction={(key) => {
+                          if (key === 'renew') setRenewing(table);
+                        }}
                       >
-                        {strings.showCode}
-                      </Button>
-                      <MenuTrigger>
-                        <Button variant="ghost" size="sm" icon="ellipsis" label={strings.actionsFor(name)} />
-                        <Menu
-                          label={strings.actionsFor(name)}
-                          onAction={(key) => {
-                            if (key === 'show') setShown(table.id);
-                            if (key === 'renew') setRenewing(table);
-                          }}
-                        >
-                          <MenuItem id="show" icon="qr-code">
-                            {strings.showCode}
-                          </MenuItem>
-                          <MenuItem id="renew" icon="refresh-cw" isDanger>
-                            {strings.newCode}
-                          </MenuItem>
-                        </Menu>
-                      </MenuTrigger>
-                    </ButtonGroup>
-                  );
-                }}
-                emptyState={
-                  <EmptyState
-                    icon="qr-code"
-                    title={strings.noTables}
-                    actions={
-                      <ButtonLink href={placeTablesHref(slug, place.id)} variant="primary" icon="plus">
-                        {strings.addTables}
-                      </ButtonLink>
-                    }
-                  >
-                    {strings.noTablesText}
-                  </EmptyState>
-                }
-              />
-            </Card>
+                        <MenuItem id="renew" icon="refresh-cw" isDanger>
+                          {strings.newCode}
+                        </MenuItem>
+                      </Menu>
+                    </MenuTrigger>
+                  </ButtonGroup>
+                );
+              }}
+              emptyState={
+                <EmptyState
+                  icon="qr-code"
+                  title={strings.noTables}
+                  actions={
+                    <ButtonLink href={placeTablesHref(slug, place.id)} variant="primary" icon="plus">
+                      {strings.addTables}
+                    </ButtonLink>
+                  }
+                >
+                  {strings.noTablesText}
+                </EmptyState>
+              }
+            />
             {zipping === undefined ? null : (
               <ZipAll
                 codes={value}
@@ -286,7 +272,11 @@ function PlaceCodes({
               look={look}
               isOpen={open !== undefined}
               onClose={() => setShown(undefined)}
-              onRenew={(table) => setRenewing(table)}
+              onRenew={(table) => {
+                // One dialog at a time: the code's closes, then the question opens.
+                setShown(undefined);
+                setRenewing(table);
+              }}
               toasts={toasts}
             />
             <Modal
@@ -330,7 +320,7 @@ function PlaceCodes({
 }
 
 /** Says why a scan shows nothing yet: the menu was never published, or it is hidden. */
-function MenuState({ slug, codes }: { readonly slug: string; readonly codes: PlaceQrCodes }) {
+export function MenuState({ slug, codes }: { readonly slug: string; readonly codes: PlaceQrCodes }) {
   if (codes.menuState === 'live') return null;
   return (
     <Callout
@@ -390,9 +380,8 @@ function TableCodeModal({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      hint={strings.sizeNote}
       footerStart={
-        <Button variant="ghost" icon="refresh-cw" onPress={() => onRenew(showing)}>
+        <Button variant="danger" icon="refresh-cw" onPress={() => onRenew(showing)}>
           {strings.newCode}
         </Button>
       }

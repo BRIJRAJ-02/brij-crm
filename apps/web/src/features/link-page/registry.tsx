@@ -504,7 +504,7 @@ export function previewBlock(
   }
   if (item.kind === 'menu' || item.kind === 'reserve') {
     // As a visitor would see it now: a paused one (the app removed, the menu hidden, reservations off) is left out.
-    if (item.place?.status !== 'live') return undefined;
+    if (item.place?.status !== 'live' || item.place.path === undefined) return undefined;
     const title = item.label ?? (item.kind === 'menu' ? reachStrings.menuTitle : reachStrings.reserveTitle);
     return item.kind === 'menu'
       ? { kind: 'menu', id: item.id, title, href: item.place.path, dishes: [] }

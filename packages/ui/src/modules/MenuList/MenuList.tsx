@@ -372,7 +372,6 @@ export function MenuList({
                   <Icon name="utensils" />
                 </span>
                 <h2 className={styles.unavailableTitle}>{strings.unavailable}</h2>
-                <p>{strings.unavailableWays(reservePath !== undefined, phoneHref !== undefined)}</p>
                 {reservePath !== undefined || phoneHref !== undefined ? (
                   <div className={styles.unavailableActions}>
                     {reservePath === undefined ? null : (
@@ -386,7 +385,9 @@ export function MenuList({
                       </ButtonLink>
                     )}
                   </div>
-                ) : null}
+                ) : (
+                  <p>{strings.unavailableLater}</p>
+                )}
               </div>
             ) : null}
             {!isUnavailable && current !== undefined && !current.serving.now ? (

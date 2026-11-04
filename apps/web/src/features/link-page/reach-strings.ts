@@ -25,23 +25,20 @@ export const reachStrings = {
   // Spec 0065 (AC-6528): a place's menu and its reservation page, offered only while their apps are installed.
   addMenu: 'Menu',
   addMenuText: 'Your menu, with its first dishes',
-  addReserve: 'Reserve',
+  addReserve: 'Reserve a table',
   addReserveText: 'Your reservation page, while you take bookings online',
-  newMenu: 'Add your menu',
-  editMenu: 'Edit menu block',
-  newReserve: 'Add Reserve a table',
-  editReserve: 'Edit Reserve block',
+  newMenu: 'Add a menu block',
+  editMenu: 'Edit the menu block',
+  newReserve: 'Add a Reserve a table block',
+  editReserve: 'Edit the Reserve a table block',
   menuTitle: 'Our menu',
   reserveTitle: 'Reserve a table',
   place: 'Place',
   placeSearch: 'Search places',
   placeFixed: 'A block keeps its place. To show another, add a new block.',
-  label: 'Label',
-  labelHint: (fallback: string) => `What the row says. Left empty, it says “${fallback}”.`,
-  menuHint: 'Opens your menu. The row lists its first three dishes from what you last published.',
-  reserveHint: 'Opens your reservation page. It shows only while the place takes reservations online.',
+  label: 'Label (optional)',
   menuRow: (place: string) => `Menu · ${place}`,
-  reserveRow: (place: string) => `Reservations · ${place}`,
+  reserveRow: (place: string) => `Reserve a table · ${place}`,
   placeGone: 'This place is gone, so visitors don’t see the block',
   placeOff: (reason: 'app' | 'unpublished' | 'hidden' | 'offline' | undefined) =>
     reason === 'app'
@@ -52,9 +49,9 @@ export const reachStrings = {
           ? 'Hidden while the menu is hidden'
           : 'Hidden: not taking reservations online',
   placesFailed: 'Your places didn’t load.',
-  noPlacesTitle: 'Set up your business first',
-  noPlacesText: 'Install Menu or Table seating in Settings › Apps, then add your place.',
-  openApps: 'Open Apps',
+  noPlacesTitle: 'Add your place first',
+  noPlacesText: 'Your menu and reservations belong to a place. Add it in Settings › Business.',
+  openBusiness: 'Add your place',
 
   // Each kind's Modal and row.
   newSocials: 'Add social icons',

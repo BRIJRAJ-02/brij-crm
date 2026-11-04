@@ -76,10 +76,9 @@ export async function placeFactsOf(
           : undefined;
     const service = apps.has('table_seating') ? await readTableService(tx, row.id) : undefined;
     const reserveReason = !apps.has('table_seating') ? 'app' : service?.rules.online === true ? undefined : 'offline';
+    // The path only while a visitor can open it: a member never learns a key before its page is live.
     const factOf = (reason: ProfilePlaceFacts['reason'], path: string): ProfilePlaceFacts =>
-      reason === undefined
-        ? { name: row.name, status: 'live', path }
-        : { name: row.name, status: 'paused', reason, path };
+      reason === undefined ? { name: row.name, status: 'live', path } : { name: row.name, status: 'paused', reason };
     facts.set(row.id, {
       menu: factOf(menuReason, `/m/${encodeURIComponent(row.menuKey)}`),
       reserve: factOf(reserveReason, `/r/${encodeURIComponent(row.publicKey)}`),
