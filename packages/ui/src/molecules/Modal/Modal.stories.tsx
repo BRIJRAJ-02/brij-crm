@@ -1,11 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
+import { useToasts } from '../../provider/context.ts';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
 import { Form } from '../Form/Form.tsx';
@@ -568,6 +570,78 @@ export const Drawer: Story = {
     await expect(Math.round(panel.right)).toBe(globalThis.innerWidth);
     await expect(within(dialog as HTMLElement).getByRole('button', { name: 'Close' })).toBeInTheDocument();
   },
+};
+
+/** A drawer (or a sheet) whose Save raises a toast, the toast being what the person reads after pressing it. */
+function DrawerSaving({ variant = 'drawer' }: { readonly variant?: 'drawer' | 'sheet' }) {
+  const toasts = useToasts();
+  return (
+    <Modal
+      variant={variant}
+      title="Members"
+      isOpen
+      actions={
+        <>
+          <Button slot="close">Cancel</Button>
+          <Button
+            variant="primary"
+            onPress={() => {
+              toasts.toast({ tone: 'success', message: 'Members saved' });
+            }}
+          >
+            Save
+          </Button>
+        </>
+      }
+    >
+      Ada Lovelace, Grace Hopper and Alan Turing share this rotation.
+    </Modal>
+  );
+}
+
+/** Presses Save, then checks the toast it raised sits clear of the footer holding Save and Cancel. */
+async function keepsToastOffFooter() {
+  const dialog = await openDialog();
+  await userEvent.click(within(dialog as HTMLElement).getByRole('button', { name: 'Save' }));
+  const toast = await waitFor(() => {
+    const found = document.querySelector('[data-toast-region] [role="alertdialog"]');
+    if (found === null) throw new Error('no toast');
+    return found;
+  });
+  await settleAnimations();
+  const foot = within(dialog as HTMLElement).getByRole('button', { name: 'Save' }).parentElement;
+  if (foot === null) throw new Error('no footer');
+  await waitFor(async () => {
+    const a = toast.getBoundingClientRect();
+    const b = foot.getBoundingClientRect();
+    const overlaps = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    await expect(overlaps).toBe(false);
+  });
+  await expect(toast).toHaveTextContent('Members saved');
+}
+
+/**
+ * A toast raised while a drawer is open rises above the drawer's footer, so Save and Cancel stay in reach (a toast
+ * sat on Save at the bottom right, 4 November 2026). The toast is still announced and still reachable by Tab.
+ */
+export const DrawerWithToast: Story = {
+  render: () => (
+    <Stage>
+      <DrawerSaving />
+    </Stage>
+  ),
+  play: keepsToastOffFooter,
+};
+
+/** A bottom sheet's buttons stay clear too: the toast rises above them. */
+export const SheetWithToast: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <DrawerSaving variant="sheet" />
+    </Stage>
+  ),
+  play: keepsToastOffFooter,
 };
 
 /** The confirm's shape: no title bar, the question opening a 400px body, Cancel and the danger commit on one row. */

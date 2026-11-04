@@ -10,6 +10,7 @@ import { InPopover } from '../Popover/Popover.tsx';
 import styles from './Modal.module.css';
 import { strings } from './strings.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
+import { useToastClearance } from '../../provider/toast-clearance.ts';
 
 /** Props for ModalTrigger. */
 export interface ModalTriggerProps {
@@ -152,6 +153,8 @@ export function Modal({
   onOpenChange,
 }: ModalProps) {
   const { isFocusVisible } = useFocusVisible();
+  // Toasts rise above this footer when they would cover it: a drawer's or a sheet's Save at the window's foot.
+  const keepToastsOff = useToastClearance();
   const isAlert = tone === 'danger';
   // The palette and a peek name themselves for screen readers only: the palette's field and the peek's page
   // (a note's own title) say what they are on screen.
@@ -273,7 +276,7 @@ export function Modal({
             </div>
           </InPopover>
           {actions !== undefined && (
-            <div className={styles.foot}>
+            <div className={styles.foot} ref={keepToastsOff}>
               {footerStart !== undefined ? (
                 <div className={styles.footerStart}>{footerStart}</div>
               ) : (

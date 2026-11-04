@@ -30,6 +30,7 @@ New. The record panel (#17), notifications (#28) and the assistant (#54) open be
 - `isFlush` runs the content to the edges and gives it the panel's height, for Tabs and lists that scroll themselves.
 - `onStep` hears ↑ (`previous`) and ↓ (`next`) pressed inside the panel where nothing else owns the arrows (a field, contenteditable, tabs, a list, a grid, a menu, a radio group): the record panel steps through the list it was opened from (Twenty's side panel, the CRM flow pass, 31 October 2026). Why a prop: only the panel knows a key happened inside it, and a document listener would also hear keys meant for a dialog opened over it. The content swaps at once, with no motion, since it is a key pressed many times a day.
 - It is not modal: the page beside it stays usable, so focus can leave it with Tab or a click.
+- Toasts keep off its `footer`: a toast that would sit over the footer's buttons rises above them, as it does for a Modal's (4 November 2026).
 
 ## States
 
