@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { CheckboxButton, CheckboxField, FieldError, Text } from 'react-aria-components';
+import { CheckboxButton, CheckboxField, Text } from 'react-aria-components';
+import { FieldError } from '../FieldError/FieldError.tsx';
 import { Icon } from '../Icon/Icon.tsx';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Checkbox.module.css';
@@ -97,7 +98,7 @@ export function Checkbox({
           {description}
         </Text>
       )}
-      <FieldError className={styles.error}>{error}</FieldError>
+      {error !== undefined && <FieldError inset="check">{error}</FieldError>}
     </CheckboxField>
   );
 }

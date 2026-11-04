@@ -15,7 +15,7 @@ Ported from the artifact's Checkbox card (version 8). Forms, settings, table sel
 
 - `label` is required; `isLabelHidden` keeps it for screen readers only (table headers and rows).
 - `isIndeterminate` shows a dash when some but not all are checked.
-- `error` marks it invalid and says how to fix it, under the box.
+- `error` marks it invalid and says how to fix it, under the box. Drawn by the shared FieldError atom: the alert mark, then the words (5 November 2026).
 - As the checkbox attribute's editor, it toggles in place and never clears: unchecked is `false`.
 - `CheckboxMark` is the same look with no control. The checkbox attribute's display and the grid's selection column draw it, where the cell is the control (Space, or a click on the mark), so a scroll past hundreds of rows mounts no checkbox per row. Screen readers hear its label and state ("Is customer, checked"). It stays inside the library: screens draw a checkbox value through `AttributeDisplay`.
 

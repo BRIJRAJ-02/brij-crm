@@ -98,7 +98,9 @@ export const StepErrors: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(canvas.getByLabelText('Your name')).toHaveFocus());
-    await waitFor(() => expect(canvas.getByText('2 answers need a look')).toBeInTheDocument());
+    // Each problem under its own question, and no summary repeating them (the design critique, 5 November 2026).
+    await expect(canvas.getAllByText('Answer this question.')).toHaveLength(2);
+    await expect(canvas.queryByText(/need(s)? a look/)).toBeNull();
     await expect(canvas.getByRole('progressbar', { name: 'Step 1 of 3' })).toBeInTheDocument();
   },
 };
@@ -188,6 +190,29 @@ export const ConversationalError: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /OK/ }));
     await waitFor(() => expect(canvas.getByText('Answer this question.')).toBeInTheDocument());
     await expect(canvas.getByRole('progressbar', { name: '1 of 7' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * One at a time with Finish later (a page that keeps fills): its words start on OK's edge (`align="start"`), not
+ * offset by the quiet button's own inset.
+ */
+export const ConversationalFinishLater: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    form: ONE_BY_ONE,
+    onSave: () =>
+      Promise.resolve({
+        resumeToken: 'a'.repeat(43),
+        resumeUrl: `https://forms.example.com/f/enquiry?resume=${'a'.repeat(43)}`,
+        expiresAt: '2026-12-03T00:00:00.000Z',
+      }),
+  },
+  play: async ({ canvas }) => {
+    const later = await canvas.findByRole('button', { name: /Finish later/ });
+    const ok = canvas.getByRole('button', { name: /OK/ });
+    const label = later.querySelector('span') ?? later;
+    await expect(Math.abs(label.getBoundingClientRect().left - ok.getBoundingClientRect().left)).toBeLessThanOrEqual(2);
   },
 };
 

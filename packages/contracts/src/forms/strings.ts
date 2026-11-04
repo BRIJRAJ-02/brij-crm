@@ -95,8 +95,6 @@ export interface FormStrings {
   readonly product: string;
   /** The dial code picker's name with the country picked: "Country code, United States". */
   readonly dialCodeOf: (country: string) => string;
-  /** Above the button after a submit that found problems: "2 answers need a look". */
-  readonly needsALook: (count: number) => string;
   /** Under an email that looks like a common provider misspelt. */
   readonly didYouMean: (email: string) => string;
   /** The button that takes the suggested address. */
@@ -130,9 +128,7 @@ export interface FormStrings {
   readonly ok: string;
   /** Under a long answer one at a time, where Enter goes on (spec 0063, AC-6305). */
   readonly newLine: string;
-  /** One at a time's welcome screen (T42): the button that starts the questions. */
-  readonly start: string;
-  /** Beside Start and OK, one at a time (T42): the word before the Enter key, "press". */
+  /** Beside OK, one at a time (T42): the word before the Enter key, "press". */
   readonly pressEnter: string;
   /** The key itself, on its keycap: "Enter ↵". */
   readonly enterKey: string;
@@ -266,7 +262,6 @@ const EN: FormStrings = {
   poweredBy: 'Powered by',
   product: 'Timefix',
   dialCodeOf: (country) => `Country code, ${country}`,
-  needsALook: (count) => (count === 1 ? '1 answer needs a look' : `${String(count)} answers need a look`),
   didYouMean: (email) => `Did you mean ${email}?`,
   useSuggestion: 'Use it',
   bookingIn: (seconds) => `Taking you to book a time in ${String(seconds)} ${seconds === 1 ? 'second' : 'seconds'}.`,
@@ -283,7 +278,6 @@ const EN: FormStrings = {
   next: 'Continue',
   ok: 'OK',
   newLine: 'Shift + Enter for a new line',
-  start: 'Start',
   pressEnter: 'press',
   enterKey: 'Enter ↵',
   copyAnswers: 'Copy my answers',
