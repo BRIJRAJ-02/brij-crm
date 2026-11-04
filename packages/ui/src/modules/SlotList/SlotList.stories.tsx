@@ -141,6 +141,20 @@ export const Grid: Story = {
   ),
 };
 
+/** A host's Reschedule: each time with the guest's own under it, quieter. */
+export const GuestClock: Story = {
+  args: {
+    layout: 'grid',
+    slots: slots(6).map((slot) => ({ ...slot, detail: '03:30 London', name: `${slot.name}, 03:30 in London` })),
+    value: undefined,
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <SlotList {...args} />
+    </Stage>
+  ),
+};
+
 /** The 24 hour clock. */
 export const TwentyFourHours: Story = {
   parameters: { crm: { screenshot: false } },

@@ -1,8 +1,11 @@
+import type { RecordRefDisplay } from '@crm/contracts/values';
 import { useId, type MouseEvent, type ReactNode } from 'react';
+import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge, type BadgeTone } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
+import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { Hue } from '../../hue.ts';
 import styles from './BookingList.module.css';
@@ -41,6 +44,21 @@ export interface BookingListRow {
   readonly badgeTone?: BadgeTone;
   /** The row's actions at its end (Cancel, an Edit menu). */
   readonly actions?: ReactNode;
+  /**
+   * `columns` only: who it is with, drawn as a record chip draws a person (their face, then their name) in place of the
+   * title's words; the name is the row's title button, so the row keeps one way in and the person's page is the card's
+   * link, not the row's.
+   */
+  readonly chip?: RecordRefDisplay;
+  /** `columns` only: the page it came through ("Intro call") by its colour, or a calendar event's calendar. */
+  readonly source?: { readonly name: string; readonly hue: Hue };
+  /** `columns` only: where it stands, as a Tag in its own column ("Confirmed", "Needs a host" in orange). */
+  readonly status?: { readonly label: string; readonly hue: Hue };
+  /**
+   * `columns` only: the row's quick changes (Reschedule, Cancel), shown while the row is hovered or holds focus, and
+   * always on a touch screen; their room is kept, so nothing shifts as they show.
+   */
+  readonly quickActions?: ReactNode;
 }
 
 /** One day's band and its rows. */
@@ -70,6 +88,12 @@ export interface BookingListProps {
    * Card around it (Home's Today): rows inset, bands kept, a narrower date column for a time alone.
    */
   readonly placement?: 'page' | 'card';
+  /**
+   * `stacked` (the default) is two lines a row. `columns` (Bookings › List) is the records table's rhythm, one line a
+   * row: the time, who it is with (`chip`, else the title), where it came from (`source`), its `status` Tag, then the
+   * actions, `quickActions` first. Under 480px of container the source column goes and the status follows the title.
+   */
+  readonly layout?: 'stacked' | 'columns';
 }
 
 /** Whether a row has anything for its second line. */
@@ -102,17 +126,94 @@ function openOnPress(event: MouseEvent<HTMLElement>, open: () => void) {
  * (Join, calendar, where it came from, who, the note); and the row's actions
  * at the end.
  */
-export function BookingList({ label, groups, onOpen, openId, emptyState, placement = 'page' }: BookingListProps) {
+export function BookingList({
+  label,
+  groups,
+  onOpen,
+  openId,
+  emptyState,
+  placement = 'page',
+  layout = 'stacked',
+}: BookingListProps) {
   const id = useId();
   if (groups.every((group) => group.rows.length === 0)) return <>{emptyState}</>;
   return (
-    <section className={styles.root} aria-label={label} data-placement={placement === 'card' ? placement : undefined}>
+    <section
+      className={styles.root}
+      aria-label={label}
+      data-placement={placement === 'card' ? placement : undefined}
+      data-layout={layout === 'columns' ? layout : undefined}
+    >
       {groups.map((group, groupIndex) => (
         <div key={group.id} className={styles.group}>
           <h3 className={styles.band}>{group.label}</h3>
           <ul className={styles.rows} aria-label={group.label}>
             {group.rows.map((row, rowIndex) => {
               const rowId = `${id}-${String(groupIndex)}-${String(rowIndex)}`;
+              const isOpen = row.id === openId;
+              if (layout === 'columns') {
+                return (
+                  // As the stacked row: the title button is the keyboard's way in, a press anywhere else opens it too.
+                  // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions
+                  <li
+                    key={row.id}
+                    className={styles.row}
+                    data-pressable=""
+                    data-open={isOpen || undefined}
+                    aria-current={isOpen || undefined}
+                    onClick={(event) => {
+                      const element = event.currentTarget;
+                      openOnPress(event, () => onOpen(row.id, element));
+                    }}
+                  >
+                    <span className={styles.date} id={`${rowId}-when`}>
+                      {row.date}
+                    </span>
+                    <span className={styles.main}>
+                      <span className={styles.titleLine}>
+                        {row.chip !== undefined && (
+                          <span className={styles.face}>
+                            <Avatar
+                              name={row.chip.name}
+                              id={row.chip.recordId}
+                              size="xs"
+                              isDecorative
+                              {...(row.chip.imageSrc === undefined ? {} : { src: row.chip.imageSrc })}
+                            />
+                          </span>
+                        )}
+                        <Button
+                          variant="ghost"
+                          aria-describedby={`${rowId}-when ${rowId}-source`}
+                          {...(openId === undefined ? {} : { isExpanded: isOpen })}
+                          onPress={(event) => {
+                            const element = event.target instanceof HTMLElement ? event.target.closest('li') : null;
+                            if (element !== null) onOpen(row.id, element);
+                          }}
+                        >
+                          {row.chip === undefined ? row.title : row.chip.name}
+                        </Button>
+                        {row.join !== undefined && (
+                          <span className={styles.join}>
+                            <Icon name="video" size="sm" />
+                            <Link href={row.join.href}>{strings.join(row.join.provider)}</Link>
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                    <span className={styles.source} id={`${rowId}-source`}>
+                      {row.source !== undefined && <StatusDot hue={row.source.hue}>{row.source.name}</StatusDot>}
+                    </span>
+                    <span className={styles.status}>
+                      {row.status !== undefined && <Tag hue={row.status.hue}>{row.status.label}</Tag>}
+                    </span>
+                    <span className={styles.actions}>
+                      {row.quickActions !== undefined && <span className={styles.quick}>{row.quickActions}</span>}
+                      {row.actions}
+                    </span>
+                  </li>
+                );
+              }
               return (
                 // The title button is the row's way in by keyboard; a press anywhere else on the row opens it too.
                 // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions
@@ -120,7 +221,8 @@ export function BookingList({ label, groups, onOpen, openId, emptyState, placeme
                   key={row.id}
                   className={styles.row}
                   data-pressable=""
-                  data-open={row.id === openId || undefined}
+                  data-open={isOpen || undefined}
+                  aria-current={isOpen || undefined}
                   onClick={(event) => {
                     const element = event.currentTarget;
                     openOnPress(event, () => onOpen(row.id, element));

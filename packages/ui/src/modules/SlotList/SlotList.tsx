@@ -18,6 +18,11 @@ export interface Slot {
   readonly isBest?: boolean;
   /** The visitor's own calendar is busy then (shown only when they ask to see every time). */
   readonly isBusy?: boolean;
+  /**
+   * A quieter second line under the time: the same time on another clock (a host's Reschedule shows the guest's,
+   * "03:30 London"). Read out through `name`, so the screen puts it there too.
+   */
+  readonly detail?: string;
 }
 
 /** Props for SlotList. */
@@ -181,6 +186,11 @@ export function SlotList({
                   {slot.isBusy === true && (
                     <span className={styles.busy} aria-hidden="true">
                       {strings.busyTag}
+                    </span>
+                  )}
+                  {slot.detail !== undefined && (
+                    <span className={styles.detail} aria-hidden="true">
+                      {slot.detail}
                     </span>
                   )}
                 </button>

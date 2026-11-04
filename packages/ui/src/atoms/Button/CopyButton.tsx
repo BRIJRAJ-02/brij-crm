@@ -6,8 +6,12 @@ import { strings } from './strings.ts';
 
 /** Props for CopyButton. */
 export interface CopyButtonProps {
-  /** The text it copies. */
-  readonly value: string;
+  /**
+   * The text it copies, or a read that answers it on the press (a guest's link, which carries their key and is read
+   * only when asked for): the clipboard is handed the read itself while the press still counts as the person's, since
+   * Safari refuses a write made after an awaited request. The button is busy while it reads.
+   */
+  readonly value: string | (() => Promise<string>);
   /** The button's label; "Copy" when left out. */
   readonly label?: string;
   /** Shows the copy icon alone, with `label` as its name. */
@@ -69,6 +73,7 @@ export function CopyButton({
   const toasts = useToasts();
   // Bumped on each copy, so a second press restarts the two seconds.
   const [copiedAt, setCopiedAt] = useState(0);
+  const [isReading, setReading] = useState(false);
   const isCopied = copiedAt > 0;
   useEffect(() => {
     if (copiedAt === 0) return undefined;
@@ -77,11 +82,24 @@ export function CopyButton({
   }, [copiedAt]);
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(value);
+      if (typeof value === 'string') await navigator.clipboard.writeText(value);
+      else {
+        setReading(true);
+        const text = value();
+        if (typeof ClipboardItem === 'function') {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'text/plain': text.then((each) => new Blob([each], { type: 'text/plain' })) }),
+          ]);
+        } else {
+          await navigator.clipboard.writeText(await text);
+        }
+      }
       setCopiedAt((count) => count + 1);
     } catch {
       selectText(sourceRef?.current);
       toasts.toast({ tone: 'danger', message: failureMessage });
+    } finally {
+      setReading(false);
     }
   };
   const onPress = () => {
@@ -98,6 +116,7 @@ export function CopyButton({
           label={label}
           onPress={onPress}
           isDisabled={isDisabled}
+          isPending={isReading}
           {...(isRound ? { isRound } : {})}
         />
       ) : (
@@ -107,6 +126,7 @@ export function CopyButton({
           icon={icon}
           onPress={onPress}
           isDisabled={isDisabled}
+          isPending={isReading}
           labelReserve={isCopied ? label : strings.copiedLabel}
           {...(isRound ? { isRound } : {})}
           {...(name !== undefined && !isCopied ? { label: name } : {})}

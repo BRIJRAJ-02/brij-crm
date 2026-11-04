@@ -23,6 +23,8 @@ New. ChoiceChips hold a few labelled choices in a row; a day's times run long, s
 
 `layout="column"` (the default) is one time a row, scrolling in its pane with a fade at the foot; `grid` runs two to four across as its container allows (the List view, phones), and takes the rest of a column it sits in, rows from the top. `isLoading` draws a skeleton; `empty` takes the list's place when a day has nothing to show. `drawKey` changes with the day or zone so the times stagger in again. At its end a column's scroll goes on to the page's, so a swipe on a phone never stops in the times.
 
+A slot's `detail` is a quieter second line under its time: the same time on another clock (4 November 2026, B-05: a host's Reschedule shows the guest's own time, "03:30 London", so a move is never made blind to their night). It is hidden from screen readers, so the screen says it in the slot's `name` too. Story: GuestClock.
+
 ## States
 
 Default, picked (picker only), Best, busy, hover, focus, pressed, loading, empty.
