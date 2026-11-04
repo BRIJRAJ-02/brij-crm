@@ -4,7 +4,7 @@ import { ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
-import { useFormatSettings } from '../../provider/context.ts';
+import { useFormatSettings, useNow } from '../../provider/context.ts';
 import type { LinkPageBlock } from './LinkPage.tsx';
 import styles from './LinkPageTimes.module.css';
 import { strings } from './strings.ts';
@@ -25,6 +25,9 @@ const LOADING_CHIPS = 3;
 
 /** How far ahead of the screen the block asks for its times, so they are there as it scrolls in. */
 const NEAR = '200px';
+
+/** How many days the week strip shows, from today. */
+const WEEK = 7;
 
 /** A chip's address: the booking page on that day, that time chosen (`at`) for that length (`len`). */
 export function chipHref(href: string, start: string, minutes: number): string {
@@ -78,6 +81,34 @@ export function LinkPageTimes({ block, level, onPress, onNear }: LinkPageTimesPr
   );
   const Title = level === 2 ? 'h2' : 'h3';
   const isLoading = times === undefined || times.status === 'loading';
+  // Book a time (spec 0068, AC-6808): a week strip from today, today marked and each day with a free time dotted,
+  // read in the visitor's own zone. The chips under it carry the same times, so the strip is a picture of them.
+  const now = useNow();
+  const dayKey = memoIntl(
+    `link-times-key:${timeZone}`,
+    () => new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone }),
+  );
+  const weekday = memoIntl(
+    `link-times-weekday:${locale}:${timeZone}`,
+    () => new Intl.DateTimeFormat(locale, { weekday: 'narrow', timeZone }),
+  );
+  const dayNumber = memoIntl(
+    `link-times-daynum:${locale}:${timeZone}`,
+    () => new Intl.DateTimeFormat(locale, { day: 'numeric', timeZone }),
+  );
+  const freeDays = new Set(
+    times?.status === 'ready' ? times.starts.map((start) => dayKey.format(new Date(start))) : [],
+  );
+  // Each day stepped by the calendar from today's noon, so a clock change never skips or repeats one.
+  const noon = new Date(now);
+  noon.setHours(12, 0, 0, 0);
+  const week = Array.from({ length: WEEK }, (_, at) => {
+    const day = new Date(noon);
+    day.setDate(noon.getDate() + at);
+    return day;
+  });
+  // The strip says where the free times are; with none read (an error) it would read as a fully booked week.
+  const showsWeek = times === undefined || times.status !== 'error';
   return (
     <section ref={rootRef} className={styles.root} aria-labelledby={titleId} aria-busy={isLoading || undefined}>
       <span className={styles.head}>
@@ -86,6 +117,21 @@ export function LinkPageTimes({ block, level, onPress, onNear }: LinkPageTimesPr
         </Title>
         <span className={styles.length}>{strings.minutes(block.duration)}</span>
       </span>
+      {showsWeek && (
+        <ol className={styles.week} aria-hidden="true">
+          {week.map((day, at) => (
+            <li
+              key={dayKey.format(day)}
+              className={styles.day}
+              data-today={at === 0 || undefined}
+              data-free={freeDays.has(dayKey.format(day)) || undefined}
+            >
+              <span className={styles.weekday}>{weekday.format(day)}</span>
+              <span className={styles.dayNumber}>{dayNumber.format(day)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
       {isLoading ? (
         <div className={styles.chips}>
           <VisuallyHidden>{strings.timesLoading}</VisuallyHidden>

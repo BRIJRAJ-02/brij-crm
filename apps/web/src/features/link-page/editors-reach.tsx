@@ -48,7 +48,7 @@ const errorOf = (problems: BlockProblems, key: keyof BlockProblems) =>
 export function SocialsEditor({ item, items, linkPage, socialLinks, chrome, onSubmit, onClose }: BlockEditorProps) {
   const formId = useId();
   const editing = item?.kind === 'socials' ? item : undefined;
-  const extras = useBlockExtras(editing, false);
+  const extras = useBlockExtras(editing, true);
   const submit = () => {
     const draft: BlockDraft = { kind: 'socials', ...extras.draft };
     const checked = linkPage.check(draft, items, editing?.id);
@@ -507,7 +507,7 @@ export function TimesChooser({ slug, item, items, linkPage, chrome, onSubmit, on
   const [picked, setPicked] = useState<string | null>(editing?.pageId ?? null);
   const [problems, setProblems] = useState<BlockProblems>({});
   const [attempt, setAttempt] = useState(0);
-  const extras = useBlockExtras(editing, false);
+  const extras = useBlockExtras(editing, true);
   useEffect(() => {
     if (editing !== undefined) return undefined;
     let isCurrent = true;

@@ -8,10 +8,18 @@
 //   `link-page/<user>/<workspace>/<id>.<ext>`, nothing in it typed by anyone. Answers the picture's id and size.
 // - `GET /profile/images/:id?workspace=`: the owner's own copy, for the editor, kept by their browser alone.
 // - `GET /profile/insights.csv?workspace=&from=&to=`: the Insights CSV, at most 365 days (AC-6120).
+// - `POST /profile/audio`: one audio intro (spec 0068, AC-6808), the request body itself. The same order as a
+//   picture's: a session, the door, a store, the per person limit, a declared type that is a sound, the body to at
+//   most 4 MB, then `checkProfileAudio` (the type by its first bytes, an MP3's tags taken out, at most 1.5 MB kept),
+//   and only then the private store under the server's own path. Answers the recording's id.
+// - `GET /profile/audio/:id?workspace=`: the owner's own copy, for the editor.
 // The RPC's thumbnail fetch and a media block's poster go through `storeLinkPicture` too, so every picture a link
 // page keeps passed the same checks. Nothing here logs a picture, its path or an address it read.
 import { randomUUID } from 'node:crypto';
 import {
+  PROFILE_AUDIO_SIZE_REFUSAL,
+  PROFILE_AUDIO_TYPE_REFUSAL,
+  PROFILE_AUDIO_TYPES,
   PROFILE_IMAGE_TYPES,
   UPLOAD_WORKSPACE_HEADER,
   type MediaProvider,
@@ -19,7 +27,9 @@ import {
 } from '@crm/contracts';
 import {
   addProfileImage,
+  checkProfileAudio,
   checkProfileImage,
+  profileAudioStorePath,
   cleanTitle,
   getMyProfile,
   isMediaInfoHost,
@@ -93,6 +103,106 @@ export async function storeLinkPicture(
     throw error;
   }
   return { ok: true, image: id, width: checked.width, height: checked.height };
+}
+
+/** A recording stored for a link page: its id, or why it couldn't be. */
+export type StoredAudio =
+  | { readonly ok: true; readonly audio: string }
+  | { readonly ok: false; readonly reason: 'type' | 'size' | 'shape' | 'store' };
+
+/**
+ * Checks and keeps one audio intro of the caller's own link page (spec 0068, AC-6808): `checkProfileAudio` decides
+ * the type by the bytes and bounds the size, then the store keeps it under the server's own path and the definer
+ * keeps its row as a picture's, its sides 1 by 1. A store with no row is removed again.
+ */
+export async function storeLinkAudio(
+  files: FileStore | undefined,
+  scope: MemberScope,
+  userId: string,
+  bytes: Uint8Array,
+): Promise<StoredAudio> {
+  if (files === undefined) return { ok: false, reason: 'store' };
+  const checked = checkProfileAudio(bytes);
+  if (!checked.ok) return checked;
+  const id = randomUUID();
+  const path = profileAudioStorePath(userId, scope.workspaceId, id, checked.type);
+  await files.put(path, checked.bytes, checked.type);
+  try {
+    await addProfileImage(scope, {
+      id,
+      kind: 'audio',
+      path,
+      type: checked.type,
+      bytes: checked.bytes.byteLength,
+      width: 1,
+      height: 1,
+    });
+  } catch (error) {
+    await files.remove([path]).catch(() => undefined);
+    throw error;
+  }
+  return { ok: true, audio: id };
+}
+
+/** The largest stored recording read back: the database's own cap. */
+const STORED_AUDIO_MAX_BYTES = 1_572_864;
+
+/**
+ * A stored recording's bytes, read back for a response: only one of the four sound types, at most 1.5 MB, and only
+ * when its first bytes still are that type. Anything else is undefined, never a guess.
+ */
+export async function loadStoredAudio(
+  files: FileStore | undefined,
+  path: string,
+  type: string,
+): Promise<{ readonly type: string; readonly bytes: Uint8Array } | undefined> {
+  const known = PROFILE_AUDIO_TYPES.find((each) => each === type);
+  if (files === undefined || known === undefined) return undefined;
+  try {
+    const found = await files.get(path);
+    if (found === undefined || found.size > STORED_AUDIO_MAX_BYTES) return undefined;
+    const bytes = new Uint8Array(await new Response(found.stream).arrayBuffer());
+    const checked = checkProfileAudio(bytes);
+    return checked.ok && checked.type === known ? { type: known, bytes } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A recording's response: never sniffed, never framed, our own origin only. It answers a byte range too, since
+ * Safari's player asks for `bytes=0-1` first and plays nothing from a server that ignores it; a range it can't
+ * serve is 416, and a header that isn't one `bytes=` range is ignored and the whole file goes.
+ */
+export function audioResponse(
+  stored: { readonly type: string; readonly bytes: Uint8Array },
+  cacheControl: string,
+  range: string | undefined,
+): Response {
+  const headers = {
+    'content-type': stored.type,
+    'cache-control': cacheControl,
+    'accept-ranges': 'bytes',
+    'x-content-type-options': 'nosniff',
+    'cross-origin-resource-policy': 'same-origin',
+    'content-security-policy': "default-src 'none'",
+  };
+  const size = stored.bytes.byteLength;
+  const asked = range === undefined ? null : /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+  if (asked === null) return new Response(new Uint8Array(stored.bytes), { headers });
+  const [, from = '', to = ''] = asked;
+  // A part of the file is this visitor's answer alone: an edge never keeps it for the next one.
+  const partial = { ...headers, 'cache-control': 'private, max-age=300' };
+  // `bytes=-500` is the last 500; `bytes=100-` runs to the end.
+  const start = from === '' ? Math.max(0, size - Number(to)) : Number(from);
+  const end = from === '' || to === '' ? size - 1 : Math.min(Number(to), size - 1);
+  if ((from === '' && to === '') || !Number.isSafeInteger(start) || start > end || start >= size) {
+    return new Response(null, { status: 416, headers: { ...partial, 'content-range': `bytes */${String(size)}` } });
+  }
+  return new Response(stored.bytes.slice(start, end + 1), {
+    status: 206,
+    headers: { ...partial, 'content-range': `bytes ${String(start)}-${String(end)}/${String(size)}` },
+  });
 }
 
 /** Any https host with a name: what a link's own site may be. The pinned fetch and its address check bound it. */
@@ -250,6 +360,45 @@ export function mountLinkPagePictures(app: Hono<{ Variables: ImageVariables }>, 
         'content-security-policy': "default-src 'none'",
       },
     });
+  });
+
+  app.post('/profile/audio', imageBodyLimit(errorResponse), async (c: Context<{ Variables: ImageVariables }>) => {
+    const entered = await memberScopeOf(c, deps, c.req.header(UPLOAD_WORKSPACE_HEADER));
+    if (entered instanceof Response) return entered;
+    const { scope, session } = entered;
+    if (files === undefined) return errorResponse('API_UNAVAILABLE', 'Recordings can’t be uploaded here yet.');
+    // The same budget as pictures: a recording is one more of the page's files.
+    if (!limiter(`link-page-picture:${session.user.id}`, PICTURE_UPLOAD_LIMIT).allowed) {
+      return errorResponse('RATE_LIMITED', 'You’ve added a lot of files just now. Try again later.');
+    }
+    // A sound by its declared type (browsers name an M4A `audio/x-m4a` and an MP3 `audio/mp3`), then by its bytes.
+    const declared = (c.req.header('content-type') ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
+    if (!declared.startsWith('audio/')) return errorResponse('INPUT_INVALID', PROFILE_AUDIO_TYPE_REFUSAL);
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    if (bytes.byteLength === 0) return errorResponse('INPUT_INVALID', 'Choose a recording.');
+    try {
+      const stored = await storeLinkAudio(files, scope, session.user.id, bytes);
+      if (!stored.ok) {
+        return stored.reason === 'size'
+          ? errorResponse('PAYLOAD_TOO_LARGE', PROFILE_AUDIO_SIZE_REFUSAL)
+          : stored.reason === 'store'
+            ? errorResponse('API_UNAVAILABLE', 'Recordings can’t be uploaded here yet.')
+            : errorResponse('INPUT_INVALID', PROFILE_AUDIO_TYPE_REFUSAL);
+      }
+      log.info('link_page.audio.added', { requestId: c.get('requestId'), bytes: bytes.byteLength });
+      return c.json({ audio: stored.audio });
+    } catch (error) {
+      return refusalResponse(error, errorResponse);
+    }
+  });
+
+  app.get('/profile/audio/:id', async (c) => {
+    const entered = await memberScopeOf(c, deps, c.req.query('workspace'));
+    if (entered instanceof Response) return entered;
+    const found = await readOwnProfileImage(entered.scope, c.req.param('id'));
+    const stored = found === undefined ? undefined : await loadStoredAudio(files, found.path, found.type);
+    if (stored === undefined) return errorResponse('NOT_FOUND', 'There’s no recording here.');
+    return audioResponse(stored, 'private, max-age=3600', c.req.header('range'));
   });
 
   app.get('/profile/insights.csv', async (c) => {

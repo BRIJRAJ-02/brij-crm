@@ -62,7 +62,7 @@ export interface DraftLinkExtras {
 
 /** Spec 0061's six kinds as the editor's Modals have them, before they are checked. */
 export type ReachDraft =
-  | ({ readonly kind: 'socials' } & DraftWindow)
+  | ({ readonly kind: 'socials' } & DraftExtras)
   | ({ readonly kind: 'media'; readonly url: string; readonly title?: string } & DraftExtras)
   | ({
       readonly kind: 'image';
@@ -76,7 +76,7 @@ export type ReachDraft =
       readonly images: readonly { readonly image: string; readonly alt: string }[];
       readonly display?: 'row' | 'grid';
     } & DraftExtras)
-  | ({ readonly kind: 'times'; readonly workspaceId?: string; readonly pageId?: string } & DraftWindow)
+  | ({ readonly kind: 'times'; readonly workspaceId?: string; readonly pageId?: string } & DraftExtras)
   | ({ readonly kind: 'banner'; readonly text: string; readonly url?: string } & DraftWindow)
   // Spec 0065 (AC-6528): a place's menu, or its reservation page, with the row's own words when the owner gave any.
   | ({ readonly kind: 'menu'; readonly placeId?: string; readonly label?: string } & DraftWindow)
@@ -206,7 +206,7 @@ export function checkReachBlock(
     Object.keys(problems).length > 0 ? { ok: false as const, problems } : { ok: true as const, block };
   switch (draft.kind) {
     case 'socials':
-      return done({ kind: 'socials', ...window });
+      return done({ kind: 'socials', ...size, ...window });
     case 'media': {
       const url = draft.url.trim();
       if (url === '') problems.url = 'Paste the link.';
@@ -252,7 +252,13 @@ export function checkReachBlock(
     }
     case 'times':
       if (draft.workspaceId === undefined || draft.pageId === undefined) problems.page = 'Pick a booking page.';
-      return done({ kind: 'times', workspaceId: draft.workspaceId ?? '', pageId: draft.pageId ?? '', ...window });
+      return done({
+        kind: 'times',
+        workspaceId: draft.workspaceId ?? '',
+        pageId: draft.pageId ?? '',
+        ...size,
+        ...window,
+      });
     case 'menu':
     case 'reserve': {
       if (draft.placeId === undefined) problems.placeId = 'Pick a place.';
@@ -358,6 +364,40 @@ export interface ReachApi {
   }) => Promise<ProfileQrStyle>;
   /** Sends a picture's bytes to `/api/profile/images` for the workspace named; answers the stored picture. */
   readonly upload: (workspace: string, picture: Blob) => Promise<StoredPicture>;
+  /** Sends an audio intro's bytes to `/api/profile/audio` (spec 0068); answers the stored recording's id. */
+  readonly uploadAudio: (workspace: string, recording: Blob) => Promise<string>;
+}
+
+/**
+ * Sends an audio intro's bytes to `/api/profile/audio` on `origin` for the workspace named (spec 0068, AC-6808), from
+ * the link page's own chunk. The server decides the type by the bytes and keeps at most 1.5 MB. Answers the stored
+ * recording's id, or rejects with a DataError (the network, or the route's refusal with its status).
+ */
+export async function sendAudio(origin: string, workspace: string, recording: Blob): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(new URL('/api/profile/audio', origin).href, {
+      method: 'POST',
+      // A recording a phone made may come with no type; the server reads its bytes either way.
+      headers: { 'x-crm-workspace': workspace, 'content-type': recording.type === '' ? 'audio/mpeg' : recording.type },
+      body: recording,
+      credentials: 'include',
+    });
+  } catch (error: unknown) {
+    throw toDataError(error);
+  }
+  let answer: unknown;
+  try {
+    answer = await response.json();
+  } catch {
+    answer = undefined;
+  }
+  const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+  if (!response.ok) throw toDataError({ ...fields, status: response.status });
+  if (typeof fields.audio !== 'string') {
+    throw toDataError({ code: 'INTERNAL', message: 'The recording didn’t upload. Try again.' });
+  }
+  return fields.audio;
 }
 
 /**
@@ -604,6 +644,14 @@ export function createReach(deps: {
       deps.api.fetchThumbnail({ workspace, id, mutationId: deps.mintId() }).catch((error: unknown) => {
         throw toDataError(error);
       }),
+    /** Stores an audio intro for the page (spec 0068, AC-6808): the recording as picked; the server checks it. */
+    uploadAudio: (workspace: string, recording: Blob): Promise<string> =>
+      deps.api.uploadAudio(workspace, recording).catch((error: unknown) => {
+        throw toDataError(error);
+      }),
+    /** Where the owner's own browser plays one of their stored recordings: their copy, live or not. */
+    audioSrc: (workspace: string, audioId: string): string =>
+      `/api/profile/audio/${encodeURIComponent(audioId)}?${new URLSearchParams({ workspace }).toString()}`,
     /** Where the owner's own browser reads one of their stored pictures: their copy, live or not. */
     pictureSrc: (workspace: string, imageId: string): string =>
       `/api/profile/images/${encodeURIComponent(imageId)}?${new URLSearchParams({ workspace }).toString()}`,

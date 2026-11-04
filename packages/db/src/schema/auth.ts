@@ -528,7 +528,7 @@ export const profileItems = auth.table(
     foreignKey({ name: 'profile_items_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     check(
       'profile_items_kind',
-      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial', 'socials', 'media', 'image', 'gallery', 'times', 'banner', 'menu', 'reserve')`,
+      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial', 'socials', 'media', 'image', 'gallery', 'times', 'banner', 'menu', 'reserve', 'profile', 'status', 'audio', 'timeline', 'logos', 'work', 'steps', 'location', 'events')`,
     ),
     check('profile_items_position', sql`${t.position} between 0 and 999`),
     check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),
@@ -539,7 +539,7 @@ export const profileItems = auth.table(
     check('profile_items_page', sql`${t.kind} not in ('page', 'times') or ${t.pageId} is not null`),
     check(
       'profile_items_plain',
-      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial', 'socials', 'media', 'image', 'gallery', 'banner') or (${t.pageId} is null and ${t.formId} is null)`,
+      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial', 'socials', 'media', 'image', 'gallery', 'banner', 'profile', 'status', 'audio', 'timeline', 'logos', 'work', 'steps', 'location', 'events') or (${t.pageId} is null and ${t.formId} is null)`,
     ),
     uniqueIndex('profile_items_page_once')
       .on(t.userId, t.workspaceId, t.pageId)
@@ -709,9 +709,12 @@ export const profileImages = auth.table(
     id: uuid('id').notNull().primaryKey(),
     userId: uuid('user_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
-    /** `upload`, `thumb` or `poster`: what made it, never who may see it. */
+    /**
+     * `upload`, `thumb` or `poster`: what made it, never who may see it. `audio` (spec 0068, migration 0182) is an
+     * audio intro's recording, the one kind that is a sound; its sides are held at 1.
+     */
     kind: text('kind').notNull(),
-    /** Its store path, made by the server: `link-page/<user>/<workspace>/<id>.<jpg|png|webp>`. */
+    /** Its store path, made by the server: `link-page/<user>/<workspace>/<id>.<jpg|png|webp|mp3|m4a|ogg|webm>`. */
     path: text('path').notNull(),
     contentType: text('content_type').notNull(),
     bytes: integer('bytes').notNull(),
@@ -723,13 +726,15 @@ export const profileImages = auth.table(
     uniqueIndex('profile_images_path').on(t.path),
     index('profile_images_page').on(t.userId, t.workspaceId),
     index('profile_images_created').on(t.createdAt),
-    check('profile_images_kind', sql`${t.kind} in ('upload', 'thumb', 'poster')`),
+    check('profile_images_kind', sql`${t.kind} in ('upload', 'thumb', 'poster', 'audio')`),
     check(
       'profile_images_shape',
-      sql`${t.path} ~ ('^link-page/' || ${t.userId}::text || '/' || ${t.workspaceId}::text || '/' || ${t.id}::text || '[.](png|jpg|webp)$')
-        and ${t.contentType} in ('image/jpeg', 'image/png', 'image/webp')
+      sql`${t.path} ~ ('^link-page/' || ${t.userId}::text || '/' || ${t.workspaceId}::text || '/' || ${t.id}::text || '[.](png|jpg|webp|mp3|m4a|ogg|webm)$')
+        and ${t.contentType} in ('image/jpeg', 'image/png', 'image/webp', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm')
+        and (${t.kind} = 'audio') = (${t.contentType} like 'audio/%')
         and ${t.bytes} between 1 and 1572864
-        and ${t.width} between 1 and 4096 and ${t.height} between 1 and 4096`,
+        and ${t.width} between 1 and 4096 and ${t.height} between 1 and 4096
+        and (${t.kind} <> 'audio' or (${t.width} = 1 and ${t.height} = 1))`,
     ),
     foreignKey({ name: 'profile_images_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     foreignKey({

@@ -596,6 +596,8 @@ function Blocks({
   const items = useMemo(() => (state.status === 'ready' ? state.items : []), [state]);
   // Spec 0061: a stored picture as the owner's own browser reads it (live or not), and now, for each block's window.
   const picture = (imageId: string) => ({ src: linkPage.reach.pictureSrc(slug, imageId), width: 4, height: 3 });
+  // An audio intro plays from the owner's own copy (spec 0068); the phone is inert, so it never plays there.
+  const audio = (audioId: string) => linkPage.reach.audioSrc(slug, audioId);
   const now = useWindowClock(items);
   const { locale, timeZone } = useFormatSettings();
   const whenFormat = memoIntl(
@@ -793,7 +795,7 @@ function Blocks({
 
   const tileOf = (item: ProfileItem): LinkPageBlock => {
     // The row's tile draws the block whatever its window, so a scheduled block still reads as itself.
-    const block = previewBlock(item, handle, linkPage.markOf, { picture, socials: shownSocials });
+    const block = previewBlock(item, handle, linkPage.markOf, { picture, audio, socials: shownSocials });
     if (block !== undefined) return block;
     // A paused or unavailable page still shows its calendar tile in the list.
     return { kind: 'page', id: item.id, title: rowWords(item).title, href: '', facts: '' };
@@ -922,7 +924,7 @@ function Blocks({
     );
 
   const previewBlocks = items.flatMap((item) => {
-    const block = previewBlock(item, handle, linkPage.markOf, { picture, socials: shownSocials, now });
+    const block = previewBlock(item, handle, linkPage.markOf, { picture, audio, socials: shownSocials, now });
     return block === undefined ? [] : [block];
   });
   const preview = (

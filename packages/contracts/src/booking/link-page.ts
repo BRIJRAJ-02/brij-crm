@@ -48,6 +48,27 @@ import {
   QR_CONTRAST_MIN,
   QR_CONTRAST_REFUSAL,
   QR_LABEL_MAX,
+  PROFILE_ADDRESS_MAX,
+  PROFILE_AUDIO_TITLE_MAX,
+  PROFILE_CARD_LINE_MAX,
+  PROFILE_CARD_TITLE_MAX,
+  PROFILE_EVENTS_ITEMS,
+  PROFILE_ITEM_TITLE_MAX,
+  PROFILE_LOCATION_TITLE_MAX,
+  PROFILE_LOGO_ALT_MAX,
+  PROFILE_LOGOS_MAX,
+  PROFILE_LOGOS_MIN,
+  PROFILE_PLACE_MAX,
+  PROFILE_STATUS_MAX,
+  PROFILE_STATUS_STATES,
+  PROFILE_STEP_BODY_MAX,
+  PROFILE_STEPS_MAX,
+  PROFILE_STEPS_MIN,
+  PROFILE_TIMELINE_ITEMS,
+  PROFILE_WAVE,
+  PROFILE_WHEN_MAX,
+  PROFILE_WORK_BODY_MAX,
+  PROFILE_WORK_ITEMS,
 } from './link-page-rules.ts';
 import { contrastRatio } from '../brand-colour.ts';
 
@@ -194,6 +215,7 @@ export const ProfileContactBlock = z
     website2: contactField('website2').optional(),
     website3: contactField('website3').optional(),
     note: contactField('note').optional(),
+    ...sizeField,
     ...windowFields,
   })
   .superRefine((card, ctx) => {
@@ -222,6 +244,7 @@ export const ProfileTextBlock = z.object({
     'Keep it to 1,000 characters.',
     'Keep it to 20 line breaks. A longer piece reads better somewhere it can be a page.',
   ),
+  ...sizeField,
   ...windowFields,
 });
 /** A text block. */
@@ -244,6 +267,7 @@ export const ProfileTestimonialBlock = z.object({
   author: oneLine(1, PROFILE_AUTHOR_MAX, 'Say who said it.', 'Keep the name to 80 characters.'),
   /** What they do, under their name: absent where it adds nothing. */
   role: oneLine(0, PROFILE_AUTHOR_MAX, '', 'Keep the role to 80 characters.').optional(),
+  ...sizeField,
   ...windowFields,
 });
 /** Something a customer said. */
@@ -280,6 +304,7 @@ export const ProfileFaqBlock = z.object({
         !items.some((item, at) => items.slice(0, at).some((before) => sameQuestion(before.question, item.question))),
       { error: 'You already asked that one.' },
     ),
+  ...sizeField,
   ...windowFields,
 });
 /** A FAQ block. */
@@ -296,6 +321,7 @@ export const ProfileFormBlock = z.object({
   workspaceId: Uuid,
   formId: Uuid,
   label: oneLine(1, PROFILE_TITLE_MAX.form, 'Give the form a label.', 'Keep the label to 60 characters.'),
+  ...sizeField,
   ...windowFields,
 });
 /** A form block. */
@@ -305,7 +331,7 @@ export type ProfileFormBlock = z.infer<typeof ProfileFormBlock>;
  * The person's social links as one row of marks (spec 0061, AC-6104): no fields of its own, since the links are the
  * person's (`auth.social_links`) and drawn from there. At most one per page, wherever the owner puts it.
  */
-export const ProfileSocialsBlock = z.object({ kind: z.literal('socials'), ...windowFields });
+export const ProfileSocialsBlock = z.object({ kind: z.literal('socials'), ...sizeField, ...windowFields });
 /** A socials row block. */
 export type ProfileSocialsBlock = z.infer<typeof ProfileSocialsBlock>;
 
@@ -370,6 +396,7 @@ export const ProfileTimesBlock = z.object({
   kind: z.literal('times'),
   workspaceId: Uuid,
   pageId: Uuid,
+  ...sizeField,
   ...windowFields,
 });
 /** A next times block. */
@@ -412,6 +439,171 @@ export const ProfileBannerBlock = z.object({
 /** A banner block. */
 export type ProfileBannerBlock = z.infer<typeof ProfileBannerBlock>;
 
+/** A bento card's own small title (AC-6808): "Experience", "Clients", "How I work". Optional on every kind. */
+const cardTitle = optionalLine(PROFILE_CARD_TITLE_MAX, 'Keep the title to 40 characters.');
+
+/**
+ * The profile card (spec 0068, AC-6808): the page's own face and name, one line under them (the bio when it says
+ * nothing), and Book and Share. Book opens the page's first booking page, so the card names nothing of its own.
+ */
+export const ProfileProfileBlock = z.object({
+  kind: z.literal('profile'),
+  line: optionalLine(PROFILE_CARD_LINE_MAX, 'Keep the line to 80 characters.'),
+  ...sizeField,
+  ...windowFields,
+});
+/** A profile card block. */
+export type ProfileProfileBlock = z.infer<typeof ProfileProfileBlock>;
+
+/** "Available for work" (AC-6808): a short line beside a green dot, or a quiet one while away. */
+export const ProfileStatusBlock = z.object({
+  kind: z.literal('status'),
+  text: oneLine(1, PROFILE_STATUS_MAX, 'Say what you’re open to.', 'Keep the status to 40 characters.'),
+  state: z.enum(PROFILE_STATUS_STATES, { error: 'Pick open or away.' }).optional(),
+  ...sizeField,
+  ...windowFields,
+});
+/** A status block. */
+export type ProfileStatusBlock = z.infer<typeof ProfileStatusBlock>;
+
+/**
+ * A short audio intro (AC-6808): one recording the owner uploaded (by its id, stored privately as a picture is), an
+ * optional title, and the waveform their browser drew from it.
+ */
+export const ProfileAudioBlock = z.object({
+  kind: z.literal('audio'),
+  audio: ProfileImageId,
+  title: optionalLine(PROFILE_AUDIO_TITLE_MAX, 'Keep the title to 60 characters.'),
+  wave: z.string().regex(PROFILE_WAVE, { error: 'Add the recording again.' }).optional(),
+  ...sizeField,
+  ...windowFields,
+});
+/** An audio intro block. */
+export type ProfileAudioBlock = z.infer<typeof ProfileAudioBlock>;
+
+/** One row of an experience timeline: when, what, and where. */
+export const ProfileTimelineItem = z.object({
+  when: oneLine(1, PROFILE_WHEN_MAX, 'Say when, like 2021.', 'Keep it to 20 characters.'),
+  title: oneLine(1, PROFILE_ITEM_TITLE_MAX, 'Say what you did.', 'Keep it to 60 characters.'),
+  place: optionalLine(PROFILE_PLACE_MAX, 'Keep it to 60 characters.'),
+});
+/** One row of an experience timeline. */
+export type ProfileTimelineItem = z.infer<typeof ProfileTimelineItem>;
+
+/** An experience timeline (AC-6808): one to twelve rows, in the owner's order. */
+export const ProfileTimelineBlock = z.object({
+  kind: z.literal('timeline'),
+  title: cardTitle,
+  items: z
+    .array(ProfileTimelineItem)
+    .min(1, 'Add at least one row.')
+    .max(PROFILE_TIMELINE_ITEMS, 'Keep it to 12 rows.'),
+  ...sizeField,
+  ...windowFields,
+});
+/** An experience timeline block. */
+export type ProfileTimelineBlock = z.infer<typeof ProfileTimelineBlock>;
+
+/** One client's logo: a picture of the owner's, cropped in the browser, and the client's name as its alt text. */
+export const ProfileLogo = z.object({
+  image: ProfileImageId,
+  alt: oneLine(1, PROFILE_LOGO_ALT_MAX, 'Name the client.', 'Keep the name to 80 characters.'),
+});
+/** One client's logo. */
+export type ProfileLogo = z.infer<typeof ProfileLogo>;
+
+/** A row of client logos that drifts sideways (AC-6808): two to twelve, none twice. */
+export const ProfileLogosBlock = z.object({
+  kind: z.literal('logos'),
+  title: cardTitle,
+  images: z
+    .array(ProfileLogo)
+    .min(PROFILE_LOGOS_MIN, 'Add at least two logos.')
+    .max(PROFILE_LOGOS_MAX, 'Keep it to 12 logos.')
+    .refine((images) => new Set(images.map((each) => each.image)).size === images.length, {
+      error: 'That logo is in the row already.',
+    }),
+  ...sizeField,
+  ...windowFields,
+});
+/** A logos block. */
+export type ProfileLogosBlock = z.infer<typeof ProfileLogosBlock>;
+
+/** One work card: a picture, a title, two lines and an optional link. */
+export const ProfileWorkItem = z.object({
+  image: ProfileImageId.optional(),
+  title: oneLine(1, PROFILE_ITEM_TITLE_MAX, 'Give it a title.', 'Keep the title to 60 characters.'),
+  body: optionalLine(PROFILE_WORK_BODY_MAX, 'Keep it to 160 characters.'),
+  url: ProfileLinkUrl.optional(),
+});
+/** One work card. */
+export type ProfileWorkItem = z.infer<typeof ProfileWorkItem>;
+
+/** Work cards (AC-6808): one to six pieces of work, each a picture, a title and two lines. */
+export const ProfileWorkBlock = z.object({
+  kind: z.literal('work'),
+  title: cardTitle,
+  items: z.array(ProfileWorkItem).min(1, 'Add a piece of work.').max(PROFILE_WORK_ITEMS, 'Keep it to 6 pieces.'),
+  ...sizeField,
+  ...windowFields,
+});
+/** A work block. */
+export type ProfileWorkBlock = z.infer<typeof ProfileWorkBlock>;
+
+/** One step of "How I work". */
+export const ProfileStep = z.object({
+  title: oneLine(1, PROFILE_ITEM_TITLE_MAX, 'Name the step.', 'Keep the step’s name to 60 characters.'),
+  body: oneLine(1, PROFILE_STEP_BODY_MAX, 'Say what happens.', 'Keep it to 240 characters.'),
+});
+/** One step of "How I work". */
+export type ProfileStep = z.infer<typeof ProfileStep>;
+
+/** How I work (AC-6808): two to six numbered steps a visitor switches between. */
+export const ProfileStepsBlock = z.object({
+  kind: z.literal('steps'),
+  title: cardTitle,
+  items: z
+    .array(ProfileStep)
+    .min(PROFILE_STEPS_MIN, 'Add at least two steps.')
+    .max(PROFILE_STEPS_MAX, 'Keep it to 6 steps.'),
+  ...sizeField,
+  ...windowFields,
+});
+/** A steps block. */
+export type ProfileStepsBlock = z.infer<typeof ProfileStepsBlock>;
+
+/** A location (AC-6808): its name, the address, and Directions built from it (a static map comes later). */
+export const ProfileLocationBlock = z.object({
+  kind: z.literal('location'),
+  title: optionalLine(PROFILE_LOCATION_TITLE_MAX, 'Keep the name to 60 characters.'),
+  address: oneLine(1, PROFILE_ADDRESS_MAX, 'Write the address.', 'Keep the address to 200 characters.'),
+  ...sizeField,
+  ...windowFields,
+});
+/** A location block. */
+export type ProfileLocationBlock = z.infer<typeof ProfileLocationBlock>;
+
+/** One event: its name, when it starts, where, and an optional link. */
+export const ProfileEvent = z.object({
+  title: oneLine(1, PROFILE_ITEM_TITLE_MAX, 'Name the event.', 'Keep the name to 60 characters.'),
+  at: ProfileInstant,
+  place: optionalLine(PROFILE_PLACE_MAX, 'Keep it to 60 characters.'),
+  url: ProfileLinkUrl.optional(),
+});
+/** One event. */
+export type ProfileEvent = z.infer<typeof ProfileEvent>;
+
+/** Next events (AC-6808): one to eight; a visitor sees the ones still to come, soonest first. */
+export const ProfileEventsBlock = z.object({
+  kind: z.literal('events'),
+  title: cardTitle,
+  items: z.array(ProfileEvent).min(1, 'Add an event.').max(PROFILE_EVENTS_ITEMS, 'Keep it to 8 events.'),
+  ...sizeField,
+  ...windowFields,
+});
+/** An events block. */
+export type ProfileEventsBlock = z.infer<typeof ProfileEventsBlock>;
+
 /** One block's fields, by kind: what every write is checked against before it is stored. */
 export const ProfileBlock = z
   .discriminatedUnion('kind', [
@@ -431,6 +623,15 @@ export const ProfileBlock = z
     ProfileBannerBlock,
     ProfileMenuBlock,
     ProfileReserveBlock,
+    ProfileProfileBlock,
+    ProfileStatusBlock,
+    ProfileAudioBlock,
+    ProfileTimelineBlock,
+    ProfileLogosBlock,
+    ProfileWorkBlock,
+    ProfileStepsBlock,
+    ProfileLocationBlock,
+    ProfileEventsBlock,
   ])
   .superRefine((block, ctx) => {
     // The one rule that reads both ends of a window (AC-6111): the end after the start.
@@ -553,6 +754,21 @@ export const ProfileItem = z.discriminatedUnion('kind', [
   ProfileBannerBlock.extend({ ...Stored, url: z.string().optional() }),
   ProfileMenuBlock.extend({ ...Stored, place: ProfilePlaceFacts.optional() }),
   ProfileReserveBlock.extend({ ...Stored, place: ProfilePlaceFacts.optional() }),
+  ProfileProfileBlock.extend(Stored),
+  ProfileStatusBlock.extend(Stored),
+  ProfileAudioBlock.extend(Stored),
+  ProfileTimelineBlock.extend(Stored),
+  ProfileLogosBlock.extend(Stored),
+  ProfileWorkBlock.extend({
+    ...Stored,
+    items: z.array(ProfileWorkItem.extend({ url: z.string().optional() })),
+  }),
+  ProfileStepsBlock.extend(Stored),
+  ProfileLocationBlock.extend(Stored),
+  ProfileEventsBlock.extend({
+    ...Stored,
+    items: z.array(ProfileEvent.extend({ at: z.string(), url: z.string().optional() })),
+  }),
 ]);
 /** One block as the editor reads it. */
 export type ProfileItem = z.infer<typeof ProfileItem>;
@@ -698,21 +914,29 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     fullName: z.string().min(1),
     jobTitle: z.string().optional(),
     company: z.string().optional(),
+    ...publicSize,
   }),
   /** Writing: the words themselves, drawn as text and never as markup (spec 0052, AC-5206). */
-  z.object({ kind: z.literal('text'), id: Uuid, title: z.string().optional(), body: z.string().min(1) }),
+  z.object({
+    kind: z.literal('text'),
+    id: Uuid,
+    title: z.string().optional(),
+    body: z.string().min(1),
+    ...publicSize,
+  }),
   /** The questions, with their answers: a fold a visitor opens, counting nothing (AC-5210, AC-5211). */
   z.object({
     kind: z.literal('faq'),
     id: Uuid,
     title: z.string().optional(),
     items: z.array(ProfileFaqItem).min(1),
+    ...publicSize,
   }),
   /**
    * A Timefix form: the owner's own words and the form's address on our own origin (AC-5215, AC-5226). No workspace
    * id, no form id, no question and no count: the same rule a booking page block follows.
    */
-  z.object({ kind: z.literal('form'), id: Uuid, title: z.string().min(1), key: z.string().min(1) }),
+  z.object({ kind: z.literal('form'), id: Uuid, title: z.string().min(1), key: z.string().min(1), ...publicSize }),
   /** Something a customer said: words only, with nothing to press and nothing to count (AC-5220). */
   z.object({
     kind: z.literal('testimonial'),
@@ -720,9 +944,10 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     quote: z.string().min(1),
     author: z.string().min(1),
     role: z.string().optional(),
+    ...publicSize,
   }),
   /** The person's social links as one row of marks (AC-6104): the links are the profile's own `socials`. */
-  z.object({ kind: z.literal('socials'), id: Uuid }),
+  z.object({ kind: z.literal('socials'), id: Uuid, ...publicSize }),
   /**
    * A video or a song behind its facade (AC-6106): the poster from our origin, the title, the provider, and the
    * frame's address, built on the server from the parsed provider and id alone. Nothing loads from it until Play.
@@ -764,6 +989,7 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     slug: z.string(),
     title: z.string(),
     duration: BookingDuration,
+    ...publicSize,
   }),
   /** One line at the very top of the page (AC-6112), with an optional link. */
   z.object({ kind: z.literal('banner'), id: Uuid, text: z.string().min(1), url: z.string().optional() }),
@@ -780,6 +1006,98 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
   }),
   /** A place's reservation page (spec 0065, AC-6528): the row's words and its address (`/r/<key>`). */
   z.object({ kind: z.literal('reserve'), id: Uuid, title: z.string().min(1), path: z.string().min(1) }),
+  /**
+   * Spec 0068's bento cards (AC-6808). Every word goes as text, every picture as our own origin's path, every
+   * address as one the link rule passed on the way out, and nothing names a workspace, a member or an email.
+   */
+  /** The profile card: the page's own face and name, with its one line when it has one. */
+  z.object({ kind: z.literal('profile'), id: Uuid, line: z.string().optional(), ...publicSize }),
+  /** "Available for work", and whether its dot is green. */
+  z.object({
+    kind: z.literal('status'),
+    id: Uuid,
+    text: z.string().min(1),
+    state: z.enum(PROFILE_STATUS_STATES).catch('open'),
+    ...publicSize,
+  }),
+  /** A short audio intro: our own origin's path to it, its title and its waveform. */
+  z.object({
+    kind: z.literal('audio'),
+    id: Uuid,
+    src: z.string(),
+    title: z.string().optional(),
+    wave: z.string().regex(PROFILE_WAVE).optional().catch(undefined),
+    ...publicSize,
+  }),
+  /** An experience timeline. */
+  z.object({
+    kind: z.literal('timeline'),
+    id: Uuid,
+    title: z.string().optional(),
+    items: z
+      .array(z.object({ when: z.string().min(1), title: z.string().min(1), place: z.string().optional() }))
+      .min(1),
+    ...publicSize,
+  }),
+  /** Client logos, each with the client's name. */
+  z.object({
+    kind: z.literal('logos'),
+    id: Uuid,
+    title: z.string().optional(),
+    images: z.array(PublicPicture.extend({ alt: z.string().min(1) })).min(1),
+    ...publicSize,
+  }),
+  /** Work cards. */
+  z.object({
+    kind: z.literal('work'),
+    id: Uuid,
+    title: z.string().optional(),
+    items: z
+      .array(
+        z.object({
+          image: PublicPicture.optional(),
+          title: z.string().min(1),
+          body: z.string().optional(),
+          url: z.string().optional(),
+        }),
+      )
+      .min(1),
+    ...publicSize,
+  }),
+  /** How I work: the numbered steps. */
+  z.object({
+    kind: z.literal('steps'),
+    id: Uuid,
+    title: z.string().optional(),
+    items: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).min(1),
+    ...publicSize,
+  }),
+  /** A location: its name, the address and the Directions address the server built from it. */
+  z.object({
+    kind: z.literal('location'),
+    id: Uuid,
+    title: z.string().optional(),
+    address: z.string().min(1),
+    directions: z.string(),
+    ...publicSize,
+  }),
+  /** The next events: every one the owner listed, soonest first; the page shows those still to come. */
+  z.object({
+    kind: z.literal('events'),
+    id: Uuid,
+    title: z.string().optional(),
+    items: z
+      .array(
+        z.object({
+          title: z.string().min(1),
+          at: z.iso.datetime(),
+          place: z.string().optional(),
+          url: z.string().optional(),
+        }),
+      )
+      .min(1),
+    ...publicSize,
+  }),
 ]);
 /** One block as a visitor reads it. */
 export type PublicProfileItem = z.infer<typeof PublicProfileItem>;

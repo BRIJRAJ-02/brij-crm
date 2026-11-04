@@ -137,7 +137,7 @@ export const reachStrings = {
   schedule: 'Schedule',
   sizeAndSchedule: 'Size and schedule',
   layout: 'Layout',
-  layoutList: 'List',
+  layoutList: 'Stack',
   layoutGrid: 'Grid',
   showFrom: 'Show from',
   hideAfter: 'Hide after',
@@ -145,14 +145,12 @@ export const reachStrings = {
   ends: (at: string) => `Ends ${at}`,
   ended: 'Ended',
 
-  // A tile's size on a grid page (AC-6103).
-  size: 'Size on a grid',
-  sizeSmall: 'Small',
-  sizeWide: 'Wide',
-  sizeLarge: 'Large',
-  sizeSmallText: 'One tile',
-  sizeWideText: 'Two tiles across',
-  sizeLargeText: 'Two by two',
+  // A card's span on a grid page (spec 0068, AC-6808): one column or two of the bento.
+  size: 'Width on a grid',
+  sizeSmall: 'One column',
+  sizeWide: 'Two columns',
+  sizeSmallText: 'A third of a wide screen; widens to close a gap in its row',
+  sizeWideText: 'Two thirds of a wide screen',
 
   // Insights (AC-6118 to AC-6120).
   insights: 'Insights',

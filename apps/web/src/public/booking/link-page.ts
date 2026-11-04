@@ -29,6 +29,16 @@ export interface BlocksContext {
   readonly times?: ReadonlyMap<string, LinkPageTimes>;
 }
 
+/** A card's own small title, when its owner gave one. */
+function titled(item: { readonly title?: string }): { readonly title?: string } {
+  return item.title === undefined ? {} : { title: item.title };
+}
+
+/** A card's span on a grid page (spec 0068, AC-6808), when it has one. */
+function sized(item: { readonly size?: 'small' | 'wide' | 'large' }): { readonly size?: 'small' | 'wide' | 'large' } {
+  return item.size === undefined ? {} : { size: item.size };
+}
+
 /** The blocks of one page of a profile, in order, as LinkPage draws them. A contact card shows its full name. */
 export function blocksOf(
   handle: string,
@@ -64,6 +74,7 @@ export function blocksOf(
             quote: item.quote,
             author: item.author,
             ...(item.role === undefined ? {} : { role: item.role }),
+            ...sized(item),
           },
         ];
       case 'heading':
@@ -77,11 +88,19 @@ export function blocksOf(
         ];
       case 'text':
         return [
-          { kind: 'text', id: item.id, body: item.body, ...(item.title === undefined ? {} : { title: item.title }) },
+          {
+            kind: 'text',
+            id: item.id,
+            body: item.body,
+            ...(item.title === undefined ? {} : { title: item.title }),
+            ...sized(item),
+          },
         ];
       case 'form':
         // Our own origin, in the same tab: an ordinary navigation, no frame and no new policy (AC-5215).
-        return [{ kind: 'form', id: item.id, title: item.title, href: `/f/${encodeURIComponent(item.key)}` }];
+        return [
+          { kind: 'form', id: item.id, title: item.title, href: `/f/${encodeURIComponent(item.key)}`, ...sized(item) },
+        ];
       case 'faq':
         return [
           {
@@ -89,6 +108,7 @@ export function blocksOf(
             id: item.id,
             items: item.items,
             ...(item.title === undefined ? {} : { title: item.title }),
+            ...sized(item),
           },
         ];
       case 'page':
@@ -108,7 +128,7 @@ export function blocksOf(
       case 'socials': {
         // The person's own set, as a block wherever they put it (AC-6104). With none, the block simply isn't drawn.
         const links = context.socials ?? [];
-        return links.length === 0 ? [] : [{ kind: 'socials', id: item.id, links }];
+        return links.length === 0 ? [] : [{ kind: 'socials', id: item.id, links, ...sized(item) }];
       }
       case 'media':
         // The frame's address comes from the server, built from the parsed provider and id (AC-6106): nothing here
@@ -157,6 +177,7 @@ export function blocksOf(
             href: `/${encodeURIComponent(handle)}/${encodeURIComponent(item.slug)}`,
             duration: item.duration,
             ...(read === undefined ? {} : { times: read }),
+            ...sized(item),
           },
         ];
       }
@@ -180,9 +201,79 @@ export function blocksOf(
             // The card as a vCard, from the api on this origin: a plain link a phone offers to add (AC-5115).
             // `card` names which of the page's cards this is (AC-6114); an older link with none still answers the first.
             href: `/api/public/handles/${encodeURIComponent(handle)}/contact.vcf?card=${encodeURIComponent(item.id)}`,
+            ...sized(item),
           },
         ];
       }
+      // Spec 0068's cards (AC-6808): what the server answered, as the library draws it. Every picture and the audio
+      // intro are our own origin's paths already, every address one the link rule passed on the way out.
+      case 'profile':
+        return [
+          { kind: 'profile', id: item.id, ...(item.line === undefined ? {} : { line: item.line }), ...sized(item) },
+        ];
+      case 'status':
+        return [{ kind: 'status', id: item.id, text: item.text, state: item.state, ...sized(item) }];
+      case 'audio':
+        return [
+          {
+            kind: 'audio',
+            id: item.id,
+            src: item.src,
+            ...(item.title === undefined ? {} : { title: item.title }),
+            ...(item.wave === undefined ? {} : { wave: item.wave }),
+            ...sized(item),
+          },
+        ];
+      case 'timeline':
+      case 'steps':
+        return [
+          item.kind === 'timeline'
+            ? { kind: 'timeline', id: item.id, items: item.items, ...titled(item), ...sized(item) }
+            : { kind: 'steps', id: item.id, items: item.items, ...titled(item), ...sized(item) },
+        ];
+      case 'logos':
+        return [{ kind: 'logos', id: item.id, images: item.images, ...titled(item), ...sized(item) }];
+      case 'work':
+        return [
+          {
+            kind: 'work',
+            id: item.id,
+            items: item.items.map((piece) => ({
+              title: piece.title,
+              ...(piece.image === undefined ? {} : { image: piece.image }),
+              ...(piece.body === undefined ? {} : { body: piece.body }),
+              ...(piece.url === undefined ? {} : { href: piece.url }),
+            })),
+            ...titled(item),
+            ...sized(item),
+          },
+        ];
+      case 'location':
+        return [
+          {
+            kind: 'location',
+            id: item.id,
+            address: item.address,
+            directions: item.directions,
+            ...titled(item),
+            ...sized(item),
+          },
+        ];
+      case 'events':
+        return [
+          {
+            kind: 'events',
+            id: item.id,
+            items: item.items.map((event) => ({
+              title: event.title,
+              at: event.at,
+              ...(event.place === undefined ? {} : { place: event.place }),
+              ...(event.url === undefined ? {} : { href: event.url }),
+            })),
+            ...titled(item),
+            ...sized(item),
+          },
+        ];
       default:
         // A kind this bundle was built before: skipped, never a crash.
         return [];

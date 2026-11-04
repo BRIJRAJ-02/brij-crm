@@ -464,6 +464,7 @@ export type {
   VisitStatus,
 } from '@crm/contracts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
+export type { BentoDraft } from './link-page/bento.ts';
 export { BRAND_QUICK_PICKS } from './brand/picks.ts';
 export type {
   DraftWindow,

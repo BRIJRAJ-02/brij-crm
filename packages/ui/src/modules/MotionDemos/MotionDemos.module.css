@@ -1,0 +1,272 @@
+/* Spec 0068's stageshow demos (AC-6807): one surface each at a card's size, quiet greys, real words only on what the
+   story is about, and the library's own motion parts doing the moving. The pointer glides between targets on the
+   ease in out curve and dips as it presses. */
+@layer components {
+  .stage {
+    margin: 0;
+    container-type: inline-size;
+    inline-size: var(--size-page-card);
+    max-inline-size: 100%;
+    /* The public pages' press and label swap (spec 0068): a held control eases down, a changed label rises in. */
+    --scale-press: var(--scale-enter);
+    --label-swap: var(--duration-modal);
+  }
+
+  .surface {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-20);
+    border-radius: var(--radius-xl);
+    background: var(--surface-subtle);
+    overflow: hidden;
+  }
+
+  .card {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-16);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .card[data-small] {
+    flex: none;
+    gap: var(--space-4);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .eyebrow {
+    color: var(--text-secondary);
+    font: var(--text-label);
+  }
+
+  .title {
+    color: var(--text);
+    font: var(--text-note-title);
+  }
+
+  .quiet {
+    color: var(--text-secondary);
+    font: var(--text-body);
+  }
+
+  .rowTitle {
+    color: var(--text);
+    font: var(--text-body-strong);
+  }
+
+  .body,
+  .done {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    animation: scene-in var(--duration-modal) var(--ease-out);
+  }
+
+  .done {
+    align-items: flex-start;
+    gap: var(--space-6);
+  }
+
+  @keyframes scene-in {
+    from {
+      opacity: 0;
+      translate: var(--space-8) 0;
+      filter: blur(var(--space-2));
+    }
+  }
+
+  .times {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-8);
+  }
+
+  .time {
+    display: grid;
+    place-items: center;
+    block-size: var(--size-row);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font: var(--text-body-strong);
+    transition:
+      background-color var(--duration-move) var(--ease-out),
+      border-color var(--duration-move) var(--ease-out),
+      color var(--duration-move) var(--ease-out);
+  }
+
+  .time[data-chosen] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .foot {
+    display: flex;
+    margin-block-start: auto;
+  }
+
+  /* The menu and its item sheet, which reveals from the foot as a panel does. */
+  /* The sheet opens over the menu, so the menu keeps a sheet's height of room. */
+  .menu {
+    position: relative;
+    min-block-size: calc(var(--size-column-wide) - var(--space-32));
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-8);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .item[data-dim] {
+    box-shadow: none;
+  }
+
+  .dish {
+    flex: none;
+    inline-size: var(--size-input);
+    block-size: var(--size-input);
+    border-radius: var(--radius-md);
+    background: var(--tag-orange-bg, var(--accent-soft));
+  }
+
+  .itemWords {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .sheet {
+    position: absolute;
+    inset-inline: calc(var(--space-20) * -1);
+    inset-block-end: calc(var(--space-20) * -1);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-20);
+    border-start-start-radius: var(--radius-xl);
+    border-start-end-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-lg);
+    translate: 0 100%;
+    transition: translate var(--duration-modal) var(--ease-drawer);
+  }
+
+  .sheet[data-open] {
+    translate: 0 0;
+  }
+
+  .price {
+    color: var(--text);
+    font: var(--text-note-title);
+  }
+
+  /* Publish: the editor's bar and field beside the guest's view of the same page. */
+  .split {
+    display: grid;
+    flex: 1;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: var(--space-16);
+  }
+
+  /* In a phone's column the guest's view sits under the editor: a compact design, not a squeeze. */
+  @container (inline-size < 480px) {
+    .split {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .editor,
+  .guest {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+  }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-12);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+  }
+
+  .fact {
+    color: var(--text-secondary);
+    font: var(--text-body);
+  }
+
+  /* The guest's view takes the new length as a text swap: up out of a soft blur, a beat after Publish lands. */
+  .fact[data-changed] {
+    color: var(--text);
+    animation: scene-in var(--duration-modal) var(--ease-out) var(--duration-press) both;
+  }
+
+  .pointer {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    display: flex;
+    color: var(--text);
+    translate: var(--pointer-x, 0) var(--pointer-y, 0);
+    transition:
+      translate var(--duration-modal) var(--ease-in-out),
+      scale var(--duration-press) var(--ease-out);
+    pointer-events: none;
+  }
+
+  .pointer[data-pressed] {
+    animation: press var(--duration-press) var(--ease-out) var(--duration-modal);
+  }
+
+  @keyframes press {
+    50% {
+      scale: var(--scale-enter);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .body,
+    .done,
+    .fact[data-changed],
+    .pointer[data-pressed] {
+      animation: none;
+    }
+
+    .sheet,
+    .pointer,
+    .time {
+      transition: none;
+    }
+  }
+}
