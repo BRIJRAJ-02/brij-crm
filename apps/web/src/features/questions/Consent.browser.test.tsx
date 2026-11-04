@@ -93,8 +93,8 @@ describe('a Consent question in the builder (AC-1053)', () => {
     );
     await userEvent.click(page.getByRole('button', { name: /^Send me the monthly note/ }));
     await expect.element(page.getByRole('textbox', { name: 'Wording' })).toBeVisible();
-    await expect.element(page.getByText('Where it goes')).not.toBeInTheDocument();
-    await expect.element(page.getByText('Consent · Kept as consent')).toBeVisible();
+    await expect.element(page.getByText('Save answer to')).not.toBeInTheDocument();
+    await expect.element(page.getByText('Consent', { exact: true }).first()).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: /Marketing emails/ }));
     await userEvent.click(page.getByRole('option', { name: 'Terms and privacy' }));
     expect(latest.find((each) => each.id === 'marketing')?.options?.purpose).toBe('terms');

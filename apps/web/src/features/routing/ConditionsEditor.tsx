@@ -48,7 +48,7 @@ export function ConditionsEditor({
   }));
 
   return (
-    <SettingsStack>
+    <SettingsStack variant="nested">
       {value.rules.length > 1 && (
         <SegmentedControl
           label={strings.join}
@@ -154,14 +154,19 @@ export function ConditionsEditor({
         );
       })}
       {!isReadOnly && value.rules.length < CONDITIONS_MAX && (
-        <Button
-          ref={addRef}
-          variant="dashed"
-          icon="plus"
-          onPress={() => onChange({ ...value, rules: [...value.rules, conditionOn(facts[0])] })}
-        >
-          {strings.addCondition}
-        </Button>
+        // Its own line, the button only as wide as its words, at the start under the conditions.
+        <span>
+          <Button
+            ref={addRef}
+            // Quiet, at the start under the conditions: a dashed bar the editor's width read as an empty box to fill.
+            variant="ghost"
+            size="sm"
+            icon="plus"
+            onPress={() => onChange({ ...value, rules: [...value.rules, conditionOn(facts[0])] })}
+          >
+            {strings.addCondition}
+          </Button>
+        </span>
       )}
     </SettingsStack>
   );

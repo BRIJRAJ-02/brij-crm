@@ -44,12 +44,19 @@ describe('a form’s New step dividers (spec 0063, AC-6303)', () => {
     expect(moved.steps[0]?.startsAt).toBe('a');
   });
 
-  it('adds a divider at the end, and the next question added goes under it', () => {
-    const added = addStep(flow, 's3');
-    expect(order(added)).toEqual(['a', 'b', '|s2', 'c', 'd', '|s3']);
+  it('adds a divider that splits the last step in two, so the new step already holds questions (T15)', () => {
+    expect(order(addStep({ questions: QUESTIONS, steps: [] }, 's2'))).toEqual(['a', 'b', '|s2', 'c', 'd']);
+    expect(order(addStep(flow, 's3'))).toEqual(['a', 'b', '|s2', 'c', '|s3', 'd']);
+    expect(order(addStep({ questions: QUESTIONS.slice(0, 3), steps: [] }, 's2'))).toEqual(['a', 'b', '|s2', 'c']);
+  });
+
+  it('adds a divider at the end when the last step has one question or none, and the next question goes under it', () => {
+    const one: Flow = { questions: QUESTIONS, steps: [{ id: 's2', startsAt: 'd' }] };
+    const added = addStep(one, 's3');
+    expect(order(added)).toEqual(['a', 'b', 'c', '|s2', 'd', '|s3']);
     const withE = [...QUESTIONS, question('e')];
     expect(keepBreaks(QUESTIONS, withE, added.steps)).toEqual([
-      { id: 's2', title: 'More', startsAt: 'c' },
+      { id: 's2', startsAt: 'd' },
       { id: 's3', startsAt: 'e' },
     ]);
   });
@@ -83,7 +90,7 @@ describe('a form’s New step dividers (spec 0063, AC-6303)', () => {
     expect(stepPlaces(flow).get('s2')).toEqual({ number: 2, count: 2 });
     expect(stepPlaces(moveItem(flow, 's2', 0)).get('s2')).toEqual({ number: 1, count: 4 });
     // One with nothing under it yet is no step a visitor counts.
-    expect(stepPlaces(addStep(flow, 's3')).get('s3')).toEqual({ number: 0, count: 0 });
+    expect(stepPlaces({ ...flow, steps: [...flow.steps, { id: 's3' }] }).get('s3')).toEqual({ number: 0, count: 0 });
     expect(questionsBefore(flow, 's2').map((each) => each.id)).toEqual(['a', 'b']);
   });
 });

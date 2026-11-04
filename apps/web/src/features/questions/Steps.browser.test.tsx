@@ -63,7 +63,7 @@ function Builder({
   };
   return (
     <>
-      <LayoutCard layout={layout} hasSteps={flow.steps.length > 0} isReadOnly={false} onChange={setLayout} />
+      <LayoutCard layout={layout} isReadOnly={false} onChange={setLayout} />
       <QuestionsSection
         questions={flow.questions}
         onChange={(update) => {
@@ -101,11 +101,11 @@ describe('Layout (AC-6302)', () => {
     const preview = page.getByText('Tell us about you');
     await expect.element(preview).toBeInTheDocument();
     expect(document.querySelector('[role="progressbar"]')).toBeNull();
-    await userEvent.click(page.getByRole('radio', { name: 'Steps' }));
+    await userEvent.click(page.getByText('Steps', { exact: true }).first());
     await expect
       .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
       .toBe('Step 1 of 2');
-    await userEvent.click(page.getByRole('radio', { name: 'One at a time' }));
+    await userEvent.click(page.getByText('One at a time', { exact: true }));
     await expect
       .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
       .toBe('1 of 3');
@@ -113,33 +113,32 @@ describe('Layout (AC-6302)', () => {
 });
 
 describe('New step dividers (AC-6303)', () => {
-  it('adds one, titles it, and removes it with Undo', async () => {
+  it('adds one already placed and named, titles it, and removes it with Undo (T15)', async () => {
     await open('steps');
-    await expect.element(page.getByText('Add a step under Questions to split the form.')).toBeVisible();
     // Wide enough for Add a step beside Add a question.
     await userEvent.click(page.getByRole('button', { name: 'Add a step' }));
-    // The new divider opens at the end with its title focused.
+    // One click splits the form: the new step already holds the last question, named by its place, title focused.
     const title = page.getByRole('textbox', { name: 'Step title' });
     await expect.element(title).toHaveFocus();
+    await expect.element(page.getByText('1 question')).toBeVisible();
     await userEvent.type(title, 'About your team');
-    await expect.element(page.getByRole('button', { name: /^New step · About your team/ })).toBeVisible();
-    await expect.element(page.getByText('No questions yet')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /^Step 2 · About your team/ })).toBeVisible();
     // Its head closes it, as a question's does.
-    await userEvent.click(page.getByRole('button', { name: /^New step · About your team/, expanded: true }));
+    await userEvent.click(page.getByRole('button', { name: /^Step 2 · About your team/, expanded: true }));
     await expect.element(title).not.toBeInTheDocument();
-    await userEvent.click(page.getByRole('button', { name: /^New step · About your team/, expanded: false }));
-    // The preview counts the new step only once a question is under it: one step shows no progress line.
-    await expect.poll(() => document.querySelector('[role="progressbar"]')).toBeNull();
+    await userEvent.click(page.getByRole('button', { name: /^Step 2 · About your team/, expanded: false }));
+    // The preview walks the two steps at once.
+    await expect.poll(() => document.querySelector('[role="progressbar"]')).not.toBeNull();
     // Remove it: its questions join the step above, and Undo brings it back.
     await userEvent.click(page.getByRole('button', { name: 'Remove step' }));
-    await expect.element(page.getByRole('button', { name: /^New step/ })).not.toBeInTheDocument();
+    await expect.element(page.getByRole('button', { name: /^Step 2/ })).not.toBeInTheDocument();
     await userEvent.click(page.getByRole('button', { name: 'Undo' }));
-    await expect.element(page.getByRole('button', { name: /^New step · About your team/ })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /^Step 2 · About your team/ })).toBeVisible();
   });
 
-  it('keeps dividers outside Steps, and says quietly that only Steps shows them', async () => {
+  it('keeps dividers outside Steps, and says quietly that only Steps uses them', async () => {
     await open('classic', [{ id: 's2', title: 'More', startsAt: 'size' }]);
-    await expect.element(page.getByText(/1 question · Shows with Steps/)).toBeVisible();
+    await expect.element(page.getByText('Only used with the Steps layout')).toBeVisible();
     expect(page.getByRole('button', { name: 'Add a step' }).query()).toBeNull();
   });
 });

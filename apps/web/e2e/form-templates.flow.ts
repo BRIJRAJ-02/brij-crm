@@ -67,9 +67,8 @@ test.describe('the form template gallery', () => {
     await expect(page).toHaveURL(/\/captures\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
     await expect(page.getByRole('heading', { level: 1, name: /Feedback/ })).toBeVisible({ timeout: 30_000 });
 
-    // The template's own questions, with the rating it is named for, filed where People has a field for them.
-    await expect(page.getByText('Person › Name').first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('Person › Email addresses').first()).toBeVisible();
+    // The template's own questions, with the rating it is named for (where each is saved shows in its editor).
+    await expect(page.getByText('Your name').first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('How was it?').first()).toBeVisible();
 
     // The form the chosen tile made, in both themes.

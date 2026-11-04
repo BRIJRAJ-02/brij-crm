@@ -71,6 +71,29 @@ export function valueFor(op: ConditionOp, value: Condition['value']): Condition[
   return typeof value === 'string' || value === undefined ? value : value[0];
 }
 
+/**
+ * A ready rule for one click (Add logic, Show only if…; the owner, 4 November 2026: "everything complex at a single
+ * click"): one condition on the question it most likely reads, already filled in. It reads the first question with
+ * options among `prefer` (a step's own questions), else the last question with options, else a step's first number
+ * question, else its first question, else the last one there is; it takes that question's first comparison and, when it has options, its first option as the value. A question
+ * that is typed into is left without a value: the rule waits, unsaved, until one is typed.
+ */
+export function readyConditions(facts: readonly Fact[], prefer: ReadonlySet<string> = new Set()): ShowWhen {
+  const hasOptions = (fact: Fact) => (fact.options?.length ?? 0) > 0;
+  const preferred = facts.filter((fact) => prefer.has(fact.key));
+  // A choice is the likeliest thing to branch on; then a number (a score, a rating); then any question at all.
+  const fact =
+    preferred.find(hasOptions) ??
+    facts.findLast(hasOptions) ??
+    preferred.find((each) => each.kind === 'number') ??
+    preferred[0] ??
+    facts.at(-1);
+  const [op = 'is'] = opsFor(fact);
+  const first = fact?.options?.[0];
+  const value = first === undefined || isValueless(op) ? undefined : op === 'is_any_of' ? [first.id] : first.id;
+  return { join: 'all', rules: [{ key: fact?.key ?? '', op, ...(value === undefined ? {} : { value }) }] };
+}
+
 /** The facts a form's questions give: every question but a file one, in order. */
 export function questionFacts(questions: readonly FormQuestion[]): readonly Fact[] {
   return questions.flatMap((question): Fact[] => {

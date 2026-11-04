@@ -25,6 +25,7 @@ import {
   ConditionRow,
   DatePicker,
   Field,
+  FieldGroup,
   InfoTip,
   focusLater,
   LockReason,
@@ -36,7 +37,7 @@ import {
   QuestionList,
   Select,
   SettingsRow,
-  SettingsSection,
+  SettingsStack,
   SubmenuTrigger,
   Tooltip,
   type IconName,
@@ -44,7 +45,7 @@ import {
   type QuestionListItem,
   type Toasts,
 } from '@crm/ui';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   addPreset,
   addQuestion,
@@ -62,7 +63,7 @@ import {
   type QuestionChange,
   type Questions,
 } from './questions.ts';
-import { addJump, changeJump, idOfTarget, jumpChoices, removeJump, targetOfId } from './jumps.ts';
+import { addJump, changeJump, idOfTarget, jumpChoices, nextStepName, removeJump, targetOfId } from './jumps.ts';
 import {
   addStep,
   changeStep,
@@ -77,8 +78,8 @@ import {
   type StepChange,
 } from './steps.ts';
 import { strings } from './strings.ts';
-import { ConditionsEditor, firstConditions } from '../routing/ConditionsEditor.tsx';
-import { conditionsLine, questionFacts, storedShowWhen } from '../routing/facts.ts';
+import { ConditionsEditor } from '../routing/ConditionsEditor.tsx';
+import { conditionsLine, questionFacts, readyConditions, storedShowWhen } from '../routing/facts.ts';
 import { strings as routingStrings } from '../routing/strings.ts';
 
 /** Each answer type's icon, on the tile that starts its question's row. */
@@ -153,6 +154,8 @@ export interface QuestionsSectionProps {
   readonly steps?: StepsProps;
   /** A question or divider was opened (its row id; a divider's is `step:<id>`): the preview shows its step. */
   readonly onOpened?: (rowId: string) => void;
+  /** Before Add a question in the list's header: a form's Flow. */
+  readonly actionsStart?: ReactNode;
 }
 
 /** A form's step dividers, as the questions section draws and changes them. */
@@ -165,6 +168,11 @@ export interface StepsProps {
   readonly onChange: (update: (before: Flow) => Flow) => void;
   /** The divider a publish refused, and why: kept open, with the error under its title. */
   readonly problem?: { readonly stepId: string; readonly message: string };
+  /**
+   * Adds an ending and answers its id: Add logic on a step with nowhere further down to jump makes one, so one click
+   * still gives a working rule. Left out, Add logic shows only where there is a step or an ending to jump to.
+   */
+  readonly onAddEnding?: () => string | undefined;
 }
 
 /** A divider's row id in the list: apart from the questions' ids, which share their pattern. */
@@ -268,7 +276,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   const [focused, setFocused] = useState<string | undefined>(undefined);
   if (focusQuestionId !== focused) {
     setFocused(focusQuestionId);
-    if (focusQuestionId !== undefined && questions.some((question) => question.id === focusQuestionId)) {
+    const linkedStep = focusQuestionId === undefined ? undefined : stepOfRow(focusQuestionId);
+    if (
+      focusQuestionId !== undefined &&
+      (questions.some((question) => question.id === focusQuestionId) ||
+        (linkedStep !== undefined && props.steps?.steps.some((step) => step.id === linkedStep) === true))
+    ) {
       setOpen((before) => new Set([...before, focusQuestionId]));
       setJustAdded(focusQuestionId);
     }
@@ -318,21 +331,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     ...(CHOICE_TYPES.includes(question.answerType)
       ? { choiceCount: (question.choices ?? []).filter((choice) => choice.trim() !== '').length }
       : {}),
-    // The card's line is a list split by " · ": unfiled says so in two words, the full sentence lives in Where it goes.
-    // A form that keeps its submissions only files nothing, so its cards say nothing about it.
-    ...(objectName === undefined
-      ? {}
-      : {
-          filed:
-            // A consent is never filed onto a field: it is kept as a consent record on the person.
-            question.answerType === 'consent'
-              ? strings.consentKept
-              : question.filedOn === undefined || isFilingOff
-                ? planned.has(question.id)
-                  ? strings.willCreateShort(planned.get(question.id) ?? '')
-                  : strings.notFiledShort
-                : filedLine(question, objectName, attributes),
-        }),
+    // Where an answer is saved shows in its editor, not on the row: the row stays the question and its type (T17).
     ...(question.showWhen === undefined
       ? {}
       : {
@@ -361,9 +360,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               kind: 'step',
               label: strings.stepName(place.number, step.title),
               typeIcon: 'layers',
-              note: [strings.stepHolds(place.count), ...(breaks.layout === 'steps' ? [] : [strings.stepsOnly])].join(
-                strings.separator,
-              ),
+              // Outside Steps the divider is kept but does nothing (One at a time and Classic ignore it), so it says so.
+              note: breaks.layout === 'steps' ? strings.stepHolds(place.count) : strings.stepsOnly,
               ...(step.showWhen === undefined
                 ? {}
                 : {
@@ -401,6 +399,34 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     });
   };
 
+  // Where focus goes after a one click rule appears or goes: its first picker, or back to the button that made it.
+  const focusTargets = useRef(new Map<string, HTMLButtonElement | null>());
+  const refFor = (key: string) => (node: HTMLButtonElement | null) => {
+    focusTargets.current.set(key, node);
+  };
+  const focusOn = (key: string) => {
+    focusLater(() => focusTargets.current.get(key) ?? null);
+  };
+
+  /** Show only if…: a ready condition on the questions before it, focus on its first picker. */
+  const showIfButton = (key: string, earlier: readonly FormQuestion[], onAdd: (showWhen: ShowWhenValue) => void) => {
+    const facts = questionFacts(earlier);
+    if (isReadOnly || facts.length === 0) return null;
+    return (
+      <Button
+        ref={refFor(`${key}:show-button`)}
+        variant="ghost"
+        icon="eye"
+        onPress={() => {
+          onAdd(storedShowWhen(readyConditions(facts)));
+          focusOn(`${key}:show`);
+        }}
+      >
+        {strings.showOnlyIf}
+      </Button>
+    );
+  };
+
   return (
     <QuestionList
       label={strings.questions}
@@ -416,6 +442,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         : {})}
       actions={
         <>
+          {props.actionsStart}
           {!isReadOnly && (
             <>
               {isFull ? (
@@ -439,12 +466,9 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                     if (key === 'step') addBreak();
                   }}
                 >
-                  {breaks !== undefined && (
-                    <MenuItem
-                      id="step"
-                      icon="layers"
-                      {...(breaks.layout === 'steps' ? {} : { description: strings.stepsOnlyMenu })}
-                    >
+                  {/* Only Steps draws steps: elsewhere a divider would do nothing, so it isn't offered. */}
+                  {breaks?.layout === 'steps' && (
+                    <MenuItem id="step" icon="layers">
                       {strings.addStep}
                     </MenuItem>
                   )}
@@ -502,12 +526,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               step={step}
               earlier={questionsBefore(flow, stepId)}
               // A jump decides once its own step has been answered, so it reads that step's questions too.
-              readable={questions.filter((each) =>
-                [...questionsBefore(flow, stepId), ...stepQuestionsOf(flow, stepId)].some(
-                  (readable) => readable.id === each.id,
-                ),
-              )}
+              readable={readableBy(flow, stepId)}
               jumpTargets={jumpChoices(flow, breaks.endings ?? [], stepId)}
+              {...(nextStepName(flow, stepId) === undefined ? {} : { nextName: nextStepName(flow, stepId) })}
+              refFor={refFor}
+              focusOn={focusOn}
               isReadOnly={isReadOnly}
               isJustAdded={justAdded === id || stepProblem?.stepId === stepId}
               {...(stepProblem?.stepId === stepId ? { problem: stepProblem.message } : {})}
@@ -537,6 +560,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             // A question just added, or one a publish refused, takes focus and comes into view.
             isJustAdded={justAdded === id || problem?.questionId === id}
             {...(problem?.questionId === id ? { problem: problem.message } : {})}
+            refFor={refFor}
+            focusOn={focusOn}
             onChange={(change) => {
               onChange((before) => changeQuestion(before, id, change, liveIds));
             }}
@@ -547,9 +572,45 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         );
       }}
       renderFooterStart={(id) => {
+        const stepId = stepOfRow(id);
+        if (stepId !== undefined) {
+          const step = breaks?.steps.find((each) => each.id === stepId);
+          if (step === undefined || breaks === undefined || flow === undefined || isReadOnly) return null;
+          return (
+            <StepLogicButtons
+              step={step}
+              earlier={questionsBefore(flow, stepId)}
+              readable={readableBy(flow, stepId)}
+              own={stepQuestionsOf(flow, stepId)}
+              targets={jumpChoices(flow, breaks.endings ?? [], stepId)}
+              showIfButton={(onAdd) => showIfButton(id, questionsBefore(flow, stepId), onAdd)}
+              refFor={refFor}
+              focusOn={focusOn}
+              {...(breaks.onAddEnding === undefined ? {} : { onAddEnding: breaks.onAddEnding })}
+              onChange={(change) => {
+                breaks.onChange((before) => changeStep(before, stepId, change));
+              }}
+            />
+          );
+        }
         const question = questions.find((each) => each.id === id);
+        if (question === undefined) return null;
+        // Show only if…: one click to a ready condition, while it has none and something before it to read.
+        const showIf =
+          isLocked(question) || question.showWhen !== undefined
+            ? null
+            : showIfButton(
+                id,
+                questions.slice(
+                  0,
+                  questions.findIndex((each) => each.id === question.id),
+                ),
+                (showWhen) => {
+                  onChange((before) => changeQuestion(before, id, { showWhen }, liveIds));
+                },
+              );
         // A hidden question has nothing a visitor could answer (spec 0063): it is never one they must.
-        if (question === undefined || question.answerType === 'hidden') return null;
+        if (question.answerType === 'hidden') return showIf;
         // How they heard about you (spec 0067, AC-6703): a form's one choice or short text question whose answers
         // Insights shows beside its sources. Marking one unmarks any other.
         const canBeSource = props.keptWith === 'submission' && SOURCE_ANSWER_TYPES.has(question.answerType);
@@ -573,6 +634,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                 }}
               />
             )}
+            {showIf}
           </>
         );
       }}
@@ -669,12 +731,20 @@ interface QuestionEditorProps {
   /** Just added: its Question field takes focus, and the card scrolls into view. */
   readonly isJustAdded: boolean;
   readonly problem?: string;
+  /** Keeps a control to move focus to, by key; and moves focus to one. */
+  readonly refFor: (key: string) => (node: HTMLButtonElement | null) => void;
+  readonly focusOn: (key: string) => void;
   readonly onChange: (change: QuestionChange) => void;
   /** The choices list holds a refused edit, or no longer does. */
   readonly onChoicesInvalid: (isInvalid: boolean) => void;
 }
 
-/** One question open: Question, Answer type, Choices, Placeholder, Where it goes, Visitors must answer. */
+/**
+ * One question open (T6, 4 November 2026: "need proper heirarchy to type here"): the question's words first, in the
+ * large field, then its answer settings (type, choices, placeholder), then, quieter, its Show only if and where its
+ * answer is saved. Required and Show only if… sit in the card's footer, as Tally and Typeform keep them apart from
+ * the words.
+ */
 function QuestionEditor({
   question,
   typeItems,
@@ -691,6 +761,8 @@ function QuestionEditor({
   isReadOnly,
   isJustAdded,
   problem,
+  refFor,
+  focusOn,
   onChange,
   onChoicesInvalid,
 }: QuestionEditorProps) {
@@ -726,6 +798,8 @@ function QuestionEditor({
         ref={labelRef}
         // A consent's label is its exact wording, shown beside the tick box (spec 0023, AC-1053).
         label={isConsent ? strings.consentWording : strings.question}
+        // The one thing the card is about: larger than the settings under it, so it reads, and is typed, first.
+        size="lg"
         placeholder={isConsent ? strings.consentPlaceholder : strings.questionPlaceholder}
         {...(isConsent ? { hint: strings.consentWordingHint } : {})}
         value={question.label}
@@ -761,7 +835,6 @@ function QuestionEditor({
       {!NO_PLACEHOLDER_TYPES.includes(question.answerType) && (
         <Field
           label={strings.placeholder}
-          hint={strings.placeholderHint}
           value={question.placeholder ?? ''}
           maxLength={80}
           isReadOnly={isReadOnly}
@@ -770,17 +843,22 @@ function QuestionEditor({
           }}
         />
       )}
-      {!isLocked && (
-        <ShowWhenEditor
+      {!isLocked && question.showWhen !== undefined && (
+        <ShowWhenRules
           showWhen={question.showWhen}
           earlier={questions.slice(
             0,
             questions.findIndex((each) => each.id === question.id),
           )}
-          words={QUESTION_SHOW_WHEN}
+          readsLaterText={routingStrings.readsLater}
           isReadOnly={isReadOnly}
+          firstRef={refFor(`${question.id}:show`)}
           onChange={(showWhen) => {
             onChange({ showWhen });
+          }}
+          onClear={() => {
+            onChange({ showWhen: null });
+            focusOn(`${question.id}:show-button`);
           }}
         />
       )}
@@ -971,7 +1049,7 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
   switch (question.answerType) {
     case 'date':
       return (
-        <SettingsRow title={strings.dateRange} description={strings.dateRangeHint}>
+        <SettingsRow title={strings.dateRange}>
           {/* The app's one date editor, DatePicker; the visitor's page uses the phone's own picker. */}
           <DatePicker
             label={strings.earliest}
@@ -1053,7 +1131,7 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
     case 'multi_select':
       return (
         <>
-          <SettingsRow title={strings.picks} description={strings.picksHint}>
+          <SettingsRow title={strings.picks}>
             <Field
               label={strings.leastPicks}
               size="sm"
@@ -1118,89 +1196,65 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
   }
 }
 
-/** Props for a Show when: a question's, or a step's (spec 0063). */
-interface ShowWhenEditorProps {
-  readonly showWhen: FormQuestion['showWhen'];
+/** A Show when as the document stores it. */
+type ShowWhenValue = NonNullable<FormQuestion['showWhen']>;
+
+/** Props for a Show only if: a question's, or a step's (spec 0063). */
+interface ShowWhenRulesProps {
+  readonly showWhen: ShowWhenValue;
   /** The questions before it: what its conditions may read. */
   readonly earlier: readonly FormQuestion[];
-  readonly words: { readonly hint: string; readonly noEarlier: string; readonly readsLater: string };
+  /** What to say when a condition reads a question that is no longer before it. */
+  readonly readsLaterText: string;
   readonly isReadOnly: boolean;
-  /** New conditions, or null to always show it. */
-  readonly onChange: (showWhen: FormQuestion['showWhen'] | null) => void;
+  readonly firstRef: (node: HTMLButtonElement | null) => void;
+  readonly onChange: (showWhen: ShowWhenValue) => void;
+  /** Always show it again. */
+  readonly onClear: () => void;
 }
 
-/** The Show when words of a question. */
-const QUESTION_SHOW_WHEN = {
-  hint: routingStrings.showWhenHint,
-  noEarlier: routingStrings.noEarlier,
-  readsLater: routingStrings.readsLater,
-} as const;
-
-/** The Show when words of a step. */
-const STEP_SHOW_WHEN = {
-  hint: strings.stepShowWhenHint,
-  noEarlier: strings.stepNoEarlier,
-  readsLater: strings.stepReadsLater,
-} as const;
-
 /**
- * Show when (spec 0043, AC-1615; a step's, spec 0063 AC-6312): off, a line saying it always shows and Add a
- * condition; on, its conditions over the questions before it, and Always show it. Nothing before it, nothing to read.
+ * Show only if (spec 0043, AC-1615; a step's, spec 0063 AC-6312): its conditions over the questions before it under a
+ * quiet label, with Always show at the label's end. Off, it is not drawn at all: Show only if… in the card's footer
+ * adds it, ready filled.
  */
-function ShowWhenEditor({ showWhen, earlier: before, words, isReadOnly, onChange }: ShowWhenEditorProps) {
+function ShowWhenRules({
+  showWhen,
+  earlier: before,
+  readsLaterText,
+  isReadOnly,
+  firstRef,
+  onChange,
+  onClear,
+}: ShowWhenRulesProps) {
   const earlier = questionFacts(before);
-  // Turning Show when on or off swaps what is drawn: focus follows to the first condition, or to Add a condition.
-  const addRef = useRef<HTMLButtonElement>(null);
-  const firstRef = useRef<HTMLButtonElement>(null);
-  if (showWhen === undefined) {
-    return (
-      <SettingsRow
-        title={routingStrings.showWhen}
-        description={earlier.length === 0 ? words.noEarlier : routingStrings.alwaysShown}
-      >
-        {!isReadOnly && (
-          <Button
-            ref={addRef}
-            variant="dashed"
-            icon="plus"
-            isDisabled={earlier.length === 0}
-            onPress={() => {
-              onChange(storedShowWhen(firstConditions(earlier)));
-              focusLater(() => firstRef.current);
-            }}
-          >
-            {routingStrings.addShowWhen}
-          </Button>
-        )}
-      </SettingsRow>
-    );
-  }
   // Moved above what its Show when reads: said here, as publish would refuse it.
   const readsLater = showWhen.rules.some((condition) => !earlier.some((fact) => fact.key === condition.key));
   return (
-    <SettingsSection title={routingStrings.showWhen} description={words.hint}>
-      {readsLater && <Callout tone="danger">{words.readsLater}</Callout>}
+    <FieldGroup
+      label={strings.showOnlyIfTitle}
+      {...(isReadOnly
+        ? {}
+        : {
+            action: (
+              <Button variant="ghost" size="sm" icon="x" onPress={onClear}>
+                {strings.alwaysShow}
+              </Button>
+            ),
+          })}
+    >
+      {readsLater && <Callout tone="danger">{readsLaterText}</Callout>}
       <ConditionsEditor
         value={showWhen}
         facts={earlier}
         factLabel={routingStrings.question}
         isReadOnly={isReadOnly}
         firstRef={firstRef}
-        onChange={(next) => onChange(storedShowWhen(next))}
+        onChange={(next) => {
+          onChange(storedShowWhen(next));
+        }}
       />
-      {!isReadOnly && (
-        <Button
-          variant="ghost"
-          icon="x"
-          onPress={() => {
-            onChange(null);
-            focusLater(() => addRef.current);
-          }}
-        >
-          {routingStrings.clearShowWhen}
-        </Button>
-      )}
-    </SettingsSection>
+    </FieldGroup>
   );
 }
 
@@ -1267,7 +1321,7 @@ function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
   };
   if (question.answerType === 'rating' || question.answerType === 'scale') {
     return (
-      <SettingsRow title={strings.points} description={strings.pointsValueHint}>
+      <SettingsRow title={strings.points}>
         <Select
           label={strings.pointsScale}
           isLabelHidden
@@ -1287,7 +1341,7 @@ function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
   }
   if (question.answerType === 'yes_no') {
     return (
-      <SettingsRow title={strings.points} description={strings.pointsHint}>
+      <SettingsRow title={strings.points}>
         <PointsField
           label={strings.pointsYes}
           value={at(0)}
@@ -1316,7 +1370,7 @@ function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
   // One row of small numbers, as the yes or no branch does, rather than a full width field per choice: the choices
   // are listed right above, so each number only has to say which one it is for.
   return (
-    <SettingsRow title={strings.points} description={strings.pointsHint}>
+    <SettingsRow title={strings.points}>
       {choices.flatMap((choice, place) =>
         choice.trim() === ''
           ? []
@@ -1336,96 +1390,164 @@ function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
   );
 }
 
+/** What a step's jumps may read: the questions before it and its own (AC-6313), in the form's order. */
+function readableBy(flow: Flow, stepId: string): readonly FormQuestion[] {
+  const ids = new Set([...questionsBefore(flow, stepId), ...stepQuestionsOf(flow, stepId)].map((each) => each.id));
+  return flow.questions.filter((each) => ids.has(each.id));
+}
+
 /** Props for a step's jumps. */
-interface JumpsEditorProps {
+interface JumpRulesProps {
+  readonly stepId: string;
   readonly jumps: readonly FormJump[];
   /** What a jump's conditions may read: the questions up to and including this step's own. */
   readonly readable: readonly FormQuestion[];
   /** Where a jump may go: the steps below this one, then the endings. */
   readonly choices: readonly { readonly id: string; readonly label: string }[];
+  /** Where the step goes when no jump matched: the next step's name; absent at the last step (the thank you). */
+  readonly nextName?: string;
   readonly isReadOnly: boolean;
+  readonly refFor: (key: string) => (node: HTMLButtonElement | null) => void;
+  readonly focusOn: (key: string) => void;
   readonly onChange: (jumps: readonly FormJump[]) => void;
 }
 
 /**
- * A step's jumps (spec 0063, AC-6313, AC-6325), in order: each "when these answers match, go there", the first
- * match deciding and no match going to the next step. Only forward targets are offered, so a backward jump is
- * nothing the editor can make.
+ * A step's logic (spec 0063, AC-6313, AC-6325), in Typeform's words: each rule "When <answers match>, Jump to
+ * <a step below, or an ending>", tried in order, the first match deciding; under them, where everyone else goes
+ * ("Otherwise, go to Step 3"). Only forward targets are offered, so a backward jump is nothing the editor can make.
+ * With no rules, nothing is drawn: Add logic in the card's footer adds a ready one.
  */
-function JumpsEditor({ jumps, readable, choices, isReadOnly, onChange }: JumpsEditorProps) {
-  const addRef = useRef<HTMLButtonElement>(null);
+function JumpRules({
+  stepId,
+  jumps,
+  readable,
+  choices,
+  nextName,
+  isReadOnly,
+  refFor,
+  focusOn,
+  onChange,
+}: JumpRulesProps) {
+  if (jumps.length === 0) return null;
   const facts = questionFacts(readable);
-  const canAdd = !isReadOnly && choices.length > 0 && facts.length > 0 && jumps.length < STEP_JUMPS_MAX;
   return (
-    <SettingsSection
-      title={strings.jumps}
-      description={choices.length === 0 ? strings.jumpsNowhere : strings.jumpsHint}
-    >
-      {jumps.map((jump, index) => {
-        const chosen = idOfTarget(jump.to);
-        const isGone = !choices.some((choice) => choice.id === chosen);
-        return (
-          <SettingsSection key={String(index)} title={strings.jumpNumber(index + 1)}>
-            {isGone && <Callout tone="danger">{strings.jumpGone}</Callout>}
-            <ConditionsEditor
-              value={jump.when}
-              facts={facts}
-              factLabel={routingStrings.question}
-              isReadOnly={isReadOnly}
-              onChange={(when) => {
-                onChange(changeJump(jumps, index, { when: storedShowWhen(when) }));
-              }}
-            />
-            {/* The same row the conditions above it use, so Then starts on When's own left edge and removing a
-                jump is the same control as removing a condition, not a third shape. */}
-            <ConditionRow
-              lead={strings.jumpTo}
-              removeLabel={strings.removeJump(index + 1)}
-              isDisabled={isReadOnly}
-              {...(isReadOnly
-                ? {}
-                : {
-                    onRemove: () => {
-                      onChange(removeJump(jumps, index));
-                      // Add a jump may now be off (the step's limit, or nowhere left to go): focus moves there only
-                      // while it can take it, since a disabled button would drop focus onto the page itself.
-                      focusLater(() => (addRef.current?.disabled === false ? addRef.current : null));
-                    },
-                  })}
-            >
-              <Select
-                savesOnPick
-                label={strings.jumpTo}
-                isLabelHidden
-                items={[...choices]}
-                value={isGone ? null : chosen}
+    <FieldGroup label={strings.logic} hint={strings.otherwiseGoTo(nextName ?? strings.theEnd)}>
+      <SettingsStack variant="nested">
+        {jumps.map((jump, index) => {
+          const chosen = idOfTarget(jump.to);
+          const isGone = !choices.some((choice) => choice.id === chosen);
+          return (
+            <SettingsStack key={String(index)} variant="nested">
+              {isGone && <Callout tone="danger">{strings.jumpGone}</Callout>}
+              <ConditionsEditor
+                value={jump.when}
+                facts={facts}
+                factLabel={routingStrings.question}
                 isReadOnly={isReadOnly}
-                onChange={(id) => {
-                  const target = id === null ? undefined : targetOfId(id);
-                  if (target !== undefined) onChange(changeJump(jumps, index, { to: target }));
+                firstRef={refFor(`step:${stepId}:jump:${String(index)}`)}
+                onChange={(when) => {
+                  onChange(changeJump(jumps, index, { when: storedShowWhen(when) }));
                 }}
               />
-            </ConditionRow>
-          </SettingsSection>
-        );
-      })}
-      {!isReadOnly && (
+              {/* The same row the conditions above it use, so Jump to starts on When's own left edge and removing a
+                rule is the same control as removing a condition, not a third shape. */}
+              <ConditionRow
+                lead={strings.jumpTo}
+                removeLabel={strings.removeJump(index + 1)}
+                isDisabled={isReadOnly}
+                {...(isReadOnly
+                  ? {}
+                  : {
+                      onRemove: () => {
+                        onChange(removeJump(jumps, index));
+                        focusOn(`step:${stepId}:logic-button`);
+                      },
+                    })}
+              >
+                <Select
+                  savesOnPick
+                  label={strings.jumpTo}
+                  isLabelHidden
+                  items={[...choices]}
+                  value={isGone ? null : chosen}
+                  isReadOnly={isReadOnly}
+                  onChange={(id) => {
+                    const target = id === null ? undefined : targetOfId(id);
+                    if (target !== undefined) onChange(changeJump(jumps, index, { to: target }));
+                  }}
+                />
+              </ConditionRow>
+            </SettingsStack>
+          );
+        })}
+      </SettingsStack>
+    </FieldGroup>
+  );
+}
+
+/** Props for a step card's footer buttons. */
+interface StepLogicButtonsProps {
+  readonly step: FormStep;
+  readonly earlier: readonly FormQuestion[];
+  readonly readable: readonly FormQuestion[];
+  /** The step's own questions: a ready rule reads one of these first. */
+  readonly own: readonly FormQuestion[];
+  readonly targets: readonly { readonly id: string; readonly label: string }[];
+  /** Show only if…, drawn by the section (null when there is nothing before the step to read). */
+  readonly showIfButton: (onAdd: (showWhen: ShowWhenValue) => void) => ReactNode;
+  readonly refFor: (key: string) => (node: HTMLButtonElement | null) => void;
+  readonly focusOn: (key: string) => void;
+  readonly onAddEnding?: () => string | undefined;
+  readonly onChange: (change: StepChange) => void;
+}
+
+/**
+ * A step card's footer: Add logic and Show only if…, each one click to a ready rule (the owner, 4 November 2026:
+ * "everything complex at a single click"). Add logic reads the step's own question with options first, takes its
+ * first option, and jumps to the first place below (the next step, or an ending); with nowhere below to go it makes an
+ * ending to jump to. Neither shows when it could do nothing, rather than a disabled button.
+ */
+function StepLogicButtons({
+  step,
+  readable,
+  own,
+  targets,
+  showIfButton,
+  refFor,
+  focusOn,
+  onAddEnding,
+  onChange,
+}: StepLogicButtonsProps) {
+  const jumps = step.jumps ?? [];
+  const facts = questionFacts(readable);
+  const canJump =
+    facts.length > 0 && jumps.length < STEP_JUMPS_MAX && (targets.length > 0 || onAddEnding !== undefined);
+  return (
+    <>
+      {canJump && (
         <Button
-          ref={addRef}
-          variant="dashed"
-          icon="plus"
-          isDisabled={!canAdd}
+          ref={refFor(`step:${step.id}:logic-button`)}
+          variant="ghost"
+          icon="git-branch"
           onPress={() => {
-            const first = choices[0];
-            if (first === undefined) return;
-            const target = targetOfId(first.id);
-            onChange(addJump(jumps, target, storedShowWhen(firstConditions(facts))));
+            const first = targets[0];
+            const to = first === undefined ? onAddEnding?.() : undefined;
+            const target = first === undefined ? (to === undefined ? undefined : { ending: to }) : targetOfId(first.id);
+            if (target === undefined) return;
+            const when = storedShowWhen(readyConditions(facts, new Set(own.map((each) => each.key))));
+            onChange({ jumps: addJump(jumps, target, when) });
+            focusOn(`step:${step.id}:jump:${String(jumps.length)}`);
           }}
         >
-          {strings.addJump}
+          {strings.addLogic}
         </Button>
       )}
-    </SettingsSection>
+      {step.showWhen === undefined &&
+        showIfButton((showWhen) => {
+          onChange({ showWhen });
+        })}
+    </>
   );
 }
 
@@ -1437,6 +1559,10 @@ interface StepEditorProps {
   readonly readable: readonly FormQuestion[];
   /** Where its jumps may go: the steps below it, then the form's endings. */
   readonly jumpTargets: readonly { readonly id: string; readonly label: string }[];
+  /** The next step's name, where everyone else goes; absent at the last step. */
+  readonly nextName?: string;
+  readonly refFor: (key: string) => (node: HTMLButtonElement | null) => void;
+  readonly focusOn: (key: string) => void;
   readonly isReadOnly: boolean;
   /** Just added: its title takes focus, and the divider comes into view. */
   readonly isJustAdded: boolean;
@@ -1444,12 +1570,18 @@ interface StepEditorProps {
   readonly onChange: (change: StepChange) => void;
 }
 
-/** One step divider open (spec 0063, AC-6303, AC-6312): its title, then its Show when over the questions before it. */
+/**
+ * One step divider open (spec 0063, AC-6303, AC-6312, AC-6313): its title, then, only when it has them, its Show only
+ * if and its logic. Add logic and Show only if… are in the card's footer.
+ */
 function StepEditor({
   step,
   earlier,
   readable,
   jumpTargets,
+  nextName,
+  refFor,
+  focusOn,
   isReadOnly,
   isJustAdded,
   problem,
@@ -1464,6 +1596,7 @@ function StepEditor({
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     input.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
   }, [isJustAdded]);
+  const key = `step:${step.id}`;
   return (
     <>
       {/* A refusal is about the step (empty, or its Show when), not its title: said over the editor. */}
@@ -1479,20 +1612,31 @@ function StepEditor({
           onChange({ title });
         }}
       />
-      <ShowWhenEditor
-        showWhen={step.showWhen}
-        earlier={earlier}
-        words={STEP_SHOW_WHEN}
-        isReadOnly={isReadOnly}
-        onChange={(showWhen) => {
-          onChange({ showWhen });
-        }}
-      />
-      <JumpsEditor
+      {step.showWhen !== undefined && (
+        <ShowWhenRules
+          showWhen={step.showWhen}
+          earlier={earlier}
+          readsLaterText={strings.stepReadsLater}
+          isReadOnly={isReadOnly}
+          firstRef={refFor(`${key}:show`)}
+          onChange={(showWhen) => {
+            onChange({ showWhen });
+          }}
+          onClear={() => {
+            onChange({ showWhen: null });
+            focusOn(`${key}:show-button`);
+          }}
+        />
+      )}
+      <JumpRules
+        stepId={step.id}
         jumps={step.jumps ?? []}
         readable={readable}
         choices={jumpTargets}
+        {...(nextName === undefined ? {} : { nextName })}
         isReadOnly={isReadOnly}
+        refFor={refFor}
+        focusOn={focusOn}
         onChange={(jumps) => {
           onChange({ jumps: [...jumps] });
         }}

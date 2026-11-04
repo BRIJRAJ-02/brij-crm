@@ -8,6 +8,8 @@ import {
   knownFact,
   opsFor,
   questionFacts,
+  readyConditions,
+  isSavable,
   storedShowWhen,
   valueFor,
 } from './facts.ts';
@@ -98,5 +100,34 @@ describe('Known (spec 0037, AC-1393)', () => {
       'Known company',
       'Customer',
     ]);
+  });
+});
+
+describe('one click rules (T15)', () => {
+  const facts = questionFacts([
+    question({ id: 'q1', key: 'name', label: 'Your name', answerType: 'short_text' }),
+    question({ id: 'q2', key: 'size', label: 'Team size', answerType: 'choice', choices: ['1 to 10', '11 to 50'] }),
+    question({ id: 'q3', key: 'notes', label: 'Anything else', answerType: 'long_text' }),
+  ]);
+
+  it('reads the last question with options and fills in its first option, ready to save', () => {
+    const ready = readyConditions(facts);
+    expect(ready).toEqual({ join: 'all', rules: [{ key: 'size', op: 'is', value: '1 to 10' }] });
+    expect(isSavable(ready)).toBe(true);
+  });
+
+  it('prefers the step’s own questions, and leaves a typed question waiting for its value', () => {
+    const ready = readyConditions(facts, new Set(['notes']));
+    expect(ready.rules[0]?.key).toBe('size');
+    const typed = readyConditions(
+      questionFacts([question({ id: 'q1', key: 'name', label: 'Your name', answerType: 'short_text' })]),
+    );
+    expect(typed).toEqual({ join: 'all', rules: [{ key: 'name', op: 'is' }] });
+    expect(isSavable(typed)).toBe(false);
+  });
+
+  it('a number comparison saves only with a number', () => {
+    expect(isSavable({ join: 'all', rules: [{ key: 'n', op: 'more_than', value: '7' }] })).toBe(true);
+    expect(isSavable({ join: 'all', rules: [{ key: 'n', op: 'more_than', value: 'seven' }] })).toBe(false);
   });
 });

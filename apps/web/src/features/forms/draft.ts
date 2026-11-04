@@ -4,7 +4,14 @@
 // list's own rules live in the shared editor (`features/questions/questions.ts`,
 // spec 0057, which a booking page uses too); these wrap them over a form.
 import type { FormAttributeChoice, FormDocument, FormQuestion, FormTargetChoices, FormView } from '@crm/data';
-import { FORM_SLUG, type PublishAttribute, type QuestionPreset, slugFromName } from '@crm/data/forms';
+import {
+  FORM_ENDINGS_MAX,
+  FORM_SLUG,
+  type FormEnding,
+  type PublishAttribute,
+  type QuestionPreset,
+  slugFromName,
+} from '@crm/data/forms';
 import * as list from '../questions/questions.ts';
 import { keepBreaks, renameStepKeys, type Flow } from '../questions/steps.ts';
 import type { PlannedAttribute, QuestionChange } from '../questions/questions.ts';
@@ -277,4 +284,13 @@ export function publishStart(name: string, publicKey: string): { readonly name: 
   const named = name === strings.untitledForm ? '' : name;
   const suggested = named.trim() === '' ? '' : slugFromName(named);
   return { name: named, address: FORM_SLUG.test(suggested) ? suggested : publicKey };
+}
+
+/** A new ending's id: short, stable, and never one the draft already holds. */
+export function mintEndingId(endings: readonly FormEnding[]): string {
+  for (let place = 1; place <= FORM_ENDINGS_MAX + 1; place += 1) {
+    const id = `ending_${String(place)}`;
+    if (!endings.some((ending) => ending.id === id)) return id;
+  }
+  return `ending_${String(Date.now())}`;
 }

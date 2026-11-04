@@ -29,12 +29,13 @@ test.describe('the form journey', () => {
     await page.getByRole('button', { name: 'Add a question' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your role?');
     await page
-      .getByRole('button', { name: /Where it goes$/ })
+      .getByRole('button', { name: /Save answer to$/ })
       .last()
       .click();
     await page.getByRole('option', { name: 'Job title', exact: true }).click();
     await expect(page.getByRole('listbox')).toBeHidden();
-    await expect(page.getByText('Person › Job title').first()).toBeVisible();
+    // Where the answer is saved shows in the question's editor, not on its row (T17).
+    await expect(page.getByRole('button', { name: /Save answer to$/ }).last()).toContainText('Job title');
 
     // The first publish, in one step: name it, check where the answers go, publish.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();

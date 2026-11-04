@@ -43,7 +43,7 @@ test.describe('the booking journey', () => {
     await page.getByRole('button', { name: 'Add a question' }).click();
     await page.getByLabel('Question', { exact: true }).fill('What do you want to cover?');
     // A new question is kept with the booking until the host says otherwise (B3); here they file it on People.
-    await page.getByRole('button', { name: 'Not filed, kept with the booking Where it goes' }).click();
+    await page.getByRole('button', { name: 'Not filed, kept with the booking Save answer to' }).click();
     await page.getByRole('option', { name: /^Creates/ }).click();
     await page.getByText('Visitors must answer').click();
     await page.getByRole('button', { name: /^Save/ }).click();

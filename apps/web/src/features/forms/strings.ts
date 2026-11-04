@@ -126,19 +126,14 @@ export const strings = {
   // Layout (spec 0063)
   layoutTitle: 'Layout',
   layoutClassic: 'Classic',
-  layoutClassicHint: 'Every question on one page.',
   layoutSteps: 'Steps',
-  layoutStepsHint: 'Questions in groups, with Back and Continue.',
   layoutOneAtATime: 'One at a time',
-  layoutOneAtATimeHint: 'One question per screen. Enter goes on.',
-  /** Under the tiles when Steps has no divider yet. */
-  layoutAddStep: 'Add a step under Questions to split the form.',
   colour: 'Colour',
-  light: 'Light form',
-  dark: 'Dark form',
+  light: 'Light',
+  dark: 'Dark',
   corners: 'Corners',
-  rounded: 'Rounded corners',
-  square: 'Square corners',
+  rounded: 'Rounded',
+  square: 'Square',
   /** The look's third axis (spec 0063, AC-6327): the workspace's brand kit, or the product's own colours. */
   theme: 'Colours',
   themeBrand: 'Brand colours',
@@ -581,22 +576,30 @@ export const strings = {
   scoreFiledNowhere: 'Keep it off the CRM',
   scoreNoNumbers: 'This object has no number field to file a score on.',
   flowOpen: 'Flow',
-  flowTitle: 'The flow',
-  flowLine: 'The steps a visitor walks, their jumps, and where each one ends.',
+  flowTitle: 'Flow',
   flowStep: (place: number, title: string | undefined) =>
     title === undefined || title.trim() === '' ? `Step ${String(place)}` : `Step ${String(place)} · ${title}`,
-  flowQuestions: (count: number) => (count === 1 ? '1 question' : `${String(count)} questions`),
+  /** A jump as a line: "If Budget is Under $1k". */
   flowJump: (condition: string) => `If ${condition}`,
-  flowToStep: (name: string) => `go to ${name}`,
-  flowToEnding: (name: string) => `end with ${name}`,
+  /** Where it goes, after its If: "Jump to Step 3", "Jump to Ending: Not a fit". */
+  flowJumpTo: (where: string) => `Jump to ${where}`,
+  /** A step that only shows for some answers. */
+  flowShownIf: 'Shown only if',
+  /** Where a step goes after its jumps: everyone the jumps above didn't send elsewhere. */
   flowNext: 'Otherwise',
+  /** Where a step with no jumps goes. */
+  flowThen: 'Then',
+  /** The next step, as a place to go. */
+  flowGoTo: (name: string) => `Go to ${name}`,
   flowEndings: 'Endings',
-  flowClassic: 'Classic shows every question on one page, so it has no steps to jump between.',
-  flowEmptyTitle: 'No steps yet',
-  flowEmpty: 'Add a question, and a step to split the form, to see the flow.',
-  flowThanks: 'The thank you',
+  flowClassic: 'Steps and logic jumps work with the Steps layout.',
+  flowEmptyTitle: 'No questions yet',
+  flowEmpty: 'Add a question to see the flow.',
+  /** The form's own end, after the last step. */
+  flowThanks: 'Thank you page',
   flowNoLine: 'No line',
   flowEdit: 'Edit',
+  flowAddStep: 'Add a step',
   flowClose: 'Close',
   // Analytics (spec 0063, AC-6321, AC-6322). Short on purpose (spec 0058, AC-3).
   analytics: 'Analytics',

@@ -74,3 +74,17 @@ export function removeJump(jumps: readonly FormJump[], index: number): FormJump[
 export function targetWords(target: JumpTarget, choices: readonly JumpChoice[]): string | undefined {
   return choices.find((choice) => choice.id === idOfTarget(target))?.label;
 }
+
+/**
+ * Where a visitor goes after step `stepId` when no jump matched: the next step they can reach, by its name ("Step 3",
+ * "Step 3 · Your team"), or undefined at the last step, where the form ends with the thank you.
+ */
+export function nextStepName(
+  flow: { readonly questions: readonly FormQuestion[]; readonly steps: readonly FormStep[] },
+  stepId: string | undefined,
+): string | undefined {
+  const resolved = stepsOfBreaks(flow.questions, flow.steps).filter((step) => step.keys.length > 0);
+  const at = resolved.findIndex((step) => step.id === stepId);
+  const next = at < 0 ? undefined : resolved[at + 1];
+  return next === undefined ? undefined : strings.jumpToStep(at + 2, next.title);
+}

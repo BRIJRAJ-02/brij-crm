@@ -14,13 +14,19 @@ import {
   type SubmissionState,
   type SubmissionView,
 } from '@crm/data';
-import { FORM_QUESTIONS_MAX, pathOf, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
+import {
+  FORM_ENDINGS_MAX,
+  FORM_QUESTIONS_MAX,
+  pathOf,
+  previewOf,
+  publishProblem,
+  type PublishProblem,
+} from '@crm/data/forms';
 import { useCaptureList } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
   Callout,
-  Card,
   EditorStatus,
   Field,
   focusLater,
@@ -49,6 +55,7 @@ import {
   savableDraft,
   statusOf,
   withFlow,
+  mintEndingId,
   withQuestions,
 } from './draft.ts';
 import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from './FormBrand.tsx';
@@ -59,6 +66,7 @@ import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
+import { addStep } from '../questions/steps.ts';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
 import { afterPageProblem } from './after-page.ts';
 import { emailToMakeUnique, readyMatch } from './match.ts';
@@ -243,6 +251,14 @@ export function FormEditor(props: FormEditorProps) {
   }
 
   const isPublished = form.liveVersionNumber !== undefined;
+
+  /** The Flow's Add a step: one click, placed and named by the list (it splits the last step), then opened on the Form tab. */
+  const addStepFromFlow = () => {
+    const id = data.forms.newId();
+    setDraft((before) => withFlow(before, addStep({ questions: before.questions, steps: before.steps }, id)));
+    setFlowOpen(false);
+    void navigate({ href: `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${id}`)}` });
+  };
   // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
   // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
   // reuses what this already holds rather than asking again.
@@ -713,33 +729,40 @@ export function FormEditor(props: FormEditorProps) {
             )}
             <LayoutCard
               layout={draft.layout}
-              hasSteps={draft.steps.length > 0}
               isReadOnly={!canManage}
               onChange={(layout) => {
                 setDraft((before) => ({ ...before, layout }));
               }}
             />
-            <Button
-              variant="secondary"
-              icon="git-branch"
-              onPress={() => {
-                setFlowOpen(true);
-              }}
-            >
-              {strings.flowOpen}
-            </Button>
             <FlowView
               draft={draft}
               isOpen={isFlowOpen}
               questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
               stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
               endingsHref={formHref(slug, form.id, 'settings')}
+              {...(canManage ? { onAddStep: addStepFromFlow } : {})}
               onOpenChange={setFlowOpen}
             />
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               {...(questionStats === undefined ? {} : { stats: questionStats })}
               onOpened={setPreviewRow}
+              // The Flow sits beside Add a question, with Steps: the only layout whose steps and jumps visitors walk.
+              {...(draft.layout === 'steps'
+                ? {
+                    actionsStart: (
+                      <Button
+                        variant="ghost"
+                        icon="git-branch"
+                        onPress={() => {
+                          setFlowOpen(true);
+                        }}
+                      >
+                        {strings.flowOpen}
+                      </Button>
+                    ),
+                  }
+                : {})}
               steps={{
                 steps: draft.steps,
                 layout: draft.layout,
@@ -748,6 +771,15 @@ export function FormEditor(props: FormEditorProps) {
                   setDraft((before) => withFlow(before, update({ questions: before.questions, steps: before.steps })));
                 },
                 ...(shown?.stepId === undefined ? {} : { problem: { stepId: shown.stepId, message: shown.message } }),
+                onAddEnding: () => {
+                  const id = mintEndingId(draft.endings ?? []);
+                  if ((draft.endings ?? []).length >= FORM_ENDINGS_MAX) return undefined;
+                  setDraft((before) => ({
+                    ...before,
+                    endings: [...(before.endings ?? []), { id, heading: questionStrings.newEndingHeading }],
+                  }));
+                  return id;
+                },
               }}
               questions={draft.questions}
               onChange={(update) => {
@@ -1018,29 +1050,31 @@ function AfterPageNotice({
   );
 }
 
-/** A draft's name, as a field: blur saves it, an empty one says so. */
+/**
+ * A draft's name, as the page's own title (T17, 4 November 2026: no card round one field): the borderless title
+ * field, typed in place. Blur saves it; an empty one says so.
+ */
 function DraftName({ name, onRename }: { readonly name: string; readonly onRename: (name: string) => void }) {
   const [value, setValue] = useState(name);
   const [error, setError] = useState<string | undefined>(undefined);
   return (
-    <Card title={strings.name}>
-      <Field
-        label={strings.name}
-        isLabelHidden
-        value={value}
-        maxLength={80}
-        isRequired
-        onChange={(text) => {
-          setValue(text);
-          setError(undefined);
-        }}
-        onBlur={() => {
-          const trimmed = value.trim();
-          if (trimmed === '') setError(strings.nameRequired);
-          else if (trimmed !== name) onRename(trimmed);
-        }}
-        {...(error === undefined ? {} : { error })}
-      />
-    </Card>
+    <Field
+      label={strings.name}
+      isLabelHidden
+      variant="title"
+      value={value}
+      maxLength={80}
+      isRequired
+      onChange={(text) => {
+        setValue(text);
+        setError(undefined);
+      }}
+      onBlur={() => {
+        const trimmed = value.trim();
+        if (trimmed === '') setError(strings.nameRequired);
+        else if (trimmed !== name) onRename(trimmed);
+      }}
+      {...(error === undefined ? {} : { error })}
+    />
   );
 }
