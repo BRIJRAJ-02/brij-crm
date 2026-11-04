@@ -371,6 +371,8 @@ export function PageEditor({
   const [draft, setDraft] = useState(saved);
   // The address's shape is said once the person leaves the field, not at every key.
   const [isSlugLeft, setSlugLeft] = useState(false);
+  // The meeting link's error waits until the field is left, as the address's does.
+  const [isLinkLeft, setLinkLeft] = useState(false);
   // The redirect address's error waits until the field is left, as the address's does.
   const [isRedirectLeft, setRedirectLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
@@ -1573,6 +1575,7 @@ export function PageEditor({
                           duration={page.durations[0] ?? 30}
                           link={savedLink}
                           isLive={page.status === 'live'}
+                          isPaused={page.status === 'paused' && !isDraft}
                         />
                       )}
                       {/* The snippet for someone else's site (spec 0062, L3). */}
@@ -1737,10 +1740,8 @@ export function PageEditor({
                             value={locationChoice}
                             isReadOnly={readOnly('location')}
                             // Only the reconnect case still needs a word: the field below asks for the rest.
-                            {...(locationChoice === 'video' &&
-                            noLinkReason === 'reconnect' &&
-                            location.type === 'video' &&
-                            location.link === undefined
+                            // A calendar that needs reconnecting makes no link: said under "I'll send a link".
+                            {...(locationChoice === SEND_LINK && noLinkReason === 'reconnect'
                               ? { hint: strings.noVideoLinkReconnect }
                               : {})}
                             onChange={(type) => {
@@ -1770,9 +1771,11 @@ export function PageEditor({
                               maxLength={2048}
                               isRequired
                               isReadOnly={readOnly('location')}
-                              {...(meetingLinkProblem(location) === undefined
+                              // Said once the field is left (or Save is tried), not before anything is typed.
+                              {...(meetingLinkProblem(location) === undefined || (!isLinkLeft && failure === undefined)
                                 ? {}
                                 : { error: meetingLinkProblem(location) })}
+                              onBlur={() => setLinkLeft(true)}
                               onChange={(link) => change({ location: { type: 'video', link } })}
                             />
                           </SettingsRow>

@@ -40,6 +40,8 @@ export interface ShareTimesCardProps {
   readonly link: string;
   /** Live and taking bookings: otherwise there is nothing to offer, and the card says so. */
   readonly isLive: boolean;
+  /** Published but turned off: the card says to turn it on, not to publish it. */
+  readonly isPaused?: boolean;
 }
 
 /** The link that offers only `times` (ISO instants) at `duration` minutes, read by the public page (`at-param.ts`). */
@@ -57,7 +59,15 @@ type TimesRead =
   | { readonly status: 'ready'; readonly times: readonly string[] };
 
 /** The card: the open times by day as chips, at most five chosen, then Copy link and Copy text. */
-export function ShareTimesCard({ data, publicKey, title, duration, link, isLive }: ShareTimesCardProps) {
+export function ShareTimesCard({
+  data,
+  publicKey,
+  title,
+  duration,
+  link,
+  isLive,
+  isPaused = false,
+}: ShareTimesCardProps) {
   const { locale, timeZone } = useFormatSettings();
   const [weeks, setWeeks] = useState(1);
   const [attempt, setAttempt] = useState(0);
@@ -70,7 +80,12 @@ export function ShareTimesCard({ data, publicKey, title, duration, link, isLive 
   const [refusedDay, setRefusedDay] = useState<string | undefined>(undefined);
   // The last times read, kept on screen while a longer read (Show the next week) is out, so nothing ticked vanishes.
   const [lastTimes, setLastTimes] = useState<readonly string[] | undefined>(undefined);
-  if (read.status === 'ready' && read.times !== lastTimes) setLastTimes(read.times);
+  if (read.status === 'ready' && read.times !== lastTimes) {
+    setLastTimes(read.times);
+    // A ticked time booked meanwhile leaves the pick, so it never goes into the link or counts toward five.
+    const open = new Set(read.times);
+    if (chosen.some((start) => !open.has(start))) setChosen(chosen.filter((start) => open.has(start)));
+  }
   const shownTimes = read.status === 'ready' ? read.times : lastTimes;
   const isLoadingMore = read.status === 'loading' && lastTimes !== undefined;
   useEffect(() => {
@@ -129,18 +144,16 @@ export function ShareTimesCard({ data, publicKey, title, duration, link, isLive 
   ].join('\n');
   // What the card says under its title: not live yet, no times, or what Copy waits for (said, not only on hover).
   const line = !isLive
-    ? strings.notLive
+    ? isPaused
+      ? strings.notOn
+      : strings.notLive
     : shownTimes !== undefined && days.length === 0
       ? strings.noTimes
       : !isEnough
         ? strings.pickMore
-        : undefined;
+        : strings.picked(sorted.length);
   return (
-    <Card
-      title={strings.title}
-      actions={<InfoTip label={strings.title}>{strings.help}</InfoTip>}
-      {...(line === undefined ? {} : { description: line })}
-    >
+    <Card title={strings.title} actions={<InfoTip label={strings.title}>{strings.help}</InfoTip>} description={line}>
       {isLive && shownTimes === undefined && read.status === 'loading' && <Skeleton lines={3} />}
       {isLive && read.status === 'error' && (
         <EmptyState tone="error" title={strings.failed} onRetry={() => setAttempt((count) => count + 1)} />

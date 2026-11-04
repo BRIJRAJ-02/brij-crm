@@ -5,7 +5,7 @@
 //   Bookings list or Insights, filtered to this page, for anything more.
 // Leaves out: acting on a booking (the Bookings list's drawer), the sessions table and sharing (Insights itself), and
 //   live updates (a booking or a visit sends no change event here; each tab reads when it opens).
-import type { BookingView, DataLayer, InsightRange } from '@crm/data';
+import { isDataError, type BookingView, type DataLayer, type InsightRange } from '@crm/data';
 import { useInsightRead } from '@crm/data/react';
 import {
   BookingList,
@@ -28,8 +28,8 @@ import { strings as insightStrings } from '../insights/strings.ts';
 import { activityStrings as strings } from './activity-strings.ts';
 
 /** The Bookings list (`/bookings/list`), filtered to one page. */
-const pageBookingsHref = (slug: string, pageId: string) =>
-  `/w/${slug}/bookings/list?link=${encodeURIComponent(pageId)}`;
+const pageBookingsHref = (slug: string, pageId: string, when: 'upcoming' | 'past') =>
+  `/w/${slug}/bookings/list?link=${encodeURIComponent(pageId)}${when === 'past' ? '&tab=past' : ''}`;
 
 /** Props for both tabs. */
 export interface PageActivityProps {
@@ -67,7 +67,7 @@ export function PageBookingsTab({ data, slug, pageId }: PageActivityProps) {
         if (isCurrent) {
           setAnswer({
             key,
-            read: { status: 'error', message: error instanceof Error ? error.message : strings.bookingsFailed },
+            read: { status: 'error', message: isDataError(error) ? error.message : strings.bookingsFailed },
           });
         }
       },
@@ -127,14 +127,14 @@ export function PageBookingsTab({ data, slug, pageId }: PageActivityProps) {
           groups={groups}
           placement="card"
           onOpen={() => {
-            void navigate({ href: pageBookingsHref(slug, pageId) });
+            void navigate({ href: pageBookingsHref(slug, pageId, when) });
           }}
           emptyState={
             <EmptyState
               icon="calendar-check"
               title={when === 'upcoming' ? strings.noUpcoming : strings.noPast}
               actions={
-                <ButtonLink href={pageBookingsHref(slug, pageId)} icon="arrow-right">
+                <ButtonLink href={pageBookingsHref(slug, pageId, when)} icon="arrow-right">
                   {strings.allBookings}
                 </ButtonLink>
               }
@@ -145,7 +145,7 @@ export function PageBookingsTab({ data, slug, pageId }: PageActivityProps) {
       {read.status === 'ready' && read.items.length > 0 && (
         <SectionBar
           start={
-            <ButtonLink href={pageBookingsHref(slug, pageId)} variant="ghost" icon="arrow-right">
+            <ButtonLink href={pageBookingsHref(slug, pageId, when)} variant="ghost" icon="arrow-right">
               {strings.allBookings}
             </ButtonLink>
           }

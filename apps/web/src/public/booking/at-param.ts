@@ -65,7 +65,7 @@ export function readTimes(address: URL, now: number): readonly string[] | undefi
     .split(',')
     .slice(0, TIMES_MAX)
     .map((each) => (each.length > AT_MAX ? Number.NaN : Date.parse(each)))
-    .filter((ms) => Number.isFinite(ms) && Math.abs(ms - now) <= AT_RANGE_MS)
+    .filter((ms) => Number.isFinite(ms) && ms > now && ms - now <= AT_RANGE_MS)
     .map((ms) => new Date(ms).toISOString());
   const unique = [...new Set(times)].sort();
   return unique.length === 0 ? undefined : unique;

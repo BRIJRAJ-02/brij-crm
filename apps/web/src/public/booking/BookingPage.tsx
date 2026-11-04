@@ -1280,6 +1280,26 @@ function Booking({
     >
       {strings.errors.failed}
     </Callout>
+  ) : noTimes && shared !== undefined ? (
+    // Every time the host shared has gone: said as that, with the way to the page's other times.
+    <Callout
+      tone="info"
+      title={strings.sharedGoneTitle}
+      actions={
+        <Button
+          onPress={() => {
+            const address = new URL(globalThis.location.href);
+            address.searchParams.delete('times');
+            address.searchParams.delete('len');
+            globalThis.location.assign(address.href);
+          }}
+        >
+          {strings.seeAllTimes}
+        </Button>
+      }
+    >
+      {strings.sharedGoneText}
+    </Callout>
   ) : noTimes ? (
     <Callout tone="info" title={strings.noTimesTitle}>
       {strings.noTimesText}

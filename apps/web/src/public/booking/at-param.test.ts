@@ -66,6 +66,10 @@ describe('readTimes (Share specific times, 5 Nov 2026)', () => {
     expect(readTimes(at(`?times=${encodeURIComponent(many)}`), now)).toHaveLength(5);
     expect(readTimes(at('?times='), now)).toBeUndefined();
     expect(readTimes(at('?times=nonsense'), now)).toBeUndefined();
+    // A time already gone is no offer: an old link opens on the next shared time, never a past day.
+    expect(
+      readTimes(at(`?times=${encodeURIComponent('2026-11-02T09:00:00.000Z,2026-11-06T09:00:00.000Z')}`), now),
+    ).toEqual(['2026-11-06T09:00:00.000Z']);
   });
 
   it('opens on the first shared time’s day, at the shared length, offering only those times', () => {

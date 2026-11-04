@@ -3,6 +3,8 @@ export const shareTimesStrings = {
   title: 'Share specific times',
   help: 'Pick 2 to 5 open times. The link offers only those, and only while they are still free.',
   notLive: 'Publish the page to share its times.',
+  notOn: 'Turn the page on to share its times.',
+  picked: (count: number) => `${String(count)} of 5 picked.`,
   noTimes: 'No open times in these days.',
   failed: 'The open times couldn’t load.',
   nextWeek: 'Show the next week',
