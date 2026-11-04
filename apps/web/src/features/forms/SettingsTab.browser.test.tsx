@@ -411,6 +411,10 @@ describe('Settings as plain rows (T21)', () => {
       expect(page.getByRole('heading', { name: gone, exact: true }).query()).toBeNull();
     }
     expect(page.getByRole('textbox', { name: 'Headline' }).query()).toBeNull();
+    // Grouped under headings (the owner, 5 November 2026: less text, never less structure).
+    for (const group of ['Form', 'CRM', 'Emails', 'Answers']) {
+      await expect.element(page.getByRole('heading', { name: group, exact: true })).toBeVisible();
+    }
     for (const row of [
       'Name',
       'Link',

@@ -268,6 +268,11 @@ export const strings = {
   closesCount: 'Number of answers',
   closedMessageRow: 'Message when closed',
   closedMessageDefault: 'This form isn’t taking answers right now.',
+  /** Settings' groups (the owner, 5 November 2026: less text never means less structure). */
+  groupForm: 'Form',
+  groupCrm: 'CRM',
+  groupEmails: 'Emails',
+  groupAnswers: 'Answers',
   /** How long the workspace keeps answers (critique b S2): said here, changed in Settings › General. */
   keptRow: 'Answers kept',
   keptHelp: 'How long every form’s answers are kept is set for the whole workspace, in Settings › General.',
