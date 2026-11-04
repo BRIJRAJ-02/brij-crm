@@ -3,7 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { HostedFormPreview } from '../HostedFormPreview/HostedFormPreview.tsx';
+import { HostedFormPreview, type HostedFormPreviewProps } from '../HostedFormPreview/HostedFormPreview.tsx';
 import { LinkCard, LinkCardSkeleton } from './LinkCard.tsx';
 
 /** Open (only while it is on: there is nothing to open on an off link) and the ··· menu. */
@@ -252,7 +252,7 @@ export const Loading: Story = {
 };
 
 /** The picture's form: its headline and first questions, as the forms list's card reads them. */
-const PICTURED_FORM = {
+const PICTURED_FORM: HostedFormPreviewProps['form'] = {
   key: 'card-contact',
   status: 'live',
   versionNumber: 1,
@@ -266,7 +266,7 @@ const PICTURED_FORM = {
     { id: 'e', key: 'email', label: 'Work email', answerType: 'email', required: true },
   ],
   offersMeeting: false,
-} as const;
+};
 
 /**
  * A pictured form (5 November 2026): the form small across the top, hidden and inert; its state as a dot and a word
