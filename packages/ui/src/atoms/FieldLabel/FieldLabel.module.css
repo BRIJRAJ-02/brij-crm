@@ -1,8 +1,10 @@
 /* FieldLabel: a control's name in text-secondary at text-label (text-label-strong for a group's question), an
    aside a step quieter on the same line, and an InfoTip beside it in a row that keeps the label's height. */
 @layer components {
+  /* `--label-colour` lets a surface that reads at another size name its labels in the text colour (a hosted form,
+     where grey labels read weaker than the placeholders under them); the app keeps the secondary grey. */
   .label {
-    color: var(--text-secondary);
+    color: var(--label-colour, var(--text-secondary));
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }

@@ -83,13 +83,20 @@
     --radius-xl: var(--radius-xs);
   }
 
-  /* Touch screens: 16px text in the inputs, so phones don't zoom into a field, and taller
-     inputs to tap; on the page's root too, so a list opened in a popover (a country search) matches. Drawn from the spacing scale until the design system has a touch type
-     size (0023-form-design.md, pending owner confirmation). */
+  /* The public size (the design critique, 5 November 2026, after Typeform and Tally): a visitor reads 16px text in
+     40px fields and buttons, never the app's dense 13px and 30px; on the page's root too, so a list opened in a
+     popover (a country search) matches. A touch screen keeps 44px to tap. Drawn from the spacing scale until the
+     design system has a public type size. One at a time's actions (HostedFormSteps) put its buttons back to these
+     under the question's larger field. */
+  :root:has(.root),
+  .root {
+    --text-body: 400 var(--space-16) / var(--space-24) var(--font-sans);
+    --size-input: calc(2 * var(--space-20));
+  }
+
   @media (pointer: coarse) {
     :root:has(.root),
     .root {
-      --text-body: 400 var(--space-16) / var(--space-24) var(--font-sans);
       --size-input: calc(var(--space-20) + var(--space-24));
     }
   }
@@ -115,6 +122,8 @@
     --shadow-focus: var(--form-focus);
     --text-label: var(--text-body);
     --tracking-label: var(--tracking-body);
+    /* A question's name in the text colour: in grey it read weaker than the placeholder under it. */
+    --label-colour: var(--text);
     --text-label-strong: var(--text-body);
     --tracking-label-strong: var(--tracking-body);
 
@@ -177,6 +186,13 @@
   .headline[data-mode='page'] {
     font: var(--text-note-title);
     letter-spacing: var(--tracking-note-title);
+  }
+
+  /* Small over the first question, One at a time (Tally's way): the name in the title's size, so the question
+     leads and the name only says whose form it is. */
+  .headline[data-size='small'] {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   .headline:focus {
@@ -326,6 +342,14 @@
      width, the foot at the window's foot. */
   .root[data-frame='open'] .card {
     margin-block: auto;
+  }
+
+  /* Under the page breakpoint One at a time's arrows are a bar at the window's foot: the page keeps its height free
+     at the end, so the foot is never under it. */
+  @media (width < 1024px) {
+    .root[data-mode='page'][data-frame='open'] {
+      padding-block-end: calc(var(--size-control) + 2 * var(--space-12) + var(--space-24));
+    }
   }
 
   @media (width >= 1024px) {

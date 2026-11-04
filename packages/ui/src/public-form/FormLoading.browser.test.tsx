@@ -116,8 +116,8 @@ it('draws One at a time’s loading shape with no card, as the form itself has n
   drawn.destroy();
   // The chunk loaded with the test before, so it draws at once now, as a second Steps form on a page would.
   drawn = mountHostedForm(host, { ...FORM, layout: 'conversational' }, { mode: 'page' });
-  // It opens on its welcome screen (T42), in the same open frame.
-  await expect.element(page.getByRole('button', { name: 'Start' })).toBeInTheDocument();
+  // It opens on its first question, in the same open frame.
+  await expect.element(page.getByRole('textbox', { name: 'Your name' })).toBeInTheDocument();
   expect(host.querySelector('[data-frame="open"]')).not.toBeNull();
 });
 

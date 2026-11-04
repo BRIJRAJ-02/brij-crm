@@ -212,7 +212,7 @@ export function HostedForm({
             <FormAlert state={state} />
             <Button
               variant="primary"
-              size="lg"
+              size="public"
               type={preview ? 'button' : 'submit'}
               isFullWidth="center"
               // Closed while they filled it in: nothing more to send, only their answers to keep.

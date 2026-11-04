@@ -11,6 +11,12 @@
     text-align: center;
   }
 
+  /* One at a time (critique, 5 November 2026): flush with OK's edge, the quiet button's own inset taken back. */
+  .wrap[data-align='start'] {
+    align-items: flex-start;
+    margin-inline-start: calc(-1 * (var(--space-4) + var(--border-width-hairline)));
+  }
+
   .panel {
     display: flex;
     flex-direction: column;
@@ -23,6 +29,11 @@
   .line {
     color: var(--text-tertiary);
     font: var(--text-label);
+  }
+
+  /* Nothing saved yet: the empty live region keeps its place in the tree but gives back the row's gap. */
+  .line:empty {
+    margin-inline-end: calc(-1 * var(--space-8));
   }
 
   .row {
