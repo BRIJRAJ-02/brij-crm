@@ -3,6 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { HostedFormPreview, type HostedFormPreviewProps } from '../HostedFormPreview/HostedFormPreview.tsx';
 import { LinkCard, LinkCardSkeleton } from './LinkCard.tsx';
 
 /** Open (only while it is on: there is nothing to open on an off link) and the ··· menu. */
@@ -246,6 +247,78 @@ export const Loading: Story = {
   render: () => (
     <Stage width="narrow">
       <LinkCardSkeleton />
+    </Stage>
+  ),
+};
+
+/** The picture's form: its headline and first questions, as the forms list's card reads them. */
+const PICTURED_FORM: HostedFormPreviewProps['form'] = {
+  key: 'card-contact',
+  status: 'live',
+  versionNumber: 1,
+  headline: 'Get in touch',
+  subheading: 'We answer within a day.',
+  buttonText: 'Send',
+  language: 'en',
+  look: { colour: 'light', corners: 'rounded' },
+  questions: [
+    { id: 'n', key: 'name', label: 'Your name', answerType: 'short_text', required: true },
+    { id: 'e', key: 'email', label: 'Work email', answerType: 'email', required: true },
+  ],
+  offersMeeting: false,
+};
+
+/**
+ * A pictured form (5 November 2026): the form small across the top, hidden and inert; its state as a dot and a word
+ * before its one fact; its submissions as the foot's own link; Copy link a quiet icon; and the ··· menu.
+ */
+export const Pictured: Story = {
+  parameters: { crm: { preview: true } },
+  args: {
+    title: 'Contact us',
+    href: '/w/acme/captures/forms/contact',
+    hue: undefined,
+    facts: ['edited 2 minutes ago'],
+    address: undefined,
+    toggle: undefined,
+    isCopyQuiet: true,
+    status: { label: 'Live', hue: 'green' },
+    picture: <HostedFormPreview form={PICTURED_FORM} size="thumbnail" />,
+    lead: (
+      <Button variant="ghost" size="lg" icon="inbox">
+        24 submissions
+      </Button>
+    ),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <LinkCard {...args} actions={<Button variant="ghost" size="lg" icon="ellipsis" label="More for Contact us" />} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByText('Live')).toBeInTheDocument();
+    // The picture is shown, never read or reached: hidden, inert, its fields no textboxes.
+    const stage = canvasElement.querySelector('[aria-hidden="true"][inert]');
+    await expect(stage?.textContent).toContain('Work email');
+    await expect(canvas.queryByRole('textbox')).toBeNull();
+    // Copy link is an icon with its name, no words.
+    const copy = canvas.getByRole('button', { name: 'Copy link' });
+    await expect(copy.textContent.trim()).toBe('');
+    // A press on the picture opens the card: the title's link lies over it.
+    const box = stage?.getBoundingClientRect();
+    if (box !== undefined) {
+      await expect(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)).toBe(
+        canvas.getByRole('link', { name: 'Contact us' }),
+      );
+    }
+  },
+};
+
+/** While a pictured grid loads: the card's shape with its stage. */
+export const LoadingPictured: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <LinkCardSkeleton hasPicture />
     </Stage>
   ),
 };

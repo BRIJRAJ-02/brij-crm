@@ -262,6 +262,7 @@ export {
   type BookingListProps,
   type BookingListRow,
 } from './modules/BookingList/BookingList.tsx';
+export { BookingPagePicture, type BookingPagePictureProps } from './modules/BookingPagePicture/BookingPagePicture.tsx';
 export { LinkCard, LinkCardSkeleton, type LinkCardProps, type LinkCardToggle } from './modules/LinkCard/LinkCard.tsx';
 export { LinkGrid, type LinkGridCard, type LinkGridGroup, type LinkGridProps } from './modules/LinkGrid/LinkGrid.tsx';
 export {
@@ -464,6 +465,7 @@ export {
 export {
   EditorStatus,
   PhonePreview,
+  PreviewFooter,
   PreviewFrame,
   PreviewLayout,
   PreviewPage,

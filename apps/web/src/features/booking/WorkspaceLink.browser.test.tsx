@@ -40,6 +40,9 @@ function held<T>(state: T) {
   };
 }
 
+/** A working day's hours. */
+const DAY = ['09:00', '17:00'] as const;
+
 /** A booking page as the list holds it. */
 function pageOf(id: string, title: string, over: Partial<BookingPageView> = {}): BookingPageView {
   return {
@@ -49,6 +52,12 @@ function pageOf(id: string, title: string, over: Partial<BookingPageView> = {}):
     description: '',
     durations: [30],
     location: { type: 'video' },
+    // Weekdays nine to five: the card's picture tints the days its hours book.
+    availability: {
+      timeZone: 'Europe/London',
+      weekly: { mon: [DAY], tue: [DAY], wed: [DAY], thu: [DAY], fri: [DAY], sat: [], sun: [] },
+      overrides: [],
+    },
     status: 'live',
     isPrivate: false,
     kind: 'personal',

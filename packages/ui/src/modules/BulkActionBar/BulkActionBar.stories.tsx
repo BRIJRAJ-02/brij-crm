@@ -392,3 +392,20 @@ export const Leaving: Story = {
     await waitFor(() => expect(canvas.queryByRole('toolbar')).toBeNull());
   },
 };
+
+/**
+ * In a page's foot (`placement="footer"`, Forms' Submissions): centred in the foot it is given, rather than inline at
+ * its start. The foot itself (PreviewFooter) sits at the view's bottom.
+ */
+export const InFooter: Story = {
+  args: { placement: 'footer', count: 1, total: 3 },
+  play: async ({ canvas }) => {
+    const bar = canvas.getByRole('toolbar', { name: 'Selected records' });
+    const frame = bar.closest('[data-placement="footer"]');
+    await expect(frame).not.toBeNull();
+    const box = bar.getBoundingClientRect();
+    const outer = frame?.getBoundingClientRect();
+    // Centred in the foot: the gaps either side match, but for the shell's own uneven padding (12 and 8).
+    await expect(Math.abs(box.left - (outer?.left ?? 0) - ((outer?.right ?? 0) - box.right))).toBeLessThanOrEqual(8);
+  },
+};

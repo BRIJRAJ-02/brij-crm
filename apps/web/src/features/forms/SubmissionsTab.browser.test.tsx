@@ -213,6 +213,19 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     await expect.poll(() => app.router.state.location.href).toContain(`submission=${id(1)}`);
   });
 
+  it('floats the bulk bar at the foot, after the rows, and lets it sink out once cleared (owner, 5 November 2026)', async () => {
+    await show(undefined);
+    await userEvent.click(page.getByRole('checkbox', { name: 'Select Ada Lovelace' }), { force: true });
+    const bar = page.getByRole('toolbar', { name: 'Selected records' });
+    await expect.element(bar).toBeVisible();
+    await expect.element(bar.getByText('1 selected')).toBeVisible();
+    // Last in the body, after the table: at the view's foot, never above the rows.
+    const table = page.getByRole('grid').element();
+    expect(table.compareDocumentPosition(bar.element()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await userEvent.click(bar.getByRole('button', { name: 'Clear the selection' }));
+    await expect.poll(() => bar.query()).toBeNull();
+  });
+
   it('deletes the picked ones in one request, gone at once, and one Undo brings them back (forms fixes 3)', async () => {
     await show(undefined);
     await userEvent.click(page.getByRole('checkbox', { name: 'Select All' }), { force: true });
