@@ -1,6 +1,6 @@
 # Services, staff and shifts
 
-The settings screens of the visit engine (spec 0066 B1), for a salon, a clinic or a studio setting up from an empty
+The settings screens of the visit engine (spec 0066 B1), after Fresha's service menu, team members and scheduled shifts (the design note with flows and wireframes is kept with the lane's handoff), for a salon, a clinic or a studio setting up from an empty
 workspace. Data comes only from `data.services` (`packages/data/src/services/store.ts`): every change shows at once,
 goes back with the server's reason when refused, and every write's `visits` change event reads the held copies again
 in every open tab. Nothing here calls the network.

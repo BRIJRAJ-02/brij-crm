@@ -19,12 +19,17 @@ import {
   Form,
   formatDate,
   HuePicker,
+  Menu,
+  MenuItem,
+  MenuTrigger,
   Modal,
   SaveBar,
   Select,
   SettingsRow,
   SettingsSection,
   Table,
+  TabPanel,
+  Tabs,
   useFormatSettings,
   usePhotoCrop,
   type SaveBarStatus,
@@ -265,6 +270,24 @@ function Profile({
     <SettingsPage
       title={person.name}
       crumbs={[{ id: 'staff', label: strings.staffTitle, href: staffSettingsHref(slug) }]}
+      hasTabs
+      actions={
+        person.archived ? undefined : (
+          <MenuTrigger>
+            <Button variant="ghost" icon="ellipsis" label={strings.profileActions(person.name)} />
+            <Menu
+              label={strings.profileActions(person.name)}
+              onAction={(key) => {
+                if (key === 'archive') setDialog('archive');
+              }}
+            >
+              <MenuItem id="archive" icon="archive">
+                {strings.archive}
+              </MenuItem>
+            </Menu>
+          </MenuTrigger>
+        )
+      }
       footer={
         <SaveBar
           status={status}
@@ -290,8 +313,15 @@ function Profile({
           {strings.archivedProfile}
         </Callout>
       ) : null}
-      <SettingsSection title={strings.profileTitle}>
-        <Card>
+      <Tabs
+        label={person.name}
+        tabs={[
+          { id: 'details', label: strings.detailsTab },
+          { id: 'services', label: strings.servicesTitle, count: draft.serviceIds.length },
+          { id: 'shifts', label: strings.shiftsTitle },
+        ]}
+      >
+        <TabPanel id="details" variant="fields">
           <Form id={formId} onSubmit={() => void save()}>
             {/* The account profile's pattern: the picture as it shows, then Upload or Change, Adjust crop and Remove. */}
             <SettingsRow
@@ -353,25 +383,48 @@ function Profile({
               value={draft.bio}
               onChange={(bio) => set({ bio })}
               isMultiline
-              hint={strings.bioHint}
               maxLength={CATALOGUE_LIMITS.staffBioMax}
             />
+            <Select
+              label={strings.places}
+              selectionMode="multiple"
+              items={placeItems}
+              values={draft.placeIds}
+              onValuesChange={(placeIds) => set({ placeIds })}
+            />
           </Form>
-        </Card>
-      </SettingsSection>
-      <SettingsSection title={strings.worksAtTitle} description={strings.worksAtHint}>
-        <Select
-          label={strings.places}
-          isLabelHidden
-          selectionMode="multiple"
-          items={placeItems}
-          values={draft.placeIds}
-          onValuesChange={(placeIds) => set({ placeIds })}
-        />
-      </SettingsSection>
-      <SettingsSection
-        title={strings.servicesTitleProfile}
-        actions={
+          {/* Signs in as: its own Link, since linking is checked against their visits and meetings at once. */}
+          <Select
+            label={strings.signsIn}
+            items={memberItems}
+            value={memberId}
+            onChange={(chosen) => {
+              setMemberId(chosen ?? '');
+              setLinkRefusal(undefined);
+            }}
+            {...(linkRefusal === undefined ? {} : { error: linkRefusal })}
+          />
+          {/* Shown only once there is a change to make, so it is never a dead control. */}
+          {memberId === (person.memberId ?? '') ? null : (
+            <Button
+              isPending={isLinking}
+              onPress={() => {
+                setLinking(true);
+                const chosen = memberId === '' ? null : memberId;
+                void store
+                  .linkStaff(slug, person.id, chosen, members.find((member) => member.id === chosen)?.name)
+                  .then((refused) => {
+                    setLinking(false);
+                    setLinkRefusal(refused?.message);
+                    if (refused !== undefined) setMemberId(person.memberId ?? '');
+                  });
+              }}
+            >
+              {memberId === '' && isLinked ? strings.unlink : strings.link}
+            </Button>
+          )}
+        </TabPanel>
+        <TabPanel id="services" variant="fields">
           <Button
             variant="ghost"
             size="sm"
@@ -380,153 +433,121 @@ function Profile({
           >
             {strings.selectAll}
           </Button>
-        }
-      >
-        <Select
-          label={strings.does}
-          isLabelHidden
-          selectionMode="multiple"
-          isSearchable
-          items={serviceItems}
-          values={draft.serviceIds}
-          onValuesChange={(serviceIds) => set({ serviceIds })}
-          placeholder={strings.none}
-        />
-      </SettingsSection>
-      <SettingsSection title={strings.linkTitle} description={strings.linkText}>
-        <Select
-          label={strings.member}
-          items={memberItems}
-          value={memberId}
-          onChange={(chosen) => {
-            setMemberId(chosen ?? '');
-            setLinkRefusal(undefined);
-          }}
-          {...(linkRefusal === undefined ? {} : { error: linkRefusal })}
-        />
-        <Button
-          isDisabled={memberId === (person.memberId ?? '')}
-          isPending={isLinking}
-          onPress={() => {
-            setLinking(true);
-            const chosen = memberId === '' ? null : memberId;
-            void store
-              .linkStaff(slug, person.id, chosen, members.find((member) => member.id === chosen)?.name)
-              .then((refused) => {
-                setLinking(false);
-                setLinkRefusal(refused?.message);
-                if (refused !== undefined) setMemberId(person.memberId ?? '');
-              });
-          }}
-        >
-          {memberId === '' && isLinked ? strings.unlink : strings.link}
-        </Button>
-      </SettingsSection>
-      {person.places.map((works) => {
-        const place = team.places.find((each) => each.id === works.placeId);
-        if (place === undefined) return null;
-        return (
+          <Select
+            label={strings.does}
+            isLabelHidden
+            selectionMode="multiple"
+            isSearchable
+            items={serviceItems}
+            values={draft.serviceIds}
+            onValuesChange={(serviceIds) => set({ serviceIds })}
+            placeholder={strings.none}
+          />
+        </TabPanel>
+        <TabPanel id="shifts">
+          {person.places.map((works) => {
+            const place = team.places.find((each) => each.id === works.placeId);
+            if (place === undefined) return null;
+            return (
+              <SettingsSection
+                key={place.id}
+                title={`${strings.shiftsTitle} · ${place.name}`}
+                actions={
+                  <ButtonLink variant="ghost" size="sm" href={shiftsSettingsHref(slug, { place: place.id })}>
+                    {strings.shiftsTitle}
+                  </ButtonLink>
+                }
+              >
+                <Card>
+                  <RegularShifts
+                    name={person.name}
+                    place={place}
+                    works={works}
+                    onSave={(shifts: PlaceHours, outsideHours: boolean) =>
+                      store.setShifts(slug, 'team', person.id, place.id, shifts, outsideHours).then(said)
+                    }
+                  />
+                </Card>
+              </SettingsSection>
+            );
+          })}
           <SettingsSection
-            key={place.id}
-            title={`${strings.shiftsTitle} · ${place.name}`}
-            description={strings.savedAsYouChange}
+            title={strings.upcomingTitle}
             actions={
-              <ButtonLink variant="ghost" size="sm" href={shiftsSettingsHref(slug, { place: place.id })}>
-                {strings.shiftsTitle}
-              </ButtonLink>
+              isLinked ? undefined : (
+                <>
+                  <Button size="sm" icon="calendar-plus" onPress={() => setDialog('time-off')}>
+                    {strings.addTimeOff}
+                  </Button>
+                  {person.places[0] === undefined ? null : (
+                    <Button
+                      size="sm"
+                      icon="clock"
+                      onPress={() => setDialog({ block: person.places[0]?.placeId ?? '' })}
+                    >
+                      {strings.blockTime}
+                    </Button>
+                  )}
+                </>
+              )
             }
           >
-            <Card>
-              <RegularShifts
-                name={person.name}
-                place={place}
-                works={works}
-                onSave={(shifts: PlaceHours, outsideHours: boolean) =>
-                  store.setShifts(slug, 'team', person.id, place.id, shifts, outsideHours).then(said)
-                }
-              />
-            </Card>
-          </SettingsSection>
-        );
-      })}
-      <SettingsSection
-        title={strings.upcomingTitle}
-        actions={
-          isLinked ? undefined : (
-            <>
-              <Button size="sm" icon="calendar-plus" onPress={() => setDialog('time-off')}>
-                {strings.addTimeOff}
-              </Button>
-              {person.places[0] === undefined ? null : (
-                <Button size="sm" icon="clock" onPress={() => setDialog({ block: person.places[0]?.placeId ?? '' })}>
-                  {strings.blockTime}
-                </Button>
-              )}
-            </>
-          )
-        }
-      >
-        {isLinked ? (
-          <Callout tone="info">{strings.linkedTime(person.name)}</Callout>
-        ) : (
-          <Table
-            label={strings.upcomingTitle}
-            columns={[
-              { id: 'when', label: strings.when, isRowHeader: true },
-              { id: 'what', label: strings.reason, size: 'fill' },
-              { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
-            ]}
-            rows={coming}
-            getRowId={(row) => row.id}
-            renderCell={(row, column) => {
-              if (column === 'when') {
-                // On the place's own clock: whole days for time off, the day and its hours for a block.
-                const first = formatDate(todayIn(zone, new Date(row.start)), locale);
-                if (row.kind === 'block') {
-                  const time = (iso: string) =>
-                    new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: zone }).format(
-                      new Date(iso),
-                    );
-                  return `${first}, ${strings.range(time(row.start), time(row.end))}`;
-                }
-                const last = formatDate(todayIn(zone, new Date(Date.parse(row.end) - 1)), locale);
-                return first === last ? first : `${first} – ${last}`;
-              }
-              if (column === 'what') return row.words;
-              return (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon="x"
-                  label={row.kind === 'off' ? strings.removeTimeOff : strings.removeBlock}
-                  onPress={() =>
-                    void (
-                      row.kind === 'off'
-                        ? store.removeTimeOff(slug, 'team', row.id)
-                        : store.removeBlock(slug, 'team', row.id)
-                    ).then((refused) => {
-                      if (said(refused) !== undefined) return;
-                      toasts.toast({
-                        tone: 'success',
-                        message: row.kind === 'off' ? strings.timeOffRemoved : strings.blockRemoved,
-                        action: { label: strings.undo, onAction: () => void row.undo().then(said) },
-                      });
-                    })
+            {isLinked ? (
+              <Callout tone="info">{strings.linkedTime(person.name)}</Callout>
+            ) : (
+              <Table
+                label={strings.upcomingTitle}
+                columns={[
+                  { id: 'when', label: strings.when, isRowHeader: true },
+                  { id: 'what', label: strings.reason, size: 'fill' },
+                  { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
+                ]}
+                rows={coming}
+                getRowId={(row) => row.id}
+                renderCell={(row, column) => {
+                  if (column === 'when') {
+                    // On the place's own clock: whole days for time off, the day and its hours for a block.
+                    const first = formatDate(todayIn(zone, new Date(row.start)), locale);
+                    if (row.kind === 'block') {
+                      const time = (iso: string) =>
+                        new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: zone }).format(
+                          new Date(iso),
+                        );
+                      return `${first}, ${strings.range(time(row.start), time(row.end))}`;
+                    }
+                    const last = formatDate(todayIn(zone, new Date(Date.parse(row.end) - 1)), locale);
+                    return first === last ? first : `${first} – ${last}`;
                   }
-                />
-              );
-            }}
-            emptyState={<EmptyState title={strings.noUpcoming} icon="calendar-check" />}
-          />
-        )}
-      </SettingsSection>
-      {person.archived ? null : (
-        <SettingsSection title={strings.archiveTitle} description={strings.archiveText}>
-          <Button icon="archive" onPress={() => setDialog('archive')}>
-            {strings.archive}
-          </Button>
-        </SettingsSection>
-      )}
+                  if (column === 'what') return row.words;
+                  return (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="x"
+                      label={row.kind === 'off' ? strings.removeTimeOff : strings.removeBlock}
+                      onPress={() =>
+                        void (
+                          row.kind === 'off'
+                            ? store.removeTimeOff(slug, 'team', row.id)
+                            : store.removeBlock(slug, 'team', row.id)
+                        ).then((refused) => {
+                          if (said(refused) !== undefined) return;
+                          toasts.toast({
+                            tone: 'success',
+                            message: row.kind === 'off' ? strings.timeOffRemoved : strings.blockRemoved,
+                            action: { label: strings.undo, onAction: () => void row.undo().then(said) },
+                          });
+                        })
+                      }
+                    />
+                  );
+                }}
+                emptyState={<EmptyState title={strings.noUpcoming} icon="calendar-check" />}
+              />
+            )}
+          </SettingsSection>
+        </TabPanel>
+      </Tabs>
       {dialog === 'time-off' ? (
         <TimeOffDialog
           person={person}

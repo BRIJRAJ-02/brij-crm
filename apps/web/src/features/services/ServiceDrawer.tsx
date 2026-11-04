@@ -16,6 +16,7 @@ import type {
 import { CATALOGUE_LIMITS, minorToDecimal, parsePrice, PRICE_TYPES, VISIT_LIMITS } from '@crm/data/services';
 import {
   Button,
+  ButtonLink,
   Callout,
   Field,
   Form,
@@ -28,6 +29,7 @@ import {
 } from '@crm/ui';
 import { Fragment, useId, useState } from 'react';
 import { DrawerForm } from '../menus/drawer.tsx';
+import { staffSettingsHref } from '../settings/nav.ts';
 import { BUFFER_CHOICES, LENGTH_CHOICES, lengthWords } from './format.ts';
 import { strings } from './strings.ts';
 
@@ -335,7 +337,6 @@ export function ServiceDrawer({
           onChange={setDescription}
           isMultiline
           maxLength={CATALOGUE_LIMITS.descriptionMax}
-          hint={strings.descriptionHint}
         />
         <SettingsSection title={strings.variantsTitle}>
           {variants.map((variant, index) => (
@@ -385,7 +386,6 @@ export function ServiceDrawer({
             items={placeItems}
             values={placeIds}
             onValuesChange={setPlaceIds}
-            hint={strings.placesHint}
             {...(placeIds.length === 0 ? { error: strings.noPlacesChosen } : {})}
           />
           <Select
@@ -399,7 +399,12 @@ export function ServiceDrawer({
           />
           {staffRule === 'chosen' ? (
             staffItems.length === 0 ? (
-              <Callout tone="info">{strings.noStaffYet}</Callout>
+              <Callout
+                tone="info"
+                actions={<ButtonLink href={staffSettingsHref(slug)}>{strings.openStaff}</ButtonLink>}
+              >
+                {strings.noStaffYet}
+              </Callout>
             ) : (
               <Select
                 label={strings.chooseStaff}
@@ -413,7 +418,7 @@ export function ServiceDrawer({
           ) : null}
         </SettingsSection>
         {needItems.length === 0 ? null : (
-          <SettingsSection title={strings.needsTitle} description={strings.needsHint}>
+          <SettingsSection title={strings.needsTitle}>
             {needs.map((need, needIndex) => (
               <Fragment key={need.key}>
                 <FormRow>
@@ -466,7 +471,6 @@ export function ServiceDrawer({
             items={BUFFER_ITEMS}
             value={String(bufferAfter)}
             onChange={(chosen) => setBufferAfter(Number(chosen ?? '0'))}
-            hint={strings.bufferAfterHint}
           />
           <Switch label={strings.onlineSwitch} isSelected={online} onChange={setOnline} />
           <Field
@@ -474,7 +478,6 @@ export function ServiceDrawer({
             value={cancelNote}
             onChange={setCancelNote}
             maxLength={CATALOGUE_LIMITS.cancelNoteMax}
-            hint={strings.cancelNoteHint}
           />
         </SettingsSection>
       </Form>
@@ -533,7 +536,7 @@ function Variant({
       <FormRow>
         {hasAmount ? (
           <Field
-            label={strings.variantAmount(currency)}
+            label={strings.variantAmount}
             prefix={currency}
             value={draft.price}
             onChange={(price) => onChange({ price })}

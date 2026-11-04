@@ -41,7 +41,7 @@ export interface StaffScreenProps {
 }
 
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'person', label: strings.person, isRowHeader: true, size: 'fill' },
+  { id: 'person', label: strings.person, isRowHeader: true },
   { id: 'works', label: strings.works, size: 'fit' },
   { id: 'does', label: strings.does, size: 'fit' },
   { id: 'signs', label: strings.signsIn, size: 'fit' },

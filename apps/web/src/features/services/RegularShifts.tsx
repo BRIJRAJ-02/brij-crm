@@ -64,7 +64,6 @@ export function RegularShifts({ name, place, works, isReadOnly = false, onSave }
       />
       <Switch
         label={strings.outsideHours}
-        description={strings.outsideHoursHint}
         isSelected={works.outsideHours}
         isDisabled={isReadOnly}
         onChange={(outside) => void onSave(latest.current, outside)}

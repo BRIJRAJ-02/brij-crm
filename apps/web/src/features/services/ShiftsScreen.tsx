@@ -220,10 +220,6 @@ function Grid({
               }
               if (key === 'block') setOpen({ kind: 'block', staffId: person.id, day: today < monday ? monday : today });
             }}
-            disabledKeys={[
-              ...(here.length < 2 ? ['copy-to'] : []),
-              ...(person.memberId === undefined ? [] : ['time-off', 'block']),
-            ]}
           >
             <MenuItem id="regular" icon="clock">
               {strings.setRegular}
@@ -231,16 +227,23 @@ function Grid({
             <MenuItem id="copy-week" icon="copy">
               {strings.copyToAllWeeks}
             </MenuItem>
-            <MenuItem id="copy-to" icon="users">
-              {strings.copyToOthers}
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem id="time-off" icon="calendar-plus">
-              {strings.addTimeOff}
-            </MenuItem>
-            <MenuItem id="block" icon="calendar-clock">
-              {strings.blockTime}
-            </MenuItem>
+            {/* Only what can be done: copying needs someone else here; a member's time off is their Availability. */}
+            {here.length < 2 ? null : (
+              <MenuItem id="copy-to" icon="users">
+                {strings.copyToOthers}
+              </MenuItem>
+            )}
+            {person.memberId === undefined ? <MenuSeparator /> : null}
+            {person.memberId === undefined ? (
+              <MenuItem id="time-off" icon="calendar-plus">
+                {strings.addTimeOff}
+              </MenuItem>
+            ) : null}
+            {person.memberId === undefined ? (
+              <MenuItem id="block" icon="calendar-clock">
+                {strings.blockTime}
+              </MenuItem>
+            ) : null}
           </Menu>
         </MenuTrigger>
       ),
@@ -408,7 +411,6 @@ function Grid({
           status={strings.savedAsYouChange}
           actions={<Button slot="close">{strings.done}</Button>}
         >
-          <Callout tone="info">{strings.regularHint}</Callout>
           <RegularShifts
             name={person.name}
             place={place}

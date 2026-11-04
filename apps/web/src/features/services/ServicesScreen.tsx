@@ -44,7 +44,7 @@ export interface ServicesScreenProps {
 }
 
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'name', label: strings.service, isRowHeader: true, size: 'fill' },
+  { id: 'name', label: strings.service, isRowHeader: true },
   { id: 'length', label: strings.length, size: 'fit' },
   { id: 'price', label: strings.price, align: 'end', size: 'fit' },
   { id: 'staff', label: strings.who, size: 'fit' },
@@ -173,20 +173,16 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
         />
       ) : null}
       {isFull ? <Callout tone="info">{strings.limitServices(CATALOGUE_LIMITS.services)}</Callout> : null}
-      {view !== undefined && live.length === 0 && view.categories.length === 0 ? (
-        // One next action: the checklist's while it shows, else the starter here.
+      {view !== undefined && live.length === 0 && view.categories.length === 0 && !setupShown.isShown ? (
+        // One next action: the checklist's while it shows (and then no empty state), else the starter here.
         <EmptyState
           title={strings.noServices}
           icon="scissors"
-          {...(setupShown.isShown
-            ? {}
-            : {
-                actions: (
-                  <Button variant="primary" icon="plus" onPress={() => addStarter(view)}>
-                    {strings.addStarter(starterService(view.businessKind).name)}
-                  </Button>
-                ),
-              })}
+          actions={
+            <Button variant="primary" icon="plus" onPress={() => addStarter(view)}>
+              {strings.addStarter(starterService(view.businessKind).name)}
+            </Button>
+          }
         >
           {strings.noServicesText}
         </EmptyState>

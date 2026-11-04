@@ -113,7 +113,7 @@ test.describe('a salon set up from empty', () => {
       // Save with no price says how to fix it, in place.
       await drawer.getByRole('button', { name: 'Save', exact: true }).click();
       await expect(drawer.getByText('Give a price like 25 or 25.50 in GBP.')).toBeVisible();
-      await drawer.getByLabel('Amount in GBP').fill('25');
+      await drawer.getByLabel('Amount', { exact: true }).fill('25');
       await shot(page, '03-service-drawer');
       await drawer.getByRole('button', { name: 'Save', exact: true }).click();
       await expect(drawer).toBeHidden({ timeout: 15_000 });
