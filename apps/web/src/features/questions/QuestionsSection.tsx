@@ -332,13 +332,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       ? { choiceCount: (question.choices ?? []).filter((choice) => choice.trim() !== '').length }
       : {}),
     // Where an answer is saved shows in its editor, not on the row: the row stays the question and its type (T17).
-    ...(question.showWhen === undefined
-      ? {}
-      : {
-          condition: routingStrings.shownWhen(
-            conditionsLine(question.showWhen, questionFacts(questions.slice(0, questions.indexOf(question)))),
-          ),
-        }),
+    // Only a complete condition is said: one still being written shows nothing rather than "Shows when … is".
+    ...shownWhenOf(question.showWhen, questionFacts(questions.slice(0, questions.indexOf(question)))),
     ...(stats?.get(question.id) ?? {}),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
@@ -362,12 +357,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               typeIcon: 'layers',
               // Outside Steps the divider is kept but does nothing (One at a time and Classic ignore it), so it says so.
               note: breaks.layout === 'steps' ? strings.stepHolds(place.count) : strings.stepsOnly,
-              ...(step.showWhen === undefined
-                ? {}
-                : {
-                    // Named by every question, so one that comes after the step reads by its label, not as removed.
-                    condition: routingStrings.shownWhen(conditionsLine(step.showWhen, questionFacts(questions))),
-                  }),
+              // Named by every question, so one that comes after the step reads by its label, not as removed.
+              ...shownWhenOf(step.showWhen, questionFacts(questions)),
               hasProblem: stepProblem?.stepId === step.id,
             },
           ];
@@ -1643,4 +1634,13 @@ function StepEditor({
       />
     </>
   );
+}
+
+/** A row's "Shows when …" line, only when its Show when has a complete condition to say. */
+function shownWhenOf(
+  showWhen: ShowWhenValue | undefined,
+  facts: ReturnType<typeof questionFacts>,
+): { readonly condition?: string } {
+  const line = showWhen === undefined ? undefined : conditionsLine(showWhen, facts);
+  return line === undefined ? {} : { condition: routingStrings.shownWhen(line) };
 }

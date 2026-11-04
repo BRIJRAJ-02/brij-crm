@@ -32,6 +32,8 @@ export interface Fact {
   readonly options?: readonly { readonly id: string; readonly label: string }[];
   /** The heading it sits under in the picker, after the facts with none: the visit's hidden fields. */
   readonly group?: string;
+  /** A rating's or a scale's lowest and highest answers, so a ready rule can name a real number on it. */
+  readonly range?: { readonly from: number; readonly to: number };
 }
 
 /** The comparisons each kind offers, in the order the Select lists them. */
@@ -73,10 +75,12 @@ export function valueFor(op: ConditionOp, value: Condition['value']): Condition[
 
 /**
  * A ready rule for one click (Add logic, Show only if…; the owner, 4 November 2026: "everything complex at a single
- * click"): one condition on the question it most likely reads, already filled in. It reads the first question with
- * options among `prefer` (a step's own questions), else the last question with options, else a step's first number
- * question, else its first question, else the last one there is; it takes that question's first comparison and, when it has options, its first option as the value. A question
- * that is typed into is left without a value: the rule waits, unsaved, until one is typed.
+ * click"): one condition on the question it most likely reads, complete the moment it appears, so a summary never
+ * reads "If How likely … is" with nothing after it. It reads the first question with options among `prefer` (a
+ * step's own questions), else a number among them, else the last question with options, else a step's first
+ * question, else the last one there is. A choice takes its first option; a rating or a scale "is less than" a
+ * number in its lower part (on 0 to 10, less than 7: the 0 to 6 detractors); anything else "is answered", which
+ * needs no value.
  */
 export function readyConditions(facts: readonly Fact[], prefer: ReadonlySet<string> = new Set()): ShowWhen {
   const hasOptions = (fact: Fact) => (fact.options?.length ?? 0) > 0;
@@ -84,14 +88,23 @@ export function readyConditions(facts: readonly Fact[], prefer: ReadonlySet<stri
   // A choice is the likeliest thing to branch on; then a number (a score, a rating); then any question at all.
   const fact =
     preferred.find(hasOptions) ??
-    facts.findLast(hasOptions) ??
     preferred.find((each) => each.kind === 'number') ??
+    facts.findLast(hasOptions) ??
     preferred[0] ??
     facts.at(-1);
-  const [op = 'is'] = opsFor(fact);
+  return { join: 'all', rules: [{ key: fact?.key ?? '', ...readyCompare(fact) }] };
+}
+
+/** The comparison and value a ready rule takes on `fact` (see `readyConditions`). */
+function readyCompare(fact: Fact | undefined): { readonly op: ConditionOp; readonly value?: string | string[] } {
   const first = fact?.options?.[0];
-  const value = first === undefined || isValueless(op) ? undefined : op === 'is_any_of' ? [first.id] : first.id;
-  return { join: 'all', rules: [{ key: fact?.key ?? '', op, ...(value === undefined ? {} : { value }) }] };
+  if (first !== undefined) return { op: opsFor(fact)[0] ?? 'is', value: first.id };
+  const range = fact?.range;
+  if (range !== undefined && range.to > range.from) {
+    // The bottom part of the range, about two thirds of the way up: 7 on 0 to 10, 4 on 1 to 5.
+    return { op: 'less_than', value: String(range.from + Math.ceil((range.to - range.from) * 0.65)) };
+  }
+  return { op: 'is_answered' };
 }
 
 /** The facts a form's questions give: every question but a file one, in order. */
@@ -123,9 +136,18 @@ export function questionFacts(questions: readonly FormQuestion[]): readonly Fact
       case 'checkbox':
         return [{ key: question.key, label, kind: 'yes_no', options: yesNo() }];
       case 'number':
-      case 'rating':
-      case 'scale':
         return [{ key: question.key, label, kind: 'number' }];
+      case 'rating':
+        return [{ key: question.key, label, kind: 'number', range: { from: 1, to: 5 } }];
+      case 'scale':
+        return [
+          {
+            key: question.key,
+            label,
+            kind: 'number',
+            range: { from: question.options?.from ?? 0, to: question.options?.to ?? 10 },
+          },
+        ];
       default:
         return [{ key: question.key, label, kind: 'text' }];
     }
@@ -208,11 +230,17 @@ export function hiddenFieldFacts(surface: 'form' | 'page'): readonly Fact[] {
   }));
 }
 
-/** One line for a set of conditions, naming each fact and a choice's option by name. */
-export function conditionsLine(showWhen: ShowWhen, facts: readonly Fact[]): string {
+/**
+ * One line for a set of conditions, naming each fact and a choice's option by name. A condition still being written
+ * (no question, or no value where its comparison needs one) is left out, so a line never ends on a bare "is"; with
+ * none complete there is no line at all (undefined), and the caller shows nothing.
+ */
+export function conditionsLine(showWhen: ShowWhen, facts: readonly Fact[]): string | undefined {
   const factOf = (key: string) => facts.find((fact) => fact.key === key);
+  const rules = showWhen.rules.filter((condition) => isComplete({ join: showWhen.join, rules: [condition] }));
+  if (rules.length === 0) return undefined;
   return summarizeShowWhen(
-    showWhen,
+    { ...showWhen, rules },
     (key) => factOf(key)?.label ?? strings.removedQuestion,
     (key, value) => factOf(key)?.options?.find((option) => option.id === value)?.label ?? value,
   );

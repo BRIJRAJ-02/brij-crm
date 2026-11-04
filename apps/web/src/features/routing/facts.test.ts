@@ -116,14 +116,63 @@ describe('one click rules (T15)', () => {
     expect(isSavable(ready)).toBe(true);
   });
 
-  it('prefers the step’s own questions, and leaves a typed question waiting for its value', () => {
+  it('prefers the step’s own questions, and gives a typed question “is answered”, complete at once', () => {
     const ready = readyConditions(facts, new Set(['notes']));
     expect(ready.rules[0]?.key).toBe('size');
     const typed = readyConditions(
       questionFacts([question({ id: 'q1', key: 'name', label: 'Your name', answerType: 'short_text' })]),
     );
-    expect(typed).toEqual({ join: 'all', rules: [{ key: 'name', op: 'is' }] });
-    expect(isSavable(typed)).toBe(false);
+    expect(typed).toEqual({ join: 'all', rules: [{ key: 'name', op: 'is_answered' }] });
+    expect(isSavable(typed)).toBe(true);
+  });
+
+  it('gives a scale or a rating a real number in its lower part, never a bare “is” (T5 shots, 4 November 2026)', () => {
+    const nps = questionFacts([
+      question({ id: 'q1', key: 'name', label: 'Your name', answerType: 'short_text' }),
+      question({
+        id: 'q2',
+        key: 'nps',
+        label: 'How likely are you to recommend us?',
+        answerType: 'scale',
+        options: { from: 0, to: 10 },
+      }),
+    ]);
+    const ready = readyConditions(nps, new Set(['nps']));
+    expect(ready).toEqual({ join: 'all', rules: [{ key: 'nps', op: 'less_than', value: '7' }] });
+    expect(isSavable(ready)).toBe(true);
+    expect(conditionsLine(ready, nps)).toBe('How likely are you to recommend us? is less than 7');
+    const stars = questionFacts([question({ id: 'q3', key: 'stars', label: 'How was it?', answerType: 'rating' })]);
+    expect(readyConditions(stars).rules[0]).toEqual({ key: 'stars', op: 'less_than', value: '4' });
+    // A plain number has no range to pick from: "is answered" needs no value.
+    const size = questionFacts([question({ id: 'q4', key: 'size', label: 'Team size', answerType: 'number' })]);
+    expect(readyConditions(size).rules[0]).toEqual({ key: 'size', op: 'is_answered' });
+    // The step's own number question wins over an earlier choice elsewhere in the form.
+    const mixed = questionFacts([
+      question({ id: 'q5', key: 'plan', label: 'Plan', answerType: 'choice', choices: ['Free', 'Pro'] }),
+      question({ id: 'q6', key: 'nps', label: 'Score', answerType: 'scale', options: { from: 0, to: 10 } }),
+    ]);
+    expect(readyConditions(mixed, new Set(['nps'])).rules[0]?.key).toBe('nps');
+  });
+
+  it('never says a condition with no value: it is left out, and with none left there is no line', () => {
+    const nps = questionFacts([
+      question({ id: 'q2', key: 'nps', label: 'How likely?', answerType: 'scale', options: { from: 0, to: 10 } }),
+      question({ id: 'q3', key: 'why', label: 'Why?', answerType: 'long_text' }),
+    ]);
+    expect(conditionsLine({ join: 'all', rules: [{ key: 'nps', op: 'is' }] }, nps)).toBeUndefined();
+    expect(conditionsLine({ join: 'all', rules: [{ key: 'nps', op: 'is', value: ' ' }] }, nps)).toBeUndefined();
+    expect(
+      conditionsLine(
+        {
+          join: 'all',
+          rules: [
+            { key: 'nps', op: 'is' },
+            { key: 'why', op: 'is_answered' },
+          ],
+        },
+        nps,
+      ),
+    ).toBe('Why? is answered');
   });
 
   it('a number comparison saves only with a number', () => {
