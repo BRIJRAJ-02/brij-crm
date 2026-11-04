@@ -162,6 +162,7 @@ export function Sidebar(props: SidebarProps) {
   const foot = typeof footer === 'function' ? footer({ isCollapsed }) : footer;
   const bodyRef = useRef<HTMLDivElement>(null);
   useArrowKeys(bodyRef, keyboard === 'arrows');
+  useRowStops(bodyRef, keyboard === 'tab');
   const collapse =
     onCollapsedChange !== undefined && !isCollapsed ? (
       <TipWithKeys content={strings.collapse} placement="bottom" kbd={collapseKbd}>
@@ -232,7 +233,15 @@ export function Sidebar(props: SidebarProps) {
                     moveByArrow(event, bodyRef.current);
                   },
                 }
-              : {})}
+              : {
+                  // An item's grip and More join the tab order only while the item holds focus (forms fixes 2).
+                  onFocus: () => {
+                    applyRowStops(bodyRef.current);
+                  },
+                  onBlur: () => {
+                    applyRowStops(bodyRef.current);
+                  },
+                })}
           >
             {children}
           </div>
@@ -352,6 +361,32 @@ function useArrowKeys(bodyRef: { readonly current: HTMLDivElement | null }, isOn
       items.find((item) => item.getAttribute('aria-current') === 'page') ??
       items[0];
     for (const item of items) item.tabIndex = item === stop ? 0 : -1;
+  });
+}
+
+/**
+ * An item's grip and More are tab stops only while focus is on that item (its link, grip or More): Tab goes link,
+ * grip, More on the item in hand and link to link past the rest, so the sidebar is about one stop per item rather
+ * than three (forms fixes 2, the critique's ~40 stops). A pointer, and the arrow keys inside an open menu, are
+ * unchanged. Runs after every render and as focus moves, so a row that arrives later joins in.
+ */
+function applyRowStops(body: HTMLElement | null) {
+  if (body === null) return;
+  // React Aria's FocusScope moves focus a frame after the blur, so the row is read once focus has landed.
+  queueMicrotask(() => {
+    for (const row of body.querySelectorAll<HTMLElement>('[data-row-stops]')) {
+      const holds = row.contains(document.activeElement);
+      for (const control of row.querySelectorAll<HTMLElement>('[data-row-actions] button')) {
+        control.tabIndex = holds ? 0 : -1;
+      }
+    }
+  });
+}
+
+/** Keeps `applyRowStops` after every render of the body. */
+function useRowStops(bodyRef: { readonly current: HTMLDivElement | null }, isOn: boolean) {
+  useLayoutEffect(() => {
+    if (isOn) applyRowStops(bodyRef.current);
   });
 }
 
@@ -507,9 +542,9 @@ function ItemRow({
   if (reorders && id !== undefined) return <SortableItemRow id={id} name={name} item={item} menu={menu} />;
   if (menu === undefined) return item;
   return (
-    <div className={styles.row}>
+    <div className={styles.row} data-row-stops>
       {item}
-      <span className={styles.rowActions}>
+      <span className={styles.rowActions} data-row-actions>
         <ItemMenu name={name} menu={menu} />
       </span>
     </div>
@@ -540,9 +575,9 @@ function SortableItemRow({
 }) {
   const { bind, grip } = useSortableItem(id);
   return (
-    <div ref={bind} className={styles.row} data-reorder-id={id}>
+    <div ref={bind} className={styles.row} data-reorder-id={id} data-row-stops>
       {item}
-      <span className={styles.rowActions}>
+      <span className={styles.rowActions} data-row-actions>
         <DragHandle label={strings.moveItem(name)} drag={grip} />
         {menu !== undefined && <ItemMenu name={name} menu={menu} />}
       </span>

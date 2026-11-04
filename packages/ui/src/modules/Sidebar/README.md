@@ -81,7 +81,7 @@ The current item takes `surface-selected`; hover (pointer only) `surface-hover`;
 
 ## Keyboard
 
-Tab moves through the workspace switcher, the collapse button, Quick actions, each item (then its grip and its menu, where a section reorders) and each section label (then its grip and menu). On a grip: Space or Enter lifts, the up and down arrows move, Space or Enter drops, Esc puts it back. Enter follows a link or presses a button; Enter or Space folds a section (with `onFoldChange`, the screen is told and keeps it). With `keyboard="arrows"`, the items are one tab stop and the arrow keys, Home and End move between them.
+Tab moves through the workspace switcher, the collapse button, Quick actions, each item and each section label (then its grip and menu). An item's grip and More are tab stops only while that item holds focus (its link, grip or More), so Tab goes link, grip, More on the item in hand and link to link past the others: about one stop per item, not three (forms fixes 2; a pointer and touch are unchanged). Why: a sidebar of a dozen reorderable items with menus was some 40 tab stops. On a grip: Space or Enter lifts, the up and down arrows move, Space or Enter drops, Esc puts it back. Enter follows a link or presses a button; Enter or Space folds a section (with `onFoldChange`, the screen is told and keeps it). With `keyboard="arrows"`, the items are one tab stop and the arrow keys, Home and End move between them.
 
 ## Differences from the artifact
 

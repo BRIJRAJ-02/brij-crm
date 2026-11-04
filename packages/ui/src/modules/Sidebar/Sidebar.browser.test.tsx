@@ -159,6 +159,26 @@ describe('a sidebar drag', () => {
   });
 });
 
+// An item's grip and More join the tab order only on the item in hand (forms fixes 2): about one stop per item.
+describe('the sidebar’s tab stops', () => {
+  it('reaches a grip only from its own item, so Tab goes link to link past the rest', async () => {
+    await render(<Records order={['Companies', 'People', 'Deals']} onReorder={vi.fn()} />);
+    await frame();
+    const stops = () => ['Companies', 'People', 'Deals'].map((name) => grip(name).tabIndex);
+    expect(stops()).toEqual([-1, -1, -1]);
+    const people = document.querySelector<HTMLElement>('a[href="/people"]');
+    people?.focus();
+    await frame();
+    expect(stops()).toEqual([-1, 0, -1]);
+    grip('People').focus();
+    await frame();
+    expect(stops()).toEqual([-1, 0, -1]);
+    document.querySelector<HTMLElement>('a[href="/deals"]')?.focus();
+    await frame();
+    expect(stops()).toEqual([-1, -1, 0]);
+  });
+});
+
 // The workspace's own logo at the head (spec 0060): one upload in Settings › Brand heads the switcher.
 describe('the workspace logo at the head', () => {
   /** A wordmark four times as wide as it is tall, as a data address the library's image check lets through. */
