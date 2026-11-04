@@ -139,7 +139,9 @@ export function planNewAttributes(
 export { filedLine, fittingAttributes, type PlannedAttribute, type QuestionChange } from '../questions/questions.ts';
 
 /** The target's attributes as the publish check reads them. */
-export function publishAttributesOf(target: FormTargetChoices): ReadonlyMap<string, PublishAttribute> {
+export function publishAttributesOf(
+  target: Pick<FormTargetChoices, 'items' | 'objectName'>,
+): ReadonlyMap<string, PublishAttribute> {
   return new Map(
     target.items.map((item) => [
       item.attributeId,

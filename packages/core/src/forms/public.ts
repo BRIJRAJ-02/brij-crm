@@ -307,7 +307,8 @@ export async function handoffAnswers(
   const objectId = found.document.targets.main?.objectId;
   return found.document.questions.flatMap((question) => {
     if (!Object.hasOwn(answers, question.key)) return [];
-    const attributeId = question.filedOn?.attributeId;
+    // Only the person's own fields: one saved on the deal is the deal's, not the booking's.
+    const attributeId = question.filedOn?.objectRole === 'main' ? question.filedOn.attributeId : undefined;
     return [
       {
         key: question.key,

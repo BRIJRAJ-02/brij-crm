@@ -238,6 +238,7 @@ export function FormEditor(props: FormEditorProps) {
       slug: form.publicKey,
       document: draft,
       attributes: publishAttributesOf(target),
+      ...(target.deal === undefined ? {} : { dealAttributes: publishAttributesOf(target.deal) }),
     });
     return still?.code === problem.code &&
       still.questionId === problem.questionId &&
@@ -480,6 +481,7 @@ export function FormEditor(props: FormEditorProps) {
       slug: form.publicKey,
       document: draft,
       attributes: publishAttributesOf(target),
+      ...(target.deal === undefined ? {} : { dealAttributes: publishAttributesOf(target.deal) }),
       ...(target.objectName === undefined ? {} : { objectName: target.objectName }),
       canChangeAttributes: canBuild && canManage,
     });
@@ -566,14 +568,19 @@ export function FormEditor(props: FormEditorProps) {
   // Asked first when questions are saved onto the object now: the change clears where every one of them is saved,
   // and nothing takes it back. With nothing saved anywhere it stays one click.
   const [retargetAsk, setRetargetAsk] = useState<RetargetAsk | undefined>(undefined);
-  const askRetarget = (objectId: string | null) => {
+  const askRetarget = (objectId: string | null, withDeal?: boolean) => {
     if (isRetargeting) return;
+    // Moving a Deals form to People with a deal keeps every answer where it was saved (on the deal), so it asks nothing.
+    if (withDeal === true) {
+      retarget(objectId, false, true);
+      return;
+    }
     const step = retargetStep(draft, objects, objectId, strings.thisObject);
     if (step.kind === 'go') retarget(objectId);
     else if (step.kind === 'ask') setRetargetAsk(step.ask);
   };
 
-  const retarget = (objectId: string | null, isUndo = false) => {
+  const retarget = (objectId: string | null, isUndo = false, withDeal = false) => {
     if (isRetargeting) return;
     setRetargeting(true);
     const settled = () => {
@@ -582,7 +589,7 @@ export function FormEditor(props: FormEditorProps) {
     // Where it saved before, for Undo (forms fix a2): the server remembered the mapping, so going back restores it.
     const before = draft.targets.main?.objectId ?? null;
     flush()
-      .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision))
+      .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision, withDeal || undefined))
       .then(async (view) => {
         const choices = await data.forms.attributes(slug, form.id);
         apply(view);
@@ -595,7 +602,12 @@ export function FormEditor(props: FormEditorProps) {
         const toName = objects.find((object) => object.id === objectId)?.pluralName ?? strings.thisObject;
         toasts.toast({
           tone: 'success',
-          message: objectId === null ? strings.retargetOffDone : strings.retargetDone(toName),
+          message:
+            objectId === null
+              ? strings.retargetOffDone
+              : withDeal
+                ? strings.retargetDealDone
+                : strings.retargetDone(toName),
           action: {
             label: strings.undo,
             onAction: () => {
@@ -938,6 +950,7 @@ export function FormEditor(props: FormEditorProps) {
               }}
               attributes={target.items}
               objectName={target.objectName}
+              {...(draft.targets.deal === undefined || target.deal === undefined ? {} : { deal: target.deal })}
               liveIds={liveIds}
               newId={() => data.forms.newId()}
               toasts={toasts}

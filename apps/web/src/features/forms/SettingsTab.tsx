@@ -5,7 +5,7 @@
 // each row saves itself (where answers are saved goes live with the header's one Publish).
 // Leaves out: everything a visitor meets (the words, what happens after they send, the look), on the Form tab beside
 // the preview; each question's filing (set on the question).
-import type { FormDocument, FormTargetChoices, FormView, MemberSummary, ObjectSummary } from '@crm/data';
+import type { FormDocument, FormQuestion, FormTargetChoices, FormView, MemberSummary, ObjectSummary } from '@crm/data';
 import {
   CLOSE_AFTER_MAX,
   CLOSED_MESSAGE_MAX,
@@ -17,6 +17,7 @@ import { closingKind, closingOnDay, dayIn, dayOfClosing, type ClosingKind } from
 import { useCaptureList } from '@crm/data/react';
 import {
   Avatar,
+  Button,
   ButtonLink,
   CopyButton,
   DatePicker,
@@ -216,8 +217,11 @@ export interface SettingsTabProps {
   readonly members: readonly MemberSummary[];
   readonly isReadOnly: boolean;
   readonly settings: FormSettings;
-  /** Points the draft at an object, or at none (keep submissions only); the editor saves first and takes the answer. */
-  readonly onRetarget: (objectId: string | null) => void;
+  /**
+   * Points the draft at an object, or at none (keep submissions only); the editor saves first and takes the answer.
+   * `withDeal` moves a Deals form to People with a deal.
+   */
+  readonly onRetarget: (objectId: string | null, withDeal?: boolean) => void;
   /** A change of where submissions go is on its way. */
   readonly isRetargeting: boolean;
   /** Opens or closes the form (Pause, Resume): what the header's menu does too, as a setting. */
@@ -229,6 +233,13 @@ export interface SettingsTabProps {
   readonly onDraftChange: (change: (before: FormDocument) => FormDocument) => void;
   /** How many months the workspace keeps answers (null: kept); absent, the row isn't shown (critique b S2). */
   readonly keepMonths?: number | null;
+}
+
+/** A question as it is once no deal is made: an answer saved on the deal is kept with the submission instead. */
+function offDeal(question: FormQuestion): FormQuestion {
+  if (question.filedOn?.objectRole !== 'deal') return question;
+  const { filedOn: _deal, ...rest } = question;
+  return { ...rest, kept: true };
 }
 
 /** What Closes › After a number of answers starts at. */
@@ -542,6 +553,19 @@ export function SettingsTab({
             }}
           />
         </SettingsRow>
+        {/* A form already saving to Deals saves no person: one press moves it to People, with a deal (forms fix a3). */}
+        {people !== undefined && deals !== undefined && savingTo === deals.id && (
+          <SettingsRow title={strings.dealsNoPerson} meta={tip(strings.dealsNoPerson, strings.dealsNoPersonTip)}>
+            <Button
+              isDisabled={isRetargeting || isReadOnly}
+              onPress={() => {
+                onRetarget(people.id, true);
+              }}
+            >
+              {strings.dealsMove}
+            </Button>
+          </SettingsRow>
+        )}
         {offersDeal && (
           <SettingsRow
             title={strings.alsoDeal}
@@ -556,7 +580,9 @@ export function SettingsTab({
               onChange={(isOn) => {
                 onDraftChange((before) => {
                   const { deal: _deal, ...rest } = before.targets;
-                  return { ...before, targets: isOn ? { ...rest, deal: { objectId: deals.id } } : rest };
+                  if (isOn) return { ...before, targets: { ...rest, deal: { objectId: deals.id } } };
+                  // No deal, so nothing is saved on one: those answers stay with the submission.
+                  return { ...before, targets: rest, questions: before.questions.map(offDeal) };
                 });
               }}
             />

@@ -57,6 +57,7 @@ import {
   SOURCE_ANSWER_TYPES,
   typeChange,
   planNewAttributes,
+  type DealChoices,
   moveQuestion,
   removeQuestion,
   restoreQuestion,
@@ -126,6 +127,11 @@ export interface QuestionsSectionProps {
   readonly attributes: readonly FormAttributeChoice[];
   /** The target object's name; absent while the form keeps its submissions only, when no answer is filed. */
   readonly objectName?: string;
+  /**
+   * The deal a form makes beside each person (Also create a deal, forms fixes 2): its fields join Where it goes under
+   * their own heading, so an answer can go on the deal itself (its Value, its Source). Absent: no deal is made.
+   */
+  readonly deal?: DealChoices;
   /**
    * Where it goes shows, off and at Not filed, with why: a booking page kept out of the CRM (spec 0057, AC-5708). Each
    * question keeps where it was filed, so turning the CRM back on puts it back.
@@ -312,7 +318,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     const filed =
       question.filedOn === undefined || objectName === undefined || isFilingOff
         ? undefined
-        : filedLine(question, objectName, attributes);
+        : filedLine(question, objectName, attributes, props.deal);
     toasts.toast({
       tone: 'info',
       message: filed === undefined ? strings.questionDeleted(name) : strings.questionDeletedFiled(name, filed),
@@ -728,6 +734,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             typeItems={props.keptWith === 'booking' ? BOOKING_TYPE_ITEMS : TYPE_ITEMS}
             questions={questions}
             attributes={attributes}
+            {...(props.deal === undefined ? {} : { deal: props.deal })}
             isFiling={objectName !== undefined}
             isFilingOff={isFilingOff}
             isLocked={isLocked(question)}
@@ -912,6 +919,8 @@ interface QuestionEditorProps {
   readonly typeItems: typeof TYPE_ITEMS;
   readonly questions: Questions;
   readonly attributes: readonly FormAttributeChoice[];
+  /** The deal's fields, under their own heading in Where it goes. */
+  readonly deal?: DealChoices;
   /** The form adds submissions to the CRM, so Where it goes shows; a form that keeps them only files nothing. */
   readonly isFiling: boolean;
   /** Where it goes shows off, at Not filed: a booking page kept out of the CRM. */
@@ -949,6 +958,7 @@ function QuestionEditor({
   typeItems,
   questions,
   attributes,
+  deal,
   isFiling,
   isFilingOff,
   isLocked,
@@ -985,6 +995,10 @@ function QuestionEditor({
   const isConsent = question.answerType === 'consent';
   const choices = question.choices ?? [];
   const fitting = fittingAttributes(attributes, question.answerType);
+  const dealFitting = deal === undefined ? [] : fittingAttributes(deal.items, question.answerType);
+  // With a deal, the person's fields sit under the object's name and the deal's under Deal, so each reads as where
+  // it goes; without one the list stays as it was, one group.
+  const mainGroup = dealFitting.length === 0 || objectName === undefined ? {} : { group: objectName };
   const usedBy = new Map(
     questions
       .filter((each) => each.id !== question.id && each.filedOn !== undefined)
@@ -1016,7 +1030,7 @@ function QuestionEditor({
         isReadOnly={isReadOnly || isLocked}
         onChange={(type) => {
           if (type === null) return;
-          onChange(typeChange(question, attributes, type as AnswerType));
+          onChange(typeChange(question, [...attributes, ...(deal?.items ?? [])], type as AnswerType));
         }}
       />
       {isChoice && (
@@ -1079,6 +1093,7 @@ function QuestionEditor({
               ? []
               : [
                   {
+                    ...mainGroup,
                     id: CREATE,
                     // The title Save will really use, when it will make one; else the one it would (kept, or no words yet).
                     label:
@@ -1087,9 +1102,13 @@ function QuestionEditor({
                         : strings.willCreate(willCreate ?? createTitle ?? '', objectName),
                   },
                 ]),
-            ...fitting.map((attribute) => {
+            ...[
+              ...fitting.map((attribute) => ({ attribute, group: mainGroup })),
+              ...dealFitting.map((attribute) => ({ attribute, group: { group: strings.dealGroup } })),
+            ].map(({ attribute, group }) => {
               const holder = usedBy.get(attribute.attributeId);
               return {
+                ...group,
                 id: attribute.attributeId,
                 label: attribute.title,
                 ...(holder === undefined ? {} : { description: strings.takenBy(holder) }),
@@ -1099,7 +1118,7 @@ function QuestionEditor({
             // A filing whose field is gone (archived, or no longer fits the answer type) still shows, muted, as the card
             // names it: the Select was blank while the card said the field no longer exists.
             ...(question.filedOn === undefined ||
-            fitting.some((attribute) => attribute.attributeId === question.filedOn?.attributeId)
+            [...fitting, ...dealFitting].some((attribute) => attribute.attributeId === question.filedOn?.attributeId)
               ? []
               : [{ id: question.filedOn.attributeId, label: strings.goneAttribute, isArchived: true }]),
             // Apart from the fields, as a form's "Don't add to the CRM" is: not one more place an answer could go.
@@ -1123,7 +1142,10 @@ function QuestionEditor({
           onChange={(id) => {
             if (id === null || id === NOT_FILED) onChange({ filedOn: null, kept: true });
             else if (id === CREATE) onChange({ filedOn: null, kept: false });
-            else onChange({ filedOn: id });
+            else {
+              const onDeal = dealFitting.some((attribute) => attribute.attributeId === id);
+              onChange({ filedOn: id, filedRole: onDeal ? 'deal' : 'main' });
+            }
           }}
         />
       )}

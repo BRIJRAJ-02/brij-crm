@@ -63,6 +63,12 @@ export interface PublishInput {
   };
   /** The main object's live attributes, by id (archived and deleted ones absent). */
   readonly attributes: ReadonlyMap<string, PublishAttribute>;
+  /**
+   * The deal's live attributes, by id, when Also create a deal is on (forms fixes 2): a question filed on the deal is
+   * checked against these, as one filed on the main record is against `attributes`. Absent: none are known, so a
+   * question filed on the deal reads as filed on a field that no longer exists.
+   */
+  readonly dealAttributes?: ReadonlyMap<string, PublishAttribute>;
   /** The main object's name, for the sentences that name it; "People" when it isn't given. */
   readonly objectName?: string;
   /**
@@ -211,6 +217,7 @@ export function questionsProblem(
   questions: readonly FormDocument['questions'][number][],
   attributes: ReadonlyMap<string, PublishAttribute>,
   target?: { readonly matchAttributeId?: string | undefined },
+  dealAttributes: ReadonlyMap<string, PublishAttribute> = new Map(),
 ): PublishProblem | undefined {
   const all: Readable = new Map(questions.map((question) => [question.key, question]));
   const before = new Map<string, FormDocument['questions'][number]>();
@@ -259,7 +266,7 @@ export function questionsProblem(
     }
     const filed = question.filedOn;
     if (filed === undefined) continue;
-    const attribute = attributes.get(filed.attributeId);
+    const attribute = (filed.objectRole === 'deal' ? dealAttributes : attributes).get(filed.attributeId);
     if (attribute === undefined) {
       return {
         code: 'FILING_GONE',
@@ -294,7 +301,7 @@ function requiredNotAsked(input: PublishInput): PublishProblem | undefined {
   if (input.document.targets.main === undefined) return undefined;
   const filled = new Set(
     input.document.questions.flatMap((question) =>
-      question.filedOn === undefined ? [] : [question.filedOn.attributeId],
+      question.filedOn?.objectRole !== 'main' ? [] : [question.filedOn.attributeId],
     ),
   );
   const missing = [...input.attributes.values()].filter(
@@ -679,6 +686,7 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
     questions,
     input.attributes,
     targets.main === undefined ? undefined : { matchAttributeId: targets.main.matchAttributeId },
+    input.dealAttributes,
   );
   if (problem !== undefined) return problem;
   const steps = stepsProblem(input);

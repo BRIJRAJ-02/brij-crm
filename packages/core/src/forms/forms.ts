@@ -288,8 +288,32 @@ export async function formAttributes(
     const form = await visibleForm(tx, scope, input.formId);
     const objectId = form.mainObjectId;
     if (objectId === null) return { items: [] };
-    return targetChoices(tx, scope, objectId);
+    const main = await targetChoices(tx, scope, objectId);
+    // The deal's fields too (forms fixes 2), for a form saving people: Also create a deal can then take answers onto
+    // the deal itself. Only when the reader may see Deals, so a hidden object stays absent.
+    if (!(await isPeopleObject(tx, objectId))) return main;
+    const dealsId = await standardDealsId(tx);
+    if (dealsId === undefined || objectLevel(scope.access, dealsId) === 'none') return main;
+    const deal = await targetChoices(tx, scope, dealsId);
+    return { ...main, deal: { objectId: dealsId, objectName: deal.objectName ?? '', items: deal.items } };
   });
+}
+
+/** The workspace's live standard Deals, if it has one. */
+async function standardDealsId(tx: WorkspaceTx): Promise<string | undefined> {
+  const [found] = await tx
+    .select({ id: objects.id })
+    .from(objects)
+    .where(and(eq(objects.standardKey, 'deals'), isNull(objects.archivedAt)));
+  return found?.id;
+}
+
+/** The standard Deals a form's deal goes to, refused when the workspace has none live (Move to People with a deal). */
+async function standardDeals(tx: WorkspaceTx, scope: EngineScope): Promise<string> {
+  const id = await standardDealsId(tx);
+  if (id === undefined) throw refuseOn('CONFIG_INVALID', 'Deals is not available in this workspace.', 'deal');
+  await checkObject(tx, scope.access, id, 'write');
+  return id;
 }
 
 /**
@@ -1066,6 +1090,10 @@ export async function publishForm(
               },
             }),
         attributes: await publishAttributes(tx, scope.access, form.mainObjectId),
+        // A question saved on the deal is checked against the deal's own fields (forms fixes 2).
+        ...(draft.document.targets.deal === undefined
+          ? {}
+          : { dealAttributes: await publishAttributes(tx, scope.access, draft.document.targets.deal.objectId) }),
         // So a refusal names the object the form files onto, not People whatever it is (27 October 2026).
         ...(form.mainObjectId === null ? {} : { objectName: await objectName(tx, form.mainObjectId) }),
         // A consent is kept on a person (AC-1053): a form keeping its submissions only, or filing elsewhere, can't ask one.
@@ -1350,7 +1378,7 @@ function rememberFiling(document: FormDocument): Readonly<Record<string, Readonl
   if (objectId === undefined) return before;
   const now = Object.fromEntries(
     document.questions.flatMap((question) =>
-      question.filedOn === undefined ? [] : [[question.id, question.filedOn.attributeId] as const],
+      question.filedOn?.objectRole !== 'main' ? [] : [[question.id, question.filedOn.attributeId] as const],
     ),
   );
   return Object.keys(now).length === 0 ? before : { ...before, [objectId]: now };
@@ -1416,7 +1444,13 @@ function sameDraft(before: FormDocument, after: FormDocument): boolean {
  */
 export async function setFormTarget(
   scope: EngineScope,
-  input: { readonly formId: string; readonly mainObjectId: string | null; readonly expectedRevision: number },
+  input: {
+    readonly formId: string;
+    readonly mainObjectId: string | null;
+    readonly expectedRevision: number;
+    /** With People: also make a deal for each submission, on the standard Deals (Move to People with a deal). */
+    readonly withDeal?: boolean;
+  },
   hooks: readonly AfterWrite[] = [],
 ): Promise<FormView> {
   requirePermission(scope, 'forms.manage');
@@ -1447,13 +1481,31 @@ export async function setFormTarget(
         const object = await writableObject(tx, scope, objectId);
         const attributes = await loadAttributes(tx, objectId);
         const match = matchOf(fileable(attributes));
-        const kept = draft.document.questions.map((question) =>
-          question.filedOn !== undefined && attributes.has(question.filedOn.attributeId) ? question : unfiled(question),
-        );
+        const isPeople = await isPeopleObject(tx, objectId);
+        // Move to People with a deal (forms fixes 2): a form saving to Deals saves the person, and makes the deal
+        // beside them with every answer it saved on Deals still on the deal.
+        const deal = !isPeople
+          ? undefined
+          : input.withDeal === true
+            ? { objectId: await standardDeals(tx, scope) }
+            : draft.document.targets.deal;
+        const dealAttributes = deal === undefined ? undefined : await loadAttributes(tx, deal.objectId);
+        const kept = draft.document.questions.map((question): FormQuestion => {
+          const filed = question.filedOn;
+          if (filed === undefined) return question;
+          // On the new object itself (Deals again, after Undo): saved on its record.
+          if (attributes.has(filed.attributeId)) {
+            return filed.objectRole === 'main'
+              ? question
+              : { ...question, filedOn: { objectRole: 'main', attributeId: filed.attributeId } };
+          }
+          if (dealAttributes?.has(filed.attributeId) === true) {
+            return { ...question, filedOn: { objectRole: 'deal', attributeId: filed.attributeId } };
+          }
+          return unfiled(question);
+        });
         const restored = restoreFiling(kept, filedBefore[objectId], fileable(attributes));
         const { [objectId]: _back, ...remembered } = filedBefore;
-        const isPeople = await isPeopleObject(tx, objectId);
-        const deal = isPeople ? draft.document.targets.deal : undefined;
         document = withFiledBefore(
           {
             ...draft.document,

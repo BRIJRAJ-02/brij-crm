@@ -131,7 +131,12 @@ export const formsRouter = member.forms.router({
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       setFormTarget(
         context.scope,
-        { formId: input.formId, mainObjectId: input.mainObjectId, expectedRevision: input.expectedRevision },
+        {
+          formId: input.formId,
+          mainObjectId: input.mainObjectId,
+          expectedRevision: input.expectedRevision,
+          ...(input.withDeal === undefined ? {} : { withDeal: input.withDeal }),
+        },
         hooks,
       ),
     ),

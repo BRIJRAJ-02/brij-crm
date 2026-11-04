@@ -218,8 +218,8 @@ function Editor({ initial }: { readonly initial: FormView }) {
         members={MEMBERS}
         isReadOnly={false}
         settings={settings}
-        onRetarget={(objectId) => {
-          retargets.push(objectId);
+        onRetarget={(objectId, withDeal) => {
+          retargets.push(withDeal === true ? `${objectId ?? ''} with a deal` : objectId);
         }}
         isRetargeting={false}
         onStatusChange={(status) => {
@@ -231,6 +231,7 @@ function Editor({ initial }: { readonly initial: FormView }) {
           deals.push(next.targets.deal?.objectId);
           copies.push(next.confirmation?.on);
           closings.push(next.closing);
+          filings.push(next.questions.map((question) => question.filedOn?.objectRole ?? 'kept'));
           setForm({ ...form, draft: next });
         }}
       />
@@ -245,6 +246,7 @@ const statuses: string[] = [];
 const deals: (string | undefined)[] = [];
 const copies: (boolean | undefined)[] = [];
 const closings: FormDocument['closing'][] = [];
+const filings: string[][] = [];
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -258,6 +260,7 @@ afterEach(() => {
   deals.length = 0;
   copies.length = 0;
   closings.length = 0;
+  filings.length = 0;
 });
 
 async function show(
@@ -440,6 +443,33 @@ describe('Settings as plain rows (T21)', () => {
     await expect.element(deal).not.toBeChecked();
     (deal.element() as HTMLElement).click();
     expect(deals).toEqual([DEALS]);
+  });
+
+  it('keeps an answer saved on the deal with the submission once Also create a deal is off (forms fixes 2)', async () => {
+    const budget = {
+      id: 'q-budget',
+      key: 'budget',
+      label: 'Budget',
+      answerType: 'number' as const,
+      required: false,
+      filedOn: { objectRole: 'deal' as const, attributeId: '0199f0a0-0000-7000-8000-0000000000b1' },
+    };
+    const draft: FormDocument = {
+      ...DRAFT,
+      questions: [...DRAFT.questions, budget],
+      targets: { ...DRAFT.targets, deal: { objectId: DEALS } },
+    };
+    await show({ ...formView({}), draft }, []);
+    (page.getByRole('switch', { name: 'Also create a deal' }).element() as HTMLElement).click();
+    expect(deals).toEqual([undefined]);
+    expect(filings).toEqual([['main', 'kept']]);
+  });
+
+  it('moves a form saving to Deals to People with a deal in one press (forms fixes 2)', async () => {
+    const draft: FormDocument = { ...DRAFT, targets: { main: { objectId: DEALS } } };
+    await show({ ...formView({}), mainObjectId: DEALS, draft }, []);
+    await page.getByRole('button', { name: 'Save people', exact: true }).click();
+    expect(retargets).toEqual([`${PEOPLE} with a deal`]);
   });
 
   it('turns on Email them a copy, then shows its subject and message (forms fix b1)', async () => {

@@ -7751,11 +7751,28 @@ export function createDataLayer({
        * Points a form's draft at another object, or at none (`null`: keep its submissions only); on a published
        * form it goes live with the next publish.
        */
-      setTarget: (workspace: string, formId: string, mainObjectId: string | null, expectedRevision: number) =>
+      setTarget: (
+        workspace: string,
+        formId: string,
+        mainObjectId: string | null,
+        expectedRevision: number,
+        /** With People: each submission also makes a deal (Move to People with a deal). */
+        withDeal?: boolean,
+      ) =>
         formLists.write(workspace, {
           send: () =>
             call((options) =>
-              api.forms.setTarget({ workspace, formId, mainObjectId, expectedRevision, mutationId: mintId() }, options),
+              api.forms.setTarget(
+                {
+                  workspace,
+                  formId,
+                  mainObjectId,
+                  expectedRevision,
+                  ...(withDeal === undefined ? {} : { withDeal }),
+                  mutationId: mintId(),
+                },
+                options,
+              ),
             ),
           land: landForm(formId),
         }),

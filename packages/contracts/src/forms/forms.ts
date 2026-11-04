@@ -193,6 +193,8 @@ export const SetFormTargetInput = WorkspaceScoped.extend({
   formId: Uuid,
   mainObjectId: Uuid.nullable(),
   expectedRevision: z.number().int().min(1),
+  /** With People: each submission also makes a deal (Move to People with a deal, forms fixes 2). */
+  withDeal: z.boolean().optional(),
   mutationId: Uuid,
 });
 /** Points a form's draft at another object, or at none. */
@@ -263,6 +265,11 @@ export const FormTargetChoices = z.object({
   objectId: Uuid.optional(),
   objectName: z.string().optional(),
   items: z.array(FormAttributeChoice),
+  /**
+   * The standard Deals and its attributes, when the form saves to People and the reader may see Deals (forms fixes 2):
+   * with Also create a deal on, a question may go on the deal itself (its Value, its Source). Absent otherwise.
+   */
+  deal: z.object({ objectId: Uuid, objectName: z.string(), items: z.array(FormAttributeChoice) }).optional(),
 });
 /** The target object and its attributes. */
 export type FormTargetChoices = z.infer<typeof FormTargetChoices>;

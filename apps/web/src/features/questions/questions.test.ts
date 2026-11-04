@@ -4,6 +4,7 @@ import {
   addQuestion,
   changeQuestion,
   fileByLabel,
+  filedLine,
   movedPoints,
   planNewAttributes,
   renamedKeys,
@@ -154,5 +155,29 @@ describe('points follow their choice (spec 0063, AC-6316)', () => {
     expect(changed?.points).toEqual([5, 2, 3]);
     const [typed] = changeQuestion([question], 'q9', { answerType: 'short_text' });
     expect(typed?.points).toBeUndefined();
+  });
+});
+
+describe('an answer saved on the deal (forms fixes 2)', () => {
+  const VALUE = '0199f0a0-0000-7000-8000-0000000000bb';
+  const deal = {
+    items: [
+      { attributeId: VALUE, title: 'Value', type: 'currency', isRequired: false, isUnique: false, canWrite: true },
+    ] satisfies FormAttributeChoice[],
+  };
+
+  it('keeps its place on the deal while its words change, and goes back to the person when a person field is chosen', () => {
+    const [onDeal] = changeQuestion([role], 'q1', { filedOn: VALUE, filedRole: 'deal' });
+    expect(onDeal?.filedOn).toEqual({ objectRole: 'deal', attributeId: VALUE });
+    const [renamed] = changeQuestion(onDeal === undefined ? [] : [onDeal], 'q1', { label: 'Budget' });
+    expect(renamed?.filedOn).toEqual({ objectRole: 'deal', attributeId: VALUE });
+    const [back] = changeQuestion(renamed === undefined ? [] : [renamed], 'q1', { filedOn: JOB });
+    expect(back?.filedOn).toEqual({ objectRole: 'main', attributeId: JOB });
+  });
+
+  it('reads as Deal › Value on its card', () => {
+    const [onDeal] = changeQuestion([role], 'q1', { filedOn: VALUE, filedRole: 'deal' });
+    if (onDeal === undefined) throw new Error('No question.');
+    expect(filedLine(onDeal, 'People', attributes, deal)).toBe('Deal › Value');
   });
 });

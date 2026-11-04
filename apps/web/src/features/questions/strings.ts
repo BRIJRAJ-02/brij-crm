@@ -61,6 +61,8 @@ export const strings = {
   questionDeletedFiled: (label: string, filed: string) => `Deleted “${label}”. Its answers went to ${filed}.`,
   undo: 'Undo',
   filedLine: (objectName: string, title: string) => `${objectName} › ${title}`,
+  /** The heading over the deal's fields in Where it goes, and the closed line's start ("Deal › Value"). */
+  dealGroup: 'Deal',
   goneAttribute: 'A field that no longer exists',
   // The new answer types' options (spec 0063)
   dateRange: 'Days offered',

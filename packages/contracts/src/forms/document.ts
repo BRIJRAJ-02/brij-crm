@@ -42,10 +42,19 @@ export const OptionKey = z
   .string()
   .regex(OPTION_KEY, { error: 'A choice key is 1 to 40 lowercase letters, numbers or underscores.' });
 
-/** Where an answer is filed: an attribute of the form's main target (later milestones add person, company, deal). */
-export const FiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: Uuid });
+/**
+ * Where an answer is filed: an attribute of the form's main target, or (forms fixes 2, 6 November 2026) of the deal
+ * Also create a deal makes beside the person (`targets.deal`), such as its Value or Source. Only a form's questions
+ * file on the deal; a booking page's and the score file on the main record only.
+ */
+export const FiledOn = z.strictObject({ objectRole: z.enum(['main', 'deal']), attributeId: Uuid });
 /** Where an answer is filed. */
 export type FiledOn = z.infer<typeof FiledOn>;
+
+/** Where the score is filed: an attribute of the main target only. */
+export const MainFiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: Uuid });
+/** Where the score is filed. */
+export type MainFiledOn = z.infer<typeof MainFiledOn>;
 
 /** A scale's ends: 0 or 1 to 5, 7 or 10 (spec 0063, AC-6307; 0 to 10 is NPS). */
 export const SCALE_FROM = [0, 1] as const;
@@ -382,7 +391,7 @@ export const FormDocument = z
       .max(FORM_ENDINGS_MAX, { error: `A form holds at most ${String(FORM_ENDINGS_MAX)} endings beside the default.` })
       .optional(),
     /** Where the form's score is filed (spec 0063, AC-6316): a number attribute, for example a lead score. */
-    scoreFiledOn: FiledOn.optional(),
+    scoreFiledOn: MainFiledOn.optional(),
     look: FormLook.default({ colour: 'light', corners: 'rounded' }),
     headline: z.string().trim().max(120, { error: 'Keep the headline to 120 characters.' }).default(DEFAULT_HEADLINE),
     subheading: z.string().trim().max(240, { error: 'Keep the subheading to 240 characters.' }).optional(),
@@ -495,6 +504,13 @@ export const FormDocument = z
           code: 'custom',
           path: [...at, 'filedOn'],
           message: 'Two questions are filed on one attribute.',
+        });
+      }
+      if (question.filedOn?.objectRole === 'deal' && document.targets.deal === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'filedOn'],
+          message: 'This answer goes on the deal. Turn on Also create a deal, or choose another place for it.',
         });
       }
       if (question.answerType === 'file') files += 1;

@@ -19,12 +19,12 @@
 // the write and its ledger row after it, all in this one transaction.
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
-import { fitsAttribute, scoreOf, type EngineRefusal, type FormDocument } from '@crm/contracts';
+import { fitsAttribute, scoreOf, type EngineRefusal, type FiledOn, type FormDocument } from '@crm/contracts';
 import { isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
 import { companyFilingTarget } from '../engine/filing.ts';
-import { insertRecord, readRecords, updateRecord } from '../engine/records.ts';
+import { insertRecord, updateRecord } from '../engine/records.ts';
 import { uniqueKeyOf } from '../engine/unique.ts';
 import { currentItems, isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -152,6 +152,14 @@ function valueFor(
     // A rating's or a scale's number (spec 0063): a number field holds it as text, as every decimal is held.
     case 'number':
       return { value: typeof answer === 'number' ? String(answer) : answer };
+    // A number onto a currency (a deal's Value): the amount, in the field's own default currency.
+    case 'currency': {
+      const config = attribute.config as { readonly defaultCurrency?: unknown } | null;
+      const currency = typeof config?.defaultCurrency === 'string' ? config.defaultCurrency : 'USD';
+      return typeof answer === 'number' || typeof answer === 'string'
+        ? { value: { amount: String(answer), currency } }
+        : { refused: 'That isn’t an amount.' };
+    }
     // A date and time files its moment; the visitor's time zone stays with the submission.
     case 'timestamp': {
       const at = typeof answer === 'object' && answer !== null ? (answer as { readonly at?: unknown }).at : undefined;
@@ -281,11 +289,13 @@ export function plan(
   attributes: ReadonlyMap<string, AttributeDef>,
   options: ReadonlyMap<string, readonly { id: string; label: string }[]>,
   answers: Readonly<Record<string, unknown>>,
+  /** Which record these attributes are on: the main one (with the score), or the deal made beside it. */
+  role: FiledOn['objectRole'] = 'main',
 ): { readonly planned: readonly Planned[]; readonly refused: { questionId: string; message: string }[] } {
   const planned: Planned[] = [];
   const refused: { questionId: string; message: string }[] = [];
   for (const question of document.questions) {
-    if (question.filedOn === undefined || !Object.hasOwn(answers, question.key)) continue;
+    if (question.filedOn?.objectRole !== role || !Object.hasOwn(answers, question.key)) continue;
     const attribute = attributes.get(question.filedOn.attributeId);
     // An answer filed on an attribute archived, deleted or changed since stays on the submission only (AC-551), and
     // says so (late trap #50): before, it was dropped with no word, and the panel counted it saved on the record.
@@ -313,6 +323,7 @@ export function plan(
     if (parsed.value === null) continue;
     planned.push({ attribute, questionId: question.id, value: parsed.value, always: question.update === 'always' });
   }
+  if (role === 'deal') return { planned, refused };
   // The score last, so a question filed on the same attribute is planned first and the score's own `always` wins.
   const score = planScore(document, attributes, answers);
   return { planned: [...planned, ...score.planned], refused: [...refused, ...score.refused] };
@@ -1080,10 +1091,15 @@ export async function processSubmission(
           peopleObjectId: target.objectId,
           peopleAttributes: attributes,
           dealObjectId: document.targets.deal.objectId,
+          document,
+          answers: answersOf(submission.answers),
           ...(filed.assignment.memberId === undefined ? {} : { ownerMemberId: filed.assignment.memberId }),
         })
       : undefined;
-  await settle(tx, submission.id, filed, deal?.ok === false ? { dealFailure: deal.failure } : {});
+  // An answer the deal refused says why on the submission, as one the person refused does.
+  const settled =
+    deal === undefined || filed.kind !== 'filed' ? filed : { ...filed, refused: [...filed.refused, ...deal.refused] };
+  await settle(tx, submission.id, settled, deal?.ok === false ? { dealFailure: deal.failure } : {});
   // Each consent ticked becomes a consent record on the person, in this same transaction (AC-1053).
   if (filed.kind === 'filed' && isPeople && consents.kind === 'given') {
     await recordConsents(tx, {
@@ -1100,9 +1116,10 @@ export async function processSubmission(
 /** What a deal that couldn't be made says on its submission; the person is still filed. */
 export const DEAL_NOT_MADE = 'The person was saved, but their deal couldn’t be made.';
 
-/** What making a submission's deal ended as: its record, or why not. */
-export type DealFiled =
-  { readonly ok: true; readonly recordId: string } | { readonly ok: false; readonly failure: string };
+/** What making a submission's deal ended as: its record, or why not, and each answer the deal refused. */
+export type DealFiled = (
+  { readonly ok: true; readonly recordId: string } | { readonly ok: false; readonly failure: string }
+) & { readonly refused: readonly { readonly questionId: string; readonly message: string }[] };
 
 /** The record a person links on a relationship attribute now, if any (their company, read from either end). */
 async function linkedOn(tx: WorkspaceTx, recordId: string, attribute: AttributeDef | undefined) {
@@ -1117,11 +1134,27 @@ async function linkedOn(tx: WorkspaceTx, recordId: string, attribute: AttributeD
   return found.rows[0]?.id;
 }
 
-/** A person's name as the deal takes it: their display name, else their first email, else the form's name. */
-async function dealName(tx: WorkspaceTx, scope: EngineScope, personId: string, formName: string): Promise<string> {
-  const [view] = await readRecords(tx, scope.access, [personId], { attributeIds: [] });
-  const name = view?.display.name.trim() ?? '';
-  return (name === '' ? formName : name).slice(0, 200);
+/**
+ * The deal's name, from this submission's own answers only (forms fixes 2, 6 November 2026): the name they typed,
+ * else their email, else the form's name. Never the person record's display name, which can carry what other people
+ * wrote on it since, and which a member who sees Deals but not People would then read on the deal.
+ */
+export function dealName(
+  questions: FormDocument['questions'],
+  answers: Readonly<Record<string, unknown>>,
+  formName: string,
+  /** The person's attributes: the question saved on their name is the name they typed. */
+  peopleAttributes: ReadonlyMap<string, AttributeDef>,
+): string {
+  const answerOf = (test: (question: FormDocument['questions'][number]) => boolean) => {
+    const question = questions.find((each) => test(each) && typeof answers[each.key] === 'string');
+    return question === undefined ? '' : String(answers[question.key]).trim();
+  };
+  const isName = (question: FormDocument['questions'][number]) =>
+    question.filedOn?.objectRole === 'main' &&
+    peopleAttributes.get(question.filedOn.attributeId)?.type === 'personal_name';
+  const name = answerOf(isName) || answerOf((question) => question.answerType === 'email') || formName;
+  return name.slice(0, 200);
 }
 
 /**
@@ -1140,11 +1173,21 @@ async function fileDeal(
     readonly peopleObjectId: string;
     readonly peopleAttributes: ReadonlyMap<string, AttributeDef>;
     readonly dealObjectId: string;
+    readonly document: FormDocument;
+    readonly answers: Readonly<Record<string, unknown>>;
     readonly ownerMemberId?: string;
   },
 ): Promise<DealFiled> {
   const { tx } = context;
   const dealAttributes = await loadAttributes(tx, input.dealObjectId);
+  // The answers saved on the deal itself (forms fixes 2): its Value, its Source, planned as the person's are.
+  const own = plan(
+    { questions: input.document.questions },
+    dealAttributes,
+    await optionsFor(tx, input.document, dealAttributes),
+    input.answers,
+    'deal',
+  );
   const live = (slug: string) =>
     [...dealAttributes.values()].find((attribute) => attribute.apiSlug === slug && !isArchivedNow(attribute));
   const name = live('name');
@@ -1152,7 +1195,7 @@ async function fileDeal(
   const companyLink = live('associated_company');
   const owner = live('owner');
   if (name === undefined || people?.type !== 'record_reference' || people.relationshipId === null) {
-    return { ok: false, failure: DEAL_NOT_MADE };
+    return { ok: false, failure: DEAL_NOT_MADE, refused: [] };
   }
   // One deal per submission: filing it again (Add to CRM, a retry) never makes a second while the first is live.
   const made = await tx.execute(sql`
@@ -1161,7 +1204,7 @@ async function fileDeal(
     where l.submission_id = ${input.submissionId}::uuid and l.role = 'deal'
     limit 1
   `);
-  if (made.rows.length > 0) return { ok: true, recordId: '' };
+  if (made.rows.length > 0) return { ok: true, recordId: '', refused: [] };
   const personCompany = [...input.peopleAttributes.values()].find((attribute) => attribute.apiSlug === 'company');
   const companyId = await linkedOn(tx, input.personId, personCompany);
   const companyObjectId =
@@ -1174,7 +1217,9 @@ async function fileDeal(
         ).rows[0]?.object_id;
   const ownerId = input.ownerMemberId ?? input.form.createdById ?? undefined;
   const values = new Map<string, unknown>([
-    [name.id, await dealName(tx, context.scope, input.personId, input.form.name)],
+    [name.id, dealName(input.document.questions, input.answers, input.form.name, input.peopleAttributes)],
+    // A question saved on the deal's own Name names it instead.
+    ...own.planned.map((each) => [each.attribute.id, each.value] as const),
     [people.id, [{ objectId: input.peopleObjectId, recordId: input.personId }]],
   ]);
   if (
@@ -1230,7 +1275,13 @@ async function fileDeal(
   const written = await writeSkipping(writer, values, (inner, given) =>
     insertRecord(inner, { objectId: input.dealObjectId, values: given }),
   );
-  if (!written.ok) return { ok: false, failure: DEAL_NOT_MADE };
+  if (!written.ok) return { ok: false, failure: DEAL_NOT_MADE, refused: own.refused };
+  // A value the deal refused (an option it lacks, a field locked to the form) stays on the submission, saying why.
+  const questionOf = new Map(own.planned.map((each) => [each.attribute.id, each.questionId]));
+  const skipped = written.skipped.flatMap((refusal) => {
+    const questionId = refusal.attributeId === undefined ? undefined : questionOf.get(refusal.attributeId);
+    return questionId === undefined ? [] : [{ questionId, message: refusal.message }];
+  });
   await tx
     .insert(formSubmissionRecords)
     .values({
@@ -1242,7 +1293,7 @@ async function fileDeal(
       role: 'deal',
     })
     .onConflictDoNothing();
-  return { ok: true, recordId: written.value.recordId };
+  return { ok: true, recordId: written.value.recordId, refused: [...own.refused, ...skipped] };
 }
 
 /** A stored assignment as filing's `previous`, when there is one. */

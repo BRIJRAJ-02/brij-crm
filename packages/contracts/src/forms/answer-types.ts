@@ -102,7 +102,8 @@ export const FILES_ONTO: Readonly<Record<AnswerType, readonly AttributeType[]>> 
   email: ['email'],
   phone: ['phone'],
   website: ['url', 'domain'],
-  number: ['number'],
+  // A number onto a currency too (forms fixes 2): a deal's Value, in the field's own default currency.
+  number: ['number', 'currency'],
   dropdown: ['select', 'status'],
   choice: ['select', 'status'],
   checkbox: ['checkbox'],

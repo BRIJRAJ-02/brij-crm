@@ -10,7 +10,7 @@ import { sql } from 'drizzle-orm';
 import { createWebhook } from '../webhooks/endpoints.ts';
 import { decodeWebhookKey } from '../webhooks/signing.ts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import type { FormDocument, FormQuestion, SubmitBody } from '@crm/contracts';
+import { FormDocument, type FormQuestion, type SubmitBody } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { enterPublicForm } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
@@ -842,6 +842,114 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
       objectId: expect.any(String) as string,
     });
     expect(record?.values[w.attribute('deals.owner')]).toEqual({ type: 'member', id: w.ownerId });
+  });
+
+  it('saves answers on the deal itself, and names it from the answers (forms fixes 2)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, (document) => ({
+      ...document,
+      targets: { ...document.targets, deal: { objectId: w.deals } },
+      questions: [
+        ...document.questions,
+        question({
+          id: 'budget',
+          key: 'budget',
+          label: 'Budget',
+          answerType: 'number',
+          filedOn: { objectRole: 'deal', attributeId: w.attribute('deals.value') },
+        }),
+        question({
+          id: 'heard',
+          key: 'heard',
+          label: 'How did you hear about us?',
+          answerType: 'choice',
+          choices: ['Referral', 'Somewhere else'],
+          filedOn: { objectRole: 'deal', attributeId: w.attribute('deals.source') },
+        }),
+      ],
+    }));
+    // The deal's fields are offered beside the person's.
+    const choices = await formAttributes(w.scope, { formId: live.id });
+    expect(choices.deal?.objectId).toBe(w.deals);
+    expect(choices.deal?.items.map((each) => each.attributeId)).toContain(w.attribute('deals.value'));
+    await submit(
+      live.publicKey,
+      body({ name: 'Grace Hopper', email: 'grace@navy-labs.com', budget: 12000, heard: 'Somewhere else' }),
+    );
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const view = await getSubmission(w.scope, { submissionId: submission.id });
+    expect(view.state).toBe('processed');
+    const deal = view.records.find((each) => each.role === 'deal');
+    // Named from what they typed, not from the person record.
+    expect(deal?.record.name).toBe('Grace Hopper');
+    const [record] = await getRecords(w.scope, { ids: [deal?.record.recordId ?? ''] });
+    expect(record?.values[w.attribute('deals.value')]).toMatchObject({ amount: '12000', currency: 'USD' });
+    expect(record?.values[w.attribute('deals.source')] ?? null).toBeNull();
+    // A choice the deal has no option for stays on the submission, saying why; nothing of it lands on the person.
+    expect(view.refused).toEqual([expect.objectContaining({ questionId: 'heard' })]);
+    const [person] = await getRecords(w.scope, { ids: [view.mainRecord?.recordId ?? ''] });
+    expect(Object.values(person?.values ?? {})).not.toContainEqual(expect.objectContaining({ amount: '12000' }));
+  });
+
+  it('refuses an answer saved on the deal while Also create a deal is off (forms fixes 2)', () => {
+    const parsed = FormDocument.safeParse({
+      questions: [
+        {
+          id: 'budget',
+          key: 'budget',
+          label: 'Budget',
+          answerType: 'number',
+          required: false,
+          filedOn: { objectRole: 'deal', attributeId: newId() },
+        },
+      ],
+      targets: { main: { objectId: newId() } },
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('moves a form saving to Deals to People with a deal, its Deals answers kept on the deal (forms fixes 2)', async () => {
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId(), name: 'Deal form' });
+    const onDeals = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: w.deals,
+      expectedRevision: created.revision,
+    });
+    const saved = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: {
+        ...onDeals.draft,
+        questions: [
+          ...onDeals.draft.questions,
+          question({
+            id: 'budget',
+            key: 'budget',
+            label: 'Budget',
+            answerType: 'number',
+            filedOn: { objectRole: 'main', attributeId: w.attribute('deals.value') },
+          }),
+        ],
+      },
+      expectedRevision: onDeals.revision,
+    });
+    const moved = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: w.people,
+      withDeal: true,
+      expectedRevision: saved.revision,
+    });
+    expect(moved.draft.targets.deal).toEqual({ objectId: w.deals });
+    expect(moved.draft.questions.find((each) => each.key === 'budget')?.filedOn).toEqual({
+      objectRole: 'deal',
+      attributeId: w.attribute('deals.value'),
+    });
+    // The person's email is filed on People, so a submission makes a person.
+    expect(moved.draft.questions.find((each) => each.answerType === 'email')?.filedOn?.attributeId).toBe(
+      w.attribute('people.email_addresses'),
+    );
   });
 
   it('gives a deal’s timeline no answers for a reader who can’t see the person, and makes one deal per submission', async () => {

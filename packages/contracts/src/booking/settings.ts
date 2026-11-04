@@ -245,6 +245,9 @@ export const BookingQuestions = z
         });
       }
       const attributeId = question.filedOn?.attributeId;
+      if (question.filedOn?.objectRole === 'deal') {
+        context.addIssue({ code: 'custom', path: [...at, 'filedOn'], message: 'A booking page makes no deal.' });
+      }
       if (attributeId !== undefined && seen.attributes.has(attributeId)) {
         context.addIssue({
           code: 'custom',

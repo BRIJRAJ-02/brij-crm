@@ -251,6 +251,7 @@ export const strings = {
   moreQuestions: (n: number) => (n === 1 ? '1 more question' : `${String(n)} more questions`),
   retargetDone: (to: string) => `Answers now save to ${to}.`,
   retargetOffDone: 'Answers now stay in Submissions.',
+  retargetDealDone: 'Each answer now saves a person, with a deal.',
   /** Email them a copy (forms fix b1): the visitor's own copy of what they sent. */
   copyRow: 'Email them a copy',
   copyHelp: 'Each person gets a copy of their answers at the email they gave. Replies come to the form’s owner.',
@@ -285,6 +286,11 @@ export const strings = {
   keptMonths: (months: number) => `For ${String(months)} months`,
   /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
   alsoDeal: 'Also create a deal',
+  /** A form saving to Deals saves no person (forms fix a3): one press moves it to People, each answer still a deal. */
+  dealsNoPerson: 'Save the person too',
+  dealsNoPersonTip:
+    'Saving to Deals keeps no person, so there is no one to email back. Save to People with a deal instead; answers saved on the deal stay there.',
+  dealsMove: 'Save people',
   alsoDealTip: 'Each submission also adds a deal, linked to the person and their company. Goes live with Publish.',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
