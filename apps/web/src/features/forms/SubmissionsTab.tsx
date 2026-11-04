@@ -21,6 +21,7 @@ import {
   BulkActionBar,
   focusLater,
   Button,
+  ButtonLink,
   Callout,
   CopyButton,
   DescriptionList,
@@ -762,6 +763,13 @@ export function SubmissionsTab({
                           <Button variant="primary" isPending={busy === 'add'} onPress={() => addToCrm([open.id])}>
                             {strings.addToCrm}
                           </Button>
+                        )}
+                        {/* A form that keeps answers only had no way to the CRM from here (forms fix a10): the one
+                            way is to turn saving on, where it is set; Sync then adds the earlier ones. */}
+                        {!isFiling && open.state === 'processed' && (
+                          <ButtonLink variant="primary" href={formHref(slug, formId, 'settings')}>
+                            {strings.turnOnCrm}
+                          </ButtonLink>
                         )}
                       </>
                     )}
