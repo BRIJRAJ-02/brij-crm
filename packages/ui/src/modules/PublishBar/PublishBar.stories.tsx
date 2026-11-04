@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { PublishBar, type PublishBarStatus } from './PublishBar.tsx';
+import { PublishBar, PublishBarSkeleton, type PublishBarStatus } from './PublishBar.tsx';
 
 const CHANGES = ['Title “Intro” → “Intro call”', 'Length 30 min → 45 min', 'Social links hidden'];
 
@@ -48,6 +48,15 @@ export const Draft: Story = {
 
 /** Nothing to publish: the page is live, and Versions stays. */
 export const Live: Story = { args: { status: 'live', changes: [] } };
+
+/** While the editor loads: the bar's strip and height, its status a skeleton line. */
+export const Loading: Story = {
+  render: () => (
+    <Stage width="fill">
+      <PublishBarSkeleton />
+    </Stage>
+  ),
+};
 
 /** Paused with nothing to publish: the bar says guests can't book it, with a pause, and never claims live. */
 export const Paused: Story = {

@@ -48,6 +48,7 @@ import {
   PreviewFrame,
   PreviewLayout,
   PublishBar,
+  PublishBarSkeleton,
   type PublishBarStatus,
   type PublishBarVersion,
   Popover,
@@ -1861,8 +1862,8 @@ const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
 };
 
 /**
- * The editor while its page loads: the tabs where the editor's will stand, and the chosen one's sections, titled and
- * busy, with skeleton fields. Hosts waits for the page, since only a round robin page has it.
+ * The editor while its page loads: the publish bar's strip, the tabs where the editor's will stand, and the chosen
+ * one's sections, titled and busy, with skeleton fields. Hosts waits for the page, since only a round robin page has it.
  */
 export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
   // Hosts only when it is the tab asked for (a round robin page's); the page says whether it has it.
@@ -1890,7 +1891,17 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
             selectedKey={shown}
           >
             <TabPanel id={shown} variant="fill">
-              <PreviewLayout preview={<Skeleton shape="block" />} {...(notices === undefined ? {} : { notices })}>
+              <PreviewLayout
+                preview={<Skeleton shape="block" />}
+                // The publish bar's place first, as the editor draws it on a page its reader can change (the usual
+                // case: a colleague's locked page has none), then the notices already known.
+                notices={
+                  <>
+                    <PublishBarSkeleton />
+                    {notices}
+                  </>
+                }
+              >
                 {PENDING_SECTIONS[shown].map((title) => (
                   <Card key={title} title={title} isBusy>
                     <Skeleton lines={3} />

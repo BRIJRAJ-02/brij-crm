@@ -1,6 +1,6 @@
 // Availability schedules (spec 0035), end to end: the Availability tab opens the default in its editor; a member makes
 // a second schedule from it, gives it evening hours (saved with the Unsaved changes bar's Save), picks it for a booking
-// page, and the page's public slots follow it; a save in one browser shows in another browser's editor (AC-977);
+// page and publishes it, and the page's public slots follow it; a save in one browser shows in another browser's editor (AC-977);
 // deleting it from the switcher asks first, naming the page it moves, Cancel changes nothing, and once it is gone the
 // tab opens the default and the page books by it again (AC-964, AC-965, AC-967, AC-969, AC-970).
 import { randomUUID } from 'node:crypto';
@@ -124,11 +124,17 @@ test.describe('availability schedules', () => {
     await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
     await expect(page.getByRole('button', { name: /Monday until/ }).first()).toContainText('8:00 PM');
 
-    // The page picks Evenings, and its public slots follow.
+    // The page picks Evenings. Which schedule a page books by is drafted (spec 0068, AC-6813): Save draft keeps guests
+    // on the working hours, and Publish puts the page's public slots on Evenings.
     await page.goto(`${pageUrl}?tab=hours`);
     await pick(page, 'Schedule', 'Evenings');
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
     await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+    expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
+    const publishBar = page.getByRole('region', { name: 'Publish' });
+    await expect(publishBar.getByRole('status')).toHaveText('1 change not published');
+    await publishBar.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(publishBar.getByRole('status')).toHaveText(/Published|Live: guests see this page/);
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(18, 20));
 
     // A second browser on the same schedule's editor sees a save from the first (AC-977).
