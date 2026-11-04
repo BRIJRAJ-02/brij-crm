@@ -10,6 +10,7 @@ import { CATALOGUE_LIMITS } from '@crm/data/services';
 import {
   BulkActionBar,
   Button,
+  Callout,
   Disclosure,
   EmptyState,
   Field,
@@ -26,10 +27,10 @@ import {
 } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useId, useMemo, useState } from 'react';
-import { SettingsPage } from '../settings/SettingsPage.tsx';
+import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { staffProfileHref } from '../settings/nav.ts';
 import { NotInstalled } from './NotInstalled.tsx';
-import { SetupSteps } from './SetupSteps.tsx';
+import { SetupSteps, useSetupShown } from './SetupSteps.tsx';
 import { strings } from './strings.ts';
 
 /** Props for Settings › Staff. */
@@ -53,9 +54,11 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
   const catalogue = useHospitality(store.catalogue(slug));
   const navigate = useNavigate();
   const [isAdding, setAdding] = useState(false);
-  const [archiving, setArchiving] = useState<StaffView | undefined>();
+  // Who an archive asks about: one person (their row's menu) or every ticked person (the bulk bar).
+  const [archiving, setArchiving] = useState<readonly StaffView[] | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const team = state.status === 'ready' ? state.value : undefined;
+  const setupShown = useSetupShown(slug, catalogue.status === 'ready' ? catalogue.value.setup : undefined);
   const live = useMemo(() => team?.staff.filter((each) => !each.archived) ?? [], [team]);
   const archived = useMemo(() => team?.staff.filter((each) => each.archived) ?? [], [team]);
   const placeName = new Map(team?.places.map((place) => [place.id, place.name]) ?? []);
@@ -64,21 +67,30 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
     if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
   };
   const open = (person: StaffView) => void navigate({ href: staffProfileHref(slug, person.id) });
-  const archive = (person: StaffView) =>
-    void store.archiveStaff(slug, person.id).then((refused) => {
-      if (refused !== undefined) {
-        said(refused);
-        return;
-      }
-      toasts.toast({
-        tone: 'success',
-        message: strings.staffArchived(person.name),
-        action: { label: strings.undo, onAction: () => void store.restoreStaff(slug, person.id).then(said) },
-      });
+  /** Archives each (in order), then one toast for all that went, with one Undo bringing them back. */
+  const archive = async (people: readonly StaffView[]) => {
+    const gone: StaffView[] = [];
+    for (const person of people) {
+      const refused = await store.archiveStaff(slug, person.id);
+      if (refused === undefined) gone.push(person);
+      else said(refused);
+    }
+    if (gone.length === 0) return;
+    toasts.toast({
+      tone: 'success',
+      message: gone.length === 1 ? strings.staffArchived(gone[0]?.name ?? '') : strings.staffArchivedMany(gone.length),
+      action: {
+        label: strings.undo,
+        onAction: () => {
+          for (const person of gone) void store.restoreStaff(slug, person.id).then(said);
+        },
+      },
     });
+  };
 
   if (state.status === 'error') {
     if (state.error.code === 'APP_NOT_INSTALLED') return <NotInstalled slug={slug} title={strings.staffTitle} />;
+    if (state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
     return (
       <SettingsPage title={strings.staffTitle}>
         <EmptyState
@@ -93,6 +105,7 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
   }
 
   const isFull = live.length >= CATALOGUE_LIMITS.staff;
+  const blocked = (archiving ?? []).reduce((total, person) => total + person.upcoming, 0);
   const ticked = live.filter((each) => selected.has(each.id));
   const photoOf = (person: StaffView) =>
     person.photo === undefined ? undefined : store.staffPhotoSrc(slug, person.id, person.photo);
@@ -102,29 +115,36 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
       title={strings.staffTitle}
       isLoading={team === undefined}
       actions={
-        <Button variant="primary" icon="plus" isDisabled={team === undefined || isFull} onPress={() => setAdding(true)}>
+        // The checklist (or the empty list) holds the one next action while it shows; then Add staff leads.
+        <Button
+          variant={setupShown.isShown || live.length === 0 ? 'secondary' : 'primary'}
+          icon="plus"
+          isDisabled={team === undefined || isFull}
+          onPress={() => setAdding(true)}
+        >
           {strings.addStaff}
         </Button>
       }
     >
-      {catalogue.status === 'ready' ? (
-        <SetupSteps slug={slug} setup={catalogue.value.setup} onHere={{ staff: () => setAdding(true) }} />
+      {catalogue.status === 'ready' && setupShown.isShown ? (
+        <SetupSteps
+          slug={slug}
+          setup={catalogue.value.setup}
+          onHere={{ staff: () => setAdding(true) }}
+          onHide={setupShown.hide}
+        />
       ) : null}
+      {isFull ? <Callout tone="info">{strings.limitStaff(CATALOGUE_LIMITS.staff)}</Callout> : null}
       {ticked.length > 0 ? (
         <BulkActionBar count={ticked.length} total={live.length} onClear={() => setSelected(new Set())}>
-          <Button
-            icon="archive"
-            onPress={() => {
-              setSelected(new Set());
-              for (const person of ticked) archive(person);
-            }}
-          >
+          <Button icon="archive" onPress={() => setArchiving(ticked)}>
             {strings.archive}
           </Button>
         </BulkActionBar>
       ) : null}
       <Table
         label={strings.staffTitle}
+        isScrollable
         columns={COLUMNS}
         rows={live}
         isLoading={team === undefined}
@@ -176,7 +196,7 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
                       if (key === 'open') open(person);
                       if (key === 'up') void store.moveStaff(slug, person.id, index - 1).then(said);
                       if (key === 'down') void store.moveStaff(slug, person.id, index + 1).then(said);
-                      if (key === 'archive') setArchiving(person);
+                      if (key === 'archive') setArchiving([person]);
                     }}
                   >
                     <MenuItem id="open" icon="pencil">
@@ -201,11 +221,15 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
           <EmptyState
             title={strings.noStaff}
             icon="id-card"
-            actions={
-              <Button variant="primary" icon="plus" onPress={() => setAdding(true)}>
-                {strings.addStaff}
-              </Button>
-            }
+            {...(setupShown.isShown
+              ? {}
+              : {
+                  actions: (
+                    <Button variant="primary" icon="plus" onPress={() => setAdding(true)}>
+                      {strings.addStaff}
+                    </Button>
+                  ),
+                })}
           >
             {strings.noStaffText}
           </EmptyState>
@@ -261,7 +285,13 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
       ) : null}
       <Modal
         variant="confirm"
-        title={archiving === undefined ? '' : strings.archiveQuestion(archiving.name)}
+        title={
+          archiving === undefined
+            ? ''
+            : archiving.length === 1
+              ? strings.archiveQuestion(archiving[0]?.name ?? '')
+              : strings.archiveManyQuestion(archiving.length)
+        }
         isOpen={archiving !== undefined}
         onOpenChange={(isOpen) => {
           if (!isOpen) setArchiving(undefined);
@@ -271,9 +301,12 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
             <Button slot="close">{strings.cancel}</Button>
             <Button
               variant="danger-solid"
+              // Refused anyway while they have visits to come: the line says why, and the button waits.
+              isDisabled={blocked > 0}
               onPress={() => {
-                if (archiving !== undefined) archive(archiving);
+                if (archiving !== undefined) void archive(archiving);
                 setArchiving(undefined);
+                setSelected(new Set());
               }}
             >
               {strings.archive}
@@ -281,9 +314,7 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
           </>
         }
       >
-        {archiving !== undefined && archiving.upcoming > 0
-          ? strings.upcomingBlocks(archiving.upcoming)
-          : strings.archiveLine}
+        {blocked > 0 ? strings.upcomingBlocks(blocked) : strings.archiveLine}
       </Modal>
     </SettingsPage>
   );

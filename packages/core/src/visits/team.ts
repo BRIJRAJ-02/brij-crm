@@ -29,6 +29,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import type { CatalogueDeps } from './catalogue.ts';
 import { readServicePlaces } from './catalogue.ts';
+import { personLockKeys } from './locks.ts';
 import { linkStaffMember } from './staff-link.ts';
 
 const L = CATALOGUE_LIMITS;
@@ -422,6 +423,14 @@ export async function archiveStaff(
   requirePermission(scope, 'services.manage');
   const id = checkId(input.staffId, STAFF_MISSING);
   return teamWrite(scope, 'services.manage', deps, hooks, 'staff.archived', async ({ tx }) => {
+    // Their person lock first, as a booking takes it, so a visit being booked for them now finishes before the count,
+    // and one after sees them archived (Rules settled: Locks).
+    const [seen] = (
+      await tx.execute<{ member_id: string | null }>(sql`select member_id::text from staff where id = ${id}::uuid`)
+    ).rows;
+    for (const key of personLockKeys(scope.workspaceId, [{ id, memberId: seen?.member_id ?? undefined }])) {
+      await lockKey(tx, key);
+    }
     const row = await lockedStaff(tx, id);
     const [upcoming] = (
       await tx.execute<{ n: number }>(sql`
@@ -476,43 +485,68 @@ export async function linkStaff(
   scope: EngineScope,
   input: { readonly staffId: string; readonly memberId: string | null },
   deps: { readonly now?: () => Date } = {},
+  hooks: readonly AfterWrite[] = [],
 ): Promise<StaffTeamView> {
   requirePermission(scope, 'services.manage');
-  await linkStaffMember(scope, input, deps);
+  // The engine's link gates on either engine app; these screens are Appointments', so refuse first, before writing.
+  await inWorkspace(scope, (tx) => requireApp(tx, scope.workspaceId, 'appointments'));
+  await linkStaffMember(scope, input, deps, hooks);
   return getTeam(scope);
 }
 
-/** Keeps a new photo's path (the API stores its bytes after); answers the path. */
+/** Where a profile's photos live: under its workspace and its own id, nothing typed by anyone. */
+export const staffPhotoFolder = (workspaceId: string, staffId: string): string => `staff/${workspaceId}/${staffId}-`;
+
+/**
+ * Points a profile at a new photo the API has already stored at `path` (inside `staffPhotoFolder`). Answers the photo
+ * it replaced, for the API to remove from the store once this commits, so a face never outlives its profile's choice.
+ */
 export async function setStaffPhoto(
   scope: EngineScope,
-  input: { readonly staffId: string; readonly path: (workspaceId: string, staffId: string) => string },
-): Promise<{ readonly path: string }> {
+  input: { readonly staffId: string; readonly path: string },
+): Promise<{ readonly previous?: string }> {
   requirePermission(scope, 'services.manage');
   const id = checkId(input.staffId, STAFF_MISSING);
-  let path = '';
+  if (!input.path.startsWith(staffPhotoFolder(scope.workspaceId, id)) || !/^[a-z0-9/.-]+$/.test(input.path)) {
+    throw inputInvalid('path', 'That photo can’t be kept here.');
+  }
+  const found: { previous: string | null } = { previous: null };
   await teamWrite(scope, 'services.manage', {}, [], 'staff.photo', async ({ tx }) => {
     await lockedStaff(tx, id);
-    path = input.path(scope.workspaceId, id);
-    await tx.execute(sql`update staff set photo_path = ${path}, updated_at = now() where id = ${id}::uuid`);
+    const [row] = (
+      await tx.execute<{ photo_path: string | null }>(sql`select photo_path from staff where id = ${id}::uuid`)
+    ).rows;
+    found.previous = row?.photo_path ?? null;
+    await tx.execute(sql`update staff set photo_path = ${input.path}, updated_at = now() where id = ${id}::uuid`);
     return { places: await placesOf(tx, id), ids: { staffId: id } };
   });
-  return { path };
+  return found.previous === null ? {} : { previous: found.previous };
 }
 
-/** Takes a profile's photo away. */
+/**
+ * Takes a profile's photo away; once that commits, `deps.forgetFile` removes it from the store (the API's), so nothing
+ * keeps a face nobody points at.
+ */
 export async function removeStaffPhoto(
   scope: EngineScope,
   input: { readonly staffId: string },
-  deps: CatalogueDeps = {},
+  deps: CatalogueDeps & { readonly forgetFile?: (path: string) => Promise<void> } = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<StaffTeamView> {
   requirePermission(scope, 'services.manage');
   const id = checkId(input.staffId, STAFF_MISSING);
-  return teamWrite(scope, 'services.manage', deps, hooks, 'staff.photo_removed', async ({ tx }) => {
+  const found: { previous: string | null } = { previous: null };
+  const view = await teamWrite(scope, 'services.manage', deps, hooks, 'staff.photo_removed', async ({ tx }) => {
     await lockedStaff(tx, id);
+    const [row] = (
+      await tx.execute<{ photo_path: string | null }>(sql`select photo_path from staff where id = ${id}::uuid`)
+    ).rows;
+    found.previous = row?.photo_path ?? null;
     await tx.execute(sql`update staff set photo_path = null, updated_at = now() where id = ${id}::uuid`);
     return { places: await placesOf(tx, id), ids: { staffId: id } };
   });
+  if (found.previous !== null) await deps.forgetFile?.(found.previous);
+  return view;
 }
 
 /** A profile's photo for the screens (`services.manage` or `services.calendar`), or undefined. */
@@ -523,6 +557,7 @@ export async function readStaffPhoto(
   if (!can(scope.access, 'services.manage')) requirePermission(scope, 'services.calendar');
   const id = checkId(input.staffId, STAFF_MISSING);
   return inWorkspace(scope, async (tx) => {
+    await requireApp(tx, scope.workspaceId, 'appointments');
     const [row] = (
       await tx.execute<{ photo_path: string | null }>(sql`select photo_path from staff where id = ${id}::uuid`)
     ).rows;
@@ -626,6 +661,27 @@ async function unlinkedPlaces(tx: WorkspaceTx, staffId: string): Promise<{ name:
   return { name: row.name, places: await placesOf(tx, staffId) };
 }
 
+/**
+ * After an insert that may have met its own id (a retry): refuses CONFLICT unless the row there is this one (the same
+ * staff member and span), so a reused id never answers success for a write that didn't happen.
+ */
+async function sameRetry(
+  tx: WorkspaceTx,
+  table: 'staff_time_off' | 'staff_blocks',
+  id: string,
+  staffId: string,
+  start: string,
+  end: string,
+): Promise<void> {
+  const [row] = (
+    await tx.execute<{ same: boolean }>(sql`
+      select (staff_id = ${staffId}::uuid and starts_at = ${start}::timestamptz and ends_at = ${end}::timestamptz) as same
+      from ${sql.identifier(table)} where id = ${id}::uuid
+    `)
+  ).rows;
+  if (row?.same !== true) throw refuse('CONFLICT', 'That time was already used for something else. Try again.');
+}
+
 /** Checks a span: start before end, at most `days` long. */
 function checkSpan(start: string, end: string, days: number): void {
   const from = Date.parse(start);
@@ -662,6 +718,7 @@ export async function addStaffTimeOff(
         ${input.start}::timestamptz, ${input.end}::timestamptz, ${input.reason}, ${by}::uuid)
       on conflict do nothing
     `);
+    await sameRetry(tx, 'staff_time_off', id, staffId, input.start, input.end);
     return { places: placeId === undefined ? places : [placeId], ids: { staffId, timeOffId: id } };
   });
 }
@@ -718,6 +775,7 @@ export async function addStaffBlock(
         ${input.end}::timestamptz, ${reason}, ${by}::uuid)
       on conflict do nothing
     `);
+    await sameRetry(tx, 'staff_blocks', id, staffId, input.start, input.end);
     return { places: [placeId], ids: { staffId, blockId: id } };
   });
 }

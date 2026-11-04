@@ -9,6 +9,7 @@ import { CATALOGUE_LIMITS, starterService } from '@crm/data/services';
 import {
   BulkActionBar,
   Button,
+  Callout,
   Disclosure,
   EmptyState,
   Field,
@@ -28,11 +29,11 @@ import {
   useFormatSettings,
 } from '@crm/ui';
 import { useId, useMemo, useState } from 'react';
-import { SettingsPage } from '../settings/SettingsPage.tsx';
+import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { servicePrice, serviceLength } from './format.ts';
 import { NotInstalled } from './NotInstalled.tsx';
 import { ServiceDrawer, type ServiceStart } from './ServiceDrawer.tsx';
-import { SetupSteps } from './SetupSteps.tsx';
+import { SetupSteps, useSetupShown } from './SetupSteps.tsx';
 import { strings } from './strings.ts';
 
 /** Props for Settings › Services. */
@@ -65,6 +66,7 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
   const [open, setOpen] = useState<Open | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const view = state.status === 'ready' ? state.value : undefined;
+  const setupShown = useSetupShown(slug, view?.setup);
   const live = useMemo(() => view?.services.filter((service) => !service.archived) ?? [], [view]);
   const archived = useMemo(() => view?.services.filter((service) => service.archived) ?? [], [view]);
   const said = (refused: { readonly message: string } | undefined) => {
@@ -73,23 +75,17 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
   const isFull = live.length >= CATALOGUE_LIMITS.services;
   const newService = (start?: ServiceStart) => setOpen({ kind: 'service', ...(start === undefined ? {} : { start }) });
 
-  /** The starter for this kind of business, its category made first so it lands in one (Foolproof). */
-  const addStarter = async (catalogue: CatalogueView) => {
+  /**
+   * The starter for this kind of business (Foolproof), in its category: an existing one by that name, else one the
+   * drawer makes only when the service is saved, so Cancel leaves nothing behind.
+   */
+  const addStarter = (catalogue: CatalogueView) => {
     const starter = starterService(catalogue.businessKind);
     const existing = catalogue.categories.find((category) => category.name === starter.category);
-    let categoryId = existing?.id;
-    if (categoryId === undefined) {
-      categoryId = newId();
-      const refused = await store.saveCategory(slug, categoryId, starter.category);
-      if (refused !== undefined) {
-        said(refused);
-        categoryId = undefined;
-      }
-    }
     newService({
       name: starter.name,
       minutes: starter.minutes,
-      ...(categoryId === undefined ? {} : { categoryId }),
+      ...(existing === undefined ? { categoryName: starter.category } : { categoryId: existing.id }),
     });
   };
 
@@ -112,6 +108,7 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
 
   if (state.status === 'error') {
     if (state.error.code === 'APP_NOT_INSTALLED') return <NotInstalled slug={slug} title={strings.servicesTitle} />;
+    if (state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
     return (
       <SettingsPage title={strings.servicesTitle}>
         <EmptyState
@@ -155,24 +152,41 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
           <Button isDisabled={view === undefined} onPress={() => setOpen({ kind: 'category' })}>
             {strings.newCategory}
           </Button>
-          <Button variant="primary" icon="plus" isDisabled={view === undefined || isFull} onPress={() => newService()}>
+          {/* The checklist (or the empty list) holds the one next action while it shows; then New service leads. */}
+          <Button
+            variant={setupShown.isShown || live.length === 0 ? 'secondary' : 'primary'}
+            icon="plus"
+            isDisabled={view === undefined || isFull}
+            onPress={() => newService()}
+          >
             {strings.newService}
           </Button>
         </>
       }
     >
-      {view === undefined ? null : (
-        <SetupSteps slug={slug} setup={view.setup} onHere={{ service: () => void addStarter(view) }} />
-      )}
+      {view !== undefined && setupShown.isShown ? (
+        <SetupSteps
+          slug={slug}
+          setup={view.setup}
+          onHere={{ service: () => addStarter(view) }}
+          onHide={setupShown.hide}
+        />
+      ) : null}
+      {isFull ? <Callout tone="info">{strings.limitServices(CATALOGUE_LIMITS.services)}</Callout> : null}
       {view !== undefined && live.length === 0 && view.categories.length === 0 ? (
+        // One next action: the checklist's while it shows, else the starter here.
         <EmptyState
           title={strings.noServices}
           icon="scissors"
-          actions={
-            <Button variant="primary" icon="plus" onPress={() => void addStarter(view)}>
-              {strings.addStarter(starterService(view.businessKind).name)}
-            </Button>
-          }
+          {...(setupShown.isShown
+            ? {}
+            : {
+                actions: (
+                  <Button variant="primary" icon="plus" onPress={() => addStarter(view)}>
+                    {strings.addStarter(starterService(view.businessKind).name)}
+                  </Button>
+                ),
+              })}
         >
           {strings.noServicesText}
         </EmptyState>
@@ -270,6 +284,7 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
           >
             <Table
               label={strings.servicesIn(title)}
+              isScrollable
               columns={COLUMNS}
               rows={rows}
               getRowId={(service) => service.id}

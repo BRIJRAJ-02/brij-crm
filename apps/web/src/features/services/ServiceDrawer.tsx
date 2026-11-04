@@ -54,6 +54,8 @@ export interface ServiceStart {
   readonly name?: string;
   readonly minutes?: number;
   readonly categoryId?: string;
+  /** A category to make for it on Save (the starter's, when the catalogue has none by that name yet). */
+  readonly categoryName?: string;
 }
 
 /** Props for the service editor. */
@@ -144,7 +146,13 @@ export function ServiceDrawer({
         : { key: newId(), choice: `kind:${need.kind}`, count: need.count },
     );
   const [name, setName] = useState(service?.name ?? start?.name ?? '');
-  const [categoryId, setCategoryId] = useState<string>(service?.categoryId ?? start?.categoryId ?? '');
+  // The starter's category exists only as a choice until Save makes it, so Cancel leaves nothing behind.
+  const [pendingCategory] = useState(() =>
+    service === undefined && start?.categoryName !== undefined ? { id: newId(), name: start.categoryName } : undefined,
+  );
+  const [categoryId, setCategoryId] = useState<string>(
+    service?.categoryId ?? start?.categoryId ?? pendingCategory?.id ?? '',
+  );
   const [description, setDescription] = useState(service?.description ?? '');
   const [variants, setVariants] = useState<VariantDraft[]>(firstVariants);
   // A new service is offered everywhere, by everyone (Foolproof); the owner narrows it if they want.
@@ -165,7 +173,7 @@ export function ServiceDrawer({
   const [first] = useState(() =>
     JSON.stringify([
       service?.name ?? start?.name ?? '',
-      service?.categoryId ?? start?.categoryId ?? '',
+      categoryId,
       service?.description ?? '',
       variants,
       service?.placeIds ?? catalogue.places.map((place) => place.id),
@@ -194,7 +202,7 @@ export function ServiceDrawer({
 
   const variantKeysSame = variants.length === 1;
   const problems = {
-    name: name.trim() === '' ? strings.serviceName : undefined,
+    name: name.trim() === '' ? strings.nameNeeded : undefined,
     prices: new Map(
       variants.flatMap((variant): [string, string][] => {
         if (variant.priceType === 'free' || variant.priceType === 'on_request') return [];
@@ -203,15 +211,17 @@ export function ServiceDrawer({
     ),
     variantNames: new Map(
       variants.flatMap((variant): [string, string][] =>
-        !variantKeysSame && variant.name.trim() === '' ? [[variant.key, strings.variantName]] : [],
+        !variantKeysSame && variant.name.trim() === '' ? [[variant.key, strings.variantNameNeeded]] : [],
       ),
     ),
   };
-  const hasProblem = problems.name !== undefined || problems.prices.size > 0 || problems.variantNames.size > 0;
+  const hasProblem =
+    problems.name !== undefined || problems.prices.size > 0 || problems.variantNames.size > 0 || placeIds.length === 0;
 
   const categoryItems: readonly SelectItem[] = [
     { id: '', label: strings.noCategoryOption },
     ...catalogue.categories.map((category) => ({ id: category.id, label: category.name })),
+    ...(pendingCategory === undefined ? [] : [{ id: pendingCategory.id, label: pendingCategory.name }]),
   ];
   const placeItems: readonly SelectItem[] = catalogue.places.map((place) => ({ id: place.id, label: place.name }));
   const staffItems: readonly SelectItem[] = catalogue.staff.map((person) => ({ id: person.id, label: person.name }));
@@ -261,10 +271,22 @@ export function ServiceDrawer({
       ...(cancelNote.trim() === '' ? {} : { cancelNote: cancelNote.trim() }),
     };
     setSaving(true);
+    setRefusal(undefined);
+    if (pendingCategory !== undefined && categoryId === pendingCategory.id) {
+      const made = await store.saveCategory(slug, pendingCategory.id, pendingCategory.name);
+      if (made !== undefined) {
+        setSaving(false);
+        setRefusal(made.message);
+        toasts.toast({ tone: 'danger', message: made.message });
+        return;
+      }
+    }
     const refused = await store.saveService(slug, id, fields);
     setSaving(false);
     if (refused !== undefined) {
+      // Said at the top of the form and in a toast, so it is seen wherever the owner pressed Save.
       setRefusal(refused.message);
+      toasts.toast({ tone: 'danger', message: refused.message });
       return;
     }
     toasts.toast({ tone: 'success', message: strings.saved(fields.name) });
@@ -299,7 +321,7 @@ export function ServiceDrawer({
           onChange={setName}
           isRequired
           maxLength={CATALOGUE_LIMITS.serviceNameMax}
-          {...(isTried && problems.name !== undefined ? { error: strings.serviceName } : {})}
+          {...(isTried && problems.name !== undefined ? { error: problems.name } : {})}
         />
         <Select
           label={strings.category}
@@ -392,11 +414,11 @@ export function ServiceDrawer({
         </SettingsSection>
         {needItems.length === 0 ? null : (
           <SettingsSection title={strings.needsTitle} description={strings.needsHint}>
-            {needs.map((need, index) => (
+            {needs.map((need, needIndex) => (
               <Fragment key={need.key}>
                 <FormRow>
                   <Select
-                    label={strings.needN(index + 1)}
+                    label={strings.needN(needIndex + 1)}
                     items={needItems}
                     value={need.choice}
                     onChange={(chosen) =>
@@ -424,7 +446,7 @@ export function ServiceDrawer({
                   icon="x"
                   onPress={() => setNeeds((was) => was.filter((each) => each.key !== need.key))}
                 >
-                  {strings.removeNeed}
+                  {strings.removeNeed(needIndex + 1)}
                 </Button>
               </Fragment>
             ))}
@@ -502,19 +524,13 @@ function Variant({
           onChange={(chosen) => onChange({ minutes: Number(chosen ?? '30') })}
         />
         <Select
-          label={strings.bufferBefore}
-          items={BUFFER_ITEMS}
-          value={String(draft.bufferBeforeMin)}
-          onChange={(chosen) => onChange({ bufferBeforeMin: Number(chosen ?? '0') })}
-        />
-      </FormRow>
-      <FormRow>
-        <Select
           label={strings.variantPriceType}
           items={PRICE_TYPE_ITEMS}
           value={draft.priceType}
           onChange={(chosen) => onChange({ priceType: (chosen ?? 'fixed') as PriceTypeName })}
         />
+      </FormRow>
+      <FormRow>
         {hasAmount ? (
           <Field
             label={strings.variantAmount(currency)}
@@ -525,6 +541,12 @@ function Variant({
             {...(priceError === undefined ? {} : { error: priceError })}
           />
         ) : null}
+        <Select
+          label={strings.bufferBefore}
+          items={BUFFER_ITEMS}
+          value={String(draft.bufferBeforeMin)}
+          onChange={(chosen) => onChange({ bufferBeforeMin: Number(chosen ?? '0') })}
+        />
       </FormRow>
     </>
   );

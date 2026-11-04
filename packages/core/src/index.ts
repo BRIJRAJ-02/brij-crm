@@ -1024,6 +1024,7 @@ export {
   saveStaff,
   setShifts,
   setStaffPhoto,
+  staffPhotoFolder,
 } from './visits/team.ts';
 export { serviceTimes } from './visits/times.ts';
 export {

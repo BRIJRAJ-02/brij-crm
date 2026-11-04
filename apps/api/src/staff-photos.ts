@@ -4,14 +4,15 @@
 //   again by the screen (`preparePhoto(file, 'avatar', crop)`), its `content-type` its type. The order is the business
 //   page photos' (`business-page-photos.ts`): a session, the door, a store, the per person limit, the type against the
 //   allowlist (JPEG, PNG, WebP; never SVG), the body to at most 4 MB, `checkProfileImage` (the first bytes, the sides,
-//   the metadata taken out, at most 1.5 MB kept), then the row (`setStaffPhoto`, which checks `services.manage`), and
-//   only then the private store under `staff/<workspace>/<staff>-<random>.<ext>`, nothing in it typed by anyone. A
-//   new upload is a new path, so the photo's address changes with it. Answers the photo's version.
+//   the metadata taken out, at most 1.5 MB kept), the private store under `staff/<workspace>/<staff>-<random>.<ext>`
+//   (nothing in it typed by anyone), then the row (`setStaffPhoto`, which checks `services.manage`; refused, the new
+//   file goes again), and the photo it replaced is removed. A new upload is a new path, so the photo's address changes
+//   with it. Answers the photo's version.
 // - `GET /services/staff/:staffId/photo?workspace=`: the profile's photo for the screens (`services.manage` or
 //   `services.calendar`). Guests read it through the public booking pages (B2), not here. Nothing logs a path.
 import { randomBytes } from 'node:crypto';
 import { PROFILE_IMAGE_TYPES, UPLOAD_WORKSPACE_HEADER, type UploadedStaffPhoto } from '@crm/contracts';
-import { checkProfileImage, readStaffPhoto, setStaffPhoto } from '@crm/core';
+import { checkProfileImage, readStaffPhoto, setStaffPhoto, staffPhotoFolder } from '@crm/core';
 import type { Context, Hono } from 'hono';
 import {
   imageBodyLimit,
@@ -65,25 +66,32 @@ export function mountStaffPhotos(app: Hono<{ Variables: ImageVariables }>, deps:
         );
       }
       const version = randomBytes(6).toString('hex');
-      const extension = EXTENSIONS[checked.type] ?? 'jpg';
-      let path: string;
-      try {
-        // The row first: it checks the permission and that the profile is there before a byte is stored.
-        ({ path } = await setStaffPhoto(scope, {
-          staffId: c.req.param('staffId') ?? '',
-          path: (workspaceId, staffId) => `staff/${workspaceId}/${staffId}-${version}.${extension}`,
-        }));
-      } catch (error) {
-        return refusalResponse(error, errorResponse);
-      }
+      const staffId = c.req.param('staffId') ?? '';
+      // The bytes first, then the row: a refused row takes the new file away again, and a stored row never points
+      // at a file that isn't there. The path is the server's own, under the profile's folder.
+      const path = `${staffPhotoFolder(scope.workspaceId, staffId.toLowerCase())}${version}.${EXTENSIONS[checked.type] ?? 'jpg'}`;
+      if (!/^[0-9a-f-]{36}$/i.test(staffId)) return errorResponse('NOT_FOUND', 'That staff member doesn’t exist.');
       try {
         await files.put(path, checked.bytes, checked.type);
       } catch (error) {
         log.error('staff.photo.store_failed', { requestId: c.get('requestId'), ...errorFields(error) });
         return errorResponse('API_UNAVAILABLE', 'The photo couldn’t be saved. Try again in a moment.');
       }
+      let previous: string | undefined;
+      try {
+        ({ previous } = await setStaffPhoto(scope, { staffId, path }));
+      } catch (error) {
+        await files.remove([path]).catch(() => undefined);
+        return refusalResponse(error, errorResponse);
+      }
+      // The photo it replaced goes, so a face nobody chose any more never stays in the store.
+      if (previous !== undefined) {
+        await files.remove([previous]).catch((error: unknown) => {
+          log.warn('staff.photo.remove_failed', { requestId: c.get('requestId'), ...errorFields(error) });
+        });
+      }
       log.info('staff.photo.added', { requestId: c.get('requestId'), width: checked.width, height: checked.height });
-      return c.json({ photo: `${c.req.param('staffId') ?? ''}-${version}` } satisfies UploadedStaffPhoto);
+      return c.json({ photo: `${staffId}-${version}` } satisfies UploadedStaffPhoto);
     },
   );
 

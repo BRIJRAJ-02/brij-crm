@@ -283,11 +283,15 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
                         : placeTablesHref(slug, view.problem.placeId)
               }
             >
-              {view.problem.fix === 'services' || view.problem.fix === 'staff' || view.problem.fix === 'shifts'
-                ? words.fixIt
-                : view.problem.placeId === undefined
-                  ? words.fixInBusiness
-                  : words.fixPlace}
+              {view.problem.fix === 'services'
+                ? words.fixServices
+                : view.problem.fix === 'staff'
+                  ? words.fixStaff
+                  : view.problem.fix === 'shifts'
+                    ? words.fixShifts
+                    : view.problem.placeId === undefined
+                      ? words.fixInBusiness
+                      : words.fixPlace}
             </ButtonLink>
           }
         >

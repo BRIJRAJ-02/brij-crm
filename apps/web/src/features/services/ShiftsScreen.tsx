@@ -8,6 +8,7 @@ import type { ServicesStore, StaffTeamView, StaffView } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import {
   Button,
+  ButtonLink,
   Callout,
   EmptyState,
   HoursEditor,
@@ -29,8 +30,8 @@ import {
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { clockLabel } from '../hospitality/hours-rows.ts';
-import { shiftsSettingsHref, staffSettingsHref } from '../settings/nav.ts';
-import { SettingsPage } from '../settings/SettingsPage.tsx';
+import { businessSettingsHref, shiftsSettingsHref, staffSettingsHref } from '../settings/nav.ts';
+import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { NotInstalled } from './NotInstalled.tsx';
 import { RegularShifts } from './RegularShifts.tsx';
 import {
@@ -91,6 +92,7 @@ export function ShiftsScreen({ store, slug, placeId, week, toasts }: ShiftsScree
   const state = useHospitality(store.team(slug, 'shifts'));
   if (state.status === 'error') {
     if (state.error.code === 'APP_NOT_INSTALLED') return <NotInstalled slug={slug} title={strings.shiftsTitle} />;
+    if (state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
     return (
       <SettingsPage title={strings.shiftsTitle}>
         <EmptyState
@@ -107,7 +109,15 @@ export function ShiftsScreen({ store, slug, placeId, week, toasts }: ShiftsScree
   if (team !== undefined && team.places.length === 0) {
     return (
       <SettingsPage title={strings.shiftsTitle}>
-        <EmptyState title={strings.noPlaces} icon="calendar-clock">
+        <EmptyState
+          title={strings.noPlaces}
+          icon="calendar-clock"
+          actions={
+            <ButtonLink variant="primary" href={businessSettingsHref(slug)}>
+              {strings.openBusiness}
+            </ButtonLink>
+          }
+        >
           {strings.noPlacesText}
         </EmptyState>
       </SettingsPage>
@@ -279,7 +289,11 @@ function Grid({
         variant="bar"
         start={
           <>
-            <Button variant="secondary" onPress={() => go({ week: mondayOf(today) })}>
+            <Button
+              variant="secondary"
+              isDisabled={monday === mondayOf(today)}
+              onPress={() => go({ week: mondayOf(today) })}
+            >
               {strings.thisWeek}
             </Button>
             <Tooltip content={strings.previousWeek}>
@@ -391,11 +405,8 @@ function Grid({
           onOpenChange={(isOpen) => {
             if (!isOpen) setOpen(undefined);
           }}
-          actions={
-            <Button variant="primary" slot="close">
-              {strings.save}
-            </Button>
-          }
+          status={strings.savedAsYouChange}
+          actions={<Button slot="close">{strings.done}</Button>}
         >
           <Callout tone="info">{strings.regularHint}</Callout>
           <RegularShifts
@@ -434,9 +445,19 @@ function Grid({
                     works.outsideHours,
                   )
                   .then((refused) => {
-                    if (said(refused) === undefined) {
-                      toasts.toast({ tone: 'success', message: strings.copyWeekDone(person.name) });
-                    }
+                    if (said(refused) !== undefined) return;
+                    const before = works.shifts;
+                    toasts.toast({
+                      tone: 'success',
+                      message: strings.copyWeekDone(person.name),
+                      action: {
+                        label: strings.undo,
+                        onAction: () =>
+                          void store
+                            .setShifts(slug, 'shifts', person.id, place.id, before, works.outsideHours)
+                            .then(said),
+                      },
+                    });
                   });
               }}
             >
@@ -453,10 +474,28 @@ function Grid({
           others={here.filter((each) => each.id !== person.id)}
           onClose={() => setOpen(undefined)}
           onCopy={async (ids) => {
+            // What each had, so Undo puts every one back in one press.
+            const before = here.flatMap((each) => {
+              const at = worksOf(each);
+              return ids.includes(each.id) && at !== undefined ? [{ id: each.id, at }] : [];
+            });
             const refused = await store.copyShifts(slug, 'shifts', person.id, place.id, ids);
             if (refused === undefined) {
               setOpen(undefined);
-              toasts.toast({ tone: 'success', message: strings.copyDone(ids.length) });
+              toasts.toast({
+                tone: 'success',
+                message: strings.copyDone(ids.length),
+                action: {
+                  label: strings.undo,
+                  onAction: () => {
+                    for (const was of before) {
+                      void store
+                        .setShifts(slug, 'shifts', was.id, place.id, was.at.shifts, was.at.outsideHours)
+                        .then(said);
+                    }
+                  },
+                },
+              });
             }
             return refused?.message;
           }}

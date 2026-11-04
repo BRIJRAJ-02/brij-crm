@@ -102,11 +102,12 @@ test.describe('a salon set up from empty', () => {
       await expect(card).toBeHidden({ timeout: 15_000 });
     });
 
-    await test.step('Services: the checklist and one next action, the starter Haircut', async () => {
+    await test.step('Services: the checklist with its one next action, the starter Haircut', async () => {
       await page.goto(`/w/${slug}/settings/services`);
       await expect(page.getByRole('heading', { name: 'Set up online booking' })).toBeVisible();
       await shot(page, '02-services-empty');
-      await page.getByRole('button', { name: 'Add Haircut' }).click();
+      // The checklist holds the one next action: Add service opens the starter for a salon, a Haircut.
+      await page.getByRole('button', { name: /^Add service/ }).click();
       const drawer = page.getByRole('dialog', { name: 'Haircut' });
       await expect(drawer.getByLabel('Name', { exact: true })).toHaveValue('Haircut');
       // Save with no price says how to fix it, in place.

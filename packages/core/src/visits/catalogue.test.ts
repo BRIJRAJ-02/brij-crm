@@ -41,10 +41,14 @@ import {
   getShifts,
   getTeam,
   linkStaff,
+  readStaffPhoto,
+  removeStaffPhoto,
   removeStaffTimeOff,
   restoreStaff,
   saveStaff,
   setShifts,
+  setStaffPhoto,
+  staffPhotoFolder,
 } from './team.ts';
 import { serviceTimes } from './times.ts';
 
@@ -458,6 +462,66 @@ describe('who may do what', () => {
     const waiter = await waiterScope(db, w);
     expect(await refusal(getCatalogue(waiter))).toMatchObject({ code: 'FORBIDDEN' });
     expect(await refusal(getShifts(waiter))).toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('keeps a photo for a manager only, shows it to the desk, and never to a waiter or another workspace', async () => {
+    const w = await salon();
+    const asha = newId();
+    await saveStaff(w.owner, { id: asha, staff: { name: 'Asha', color: null, placeIds: [w.placeId], serviceIds: [] } });
+    const path = (version: string) => `${staffPhotoFolder(w.workspaceId, asha)}${version}.jpg`;
+    expect(await setStaffPhoto(w.owner, { staffId: asha, path: path('a') })).toEqual({});
+    // A new photo answers the one it replaced, for the store to remove.
+    expect(await setStaffPhoto(w.owner, { staffId: asha, path: path('b') })).toEqual({ previous: path('a') });
+    // Only a path under the profile's own folder is kept.
+    expect(
+      await refusal(setStaffPhoto(w.owner, { staffId: asha, path: `staff/${w.workspaceId}/other.jpg` })),
+    ).toMatchObject({
+      field: 'path',
+    });
+    const desk = await holderOf(w, 'services.calendar');
+    const waiter = await waiterScope(db, w);
+    expect(await refusal(setStaffPhoto(desk, { staffId: asha, path: path('c') }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusal(setStaffPhoto(waiter, { staffId: asha, path: path('c') }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(await readStaffPhoto(desk, { staffId: asha })).toEqual({ path: path('b'), type: 'image/jpeg' });
+    expect(await refusal(readStaffPhoto(waiter, { staffId: asha }))).toMatchObject({ code: 'FORBIDDEN' });
+    // Another workspace's owner finds no such profile.
+    const other = await salon();
+    expect(await readStaffPhoto(other.owner, { staffId: asha })).toBeUndefined();
+    expect(
+      await refusal(
+        setStaffPhoto(other.owner, { staffId: asha, path: `${staffPhotoFolder(other.workspaceId, asha)}x.jpg` }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    // Removed, the store is told which file to forget.
+    const forgotten: string[] = [];
+    await removeStaffPhoto(
+      w.owner,
+      { staffId: asha },
+      { forgetFile: (file) => Promise.resolve(void forgotten.push(file)) },
+    );
+    expect(forgotten).toEqual([path('b')]);
+    // An archived profile takes no new photo.
+    await archiveStaff(w.owner, { staffId: asha });
+    expect(await refusal(setStaffPhoto(w.owner, { staffId: asha, path: path('d') }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('refuses a time off id already used for something else', async () => {
+    const w = await salon();
+    const [asha, ben] = [newId(), newId()];
+    await saveStaff(w.owner, { id: asha, staff: { name: 'Asha', color: null, placeIds: [w.placeId], serviceIds: [] } });
+    await saveStaff(w.owner, { id: ben, staff: { name: 'Ben', color: null, placeIds: [w.placeId], serviceIds: [] } });
+    const id = newId();
+    const span = { start: `${week.monday}T00:00:00.000Z`, end: `${week.tuesday}T00:00:00.000Z` };
+    await addStaffTimeOff(w.owner, { id, staffId: asha, reason: 'holiday', ...span });
+    // The same again (a retry) answers as done; the id for someone else is refused.
+    await addStaffTimeOff(w.owner, { id, staffId: asha, reason: 'holiday', ...span });
+    expect(await refusal(addStaffTimeOff(w.owner, { id, staffId: ben, reason: 'holiday', ...span }))).toMatchObject({
+      code: 'CONFLICT',
+    });
   });
 
   it('refuses everything while Appointments isn’t installed', async () => {

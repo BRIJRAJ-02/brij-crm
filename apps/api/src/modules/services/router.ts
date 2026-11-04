@@ -119,10 +119,10 @@ export const servicesRouter = s.router({
       ),
     ),
   ),
-  // Linking stores no change event (the engine's link is its own write); the answer carries the team.
+  // Linking stores one `visits` event naming the profile's places, as every write here does.
   linkStaff: s.linkStaff.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      linkStaff(context.scope, { staffId: input.staffId, memberId: input.memberId }),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      linkStaff(context.scope, { staffId: input.staffId, memberId: input.memberId }, {}, hooks),
     ),
   ),
   archiveStaff: s.archiveStaff.handler(({ context, input }) =>
@@ -137,7 +137,18 @@ export const servicesRouter = s.router({
   ),
   removeStaffPhoto: s.removeStaffPhoto.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      removeStaffPhoto(context.scope, { staffId: input.staffId }, { slotCache: context.visitSlots }, hooks),
+      removeStaffPhoto(
+        context.scope,
+        { staffId: input.staffId },
+        {
+          slotCache: context.visitSlots,
+          // The file goes once the row let go of it, so nothing keeps a face nobody points at.
+          forgetFile: async (path) => {
+            await context.files?.remove([path]).catch(() => undefined);
+          },
+        },
+        hooks,
+      ),
     ),
   ),
   setShifts: s.setShifts.handler(({ context, input }) =>

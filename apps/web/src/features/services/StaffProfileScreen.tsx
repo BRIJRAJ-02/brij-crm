@@ -8,6 +8,7 @@ import type { Hue, PlaceHours, ServicesStore, StaffFields, StaffTeamView, StaffV
 import { useHospitality } from '@crm/data/react';
 import { CATALOGUE_LIMITS } from '@crm/data/services';
 import {
+  Avatar,
   Button,
   ButtonLink,
   Callout,
@@ -21,6 +22,7 @@ import {
   Modal,
   SaveBar,
   Select,
+  SettingsRow,
   SettingsSection,
   Table,
   useFormatSettings,
@@ -33,7 +35,8 @@ import { preparePhoto } from '@crm/ui/photo';
 import { useNavigate } from '@tanstack/react-router';
 import { useId, useState } from 'react';
 import { shiftsSettingsHref, staffSettingsHref } from '../settings/nav.ts';
-import { SettingsPage } from '../settings/SettingsPage.tsx';
+import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
+import { PHOTO_PICK_MAX_BYTES } from '../hospitality/business-photos.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { NotInstalled } from './NotInstalled.tsx';
 import { RegularShifts } from './RegularShifts.tsx';
@@ -54,6 +57,7 @@ export function StaffProfileScreen({ store, slug, staffId, toasts }: StaffProfil
   const state = useHospitality(store.team(slug));
   if (state.status === 'error') {
     if (state.error.code === 'APP_NOT_INSTALLED') return <NotInstalled slug={slug} title={strings.staffTitle} />;
+    if (state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
     return (
       <SettingsPage
         title={strings.staffTitle}
@@ -80,9 +84,9 @@ export function StaffProfileScreen({ store, slug, staffId, toasts }: StaffProfil
       >
         {team === undefined ? null : (
           <EmptyState
-            title={strings.failed}
-            icon="id-card"
-            actions={<ButtonLink href={staffSettingsHref(slug)}>{strings.staffTitle}</ButtonLink>}
+            title={strings.missingProfile}
+            icon="search"
+            actions={<ButtonLink href={staffSettingsHref(slug)}>{strings.backToStaff}</ButtonLink>}
           />
         )}
       </SettingsPage>
@@ -132,7 +136,7 @@ function Profile({
   const [saved, setSaved] = useState<Draft>(() => draftOf(person));
   const [phase, setPhase] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [failure, setFailure] = useState<string | undefined>();
-  const [dialog, setDialog] = useState<'time-off' | 'archive' | { readonly block: string } | undefined>();
+  const [dialog, setDialog] = useState<'time-off' | 'archive' | 'photo' | { readonly block: string } | undefined>();
   const isDirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const status: SaveBarStatus =
     phase === 'saving'
@@ -229,6 +233,14 @@ function Profile({
       start: off.start,
       end: off.end,
       words: strings.reasons[off.reason],
+      undo: () =>
+        store.addTimeOff(slug, 'team', {
+          staffId: person.id,
+          start: off.start,
+          end: off.end,
+          reason: off.reason,
+          ...(off.placeId === undefined ? {} : { placeId: off.placeId }),
+        }),
     })),
     ...person.blocks.map((block) => ({
       kind: 'block' as const,
@@ -236,6 +248,14 @@ function Profile({
       start: block.start,
       end: block.end,
       words: block.reason ?? strings.blockTime,
+      undo: () =>
+        store.addBlock(slug, 'team', {
+          staffId: person.id,
+          placeId: block.placeId,
+          start: block.start,
+          end: block.end,
+          ...(block.reason === undefined ? {} : { reason: block.reason }),
+        }),
     })),
   ]
     .filter((each) => Date.parse(each.end) > now)
@@ -254,7 +274,7 @@ function Profile({
             setDraft(saved);
             setPhase('idle');
           }}
-          {...(draft.name.trim() === '' ? { blockedReason: strings.staffName } : {})}
+          {...(draft.name.trim() === '' ? { blockedReason: strings.staffNameNeeded } : {})}
         />
       }
     >
@@ -273,37 +293,47 @@ function Profile({
       <SettingsSection title={strings.profileTitle}>
         <Card>
           <Form id={formId} onSubmit={() => void save()}>
-            <FileDrop
-              label={strings.photo}
-              acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
-              typesText={strings.photoTypes}
-              onFiles={(files) => {
-                const file = files[0];
-                if (file !== undefined) void uploadPhoto(file);
-              }}
-              isPending={isUploading}
-              {...(photoError === undefined ? {} : { error: photoError })}
-              {...(photoSrc === undefined
-                ? {}
-                : { preview: { src: photoSrc, alt: '' }, onAdjust: () => void uploadPhoto(photoSrc) })}
-            />
-            {photoSrc === undefined ? null : (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon="x"
-                onPress={() => void store.removeStaffPhoto(slug, person.id).then(said)}
-              >
-                {strings.removePhoto}
-              </Button>
-            )}
+            {/* The account profile's pattern: the picture as it shows, then Upload or Change, Adjust crop and Remove. */}
+            <SettingsRow
+              title={strings.photo}
+              leadingAlign="center"
+              leading={
+                <Avatar
+                  name={person.name}
+                  id={person.id}
+                  size="xl"
+                  isDecorative
+                  {...(photoSrc === undefined ? {} : { src: photoSrc })}
+                  {...(draft.color === null ? {} : { hue: draft.color })}
+                />
+              }
+            >
+              <FileDrop
+                variant="button"
+                label={photoSrc === undefined ? strings.uploadPhoto : strings.changePhoto}
+                acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
+                maxSize={PHOTO_PICK_MAX_BYTES}
+                onFiles={(files) => {
+                  const file = files[0];
+                  if (file !== undefined) void uploadPhoto(file);
+                }}
+                isPending={isUploading}
+                {...(photoError === undefined ? {} : { error: photoError })}
+                {...(photoSrc === undefined ? {} : { onAdjust: () => void uploadPhoto(photoSrc) })}
+              />
+              {photoSrc === undefined ? null : (
+                <Button variant="ghost" icon="x" onPress={() => setDialog('photo')}>
+                  {strings.removePhoto}
+                </Button>
+              )}
+            </SettingsRow>
             <Field
               label={strings.staffName}
               value={draft.name}
               onChange={(name) => set({ name })}
               isRequired
               maxLength={CATALOGUE_LIMITS.staffNameMax}
-              {...(draft.name.trim() === '' ? { error: strings.staffName } : {})}
+              {...(draft.name.trim() === '' ? { error: strings.staffNameNeeded } : {})}
             />
             <Field
               label={strings.staffTitleField}
@@ -399,6 +429,7 @@ function Profile({
           <SettingsSection
             key={place.id}
             title={`${strings.shiftsTitle} · ${place.name}`}
+            description={strings.savedAsYouChange}
             actions={
               <ButtonLink variant="ghost" size="sm" href={shiftsSettingsHref(slug, { place: place.id })}>
                 {strings.shiftsTitle}
@@ -441,7 +472,7 @@ function Profile({
           <Table
             label={strings.upcomingTitle}
             columns={[
-              { id: 'when', label: strings.from, isRowHeader: true },
+              { id: 'when', label: strings.when, isRowHeader: true },
               { id: 'what', label: strings.reason, size: 'fill' },
               { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
             ]}
@@ -467,13 +498,20 @@ function Profile({
                   variant="ghost"
                   size="sm"
                   icon="x"
-                  label={strings.removeTimeOff}
+                  label={row.kind === 'off' ? strings.removeTimeOff : strings.removeBlock}
                   onPress={() =>
                     void (
                       row.kind === 'off'
                         ? store.removeTimeOff(slug, 'team', row.id)
                         : store.removeBlock(slug, 'team', row.id)
-                    ).then(said)
+                    ).then((refused) => {
+                      if (said(refused) !== undefined) return;
+                      toasts.toast({
+                        tone: 'success',
+                        message: row.kind === 'off' ? strings.timeOffRemoved : strings.blockRemoved,
+                        action: { label: strings.undo, onAction: () => void row.undo().then(said) },
+                      });
+                    })
                   }
                 />
               );
@@ -527,6 +565,31 @@ function Profile({
       ) : null}
       <Modal
         variant="confirm"
+        tone="danger"
+        title={strings.photoRemoveQuestion(person.name)}
+        isOpen={dialog === 'photo'}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setDialog(undefined);
+        }}
+        actions={
+          <>
+            <Button slot="close">{strings.cancel}</Button>
+            <Button
+              variant="danger-solid"
+              onPress={() => {
+                setDialog(undefined);
+                void store.removeStaffPhoto(slug, person.id).then(said);
+              }}
+            >
+              {strings.removePhoto}
+            </Button>
+          </>
+        }
+      >
+        {strings.photoRemoveLine}
+      </Modal>
+      <Modal
+        variant="confirm"
         title={strings.archiveQuestion(person.name)}
         isOpen={dialog === 'archive'}
         onOpenChange={(isOpen) => {
@@ -542,7 +605,14 @@ function Profile({
                 setDialog(undefined);
                 void store.archiveStaff(slug, person.id).then((refused) => {
                   if (said(refused) === undefined) {
-                    toasts.toast({ tone: 'success', message: strings.staffArchived(person.name) });
+                    toasts.toast({
+                      tone: 'success',
+                      message: strings.staffArchived(person.name),
+                      action: {
+                        label: strings.undo,
+                        onAction: () => void store.restoreStaff(slug, person.id).then(said),
+                      },
+                    });
                     void navigate({ href: staffSettingsHref(slug) });
                   }
                 });

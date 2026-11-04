@@ -3989,7 +3989,7 @@ async function categoryOf(m: Member): Promise<string> {
 }
 
 // Services, staff and shifts (spec 0066 B1): no record changes; each write stores one `visits` row naming the places
-// it touched (every place for a category), after the install's `nav`. Linking stores none of its own.
+// it touched (every place for a category), after the install's `nav`.
 const visitsAt = (placeId: string, mutationId?: string) => ({
   kind: 'visits',
   item_ids: [placeId],
@@ -4086,7 +4086,7 @@ Object.assign(WRITES, {
     const staffId = await stylistAt(m, placeId);
     const { memberId } = await m.client.access.mine({ workspace: m.slug });
     await m.client.services.linkStaff({ workspace: m.slug, staffId, memberId, mutationId });
-    return [{ kind: 'nav' }, visitsAt(placeId)];
+    return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
   },
   'services.archiveStaff': async (m: Member, mutationId: string) => {
     const { placeId } = await appointmentsOf(m);

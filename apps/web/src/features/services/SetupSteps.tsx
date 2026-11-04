@@ -35,18 +35,11 @@ function stepHref(slug: string, id: SetupStepId, placeId: string | undefined): s
   }
 }
 
-/** The checklist, or nothing once the reader hid it in this browser. `onHere` runs a step done on this page. */
-export function SetupSteps({
-  slug,
-  setup,
-  onHere,
-}: {
-  readonly slug: string;
-  readonly setup: AppointmentsSetup;
-  /** A step this page does itself (Add service on Services): pressed, it runs here rather than navigating. */
-  readonly onHere?: Partial<Record<SetupStepId, () => void>>;
-}) {
-  const navigate = useNavigate();
+/**
+ * Whether the checklist shows on this page: it has an open step and the reader hasn't put it away in this browser.
+ * The page reads it so the checklist is the one next action while it shows (no second primary beside it).
+ */
+export function useSetupShown(slug: string, setup: AppointmentsSetup | undefined) {
   // Put away from its own menu, it stays away in this browser (UI state, never the server's).
   const key = `crm.appointments.setup-hidden.${slug}`;
   const [isHidden, setHidden] = useState(() => {
@@ -56,7 +49,32 @@ export function SetupSteps({
       return false;
     }
   });
-  if (isHidden) return null;
+  const hide = () => {
+    setHidden(true);
+    try {
+      globalThis.localStorage.setItem(key, '1');
+    } catch {
+      // Blocked storage: hidden for this visit.
+    }
+  };
+  const isShown = setup !== undefined && !isHidden && setup.steps.some((step) => !step.done);
+  return { isShown, hide };
+}
+
+/** The checklist while it shows. `onHere` runs a step done on this page. */
+export function SetupSteps({
+  slug,
+  setup,
+  onHere,
+  onHide,
+}: {
+  readonly slug: string;
+  readonly setup: AppointmentsSetup;
+  /** A step this page does itself (Add service on Services): pressed, it runs here rather than navigating. */
+  readonly onHere?: Partial<Record<SetupStepId, () => void>>;
+  readonly onHide: () => void;
+}) {
+  const navigate = useNavigate();
   return (
     <SetupChecklist
       title={strings.setupTitle}
@@ -77,14 +95,7 @@ export function SetupSteps({
         }
         void navigate({ href: stepHref(slug, step.id, step.placeId) });
       }}
-      onHide={() => {
-        setHidden(true);
-        try {
-          globalThis.localStorage.setItem(key, '1');
-        } catch {
-          // Blocked storage: hidden for this visit.
-        }
-      }}
+      onHide={onHide}
     />
   );
 }
