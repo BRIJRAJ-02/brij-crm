@@ -45,8 +45,10 @@
     counter-reset: choice;
   }
 
+  /* The label itself fills the box (its padding, not the box's), so the whole box picks the choice and a press
+     anywhere lands on the label or its words, with nothing laid over them. */
   .choices[data-variant='letters'] .field {
-    padding: var(--space-8) var(--space-12);
+    padding: 0;
     counter-increment: choice;
   }
 
@@ -80,17 +82,18 @@
 
   .choices[data-variant='letters'] .radio {
     align-items: center;
+    padding: var(--space-8) var(--space-12);
   }
 
   /* The whole card picks it, which is what a bordered box this size promises: the description and the padding
      around the label were outside the hit area, so a press on the words under the title did nothing (the owner,
      26 October 2026). The control is still the RadioButton, so the name, the keyboard and the focus ring are
      unchanged; its own box just reaches the card's edges, which is also what makes the hover fill the card. */
-  .choices:not([data-variant='plain']) .radio {
+  .choices[data-variant='cards'] .radio {
     position: static;
   }
 
-  .choices:not([data-variant='plain']) .radio::after {
+  .choices[data-variant='cards'] .radio::after {
     content: '';
     position: absolute;
     inset: 0;
