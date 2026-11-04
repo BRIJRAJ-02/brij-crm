@@ -118,6 +118,8 @@
     --text-label-strong: var(--text-body);
     --tracking-label-strong: var(--tracking-body);
 
+    /* The leaving step's copy is laid over its place inside the card as the next one comes in (T23). */
+    position: relative;
     display: flex;
     flex-direction: column;
     box-sizing: border-box;

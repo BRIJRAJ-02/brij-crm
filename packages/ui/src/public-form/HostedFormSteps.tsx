@@ -75,6 +75,57 @@ function backByKey(event: KeyboardEvent<HTMLFormElement>): boolean {
   return false;
 }
 
+/**
+ * The leaving step, animated out (T23): a still, inert copy of `form` laid over its place, sliding a little the way
+ * the visitor goes and fading, then removed. A copy, so the real step changes at once and nothing waits on the
+ * animation; ids, label links and question marks are taken off it so it never doubles a field. Nothing happens without the Web
+ * Animations API.
+ */
+function leaveFrom(form: HTMLFormElement | null, way: 'forward' | 'back'): void {
+  const parent = form?.parentElement;
+  if (form === null || parent === null || parent === undefined || typeof form.animate !== 'function') return;
+  const ghost = form.cloneNode(true);
+  if (!(ghost instanceof HTMLElement)) return;
+  for (const each of [ghost, ...ghost.querySelectorAll('[id], [for], [data-question]')]) {
+    each.removeAttribute('id');
+    each.removeAttribute('for');
+    // A question's mark is how focus finds it: the copy must never be found instead of the real one.
+    each.removeAttribute('data-question');
+  }
+  ghost.inert = true;
+  ghost.setAttribute('aria-hidden', 'true');
+  const box = form.getBoundingClientRect();
+  const frame = parent.getBoundingClientRect();
+  Object.assign(ghost.style, {
+    position: 'absolute',
+    insetBlockStart: `${String(box.top - frame.top + parent.scrollTop)}px`,
+    insetInlineStart: `${String(box.left - frame.left)}px`,
+    inlineSize: `${String(box.width)}px`,
+    margin: '0',
+    pointerEvents: 'none',
+  });
+  parent.insertBefore(ghost, form);
+  const tokens = getComputedStyle(form);
+  const distance = tokens.getPropertyValue('--space-16').trim() || '0px';
+  const duration = Number.parseFloat(tokens.getPropertyValue('--duration-exit')) || 0;
+  const remove = () => {
+    ghost.remove();
+  };
+  // Whichever comes first: the exit finishing, or its own length passing (a paused animation never strands it).
+  globalThis.setTimeout(remove, duration + 50);
+  ghost
+    .animate(
+      prefersStill()
+        ? [{ opacity: 1 }, { opacity: 0 }]
+        : [
+            { opacity: 1, transform: 'none' },
+            { opacity: 0, transform: `translateY(${way === 'back' ? distance : `calc(-1 * ${distance})`})` },
+          ],
+      { duration, easing: tokens.getPropertyValue('--ease-out').trim() || 'ease-out', fill: 'forwards' },
+    )
+    .finished.then(remove, remove);
+}
+
 /** True when the visitor asked for less motion. */
 function prefersStill(): boolean {
   return globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -114,8 +165,6 @@ export function HostedFormSteps({
   // Which way the visitor last moved (T23): the next step rises in, Back comes down; none before the first move.
   const [moved, setMoved] = useState<'forward' | 'back' | undefined>(undefined);
   const hasMoved = moved !== undefined;
-  // A move under way: the leaving step is animating out, so a second press waits for it.
-  const leaving = useRef(false);
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
   const [focusesStep, setFocusesStep] = useState(false);
   const [round, setRound] = useState(0);
@@ -195,40 +244,14 @@ export function HostedFormSteps({
   }, [index]);
 
   const go = (next: number) => {
-    if (leaving.current) return;
     setPicks(0);
-    const arrive = () => {
-      leaving.current = false;
-      setMoved(next < index ? 'back' : 'forward');
-      setFocusesStep(true);
-      setIndex(next);
-    };
-    // The step on screen leaves the way the visitor is going (up on, down back), quickly, before the next one
-    // comes in (T23, Typeform): opacity and transform through the Web Animations API, timed by the motion tokens.
-    // Under reduced motion it fades only; with no animation support it simply goes.
-    const leavingForm = formRef.current;
-    if (leavingForm === null || typeof leavingForm.animate !== 'function') {
-      arrive();
-      return;
-    }
-    const tokens = getComputedStyle(leavingForm);
-    const distance = tokens.getPropertyValue('--space-16').trim() || '0px';
-    const away = next < index ? distance : `calc(-1 * ${distance})`;
-    leaving.current = true;
-    const exit = leavingForm.animate(
-      prefersStill()
-        ? [{ opacity: 1 }, { opacity: 0 }]
-        : [
-            { opacity: 1, transform: 'none' },
-            { opacity: 0, transform: `translateY(${away})` },
-          ],
-      {
-        duration: Number.parseFloat(tokens.getPropertyValue('--duration-exit')) || 0,
-        easing: tokens.getPropertyValue('--ease-out').trim() || 'ease-out',
-        fill: 'forwards',
-      },
-    );
-    exit.finished.then(arrive, arrive);
+    // The step on screen leaves the way the visitor is going (up on, down back) while the next one comes in
+    // (T23, Typeform): a still copy of it is laid where it was and animated out through the Web Animations API,
+    // on the motion tokens, so the move itself is never held up by it. Under reduced motion it fades only.
+    leaveFrom(formRef.current, next < index ? 'back' : 'forward');
+    setMoved(next < index ? 'back' : 'forward');
+    setFocusesStep(true);
+    setIndex(next);
   };
   // A one at a time choice goes on by itself once picked (AC-6305), through the form's own submit so the same check
   // runs; a change of mind before the pause ends starts it again, and leaving the question drops it. Only a pick by

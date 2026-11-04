@@ -173,7 +173,7 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
 
   it('gives points in one click, then a number for each choice, in both themes', async () => {
     await openBuilder();
-    await userEvent.click(page.getByRole('button', { name: /^Budget/ }));
+    await userEvent.click(page.getByRole('button', { name: /^Budget\s*Required/ }));
     // No points until asked (T20, Typeform's score): Give points is one click to 1, 2, 3.
     expect(page.getByRole('textbox', { name: 'Points for Under $1k' }).query()).toBeNull();
     await userEvent.click(page.getByRole('button', { name: 'Give points' }));

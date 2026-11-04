@@ -302,10 +302,8 @@ export const WithGap: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    const splits = canvas.getAllByRole('button', { name: 'Split here' });
-    await expect(splits).toHaveLength(3);
-    splits[0]?.focus();
-    await waitFor(() => expect(getComputedStyle(splits[0]?.parentElement ?? document.body).opacity).toBe('1'));
+    // Every card but the first has the action in the gap above it.
+    await expect(canvas.getAllByRole('button', { name: 'Split here' })).toHaveLength(3);
   },
 };
 

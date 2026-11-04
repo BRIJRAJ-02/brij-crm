@@ -254,7 +254,7 @@ describe('the owner of a form’s new records', () => {
       group(SALES, 'Sales team', [true, true]),
       group(QUIET, 'Night shift', [false, false]),
     ]);
-    const owner = page.getByRole('button', { name: /Owner$/ });
+    const owner = page.getByRole('button', { name: /Owner$/ }).last();
     // The chosen teammate shows with their avatar, so the name is matched on its own.
     await expect.element(owner.getByText('Ada Lovelace', { exact: true })).toBeVisible();
     // Its help is a tip beside the label, never a line under the field (T21).
@@ -292,7 +292,7 @@ describe('the owner of a form’s new records', () => {
 
   it('keeps a group the reader can’t list in view, saying new records still go to it, and the keyboard reaches every choice', async () => {
     await show(formView({ ownerRotationId: GONE }), [group(SALES, 'Sales team', [true, true])]);
-    const owner = page.getByRole('button', { name: /Owner$/ });
+    const owner = page.getByRole('button', { name: /Owner$/ }).last();
     await expect.element(owner).toHaveTextContent('Round robin group');
 
     // Opened from the keyboard, the arrows move through the list; Enter picks a teammate in place of the group.
@@ -306,7 +306,7 @@ describe('the owner of a form’s new records', () => {
 
   it('names an owner who has left as a former member, saying new records get no owner', async () => {
     await show(formView({ ownerMemberId: '0199a6f2-0000-7000-8000-0000000000ff' }), []);
-    const owner = page.getByRole('button', { name: /Owner$/ });
+    const owner = page.getByRole('button', { name: /Owner$/ }).last();
     await expect.element(owner).toHaveTextContent('Former member');
     await expect
       .element(page.getByText('They’ve left the workspace, so new records get no owner. Pick another.'))
@@ -349,7 +349,7 @@ describe('the name and the link save as they are left (one save model)', () => {
 describe('who is emailed each new submission (AC-568, AC-1047)', () => {
   it('lists the people the form tells, saves a change alone, and says the owner is told too', async () => {
     const fake = await show(formView({ ownerMemberId: ADA }, [ADA]), []);
-    const notify = page.getByRole('button', { name: /Email each submission to$/ });
+    const notify = page.getByRole('button', { name: /Email each submission to$/ }).last();
     await expect.element(notify).toHaveTextContent('Ada Lovelace');
     await notify.click();
     await page.getByRole('listbox').getByRole('option', { name: /Bea/ }).click();
@@ -360,18 +360,18 @@ describe('who is emailed each new submission (AC-568, AC-1047)', () => {
   it('keeps people the reader can’t list as one choice, and names nobody as Nobody else', async () => {
     await show(formView({ ownerMemberId: ADA }, ['0199a6f2-0000-7000-8000-0000000000ff']), []);
     await expect
-      .element(page.getByRole('button', { name: /Email each submission to$/ }))
+      .element(page.getByRole('button', { name: /Email each submission to$/ }).last())
       .toHaveTextContent('1 other person');
     shown?.unmount();
     await show(formView({ ownerMemberId: ADA }), []);
     await expect
-      .element(page.getByRole('button', { name: /Email each submission to$/ }))
+      .element(page.getByRole('button', { name: /Email each submission to$/ }).last())
       .toHaveTextContent('Nobody else');
     // With no owner, nobody else is told either: the field says Nobody and the hint drops the owner.
     shown?.unmount();
     await show(formView({}), []);
     await expect
-      .element(page.getByRole('button', { name: /Email each submission to$/ }))
+      .element(page.getByRole('button', { name: /Email each submission to$/ }).last())
       .not.toHaveTextContent('Nobody else');
   });
 });
@@ -398,7 +398,7 @@ describe('Settings as plain rows (T21)', () => {
 
   it('saves answers to an object or to Submissions only, from one picker', async () => {
     await show(formView({}), []);
-    const saving = page.getByRole('button', { name: /Save answers to$/ });
+    const saving = page.getByRole('button', { name: /Save answers to$/ }).last();
     await expect.element(saving).toHaveTextContent('People');
     await saving.click();
     await page.getByRole('listbox').getByRole('option', { name: 'Only in Submissions' }).click();
@@ -407,7 +407,7 @@ describe('Settings as plain rows (T21)', () => {
 
   it('closes and opens the form from Accepting submissions', async () => {
     await show(formView({}), []);
-    await userEvent.click(page.getByRole('switch', { name: 'Accepting submissions' }));
+    (page.getByRole('switch', { name: 'Accepting submissions' }).element() as HTMLElement).click();
     expect(statuses).toEqual(['paused']);
   });
 });

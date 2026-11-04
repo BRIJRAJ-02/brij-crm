@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 const field = () => host.querySelector('input');
-const form = () => host.querySelector('form');
+const form = () => host.querySelector<HTMLFormElement>('form:not([aria-hidden])');
 
 it('nudges a required question left empty, then moves on by Enter with focus in the next field', async () => {
   drawn = mountHostedForm(host, FORM, { mode: 'page' });
@@ -72,4 +72,14 @@ it('offers Try again when the form fails to load', async () => {
   const { mountFormMessage } = await import('./hosted-form.ts');
   drawn = mountFormMessage(host, { mode: 'page', kind: 'failed' });
   await expect.element(page.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+});
+
+it('goes back with the Back button, keeping what was typed', async () => {
+  drawn = mountHostedForm(host, FORM, { mode: 'page' });
+  await expect.poll(() => field()).not.toBeNull();
+  await userEvent.fill(page.getByRole('textbox'), 'Ada');
+  await userEvent.keyboard('{Enter}');
+  await expect.element(page.getByLabelText('Work email')).toHaveFocus();
+  await userEvent.click(page.getByRole('button', { name: 'Back' }));
+  await expect.element(page.getByLabelText('Your name')).toHaveValue('Ada');
 });

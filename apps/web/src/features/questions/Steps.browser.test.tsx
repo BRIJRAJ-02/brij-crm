@@ -166,7 +166,7 @@ describe('Steps as pages (AC-6303, T20)', () => {
 
   it('keeps breaks outside Steps without saying so, and draws no headers', async () => {
     await open('classic', [{ id: 's2', title: 'More', startsAt: 'size' }]);
-    expect(page.getByRole('button', { name: /More/ }).query()).toBeNull();
+    expect(page.getByRole('button', { name: 'Step 2 · More', exact: true }).query()).toBeNull();
     expect(page.getByText('Only used with the Steps layout').query()).toBeNull();
   });
 });

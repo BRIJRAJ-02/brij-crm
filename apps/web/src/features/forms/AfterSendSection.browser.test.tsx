@@ -2,7 +2,7 @@
 // "depending on answers" rule, Send to a booking page or link, Insert an answer in place of typing {{key}}, the score
 // only once a question gives points, and the paused or deleted booking page said beside the choice (late trap #53).
 import type { BookingPageView, DataLayer, FormDocument } from '@crm/data';
-import { createToasts } from '@crm/ui';
+import { createToasts, type Toasts } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -73,7 +73,7 @@ afterEach(() => {
   shown = undefined;
 });
 
-function Section({ initial }: { readonly initial: FormDocument }) {
+function Section({ initial, toasts }: { readonly initial: FormDocument; readonly toasts: Toasts }) {
   const [draft, setDraft] = useState(initial);
   // What the section last changed the draft to, for the checks below.
   useEffect(() => {
@@ -85,7 +85,7 @@ function Section({ initial }: { readonly initial: FormDocument }) {
       draft={draft}
       target={{ items: [{ attributeId: SCORE, title: 'Lead score', type: 'number', canWrite: true }] } as never}
       isReadOnly={false}
-      toasts={createToasts()}
+      toasts={toasts}
       newId={() => `r${String((ids += 1))}`}
       onDraftChange={setDraft}
       showGaps={false}
@@ -95,7 +95,9 @@ function Section({ initial }: { readonly initial: FormDocument }) {
 
 async function show(initial: FormDocument, pages: readonly BookingPageView[] = [], permissions?: readonly string[]) {
   const pageList = readyList(pages);
-  shown = await renderInApp(() => <Section initial={initial} />, {
+  const toasts = createToasts();
+  shown = await renderInApp(() => <Section initial={initial} toasts={toasts} />, {
+    toasts,
     data: { bookingPages: { view: () => pageList } } as unknown as DataLayer,
     ...(permissions === undefined ? {} : { permissions }),
     pattern: '/w/$slug/captures/forms/$formId',
