@@ -180,3 +180,95 @@ export const Refused: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent('Add a picture.');
   },
 };
+
+/** `variant="row"` with nothing there: one line, the picture mark, the label and Upload (a link page's cover). */
+export const AsRow: Story = {
+  // New after the last baselines were shot on CI; its screenshot joins with the next baseline run.
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Cover photo', variant: 'row', acceptedTypes: ['image/png', 'image/jpeg'] },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Upload cover photo' })).toBeEnabled();
+    await expect(canvas.queryByRole('button', { name: 'Adjust crop' })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Remove cover photo' })).not.toBeInTheDocument();
+  },
+};
+
+/** The row with a picture there: a small picture of it, Change, Adjust crop and Remove. */
+export const AsRowWithPicture: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Cover photo',
+    variant: 'row',
+    acceptedTypes: ['image/png', 'image/jpeg'],
+    preview: { src: PIXEL, alt: 'Your cover photo' },
+    onAdjust: fn(),
+    onRemove: fn(),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ args, canvas }) => {
+    await expect(canvas.getByAltText('Your cover photo')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Change cover photo' })).toBeEnabled();
+    await userEvent.click(canvas.getByRole('button', { name: 'Adjust crop' }));
+    await expect(args.onAdjust).toHaveBeenCalledTimes(1);
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove cover photo' }));
+    await expect(args.onRemove).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** The row while what was picked is on its way: Change spins, and nothing else takes a press. */
+export const AsRowPending: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Cover photo',
+    variant: 'row',
+    isPending: true,
+    preview: { src: PIXEL, alt: 'Your cover photo' },
+    onAdjust: fn(),
+    onRemove: fn(),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Adjust crop' })).toBeDisabled();
+  },
+};
+
+/** The row disabled: its words at the tertiary text colour, every button off. */
+export const AsRowDisabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Cover photo', variant: 'row', isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Upload cover photo' })).toBeDisabled();
+  },
+};
+
+/** The row with the screen's own refusal, in its refusal line under it. */
+export const AsRowRefused: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Cover photo', variant: 'row', error: 'That picture couldn’t be read. Try a JPEG, PNG or WebP.' },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveTextContent('That picture couldn’t be read.');
+  },
+};

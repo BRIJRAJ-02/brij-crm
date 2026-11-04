@@ -12,7 +12,19 @@ const LazySocialsCard = lazy(() => import('./SocialsCard.tsx').then((module) => 
 type SocialsCardProps = ComponentProps<typeof LazySocialsCard>;
 
 /** The card while its module loads, in the shape it will take for this page: a team page's, a colleague's, or the owner's. */
-export function SocialsCardPending({ isTeam, isOwner }: Pick<SocialsCardProps, 'isTeam' | 'isOwner'>) {
+export function SocialsCardPending({
+  isTeam,
+  isOwner,
+  isOneLine = false,
+}: Pick<SocialsCardProps, 'isTeam' | 'isOwner'> & { readonly isOneLine?: boolean }) {
+  // A link page's card is one line (no switch): it waits in that shape.
+  if (isOneLine) {
+    return (
+      <Card title={strings.title} isBusy>
+        <Skeleton width="short" />
+      </Card>
+    );
+  }
   if (isTeam) return <Card title={strings.title} description={strings.team} />;
   if (!isOwner) {
     return (
@@ -31,7 +43,15 @@ export function SocialsCardPending({ isTeam, isOwner }: Pick<SocialsCardProps, '
 /** The card, loaded on its own; its loading shape until then. */
 export function SocialsCardSlot(props: SocialsCardProps) {
   return (
-    <Suspense fallback={<SocialsCardPending isTeam={props.isTeam} isOwner={props.isOwner} />}>
+    <Suspense
+      fallback={
+        <SocialsCardPending
+          isTeam={props.isTeam}
+          isOwner={props.isOwner}
+          isOneLine={props.isOwner && !props.isTeam && props.onShownChange === undefined}
+        />
+      }
+    >
       <LazySocialsCard {...props} />
     </Suspense>
   );

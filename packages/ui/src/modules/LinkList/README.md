@@ -90,6 +90,8 @@ PagesHours draws the compact, card placed variant:
 </Card>
 ```
 
+`figure` (5 November 2026, a link page's blocks) is one quiet number at a comfortable row's end, after a small pointer mark: a block's clicks ("12"), heard in full ("12 clicks"). Why not a chip or a `badge`: a Badge under every title made the list twice as tall and as loud as its titles, and a badge is for a state, not a count.
+
 A compact row has no second line, so PagesHours puts the hours ("Mon to Fri, 9:00 AM to 5:00 PM") in `address`, the muted text after the title, since the hours are what that list is for. In a card nothing is hidden on a phone: the hours wrap under the title, the badges under them.
 
 ## Use

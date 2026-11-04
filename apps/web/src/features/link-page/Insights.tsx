@@ -42,8 +42,12 @@ export interface InsightsProps {
   readonly items: readonly ProfileItem[];
 }
 
-/** A number against the one before it, as a Stat's comparison and trend. */
-function compared(now: number, before: number, days: number): Pick<StatItem, 'comparison' | 'trend'> {
+/**
+ * A number against the one before it, as a Stat's comparison and trend; nothing while there was nothing before
+ * (owner, 5 November 2026: "↑ 0 in the 30 days before" on a new page said nothing).
+ */
+function compared(now: number, before: number, days: number): Partial<Pick<StatItem, 'comparison' | 'trend'>> {
+  if (before === 0) return {};
   return {
     comparison: words.before(before, days),
     trend: now === before ? 'same' : now > before ? 'up' : 'down',
@@ -89,12 +93,11 @@ export function Insights({ linkPage, slug, items }: InsightsProps) {
           <ButtonLink
             variant="ghost"
             icon="download"
+            label={words.csv}
             href={linkPage.reach.insightsCsvHref(slug, from, today)}
             download=""
             isDisabled={!hasViews}
-          >
-            {words.csv}
-          </ButtonLink>
+          />
         </>
       }
     >

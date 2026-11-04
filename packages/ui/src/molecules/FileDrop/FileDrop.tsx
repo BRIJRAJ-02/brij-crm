@@ -41,8 +41,12 @@ export interface FileDropProps {
    * `zone` (the default) is the drop area with its browse button. `button` is the browse button alone, with
    * `label` as its words, for a picker that sits beside what it changes (first run's avatar, 27 October 2026),
    * where a drop area would draw the picture twice. Same checks, same refusal line; nothing to drop onto.
+   * `row` (5 November 2026) is one row's height: a small picture of what is there (or the upload mark), the label,
+   * and Upload or Change, Adjust crop and Remove at its end. Still a drop target; the accepted types and size are
+   * said only in its refusal. For an optional picture in a settings card (a link page's cover, its share picture),
+   * where the zone's dashed box outweighed the page.
    */
-  readonly variant?: 'zone' | 'button';
+  readonly variant?: 'zone' | 'button' | 'row';
   /**
    * What was picked is on its way: with `variant="button"` the button spins and takes no second press; on the zone
    * (spec 0061, a link page's picture) the zone stays where it is, says so, and its browse button keeps focus but
@@ -65,6 +69,11 @@ export interface FileDropProps {
    * shows (beside the button with `variant="button"`), which opens the screen's PhotoCrop on it.
    */
   readonly onAdjust?: () => void;
+  /**
+   * Takes the picture there away (`variant="row"` only): a quiet remove button at the row's end while `preview`
+   * shows. The screen asks first, as every ending action does.
+   */
+  readonly onRemove?: () => void;
 }
 
 function accepts(file: File, types: readonly string[] | undefined): boolean {
@@ -94,6 +103,7 @@ export function FileDrop({
   error: given,
   wrongTypeText,
   onAdjust,
+  onRemove,
 }: FileDropProps) {
   const { locale } = useFormatSettings();
   const [error, setError] = useState<string | undefined>(undefined);
@@ -157,6 +167,72 @@ export function FileDrop({
             {strings.adjust}
           </Button>
         )}
+        {refusal}
+      </div>
+    );
+  }
+  if (variant === 'row') {
+    const hasPicture = shown !== undefined && failed !== shown;
+    return (
+      <div className={styles.field}>
+        <DropZone
+          className={styles.row}
+          isDisabled={isDisabled || isPending}
+          aria-label={label}
+          aria-busy={isPending || undefined}
+          onDrop={(event) => {
+            void Promise.all(event.items.flatMap((item) => (item.kind === 'file' ? [item.getFile()] : []))).then(take);
+          }}
+        >
+          <span className={styles.thumb}>
+            {hasPicture ? (
+              <img
+                className={styles.thumbImage}
+                src={shown}
+                alt={preview?.alt ?? ''}
+                onError={() => {
+                  setFailed(shown);
+                }}
+              />
+            ) : (
+              <Icon name="upload" size="sm" tone="muted" />
+            )}
+          </span>
+          <Text slot="label" className={styles.rowLabel}>
+            {label}
+          </Text>
+          <span className={styles.rowActions}>
+            <FileTrigger
+              {...(acceptedTypes === undefined ? {} : { acceptedFileTypes: [...acceptedTypes] })}
+              onSelect={(list) => {
+                if (list !== null) take([...list]);
+              }}
+            >
+              <Button
+                isPending={isPending}
+                isDisabled={isDisabled}
+                label={hasPicture ? strings.changeNamed(label) : strings.uploadNamed(label)}
+              >
+                {hasPicture ? strings.change : strings.upload}
+              </Button>
+            </FileTrigger>
+            {onAdjust !== undefined && hasPicture && (
+              <Button variant="ghost" isDisabled={isDisabled || isPending} onPress={onAdjust}>
+                {strings.adjust}
+              </Button>
+            )}
+            {onRemove !== undefined && hasPicture && (
+              <Button
+                variant="ghost"
+                // The base set's x: the hosted form draws FileDrop with no icon registry around it.
+                icon="x"
+                label={strings.remove(label)}
+                isDisabled={isDisabled || isPending}
+                onPress={onRemove}
+              />
+            )}
+          </span>
+        </DropZone>
         {refusal}
       </div>
     );

@@ -9,6 +9,7 @@ import { Button, ButtonGroup, ButtonLink, Callout, Field, Modal, QrCode } from '
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { qrPng, saveFile } from './qr-png.ts';
+import { homeStrings } from './home-strings.ts';
 import { reachStrings } from './reach-strings.ts';
 import type { DrawnQrStyle } from './ShareTools.tsx';
 import { shareStrings as strings } from './share-strings.ts';
@@ -32,6 +33,10 @@ export interface ShareLinkPageModalProps {
   readonly qrStyle?: DrawnQrStyle;
   /** Opens Links for each place (AC-6125), offered beside the address while the page is Live. */
   readonly onShareLinks?: () => void;
+  /** Opens Style the code (AC-6124): every way to share sits in this one modal (owner, 5 November 2026). */
+  readonly onStyle?: () => void;
+  /** The Apple Wallet pass's address, once read; left out, no Add to Wallet. */
+  readonly wallet?: string;
   /** Kept mounted while it closes, so the Modal's own exit plays. */
   readonly isOpen: boolean;
   readonly onClose: () => void;
@@ -46,6 +51,8 @@ export function ShareLinkPageModal({
   onGoLive,
   qrStyle,
   onShareLinks,
+  onStyle,
+  wallet,
   isOpen,
   onClose,
 }: ShareLinkPageModalProps) {
@@ -98,11 +105,23 @@ export function ShareLinkPageModal({
         </Callout>
       )}
       <Field label={strings.address} isLabelHidden variant="copy" icon="link" value={shown} copyLabel={strings.copy} />
-      {isPublic && onShareLinks !== undefined && (
-        <ButtonGroup label={reachStrings.shareLinksOpen} layout="row">
-          <Button variant="ghost" size="sm" icon="link" onPress={onShareLinks}>
-            {reachStrings.shareLinksOpen}
-          </Button>
+      {isPublic && (
+        <ButtonGroup label={strings.more} layout="row">
+          {onShareLinks !== undefined && (
+            <Button variant="ghost" icon="link" onPress={onShareLinks}>
+              {reachStrings.shareLinksOpen}
+            </Button>
+          )}
+          {onStyle !== undefined && (
+            <Button variant="ghost" icon="palette" onPress={onStyle}>
+              {reachStrings.qrStyle}
+            </Button>
+          )}
+          {wallet !== undefined && (
+            <ButtonLink variant="ghost" size="sm" href={wallet} isExternal icon="wallet">
+              {homeStrings.addToWallet}
+            </ButtonLink>
+          )}
         </ButtonGroup>
       )}
     </Modal>

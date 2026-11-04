@@ -871,3 +871,37 @@ export const LeadingNarrow: Story = {
     </Stage>
   ),
 };
+
+/** A link page's blocks: each row's clicks as one quiet number at its end, its words heard in full. */
+export const Figures: Story = {
+  // New after the last baselines were shot on CI; its screenshot joins with the next baseline run.
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Blocks', searchLabel: 'Search blocks', isToolbarHidden: true },
+  render: (args) => (
+    <Stage>
+      <LinkList
+        {...args}
+        rows={[
+          {
+            id: 'site',
+            title: 'Rilian website',
+            address: 'rilian.com',
+            chips: [],
+            figure: { text: '12', label: '12 clicks' },
+          },
+          {
+            id: 'mail',
+            title: 'Email',
+            address: 'christian@rilian.com',
+            chips: [],
+            figure: { text: '1', label: '1 click' },
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('12 clicks')).toBeInTheDocument();
+    await expect(canvas.getByText('christian@rilian.com')).toBeInTheDocument();
+  },
+};

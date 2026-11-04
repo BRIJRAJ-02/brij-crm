@@ -19,6 +19,7 @@ import {
   Button,
   Callout,
   Card,
+  EmptyState,
   Modal,
   SettingsRow,
   Skeleton,
@@ -260,21 +261,53 @@ function OwnSocialsCard({
         {links.length === 0 ? strings.add : strings.edit}
       </Button>
     );
+  // A link page's card (no switch: the page always shows them) is one line, as Linktree's social icons are: the
+  // marks, or "None yet", beside Add or Edit (owner, 5 November 2026). A booking page keeps its row and switch.
+  if (onShownChange === undefined) {
+    const body =
+      state.status === 'loading' ? (
+        <Skeleton width="short" />
+      ) : state.status === 'error' ? (
+        <Callout
+          tone="danger"
+          title={strings.failed}
+          actions={<Button onPress={held.retry}>{strings.tryAgain}</Button>}
+        >
+          {state.message}
+        </Callout>
+      ) : links.length > 0 ? (
+        <SocialLinks links={previewSocials(links)} isInline />
+      ) : (
+        <EmptyState layout="row" icon="link" title={strings.noneYet} />
+      );
+    const dialog =
+      isEditing && state.status === 'ready' && access !== undefined ? (
+        <EditDialog
+          access={access}
+          slug={slug}
+          links={links}
+          onClose={() => {
+            setEditing(false);
+          }}
+        />
+      ) : undefined;
+    return (
+      <Card title={strings.title} {...(edit === undefined ? {} : { actions: edit })}>
+        {body}
+        {dialog}
+      </Card>
+    );
+  }
   return (
     <Card title={strings.title} description={strings.everywhere} {...(edit === undefined ? {} : { actions: edit })}>
-      <SettingsRow
-        title={onShownChange === undefined ? strings.yours : strings.shown}
-        {...(marks === undefined ? {} : { description: marks })}
-      >
-        {onShownChange === undefined ? undefined : (
-          <Switch
-            label={strings.shown}
-            isLabelHidden
-            isSelected={isShown ?? false}
-            isReadOnly={isLocked ?? false}
-            onChange={onShownChange}
-          />
-        )}
+      <SettingsRow title={strings.shown} {...(marks === undefined ? {} : { description: marks })}>
+        <Switch
+          label={strings.shown}
+          isLabelHidden
+          isSelected={isShown ?? false}
+          isReadOnly={isLocked ?? false}
+          onChange={onShownChange}
+        />
       </SettingsRow>
       {state.status === 'error' && (
         <Callout

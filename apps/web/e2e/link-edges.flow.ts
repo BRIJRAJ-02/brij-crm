@@ -16,10 +16,12 @@ async function editing(page: Page, kind: string): Promise<{ slug: string; public
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('link', { name: 'Link page', exact: true })
     .click();
-  const publicPage = await page
-    .getByRole('group', { name: 'Share online' })
-    .getByRole('link', { name: 'Open' })
-    .getAttribute('href');
+  // Share (the bar's one place to share) holds Open page: the visitor goes there.
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  const share = page.getByRole('dialog', { name: 'Share your link page' });
+  const publicPage = await share.getByRole('link', { name: 'Open page' }).getAttribute('href');
+  await page.keyboard.press('Escape');
+  await expect(share).toBeHidden();
   await page.getByRole('button', { name: 'Edit page' }).click();
   await expect(page).toHaveURL(/edit=true/);
   return { slug, publicPage: publicPage ?? '' };

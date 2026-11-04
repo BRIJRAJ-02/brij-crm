@@ -28,11 +28,12 @@ test.describe('the link page journey', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Link page' })).toBeVisible();
     // Live before anything is added: the address is the person's handle, on the app's own host locally.
     await expect(page.getByText('Live').first()).toBeVisible();
-    // Share online's Open is the public page; the visitor goes there.
-    const publicPage = await page
-      .getByRole('group', { name: 'Share online' })
-      .getByRole('link', { name: 'Open' })
-      .getAttribute('href');
+    // Share (the bar's one place to share) holds Open page: the visitor goes there.
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    const share = page.getByRole('dialog', { name: 'Share your link page' });
+    const publicPage = await share.getByRole('link', { name: 'Open page' }).getAttribute('href');
+    await page.keyboard.press('Escape');
+    await expect(share).toBeHidden();
     expect(publicPage).toMatch(/\/[a-z0-9-]+$/);
 
     await page.getByRole('button', { name: 'Edit page' }).click();

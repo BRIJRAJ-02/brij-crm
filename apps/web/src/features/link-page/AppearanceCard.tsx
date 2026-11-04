@@ -1,9 +1,10 @@
 // Brief
-// Purpose: the link page's Design panel (spec 0068, AC-6802, AC-6804): one of four finished templates, picked by
-// seeing each as the page, then the owner's colour, cover photo and face shape, and nothing else.
+// Purpose: the link page's Design panel (spec 0068, AC-6802, AC-6804): one of four finished templates, then the
+// owner's colour, cover photo and face shape, and nothing else. Calm by design (owner, 5 November 2026: "too much
+// issues and complicated"): the phone beside it is the large live picture of the page, so the controls are small.
 // Main task: pick a template; the phone beside it crossfades to the page in it at once.
-// Leaves out: fonts, grounds, gradients, patterns, row shapes and fills, which each template fixes; and any value of
-// its own: every pick is a name from a closed set, and the stylesheet in `packages/ui` is the only place a value lives.
+// Leaves out: fonts, grounds, gradients, patterns, row shapes and fills, which each template fixes; sentences under
+// the templates; and any value of its own: every pick is a name from a closed set.
 import { themeForTemplate, type BrandColours, type DataError, type PageLookExtras, type PageTheme } from '@crm/data';
 import {
   AccentPicker,
@@ -15,22 +16,23 @@ import {
   FileDrop,
   LinkPageThumbnail,
   Modal,
+  SegmentedControl,
   SettingsStack,
   TileGrid,
   type AccentQuickPick,
   type LinkPageThumbnailProfile,
   type PageTemplate,
 } from '@crm/ui';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { BRAND_PHOTO_PICK_MAX_BYTES, BRAND_PHOTO_TYPES } from './photo-prep.ts';
 import { strings } from './strings.ts';
 
-/** The four templates in the picker's order, each with its name and the line that says who it suits. */
-const TEMPLATES: readonly { readonly id: PageTemplate; readonly name: string; readonly text: string }[] = [
-  { id: 'classic', name: strings.templateClassic, text: strings.templateClassicText },
-  { id: 'studio', name: strings.templateStudio, text: strings.templateStudioText },
-  { id: 'night', name: strings.templateNight, text: strings.templateNightText },
-  { id: 'split', name: strings.templateSplit, text: strings.templateSplitText },
+/** The four templates in the picker's order, each with its name. */
+const TEMPLATES: readonly { readonly id: PageTemplate; readonly name: string }[] = [
+  { id: 'classic', name: strings.templateClassic },
+  { id: 'studio', name: strings.templateStudio },
+  { id: 'night', name: strings.templateNight },
+  { id: 'split', name: strings.templateSplit },
 ];
 
 /** A template's name, as the picker says it. */
@@ -84,14 +86,13 @@ export interface AppearanceCardProps {
 }
 
 /**
- * Design (spec 0068, AC-6802, AC-6804, AC-6805): the four templates as large pictures of the page, the one the page
- * wears ringed and ticked; then Colour, Cover photo and Face. A page with no template of its own wears its
- * workspace's, and the picker says so. A page moved to a template by the move says so once, with a way to pick
- * another and a way to keep it.
+ * Design (spec 0068, AC-6802, AC-6804, AC-6805), one quiet column: the four templates as small pictures of the page
+ * with a name each (the one it wears ringed and ticked; the phone beside is the large live one), then Colour, the
+ * cover photo as one row, and Photo shape as two segments. A page with no template of its own wears its workspace's, and
+ * the picker says so in three words. A page moved to a template says so once, with Keep it.
  */
 export function AppearanceCard({ theme, onChange, refusal, extras, profile }: AppearanceCardProps) {
-  const [removing, setRemoving] = useState<PhotoSlot | undefined>(undefined);
-  const pickerRef = useRef<HTMLDivElement>(null);
+  const [isRemoving, setRemoving] = useState(false);
   const variables = extras?.variables ?? [];
   const look = extras?.look;
   const workspaceTemplate = look?.workspaceTemplate ?? 'classic';
@@ -100,71 +101,51 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
   const cover = look?.cover;
   const coverSrc = cover === undefined ? undefined : extras?.photoSrc('cover', cover);
   return (
-    <Card
-      title={strings.appearance}
-      description={strings.appearanceText}
-      {...(refusal === undefined ? {} : { footerNote: refusal.message })}
-    >
+    <Card title={strings.appearance}>
       <SettingsStack variant="plain">
-        {/* The move to templates, said once (AC-6805): either answer saves the look without the note. */}
+        {/* Why the last pick didn't save, until the next one: the card has no footer to say it in. */}
+        {refusal !== undefined && <Callout tone="danger">{refusal.message}</Callout>}
+        {/* The move to templates, said once (AC-6805): picking a template, or Keep it, saves the look without it. */}
         {theme.moved === true && (
           <Callout
             tone="info"
-            title={strings.templateMoved(nameOf(worn))}
             actions={
-              <>
-                <Button
-                  size="md"
-                  onPress={() => {
-                    pickerRef.current?.querySelector<HTMLInputElement>('input:checked, input')?.focus();
-                  }}
-                >
-                  {strings.templateMovedChoose}
-                </Button>
-                <Button size="md" variant="ghost" onPress={() => onChange(themeForTemplate(worn, theme))}>
-                  {strings.templateMovedKeep}
-                </Button>
-              </>
+              <Button size="md" variant="ghost" onPress={() => onChange(themeForTemplate(worn, theme))}>
+                {strings.templateMovedKeep}
+              </Button>
             }
           >
-            {strings.templateMovedText}
+            {strings.templateMoved(nameOf(worn))}
           </Callout>
         )}
-        <div ref={pickerRef}>
-          <FieldGroup
+        <FieldGroup
+          label={strings.template}
+          {...(theme.template === undefined ? { hint: strings.templateFollows(nameOf(workspaceTemplate)) } : {})}
+        >
+          {/* Each template as a small picture of the page in it, in the owner's colour: the phone is the big one. */}
+          <TileGrid
+            variant="choice"
             label={strings.template}
-            {...(theme.template === undefined ? { hint: strings.templateFollows(nameOf(workspaceTemplate)) } : {})}
-          >
-            {/* Each template as the page in it, in the owner's colour and photos: picked by sight (AC-6804). */}
-            <TileGrid
-              variant="choice"
-              label={strings.template}
-              showsDescription
-              keepsPicture
-              pictureSize="large"
-              value={worn}
-              tiles={TEMPLATES.map((template) => ({
-                id: template.id,
-                name: template.name,
-                description: template.text,
-                thumbnail: (
-                  <LinkPageThumbnail
-                    theme={themeForTemplate(template.id, theme)}
-                    variables={variables}
-                    size="large"
-                    {...(profile === undefined
-                      ? {}
-                      : { profile: { ...profile, ...(coverSrc === undefined ? {} : { cover: coverSrc }) } })}
-                  />
-                ),
-              }))}
-              onChange={(picked) => {
-                const found = TEMPLATES.find((template) => template.id === picked);
-                if (found !== undefined) onChange(themeForTemplate(found.id, theme));
-              }}
-            />
-          </FieldGroup>
-        </div>
+            value={worn}
+            tiles={TEMPLATES.map((template) => ({
+              id: template.id,
+              name: template.name,
+              thumbnail: (
+                <LinkPageThumbnail
+                  theme={themeForTemplate(template.id, theme)}
+                  variables={variables}
+                  {...(profile === undefined
+                    ? {}
+                    : { profile: { ...profile, ...(coverSrc === undefined ? {} : { cover: coverSrc }) } })}
+                />
+              ),
+            }))}
+            onChange={(picked) => {
+              const found = TEMPLATES.find((template) => template.id === picked);
+              if (found !== undefined) onChange(themeForTemplate(found.id, theme));
+            }}
+          />
+        </FieldGroup>
         {extras !== undefined && (
           <AccentPicker
             label={strings.colour}
@@ -195,13 +176,15 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
             )}
           </AccentPicker>
         )}
-        {/* The cover (AC-6802): Studio and Split lead with it; Classic and Night show it when there is one. */}
+        {/* The cover (AC-6802) as one row: Studio and Split lead with it; Classic and Night show it when there is one. */}
         <FileDrop
-          label={cover === undefined ? strings.coverPhotoDrop : strings.coverPhoto}
+          variant="row"
+          label={strings.coverPhoto}
           acceptedTypes={BRAND_PHOTO_TYPES}
           typesText={strings.photoTypes}
           maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
-          isDisabled={extras === undefined || look === undefined || extras.sending !== undefined}
+          isDisabled={extras === undefined || look === undefined}
+          isPending={extras?.sending === 'cover'}
           {...(coverSrc === undefined
             ? {}
             : {
@@ -209,58 +192,43 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
                 onAdjust: () => {
                   extras?.onPhoto('cover', coverSrc);
                 },
+                onRemove: () => setRemoving(true),
               })}
           onFiles={(files) => {
             const [file] = files;
             if (file !== undefined) extras?.onPhoto('cover', file);
           }}
         />
-        {cover !== undefined && (
-          <Button variant="ghost" size="md" icon="trash" onPress={() => setRemoving('cover')}>
-            {strings.photoRemove}
-          </Button>
-        )}
-        <FieldGroup label={strings.avatar}>
-          <TileGrid
-            variant="choice"
-            label={strings.avatar}
-            value={theme.avatar === 'rounded' ? 'rounded' : 'circle'}
-            tiles={(
-              [
-                ['circle', strings.avatarCircle],
-                ['rounded', strings.avatarRounded],
-              ] as const
-            ).map(([id, name]) => ({
-              id,
-              name,
-              thumbnail: (
-                <LinkPageThumbnail theme={{ ...themeForTemplate(worn, theme), avatar: id }} variables={variables} />
-              ),
-            }))}
-            onChange={(picked) => {
-              if (picked === 'circle' || picked === 'rounded') onChange({ ...theme, avatar: picked });
-            }}
-          />
-        </FieldGroup>
+        <SegmentedControl
+          label={strings.avatar}
+          isLabelVisible
+          size="compact"
+          value={theme.avatar === 'rounded' ? 'rounded' : 'circle'}
+          onChange={(picked) => {
+            if (picked === 'circle' || picked === 'rounded') onChange({ ...theme, avatar: picked });
+          }}
+          segments={[
+            { value: 'circle', label: strings.avatarCircle },
+            { value: 'rounded', label: strings.avatarRounded },
+          ]}
+        />
       </SettingsStack>
       <Modal
-        isOpen={removing !== undefined}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setRemoving(undefined);
-        }}
+        isOpen={isRemoving}
+        onOpenChange={setRemoving}
         title={strings.photoRemoving}
         variant="confirm"
         tone="danger"
         actions={
           <>
-            <Button variant="ghost" onPress={() => setRemoving(undefined)}>
+            <Button variant="ghost" onPress={() => setRemoving(false)}>
               {strings.cancel}
             </Button>
             <Button
               variant="danger-solid"
               onPress={() => {
-                if (removing !== undefined) extras?.onRemovePhoto(removing);
-                setRemoving(undefined);
+                extras?.onRemovePhoto('cover');
+                setRemoving(false);
               }}
             >
               {strings.photoRemove}
