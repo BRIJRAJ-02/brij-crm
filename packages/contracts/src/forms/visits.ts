@@ -101,6 +101,14 @@ export const FormAnalyticsTotals = z.object({
   completions: Count,
   /** The median time from the first answer to the accepted submit, in milliseconds. */
   medianMs: Count.optional(),
+  /**
+   * Stored submissions received in the range that the reader may see (spam and deleted ones left out), counted from
+   * the submissions themselves, as the Submissions tab lists them, so a form whose visits weren't tracked yet still
+   * agrees with it.
+   */
+  submissions: Count.default(0),
+  /** The window held more submissions than the read takes (5,000): `submissions` is "at least". */
+  submissionsAtLeast: z.boolean().optional(),
 });
 /** A range's headline numbers. */
 export type FormAnalyticsTotals = z.infer<typeof FormAnalyticsTotals>;
@@ -139,6 +147,39 @@ export const FormAnalyticsSource = z.object({
 /** One row of the by source table. */
 export type FormAnalyticsSource = z.infer<typeof FormAnalyticsSource>;
 
+/** How many text answers a question's card carries: the latest, newest first. */
+export const FORM_ANSWER_LATEST = 3;
+
+/** The most values a counted question's card carries (a country's, an old choice's), the most picked first. */
+export const FORM_ANSWER_CHOICES_MAX = 20;
+
+/** The longest a text answer is carried to a question's card; the rest is in the submission. */
+export const FORM_ANSWER_TEXT_MAX = 280;
+
+/** One choice, rating or yes or no value, and how many submissions picked it. */
+export const FormAnalyticsChoice = z.object({
+  /** The value as stored: a choice's words, a number, or `true` / `false`. */
+  value: z.union([z.string(), z.number(), z.boolean()]),
+  count: Count,
+});
+/** One value and how many picked it. */
+export type FormAnalyticsChoice = z.infer<typeof FormAnalyticsChoice>;
+
+/**
+ * One question's answers over the range, from the submissions themselves (Sprig's and Tally's results): how many
+ * answered it, then, by its type, each value's count (choices, ratings, yes or no) or the latest few text answers.
+ * Read through the door Submissions uses: only the submissions the reader may see, and no question whose answer is
+ * saved on a field hidden from them (AC-573).
+ */
+export const FormAnalyticsAnswer = z.object({
+  questionId: z.string(),
+  responses: Count,
+  choices: z.array(FormAnalyticsChoice).max(FORM_ANSWER_CHOICES_MAX).optional(),
+  latest: z.array(z.string().max(FORM_ANSWER_TEXT_MAX)).max(FORM_ANSWER_LATEST).optional(),
+});
+/** One question's answers over the range. */
+export type FormAnalyticsAnswer = z.infer<typeof FormAnalyticsAnswer>;
+
 /**
  * A form's analytics over a range (AC-6321), with the same numbers for the
  * range before it, so every headline can show its change. Nothing here names
@@ -152,6 +193,10 @@ export const FormAnalytics = z.object({
   byDay: z.array(FormAnalyticsDay),
   byQuestion: z.array(FormAnalyticsQuestion),
   bySource: z.array(FormAnalyticsSource),
+  /** Each question's answers, in the live form's order (the Answers section). */
+  answers: z.array(FormAnalyticsAnswer).default([]),
+  /** The first day any visit was counted, when one was: before it, submissions came with no visit to count. */
+  countingSince: z.iso.date().optional(),
 });
 /** A form's analytics over a range. */
 export type FormAnalytics = z.infer<typeof FormAnalytics>;

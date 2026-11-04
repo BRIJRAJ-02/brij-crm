@@ -12,12 +12,22 @@
 // access). Reading runs in a member's scope and goes through the same door
 // Submissions does: a member who may not see the form sees no numbers.
 import {
+  answerWords,
+  CHOICE_TYPES,
+  FORM_ANSWER_CHOICES_MAX,
+  FORM_ANSWER_LATEST,
+  FORM_ANSWER_TEXT_MAX,
+  QUESTION_KEY,
+  type AnswerType,
   type FormAnalytics,
+  type FormAnalyticsAnswer,
+  type FormAnalyticsChoice,
   type FormAnalyticsDay,
   type FormAnalyticsQuestion,
   type FormAnalyticsRange,
   type FormAnalyticsSource,
   type FormAnalyticsTotals,
+  type FormDocument,
   type FormEventKind,
 } from '@crm/contracts';
 import { sql, type SQL } from 'drizzle-orm';
@@ -27,6 +37,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import { runWrite } from '../engine/write.ts';
 import { canSeeForm, loadForm, loadVersions } from './shared.ts';
+import { answerHidden, visibleRows } from './submissions.ts';
 import { countPageVisit, finishPageVisit, VISITOR_ID, type VisitOrigin } from '../insights/visits.ts';
 
 /** What counting one event takes. */
@@ -136,7 +147,183 @@ async function totalsIn(tx: WorkspaceTx, where: SQL): Promise<FormAnalyticsTotal
     starts: row?.starts ?? 0,
     completions: row?.completions ?? 0,
     ...(row?.median_ms === null || row?.median_ms === undefined ? {} : { medianMs: row.median_ms }),
+    submissions: 0,
   };
+}
+
+/**
+ * The most submissions a form's analytics read in one window (the Submissions figure and the Answers section),
+ * newest first, so a form with a flood of them reads in bounded time; past it, the figure says "at least".
+ */
+const ANSWERS_READ_MAX = 5_000;
+
+/** The most values a counted question's card carries (a country's, an old choice's): the most picked first. */
+const CHOICES_SHOWN_MAX = FORM_ANSWER_CHOICES_MAX;
+
+/**
+ * The submissions that count in a window: not spam, not deleted, received from `from` (to `until`). The states are
+ * named rather than `<> 'spam'`, so `form_submissions_live` (workspace, form, state, received_at) bounds the range on
+ * any Postgres, 17 too, without a skip scan.
+ */
+function liveSubmissionsIn(workspaceId: string, formId: string, from: SQL, until?: SQL): SQL {
+  const upTo = until === undefined ? sql`` : sql` and received_at < ((${until})::timestamp at time zone 'UTC')`;
+  return sql`workspace_id = ${workspaceId} and form_id = ${formId} and deleted_at is null
+    and state in ('received', 'processing', 'processed', 'held', 'needs_review', 'failed')
+    and received_at >= ((${from})::timestamp at time zone 'UTC')${upTo}`;
+}
+
+/** One submission of a window, as the door judges it: its main record, or none. */
+interface WindowRow {
+  readonly id: string;
+  readonly mainRecordId: string | null;
+}
+
+/**
+ * The submissions of a window the reader may see, newest first, at most `ANSWERS_READ_MAX`: the rows the Submissions
+ * tab would list them (`visibleRows`: a visible main record, or none and `forms.manage`), so a member limited to their
+ * own records counts and reads only their own. `isCapped` when the window held more than the read takes.
+ */
+async function visibleWindow(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  where: SQL,
+): Promise<{ readonly ids: readonly string[]; readonly isCapped: boolean }> {
+  const found = await tx.execute<{ id: string; main_record_id: string | null }>(sql`
+    select id::text as id, main_record_id::text as main_record_id from form_submissions where ${where}
+    order by received_at desc, id desc limit ${ANSWERS_READ_MAX + 1}
+  `);
+  const rows: WindowRow[] = found.rows
+    .slice(0, ANSWERS_READ_MAX)
+    .map((row) => ({ id: row.id, mainRecordId: row.main_record_id }));
+  const seen = await visibleRows(tx, scope, rows);
+  return { ids: seen.map((row) => row.id), isCapped: found.rows.length > ANSWERS_READ_MAX };
+}
+
+/** The answer types each value of which is counted (a bar per value), rather than read as words. */
+const COUNTED_TYPES: ReadonlySet<AnswerType> = new Set<AnswerType>([
+  ...CHOICE_TYPES,
+  'yes_no',
+  'checkbox',
+  'consent',
+  'rating',
+  'scale',
+  'country',
+]);
+
+/**
+ * The answer types whose latest few answers a card shows as words. An email or a phone is not among them: a contact
+ * says nothing at a glance, and the Submissions table already lists who sent what.
+ */
+const TEXT_TYPES: ReadonlySet<AnswerType> = new Set<AnswerType>([
+  'short_text',
+  'long_text',
+  'website',
+  'number',
+  'date',
+  'time',
+  'datetime',
+  'address',
+]);
+
+/** Keys as a Postgres text array literal; a key is `[a-z][a-z0-9_]*` (`QUESTION_KEY`), so it needs no quoting. */
+const keyList = (keys: readonly string[]) => `{${keys.filter((key) => QUESTION_KEY.test(key)).join(',')}}`;
+
+/** Ids as a Postgres uuid array literal (each read back from the database as a uuid). */
+const idList = (ids: readonly string[]) => `{${ids.join(',')}}`;
+
+/**
+ * Each question's answers over the visible window (the Answers section, after Sprig's and Tally's results), three
+ * grouped reads over those submissions by id, each touching only the shown questions' values (`answers -> key`):
+ *
+ * - how many answered each question (`null`, `""`, `[]` and `{}` are no answer);
+ * - each value's count for the counted types, a multi select's picks one by one (its `{ picked }` too), the
+ *   `CHOICES_SHOWN_MAX` most picked;
+ * - the latest `FORM_ANSWER_LATEST` answers of the text types, as words, cut to `FORM_ANSWER_TEXT_MAX`.
+ *
+ * Only the questions the reader may see the answers to (`answerHidden`, AC-573: one saved on a field hidden from
+ * them, or on the deal they can't read, has no card). A hidden, file, signature or ranking question has no card: its
+ * value is a link's tag, a stored file or an order. Values are read by the live form's keys, so an older version's
+ * question under the same key counts with it.
+ */
+async function answersIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  document: FormDocument | undefined,
+  ids: readonly string[],
+): Promise<FormAnalyticsAnswer[]> {
+  const shown = (document?.questions ?? []).filter(
+    (question) =>
+      question.answerType !== 'ranking' &&
+      (COUNTED_TYPES.has(question.answerType) || TEXT_TYPES.has(question.answerType)) &&
+      document !== undefined &&
+      !answerHidden(scope, document, question),
+  );
+  if (shown.length === 0) return [];
+  if (ids.length === 0) return shown.map((question) => ({ questionId: question.id, responses: 0 }));
+  const counted = shown.filter((question) => COUNTED_TYPES.has(question.answerType)).map((question) => question.key);
+  const texts = shown.filter((question) => TEXT_TYPES.has(question.answerType)).map((question) => question.key);
+  const window = sql`form_submissions s cross join unnest(${keyList(shown.map((question) => question.key))}::text[]) k(key)`;
+  const inWindow = sql`s.workspace_id = ${scope.workspaceId} and s.id = any(${idList(ids)}::uuid[])`;
+  const answered = sql`s.answers -> k.key is not null
+    and s.answers -> k.key not in ('null'::jsonb, '""'::jsonb, '[]'::jsonb, '{}'::jsonb)`;
+  const responses = await tx.execute<{ key: string; count: number }>(sql`
+    select k.key, count(*)::int as count from ${window} where ${inWindow} and ${answered} group by k.key
+  `);
+  const values =
+    counted.length === 0
+      ? []
+      : (
+          await tx.execute<{ key: string; value: unknown; count: number }>(sql`
+            select key, value, count from (
+              select k.key, v.value, count(*)::int as count,
+                row_number() over (partition by k.key order by count(*) desc, v.value) as place
+              from ${window},
+                jsonb_array_elements(case jsonb_typeof(s.answers -> k.key)
+                  when 'array' then s.answers -> k.key
+                  when 'object' then coalesce(s.answers -> k.key -> 'picked', '[]'::jsonb)
+                  else jsonb_build_array(s.answers -> k.key) end) v(value)
+              where ${inWindow} and k.key = any(${keyList(counted)}::text[]) and ${answered}
+                and jsonb_typeof(v.value) in ('string', 'number', 'boolean')
+              group by k.key, v.value
+            ) t where place <= ${CHOICES_SHOWN_MAX}
+            order by key, place
+          `)
+        ).rows;
+  const latest =
+    texts.length === 0
+      ? []
+      : (
+          await tx.execute<{ key: string; value: unknown }>(sql`
+            select key, value from (
+              select k.key, s.answers -> k.key as value,
+                row_number() over (partition by k.key order by s.received_at desc, s.id desc) as at
+              from ${window}
+              where ${inWindow} and k.key = any(${keyList(texts)}::text[]) and ${answered}
+            ) t where at <= ${FORM_ANSWER_LATEST}
+            order by key, at
+          `)
+        ).rows;
+  const responsesOf = new Map(responses.rows.map((row) => [row.key, row.count]));
+  return shown.map((question): FormAnalyticsAnswer => {
+    const base = { questionId: question.id, responses: responsesOf.get(question.key) ?? 0 };
+    if (COUNTED_TYPES.has(question.answerType)) {
+      const choices = values.flatMap((row): FormAnalyticsChoice[] => {
+        if (row.key !== question.key) return [];
+        if (typeof row.value === 'string') {
+          return [{ value: row.value.slice(0, FORM_ANSWER_TEXT_MAX), count: row.count }];
+        }
+        return typeof row.value === 'number' || typeof row.value === 'boolean'
+          ? [{ value: row.value, count: row.count }]
+          : [];
+      });
+      return { ...base, choices };
+    }
+    const words = latest
+      .filter((row) => row.key === question.key)
+      .map((row) => answerWords(row.value, { answerType: question.answerType }).slice(0, FORM_ANSWER_TEXT_MAX))
+      .filter((text) => text !== '');
+    return { ...base, latest: words };
+  });
 }
 
 /** What a form's analytics read takes. */
@@ -169,7 +356,28 @@ export async function formAnalytics(scope: EngineScope, input: FormAnalyticsInpu
       and day >= ${since}`;
     const inPrevious = sql`workspace_id = ${workspaceId} and page_kind = 'form' and page_id = ${input.formId}
       and day >= ${before} and day < ${since}`;
-    const [totals, previous] = await Promise.all([totalsIn(tx, inRange), totalsIn(tx, inPrevious)]);
+    // Submissions are counted from the submissions themselves, so a form that took some before its visits were
+    // tracked still agrees with its Submissions tab; the first tracked day says where the visit figures start.
+    // Only those the reader may see, as Submissions lists them: a member limited to their own records counts theirs.
+    const visitTotals = await totalsIn(tx, inRange);
+    const previousVisits = await totalsIn(tx, inPrevious);
+    const now = await visibleWindow(tx, scope, liveSubmissionsIn(workspaceId, input.formId, since));
+    const then = await visibleWindow(tx, scope, liveSubmissionsIn(workspaceId, input.formId, before, since));
+    const firstDay = await tx.execute<{ day: string | null }>(sql`
+      select min(day)::text as day from page_visits
+      where workspace_id = ${workspaceId} and page_kind = 'form' and page_id = ${input.formId}
+    `);
+    const totals = {
+      ...visitTotals,
+      submissions: now.ids.length,
+      ...(now.isCapped ? { submissionsAtLeast: true } : {}),
+    };
+    const previous = {
+      ...previousVisits,
+      submissions: then.ids.length,
+      ...(then.isCapped ? { submissionsAtLeast: true } : {}),
+    };
+    const countingSince = firstDay.rows[0]?.day ?? undefined;
 
     const days = await tx.execute<{ day: string; views: number; starts: number; completions: number }>(sql`
       select day::text as day, count(*)::int as views,
@@ -201,7 +409,17 @@ export async function formAnalytics(scope: EngineScope, input: FormAnalyticsInpu
       form.liveVersionId === null ? undefined : (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
     const questionIds = (live?.document.questions ?? []).map((question) => question.id);
     const byQuestion = questionIds.length === 0 ? [] : await dropOff(tx, inRange, questionIds);
-    return { range, totals, previous, byDay, byQuestion, bySource };
+    const answers = await answersIn(tx, scope, live?.document, now.ids);
+    return {
+      range,
+      totals,
+      previous,
+      byDay,
+      byQuestion,
+      bySource,
+      answers,
+      ...(countingSince === undefined ? {} : { countingSince }),
+    };
   });
 }
 
