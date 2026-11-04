@@ -8,6 +8,7 @@ import {
   type JobView,
   type ObjectSummary,
   type SubmissionPage,
+  type SubmissionSelection,
   type SubmissionState,
   type SubmissionSummary,
   type SubmissionView,
@@ -528,41 +529,56 @@ export function SubmissionsTab({
   const exportCsv = () => {
     // The picked rows; else what the table shows when a search narrows it; else the filter.
     const ids = (picked.length > 0 ? picked : query.trim() === '' ? [] : shown).map((submission) => submission.id);
+    const select: SubmissionSelection =
+      ids.length > 0
+        ? { kind: 'ids', submissionIds: ids.slice(0, EXPORT_MAX) }
+        : { kind: 'filter', ...(state === undefined ? {} : { state }) };
     const preparing = toasts.toast({ tone: 'info', message: strings.exportStarted, isBusy: true });
-    data.submissions
-      .export(
-        slug,
-        data.submissions.newId(),
-        formId,
-        ids.length > 0
-          ? { kind: 'ids', submissionIds: ids.slice(0, EXPORT_MAX) }
-          : { kind: 'filter', ...(state === undefined ? {} : { state }) },
-      )
-      .then(
-        (view) => {
-          followJob(view.jobId, (job) => {
-            toasts.dismiss(preparing);
-            toasts.toast(
-              job.status === 'succeeded'
-                ? {
-                    tone: 'success',
-                    message: strings.exportReady(view.fileName),
-                    action: {
-                      label: strings.download,
-                      onAction: () => {
-                        downloadFile(view.downloadPath, view.fileName);
-                      },
-                    },
-                  }
-                : { tone: 'danger', message: strings.jobFailed(job.label) },
-            );
-          });
-        },
-        (error: unknown) => {
+    // A small export downloads at once (forms fixes 2); a large one is made as a job and offers Download when done.
+    data.submissions.exportNow(slug, formId, select).then(
+      (file) => {
+        toasts.dismiss(preparing);
+        saveText(file.csv, file.fileName);
+        toasts.toast({ tone: 'success', message: strings.exportSaved(file.fileName) });
+      },
+      (error: unknown) => {
+        if (!isDataError(error) || error.code !== 'JOB_TOO_LARGE') {
           toasts.dismiss(preparing);
           toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
-        },
-      );
+          return;
+        }
+        exportAsJob(select, preparing);
+      },
+    );
+  };
+
+  /** A large export, made as a job: the toast turns into Download when it is done. */
+  const exportAsJob = (select: SubmissionSelection, preparing: string) => {
+    data.submissions.export(slug, data.submissions.newId(), formId, select).then(
+      (view) => {
+        followJob(view.jobId, (job) => {
+          toasts.dismiss(preparing);
+          toasts.toast(
+            job.status === 'succeeded'
+              ? {
+                  tone: 'success',
+                  message: strings.exportReady(view.fileName),
+                  action: {
+                    label: strings.download,
+                    onAction: () => {
+                      downloadFile(view.downloadPath, view.fileName);
+                    },
+                  },
+                }
+              : { tone: 'danger', message: strings.jobFailed(job.label) },
+          );
+        });
+      },
+      (error: unknown) => {
+        toasts.dismiss(preparing);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+      },
+    );
   };
 
   // One clear action for the rows: Export, only when there are rows, naming the picked ones when some are.
@@ -1102,6 +1118,16 @@ function SubmissionDetail({
  * Saves a file the server sends as an attachment, in place (forms fix a7): an anchor with `download`, so the page
  * stays and no tab opens. An expired file's error comes back as the browser's own failed download.
  */
+/** Saves text made in the page as a file, in place (a small export, forms fixes 2). */
+function saveText(text: string, fileName: string): void {
+  const href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  downloadFile(href, fileName);
+  // After the click has handed the file to the browser.
+  setTimeout(() => {
+    URL.revokeObjectURL(href);
+  }, 0);
+}
+
 function downloadFile(href: string, fileName: string): void {
   const anchor = document.createElement('a');
   anchor.href = href;

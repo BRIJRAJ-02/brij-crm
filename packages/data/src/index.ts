@@ -7909,6 +7909,12 @@ export function createDataLayer({
        * as a `forms.export` job. `id` is minted once per press (`newId`), so a
        * retry makes one export.
        */
+      /**
+       * A small export in one answer (forms fixes 2): the file's name and its CSV, for the screen to save at once.
+       * More than 1,000 submissions is refused as `JOB_TOO_LARGE`; then `export` makes the file as a job.
+       */
+      exportNow: (workspace: string, formId: string, select: SubmissionSelection) =>
+        call((options) => api.submissions.exportNow({ workspace, formId, select }, options)),
       export: async (
         workspace: string,
         id: string,

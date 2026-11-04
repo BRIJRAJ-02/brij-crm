@@ -831,6 +831,9 @@ export {
   FORMS_EXPORT,
   getExport,
   startSubmissionsExport,
+  exportSubmissionsNow,
+  EXPORT_NOW_MAX,
+  type ExportNow,
   UNKNOWN_EXPORT,
   type ExportRecord,
 } from './forms/export.ts';

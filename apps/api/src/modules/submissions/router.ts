@@ -3,6 +3,7 @@ import {
   deleteSubmission,
   restoreSubmission,
   getExport,
+  exportSubmissionsNow,
   startSubmissionsExport,
   getSubmission,
   listSubmissions,
@@ -88,6 +89,9 @@ export const submissionsRouter = member.submissions.router({
     ),
   ),
   // Export as CSV: the export's row and its `forms.export` job; the file downloads from its path once done.
+  exportNow: member.submissions.exportNow.handler(({ context, input }) =>
+    exportSubmissionsNow(context.scope, { formId: input.formId, select: input.select }),
+  ),
   export: member.submissions.export.handler(async ({ context, input }) => {
     const started = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       startSubmissionsExport(

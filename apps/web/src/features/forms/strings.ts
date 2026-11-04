@@ -495,6 +495,8 @@ export const strings = {
   exportShown: 'What the table shows for this search, every answer as a column',
   exportPicked: (n: number) => `The ${count(n, 'picked submission', 'picked submissions')}, every answer as a column`,
   exportStarted: 'Preparing your CSV…',
+  /** A small export, saved at once (forms fixes 2). */
+  exportSaved: (fileName: string) => `Saved ${fileName}.`,
   exportReady: (file: string) => `${file} is ready.`,
   download: 'Download',
   addToCrm: 'Add to CRM',

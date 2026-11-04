@@ -563,6 +563,16 @@ export const ExportSubmissionsInput = WorkspaceScoped.extend({
 /** Exporting a form's submissions. */
 export type ExportSubmissionsInput = z.infer<typeof ExportSubmissionsInput>;
 
+/** A small export downloaded at once, with no job (forms fixes 2): the form and the selection. */
+export const ExportNowInput = WorkspaceScoped.extend({ formId: Uuid, select: SubmissionSelection });
+/** A small export downloaded at once. */
+export type ExportNowInput = z.infer<typeof ExportNowInput>;
+
+/** A small export's file: its name and its CSV. */
+export const ExportNowFile = z.object({ fileName: z.string(), csv: z.string() });
+/** A small export's file. */
+export type ExportNowFile = z.infer<typeof ExportNowFile>;
+
 /** One export by id (only its starter sees it). */
 export const ExportIdInput = WorkspaceScoped.extend({ exportId: Uuid });
 /** One export by id. */
@@ -649,6 +659,8 @@ export const submissionsContract = {
   addToCrm: oc.input(AddToCrmInput).output(AddToCrmResult),
   /** Export as CSV: starts a `forms.export` job; download from `downloadPath` once it succeeded. */
   export: oc.input(ExportSubmissionsInput).output(ExportView),
+  /** At most 1,000 submissions as CSV in the answer itself (forms fixes 2); more is `JOB_TOO_LARGE`, then `export`. */
+  exportNow: oc.input(ExportNowInput).output(ExportNowFile),
   /** One export the caller started. */
   getExport: oc.input(ExportIdInput).output(ExportView),
   retry: oc.input(SubmissionWriteInput).output(SubmissionView),

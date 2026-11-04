@@ -248,7 +248,7 @@ export async function startSubmissionsExport(
       const counted = await tx.execute<{ n: number }>(sql`
         select count(*)::int as n from (
           select 1 from ${formSubmissions}
-          where ${and(eq(formSubmissions.formId, form.id), selectionTest(input.select))}
+          where ${and(eq(formSubmissions.formId, form.id), isNull(formSubmissions.deletedAt), selectionTest(input.select))}
           limit ${EXPORT_ROWS_MAX + 1}
         ) as matched`);
       if ((counted.rows[0]?.n ?? 0) > EXPORT_ROWS_MAX) throw refuse('JOB_TOO_LARGE', EXPORT_TOO_LARGE);
@@ -368,10 +368,12 @@ async function columnsOf(tx: WorkspaceTx, scope: EngineScope, formId: string): P
     for (const question of document?.questions ?? []) {
       if (seen.has(question.key) || hidden.has(question.key)) continue;
       const attributeId = question.filedOn?.attributeId;
+      // An answer saved on the deal (forms fixes 2) is checked against the deal's object.
+      const on = question.filedOn?.objectRole === 'deal' ? document?.targets.deal?.objectId : objectId;
       if (
         attributeId !== undefined &&
-        objectId !== undefined &&
-        fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden'
+        on !== undefined &&
+        fieldLevel(scope.access, { id: attributeId, objectId: on }) === 'hidden'
       ) {
         hidden.add(question.key);
         continue;
@@ -410,6 +412,50 @@ function headerOf(columns: readonly z.infer<typeof Column>[]): string {
 }
 
 /** One batch of an export: the header first, then a page of rows, appended as chunks. */
+/** The CSV lines of rows the reader may see, one per submission, in the columns given (a job page, or a small export). */
+async function linesOf(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  form: { readonly liveVersionId: string | null },
+  columns: readonly z.infer<typeof Column>[],
+  shown: readonly Row[],
+): Promise<string[]> {
+  const files = await formFiles(tx, form);
+  const names = await displays(
+    tx,
+    scope,
+    shown.flatMap((row) => (row.mainRecordId === null ? [] : [row.mainRecordId])),
+  );
+  const versions = await loadVersions(tx, [...new Set(shown.map((row) => row.versionId))]);
+  const lines = shown.map((row) => {
+    const version = versions.get(row.versionId);
+    const answers = new Map(
+      (version === undefined ? [] : answersOf(scope, version.document, row.answers)).map((answer) => [
+        answer.key,
+        answer.value,
+      ]),
+    );
+    const main = row.mainRecordId === null ? undefined : names.get(row.mainRecordId);
+    const crm = crmOf(row.state, main, files);
+    const hidden = typeof row.hidden === 'object' && row.hidden !== null ? (row.hidden as Record<string, unknown>) : {};
+    return csvLine([
+      row.receivedMicros,
+      row.id,
+      STATE_LABEL[row.state] ?? row.state,
+      ...columns.map((column) => cellOf(answers.get(column.key))),
+      crm.state === 'linked' ? 'Yes' : crm.state === 'filing' ? 'Filing' : 'No',
+      crm.state === 'linked' ? crm.record.name : undefined,
+      crm.state === 'linked' ? crm.record.recordId : undefined,
+      ...HIDDEN_COLUMNS.map(([, key]) => {
+        const value = hidden[key];
+        return typeof value === 'string' ? value : undefined;
+      }),
+    ]);
+  });
+
+  return lines;
+}
+
 async function exportStep(context: WriteContext, exportId: string, checkpoint: unknown): Promise<StepOutcome> {
   const { tx, scope } = context;
   const [held] = await tx
@@ -467,38 +513,7 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     .orderBy(desc(formSubmissions.receivedAt), desc(formSubmissions.id))
     .limit(PAGE);
   const shown = await visibleRows(tx, scope, rows);
-  const files = await formFiles(tx, form);
-  const names = await displays(
-    tx,
-    scope,
-    shown.flatMap((row) => (row.mainRecordId === null ? [] : [row.mainRecordId])),
-  );
-  const versions = await loadVersions(tx, [...new Set(shown.map((row) => row.versionId))]);
-  const lines = shown.map((row) => {
-    const version = versions.get(row.versionId);
-    const answers = new Map(
-      (version === undefined ? [] : answersOf(scope, version.document, row.answers)).map((answer) => [
-        answer.key,
-        answer.value,
-      ]),
-    );
-    const main = row.mainRecordId === null ? undefined : names.get(row.mainRecordId);
-    const crm = crmOf(row.state, main, files);
-    const hidden = typeof row.hidden === 'object' && row.hidden !== null ? (row.hidden as Record<string, unknown>) : {};
-    return csvLine([
-      row.receivedMicros,
-      row.id,
-      STATE_LABEL[row.state] ?? row.state,
-      ...at.columns.map((column) => cellOf(answers.get(column.key))),
-      crm.state === 'linked' ? 'Yes' : crm.state === 'filing' ? 'Filing' : 'No',
-      crm.state === 'linked' ? crm.record.name : undefined,
-      crm.state === 'linked' ? crm.record.recordId : undefined,
-      ...HIDDEN_COLUMNS.map(([, key]) => {
-        const value = hidden[key];
-        return typeof value === 'string' ? value : undefined;
-      }),
-    ]);
-  });
+  const lines = await linesOf(tx, scope, form, at.columns, shown);
 
   const text = lines.join('');
   // The start counted at most EXPORT_ROWS_MAX; a file that grew past it, or past EXPORT_BYTES_MAX, stops here and
@@ -550,3 +565,46 @@ export function formsExport(): KindDefinition<FormsExportParams> {
     step: (context, { job }) => exportStep(context, job.params.exportId, job.checkpoint),
   });
 }
+
+/** The most submissions an export downloads at once, with no job (forms fixes 2). More go through `forms.export`. */
+export const EXPORT_NOW_MAX = 1_000;
+
+/** A small export, written in the request: the file's name and its CSV. */
+export interface ExportNow {
+  readonly fileName: string;
+  readonly csv: string;
+}
+
+/**
+ * Exports at most `EXPORT_NOW_MAX` submissions in the request itself (forms fixes 2): the same columns, rows and
+ * access as `forms.export` (rows the reader can't see absent, an answer on a field hidden from them left out), so a
+ * small form downloads at once rather than waiting on a job. More than that is refused as `JOB_TOO_LARGE`, and the
+ * caller starts the job instead.
+ */
+export async function exportSubmissionsNow(
+  scope: EngineScope,
+  input: { readonly formId: string; readonly select: SubmissionSelection },
+): Promise<ExportNow> {
+  memberIdOf(scope);
+  return inWorkspace(scope, async (tx) => {
+    const form = await readableForm(tx, scope, input.formId);
+    const rows: Row[] = await tx
+      .select(COLUMNS)
+      .from(formSubmissions)
+      .where(and(eq(formSubmissions.formId, form.id), isNull(formSubmissions.deletedAt), selectionTest(input.select)))
+      .orderBy(desc(formSubmissions.receivedAt), desc(formSubmissions.id))
+      .limit(EXPORT_NOW_MAX + 1);
+    if (rows.length > EXPORT_NOW_MAX) throw refuse('JOB_TOO_LARGE', EXPORT_NOW_TOO_LARGE);
+    const columns = await columnsOf(tx, scope, form.id);
+    const shown = await visibleRows(tx, scope, rows);
+    const lines = await linesOf(tx, scope, form, columns, shown);
+    const day = await tx.execute<{ day: string }>(sql`select to_char(now() at time zone 'UTC', 'YYYY-MM-DD') as day`);
+    return {
+      fileName: fileNameFor(form.name, day.rows[0]?.day ?? 'today'),
+      csv: CSV_BOM + headerOf(columns) + lines.join(''),
+    };
+  });
+}
+
+/** Why an export is too large to download at once: the caller exports it as a job. */
+export const EXPORT_NOW_TOO_LARGE = `More than ${EXPORT_NOW_MAX.toLocaleString('en')} submissions export in the background.`;
