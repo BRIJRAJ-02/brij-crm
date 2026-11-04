@@ -1,18 +1,17 @@
 // The guest menu (spec 0065, H1, AC-6528 to AC-6533): a place's published menus as a guest reads them on a phone. The
-// layout and flow follow the checklabs guest app (owner, 4 Nov 2026), rebuilt from library parts: a glass brand bar
-// stuck to the top with the logo (or the name's initial) and the section pills that follow the scroll; the header
-// (cover photo, the place as an eyebrow, the business, its line, open now); the menus, search and dietary filters;
-// each section's dishes as rows (words, then the photo with a + at its corner) or a two column photo grid; a dish's
-// sheet (a bottom sheet on a phone, a centred card on a wider screen); and Your picks behind a bar that rises once
-// there is a pick. Everything comes in through props: the page's entry reads the menu and keeps the picks.
+// layout, flow and words follow the checklabs guest app faithfully (owner, 4 and 5 Nov 2026), rebuilt from library
+// parts: a glass brand bar stuck to the top with the logo (or the name's initial); the brand block (the place as an
+// eyebrow with the table, the menu's name, its line); the menus when the link holds several; the sections as pills,
+// one at a time; each section's dishes as rows (words, the price under them, then the photo with a + at its corner)
+// or a two column photo grid; the allergens this menu names; a dish's sheet (a bottom sheet on a phone, a centred
+// card on a wider screen); and Your selection behind a bar that rises once something is picked. Everything comes in
+// through props: the page's entry reads the menu and keeps the selection.
 import {
-  DIET_FILTERS,
   EU_ALLERGENS,
   formatPrice,
   nextOpening,
   openAt,
   servingAt,
-  type DietMark,
 } from '@crm/contracts/menu';
 import type { PublicMenu, SnapshotItem, SnapshotSection, SnapshotSubsection } from '@crm/contracts';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
@@ -21,11 +20,9 @@ import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
 import { Reveal } from '../../atoms/Reveal/Reveal.tsx';
-import { ChoiceChips } from '../../molecules/ChoiceChips/ChoiceChips.tsx';
-import { Field } from '../../molecules/Field/Field.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
-import { SectionTabs } from '../../molecules/SectionTabs/SectionTabs.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
+import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import {
   ItemSheet,
   PicksSheet,
@@ -43,8 +40,6 @@ export type { GuestPick, MenuPhotoHref } from '../ItemSheet/ItemSheet.tsx';
 export interface MenuListProps {
   /** The published menu, as `GET /api/public/menu/:key` answers it. */
   readonly menu: PublicMenu;
-  /** A wide photo at the head of the menu (the business's cover), when there is one. */
-  readonly coverHref?: string;
   /** The business's logo, when it has one; without it the bar shows the name's first letter. */
   readonly logoHref?: string;
   /** Where each photo is served; without it no photo draws. */
@@ -71,12 +66,6 @@ export interface MenuListProps {
    */
   readonly at?: number;
 }
-
-const lower = (text: string) =>
-  text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase();
 
 /** The item's price line: its own price, its smallest size's "from", or its price note. */
 function priceLine(item: SnapshotItem, currency: string, locale: string): string | undefined {
@@ -108,7 +97,6 @@ const placeOf = (index: number) => Math.min(6, Math.max(1, index)) as 1 | 2 | 3 
 export function MenuList({
   menu,
   logoHref,
-  coverHref,
   photoHref,
   table,
   picks,
@@ -156,16 +144,6 @@ export function MenuList({
   const [menuId, setMenuId] = useState<string | undefined>(menus[0]?.menu.id);
   const current = menus.find((each) => each.menu.id === menuId) ?? menus[0];
 
-  const [query, setQuery] = useState('');
-  const [diets, setDiets] = useState<ReadonlySet<DietMark>>(new Set());
-  const offered = useMemo(
-    () => DIET_FILTERS.filter((mark) => Object.values(menu.menu.items).some((item) => item.diet.includes(mark))),
-    [menu.menu.items],
-  );
-  const matches = (item: SnapshotItem) =>
-    [...diets].every((mark) => item.diet.includes(mark)) &&
-    (query.trim() === '' || lower(`${item.name} ${item.description ?? ''}`).includes(lower(query.trim())));
-  const isFiltering = query.trim() !== '' || diets.size > 0;
 
   // The dish whose sheet is open, kept while the sheet leaves so its words stay as it goes.
   const [opened, setOpened] = useState<{ readonly id: string; readonly isOpen: boolean } | undefined>(
@@ -180,17 +158,10 @@ export function MenuList({
   const address = [place.addressLine, place.city, place.postcode].filter((part) => part !== undefined).join(', ');
 
   const sections = current?.menu.sections ?? [];
-  const shownSections = sections.filter(
-    (section) =>
-      sectionItems(section).some((id) => {
-        const item = menu.menu.items[id];
-        return item !== undefined && matches(item);
-      }) ||
-      (!isFiltering && sectionItems(section).length === 0),
-  );
-  const active = useScrollSpy(shownSections.map((section) => section.id));
+  // One section at a time, chosen from the pills (checklabs' categories); a menu changed under it starts at its first.
+  const [sectionId, setSectionId] = useState<string | undefined>(undefined);
+  const shownSection = sections.find((section) => section.id === sectionId) ?? sections[0];
   const headingId = useId();
-  const isNameShown = useScrolledPast(headingId);
   // The allergens this menu's dishes name, in the EU list's order (ported from checklabs' allergen footer).
   const menuAllergens = EU_ALLERGENS.filter((code) =>
     sections.some((section) =>
@@ -242,11 +213,66 @@ export function MenuList({
     );
   let drawn = 2;
 
+  /** One section's dishes: its own first (the pill names it), then each sub section under its heading. */
+  const sectionBody = (section: SnapshotSection) => {
+    const blocks = [
+      section as SnapshotSubsection,
+      ...section.sections.filter((sub) => sub.itemIds.some((id) => menu.menu.items[id] !== undefined)),
+    ];
+    return (
+      <section className={styles.section} aria-label={section.name}>
+        {blocks.map((block, index) => (
+          <div key={block.id} className={index === 0 ? styles.block : styles.sub}>
+            <SectionHead section={block} level={index === 0 ? 2 : 3} menu={menu} now={now} when={when} />
+            <ul className={styles.items} data-layout={block.layout}>
+              {block.itemIds
+                .map((id) => menu.menu.items[id])
+                .filter((item): item is SnapshotItem => item !== undefined)
+                .map((item) => {
+                  drawn += 1;
+                  const isOut = soldOut.has(item.id);
+                  const canAdd =
+                    onPicksChange !== undefined && !isOut && (item.priceMinor !== undefined || item.sizes.length > 0);
+                  return (
+                    <li key={item.id} className={styles.cell}>
+                      {entering(
+                        <ItemCard
+                          item={item}
+                          layout={block.layout}
+                          price={priceLine(item, currency, locale)}
+                          isSoldOut={isOut}
+                          photoHref={photoHref}
+                          onOpen={() => open(item.id)}
+                          add={
+                            canAdd ? (
+                              <AddControl
+                                item={item}
+                                count={isQuickAdd(item) ? plainCount(item.id) : 0}
+                                onAdd={() =>
+                                  isQuickAdd(item) ? addPick({ ...plainPick(item.id), quantity: 1 }) : open(item.id)
+                                }
+                                onRemove={() => removeOne(item.id)}
+                              />
+                            ) : undefined
+                          }
+                        />,
+                        drawn,
+                      )}
+                    </li>
+                  );
+                })}
+            </ul>
+          </div>
+        ))}
+      </section>
+    );
+  };
+
   return (
     <div className={styles.root} data-menu-list="">
       <div className={styles.look} ref={setHost}>
         <UNSAFE_PortalProvider getContainer={() => host}>
-          {/* The glass bar: the brand, the name once the heading has gone, the table, and the section pills. */}
+          {/* The glass bar: the brand, and nothing else (checklabs'). */}
           <div className={styles.bar} data-sticky="">
             <div className={styles.barTop}>
               {logoHref === undefined ? (
@@ -256,112 +282,65 @@ export function MenuList({
               ) : (
                 <img className={styles.logo} src={logoHref} alt={strings.decorative} width={64} height={64} />
               )}
-              <p className={styles.barName} data-shown={isNameShown ? '' : undefined} aria-hidden={!isNameShown}>
-                {business.name}
-              </p>
-              {table === undefined ? null : <span className={styles.table}>{table}</span>}
             </div>
-            {shownSections.length < 2 ? null : (
-              <div className={styles.barTabs}>
-                <SectionTabs
-                  label={strings.sections}
-                  sections={shownSections.map((section) => ({
-                    id: section.id,
-                    label: section.name,
-                    href: `#s-${section.id}`,
-                  }))}
-                  current={active}
-                />
-              </div>
-            )}
           </div>
 
           <header className={styles.head}>
-            {coverHref === undefined ? null : (
-              <img className={styles.cover} src={coverHref} alt={strings.decorative} width={1200} height={400} />
-            )}
             <div className={styles.titles}>
-              {place.name === business.name ? null : (
-                <p className={styles.eyebrow}>{entering(place.name, 1, 'inline')}</p>
-              )}
+              <p className={styles.eyebrow}>
+                {entering(place.name, 1, 'inline')}
+                {table === undefined ? null : <span className={styles.table}>{table}</span>}
+              </p>
               <h1 className={styles.name} id={headingId}>
-                {entering(business.name, 1, 'inline')}
+                {entering(isUnavailable || current === undefined ? business.name : current.menu.name, 1, 'inline')}
               </h1>
               {business.description === undefined ? null : (
                 <p className={styles.about}>{entering(business.description, 2, 'inline')}</p>
               )}
             </div>
-            <p className={styles.facts}>
-              <span className={styles.openNow} data-open={status.open ? 'yes' : 'no'}>
-                <span className={styles.dot} aria-hidden="true" />
-                {status.open
-                  ? status.closesAt === undefined
-                    ? strings.openNow
-                    : strings.openUntil(time.format(status.closesAt))
-                  : next === undefined
-                    ? strings.closed
-                    : strings.opensAt(when(next.at))}
-              </span>
-              {address === '' ? null : (
-                <span className={styles.line}>
-                  <Icon name="map-pin" size="sm" />
-                  {address}
+            {/* A hidden menu keeps the ways to reach the place: its address, and Call. */}
+            {isUnavailable ? (
+              <p className={styles.facts}>
+                <span className={styles.openNow} data-open={status.open ? 'yes' : 'no'}>
+                  <span className={styles.dot} aria-hidden="true" />
+                  {status.open
+                    ? status.closesAt === undefined
+                      ? strings.openNow
+                      : strings.openUntil(time.format(status.closesAt))
+                    : next === undefined
+                      ? strings.closed
+                      : strings.opensAt(when(next.at))}
                 </span>
-              )}
-              {place.phone === undefined ? null : (
-                <a
-                  className={styles.line}
-                  href={`tel:${place.phone.replace(/[^0-9+]/g, '')}`}
-                  aria-label={strings.call(place.phone)}
-                >
-                  <Icon name="phone" size="sm" />
-                  {place.phone}
-                </a>
-              )}
-            </p>
-            {isUnavailable ? null : menus.length > 1 ? (
+                {address === '' ? null : (
+                  <span className={styles.line}>
+                    <Icon name="map-pin" size="sm" />
+                    {address}
+                  </span>
+                )}
+                {place.phone === undefined ? null : (
+                  <a
+                    className={styles.line}
+                    href={`tel:${place.phone.replace(/[^0-9+]/g, '')}`}
+                    aria-label={strings.call(place.phone)}
+                  >
+                    <Icon name="phone" size="sm" />
+                    {place.phone}
+                  </a>
+                )}
+              </p>
+            ) : null}
+            {!isUnavailable && menus.length > 1 ? (
               <SegmentedControl
                 label={strings.menus}
                 segments={menus.map(({ menu: each }) => ({ value: each.id, label: each.name }))}
                 value={current?.menu.id ?? ''}
-                onChange={setMenuId}
+                onChange={(id) => {
+                  setMenuId(id);
+                  setSectionId(undefined);
+                }}
                 isFitted
               />
             ) : null}
-            {isUnavailable ? null : (
-              <Field
-                variant="search"
-                type="search"
-                label={strings.search}
-                isLabelHidden
-                placeholder={strings.searchPlaceholder}
-                value={query}
-                maxLength={60}
-                onChange={setQuery}
-                {...(query === ''
-                  ? {}
-                  : {
-                      suffix: (
-                        <Button
-                          variant="ghost"
-                          icon="x"
-                          isRound
-                          label={strings.clearSearch}
-                          onPress={() => setQuery('')}
-                        />
-                      ),
-                    })}
-              />
-            )}
-            {isUnavailable || offered.length === 0 ? null : (
-              <ChoiceChips
-                label={strings.filters}
-                isLabelHidden
-                choices={offered.map((mark) => ({ id: mark, label: strings.diet[mark] }))}
-                selected={[...diets]}
-                onChange={(picked) => setDiets(new Set(offered.filter((mark) => picked.includes(mark))))}
-              />
-            )}
           </header>
 
           <main className={styles.body} aria-labelledby={headingId}>
@@ -391,93 +370,34 @@ export function MenuList({
                   : strings.servingFrom(when(current.serving.next))}
               </p>
             ) : null}
-            {isUnavailable ? null : shownSections.length === 0 ? (
+            {isUnavailable ? null : sections.length === 0 ? (
               <div className={styles.empty}>
-                <p>{isFiltering ? strings.noMatches : strings.noMenu}</p>
-                {isFiltering ? (
-                  <Button
-                    onPress={() => {
-                      setQuery('');
-                      setDiets(new Set());
-                    }}
-                  >
-                    {strings.showAll}
-                  </Button>
-                ) : null}
+                <p>{strings.noMenu}</p>
               </div>
+            ) : sections.length === 1 || shownSection === undefined ? (
+              sections.map((section) => <div key={section.id}>{sectionBody(section)}</div>)
             ) : (
-              shownSections.map((section) => {
-                const blocks = [
-                  section as SnapshotSubsection,
-                  ...section.sections.filter((sub) =>
-                    sub.itemIds.some((id) => {
-                      const item = menu.menu.items[id];
-                      return item !== undefined && matches(item);
-                    }),
-                  ),
-                ];
-                return (
-                  <section
-                    key={section.id}
-                    id={`s-${section.id}`}
-                    className={styles.section}
-                    aria-labelledby={`h-${section.id}`}
-                  >
-                    {blocks.map((block, index) => (
-                      <div key={block.id} className={index === 0 ? styles.block : styles.sub}>
-                        <SectionHead section={block} level={index === 0 ? 2 : 3} menu={menu} now={now} when={when} />
-                        <ul className={styles.items} data-layout={block.layout}>
-                          {block.itemIds
-                            .map((id) => menu.menu.items[id])
-                            .filter((item): item is SnapshotItem => item !== undefined && matches(item))
-                            .map((item) => {
-                              drawn += 1;
-                              const isOut = soldOut.has(item.id);
-                              const canAdd =
-                                onPicksChange !== undefined &&
-                                !isOut &&
-                                (item.priceMinor !== undefined || item.sizes.length > 0);
-                              return (
-                                <li key={item.id} className={styles.cell}>
-                                  {entering(
-                                    <ItemCard
-                                      item={item}
-                                      layout={block.layout}
-                                      price={priceLine(item, currency, locale)}
-                                      isSoldOut={isOut}
-                                      photoHref={photoHref}
-                                      onOpen={() => open(item.id)}
-                                      add={
-                                        canAdd ? (
-                                          <AddControl
-                                            item={item}
-                                            count={isQuickAdd(item) ? plainCount(item.id) : 0}
-                                            onAdd={() =>
-                                              isQuickAdd(item)
-                                                ? addPick({ ...plainPick(item.id), quantity: 1 })
-                                                : open(item.id)
-                                            }
-                                            onRemove={() => removeOne(item.id)}
-                                          />
-                                        ) : undefined
-                                      }
-                                    />,
-                                    drawn,
-                                  )}
-                                </li>
-                              );
-                            })}
-                        </ul>
-                      </div>
-                    ))}
-                  </section>
-                );
-              })
+              <Tabs
+                label={strings.sections}
+                variant="pills"
+                tabs={sections.map((section) => ({ id: section.id, label: section.name }))}
+                selectedKey={shownSection.id}
+                onSelectionChange={setSectionId}
+              >
+                {sections.map((section) => (
+                  <TabPanel key={section.id} id={section.id}>
+                    {sectionBody(section)}
+                  </TabPanel>
+                ))}
+              </Tabs>
             )}
-            {current?.menu.note === undefined ? null : <p className={styles.note}>{current.menu.note}</p>}
-            {menuAllergens.length === 0 ? null : (
-              <p className={styles.note}>
-                {strings.allergenFooter(menuAllergens.map((code) => strings.allergen[code]))}
+            {isUnavailable || current?.menu.note === undefined ? null : (
+              <p className={styles.note}>{current.menu.note}</p>
+            )}
+            {isUnavailable || menuAllergens.length === 0 ? null : (
+              <p className={styles.allergenFoot}>
+                <span className={styles.allergenLabel}>{strings.allergens}</span>
+                {menuAllergens.map((code) => strings.allergen[code]).join(', ')}
               </p>
             )}
           </main>
@@ -487,9 +407,6 @@ export function MenuList({
           {onPicksChange === undefined || pickCount === 0 ? null : (
             <div className={styles.picksDock}>
               <button type="button" className={styles.picksBar} onClick={() => setPicksOpen(true)}>
-                <span className={styles.picksCount}>
-                  <NumberPop value={String(pickCount)} />
-                </span>
                 <span className={styles.picksLabel}>{strings.viewPicks}</span>
                 <span className={styles.picksTotal}>
                   <NumberPop value={formatPrice(bill.total, currency, locale)} />
@@ -534,46 +451,6 @@ export function MenuList({
       </div>
     </div>
   );
-}
-
-/** Whether the element with `id` has scrolled up out of the view (the bar then shows the venue's name). */
-function useScrolledPast(id: string): boolean {
-  const [isPast, setPast] = useState(false);
-  useEffect(() => {
-    const element = document.getElementById(id);
-    if (element === null || typeof IntersectionObserver === 'undefined') return undefined;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry !== undefined) setPast(!entry.isIntersecting && entry.boundingClientRect.top < 0);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [id]);
-  return isPast;
-}
-
-/** Which section is under the sticky bar now: the first one in the band under the bar (the pills follow it). */
-function useScrollSpy(ids: readonly string[]): string | undefined {
-  const [active, setActive] = useState<string | undefined>(ids[0]);
-  const key = ids.join(',');
-  useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined') return undefined;
-    const seen = new Map<string, boolean>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) seen.set(entry.target.id.slice(2), entry.isIntersecting);
-        const first = ids.find((id) => seen.get(id) === true);
-        if (first !== undefined) setActive(first);
-      },
-      { rootMargin: '-35% 0px -60% 0px' },
-    );
-    for (const id of ids) {
-      const element = document.getElementById(`s-${id}`);
-      if (element !== null) observer.observe(element);
-    }
-    return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for `ids`, a new array every render
-  }, [key]);
-  return ids.includes(active ?? '') ? active : ids[0];
 }
 
 /** A section's or sub section's heading, its line and when it serves. */

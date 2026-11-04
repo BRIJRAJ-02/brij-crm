@@ -291,6 +291,47 @@
     }
   }
 
+  /* A guest page's categories (the guest menu, after checklabs): outlined pills, size-bar tall less a little, in a
+     row that scrolls sideways; the chosen one filled in the text colour, the fill (the indicator) sliding between
+     them under the words. No hairline under the row. */
+  .bar[data-variant='pills'] {
+    border-block-end: none;
+  }
+
+  .bar[data-variant='pills'] .list {
+    align-items: center;
+    gap: var(--space-8);
+    padding-block: var(--space-2);
+    padding-inline: 0;
+  }
+
+  .bar[data-variant='pills'] .tab {
+    block-size: calc(var(--size-bar) - var(--space-8));
+    padding-inline: var(--space-16);
+    border: var(--border-width-hairline) solid var(--text);
+    border-radius: var(--radius-full);
+    color: var(--text);
+  }
+
+  .bar[data-variant='pills'] .tab[data-selected] {
+    color: var(--surface-raised);
+  }
+
+  .bar[data-variant='pills'] .tab[data-focus-visible] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .bar[data-variant='pills'] .label {
+    position: relative;
+    z-index: var(--z-raised);
+  }
+
+  .bar[data-variant='pills'] .indicator {
+    inset: calc(-1 * var(--border-width-hairline));
+    block-size: auto;
+    border-radius: var(--radius-full);
+  }
+
   /* In a slot with a height (the record panel), the chosen panel fills what the tabs leave. */
   .panel {
     flex: 1;

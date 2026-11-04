@@ -189,7 +189,7 @@ export function Tabs({
               ) : (
                 <>
                   {tab.icon !== undefined && <Icon name={tab.icon} size="sm" />}
-                  <span>{tab.label}</span>
+                  <span className={styles.label}>{tab.label}</span>
                 </>
               )}
               {tab.count !== undefined && (
