@@ -33,3 +33,5 @@ Not in the artifact.
 ## Bookings fix pass (5 November 2026)
 
 The strip fades out at its far edge, so days running past the card read as more to scroll rather than the last day (critic A4).
+
+The booking page loads it with the details step (`@crm/ui/public-booking/details`), beside the first paint rather than in it (5 November 2026): most pages open on Month, and its styles were 0.9 kB of the page's first load CSS budget. The guest page's Move still takes it from the main entry.

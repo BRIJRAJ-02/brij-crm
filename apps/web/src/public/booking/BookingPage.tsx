@@ -24,6 +24,7 @@ import type {
   BookingDetails as DetailsStep,
   BookingDetailsOutcome,
   BookingDetailsValues,
+  DayStrip as DayStripType,
 } from '@crm/ui/public-booking/details';
 import {
   BookingChatGhost,
@@ -32,7 +33,6 @@ import {
   Button,
   Callout,
   claimPageHref,
-  DayStrip,
   DeferredSelect,
   MonthTiles,
   SegmentedControl,
@@ -41,7 +41,17 @@ import {
   type DeferredSelectItem,
   type SelectItem,
 } from '@crm/ui/public-booking';
-import { createElement, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createElement,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from 'react';
 import { railBrand, railHost, railTitle } from './host.ts';
 import { brandHref, preloadImage, wearStylesheet } from '../stylesheet.ts';
 import type { ChatMemory } from './ChatPanel.tsx';
@@ -87,6 +97,9 @@ const VisitorBar = lazy(() => visitorModule.then((module) => ({ default: module.
 // Book by chat (spec 0042) loads only when Chat is first chosen.
 const ChatPanel = lazy(() => import('./ChatPanel.tsx').then((module) => ({ default: module.ChatPanel })));
 const BookingDetails = lazy(() => detailsModule.then((module) => ({ default: module.BookingDetails })));
+// The List view's days ride with the details step's code (the first load's CSS budget, 5 Nov 2026): most pages open
+// on Month, and the chunk is in long before a visitor switches.
+const LazyDayStrip = lazy(() => detailsModule.then((module) => ({ default: module.DayStrip })));
 // The receipt the card turns into once booked (critic C1): the guest page's own module, fetched as Confirm is pressed.
 const loadManage = () => import('./ManagePage.tsx');
 const ManagePage = lazy(() => loadManage().then((module) => ({ default: module.ManagePage })));
@@ -122,13 +135,15 @@ function useMinute(now: () => number): number {
  * so it slides in with the step rather than after a Suspense fallback's hold. Until then (or if it failed) the page
  * draws it through the lazy path, as before.
  */
-function useLoadedDetails(): typeof DetailsStep | undefined {
-  const [loaded, setLoaded] = useState<{ readonly step: typeof DetailsStep } | undefined>(undefined);
+function useLoadedDetails(): { readonly step: typeof DetailsStep; readonly days: typeof DayStripType } | undefined {
+  const [loaded, setLoaded] = useState<
+    { readonly step: typeof DetailsStep; readonly days: typeof DayStripType } | undefined
+  >(undefined);
   useEffect(() => {
     let isCurrent = true;
     detailsModule.then(
       (module) => {
-        if (isCurrent) setLoaded({ step: module.BookingDetails });
+        if (isCurrent) setLoaded({ step: module.BookingDetails, days: module.DayStrip });
       },
       () => undefined,
     );
@@ -136,7 +151,19 @@ function useLoadedDetails(): typeof DetailsStep | undefined {
       isCurrent = false;
     };
   }, []);
-  return loaded?.step;
+  return loaded;
+}
+
+/** The List view's days: drawn at once once their code is in (nearly always), else through the lazy path. */
+function DayStrip(props: ComponentProps<typeof DayStripType>) {
+  const loaded = useLoadedDetails();
+  return loaded === undefined ? (
+    <Suspense fallback={null}>
+      <LazyDayStrip {...props} />
+    </Suspense>
+  ) : (
+    createElement(loaded.days, props)
+  );
 }
 
 /** Props for the page: its key, the visitor's language and zone, the clock, a prefill, and where success goes. */
@@ -780,7 +807,7 @@ function Booking({
   );
   const [month, setMonth] = useState(monthOf(pickedDay ?? today));
   const [pickedTime, setTime] = useState<string | undefined>(undefined);
-  const LoadedDetails = useLoadedDetails();
+  const LoadedDetails = useLoadedDetails()?.step;
   const [step, setStep] = useState<{
     readonly step: 'pick' | 'details';
     readonly attempt: string;

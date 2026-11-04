@@ -5,3 +5,5 @@ export {
   type BookingDetailsOutcome,
   type BookingDetailsValues,
 } from '../modules/BookingDetails/BookingDetails.tsx';
+/** The List view's days (5 Nov 2026): loaded beside the first paint with the details step, out of its CSS budget. */
+export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
