@@ -5,6 +5,7 @@ export const strings = {
   choices: (count: number) => (count === 1 ? '1 choice' : `${String(count)} choices`),
   noChoices: 'No choices yet',
   move: (name: string) => `Move ${name}`,
+  close: (name: string) => `Close ${name}`,
   moved: (name: string, position: number, total: number) =>
     `${name}, moved to position ${String(position)} of ${String(total)}`,
   hasProblem: 'Needs a fix',

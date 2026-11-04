@@ -102,6 +102,55 @@ export interface OptionsEditorProps {
    * one is refused, so a create never goes without an option the person typed.
    */
   readonly onInvalidChange?: (isInvalid: boolean) => void;
+  /**
+   * Choices only: a whole number beside each choice (a form question's points, spec 0063, AC-6316), between its
+   * words and its remove button, so each number sits by the choice it scores. `of` reads a row's number by its id,
+   * `onChange` writes one (undefined when the box is emptied), and `label` names each box ("Points for Under $1k").
+   */
+  readonly scores?: {
+    readonly of: (id: string) => number | undefined;
+    readonly label: (name: string) => string;
+    readonly onChange: (id: string, points: number | undefined) => void;
+  };
+}
+
+/**
+ * A choice's number (`scores`): the typed text is held while it is on its way to a whole number, so "-5" survives
+ * its first keystroke and an emptied box stays empty instead of snapping back to 0.
+ */
+function ScoreField({
+  label,
+  value,
+  isReadOnly,
+  onChange,
+}: {
+  readonly label: string;
+  readonly value: number | undefined;
+  readonly isReadOnly: boolean;
+  readonly onChange: (points: number | undefined) => void;
+}) {
+  const [typed, setTyped] = useState<string | undefined>(undefined);
+  const settled = value === undefined ? '' : String(value);
+  const text = typed !== undefined && (typed.trim() === '' || Number(typed) !== value) ? typed : settled;
+  return (
+    <Field
+      label={label}
+      isLabelHidden
+      size="sm"
+      inputMode="numeric"
+      autoComplete="off"
+      align="end"
+      suffix={strings.pointsUnit}
+      value={text}
+      isReadOnly={isReadOnly}
+      onChange={(next) => {
+        setTyped(next);
+        const trimmed = next.trim();
+        if (trimmed === '') onChange(undefined);
+        else if (Number.isInteger(Number(trimmed))) onChange(Number(trimmed));
+      }}
+    />
+  );
 }
 
 /** A row menu key that archives and moves the option's records to the option after it. */
@@ -163,6 +212,7 @@ export function OptionsEditor({
   labelMaxLength = 100,
   hint,
   onInvalidChange,
+  scores,
 }: OptionsEditorProps) {
   const isStatus = kind === 'status';
   const isChoice = kind === 'choice';
@@ -510,6 +560,18 @@ export function OptionsEditor({
                         </span>
                       </>
                     ))}
+                  {isChoice && scores !== undefined && (
+                    <span className={styles.score}>
+                      <ScoreField
+                        label={scores.label(name === '' ? placeName(index) : name)}
+                        value={scores.of(option.id)}
+                        isReadOnly={isReadOnly}
+                        onChange={(points) => {
+                          scores.onChange(option.id, points);
+                        }}
+                      />
+                    </span>
+                  )}
                   {held > 0 && <span className={styles.meta}>{strings.recordCount(held)}</span>}
                   {/* Choices are saved with their form, so no row waits on the server. */}
                   {!isReadOnly && !isChoice && (

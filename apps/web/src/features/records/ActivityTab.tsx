@@ -21,7 +21,7 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { strings as noteStrings } from '../notes/strings.ts';
 import { strings } from './strings.ts';
-import { linkedSource, type RecordLink, type TaskLink } from './timeline.ts';
+import { linkedSource, type RecordLink, type SubmissionLink, type TaskLink } from './timeline.ts';
 
 /** The feed's status, as the library draws it: a record that isn't available can't be read, so no Try again. */
 export function feedStatus(state: ActivityState): 'loading' | 'ready' | 'error' | 'no-access' {
@@ -36,6 +36,8 @@ export interface ActivityTabProps {
   readonly link: RecordLink;
   /** A task entry's dialog over the page (spec 0019). */
   readonly taskHref?: TaskLink;
+  /** A submission entry's Open submission (forms fix a1). */
+  readonly submissionHref?: SubmissionLink;
   /** The feed's name: "Activity" on its tab, "Recent activity" on Overview. */
   readonly label?: string;
   /** `feed` fills its slot and scrolls inside it (the Activity tab); `inline` draws a few in place (Overview). */
@@ -120,6 +122,7 @@ function Timeline({
   feed,
   link,
   taskHref,
+  submissionHref,
   label = strings.activity,
   layout = 'feed',
   onAddPerson,
@@ -130,8 +133,8 @@ function Timeline({
   // One linked copy per entry while the links stay the same, so an entry draws again only when it changes.
   const linking = useMemo(() => {
     const cache = new WeakMap<object, ActivityEntryShape>();
-    return (entries: EntrySource) => linkedSource(entries, link, cache, taskHref);
-  }, [link, taskHref]);
+    return (entries: EntrySource) => linkedSource(entries, link, cache, taskHref, submissionHref);
+  }, [link, taskHref, submissionHref]);
   const source = useMemo(() => linking(state.source), [linking, state.source]);
   // The feed hands back its own entry: the data layer's, which carries the meeting's id.
   const addPerson = useMemo(

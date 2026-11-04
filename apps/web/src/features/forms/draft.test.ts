@@ -3,6 +3,7 @@ import type { FormAttributeChoice, FormDocument } from '@crm/data';
 import {
   addQuestion,
   canDiscard,
+  uploadsOffFor,
   firstPublish,
   firstWords,
   changeQuestion,
@@ -467,5 +468,30 @@ describe('After they send keeps an unfinished rule or ending out of the save (T2
     };
     expect(savableDraft(typing, doc).endings).toEqual([{ id: 'ending_1', heading: 'Changed' }]);
     expect(draftGap(typing)).toBe('route');
+  });
+});
+
+describe('the uploads warning (forms fixes 2)', () => {
+  const file = {
+    id: 'cv',
+    key: 'cv',
+    label: 'Your CV',
+    answerType: 'file' as const,
+    required: false,
+    update: 'fill' as const,
+  };
+  const text = {
+    id: 'name',
+    key: 'name',
+    label: 'Name',
+    answerType: 'short_text' as const,
+    required: false,
+    update: 'fill' as const,
+  };
+
+  it('warns only when the form asks for a file and uploads are off here', () => {
+    expect(uploadsOffFor({ uploadsOff: true }, { questions: [text, file] })).toBe(true);
+    expect(uploadsOffFor({ uploadsOff: true }, { questions: [text] })).toBe(false);
+    expect(uploadsOffFor({}, { questions: [file] })).toBe(false);
   });
 });

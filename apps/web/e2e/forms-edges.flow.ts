@@ -67,9 +67,13 @@ test.describe('the form journey’s edges', () => {
     test.setTimeout(180_000);
     const { slug, form } = await withForm(page, 'required');
     await page.goto(`/w/${slug}/captures/forms/${form.id}`);
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    // The type first (T40), then the words in the card's head, then Required in its footer.
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
-    await page.getByText('Visitors must answer').last().click();
+    // A switch's input sits under its drawn track: focus it and press Space, as a keyboard does.
+    await page.getByRole('switch', { name: 'Required' }).last().focus();
+    await page.keyboard.press('Space');
     // A live form publishes its changes in one press, no dialog.
     await page
       .getByRole('button', { name: /^Publish/ })
@@ -90,21 +94,27 @@ test.describe('the form journey’s edges', () => {
     await visitor.context().close();
   });
 
-  test('changing which object a filed form saves to asks first, and moves it once confirmed', async ({ page }) => {
+  test('changing which object a filed form saves to asks first, moves it, and Undo puts the mapping back', async ({
+    page,
+  }) => {
     test.setTimeout(180_000);
     const { slug, form } = await withForm(page, 'retarget');
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=settings`);
     const target = page.getByRole('button', { name: /Save answers to$/ }).last();
     await expect(target).toContainText('People');
     await target.click();
-    await page.getByRole('option', { name: 'Deals', exact: true }).click();
-    const confirm = page.getByRole('alertdialog', { name: 'Change which object submissions are saved to?' });
+    // Deals is a switch under People (forms fix a3), so the move is to Companies.
+    await page.getByRole('option', { name: 'Companies', exact: true }).click();
+    const confirm = page.getByRole('dialog', { name: 'Save answers to Companies?' });
     await expect(confirm).toBeVisible();
-    await confirm.getByRole('button', { name: 'Change object' }).click();
+    await confirm.getByRole('button', { name: 'Save to Companies' }).click();
     await expect(confirm).toBeHidden();
-    await expect(target).toContainText('Deals');
+    await expect(target).toContainText('Companies');
     // Focus isn't dropped on the page: it lands on the editor's More actions.
     await expect(page.getByRole('button', { name: 'More actions' })).toBeFocused();
+    // Undo goes back to People with every question saved where it was (forms fix a2).
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(target).toContainText('People');
   });
 
   test('a send that trips the bot trap is kept as spam, and Not spam files it', async ({ page, browser }) => {
@@ -120,13 +130,17 @@ test.describe('the form journey’s edges', () => {
     await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
     await visitor.context().close();
 
+    // All leaves spam out (forms fix a8): the "1 spam" beside the filter opens it.
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=submissions`);
-    const row = page.getByRole('row').filter({ hasText: `bot-${form.id.slice(-6)}@example.com` });
+    const email = `bot-${form.id.slice(-6)}@example.com`;
+    await page.getByRole('button', { name: '1 spam' }).click({ timeout: 30_000 });
+    const row = page.getByRole('row').filter({ hasText: email });
     await expect(row).toContainText('Spam', { timeout: 30_000 });
     await row.getByRole('checkbox').check({ force: true });
     await page.getByRole('button', { name: 'Not spam' }).first().click();
-    await expect(page.getByText(/marked as not spam|Released\./).first()).toBeVisible();
-    await expect(row).not.toContainText('Spam', { timeout: 30_000 });
+    await expect(page.getByText(/marked as not spam/i).first()).toBeVisible();
+    await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=submissions`);
+    await expect(page.getByRole('row').filter({ hasText: email })).not.toContainText('Spam', { timeout: 30_000 });
   });
 
   test('a paused form tells its visitor it is closed, and takes sends again once resumed', async ({
@@ -185,9 +199,13 @@ test.describe('the form journey’s edges', () => {
 
     // Meanwhile the owner adds a required question and publishes.
     await page.goto(`/w/${slug}/captures/forms/${form.id}`);
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    // The type first (T40), then the words in the card's head, then Required in its footer.
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
-    await page.getByText('Visitors must answer').last().click();
+    // A switch's input sits under its drawn track: focus it and press Space, as a keyboard does.
+    await page.getByRole('switch', { name: 'Required' }).last().focus();
+    await page.keyboard.press('Space');
     await page
       .getByRole('button', { name: /^Publish/ })
       .first()
@@ -222,9 +240,10 @@ test.describe('the form journey’s edges', () => {
 
     await page.goto(`/w/${slug}/captures/forms`);
     await newForm(page);
-    // What comes after sending is set before the first publish, at the end of the Form tab (T20: After they send).
-    await page.getByRole('button', { name: /^Thank you page/ }).click();
-    await page.getByText('Booking page', { exact: true }).first().click();
+    // What comes after sending is set before the first publish, at the end of the Form tab, as one sentence (T39:
+    // "Everyone sees [A booking page] [Intro call] after [5 seconds]").
+    await page.getByRole('button', { name: /What everyone else sees$/ }).click();
+    await page.getByRole('option', { name: 'A booking page' }).click();
     await page
       .getByRole('button', { name: /Booking page$/ })
       .last()
@@ -234,7 +253,7 @@ test.describe('the form journey’s edges', () => {
 
     // The first publish is one click, with nothing asked.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: / is live$/ })).toBeVisible({ timeout: 30_000 });
     await page.keyboard.press('Escape');
     await page.getByRole('tab', { name: 'Settings' }).click();
     const key = await page.getByRole('textbox', { name: /^Link/ }).inputValue();

@@ -162,6 +162,7 @@ export function Sidebar(props: SidebarProps) {
   const foot = typeof footer === 'function' ? footer({ isCollapsed }) : footer;
   const bodyRef = useRef<HTMLDivElement>(null);
   useArrowKeys(bodyRef, keyboard === 'arrows');
+  useRowStops(bodyRef, keyboard === 'tab');
   const collapse =
     onCollapsedChange !== undefined && !isCollapsed ? (
       <TipWithKeys content={strings.collapse} placement="bottom" kbd={collapseKbd}>
@@ -232,7 +233,12 @@ export function Sidebar(props: SidebarProps) {
                     moveByArrow(event, bodyRef.current);
                   },
                 }
-              : {})}
+              : {
+                  // An item's grip and More are out of the tab order; Right and Left reach them (forms fixes 2).
+                  onKeyDown: (event: KeyboardEvent) => {
+                    moveInRow(event);
+                  },
+                })}
           >
             {children}
           </div>
@@ -355,6 +361,48 @@ function useArrowKeys(bodyRef: { readonly current: HTMLDivElement | null }, isOn
   });
 }
 
+/**
+ * An item's grip and More are never tab stops (forms fixes 2, the critique's ~40 stops): Tab goes item to item, one
+ * stop each, and from an item Right moves to its grip and More, Left back, Escape back to the item. They show while
+ * the item holds focus, as on hover. A pointer is unchanged. Runs after every render, so a row that arrives later
+ * joins in.
+ */
+function applyRowStops(body: HTMLElement | null) {
+  if (body === null) return;
+  for (const control of body.querySelectorAll<HTMLElement>('[data-row-stops] [data-row-actions] button')) {
+    control.tabIndex = -1;
+  }
+}
+
+/** Keeps `applyRowStops` after every render of the body. */
+function useRowStops(bodyRef: { readonly current: HTMLDivElement | null }, isOn: boolean) {
+  useLayoutEffect(() => {
+    if (isOn) applyRowStops(bodyRef.current);
+  });
+}
+
+/** Right and Left inside an item's row: from the item to its grip and More and back; Escape back to the item. */
+function moveInRow(event: KeyboardEvent) {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Escape') return;
+  const at = document.activeElement;
+  if (!(at instanceof HTMLElement)) return;
+  const row = at.closest<HTMLElement>('[data-row-stops]');
+  if (row === null) return;
+  const item = row.querySelector<HTMLElement>(':scope > a, :scope > button');
+  const controls = [...row.querySelectorAll<HTMLElement>('[data-row-actions] button')];
+  const stops = [...(item === null ? [] : [item]), ...controls];
+  const index = stops.indexOf(at);
+  if (index === -1) return;
+  // A grip that is lifted moves the item with the arrows: leave those keys to it.
+  if (at.closest('[data-lifted]') !== null) return;
+  const next =
+    event.key === 'Escape' ? (index === 0 ? undefined : item) : stops[index + (event.key === 'ArrowRight' ? 1 : -1)];
+  if (next === undefined || next === null) return;
+  event.preventDefault();
+  next.focus();
+}
+
 /** Up and Down (and Home and End) move focus between the body's items, and the one focused becomes the tab stop. */
 function moveByArrow(event: KeyboardEvent, body: HTMLElement | null) {
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -423,7 +471,12 @@ export function NavItem(props: NavItemProps) {
   const platform = useKeyboardPlatform();
   // The keycap is hidden from the name, so the shortcut is stated as aria-keyshortcuts ("Meta+,", "Control+," off a
   // Mac). React Aria's Link and Button don't pass the attribute through, so it goes on the element through `render`.
-  const shortcut = kbd === undefined ? undefined : keyShortcuts([kbd], platform);
+  // An item with a grip or More says Right reaches them (forms fixes 2: they are out of the tab order).
+  const reorders = useContext(ReorderContext);
+  const hasActions = !isCollapsed && (props.menu !== undefined || (reorders && props.id !== undefined));
+  const ownShortcut = kbd === undefined ? undefined : keyShortcuts([kbd], platform);
+  const shortcut =
+    hasActions && ownShortcut !== undefined ? `${ownShortcut} ArrowRight` : hasActions ? 'ArrowRight' : ownShortcut;
   const linkShortcut =
     shortcut === undefined
       ? {}
@@ -507,9 +560,9 @@ function ItemRow({
   if (reorders && id !== undefined) return <SortableItemRow id={id} name={name} item={item} menu={menu} />;
   if (menu === undefined) return item;
   return (
-    <div className={styles.row}>
+    <div className={styles.row} data-row-stops>
       {item}
-      <span className={styles.rowActions}>
+      <span className={styles.rowActions} data-row-actions>
         <ItemMenu name={name} menu={menu} />
       </span>
     </div>
@@ -540,9 +593,9 @@ function SortableItemRow({
 }) {
   const { bind, grip } = useSortableItem(id);
   return (
-    <div ref={bind} className={styles.row} data-reorder-id={id}>
+    <div ref={bind} className={styles.row} data-reorder-id={id} data-row-stops>
       {item}
-      <span className={styles.rowActions}>
+      <span className={styles.rowActions} data-row-actions>
         <DragHandle label={strings.moveItem(name)} drag={grip} />
         {menu !== undefined && <ItemMenu name={name} menu={menu} />}
       </span>

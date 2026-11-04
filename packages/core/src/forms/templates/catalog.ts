@@ -11,10 +11,12 @@
 // never had a field. An answer whose slug matches nothing is kept with the
 // submission instead (`kept`), and no field is made for it until publish.
 //
-// Every template asks for a name and an email filed on People, because a form
-// whose answers reach the CRM needs both: the email is how a submission finds
-// the record it belongs to, and a name is required on People, so a template
-// without them could never be published (`publishProblem`).
+// Every template whose answers reach the CRM asks for a name and an email filed
+// on People: the email is how a submission finds the record it belongs to, and
+// a name is required on People, so without them it could never be published
+// (`publishProblem`). Two are anonymous and keep their submissions only
+// (`keepsSubmissionsOnly`: Feedback and NPS ask nobody who they are), and
+// Blank starts empty, its first question the member's own.
 import type {
   AnswerType,
   FormLayout,
@@ -25,7 +27,7 @@ import type {
 } from '@crm/contracts';
 
 /** The templates' version, moved whenever a template's questions change, so a report can say which one made a form. */
-export const FORM_TEMPLATES_VERSION = 2;
+export const FORM_TEMPLATES_VERSION = 4;
 
 /** One question a template asks, before it knows a workspace's attribute ids. */
 export interface FormTemplateQuestion {
@@ -70,6 +72,8 @@ export interface FormTemplate {
   readonly preview: readonly FormTemplatePreviewRow[];
   readonly layout: FormLayout;
   readonly headline: string;
+  /** What the form's thank you page says (critique c: each template thanks for its own job, not one line for all). */
+  readonly thanks: string;
   readonly buttonText: string;
   readonly questions: readonly FormTemplateQuestion[];
   /**
@@ -77,6 +81,12 @@ export interface FormTemplate {
    * resolved when the draft is made; with none the maker can use, the form thanks the visitor instead.
    */
   readonly endsWithBooking?: true;
+  /**
+   * Keeps its submissions only (spec 0063, AC-6323; the owner, 5 November 2026): an anonymous form, Feedback or NPS,
+   * asks no name or email and adds nobody to the CRM, so the draft names no object and files nothing. Somebody who
+   * wants the answers on a person turns Save answers to back on in Settings.
+   */
+  readonly keepsSubmissionsOnly?: true;
 }
 
 /** Name and email, which every template starts with: the two answers a submission needs to become a person. */
@@ -100,6 +110,14 @@ const WHO: readonly FormTemplateQuestion[] = [
     filesOnto: 'email_addresses',
   },
 ];
+
+/**
+ * Name and a personal email, for a form a person fills in for themselves rather than for their work (critique c:
+ * an event, a job, a newsletter or feedback never asks for a work email).
+ */
+const PERSON: readonly FormTemplateQuestion[] = WHO.map((question) =>
+  question.answerType === 'email' ? { ...question, label: 'Email', placeholder: 'you@example.com' } : question,
+);
 
 const PHONE: FormTemplateQuestion = {
   id: 'phone',
@@ -137,8 +155,9 @@ const JOB_TITLE: FormTemplateQuestion = {
  * purpose-neutral field that anyone with People read sees and that exports, search, webhooks and the API all carry.
  * A support form's "What is happening?", a feedback form's "What could be better?" and an NPS "why" are none of
  * them a person's description, and the first complaint somebody files should not become their permanent one
- * (security review, slice 8). `intro` is the exception, for the templates where a short line about the person
- * genuinely is a description.
+ * (security review, slice 8). Contact us' message and a demo's goal are no exception either (forms fix a5, 5
+ * November 2026): filed there, the first message filled it and a returning person's next one never reached the
+ * record. Each stays with its submission and shows on the person's timeline.
  */
 const note = (id: string, key: string, label: string, placeholder: string): FormTemplateQuestion => ({
   id,
@@ -149,25 +168,21 @@ const note = (id: string, key: string, label: string, placeholder: string): Form
   required: false,
 });
 
-/** A long answer that really is about the person, filed on People · Description where the workspace has it. */
-const intro = (id: string, key: string, label: string, placeholder: string): FormTemplateQuestion => ({
-  ...note(id, key, label, placeholder),
-  filesOnto: 'description',
-});
-
 /** Every template that exists in code, by id: the gallery offers each of them (`OFFERED_FORM_TEMPLATE_IDS`). */
 export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   blank: {
     id: 'blank',
     name: 'Blank form',
-    // The same name `createForm` gives an unnamed form: the blank tile makes exactly what New form used to.
+    // The same name `createForm` gives an unnamed form.
     formName: 'Untitled form',
-    purpose: 'Name, email and phone.',
-    preview: ['field', 'field', 'field'],
+    // Truly empty (the owner, 5 November 2026): the builder opens on its first question, ready to type.
+    purpose: 'Start from an empty page.',
+    preview: [],
     layout: 'classic',
     headline: 'Fill this in and we will come back to you',
+    thanks: 'Thanks. We will come back to you soon.',
     buttonText: 'Send',
-    questions: [...WHO, PHONE],
+    questions: [],
   },
 
   contact_us: {
@@ -177,8 +192,11 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'long'],
     layout: 'classic',
     headline: 'Talk to us',
+    thanks: 'Thanks for getting in touch. We will reply within one working day.',
     buttonText: 'Send message',
-    questions: [...WHO, COMPANY, intro('message', 'message', 'How can we help?', 'Tell us what you need')],
+    // The message stays with the submission and shows on the person's timeline (forms fix a5): filed on Description it
+    // filled once, and a second message never reached the record.
+    questions: [...WHO, COMPANY, note('message', 'message', 'How can we help?', 'Tell us what you need')],
   },
 
   demo_request: {
@@ -188,12 +206,13 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'long'],
     layout: 'classic',
     headline: 'Book a demo',
+    thanks: 'Thanks. We will be in touch to find a time for your demo.',
     buttonText: 'Request a demo',
     questions: [
       ...WHO,
       COMPANY,
       JOB_TITLE,
-      intro('goal', 'goal', 'What would you like to see?', 'The part of your work we should start with'),
+      note('goal', 'goal', 'What would you like to see?', 'The part of your work we should start with'),
     ],
   },
 
@@ -204,9 +223,10 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'date'],
     layout: 'classic',
     headline: 'Save your seat',
+    thanks: 'You’re in. We will email the details before the day.',
     buttonText: 'Sign me up',
     questions: [
-      ...WHO,
+      ...PERSON,
       {
         id: 'day',
         key: 'day',
@@ -236,13 +256,14 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   feedback: {
     id: 'feedback',
     name: 'Feedback',
-    purpose: 'A rating, and why.',
-    preview: ['field', 'rating', 'long'],
+    purpose: 'A rating, and why. Anonymous.',
+    preview: ['rating', 'long'],
     layout: 'classic',
     headline: 'How did we do?',
+    thanks: 'Thank you. Every answer is read.',
     buttonText: 'Send feedback',
+    keepsSubmissionsOnly: true,
     questions: [
-      ...WHO,
       {
         id: 'rating',
         key: 'rating',
@@ -257,13 +278,14 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   nps: {
     id: 'nps',
     name: 'Recommendation score (NPS)',
-    purpose: '0 to 10, and why.',
-    preview: ['field', 'scale', 'long'],
+    purpose: '0 to 10, and why. Anonymous.',
+    preview: ['scale', 'long'],
     layout: 'classic',
-    headline: 'One question, if you have a moment',
+    headline: 'How likely are you to recommend us?',
+    thanks: 'Thank you. That helps more than you know.',
     buttonText: 'Send',
+    keepsSubmissionsOnly: true,
     questions: [
-      ...WHO,
       {
         id: 'nps',
         key: 'nps',
@@ -283,9 +305,10 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'choices', 'upload'],
     layout: 'classic',
     headline: 'Apply to join us',
+    thanks: 'Thanks for applying. We read every application and will reply either way.',
     buttonText: 'Send application',
     questions: [
-      ...WHO,
+      ...PERSON,
       PHONE,
       {
         id: 'role',
@@ -329,10 +352,11 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field'],
     layout: 'classic',
     headline: 'Get the monthly note',
+    thanks: 'You’re subscribed. The next note arrives at the start of the month.',
     buttonText: 'Subscribe',
     // Marketing email needs the person's say so, in words they saw (spec 0023, AC-1053).
     questions: [
-      ...WHO,
+      ...PERSON,
       {
         id: 'marketing',
         key: 'marketing',
@@ -351,6 +375,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'long', 'choices'],
     layout: 'classic',
     headline: 'Tell us what went wrong',
+    thanks: 'Got it. We are on it and will reply by email.',
     buttonText: 'Send request',
     questions: [
       ...WHO,
@@ -380,6 +405,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'field'],
     layout: 'steps',
     headline: 'Welcome aboard',
+    thanks: 'All set. We will be in touch with your next steps.',
     buttonText: 'Finish setup',
     questions: [
       ...WHO,
@@ -416,6 +442,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'choices', 'choices'],
     layout: 'classic',
     headline: 'Tell us about your team',
+    thanks: 'Thanks. We will be in touch with what fits your team.',
     buttonText: 'Send',
     questions: [
       ...WHO,
@@ -460,20 +487,9 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'long'],
     layout: 'classic',
     headline: 'Before we meet',
+    thanks: 'Thanks. We look forward to meeting you.',
     buttonText: 'Continue',
     endsWithBooking: true,
-    questions: [
-      ...WHO,
-      COMPANY,
-      note('agenda', 'agenda', 'What would you like to cover?', 'So we can come prepared'),
-      {
-        id: 'when',
-        key: 'when',
-        label: 'Any times that suit you?',
-        answerType: 'short_text',
-        placeholder: 'Weekday mornings',
-        required: false,
-      },
-    ],
+    questions: [...WHO, COMPANY, note('agenda', 'agenda', 'What would you like to cover?', 'So we can come prepared')],
   },
 };

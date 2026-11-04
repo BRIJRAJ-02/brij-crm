@@ -67,6 +67,8 @@ export const PublicQuestion = z.object({
   /** Shown only when earlier answers match (spec 0043, AC-1614): `visibleQuestions` decides, here and on the server. */
   showWhen: PublicShowWhen.optional(),
   placeholder: z.string().optional(),
+  /** A quiet line under the question; absent when it has none. */
+  description: z.string().optional(),
   required: z.boolean(),
   /** Its jumps (AC-6313), with One at a time, where each question is a screen of its own. */
   jumps: z.array(PublicJump).optional(),
@@ -83,6 +85,7 @@ export const PublicQuestion = z.object({
       latest: z.string().optional(),
       from: z.number().optional(),
       to: z.number().optional(),
+      count: z.number().optional(),
       lowLabel: z.string().optional(),
       highLabel: z.string().optional(),
       min: z.number().optional(),
@@ -132,6 +135,8 @@ export const PublicForm = z.object({
     theme: z.enum(FORM_LOOK_THEMES).optional(),
   }),
   questions: z.array(PublicQuestion),
+  /** What a closed form says in place of its questions (forms fix b2): the owner's words, else the language's line. */
+  closedMessage: z.string().optional(),
   /** Classic when absent (spec 0063, AC-6302): Steps and One at a time load their own code on the page. */
   layout: z.enum(FORM_LAYOUTS).optional(),
   /** With Steps, the steps over `questions` (`stepsOf`); absent otherwise, since no other layout draws them. */
@@ -143,6 +148,15 @@ export const PublicForm = z.object({
   /** Whether the thank you offers a meeting (#59): false until booking pages exist. */
   offersMeeting: z.boolean(),
   recaptchaSiteKey: z.string().optional(),
+  /**
+   * The workspace's country (ISO 3166 alpha 2; forms fixes 2): the one it set, else the one its time zone is in.
+   * Country and Phone start at the visitor's own region when their browser names one (en-IN), else here; absent when
+   * neither says, so they start empty rather than at the United States.
+   */
+  country: z
+    .string()
+    .regex(/^[A-Z]{2}$/)
+    .optional(),
   /**
    * The workspace's brand kit on this form (spec 0060, AC-4): the versions `brandStylesheetPath('forms', …)` and
    * `brandLogoPath('forms', …)` take. Absent when the form wears the product's own accent and no logo.

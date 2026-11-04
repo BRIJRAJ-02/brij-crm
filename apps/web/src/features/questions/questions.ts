@@ -35,6 +35,48 @@ export function addQuestion(questions: Questions, id: string): FormQuestion[] {
   return [...questions, question];
 }
 
+/**
+ * A new question of `answerType` at `index` (the end when past it), no words yet, optional (T40, critique c: the type
+ * is picked first, and the question goes under the one being edited). A choice type starts with no choices.
+ */
+export function insertQuestion(
+  questions: Questions,
+  id: string,
+  answerType: AnswerType,
+  index: number,
+): FormQuestion[] {
+  const question: FormQuestion = {
+    id,
+    key: freeKey('question', keysOf(questions)),
+    label: '',
+    answerType,
+    required: false,
+    update: 'fill',
+    ...(CHOICE_TYPES.includes(answerType) ? { choices: [] } : {}),
+  };
+  const at = Math.max(0, Math.min(index, questions.length));
+  return [...questions.slice(0, at), question, ...questions.slice(at)];
+}
+
+/**
+ * The field a question's words name, when it has never been filed or kept by hand (T40: Save answer to is "Keep with
+ * the answer" unless the question matches a field the object already has, such as Email or Company): the same
+ * match the first publish makes, one question at a time. Undefined when nothing matches.
+ */
+export function matchingField(
+  questions: Questions,
+  id: string,
+  label: string,
+  attributes: readonly FormAttributeChoice[],
+): string | undefined {
+  const probe = questions.map((question): FormQuestion => {
+    if (question.id !== id) return question;
+    const { kept: _kept, filedOn: _filed, ...rest } = question;
+    return { ...rest, label };
+  });
+  return fileByLabel(probe, attributes).find((question) => question.id === id)?.filedOn?.attributeId;
+}
+
 /** A preset's question at the end, not filed, its key made free. */
 export function addPreset(questions: Questions, preset: QuestionPreset, id: string): FormQuestion[] {
   const question: FormQuestion = {
@@ -110,6 +152,8 @@ export interface QuestionChange {
   readonly placeholder?: string;
   readonly required?: boolean;
   readonly filedOn?: string | null;
+  /** Which record `filedOn` is on: the main one (the default), or the deal a form makes beside the person. */
+  readonly filedRole?: 'main' | 'deal';
   /** True: keep the answer off the CRM (Not filed, chosen). False: let Save give it a field again. */
   readonly kept?: boolean;
   /** Show when (spec 0043): new conditions, or null to always show it. */
@@ -118,6 +162,10 @@ export interface QuestionChange {
   readonly options?: Partial<NonNullable<FormQuestion['options']>>;
   /** What its answers are worth (spec 0063, AC-6316): new points, or null for none. */
   readonly points?: FormQuestion['points'] | null;
+  /** With One at a time (spec 0063, AC-6313): its rules, "After this question", or null for none. */
+  readonly jumps?: FormQuestion['jumps'] | null;
+  /** The quiet line under it: new words (empty while just added and unwritten), or null for none. */
+  readonly description?: string | null;
 }
 
 /**
@@ -143,7 +191,18 @@ export function changeQuestion(
       }
       return question;
     }
-    const { filedOn, showWhen: shownWhen, kept: wasKept, options: hadOptions, points: hadPoints, ...rest } = question;
+    const {
+      filedOn,
+      showWhen: shownWhen,
+      kept: wasKept,
+      options: hadOptions,
+      points: hadPoints,
+      jumps: hadJumps,
+      description: hadDescription,
+      ...rest
+    } = question;
+    const description = change.description === null ? undefined : (change.description ?? hadDescription);
+    const jumps = change.jumps === null ? undefined : (change.jumps ?? hadJumps);
     const merged = Object.fromEntries(
       Object.entries({ ...hadOptions, ...change.options }).filter(
         ([, value]: [string, unknown]) => value !== undefined && value !== '',
@@ -181,6 +240,7 @@ export function changeQuestion(
           : change.filedOn === undefined
             ? filedOn?.attributeId
             : change.filedOn;
+    const role = change.filedOn === undefined ? (filedOn?.objectRole ?? 'main') : (change.filedRole ?? 'main');
     // Kept off the CRM only while it is filed nowhere: filing it anywhere, or asking for a field again, ends that.
     const kept = filing === undefined && (change.kept ?? wasKept === true);
     return {
@@ -195,11 +255,13 @@ export function changeQuestion(
           ? {}
           : { placeholder: question.placeholder }),
       required: change.required ?? question.required,
-      ...(filing === undefined ? {} : { filedOn: { objectRole: 'main' as const, attributeId: filing } }),
+      ...(filing === undefined ? {} : { filedOn: { objectRole: role, attributeId: filing } }),
       ...(kept ? { kept: true as const } : {}),
       ...(showWhen === undefined ? {} : { showWhen }),
       ...(options === undefined ? {} : { options }),
       ...(points === undefined ? {} : { points: points === 'value' ? points : [...points] }),
+      ...(jumps === undefined || jumps.length === 0 ? {} : { jumps: [...jumps] }),
+      ...(description === undefined ? {} : { description }),
     };
   });
   return renamedKeys(questions, changed).reduce((list, [from, to]) => renameShowWhen(list, from, to), changed);
@@ -240,21 +302,31 @@ export function renamedKeys(before: Questions, after: Questions): readonly (read
   });
 }
 
-/** The list with every Show when condition reading `from` reading `to` instead (spec 0043). */
+/**
+ * The list with every Show when condition reading `from` reading `to` instead (spec 0043), and each question's jumps
+ * (One at a time) too: their conditions, and a jump to the question whose key it was.
+ */
 export function renameShowWhen(questions: Questions, from: string, to: string): FormQuestion[] {
-  return questions.map((question) =>
-    question.showWhen === undefined
-      ? question
-      : {
-          ...question,
-          showWhen: {
-            ...question.showWhen,
-            rules: question.showWhen.rules.map((condition) =>
-              condition.key === from ? { ...condition, key: to } : condition,
-            ),
-          },
-        },
-  );
+  const renamed = <T extends { readonly rules: readonly { readonly key: string }[] }>(when: T): T => ({
+    ...when,
+    rules: when.rules.map((condition) => (condition.key === from ? { ...condition, key: to } : condition)),
+  });
+  return questions.map((question) => {
+    const { showWhen, jumps } = question;
+    if (showWhen === undefined && jumps === undefined) return question;
+    return {
+      ...question,
+      ...(showWhen === undefined ? {} : { showWhen: renamed(showWhen) }),
+      ...(jumps === undefined
+        ? {}
+        : {
+            jumps: jumps.map((jump) => ({
+              when: renamed(jump.when),
+              to: 'step' in jump.to && jump.to.step === from ? { step: to } : jump.to,
+            })),
+          }),
+    };
+  });
 }
 
 /** The attributes a question of `answerType` may be filed on, in their order. */
@@ -284,11 +356,21 @@ export function filedLine(
   question: FormQuestion,
   objectName: string,
   attributes: readonly FormAttributeChoice[],
+  /** The deal's fields, for an answer saved on the deal: "Deal › Value". */
+  deal?: DealChoices,
 ): string {
   const id = question.filedOn?.attributeId;
   if (id === undefined) return strings.notFiled;
-  const attribute = attributes.find((each) => each.attributeId === id);
-  return attribute === undefined ? strings.goneAttribute : strings.filedLine(objectName, attribute.title);
+  const onDeal = question.filedOn?.objectRole === 'deal';
+  const attribute = (onDeal ? (deal?.items ?? []) : attributes).find((each) => each.attributeId === id);
+  return attribute === undefined
+    ? strings.goneAttribute
+    : strings.filedLine(onDeal ? strings.dealGroup : objectName, attribute.title);
+}
+
+/** The deal a form makes beside each person, and the fields an answer may be saved on there (forms fixes 2). */
+export interface DealChoices {
+  readonly items: readonly FormAttributeChoice[];
 }
 
 /**

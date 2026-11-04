@@ -15,12 +15,26 @@ import {
   FORM_QUESTIONS_MAX,
   OPTION_KEY,
   QUESTION_KEY,
+  RATING_COUNT,
 } from './answer-types.ts';
 import { stepsOfBreaks, type ResolvedStep } from './breaks.ts';
-import { FORM_ENDINGS_MAX, FORM_LAYOUTS, FORM_LOOK_THEMES, FORM_STEP_TITLE_MAX, STEP_JUMPS_MAX } from './path.ts';
+import {
+  DEFAULT_HEADLINE,
+  FORM_ENDINGS_MAX,
+  FORM_LAYOUTS,
+  FORM_LOOK_THEMES,
+  FORM_STEP_TITLE_MAX,
+  STEP_JUMPS_MAX,
+} from './path.ts';
 import { POINTS_LIMIT, SCORED_TYPES } from './score.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
+import {
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+} from './confirmation.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 
 /** A question's id inside its document: stable across versions, never shown. */
@@ -36,10 +50,19 @@ export const OptionKey = z
   .string()
   .regex(OPTION_KEY, { error: 'A choice key is 1 to 40 lowercase letters, numbers or underscores.' });
 
-/** Where an answer is filed: an attribute of the form's main target (later milestones add person, company, deal). */
-export const FiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: Uuid });
+/**
+ * Where an answer is filed: an attribute of the form's main target, or (forms fixes 2, 6 November 2026) of the deal
+ * Also create a deal makes beside the person (`targets.deal`), such as its Value or Source. Only a form's questions
+ * file on the deal; a booking page's and the score file on the main record only.
+ */
+export const FiledOn = z.strictObject({ objectRole: z.enum(['main', 'deal']), attributeId: Uuid });
 /** Where an answer is filed. */
 export type FiledOn = z.infer<typeof FiledOn>;
+
+/** Where the score is filed: an attribute of the main target only. */
+export const MainFiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: Uuid });
+/** Where the score is filed. */
+export type MainFiledOn = z.infer<typeof MainFiledOn>;
 
 /** A scale's ends: 0 or 1 to 5, 7 or 10 (spec 0063, AC-6307; 0 to 10 is NPS). */
 export const SCALE_FROM = [0, 1] as const;
@@ -56,6 +79,13 @@ export const FormQuestionOptions = z.strictObject({
   latest: z.iso.date({ error: 'Give the latest day as a date.' }).optional(),
   from: z.union([z.literal(0), z.literal(1)]).optional(),
   to: z.union([z.literal(5), z.literal(7), z.literal(10)]).optional(),
+  /** A rating's number of stars, 3 to 10; 5 when absent. Its ends' words are `lowLabel` and `highLabel`, as a scale's. */
+  count: z
+    .number()
+    .int()
+    .min(RATING_COUNT.min, { error: 'Use at least 3 stars.' })
+    .max(RATING_COUNT.max, { error: 'Use at most 10 stars.' })
+    .optional(),
   lowLabel: z.string().trim().max(40, { error: 'Keep an end’s words to 40 characters.' }).optional(),
   highLabel: z.string().trim().max(40, { error: 'Keep an end’s words to 40 characters.' }).optional(),
   min: z.number().int().min(1).max(FORM_CHOICES_MAX).optional(),
@@ -179,6 +209,11 @@ export const FormQuestion = z.strictObject({
    */
   choiceKeys: z.array(OptionKey).max(FORM_CHOICES_MAX).optional(),
   placeholder: z.string().trim().max(80, { error: 'Keep a placeholder to 80 characters.' }).optional(),
+  /**
+   * A quiet line under the question (5 November 2026, Typeform's and Tally's description): what it means or why it
+   * is asked. Absent on every question saved before it existed; empty while the builder has it open and unwritten.
+   */
+  description: z.string().trim().max(280, { error: 'Keep a description to 280 characters.' }).optional(),
   required: z.boolean(),
   /** Absent: not filed, kept with the enquiry. */
   filedOn: FiledOn.optional(),
@@ -296,10 +331,12 @@ export const FormSpam = z.strictObject({
 /** The bot checks' settings. */
 export type FormSpam = z.infer<typeof FormSpam>;
 
-/** How long a confirmation's own subject and line may be. */
-export const CONFIRMATION_SUBJECT_MAX = 120;
-/** How long a confirmation's own line may be. */
-export const CONFIRMATION_LINE_MAX = 500;
+export {
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+} from './confirmation.ts';
 
 /**
  * The visitor's confirmation email (spec 0063, AC-6318): off by default. When
@@ -326,9 +363,6 @@ export type FormConfirmation = z.infer<typeof FormConfirmation>;
 /** Below this many questions a Classic form saves no progress unless its owner asks (AC-6319). */
 export const SAVE_PROGRESS_CLASSIC_MIN = 10;
 
-/** The default headline. */
-export const DEFAULT_HEADLINE = 'Fill this in and we will come back to you';
-
 /** The default button text. */
 export const DEFAULT_BUTTON_TEXT = 'Send';
 
@@ -341,7 +375,22 @@ export const FormDocument = z
     /** Where submissions go in the CRM: `main` is the object each one adds or updates. Absent, they stay in Submissions only. */
     targets: z.strictObject({
       main: z.strictObject({ objectId: Uuid, matchAttributeId: Uuid.optional() }).optional(),
+      /**
+       * Also create a deal (forms fix a3, 5 November 2026): with People as `main`, each submission also makes a
+       * record on this object (the standard Deals), named after the person and linked to them and their company.
+       * Absent on every document written before it, which makes no deal.
+       */
+      deal: z.strictObject({ objectId: Uuid }).optional(),
     }),
+    /**
+     * Where each question was saved on an object the form moved away from (forms fix a2, 5 November 2026): by
+     * object id, each question's attribute there. Moving back puts them back, so trying another object never loses
+     * a mapping for good. Only the server writes it (`setFormTarget`); it never reaches a visitor.
+     */
+    filedBefore: z
+      .record(Uuid, z.record(z.string().max(64), Uuid))
+      .refine((objects) => Object.keys(objects).length <= 50, { error: 'Too many remembered objects.' })
+      .optional(),
     /** Classic, Steps or One at a time (spec 0063, AC-6302): in the version, so a visitor mid fill never sees it change. */
     layout: z.enum(FORM_LAYOUTS).default('classic'),
     /** The breaks between steps, in the questions' order. Drawn only by Steps. */
@@ -359,7 +408,7 @@ export const FormDocument = z
       .max(FORM_ENDINGS_MAX, { error: `A form holds at most ${String(FORM_ENDINGS_MAX)} endings beside the default.` })
       .optional(),
     /** Where the form's score is filed (spec 0063, AC-6316): a number attribute, for example a lead score. */
-    scoreFiledOn: FiledOn.optional(),
+    scoreFiledOn: MainFiledOn.optional(),
     look: FormLook.default({ colour: 'light', corners: 'rounded' }),
     headline: z.string().trim().max(120, { error: 'Keep the headline to 120 characters.' }).default(DEFAULT_HEADLINE),
     subheading: z.string().trim().max(240, { error: 'Keep the subheading to 240 characters.' }).optional(),
@@ -386,8 +435,36 @@ export const FormDocument = z
      * time, off for Classic until it grows past `SAVE_PROGRESS_CLASSIC_MIN` questions.
      */
     saveProgress: z.boolean().optional(),
+    /**
+     * When it stops taking answers by itself (forms fix b2, 5 November 2026): at a moment, after a number of
+     * answers (spam left out), or both, whichever comes first. Absent: only Pause closes it.
+     */
+    closing: z
+      .strictObject({
+        at: z.iso.datetime({ offset: true }).optional(),
+        after: z
+          .number()
+          .int({ error: 'Give a whole number of answers.' })
+          .min(1, { error: 'Close after at least one answer.' })
+          .max(CLOSE_AFTER_MAX)
+          .optional(),
+      })
+      .optional(),
+    /** What a closed form (paused, or past `closing`) says to a visitor; the language's own line when absent. */
+    closedMessage: z
+      .string()
+      .trim()
+      .max(CLOSED_MESSAGE_MAX, { error: `Keep the message to ${String(CLOSED_MESSAGE_MAX)} characters.` })
+      .optional(),
   })
   .superRefine((document, context) => {
+    if (document.targets.deal !== undefined && document.targets.main === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['targets', 'deal'],
+        message: 'A deal is made beside the person. Save submissions to People first.',
+      });
+    }
     const seen = { ids: new Set<string>(), keys: new Set<string>(), attributes: new Set<string>() };
     let files = 0;
     let signatures = 0;
@@ -444,6 +521,13 @@ export const FormDocument = z
           code: 'custom',
           path: [...at, 'filedOn'],
           message: 'Two questions are filed on one attribute.',
+        });
+      }
+      if (question.filedOn?.objectRole === 'deal' && document.targets.deal === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'filedOn'],
+          message: 'This answer goes on the deal. Turn on Also create a deal, or choose another place for it.',
         });
       }
       if (question.answerType === 'file') files += 1;
@@ -622,4 +706,18 @@ export function savesProgress(document: Pick<FormDocument, 'layout' | 'questions
   if (document.saveProgress !== undefined) return document.saveProgress;
   if (document.layout !== 'classic') return true;
   return document.questions.length > SAVE_PROGRESS_CLASSIC_MIN;
+}
+
+/**
+ * Whether a form's own closing rule has closed it (forms fix b2): its moment has passed, or it holds as many
+ * answers as it closes after. `answers` is the form's count of stored submissions, spam left out. Pure.
+ */
+export function closedByRule(
+  document: Pick<FormDocument, 'closing'>,
+  input: { readonly now: Date; readonly answers: number },
+): boolean {
+  const closing = document.closing;
+  if (closing === undefined) return false;
+  if (closing.at !== undefined && Date.parse(closing.at) <= input.now.getTime()) return true;
+  return closing.after !== undefined && input.answers >= closing.after;
 }

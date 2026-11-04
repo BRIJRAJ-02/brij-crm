@@ -109,6 +109,22 @@
     flex: none;
   }
 
+  /* The pill (a form's live dialog and Share tab): the address in a fully rounded pill, the host and path muted and
+     the page's own name strong, so the part that is theirs reads first. */
+  .root[data-variant='pill'] .address {
+    padding-inline: var(--space-12);
+    border-radius: var(--radius-full);
+  }
+
+  .root[data-variant='pill'] .addressStart {
+    color: var(--text-secondary);
+  }
+
+  .root[data-variant='pill'] .addressEnd {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
   /* The QR and the preview share a height (the QR's), side by side; a narrow slot stacks them. */
   .visual {
     display: flex;

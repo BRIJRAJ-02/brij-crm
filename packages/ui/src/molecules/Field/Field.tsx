@@ -34,9 +34,9 @@ export type FieldSize = 'md' | 'sm' | 'lg';
 /**
  * `default` is the boxed field; `search` the rounded search field; `cell` the bare input a grid cell edits in;
  * `copy` a value to copy, never to change: a public link, an embed code; `title` a page's own title (a note's),
- * with no box at all.
+ * with no box at all; `underline` a public form's one large answer (One at a time), a line in the accent under it.
  */
-export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title' | 'composer';
+export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title' | 'composer' | 'underline';
 
 /**
  * A text field that names a list it suggests from: the comment composer's
@@ -64,6 +64,8 @@ export interface FieldProps {
   readonly defaultValue?: string;
   readonly onChange?: (value: string) => void;
   readonly onBlur?: () => void;
+  /** Focus arriving in the field: the form builder shows a thank-you message in its preview while it is edited. */
+  readonly onFocus?: () => void;
   /** Enter in a single line field (a cell commits on it). */
   readonly onSubmit?: () => void;
   /** Esc (a cell or a popover cancels on it). */
@@ -199,6 +201,7 @@ export function Field({
   defaultValue,
   onChange,
   onBlur,
+  onFocus,
   onSubmit,
   onEscape,
   placeholder,
@@ -365,6 +368,7 @@ export function Field({
               : onChange,
           })}
       {...(onBlur === undefined ? {} : { onBlur })}
+      {...(onFocus === undefined ? {} : { onFocus })}
       {...(onSubmit === undefined && onEscape === undefined && !isWrapping
         ? {}
         : {

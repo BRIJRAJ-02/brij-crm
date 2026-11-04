@@ -52,6 +52,12 @@ export interface FormStrings {
   readonly fileBusy: string;
   /** Said under the file question when an upload failed. */
   readonly fileFailed: string;
+  /** Said when the form can't take files at all just now (forms fix b8): the answers can still go. */
+  readonly fileUnavailable: string;
+  /** What a file question takes, under its drop area (forms fix b8). */
+  readonly fileTypes: string;
+  /** Under the button, once, when a file didn't upload: pressing again sends the rest without it (forms fix b8). */
+  readonly sendWithoutFile: (button: string) => string;
   readonly previewNote: string;
   readonly recaptchaNotice: string;
   readonly honeypot: string;
@@ -124,6 +130,23 @@ export interface FormStrings {
   readonly ok: string;
   /** Under a long answer one at a time, where Enter goes on (spec 0063, AC-6305). */
   readonly newLine: string;
+  /** One at a time's welcome screen (T42): the button that starts the questions. */
+  readonly start: string;
+  /** Beside Start and OK, one at a time (T42): the word before the Enter key, "press". */
+  readonly pressEnter: string;
+  /** The key itself, on its keycap: "Enter ↵". */
+  readonly enterKey: string;
+  /** When a form closes while it is being filled in: keeps what the visitor wrote (forms QA, 5 November 2026). */
+  readonly copyAnswers: string;
+  readonly copyAnswersFailed: string;
+  /** One at a time's arrows and place, as a landmark: always the same name. */
+  readonly questionsNav: string;
+  /** A yes or no question's two answers, drawn as two choices (critique c, 9). */
+  readonly yes: string;
+  readonly no: string;
+  /** One at a time's arrows (T42): to the question before, and on to the next one. */
+  readonly previousQuestion: string;
+  readonly nextQuestion: string;
   // The new answer types (spec 0063, AC-6307).
   readonly date: string;
   readonly dateFrom: (day: string) => string;
@@ -215,6 +238,9 @@ const EN: FormStrings = {
   fileRemoved: (name) => `${name} removed.`,
   fileBusy: 'Wait a moment while your answer saves.',
   fileFailed: 'That file did not upload. Try again, or choose another file.',
+  fileUnavailable: 'This form can’t take files right now. You can still send your answers without it.',
+  fileTypes: 'PDF, images or Office files',
+  sendWithoutFile: (button) => `Your file didn’t upload. Press ${button} again to send your answers without it.`,
   previewNote: 'A preview of the form. It can’t be filled in here.',
   recaptchaNotice: 'This form is protected by reCAPTCHA. Google’s Privacy Policy and Terms of Service apply.',
   honeypot: 'Leave this empty',
@@ -257,6 +283,16 @@ const EN: FormStrings = {
   next: 'Continue',
   ok: 'OK',
   newLine: 'Shift + Enter for a new line',
+  start: 'Start',
+  pressEnter: 'press',
+  enterKey: 'Enter ↵',
+  copyAnswers: 'Copy my answers',
+  copyAnswersFailed: 'Couldn’t copy. Select your answers and copy them instead.',
+  questionsNav: 'Questions',
+  yes: 'Yes',
+  no: 'No',
+  previousQuestion: 'Previous question',
+  nextQuestion: 'Next question',
   date: 'Enter a date.',
   dateFrom: (day) => `Pick ${day} or later.`,
   dateUntil: (day) => `Pick ${day} or earlier.`,

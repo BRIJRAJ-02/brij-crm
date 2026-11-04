@@ -18,6 +18,7 @@ import { poweredByHref } from '../lib/powered-by.ts';
 import { safeImageSrc } from '../lib/safe-image-src.ts';
 import { templateAttributes } from '../lib/page-template.ts';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
+import type { EmbedLook } from './HostedForm.tsx';
 import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
@@ -45,11 +46,14 @@ export function FormGround({
   container,
   previewNote,
   foot,
+  embedLook,
   children,
 }: {
   readonly mode: HostedFormMode;
   readonly kind?: FormFrameKind;
   readonly look?: PublicForm['look'];
+  /** A site's inline embed's look: a clear ground, the headline for screen readers only. */
+  readonly embedLook?: EmbedLook;
   /** The workspace's brand kit (spec 0060, AC-4): its logo over the form, and an app preview's accent. */
   readonly brand?: PageBrand;
   readonly isLoading?: boolean;
@@ -79,6 +83,7 @@ export function FormGround({
         data-corners={look?.corners}
         data-mode={mode}
         data-frame={kind}
+        data-ground={embedLook?.isTransparent === true ? 'none' : undefined}
         {...(isLoading ? { 'aria-busy': true } : {})}
         {...(mode === 'preview' ? { inert: true } : {})}
       >
@@ -140,6 +145,7 @@ export function FormFrame({
   container,
   previewNote,
   foot,
+  embedLook,
   children,
 }: {
   readonly form: PublicForm;
@@ -147,6 +153,7 @@ export function FormFrame({
   readonly kind?: FormFrameKind;
   /** Overrides the brand the form's own `brand` names (an app preview): see `formBrand`. */
   readonly brand?: PageBrand;
+  readonly embedLook?: EmbedLook;
   readonly container?: Ref<HTMLDivElement>;
   /** Read to screen readers before an inert preview. */
   readonly previewNote?: string;
@@ -162,6 +169,7 @@ export function FormFrame({
       {...(container === undefined ? {} : { container })}
       {...(previewNote === undefined ? {} : { previewNote })}
       {...(foot === undefined ? {} : { foot })}
+      {...(embedLook === undefined ? {} : { embedLook })}
     >
       {children}
     </FormGround>
@@ -174,14 +182,17 @@ export function FormHeader({
   mode,
   heading,
   isSubheadingShown = true,
+  isVisuallyHidden = false,
 }: {
   readonly form: PublicForm;
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
   readonly isSubheadingShown?: boolean;
+  /** Kept for screen readers only: a site's inline embed asked to leave the headline to the site. */
+  readonly isVisuallyHidden?: boolean;
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
-  return (
+  const header = (
     <header className={styles.header}>
       <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
         {form.headline}
@@ -189,6 +200,7 @@ export function FormHeader({
       {isSubheadingShown && form.subheading !== undefined && <p className={styles.subheading}>{form.subheading}</p>}
     </header>
   );
+  return isVisuallyHidden ? <VisuallyHidden>{header}</VisuallyHidden> : header;
 }
 
 /**
@@ -208,17 +220,19 @@ export function FormThanks({
 }) {
   const landed = state.view.kind === 'thanks' ? state.view : undefined;
   const text = landed?.text ?? '';
-  // An ending's own heading and line stand in for the thank you's (spec 0063, AC-6315); its line may be the only
-  // words it has, so an ending with none still reads as a thank you rather than as an empty card.
+  // An ending's own heading and line stand in for the thank you's (spec 0063, AC-6315).
   const title = landed?.heading ?? '';
   const button = landed?.button;
+  // An ending says what its owner wrote and no more (critique c): a line left empty stays empty, and the answers
+  // are not read back under it. The plain thank you keeps both.
+  const isEnding = title !== '';
   return (
     <FormConfirmation
       mode={mode}
       heading={heading}
-      title={title !== '' ? title : state.words.thanksTitle}
-      text={text !== '' ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
-      summary={<SentAnswers form={form} state={state} />}
+      title={isEnding ? title : state.words.thanksTitle}
+      text={text !== '' || isEnding ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
+      {...(isEnding ? {} : { summary: <SentAnswers form={form} state={state} /> })}
     >
       {button !== undefined && (
         // A real link, through `ButtonLink`'s `safeHref`: an owner's typed address is untrusted, so a `javascript:`
@@ -288,9 +302,14 @@ export function FormClosed({
   const Heading = mode === 'page' ? 'h1' : 'h2';
   return (
     <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
-      {state.words.closed}
+      {state.closedLine}
     </Heading>
   );
+}
+
+/** The id of a question's description line, which its slot names as its description. */
+export function descriptionIdOf(question: PublicQuestion): string {
+  return `question-${question.key}-description`;
 }
 
 /**
@@ -302,13 +321,20 @@ export function QuestionSlot({
   question,
   state,
   children,
+  isDescriptionShown = true,
 }: {
   readonly question: PublicQuestion;
   readonly state: HostedFormState;
   readonly children: ReactNode;
+  /**
+   * Draws the question's description under its control, in the secondary colour (Classic and Steps, where the label
+   * is the control's own). One at a time draws it under its large heading instead, so it passes false there.
+   */
+  readonly isDescriptionShown?: boolean;
 }) {
   const hint = state.hints[question.key];
   const error = state.errors[question.key];
+  const hasDescription = question.description !== undefined && question.description !== '';
   const slot = useRef<HTMLDivElement>(null);
   // A required question left empty nudges once beside its line (T23, Typeform): a short shake through the Web
   // Animations API, so the hosted page's tight stylesheet carries none of it; nothing under reduced motion.
@@ -339,8 +365,22 @@ export function QuestionSlot({
       className={styles.question}
       data-invalid={error === undefined ? undefined : true}
       onBlur={(event) => state.blur(question, event)}
+      // With a description, the slot is the question's group, named by its words and described by the line, so a
+      // screen reader says the line as focus enters the answer, wherever the line is drawn (DS review).
+      {...(hasDescription
+        ? {
+            role: 'group',
+            'aria-label': state.read(question.label),
+            'aria-describedby': descriptionIdOf(question),
+          }
+        : {})}
     >
       {children}
+      {isDescriptionShown && hasDescription && (
+        <p id={descriptionIdOf(question)} className={styles.description}>
+          {state.read(question.description ?? '')}
+        </p>
+      )}
       {question.answerType === 'email' && (
         <div className={styles.suggestion} aria-live="polite">
           {hint !== undefined && (
@@ -389,10 +429,36 @@ export function ErrorSummary({
 
 /** A failure that isn't about a question ("That did not go through…"), in one alert line. */
 export function FormAlert({ state }: { readonly state: HostedFormState }) {
+  const [isCopied, setCopied] = useState(false);
+  const [isCopyFailed, setCopyFailed] = useState(false);
   return (
-    <p className={styles.alert} role="alert">
-      {state.alert}
-    </p>
+    <>
+      <p className={styles.alert} role="alert">
+        {state.alert}
+      </p>
+      {/* Closed while they filled it in: their answers stay on screen, and one press keeps them. */}
+      {state.isClosedMidFill && (
+        <span className={styles.again}>
+          <Button
+            icon={isCopied ? 'check' : 'copy'}
+            onPress={() => {
+              navigator.clipboard.writeText(state.answersText()).then(
+                () => {
+                  setCopied(true);
+                },
+                // A browser that refuses the clipboard: say so, so nobody leaves thinking their words are kept.
+                () => {
+                  setCopyFailed(true);
+                },
+              );
+            }}
+          >
+            {isCopied ? state.words.copiedLink : state.words.copyAnswers}
+          </Button>
+          {isCopyFailed && <span className={styles.alert}>{state.words.copyAnswersFailed}</span>}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -513,18 +579,14 @@ export function FormLoading({
   // One at a time form never loses one (spec 0063, AC-6306). Its colours follow the visitor's own light or dark
   // setting until the form's look arrives.
   const isOpen = layout === 'conversational' || layout === 'unknown';
+  // One at a time opens on its welcome screen (T42): the headline, its line and Start, with no question yet.
   const questions =
-    layout === 'classic' || layout === 'unknown' ? LOADING_QUESTIONS : isOpen ? 1 : LOADING_QUESTIONS - 1;
+    layout === 'classic' || layout === 'unknown' ? LOADING_QUESTIONS : isOpen ? 0 : LOADING_QUESTIONS - 1;
   return (
     <FormGround mode={mode} kind={isOpen ? 'open' : 'card'} isLoading>
       <VisuallyHidden>
         <p>{words.loading}</p>
       </VisuallyHidden>
-      {layout === 'conversational' && (
-        <div className={styles.loadingLine}>
-          <Skeleton shape="line" width="full" />
-        </div>
-      )}
       <header className={styles.header}>
         <p className={styles.headline} data-mode={mode}>
           <Skeleton shape="text" width="long" />

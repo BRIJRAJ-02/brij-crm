@@ -1,5 +1,5 @@
 // Layout and Steps as pages in Chromium (spec 0063, AC-6302, AC-6303; T20, 5 November 2026): Steps splits the form
-// at once into headed pages, Split here makes another, a header renames in place and merges up with Undo, and Classic
+// at once into headed pages, Add a step and the gap's + make another, a header renames in place and merges up with Undo, and Classic
 // draws no headers. Moving one is the list's own drag (QuestionList's keyboard story) over `moveItem`.
 import type { FormDocument, FormQuestion } from '@crm/data';
 import { previewOf, type FormLayout, type FormStep } from '@crm/data/forms';
@@ -118,9 +118,9 @@ describe('Layout (AC-6302)', () => {
       .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
       .toBe('Step 1 of 2');
     await userEvent.click(page.getByText('One at a time', { exact: true }));
-    await expect
-      .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
-      .toBe('1 of 3');
+    // One at a time opens on its welcome screen (T42) while no question is being edited: the headline and Start.
+    await expect.element(page.getByText('Start', { exact: true })).toBeInTheDocument();
+    expect(document.querySelector('[role="progressbar"]')).toBeNull();
   });
 });
 
@@ -132,8 +132,8 @@ describe('Steps as pages (AC-6303, T20)', () => {
     await userEvent.click(page.getByText('Steps', { exact: true }).first());
     await expect.element(page.getByRole('button', { name: /^Step 1 · Your details(?!.* options$)/ })).toBeVisible();
     await expect.element(page.getByRole('button', { name: /^Step 2(?!.* options$)/ })).toBeVisible();
-    // The vague Add a step is gone.
-    expect(page.getByRole('button', { name: 'Add a step' }).query()).toBeNull();
+    // Add a step is up front in the header once the form has steps (T39).
+    await expect.element(page.getByRole('button', { name: 'Add a step' })).toBeVisible();
     await expect
       .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
       .toBe('Step 1 of 2');
@@ -144,9 +144,9 @@ describe('Steps as pages (AC-6303, T20)', () => {
       { id: 's1', startsAt: 'name' },
       { id: 's2', startsAt: 'company' },
     ]);
-    // Split here, from the open question's footer (the gap over a card does the same on hover).
-    await userEvent.click(page.getByRole('button', { name: /^Team size/ }));
-    await userEvent.click(page.getByRole('button', { name: 'Start a new step here' }));
+    // Start a new step here, from the quiet + always in the gap above Team size (T39).
+    await userEvent.click(page.getByRole('button', { name: 'Add a question or a step here' }).last());
+    await userEvent.click(page.getByRole('menuitem', { name: 'Start a new step here' }));
     const title = page.getByRole('textbox', { name: 'Step title' });
     await expect.element(title).toHaveFocus();
     await userEvent.type(title, 'Your team');
@@ -160,10 +160,31 @@ describe('Steps as pages (AC-6303, T20)', () => {
     await expect.element(page.getByRole('button', { name: /^Step 3 · Your team(?!.* options$)/ })).toBeVisible();
   });
 
-  it('shows the gap’s Split here over a card on hover, never on the first question of a page', async () => {
+  it('keeps a quiet + in every gap, a step header counting its questions, and adds a question at a step’s top', async () => {
+    await open('steps', [
+      { id: 's1', startsAt: 'name' },
+      { id: 's2', startsAt: 'company' },
+    ]);
+    // Clearly a step: its number, its name and how many questions it holds.
+    await expect.element(page.getByRole('button', { name: /^Step 2\s*2 questions/ })).toBeVisible();
+    // Always there, never only on hover: above every row but the first.
+    expect(page.getByRole('button', { name: /^Add a question( or a step)? here$/ }).all().length).toBe(4);
+    // The + between Step 2's header and Company puts the new question at the top of Step 2.
+    const gaps = page.getByRole('button', { name: 'Add a question here' }).all();
+    await userEvent.click(gaps[gaps.length - 1] ?? page.getByRole('button', { name: 'Add a question here' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Yes or no' }));
+    await expect.element(page.getByRole('textbox', { name: 'Question', exact: true })).toHaveFocus();
+    await expect.element(page.getByRole('button', { name: /^Step 2\s*3 questions/ })).toBeVisible();
+  });
+
+  it('adds a step at the end with Add a step, its name typed first and a question already in it', async () => {
     await open('steps', [{ id: 's1', startsAt: 'name' }]);
-    // Company and Team size can be split above; Your name starts the page.
-    expect(document.querySelectorAll('[class*="gap"] button').length).toBe(2);
+    await userEvent.click(page.getByRole('button', { name: 'Add a step' }));
+    const title = page.getByRole('textbox', { name: 'Step title' });
+    await expect.element(title).toHaveFocus();
+    await userEvent.type(title, 'Wrap up');
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByRole('button', { name: /^Step 2 · Wrap up\s*1 question/ })).toBeVisible();
   });
 
   it('keeps breaks outside Steps without saying so, and draws no headers', async () => {
@@ -174,7 +195,7 @@ describe('Steps as pages (AC-6303, T20)', () => {
 });
 
 describe('the questions header at a phone’s width (spec 0058, AC-1)', () => {
-  it('keeps Add a question and the menu on screen, with no sideways scroll', async () => {
+  it('keeps Add a question on screen, with no sideways scroll', async () => {
     await page.viewport(390, 844);
     try {
       await open('steps', [
@@ -182,8 +203,7 @@ describe('the questions header at a phone’s width (spec 0058, AC-1)', () => {
         { id: 's2', startsAt: 'company' },
       ]);
       const add = page.getByRole('button', { name: 'Add a question' }).element();
-      const more = page.getByRole('button', { name: 'More question actions' }).element();
-      for (const each of [add, more]) {
+      for (const each of [add]) {
         const box = each.getBoundingClientRect();
         expect(box.right).toBeLessThanOrEqual(390);
         expect(box.width).toBeGreaterThan(0);

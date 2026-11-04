@@ -55,6 +55,7 @@ describe('the sidebar’s routes (AC-944)', () => {
       'notes',
       'bookings',
       'captures',
+      'forms',
       'menus',
       'qr',
       'reservations',

@@ -91,9 +91,11 @@ jobs:
           # shape rather than written out, so Actions doesn't read it as an expression of this job's own.
           settled_ui() {
             grep -Fxq "visual" <<< "$1" || return 1
-            grep -Fxq "stories (chromium)" <<< "$1" \
-              && grep -Fxq "stories (firefox)" <<< "$1" \
-              && grep -Fxq "stories (webkit)" <<< "$1" && return 0
+            # Chromium only (the owner, 4 November 2026): Firefox's stories time out and WebKit's run out of memory
+            # on the runner, a known leak in the harness rather than in the product, and each one held a deploy
+            # until a release-only commit went round it. Both still run on every library change and still go red;
+            # they just no longer stand between a fix and production.
+            grep -Fxq "stories (chromium)" <<< "$1" && return 0
             grep -qE '^stories \(.*matrix\.browser' <<< "$1"
           }
           if [ "$EVENT" = push ]; then

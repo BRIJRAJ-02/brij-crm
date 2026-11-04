@@ -8,6 +8,7 @@ import {
   type FormDocument,
   type FormTargetChoices,
   type FormView,
+  type LiveSettingsChange,
   type MemberSummary,
   type ObjectSummary,
   type SubmissionPage,
@@ -15,6 +16,7 @@ import {
   type SubmissionView,
 } from '@crm/data';
 import {
+  DEFAULT_HEADLINE,
   FORM_ENDINGS_MAX,
   FORM_QUESTIONS_MAX,
   pathOf,
@@ -28,11 +30,13 @@ import {
   ButtonLink,
   Callout,
   EditorStatus,
+  EmptyState,
   Field,
+  SettingsStack,
   focusLater,
   HostedFormPreview,
+  type HostedFormPreviewProps,
   PreviewLayout,
-  Select,
   type PreviewTextChange,
   TabPanel,
   Tabs,
@@ -41,7 +45,7 @@ import {
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteFormDialog, DiscardChangesDialog, RetargetFormDialog, type RetargetAsk } from './FormConfirms.tsx';
 import { retargetStep } from './retarget.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
@@ -61,15 +65,25 @@ import {
   withFlow,
   mintEndingId,
   withQuestions,
+  uploadsOffFor,
 } from './draft.ts';
-import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from './FormBrand.tsx';
-import { FlowView } from './FlowView.tsx';
+import { BrandedFormPreview, DesignButton } from './FormBrand.tsx';
+import { LogicMap } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
-import { InstallTab } from './InstallTab.tsx';
+import { ShareTab } from './ShareTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
-import { ReadyDialog } from './PublishDialog.tsx';
+import { ReadyDialog, type LiveFiling } from './PublishDialog.tsx';
 import { AFTER_ROW, AfterSendSection } from './AfterSendSection.tsx';
+import {
+  dropQuestionLogic,
+  followChoices,
+  logicCount,
+  logicProblems,
+  logicUses,
+  problemsAt,
+  problemWords,
+} from './logic.ts';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
 import { splitIntoSteps } from '../questions/steps.ts';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
@@ -94,6 +108,10 @@ export interface FormEditorProps {
   readonly objects: readonly ObjectSummary[];
   readonly tab: FormTab;
   readonly submissions: SubmissionPage | undefined;
+  /** How many months the workspace keeps answers; null keeps them; absent when it couldn't be read (critique b S2). */
+  readonly keepMonths?: number | null;
+  /** Why the Submissions tab's page didn't load (forms fix a6): said in the tab, with Try again, the form still here. */
+  readonly submissionsFailed?: string;
   readonly state: SubmissionState | undefined;
   readonly openSubmission: SubmissionView | undefined;
   /** On the Form tab, the question to open and bring into view. */
@@ -142,6 +160,8 @@ export function FormEditor(props: FormEditorProps) {
   const [isPublishing, setPublishing] = useState(false);
   // The form the first publish just put live: the Ready dialog shows its link (one click, no fields first).
   const [justLive, setJustLive] = useState<FormView | undefined>(undefined);
+  // What the first publish set up in the CRM, said once in the live dialog rather than in a toast (5 November 2026).
+  const [liveFiling, setLiveFiling] = useState<LiveFiling | undefined>(undefined);
   // Discard changes asks first: it loses every edit since the last publish.
   const [isDiscarding, setDiscarding] = useState(false);
   // Delete asks first; Pause and Resume act at once with Undo (the owner, 22 October 2026).
@@ -149,11 +169,15 @@ export function FormEditor(props: FormEditorProps) {
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
   // After a publish that changed where answers go: offer to file the submissions before it the same way.
-  const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | 'menu' | undefined>(undefined);
+  const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | undefined>(undefined);
   const [isRetargeting, setRetargeting] = useState(false);
   // A blocked Publish shows every incomplete Settings field's message at once, wherever it was pressed from.
   const [showGaps, setShowGaps] = useState(false);
-  const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
+  const heldJobs = useMemo(
+    () => ({ get: (jobId: string) => data.jobs.get(slug, jobId), follow: data.jobs.follow }),
+    [data, slug],
+  );
+  const jobs = useJobFollower(data.jobs.view(slug, 'mine'), heldJobs);
   // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // The Flow view (spec 0063, AC-6325): the steps, their jumps and the endings, read only, from the Form tab.
@@ -229,6 +253,7 @@ export function FormEditor(props: FormEditorProps) {
       slug: form.publicKey,
       document: draft,
       attributes: publishAttributesOf(target),
+      ...(target.deal === undefined ? {} : { dealAttributes: publishAttributesOf(target.deal) }),
     });
     return still?.code === problem.code &&
       still.questionId === problem.questionId &&
@@ -241,6 +266,48 @@ export function FormEditor(props: FormEditorProps) {
   const apply = (view: FormView) => {
     setForm(view);
     saved.current = { document: view.draft, revision: view.revision };
+  };
+
+  /**
+   * A setting Settings changes that the version holds (forms fixes 2, one save model): shown at once, then live at
+   * once on the server, edits waiting on the Form tab left waiting. The saved copy takes the change too, so the
+   * draft's own save never sends it as an edit.
+   */
+  const applySettings = (settings: LiveSettingsChange, change: (before: FormDocument) => FormDocument) => {
+    const shownBefore = latest.current;
+    const savedBefore = saved.current;
+    const next = change(latest.current);
+    setDraft(next);
+    latest.current = next;
+    saved.current = { ...saved.current, document: change(saved.current.document) };
+    // One after another, as the draft's saves are: each goes on from the revision the one before answered, so two
+    // quick changes never read as someone else's (the review's false conflict).
+    const sending = flush().then(async (revision) => {
+      const view = await data.forms.applySettings(slug, form.id, settings, revision);
+      apply(view);
+      // Words typed while it was out stay: the server's draft replaces the shown one only when nothing changed since.
+      if (latest.current === next) {
+        setDraft(view.draft);
+        latest.current = view.draft;
+      }
+      return view.revision;
+    });
+    inFlight.current = sending;
+    sending
+      .catch((error: unknown) => {
+        if (isDataError(error) && error.code === 'FORM_CHANGED') {
+          setConflict(true);
+          return;
+        }
+        saved.current = savedBefore;
+        setDraft(shownBefore);
+        latest.current = shownBefore;
+        toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
+        loadTheirs();
+      })
+      .finally(() => {
+        if (inFlight.current === sending) inFlight.current = undefined;
+      });
   };
 
   const loadTheirs = () => {
@@ -258,6 +325,14 @@ export function FormEditor(props: FormEditorProps) {
   }
 
   const isPublished = form.liveVersionNumber !== undefined;
+  // What is wrong with the logic (T41), said where each rule is and counted on the Logic button.
+  const logicIssues = useMemo(() => logicProblems(draft), [draft]);
+  // One title (critique c, blocker 2): a draft whose headline nobody wrote yet takes the form's name, once, so a
+  // template's form reads "Lead qualification", not the stock headline.
+  if (!isPublished && canManage && form.name !== strings.untitledForm && draft.headline === DEFAULT_HEADLINE) {
+    setDraft({ ...draft, headline: form.name });
+  }
+  const viewOnly = !canManage && isPublished;
 
   // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
   // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
@@ -273,6 +348,22 @@ export function FormEditor(props: FormEditorProps) {
   const preview = useMemo(() => previewOf(draft, { key: form.publicKey }), [draft, form.publicKey]);
   // The question or divider last opened: Steps and One at a time preview the step it is in (spec 0063).
   const [previewRow, setPreviewRow] = useState<string | undefined>(undefined);
+  // The thank-you message being edited in After they send (T47): the preview shows it in the form's place until a
+  // question or a step is opened again.
+  const [editedEnding, setEditedEnding] = useState<'default' | { readonly endingId: string } | undefined>(undefined);
+  const openRow = (row: string | undefined) => {
+    setPreviewRow(row);
+    setEditedEnding(undefined);
+  };
+  const previewEnding: HostedFormPreviewProps['ending'] =
+    editedEnding === undefined
+      ? undefined
+      : editedEnding === 'default'
+        ? {}
+        : (() => {
+            const ending = draft.endings?.find((each) => each.id === editedEnding.endingId);
+            return ending === undefined ? undefined : { heading: ending.heading, line: ending.line };
+          })();
   // The edited question's or divider's step, shown even when its Show when hides it from a visitor who has answered
   // nothing yet: its conditions (the step's, and its questions') are lifted in the preview only.
   const shownPreview = useMemo(() => {
@@ -354,6 +445,14 @@ export function FormEditor(props: FormEditorProps) {
     latest.current = next;
     const choices = await data.forms.attributes(slug, form.id);
     setTarget(choices);
+    // The first publish says it in its live dialog, with Change; a later one in a toast with Undo.
+    if (!isPublished) {
+      setLiveFiling({
+        objectName: target.objectName ?? '',
+        made: made.flatMap((each) => plans.find((plan) => plan.questionId === each.questionId)?.title ?? []),
+      });
+      return { document: next, choices };
+    }
     toasts.toast({
       tone: 'success',
       message: strings.createdAttributes(made.length, target.objectName ?? ''),
@@ -470,6 +569,7 @@ export function FormEditor(props: FormEditorProps) {
       slug: form.publicKey,
       document: draft,
       attributes: publishAttributesOf(target),
+      ...(target.deal === undefined ? {} : { dealAttributes: publishAttributesOf(target.deal) }),
       ...(target.objectName === undefined ? {} : { objectName: target.objectName }),
       canChangeAttributes: canBuild && canManage,
     });
@@ -492,10 +592,18 @@ export function FormEditor(props: FormEditorProps) {
         latest.current = view.draft;
         // The first time, the Ready dialog says it is live and hands over the link.
         if (!wasPublished) {
+          if (target.objectName !== undefined && view.live?.targets.main !== undefined) {
+            const objectName = target.objectName;
+            setLiveFiling((before) => before ?? { objectName, made: [] });
+          } else setLiveFiling(undefined);
           setJustLive(view);
           return;
         }
-        toasts.toast({ tone: 'success', message: strings.published });
+        toasts.toast(
+          view.live !== undefined && uploadsOffFor(target, view.live)
+            ? { tone: 'info', message: strings.publishedUploadsOff }
+            : { tone: 'success', message: strings.published },
+        );
         // Where answers are saved changed, and the form saves now: offer to save the earlier submissions the same way.
         if (filingChanged && view.live?.targets.main !== undefined && view.submissionCount > 0) {
           setSyncOffer(wasKeptOnly ? 'connected' : 'published');
@@ -556,29 +664,75 @@ export function FormEditor(props: FormEditorProps) {
   // Asked first when questions are saved onto the object now: the change clears where every one of them is saved,
   // and nothing takes it back. With nothing saved anywhere it stays one click.
   const [retargetAsk, setRetargetAsk] = useState<RetargetAsk | undefined>(undefined);
-  const askRetarget = (objectId: string | null) => {
+  const askRetarget = (objectId: string | null, withDeal?: boolean) => {
     if (isRetargeting) return;
+    // Moving a Deals form to People with a deal keeps every answer where it was saved (on the deal), so it asks nothing.
+    if (withDeal === true) {
+      retarget(objectId, false, true);
+      return;
+    }
     const step = retargetStep(draft, objects, objectId, strings.thisObject);
     if (step.kind === 'go') retarget(objectId);
     else if (step.kind === 'ask') setRetargetAsk(step.ask);
   };
 
-  const retarget = (objectId: string | null) => {
+  const retarget = (objectId: string | null, isUndo = false, withDeal = false) => {
     if (isRetargeting) return;
     setRetargeting(true);
     const settled = () => {
       setRetargeting(false);
     };
+    // Where it saved before, for Undo (forms fix a2): the server remembered the mapping, so going back restores it.
+    const before = draft.targets.main?.objectId ?? null;
+    // One save model (forms fixes 2): a live form with nothing else waiting takes the change live at once, as every
+    // other setting does; with edits waiting on the Form tab, it goes live with them on Publish.
+    const goesLiveNow = isPublished && !form.hasUnpublished && sameDocument(latest.current, saved.current.document);
     flush()
-      .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision))
-      .then(async (view) => {
+      .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision, withDeal || undefined))
+      .then(async (moved) => {
         const choices = await data.forms.attributes(slug, form.id);
+        const filed = objectId === null ? moved.draft : fileByLabel(moved.draft, choices.items);
+        const view = !goesLiveNow
+          ? moved
+          : await (
+              sameDocument(filed, moved.draft)
+                ? Promise.resolve(moved.revision)
+                : data.forms.saveDraft(slug, form.id, filed, moved.revision).then((saved) => saved.revision)
+            )
+              .then((revision) => data.forms.publish(slug, form.id, { expectedRevision: revision }))
+              .catch((error: unknown) => {
+                // Refused live (a field the object insists on): it waits in the draft, and the refusal says why.
+                toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
+                return data.forms.get(slug, form.id);
+              });
         apply(view);
         const next = objectId === null ? view.draft : fileByLabel(view.draft, choices.items);
         setDraft(next);
         latest.current = next;
         setTarget(choices);
         settled();
+        if (isUndo) return;
+        const toName = objects.find((object) => object.id === objectId)?.pluralName ?? strings.thisObject;
+        toasts.toast({
+          tone: 'success',
+          // With edits waiting on the Form tab, the change waits with them: the toast says so (review).
+          message:
+            isPublished && !goesLiveNow
+              ? objectId === null
+                ? strings.savingOffToast
+                : strings.savingChangedToast(toName)
+              : objectId === null
+                ? strings.retargetOffDone
+                : withDeal
+                  ? strings.retargetDealDone
+                  : strings.retargetDone(toName),
+          action: {
+            label: strings.undo,
+            onAction: () => {
+              retarget(before, true);
+            },
+          },
+        });
       })
       .catch((error: unknown) => {
         settled();
@@ -613,16 +767,19 @@ export function FormEditor(props: FormEditorProps) {
   };
 
   const changedBy = members.find((member) => member.id === form.draftSavedByMemberId)?.name;
+  // Saved by this person from another tab (critique c): never blamed on them as if someone else.
+  const isMine = useMyAccess()?.memberId === form.draftSavedByMemberId;
 
   const topBar = (
     <TopBar
       title={form.name}
       icon="clipboard-list"
       crumbs={[{ id: 'forms', label: strings.forms, href: formsHref(slug) }]}
+      // A member who may only view a live form sees its answers, and says so in the bar (forms fix a10); a reader
+      // sees the form as it is: one tag by the name, never a note over the editor.
       meta={
         <>
-          <EditorStatus tone={status.tone} text={status.text} />
-          {/* A reader sees the form as it is: one tag by the name, never a note over the editor. */}
+          {!viewOnly && <EditorStatus tone={status.tone} text={status.text} />}
           {!canManage && <ViewOnlyTag reason={strings.readOnlyText} />}
         </>
       }
@@ -688,18 +845,6 @@ export function FormEditor(props: FormEditorProps) {
                         },
                       ]
                     : []),
-                  // Earlier submissions saved again the way the form saves now: once it saves to the CRM and has some.
-                  ...(form.live?.targets.main !== undefined && form.submissionCount > 0
-                    ? [
-                        {
-                          id: 'sync',
-                          label: strings.syncOld,
-                          icon: 'refresh-cw' as const,
-                          description: strings.syncOldText,
-                          onAction: () => setSyncOffer('menu'),
-                        },
-                      ]
-                    : []),
                 ],
               },
             }
@@ -710,7 +855,14 @@ export function FormEditor(props: FormEditorProps) {
 
   // Before the first publish, Form and Settings: what happens after sending, routing and the owner are set before
   // anyone fills it in (late trap #47); Install and Submissions wait for a live form.
-  const current: FormTab = isPublished || tab === 'settings' ? tab : 'form';
+  // A member who may only view a live form gets its Submissions and Analytics, not a locked builder (forms fix a10).
+  const current: FormTab = viewOnly
+    ? tab === 'analytics'
+      ? 'analytics'
+      : 'submissions'
+    : isPublished || tab === 'settings'
+      ? tab
+      : 'form';
   const notices = (
     <>
       {form.status === 'paused' && (
@@ -726,6 +878,12 @@ export function FormEditor(props: FormEditorProps) {
       {current !== 'settings' && form.live?.after.kind === 'booking' && (
         <AfterPageNotice slug={slug} formId={form.id} live={form.live} />
       )}
+      {/* A form asking for a file where visitors can't upload one (forms fixes 2): said before it goes live. */}
+      {current === 'form' && canManage && uploadsOffFor(target, draft) && (
+        <Callout tone="warning" title={strings.uploadsOffTitle}>
+          {strings.uploadsOffText}
+        </Callout>
+      )}
       <RetargetFormDialog
         ask={retargetAsk}
         onClose={() => {
@@ -739,8 +897,16 @@ export function FormEditor(props: FormEditorProps) {
         }}
       />
       {conflict && (
-        <Callout tone="warning" isAnnounced actions={<Button onPress={loadTheirs}>{strings.loadTheirs}</Button>}>
-          {changedBy === undefined ? strings.someoneChanged : strings.changedBy(changedBy)}
+        <Callout
+          tone="warning"
+          isAnnounced
+          actions={<Button onPress={loadTheirs}>{isMine ? strings.loadMine : strings.loadTheirs}</Button>}
+        >
+          {isMine
+            ? strings.changedByMe
+            : changedBy === undefined
+              ? strings.someoneChanged
+              : strings.changedBy(changedBy)}
         </Callout>
       )}
       {shown !== undefined && (
@@ -767,14 +933,29 @@ export function FormEditor(props: FormEditorProps) {
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
             onStatusChange={setStatus}
+            onSettingsChange={applySettings}
+            {...(props.keepMonths === undefined ? {} : { keepMonths: props.keepMonths })}
           />
         );
-      case 'install':
-        return <InstallTab slug={slug} form={form} isReadOnly={!canManage} onFormChange={setForm} />;
+      case 'share':
+        return <ShareTab slug={slug} form={form} isReadOnly={!canManage} onFormChange={setForm} />;
       case 'analytics':
         // Only a live form has analytics, and the tab is offered only once it is published (see the tab list).
         return <AnalyticsTab data={data} slug={slug} form={form} />;
       case 'submissions':
+        if (props.submissionsFailed !== undefined) {
+          return (
+            <EmptyState
+              tone="error"
+              title={strings.submissionsFailedTitle}
+              onRetry={() => {
+                void router.invalidate();
+              }}
+            >
+              {props.submissionsFailed}
+            </EmptyState>
+          );
+        }
         return props.submissions === undefined ? null : (
           <SubmissionsTab
             slug={slug}
@@ -790,22 +971,38 @@ export function FormEditor(props: FormEditorProps) {
             followJob={jobs.follow}
             isFiling={form.live?.targets.main !== undefined}
             hasSubmissions={form.submissionCount > 0}
+            // Spam is for those who manage forms: a member's count would name rows they can't open.
+            spamCount={canManage ? form.spamCount : 0}
           />
         );
       default:
         return (
           <>
-            {/* Before the first publish the name is changed here too, as a field, beside the questions. */}
-            {!isPublished && canManage && (
-              <DraftName
-                name={form.name}
-                onRename={(name) => {
-                  data.forms.updateSettings(slug, form.id, { name }).then((view) => {
-                    setForm((before) => ({ ...before, name: view.name, revision: before.revision }));
-                  }, failed);
-                }}
-              />
-            )}
+            {/* One title (critique c, blocker 2): the headline visitors read, edited here at the top with the line
+                under it; while the form is still Untitled, its name follows the headline. */}
+            <FormTitle
+              headline={draft.headline}
+              subheading={draft.subheading ?? ''}
+              isReadOnly={!canManage}
+              onChange={(change) => {
+                setDraft((before) => {
+                  const { subheading: _was, ...rest } = before;
+                  const subheading = change.subheading ?? before.subheading ?? '';
+                  return {
+                    ...rest,
+                    headline: change.headline ?? before.headline,
+                    ...(subheading.trim() === '' ? {} : { subheading }),
+                  };
+                });
+              }}
+              onCommit={(headline) => {
+                if (isPublished || !canManage || form.name !== strings.untitledForm || headline.trim() === '') return;
+                const name = headline.trim().slice(0, 80);
+                data.forms.updateSettings(slug, form.id, { name }).then((view) => {
+                  setForm((before) => ({ ...before, name: view.name, revision: before.revision }));
+                }, failed);
+              }}
+            />
             <LayoutCard
               layout={draft.layout}
               isReadOnly={!canManage}
@@ -825,34 +1022,46 @@ export function FormEditor(props: FormEditorProps) {
                 );
               }}
             />
-            <FlowView
-              draft={draft}
-              isOpen={isFlowOpen}
-              questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
-              stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
-              endingsHref={`${formHref(slug, form.id)}?question=${AFTER_ROW}`}
-              onOpenChange={setFlowOpen}
-            />
+            {isFlowOpen && (
+              <LogicMap
+                slug={slug}
+                draft={draft}
+                problems={logicIssues}
+                onSuggest={(suggestion) => {
+                  const ids = { rule: data.forms.newId(), ending: mintEndingId(draft.endings ?? []) };
+                  setDraft((before) => suggestion.apply(before, ids));
+                  toasts.toast({ tone: 'success', message: strings.suggestionAdded });
+                }}
+                questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
+                stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
+                endingsHref={`${formHref(slug, form.id)}?question=${AFTER_ROW}`}
+                onOpenChange={setFlowOpen}
+              />
+            )}
             <QuestionsSection
+              // A new form never saved since it was made with nothing in it (Blank) opens on its first question.
+              startsWithQuestion={!isPublished && form.revision === 1}
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               {...(questionStats === undefined ? {} : { stats: questionStats })}
-              onOpened={setPreviewRow}
-              // The Flow sits beside Add a question once a step jumps (T20): before that, the list is the flow.
-              {...(draft.layout === 'steps' && draft.steps.some((step) => (step.jumps?.length ?? 0) > 0)
-                ? {
+              onOpened={openRow}
+              // The Logic map's door (T41): how many rules the form has, and how many need a look.
+              {...(draft.questions.length === 0
+                ? {}
+                : {
                     actionsStart: (
                       <Button
                         variant="ghost"
-                        icon="git-branch"
+                        icon={logicIssues.length > 0 ? 'triangle-alert' : 'git-branch'}
                         onPress={() => {
                           setFlowOpen(true);
                         }}
                       >
-                        {strings.flowOpen}
+                        {logicIssues.length > 0
+                          ? strings.logicButtonWarn(logicCount(draft), logicIssues.length)
+                          : strings.logicButton(logicCount(draft))}
                       </Button>
                     ),
-                  }
-                : {})}
+                  })}
               steps={{
                 steps: draft.steps,
                 layout: draft.layout,
@@ -873,7 +1082,79 @@ export function FormEditor(props: FormEditorProps) {
               }}
               questions={draft.questions}
               onChange={(update) => {
-                setDraft((before) => withQuestions(before, update(before.questions)));
+                // Rules follow their choices (T41): a renamed choice is renamed in them, a removed one leaves them,
+                // said once with Undo when a rule went with it.
+                const snapshot = draft;
+                const dropped = followChoices(
+                  snapshot.questions,
+                  withQuestions(snapshot, update(snapshot.questions)),
+                ).dropped;
+                setDraft(
+                  (before) => followChoices(before.questions, withQuestions(before, update(before.questions))).document,
+                );
+                if (dropped > 0) {
+                  toasts.toast({
+                    tone: 'info',
+                    message: strings.choiceRulesDropped(dropped),
+                    action: {
+                      label: strings.undo,
+                      onAction: () => {
+                        setDraft(snapshot);
+                      },
+                    },
+                  });
+                }
+              }}
+              logicWarnings={(place) => problemsAt(logicIssues, place).map(problemWords)}
+              onRemoveUsed={(question, index) => {
+                const uses = logicUses(draft, question.key);
+                if (uses === 0) return false;
+                const snapshot = draft;
+                setDraft(
+                  (before) =>
+                    dropQuestionLogic(
+                      withQuestions(
+                        before,
+                        before.questions.filter((each) => each.id !== question.id),
+                      ),
+                      question.key,
+                    ).document,
+                );
+                toasts.toast({
+                  tone: 'info',
+                  message: strings.deletedWithRules(
+                    question.label === '' ? questionStrings.untitledQuestion : question.label,
+                    uses,
+                  ),
+                  action: {
+                    label: strings.undo,
+                    onAction: () => {
+                      setDraft((before) =>
+                        before.questions.some((each) => each.id === question.id)
+                          ? before
+                          : {
+                              ...before,
+                              questions: [
+                                ...before.questions.slice(0, index),
+                                question,
+                                ...before.questions.slice(index),
+                              ],
+                              steps: snapshot.steps,
+                              routing: snapshot.routing,
+                              ...(snapshot.endings === undefined ? {} : { endings: snapshot.endings }),
+                            },
+                      );
+                      // Show only if on the other questions comes back with the question.
+                      setDraft((before) => ({
+                        ...before,
+                        questions: before.questions.map(
+                          (each) => snapshot.questions.find((was) => was.id === each.id) ?? each,
+                        ),
+                      }));
+                    },
+                  },
+                });
+                return true;
               }}
               max={FORM_QUESTIONS_MAX}
               holder={questionStrings.formHolder}
@@ -886,6 +1167,7 @@ export function FormEditor(props: FormEditorProps) {
               }}
               attributes={target.items}
               objectName={target.objectName}
+              {...(draft.targets.deal === undefined || target.deal === undefined ? {} : { deal: target.deal })}
               liveIds={liveIds}
               newId={() => data.forms.newId()}
               toasts={toasts}
@@ -904,6 +1186,8 @@ export function FormEditor(props: FormEditorProps) {
               newId={() => data.forms.newId()}
               onDraftChange={setDraft}
               showGaps={showGaps}
+              onEditEnding={setEditedEnding}
+              stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
               {...(props.question === AFTER_ROW ? { focusRow: AFTER_ROW } : {})}
               {...(shown?.endingId === undefined
                 ? {}
@@ -917,6 +1201,8 @@ export function FormEditor(props: FormEditorProps) {
   const layout = (
     <PreviewLayout
       notices={notices}
+      // The phone beside the questions from a laptop's width up (critique c, blocker 1): two fifths of the width.
+      previewShare="wide"
       // Every tab reads top to bottom, full width; only the Form tab keeps the preview (the owner, 22 October 2026).
       bodyLayout="stack"
       {...(current === 'form'
@@ -929,69 +1215,27 @@ export function FormEditor(props: FormEditorProps) {
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
                   {...(canManage ? { onTextChange: changeText } : {})}
+                  {...(previewEnding === undefined ? {} : { ending: previewEnding })}
                 />
               ) : (
                 <HostedFormPreview
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
                   {...(canManage ? { onTextChange: changeText } : {})}
+                  {...(previewEnding === undefined ? {} : { ending: previewEnding })}
                 />
               ),
+            // Design (5 November 2026): one button holding the look, over the preview it changes.
             previewControls: (
-              <>
-                <Select
-                  label={strings.colour}
-                  isLabelHidden
-                  size="sm"
-                  isReadOnly={!canManage}
-                  items={[
-                    { id: 'light', label: strings.light, icon: 'sun' },
-                    { id: 'dark', label: strings.dark, icon: 'moon' },
-                  ]}
-                  value={draft.look.colour}
-                  onChange={(colour) => {
-                    if (colour === 'light' || colour === 'dark') {
-                      setDraft((before) => ({ ...before, look: { ...before.look, colour } }));
-                    }
-                  }}
-                />
-                <Select
-                  label={strings.corners}
-                  isLabelHidden
-                  size="sm"
-                  isReadOnly={!canManage}
-                  items={[
-                    { id: 'rounded', label: strings.rounded },
-                    { id: 'square', label: strings.square },
-                  ]}
-                  value={draft.look.corners}
-                  onChange={(corners) => {
-                    if (corners === 'rounded' || corners === 'square') {
-                      setDraft((before) => ({ ...before, look: { ...before.look, corners } }));
-                    }
-                  }}
-                />
-                {/* Colours (spec 0063, AC-6327): the workspace's brand kit, or the product's own. */}
-                {props.brand === undefined ? (
-                  <BrandThemeSelect
-                    value={draft.look.theme ?? 'plain'}
-                    isReadOnly={!canManage}
-                    onChange={(theme) => {
-                      setDraft((before) => ({ ...before, look: { ...before.look, theme } }));
-                    }}
-                  />
-                ) : (
-                  <BrandThemeSelectWithKit
-                    brand={props.brand}
-                    slug={slug}
-                    value={draft.look.theme ?? 'plain'}
-                    isReadOnly={!canManage}
-                    onChange={(theme) => {
-                      setDraft((before) => ({ ...before, look: { ...before.look, theme } }));
-                    }}
-                  />
-                )}
-              </>
+              <DesignButton
+                look={draft.look}
+                isReadOnly={!canManage}
+                {...(props.brand === undefined ? {} : { brand: props.brand })}
+                slug={slug}
+                onChange={(look) => {
+                  setDraft((before) => ({ ...before, look }));
+                }}
+              />
             ),
           }
         : {})}
@@ -1027,7 +1271,9 @@ export function FormEditor(props: FormEditorProps) {
         }}
       />
       <ReadyDialog
+        slug={slug}
         form={justLive}
+        {...(liveFiling === undefined ? {} : { filing: liveFiling })}
         onClose={() => {
           setJustLive(undefined);
           // Publish left once the form went live; focus goes to the menu beside where it was.
@@ -1061,7 +1307,7 @@ export function FormEditor(props: FormEditorProps) {
 
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="forms"
       page={{
         topBar,
         body: (
@@ -1077,11 +1323,17 @@ export function FormEditor(props: FormEditorProps) {
                   if ((FORM_TABS as readonly string[]).includes(value)) goTab(value as FormTab);
                 }}
                 tabs={[
-                  { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
-                  { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
+                  ...(viewOnly
+                    ? []
+                    : [
+                        { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
+                        { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
+                      ]),
+                  ...(isPublished && !viewOnly
+                    ? [{ id: 'share', label: strings.tabShare, href: formHref(slug, form.id, 'share') }]
+                    : []),
                   ...(isPublished
                     ? [
-                        { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
                         {
                           id: 'submissions',
                           label: strings.tabSubmissions,
@@ -1096,7 +1348,12 @@ export function FormEditor(props: FormEditorProps) {
                     : []),
                 ]}
               >
-                {(isPublished ? FORM_TABS : (['form', 'settings'] as const)).map((id) => (
+                {(viewOnly
+                  ? (['submissions', 'analytics'] as const)
+                  : isPublished
+                    ? FORM_TABS
+                    : (['form', 'settings'] as const)
+                ).map((id) => (
                   <TabPanel key={id} id={id} variant="fill">
                     {id === current && layout}
                   </TabPanel>
@@ -1143,31 +1400,60 @@ function AfterPageNotice({
   );
 }
 
+/** What the title at the top of the Form tab changes: the headline, or the line under it. */
+interface TitleChange {
+  readonly headline?: string;
+  readonly subheading?: string;
+}
+
 /**
- * A draft's name, as the page's own title (T17, 4 November 2026: no card round one field): the borderless title
- * field, typed in place. Blur saves it; an empty one says so.
+ * The form's one title (critique c, blocker 2; Tally's page title): the headline visitors read, in the page's title
+ * type, and the line under it, quiet, each edited in place. The private name lives in Settings once published.
  */
-function DraftName({ name, onRename }: { readonly name: string; readonly onRename: (name: string) => void }) {
-  const [value, setValue] = useState(name);
-  const [error, setError] = useState<string | undefined>(undefined);
+function FormTitle({
+  headline,
+  subheading,
+  isReadOnly,
+  onChange,
+  onCommit,
+}: {
+  readonly headline: string;
+  readonly subheading: string;
+  readonly isReadOnly: boolean;
+  readonly onChange: (change: TitleChange) => void;
+  /** The headline was left: an Untitled form takes it as its name. */
+  readonly onCommit: (headline: string) => void;
+}) {
   return (
-    <Field
-      label={strings.name}
-      isLabelHidden
-      variant="title"
-      value={value}
-      maxLength={80}
-      isRequired
-      onChange={(text) => {
-        setValue(text);
-        setError(undefined);
-      }}
-      onBlur={() => {
-        const trimmed = value.trim();
-        if (trimmed === '') setError(strings.nameRequired);
-        else if (trimmed !== name) onRename(trimmed);
-      }}
-      {...(error === undefined ? {} : { error })}
-    />
+    <SettingsStack variant="nested">
+      <Field
+        label={strings.formTitle}
+        isLabelHidden
+        variant="title"
+        isWrapping
+        placeholder={strings.formTitlePlaceholder}
+        value={headline}
+        maxLength={120}
+        isReadOnly={isReadOnly}
+        onChange={(text) => {
+          onChange({ headline: text });
+        }}
+        onBlur={() => {
+          onCommit(headline);
+        }}
+      />
+      <Field
+        label={strings.formLine}
+        isLabelHidden
+        isWrapping
+        placeholder={strings.formLinePlaceholder}
+        value={subheading}
+        maxLength={240}
+        isReadOnly={isReadOnly}
+        onChange={(text) => {
+          onChange({ subheading: text });
+        }}
+      />
+    </SettingsStack>
   );
 }

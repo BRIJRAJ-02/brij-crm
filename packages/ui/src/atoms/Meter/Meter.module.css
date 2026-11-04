@@ -44,6 +44,11 @@
     background: var(--accent);
   }
 
+  /* One data hue at every share, as BarStrip's bars (the dataviz method): nothing is wrong at 90%. */
+  .fill[data-tone='share'] {
+    background: var(--dot-blue);
+  }
+
   .fill[data-tone='warning'] {
     background: var(--dot-orange);
   }

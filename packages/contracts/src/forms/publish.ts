@@ -63,6 +63,12 @@ export interface PublishInput {
   };
   /** The main object's live attributes, by id (archived and deleted ones absent). */
   readonly attributes: ReadonlyMap<string, PublishAttribute>;
+  /**
+   * The deal's live attributes, by id, when Also create a deal is on (forms fixes 2): a question filed on the deal is
+   * checked against these, as one filed on the main record is against `attributes`. Absent: none are known, so a
+   * question filed on the deal reads as filed on a field that no longer exists.
+   */
+  readonly dealAttributes?: ReadonlyMap<string, PublishAttribute>;
   /** The main object's name, for the sentences that name it; "People" when it isn't given. */
   readonly objectName?: string;
   /**
@@ -101,6 +107,7 @@ export interface PublishProblem {
     | 'SHOW_WHEN_INVALID'
     | 'ROUTING_INVALID'
     | 'STEP_EMPTY'
+    | 'QUESTIONS_MISSING'
     | 'JUMP_INVALID'
     | 'ENDING_INVALID'
     | 'RECALL_INVALID'
@@ -211,6 +218,7 @@ export function questionsProblem(
   questions: readonly FormDocument['questions'][number][],
   attributes: ReadonlyMap<string, PublishAttribute>,
   target?: { readonly matchAttributeId?: string | undefined },
+  dealAttributes: ReadonlyMap<string, PublishAttribute> = new Map(),
 ): PublishProblem | undefined {
   const all: Readable = new Map(questions.map((question) => [question.key, question]));
   const before = new Map<string, FormDocument['questions'][number]>();
@@ -259,7 +267,7 @@ export function questionsProblem(
     }
     const filed = question.filedOn;
     if (filed === undefined) continue;
-    const attribute = attributes.get(filed.attributeId);
+    const attribute = (filed.objectRole === 'deal' ? dealAttributes : attributes).get(filed.attributeId);
     if (attribute === undefined) {
       return {
         code: 'FILING_GONE',
@@ -294,7 +302,7 @@ function requiredNotAsked(input: PublishInput): PublishProblem | undefined {
   if (input.document.targets.main === undefined) return undefined;
   const filled = new Set(
     input.document.questions.flatMap((question) =>
-      question.filedOn === undefined ? [] : [question.filedOn.attributeId],
+      question.filedOn?.objectRole !== 'main' ? [] : [question.filedOn.attributeId],
     ),
   );
   const missing = [...input.attributes.values()].filter(
@@ -638,6 +646,14 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
   if (!FORM_SLUG.test(input.slug)) {
     return { code: 'ADDRESS_INVALID', message: 'The address needs 2 to 40 lowercase letters, numbers or hyphens.' };
   }
+  // A form with nothing to ask has nothing to send (a Blank template starts empty, spec 0063, AC-6323): said plainly
+  // before anything about filing, which would otherwise ask for an email question first.
+  if (input.document.questions.length === 0) {
+    return {
+      code: 'QUESTIONS_MISSING',
+      message: 'Add a question first. A form with no questions has nothing to send.',
+    };
+  }
   // The look before the questions: a brand the page could not be read in is about the whole form, not one answer.
   if (input.document.look?.theme === 'brand' && input.brand !== undefined) {
     const unreadable = unreadableBrand(input.brand);
@@ -679,6 +695,7 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
     questions,
     input.attributes,
     targets.main === undefined ? undefined : { matchAttributeId: targets.main.matchAttributeId },
+    input.dealAttributes,
   );
   if (problem !== undefined) return problem;
   const steps = stepsProblem(input);

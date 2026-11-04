@@ -760,6 +760,8 @@ export {
   publishForm,
   rotateFormSecret,
   saveFormDraft,
+  applyFormSettings,
+  type LiveSettings,
   setFormStatus,
   setFormTarget,
   SLUG_TAKEN_MESSAGE,
@@ -830,11 +832,16 @@ export {
   FORMS_EXPORT,
   getExport,
   startSubmissionsExport,
+  exportSubmissionsNow,
+  EXPORT_NOW_MAX,
+  type ExportNow,
   UNKNOWN_EXPORT,
   type ExportRecord,
 } from './forms/export.ts';
 export {
   deleteSubmission,
+  restoreSubmission,
+  DELETED_SUBMISSIONS_KEPT_DAYS,
   getSubmission,
   listSubmissions,
   markSubmissionSpam,
@@ -842,6 +849,8 @@ export {
   resolveSubmission,
   retrySubmission,
   UNKNOWN_SUBMISSION,
+  useNewAnswer,
+  undoUseNewAnswer,
 } from './forms/submissions.ts';
 export {
   attachUploads,

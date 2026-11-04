@@ -401,6 +401,7 @@ export { DayStrip, type DayStripProps } from './modules/DayStrip/DayStrip.tsx';
 export { ReadyPanel, type ReadyPanelProps } from './modules/ReadyPanel/ReadyPanel.tsx';
 /** A printable A4 sheet of table tent cards, each with its QR (Menu QR's print page, spec 0065 H2). */
 export { QrSheet, type QrSheetCard, type QrSheetProps } from './modules/QrSheet/QrSheet.tsx';
+export { EmbedPreview, type EmbedPreviewProps } from './modules/EmbedPreview/EmbedPreview.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot, type SlotListProps } from './modules/SlotList/SlotList.tsx';
 export { PhotoCrop, type PhotoCropProps, type PhotoShape } from './modules/PhotoCrop/PhotoCrop.tsx';
@@ -551,7 +552,12 @@ export {
   type OptionsEditorOption,
   type OptionsEditorProps,
 } from './modules/OptionsEditor/OptionsEditor.tsx';
-export { QuestionList, type QuestionListItem, type QuestionListProps } from './modules/QuestionList/QuestionList.tsx';
+export {
+  focusInCard,
+  QuestionList,
+  type QuestionListItem,
+  type QuestionListProps,
+} from './modules/QuestionList/QuestionList.tsx';
 export {
   editorRuleOf,
   ruleOf,
@@ -697,7 +703,7 @@ export { UiProvider, useKeyboardPlatform, type FormatSettings, type UiProviderPr
 export { LOADING_TIMING, useDelayedLoading, type LoadingTiming } from './provider/useDelayedLoading.ts';
 export { LoadingNow, type LoadingNowProps } from './provider/LoadingNow.tsx';
 export { FormatScope, type FormatScopeProps } from './provider/FormatScope.tsx';
-export { FileLinksContext, useFileHref, useFormatSettings } from './provider/context.ts';
+export { FileLinksContext, useFileHref, useFormatSettings, useNow } from './provider/context.ts';
 export { SiteIconsContext } from './provider/site-icons.ts';
-export { formatDate, formatDay, type DateFormat } from './lib/format.ts';
+export { formatDate, formatDay, formatRelative, type DateFormat } from './lib/format.ts';
 export { firstDayOfWeek, type WeekStart } from './lib/month.ts';

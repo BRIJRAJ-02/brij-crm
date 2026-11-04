@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { probeAlignment } from '../../lib/alignment-probe.ts';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -432,6 +432,30 @@ export const ChoiceWide: Story = {
     const line = within(tile).getByText('Role, CV and portfolio.').getBoundingClientRect();
     await expect(Math.round(line.left)).toBe(Math.round(name.left));
     await expect(line.top).toBeGreaterThan(name.top);
+  },
+};
+
+/** `autoFocus` on a select grid: focus starts on the chosen tile, so the arrows move between them at once. */
+export const ChoiceAutoFocus: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="Start a form"
+        showsDescription
+        tileWidth="wide"
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus
+        autoFocus
+        defaultValue="feedback"
+        tiles={[
+          { id: 'blank', name: 'Blank form', icon: 'plus', description: 'Start from an empty page.' },
+          { id: 'feedback', name: 'Feedback', icon: 'message-square', description: 'A rating, and why.' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await waitFor(() => expect(canvas.getByRole('radio', { name: 'Feedback' })).toHaveFocus());
   },
 };
 

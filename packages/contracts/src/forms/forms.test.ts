@@ -56,10 +56,37 @@ describe('checkAnswers (spec 0023, AC-553, AC-556, AC-660)', () => {
         website: 'https://acme.com',
         budget: '$1–5k',
         terms: true,
-        news: false,
         country: 'United Kingdom',
       },
     });
+  });
+
+  it('takes a rating up to its own number of stars, five when it names none', () => {
+    const rated = (count?: number) => ({
+      ...form,
+      questions: [
+        {
+          key: 'stars',
+          answerType: 'rating' as const,
+          required: true,
+          ...(count === undefined ? {} : { options: { count } }),
+        },
+      ],
+    });
+    expect(checkAnswers(rated(), { stars: 5 }).ok).toBe(true);
+    expect(checkAnswers(rated(), { stars: 6 }).ok).toBe(false);
+    expect(checkAnswers(rated(7), { stars: 7 }).ok).toBe(true);
+    expect(checkAnswers(rated(7), { stars: 8 }).ok).toBe(false);
+  });
+
+  it('takes a yes or no left unpicked as no answer, never No, and asks for a pick where one is required', () => {
+    const asked = { ...form, questions: [{ key: 'news', answerType: 'yes_no' as const, required: false }] };
+    expect(checkAnswers(asked, {})).toEqual({ ok: true, answers: {} });
+    expect(checkAnswers(asked, { news: false })).toEqual({ ok: true, answers: { news: false } });
+    const required = { ...form, questions: [{ key: 'news', answerType: 'yes_no' as const, required: true }] };
+    const refused = checkAnswers(required, {});
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.fields).toEqual({ news: 'Answer this question.' });
   });
 
   it('names each question that fails, by key', () => {
@@ -381,5 +408,31 @@ describe('the honeypot input', () => {
       /company|business|organi[sz]ation|url|website|name|mail|phone|tel|address|city|zip|postal/i,
     );
     expect(QUESTION_KEY.test(HONEYPOT_INPUT_NAME)).toBe(false);
+  });
+});
+
+describe('publishProblem on an empty form (a Blank template, AC-6323)', () => {
+  it('refuses a form with no questions, plainly, before asking for an email', () => {
+    const empty = FormDocument.parse({ questions: [], targets: {} });
+    expect(publishProblem({ name: 'Untitled form', slug: 'untitled', document: empty, attributes: new Map() })).toEqual(
+      {
+        code: 'QUESTIONS_MISSING',
+        message: 'Add a question first. A form with no questions has nothing to send.',
+      },
+    );
+  });
+});
+
+describe('a question’s description (5 November 2026)', () => {
+  it('is optional, so every document saved before it still parses, and holds up to 280 characters', () => {
+    const base = { id: 'q1', key: 'budget', label: 'Budget', answerType: 'short_text', required: false };
+    expect(FormDocument.parse({ questions: [base], targets: {} }).questions[0]?.description).toBeUndefined();
+    expect(
+      FormDocument.parse({ questions: [{ ...base, description: 'A rough number is fine.' }], targets: {} }).questions[0]
+        ?.description,
+    ).toBe('A rough number is fine.');
+    expect(
+      FormDocument.safeParse({ questions: [{ ...base, description: 'x'.repeat(281) }], targets: {} }).success,
+    ).toBe(false);
   });
 });

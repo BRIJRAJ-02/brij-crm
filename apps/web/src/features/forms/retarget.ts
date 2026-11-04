@@ -1,6 +1,6 @@
-// Whether changing a form's object asks first (the owner's rule, 21 October 2026: anything that ends something asks
-// first): it does when questions are saved onto the object now, since the change clears where each is saved and
-// nothing takes it back. Pure, so the rule is tested apart from the editor.
+// Whether changing a form's object asks first: it does when questions are saved onto the object now, naming them,
+// since they stop saving there (the server remembers where, so switching back puts them back: forms fix a2). Pure,
+// so the rule is tested apart from the editor.
 import type { FormDocument, ObjectSummary } from '@crm/data';
 import type { RetargetAsk } from './FormConfirms.tsx';
 
@@ -22,8 +22,13 @@ export function retargetStep(
 ): RetargetStep {
   const current = draft.targets.main?.objectId ?? null;
   if (current === objectId) return { kind: 'nothing' };
-  const filedCount = draft.questions.filter((question) => question.filedOn !== undefined).length;
+  const filed = draft.questions.filter((question) => question.filedOn !== undefined);
+  const filedCount = filed.length;
   if (filedCount === 0) return { kind: 'go' };
+  const filedLabels = filed.map((question) => question.label.trim() || unnamed);
   const nameOf = (id: string | null) => objects.find((object) => object.id === id)?.pluralName ?? unnamed;
-  return { kind: 'ask', ask: { objectId, filedCount, objectName: nameOf(current), nextName: nameOf(objectId) } };
+  return {
+    kind: 'ask',
+    ask: { objectId, filedCount, filedLabels, objectName: nameOf(current), nextName: nameOf(objectId) },
+  };
 }

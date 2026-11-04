@@ -6,11 +6,11 @@ import styles from './SentAnswers.module.css';
 import type { HostedFormState } from './use-hosted-form.ts';
 
 /**
- * An answer as words. It reads the held value itself rather than through Question's helpers, so this chunk shares
+ * An answer as words (also what Copy my answers copies, when a form closes mid fill). It reads the held value itself rather than through Question's helpers, so this chunk shares
  * no module with the form's first load (sharing one splits it into a chunk of its own, which the first load pays
  * for): a file's name, a phone as typed, the rest as given.
  */
-function textOf(answerType: string, value: unknown, signed: string): string {
+export function answerText(answerType: string, value: unknown, signed: string): string {
   if (typeof value === 'string') return value.trim();
   // A ranking reads as its order; a signature as the fact of it (spec 0063).
   if (Array.isArray(value)) return value.map((each, index) => `${String(index + 1)}. ${String(each)}`).join(', ');
@@ -35,7 +35,7 @@ export function SentAnswers({
 }) {
   const sent = form.questions.flatMap((question) => {
     if (!state.shown.has(question.key)) return [];
-    const text = textOf(question.answerType, state.answers[question.key], state.words.signed);
+    const text = answerText(question.answerType, state.answers[question.key], state.words.signed);
     return text === ''
       ? []
       : [

@@ -88,3 +88,45 @@ export function nextStepName(
   const next = at < 0 ? undefined : resolved[at + 1];
   return next === undefined ? undefined : strings.jumpToStep(at + 2, next.title);
 }
+
+/** A question One at a time can stop on: every question but a hidden one, which a visitor never sees. */
+const isAsked = (question: FormQuestion) => question.answerType !== 'hidden';
+
+/** A question's name in a jump's line: its words, or "Untitled question". */
+const questionName = (question: FormQuestion) =>
+  question.label.trim() === '' ? strings.untitledQuestion : question.label.trim();
+
+/**
+ * The targets a jump on question `questionId` may take with One at a time (spec 0063, AC-6313), where each question
+ * is a screen of its own and a jump names the question it goes to by its key: every question below it a visitor sees,
+ * then every ending. Only forward targets are offered, as on a step.
+ */
+export function questionJumpChoices(
+  questions: readonly FormQuestion[],
+  endings: readonly FormEnding[],
+  questionId: string,
+): readonly JumpChoice[] {
+  const asked = questions.filter(isAsked);
+  const at = asked.findIndex((question) => question.id === questionId);
+  const later = asked.flatMap((question, index): JumpChoice[] =>
+    index <= at ? [] : [{ id: `step:${question.key}`, label: strings.jumpToQuestion(questionName(question)) }],
+  );
+  return [
+    ...later,
+    ...endings.map((ending, index) => ({
+      id: `ending:${ending.id}`,
+      label: strings.jumpToEnding(index + 1, ending.heading),
+    })),
+  ];
+}
+
+/**
+ * Where a visitor goes after question `questionId` with One at a time when no jump matched: the next question they
+ * see, by its place and words ("Budget"), or undefined at the last one, where the form is sent.
+ */
+export function nextQuestionName(questions: readonly FormQuestion[], questionId: string): string | undefined {
+  const asked = questions.filter(isAsked);
+  const at = asked.findIndex((question) => question.id === questionId);
+  const next = at < 0 ? undefined : asked[at + 1];
+  return next === undefined ? undefined : strings.jumpToQuestion(questionName(next));
+}

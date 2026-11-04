@@ -13,6 +13,8 @@ import {
   publishForm,
   rotateFormSecret,
   saveFormDraft,
+  applyFormSettings,
+  type LiveSettings,
   setFormStatus,
   setFormTarget,
   updateFormSettings,
@@ -22,6 +24,7 @@ import {
 import { withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
+import type { ApplyFormSettingsInput } from '@crm/contracts';
 
 // Forms (spec 0023), inside a workspace: the door has let in an active member, and `context.scope` is theirs. Reads
 // answer the forms on objects the member can see; every change needs forms.manage, checked in the service, and goes
@@ -29,9 +32,11 @@ import { member } from '../../orpc.ts';
 export const formsRouter = member.forms.router({
   list: member.forms.list.handler(({ context, input }) => listForms(context.scope, { archived: input.archived })),
   get: member.forms.get.handler(({ context, input }) => getForm(context.scope, { formId: input.formId })),
-  attributes: member.forms.attributes.handler(({ context, input }) =>
-    formAttributes(context.scope, { formId: input.formId }),
-  ),
+  attributes: member.forms.attributes.handler(async ({ context, input }) => {
+    const choices = await formAttributes(context.scope, { formId: input.formId });
+    // Said where it is known: the store is the api's, not the core's (forms fixes 2).
+    return context.takesFormFiles ? choices : { ...choices, uploadsOff: true as const };
+  }),
   // A form's analytics (spec 0063, AC-6321): read only, and only for a form this member may see.
   analytics: member.forms.analytics.handler(({ context, input }) =>
     formAnalytics(context.scope, { formId: input.formId, range: input.range }),
@@ -84,6 +89,16 @@ export const formsRouter = member.forms.router({
       ),
     ),
   ),
+  // Settings a version holds, live at once (forms fixes 2).
+  applySettings: member.forms.applySettings.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      applyFormSettings(
+        context.scope,
+        { formId: input.formId, expectedRevision: input.expectedRevision, settings: liveSettings(input.settings) },
+        hooks,
+      ),
+    ),
+  ),
   publish: member.forms.publish.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       publishForm(
@@ -131,7 +146,12 @@ export const formsRouter = member.forms.router({
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       setFormTarget(
         context.scope,
-        { formId: input.formId, mainObjectId: input.mainObjectId, expectedRevision: input.expectedRevision },
+        {
+          formId: input.formId,
+          mainObjectId: input.mainObjectId,
+          expectedRevision: input.expectedRevision,
+          ...(input.withDeal === undefined ? {} : { withDeal: input.withDeal }),
+        },
         hooks,
       ),
     ),
@@ -156,3 +176,13 @@ export const formsRouter = member.forms.router({
     ),
   ),
 });
+
+/** The settings as the service takes them: a key the call left out stays out, so it isn't read as a change. */
+function liveSettings(settings: ApplyFormSettingsInput['settings']): LiveSettings {
+  return {
+    ...(settings.closing === undefined ? {} : { closing: settings.closing }),
+    ...(settings.closedMessage === undefined ? {} : { closedMessage: settings.closedMessage }),
+    ...(settings.confirmation === undefined ? {} : { confirmation: settings.confirmation }),
+    ...(settings.deal === undefined ? {} : { deal: settings.deal }),
+  };
+}

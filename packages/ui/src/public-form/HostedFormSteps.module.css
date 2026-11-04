@@ -37,7 +37,8 @@
      as the whole screen, and the answer in a larger type, drawn from the spacing scale as the touch sizes are until
      the design system has an answer size. The lines under them (the error, Saved) take the label size the card
      worked out, so they stay small. */
-  .form[data-layout='conversational'] {
+  .form[data-layout='conversational'],
+  .welcome {
     --size-input: calc(2 * var(--space-24));
     --text-body: 400 var(--space-20) / var(--space-32) var(--font-sans);
 
@@ -47,25 +48,30 @@
   /* Moving on (T23): the next step or question rises in from below as the last one left upwards; Back comes down
      from above. The leaving one is animated out by the component (it is gone from the tree by then). Opacity and
      transform only, about a quarter second; under reduced motion a crossfade alone. */
-  .form[data-enter] {
-    animation: step-in var(--duration-modal) var(--ease-out);
+  /* The two never share a frame (critique c, 8): the leaving one goes in the exit's time, then this one comes in,
+     a little blurred as it starts, over the dialog's time. */
+  .form[data-enter],
+  .welcome[data-enter] {
+    animation: step-in var(--duration-modal) var(--ease-out) var(--duration-exit) backwards;
   }
 
-  /* Back comes down from above; under reduced motion it is a crossfade alone, with no travel. */
+  /* Back comes down from above; under reduced motion it is a crossfade alone, with no travel and no blur. */
   .form[data-enter='back'] {
-    --step-from: calc(-1 * var(--space-16));
+    --step-from: calc(-1 * var(--space-8));
   }
 
   @keyframes step-in {
     from {
       opacity: 0;
-      translate: 0 var(--step-from, var(--space-16));
+      translate: 0 var(--step-from, var(--space-8));
+      filter: blur(var(--step-blur, var(--space-2)));
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .form[data-enter] {
       --step-from: 0;
+      --step-blur: 0;
     }
   }
 
@@ -94,15 +100,85 @@
     letter-spacing: var(--tracking-note-title);
   }
 
+  /* One at a time's description under the heading: quiet, in the body size, before the answer. */
+  .describe {
+    margin: calc(-1 * var(--space-4)) 0 var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: pre-line;
+  }
+
+  /* The number in the accent with a small arrow after it (T42, Typeform's way). The accent is the link colour
+     here, the shade of it that reads as text on the ground. */
   .number {
+    display: inline-flex;
     flex: none;
-    color: var(--accent);
+    gap: var(--space-2);
+    align-items: center;
+    block-size: 1lh;
+    color: var(--link);
     font-variant-numeric: tabular-nums;
   }
 
+  /* The welcome screen (T42): the headline, its line, then Start, a step apart; it leaves upwards like a question. */
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-32);
+  }
+
+  /* "press Enter ↵" beside Start and OK, quiet, and only where there is a keyboard. */
+  .enter {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @media (pointer: coarse) {
+    .enter {
+      display: none;
+    }
+  }
+
+  /* The arrows and the place (T42): under the form, at its end; on a page from the page breakpoint, at the
+     window's foot on the end side, as Typeform's are. */
+  .nav {
+    display: flex;
+    gap: var(--space-4);
+    align-items: center;
+    align-self: flex-end;
+    margin-block-start: var(--space-24);
+  }
+
+  @media (width >= 1024px) {
+    .nav[data-mode='page'] {
+      position: fixed;
+      z-index: var(--z-sticky);
+      inset-block-end: var(--space-24);
+      inset-inline-end: var(--space-24);
+      margin: 0;
+    }
+  }
+
+  .place {
+    margin-inline-end: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Small beside the large question (the card's body and label are both the question's size here). */
   .aside {
     color: var(--text-tertiary);
+    font-size: var(--space-16);
     font-weight: normal;
+    letter-spacing: normal;
+    white-space: nowrap;
   }
 
   .actions {
@@ -120,6 +196,12 @@
   .buttons {
     display: flex;
     gap: var(--space-8);
+  }
+
+  /* One at a time: OK, then its Enter hint a little apart. */
+  .buttons[data-layout='conversational'] {
+    gap: var(--space-12);
+    align-items: center;
   }
 
   /* Steps: Back keeps its size and Continue takes the rest of the row. */

@@ -274,7 +274,7 @@ async function readDecisions(tx: WorkspaceTx, where: SQL, limit: number) {
       r.id::text as person_id, r.object_id::text as person_object_id
     from routing_decisions d
     left join bookings b on b.workspace_id = d.workspace_id and b.id = d.booking_id
-    left join form_submissions s on s.workspace_id = d.workspace_id and s.id = d.submission_id
+    left join form_submissions s on s.workspace_id = d.workspace_id and s.id = d.submission_id and s.deleted_at is null
     left join records r on r.workspace_id = d.workspace_id and r.id = coalesce(b.person_record_id, s.main_record_id)
     where ${where}
     order by d.decided_at desc, d.id desc

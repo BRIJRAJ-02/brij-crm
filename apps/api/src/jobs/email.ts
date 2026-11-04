@@ -134,6 +134,7 @@ export async function runEmail(deps: EmailTaskDeps, payload: unknown, attempt: E
       html: drawn.html,
       text: drawn.text,
       ...(email.replyTo === undefined ? {} : { replyTo: email.replyTo }),
+      ...(email.fromName === undefined ? {} : { fromName: email.fromName }),
       idempotencyKey: `email/${emailId}`,
       ...(link === undefined
         ? {}

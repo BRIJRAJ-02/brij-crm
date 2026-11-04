@@ -4,7 +4,7 @@
 // read its main record; one with no main record yet (received, spam,
 // failed) only with `forms.manage`. Answers to attributes the reader can't
 // see are left out, the same rule as everywhere else (hidden means absent).
-import { and, desc, eq, inArray, lt, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import {
   SPAM_FILES_KEPT_DAYS,
   SubmissionContext,
@@ -25,8 +25,8 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import * as z from 'zod';
 import { checkId } from '../engine/ids.ts';
 import { queueFormWebhooks } from '../webhooks/queue.ts';
-import { readRecords } from '../engine/records.ts';
-import { loadAttributesById } from '../engine/values.ts';
+import { readRecords, updateRecord } from '../engine/records.ts';
+import { currentItems, loadAttributes, loadAttributesById } from '../engine/values.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -38,7 +38,14 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { withdrawSubmissionNotices } from '../notifications/notify.ts';
 import { UNKNOWN_FORM } from './forms.ts';
-import { FORMS_PROCESS, requiredFieldFailure, siteFieldFailure } from './process.ts';
+import {
+  FORMS_PROCESS,
+  fileOntoRecord,
+  heldValues,
+  indexHeld,
+  requiredFieldFailure,
+  siteFieldFailure,
+} from './process.ts';
 import { canSeeForm, loadForm, loadForms, loadVersions, millis } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
@@ -101,6 +108,12 @@ export const COLUMNS = {
 
 const record = (value: unknown): Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+/** Whether filing went to a record that was already there (forms fix a4): its stored action, updated or matched. */
+const isReturning = (outcome: unknown): boolean => {
+  const action = record(outcome).action;
+  return action === 'updated' || action === 'matched';
+};
 
 /** A stored context as members read it: read back through its schema, so a bad row shows nothing rather than failing. */
 function contextOf(stored: unknown): SubmissionContext | undefined {
@@ -171,10 +184,12 @@ export function answersOf(scope: EngineScope, document: FormDocument, stored: un
   return document.questions.flatMap((question): SubmissionAnswer[] => {
     if (!Object.hasOwn(answers, question.key)) return [];
     const attributeId = question.filedOn?.attributeId;
+    // An answer saved on the deal (forms fixes 2) is read as the deal's field, so a reader without Deals, or with
+    // that field hidden, never sees it.
+    const on = question.filedOn?.objectRole === 'deal' ? document.targets.deal?.objectId : objectId;
     if (
       attributeId !== undefined &&
-      objectId !== undefined &&
-      fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden'
+      (on === undefined || fieldLevel(scope.access, { id: attributeId, objectId: on }) === 'hidden')
     ) {
       return [];
     }
@@ -237,7 +252,10 @@ export async function readableForm(tx: WorkspaceTx, scope: EngineScope, formId: 
   return form;
 }
 
-/** A page of a form's submissions, newest first, optionally one state only (AC-572). */
+/**
+ * A page of a form's submissions, newest first, optionally one state only (AC-572). With no state, spam is left out
+ * (forms fix a8: it sat among real answers); the Spam filter shows it.
+ */
 export async function listSubmissions(
   scope: EngineScope,
   input: {
@@ -257,7 +275,8 @@ export async function listSubmissions(
       .where(
         and(
           eq(formSubmissions.formId, form.id),
-          input.state === undefined ? undefined : eq(formSubmissions.state, input.state),
+          isNull(formSubmissions.deletedAt),
+          input.state === undefined ? sql`${formSubmissions.state} <> 'spam'` : eq(formSubmissions.state, input.state),
           after === undefined
             ? undefined
             : and(
@@ -296,6 +315,7 @@ export async function listSubmissions(
         ...(main === undefined ? {} : { mainRecord: main }),
         ...summaryOf(version?.document, answers),
         crm: crmOf(row.state, main, files),
+        ...(isReturning(row.outcome) ? { isReturning: true } : {}),
       };
     });
     return {
@@ -355,7 +375,10 @@ export async function submissionNotices(
 ): Promise<ReadonlyMap<string, SubmissionNotice>> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
-  const rows = await tx.select(COLUMNS).from(formSubmissions).where(inArray(formSubmissions.id, unique));
+  const rows = await tx
+    .select(COLUMNS)
+    .from(formSubmissions)
+    .where(and(inArray(formSubmissions.id, unique), isNull(formSubmissions.deletedAt)));
   const forms = await loadForms(
     tx,
     rows.map((row) => row.formId),
@@ -381,11 +404,22 @@ export async function submissionNotices(
 }
 
 /** One submission in full, as the reader may see it, read inside an open transaction (NOT_FOUND for one they can't). */
-export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string): Promise<SubmissionView> {
+export async function viewIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  submissionId: string,
+  /** A deleted one too: only Undo reads one, to put it back. */
+  withDeleted = false,
+): Promise<SubmissionView> {
   const [row] = await tx
     .select(COLUMNS)
     .from(formSubmissions)
-    .where(eq(formSubmissions.id, checkId(submissionId, UNKNOWN_SUBMISSION)));
+    .where(
+      and(
+        eq(formSubmissions.id, checkId(submissionId, UNKNOWN_SUBMISSION)),
+        withDeleted ? undefined : isNull(formSubmissions.deletedAt),
+      ),
+    );
   if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   const form = await loadForm(tx, row.formId);
   if (form === undefined || !canSeeForm(scope.access, form)) {
@@ -432,6 +466,15 @@ export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: 
       ? [{ questionId, message }]
       : [];
   });
+  const keptList = record(row.outcome).kept;
+  // Only while the record shows: a kept answer is about the record it was kept off.
+  const kept =
+    main === undefined
+      ? []
+      : (Array.isArray(keptList) ? keptList : []).flatMap((item) => {
+          const { questionId } = record(item);
+          return typeof questionId === 'string' && shownQuestions.has(questionId) ? [{ questionId }] : [];
+        });
   const assignment = record(row.assignment);
   // A failure for a required field nothing filled is named here, not where it was stored: the job that wrote it
   // runs as the system and sees every field, while this reader may not (security review, 27 October 2026).
@@ -453,6 +496,7 @@ export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: 
     ...(main === undefined ? {} : { mainRecord: main }),
     ...summaryOf(version?.document, answers),
     crm: crmOf(row.state, main, await formFiles(tx, form)),
+    ...(isReturning(row.outcome) ? { isReturning: true } : {}),
     versionNumber: version?.number ?? 1,
     answers,
     hidden,
@@ -461,6 +505,7 @@ export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: 
     records,
     ...(failure === undefined ? {} : { failure }),
     refused,
+    kept,
     ...(removedOn === undefined ? {} : { filesRemovedOn: removedOn }),
     ...(typeof assignment.reason === 'string'
       ? {
@@ -483,9 +528,9 @@ export async function getSubmission(
 }
 
 /** Locks a submission the reader may see, for a change. */
-async function lockedSubmission(tx: WorkspaceTx, scope: EngineScope, submissionId: string) {
+async function lockedSubmission(tx: WorkspaceTx, scope: EngineScope, submissionId: string, withDeleted = false) {
   const id = checkId(submissionId, UNKNOWN_SUBMISSION);
-  await viewIn(tx, scope, id);
+  await viewIn(tx, scope, id, withDeleted);
   const [row] = await tx
     .select({
       id: formSubmissions.id,
@@ -674,7 +719,177 @@ export async function retrySubmission(
   );
 }
 
-/** Deletes a submission (AC-575): its answers go; the records it created stay. */
+/** What Use new answers for an answer that is no longer kept off the record (written already, or never kept). */
+export const NOT_KEPT = 'That answer is already on the record.';
+
+/**
+ * Use new (forms fix a4): writes one answer filing kept off the record (its question fills only an empty value, and
+ * the record held another) over the record's value now. Through the member's own access, as an edit on the record
+ * would be: a record or field they can't write refuses here with the engine's reason. The answer then no longer
+ * reads as kept. Needs `forms.manage`, as every other change to a submission does, and the record write goes
+ * through the member's own access.
+ */
+export async function useNewAnswer(
+  scope: EngineScope,
+  input: { readonly submissionId: string; readonly questionId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const before = await viewIn(tx, scope, input.submissionId);
+      const recordId = before.mainRecord?.recordId;
+      if (recordId === undefined || !before.kept.some((each) => each.questionId === input.questionId)) {
+        throw refuse('FORM_STATE', NOT_KEPT);
+      }
+      const [row] = await tx
+        .select({ versionId: formSubmissions.versionId, answers: formSubmissions.answers })
+        .from(formSubmissions)
+        .where(eq(formSubmissions.id, before.id))
+        .for('update');
+      const version = row === undefined ? undefined : (await loadVersions(tx, [row.versionId])).get(row.versionId);
+      const question = version?.document.questions.find((each) => each.id === input.questionId);
+      const objectId = version?.document.targets.main?.objectId;
+      if (row === undefined || question === undefined || objectId === undefined) throw refuse('FORM_STATE', NOT_KEPT);
+      const attributes = await loadAttributes(tx, objectId);
+      // The record's value before, kept on the submission so Undo can put it back (forms fixes 2).
+      const filedOn =
+        question.filedOn?.objectRole === 'main' ? attributes.get(question.filedOn.attributeId) : undefined;
+      const held =
+        filedOn === undefined
+          ? null
+          : (heldValues(indexHeld(await currentItems(tx, [recordId], [filedOn.id])), recordId)(filedOn) ?? null);
+      const filed = await fileOntoRecord(context, {
+        recordId,
+        questions: [{ ...question, update: 'always' }],
+        attributes,
+        answers: record(row.answers),
+      });
+      const [refusal] = filed.refused;
+      if (refusal !== undefined) throw refuse('FORM_STATE', refusal.message);
+      // And the value it wrote, so Undo puts the old one back only while the record still holds this one.
+      const wrote =
+        filedOn === undefined
+          ? null
+          : (heldValues(indexHeld(await currentItems(tx, [recordId], [filedOn.id])), recordId)(filedOn) ?? null);
+      const used = { questionId: input.questionId, attributeId: filedOn?.id ?? null, before: held, after: wrote };
+      await tx
+        .update(formSubmissions)
+        .set({
+          outcome: sql`jsonb_set(jsonb_set(${formSubmissions.outcome}, '{kept}', coalesce((
+            select jsonb_agg(item) from jsonb_array_elements(${formSubmissions.outcome}->'kept') item
+            where item->>'questionId' <> ${input.questionId}), '[]'::jsonb)), '{usedNew}', coalesce((
+            select jsonb_agg(item) from jsonb_array_elements(coalesce(${formSubmissions.outcome}->'usedNew', '[]'::jsonb)) item
+            where item->>'questionId' <> ${input.questionId}), '[]'::jsonb) || ${JSON.stringify([used])}::jsonb)`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(formSubmissions.id, before.id));
+      return viewIn(tx, scope, before.id);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** What Undo on Use new says when there is nothing to put back. */
+export const NOTHING_TO_UNDO = 'That answer was not changed from here, so there is nothing to put back.';
+
+/**
+ * Undo for Use new (forms fixes 2): puts back the value the record held before, through the member's own access, and
+ * the answer reads as kept off the record again. The value before is the one Use new kept on the submission.
+ */
+export async function undoUseNewAnswer(
+  scope: EngineScope,
+  input: { readonly submissionId: string; readonly questionId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const before = await viewIn(tx, scope, input.submissionId);
+      const recordId = before.mainRecord?.recordId;
+      const [row] = await tx
+        .select({ outcome: formSubmissions.outcome })
+        .from(formSubmissions)
+        .where(eq(formSubmissions.id, before.id))
+        .for('update');
+      const usedList = record(row?.outcome).usedNew;
+      const used = (Array.isArray(usedList) ? usedList : [])
+        .map((item) => UsedNew.safeParse(item))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []))
+        .find((item) => item.questionId === input.questionId);
+      if (recordId === undefined || used === undefined || used.attributeId === null) {
+        throw refuse('FORM_STATE', NOTHING_TO_UNDO);
+      }
+      // Someone changed the field since: Undo would wipe their edit, so it says so instead.
+      const attribute = (await loadAttributesById(tx, [used.attributeId])).get(used.attributeId);
+      const now =
+        attribute === undefined
+          ? null
+          : (heldValues(indexHeld(await currentItems(tx, [recordId], [attribute.id])), recordId)(attribute) ?? null);
+      if (stableJson(now) !== stableJson(used.after ?? null)) throw refuse('FORM_STATE', CHANGED_SINCE);
+      const written = await context.perRecord((inner) =>
+        updateRecord(inner, { recordId, values: { [used.attributeId ?? '']: { value: used.before } } }),
+      );
+      if (!written.ok) throw refuse('FORM_STATE', written.refusals[0]?.message ?? NOTHING_TO_UNDO);
+      await tx
+        .update(formSubmissions)
+        .set({
+          outcome: sql`jsonb_set(jsonb_set(${formSubmissions.outcome}, '{usedNew}', coalesce((
+            select jsonb_agg(item) from jsonb_array_elements(${formSubmissions.outcome}->'usedNew') item
+            where item->>'questionId' <> ${input.questionId}), '[]'::jsonb)), '{kept}',
+            coalesce(${formSubmissions.outcome}->'kept', '[]'::jsonb) || ${JSON.stringify([{ questionId: input.questionId }])}::jsonb)`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(formSubmissions.id, before.id));
+      return viewIn(tx, scope, before.id);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** One Use new, as the submission keeps it for Undo. */
+const UsedNew = z.object({
+  questionId: z.string(),
+  attributeId: z.string().nullable(),
+  before: z.unknown(),
+  after: z.unknown(),
+});
+
+/** A value as text with its keys in order: what jsonb kept (its own key order) compares equal to what is read now. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, each]) => each !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([key, each]) => `${JSON.stringify(key)}:${stableJson(each)}`).join(',')}}`;
+  }
+  return value === undefined ? 'null' : JSON.stringify(value);
+}
+
+/** What Undo on Use new says when the field has changed since. */
+export const CHANGED_SINCE = 'That field has changed since, so Undo would lose the newer value. Edit it on the record.';
+
+/** How long a deleted submission can be put back before the daily cleanup removes it for good. */
+export const DELETED_SUBMISSIONS_KEPT_DAYS = 30;
+
+/** Why a submission still being filed can't be deleted yet. */
+export const STILL_FILING = 'This submission is still being added. Try again in a moment.';
+
+/** What Undo on a submission that is no longer in the bin says. */
+export const NOT_DELETED = 'That submission is no longer deleted, or it was removed for good.';
+
+/**
+ * Deletes a submission (AC-575; soft since forms fixes 2, 6 November 2026): it leaves every list, count and export at
+ * once, the records it created stay, and Undo (`restoreSubmission`) puts it back until the daily cleanup removes it
+ * for good after `DELETED_SUBMISSIONS_KEPT_DAYS`.
+ */
 export async function deleteSubmission(
   scope: EngineScope,
   input: { readonly submissionId: string },
@@ -686,11 +901,42 @@ export async function deleteSubmission(
     async (context) => {
       const { tx } = context;
       const row = await lockedSubmission(tx, scope, input.submissionId);
+      // One still being filed waits for its filing (state review): deleted then put back, its job would have passed
+      // it by, and it would stay Received for good.
+      if (row.state === 'received' || row.state === 'processing') throw refuse('FORM_STATE', STILL_FILING);
       // Its notifications go with it: the inboxes showing one hear of it.
       await withdrawSubmissionNotices(context, sql`n.submission_id = ${row.id}`);
-      await tx.delete(formSubmissions).where(eq(formSubmissions.id, row.id));
+      await tx
+        .update(formSubmissions)
+        .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+        .where(eq(formSubmissions.id, row.id));
     },
     hooks,
   );
   return { deleted: true };
+}
+
+/** Puts back a submission deleted a moment ago (Undo), as it was; its notices stay withdrawn. */
+export async function restoreSubmission(
+  scope: EngineScope,
+  input: { readonly submissionId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const row = await lockedSubmission(tx, scope, input.submissionId, true);
+      const restored = await tx
+        .update(formSubmissions)
+        .set({ deletedAt: null, updatedAt: sql`now()` })
+        .where(and(eq(formSubmissions.id, row.id), isNotNull(formSubmissions.deletedAt)))
+        .returning({ id: formSubmissions.id });
+      if (restored.length === 0) throw refuse('FORM_STATE', NOT_DELETED);
+      return viewIn(tx, scope, row.id);
+    },
+    hooks,
+  );
+  return result;
 }

@@ -22,7 +22,7 @@ import { inWorkspace } from '../access/run.ts';
 import { checkId } from '../engine/ids.ts';
 import { refuse, refuseAll } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { loadForm, loadVersions } from './shared.ts';
+import { isClosedByRule, loadForm, loadVersions } from './shared.ts';
 import { getSubmission, UNKNOWN_SUBMISSION } from './submissions.ts';
 
 const { formUploads } = schema;
@@ -53,6 +53,10 @@ async function liveFileForm(tx: WorkspaceTx, formId: string): Promise<{ readonly
   if (form.status !== 'live') throw refuse('FORM_CLOSED', 'This form isn’t taking enquiries right now.');
   const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
   if (live === undefined || !asksForFile(live.document)) throw refuse('NOT_FOUND', NOT_TAKING_FILES);
+  // Closed by its own rule takes no more files either (security review, 5 November 2026).
+  if (isClosedByRule(live.document)) {
+    throw refuse('FORM_CLOSED', 'This form isn’t taking enquiries right now.');
+  }
   return { signatureOnly: !live.document.questions.some((question) => question.answerType === 'file') };
 }
 

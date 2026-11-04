@@ -4,7 +4,7 @@
 // the replies, already cut to what the reader may see.
 import type { EmailRow, FormConfirmationEmail, FormResumeEmail, FormSubmissionEmail } from '@crm/contracts/emails';
 import type { DocumentRow, EmailBlock } from '../document.ts';
-import { formatMoment } from '../format.ts';
+import { formatShortMoment } from '../format.ts';
 import { clip, workspaceOf, type Template, type TemplateContext } from '../template.ts';
 
 /** A form's answers as stacked rows (questions run long), each linked when it carries an app path. */
@@ -31,8 +31,9 @@ function answersPreview(answers: readonly EmailRow[]): string | undefined {
 /** A new submission to a form, for one member told about it. */
 export const formSubmission: Template<FormSubmissionEmail> = (params, context) => {
   const who = params.submitter.name ?? params.submitter.email;
-  const from = senderOf(params.submitter);
-  const when = formatMoment(params.submittedAt, params.timeZone);
+  const when = formatShortMoment(params.submittedAt, params.timeZone);
+  // The sender is in the answers already (their name, their email): a From row said it twice (forms fix b4).
+  const from = params.answers.length === 0 ? senderOf(params.submitter) : undefined;
   const blocks: EmailBlock[] = [
     {
       type: 'rows',
@@ -51,6 +52,13 @@ export const formSubmission: Template<FormSubmissionEmail> = (params, context) =
     blocks.push({ type: 'rows', layout: 'stacked', rows: answerRows(params.answers, context) });
   }
   blocks.push({ type: 'button', label: 'Open submission', url: context.link(params.submissionPath) });
+  // Replies go to the visitor (the worker sets Reply-To from their address), so the way to answer them is Reply.
+  if (params.submitter.email !== undefined) {
+    blocks.push({
+      type: 'note',
+      text: `Reply to this email to answer ${params.submitter.name ?? params.submitter.email}.`,
+    });
+  }
   return {
     subject: who === undefined ? `New submission to ${params.formName}` : `${who} filled in ${params.formName}`,
     preheader: answersPreview(params.answers) ?? `Submitted ${when}.`,
@@ -73,27 +81,33 @@ export const formSubmission: Template<FormSubmissionEmail> = (params, context) =
 /** The subject and heading a confirmation takes when its form sets none (spec 0023's default). */
 export const CONFIRMATION_DEFAULT_SUBJECT = 'We got your message';
 
-/** The visitor's copy of what they sent. */
+/**
+ * The visitor's copy of what they sent. It never names the form by its internal name (forms fix b3: "Thanks for
+ * filling in Lead qualification v2" told a visitor what the team calls them): the form's headline when it has one,
+ * else plain words. No time either: it was the workspace's zone, not the visitor's.
+ */
 export const formConfirmation: Template<FormConfirmationEmail> = (params, context) => {
   const title = params.subject ?? CONFIRMATION_DEFAULT_SUBJECT;
-  const opening = params.message ?? `Thanks for filling in ${params.formName}.`;
+  const opening = params.message ?? 'Thanks, we got it. We will come back to you soon.';
   const blocks: EmailBlock[] = [{ type: 'paragraph', text: opening }];
   if (params.answers.length > 0) {
     blocks.push(
-      {
-        type: 'note',
-        text: `Here’s a copy of what you sent on ${formatMoment(params.submittedAt, params.timeZone)}.`,
-      },
+      { type: 'note', text: 'Here’s a copy of what you sent.' },
       { type: 'rows', layout: 'stacked', rows: answerRows(params.answers, context) },
     );
   }
+  const where = params.headline === undefined ? 'a form' : `“${params.headline}”, a form`;
   return {
     subject: title,
     preheader: clip(opening, 140),
+    // The business's own logo heads its visitor's copy (forms fixes 2, critique b3); its name stays under it.
+    ...(params.logoPath === undefined
+      ? {}
+      : { logo: { url: context.link(params.logoPath), alt: workspaceOf(context) } }),
     eyebrow: workspaceOf(context),
     heading: title,
     blocks,
-    why: `You got this email because this address was entered on ${params.formName}, a form by ${workspaceOf(context)}. If that wasn’t you, you can ignore it.`,
+    why: `You got this email because this address was entered on ${where} by ${workspaceOf(context)}. If that wasn’t you, you can ignore it.`,
   };
 };
 
@@ -107,7 +121,7 @@ export const RESUME_SUBJECT = 'Finish your form when you’re ready';
  * to finish the form.
  */
 export const formResume: Template<FormResumeEmail> = (params, context) => {
-  const until = formatMoment(params.expiresAt, params.timeZone);
+  const until = formatShortMoment(params.expiresAt, params.timeZone);
   const opening = `Pick up ${params.formName} where you left off. This link works until ${until}.`;
   return {
     subject: RESUME_SUBJECT,

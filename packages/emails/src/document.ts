@@ -44,6 +44,11 @@ export interface EmailDocument {
   readonly preheader: string;
   /** A small line over the heading: the workspace the email is about. */
   readonly eyebrow?: string;
+  /**
+   * The workspace's own logo over the eyebrow, on the app's own origin (a visitor's copy of a form, forms fixes 2):
+   * the business's mark heads the email, and the product's stays in the footer. `alt` is the workspace's name.
+   */
+  readonly logo?: { readonly url: string; readonly alt: string };
   readonly heading: string;
   readonly blocks: readonly EmailBlock[];
   /** Why the reader got this email, for the footer: "You got this email because …". */

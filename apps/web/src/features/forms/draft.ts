@@ -139,7 +139,9 @@ export function planNewAttributes(
 export { filedLine, fittingAttributes, type PlannedAttribute, type QuestionChange } from '../questions/questions.ts';
 
 /** The target's attributes as the publish check reads them. */
-export function publishAttributesOf(target: FormTargetChoices): ReadonlyMap<string, PublishAttribute> {
+export function publishAttributesOf(
+  target: Pick<FormTargetChoices, 'items' | 'objectName'>,
+): ReadonlyMap<string, PublishAttribute> {
   return new Map(
     target.items.map((item) => [
       item.attributeId,
@@ -290,17 +292,31 @@ export function savableDraft(document: FormDocument, saved: FormDocument): FormD
       };
 }
 
-/** The questions with each unfinished Show when back at the server's (or none): the same list when all are done. */
+/**
+ * The questions with each unfinished Show when back at the server's (or none), and unfinished jumps (One at a time)
+ * left out: the same list when all are done.
+ */
 function savableQuestions(
   questions: FormDocument['questions'],
   saved: FormDocument['questions'],
 ): FormDocument['questions'] {
-  if (questions.every((question) => question.showWhen === undefined || isSavable(question.showWhen))) return questions;
+  const isDone = (question: FormDocument['questions'][number]) =>
+    (question.showWhen === undefined || isSavable(question.showWhen)) &&
+    (question.jumps ?? []).every((jump) => isSavable(jump.when));
+  if (questions.every(isDone)) return questions;
   return questions.map((question) => {
-    if (question.showWhen === undefined || isSavable(question.showWhen)) return question;
-    const kept = saved.find((each) => each.id === question.id)?.showWhen;
-    const { showWhen: _draft, ...rest } = question;
-    return kept === undefined ? rest : { ...rest, showWhen: kept };
+    if (isDone(question)) return question;
+    const { showWhen, jumps, ...rest } = question;
+    const kept =
+      showWhen === undefined || isSavable(showWhen)
+        ? showWhen
+        : saved.find((each) => each.id === question.id)?.showWhen;
+    const done = (jumps ?? []).filter((jump) => isSavable(jump.when));
+    return {
+      ...rest,
+      ...(kept === undefined ? {} : { showWhen: kept }),
+      ...(done.length === 0 ? {} : { jumps: done }),
+    };
   });
 }
 
@@ -377,4 +393,18 @@ export function firstWords(line: string): string {
     .split(/\s+/)
     .filter((word) => word !== '');
   return words.length <= FIRST_WORDS ? words.join(' ') : `${words.slice(0, FIRST_WORDS).join(' ')}…`;
+}
+
+/**
+ * Whether the builder warns that a form asks for a file where visitors can't upload one (forms fixes 2): a file or a
+ * signature question, and the api saying uploads are off here.
+ */
+export function uploadsOffFor(
+  target: Pick<FormTargetChoices, 'uploadsOff'>,
+  document: Pick<FormDocument, 'questions'>,
+) {
+  return (
+    target.uploadsOff === true &&
+    document.questions.some((question) => question.answerType === 'file' || question.answerType === 'signature')
+  );
 }

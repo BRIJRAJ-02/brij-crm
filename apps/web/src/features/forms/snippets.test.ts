@@ -4,7 +4,7 @@
 // and live status lines, every word escaped.
 import { describe, expect, it } from 'vitest';
 import type { FormDocument } from '@crm/data';
-import { siteOrigin } from './InstallTab.tsx';
+import { siteOrigin } from './ShareTab.tsx';
 import { EMBED_ACCENT, embedSnippet, escapeHtml, ownFormHtml, type EmbedTarget } from './snippets.ts';
 
 const SCRIPT = 'https://brij-crm-phi.vercel.app/embed/v1.js';
@@ -60,6 +60,19 @@ describe('the embed snippets', () => {
     expect(floating).toContain('data-timefix-booking="demo-request" data-timefix-mode="floating"');
     expect(floating).toContain('data-timefix-text="Talk to us" data-timefix-color="#1f5fd6"');
     expect(floating).not.toContain('data-timefix-theme');
+  });
+
+  it('names a light form’s Colour too, so a dialog’s frame matches the form inside it (b7)', () => {
+    expect(embedSnippet(SCRIPT, { ...target, theme: 'light' }, 'popup')).toContain('data-timefix-theme="light"');
+  });
+
+  it('writes a clear ground and a hidden headline on an inline holder only, as the Share tab’s switches ask', () => {
+    const asked = { ...target, isTransparent: true, isTitleHidden: true };
+    const inline = embedSnippet(SCRIPT, asked, 'inline');
+    expect(inline).toContain('data-timefix-ground="none"');
+    expect(inline).toContain('data-timefix-head="none"');
+    expect(embedSnippet(SCRIPT, asked, 'popup')).not.toContain('data-timefix-ground');
+    expect(embedSnippet(SCRIPT, target, 'inline')).not.toContain('data-timefix-ground');
   });
 
   it('escapes every character that could leave an attribute or start markup', () => {

@@ -138,3 +138,13 @@ describe('labelStepFor (T7)', () => {
     expect(labelStepFor([40], 10)).toBe(1);
   });
 });
+
+describe('niceTicks for counts', () => {
+  it('keeps every tick whole when the values are counts', () => {
+    expect(niceTicks(2, 4, true).ticks).toEqual([0, 1, 2]);
+    expect(niceTicks(1, 4, true).ticks).toEqual([0, 1]);
+    expect(niceTicks(7, 4, true).ticks).toEqual([0, 2, 4, 6, 8]);
+    // Without it, small ranges still take round fractions.
+    expect(niceTicks(2).ticks).toEqual([0, 0.5, 1, 1.5, 2]);
+  });
+});

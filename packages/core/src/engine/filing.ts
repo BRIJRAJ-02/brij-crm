@@ -120,6 +120,9 @@ export function filingDomains(email: string): { readonly host: string; readonly 
   const registrable = registrableDomain(host);
   if (isPublicEmailDomain(host) || isPublicEmailDomain(registrable)) return undefined;
   if (RESERVED_DOMAINS.has(registrable) || RESERVED_TOP_LEVELS.has(host.split('.').at(-1) ?? '')) return undefined;
+  // A one letter name (`b@g.com`) is a typo or a throwaway far more often than a company: filing it made a company
+  // called "G" (forms critique, 5 November 2026).
+  if ((registrable.split('.')[0] ?? '').length < 2) return undefined;
   return { host, registrable };
 }
 

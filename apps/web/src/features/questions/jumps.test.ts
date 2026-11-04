@@ -8,11 +8,14 @@ import {
   changeJump,
   idOfTarget,
   jumpChoices,
+  nextQuestionName,
   nextStepName,
+  questionJumpChoices,
   removeJump,
   targetOfId,
   targetWords,
 } from './jumps.ts';
+import { changeQuestion } from './questions.ts';
 import { changeStep, stepQuestionsOf, type Flow } from './steps.ts';
 
 const question = (id: string, key: string): FormQuestion => ({
@@ -56,7 +59,10 @@ describe('jumpChoices (AC-6313)', () => {
   });
 
   it('names a step by its place and an ending by its heading', () => {
-    expect(jumpChoices(flow, endings, 's3').map((choice) => choice.label)).toEqual(['Step 4', 'Ending: Not a fit']);
+    expect(jumpChoices(flow, endings, 's3').map((choice) => choice.label)).toEqual([
+      'Step 4',
+      'Thank-you message: Not a fit',
+    ]);
   });
 
   it('names where a step goes when no jump matched: the next step, or nothing at the last (the thank you)', () => {
@@ -109,5 +115,40 @@ describe('stepQuestionsOf (AC-6313)', () => {
   it('gives a step’s own questions, which its jumps read along with everything before them', () => {
     expect(stepQuestionsOf(flow, 's3').map((each) => each.key)).toEqual(['team']);
     expect(stepQuestionsOf(flow, 'gone')).toEqual([]);
+  });
+});
+
+describe('One at a time: a question’s rules (AC-6313)', () => {
+  const hidden: FormQuestion = { ...question('q5', 'ref'), answerType: 'hidden' };
+  const questions = [...flow.questions, hidden];
+  const endings: FormEnding[] = [{ id: 'e1', heading: 'Not a fit' }];
+
+  it('offers only the questions below it a visitor sees, by place and words, then the endings', () => {
+    expect(questionJumpChoices(questions, endings, 'q2')).toEqual([
+      { id: 'step:team', label: 'team' },
+      { id: 'step:notes', label: 'notes' },
+      { id: 'ending:e1', label: 'Thank-you message: Not a fit' },
+    ]);
+  });
+
+  it('names the next question as where everyone else goes, and none after the last', () => {
+    expect(nextQuestionName(questions, 'q2')).toBe('team');
+    expect(nextQuestionName(questions, 'q4')).toBeUndefined();
+  });
+
+  it('follows a renamed question: its rules read and go to the new key', () => {
+    const ruled: FormQuestion[] = [
+      { ...question('a', 'budget'), label: 'Budget' },
+      {
+        ...question('b', 'role'),
+        jumps: [{ when: { join: 'all', rules: [{ key: 'budget', op: 'is_answered' }] }, to: { step: 'notes' } }],
+      },
+      question('c', 'notes'),
+    ];
+    const renamed = changeQuestion(ruled, 'c', { label: 'Anything else' });
+    expect(renamed[1]?.jumps?.[0]?.to).toEqual({ step: 'anything_else' });
+    const reread = changeQuestion(renamed, 'a', { label: 'Spend' });
+    expect(reread[1]?.jumps?.[0]?.when.rules[0]?.key).toBe('spend');
+    expect(changeQuestion(reread, 'b', { jumps: null })[1]?.jumps).toBeUndefined();
   });
 });

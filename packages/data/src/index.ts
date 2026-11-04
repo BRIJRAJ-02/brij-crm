@@ -93,6 +93,7 @@ import type {
   OfferedFormTemplateId,
   PublishFormInput,
   SaveFormDraftInput,
+  ApplyFormSettingsInput,
   InvitationView,
   InvitePeek,
   InviteResult,
@@ -242,6 +243,8 @@ export {
   type DuplicatePairsState,
 } from './duplicates/store.ts';
 export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contracts';
+/** The settings Settings changes live on a form (forms fixes 2). */
+export type LiveSettingsChange = ApplyFormSettingsInput['settings'];
 // Insights (spec 0067).
 export type {
   InsightBucket,
@@ -7969,6 +7972,23 @@ export function createDataLayer({
             ),
           land: landForm(formId),
         }),
+      /**
+       * Changes the settings a form's version holds, live at once (forms fixes 2, one save model): Closes, the closed
+       * message, the visitor's copy, Also create a deal. Edits waiting on the Form tab stay waiting.
+       */
+      applySettings: (
+        workspace: string,
+        formId: string,
+        settings: ApplyFormSettingsInput['settings'],
+        expectedRevision: number,
+      ) =>
+        formLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.forms.applySettings({ workspace, formId, settings, expectedRevision, mutationId: mintId() }, options),
+            ),
+          land: landForm(formId),
+        }),
       /** Publishes the draft as the next live version; the first publish names the form and its address. */
       publish: (
         workspace: string,
@@ -8038,11 +8058,28 @@ export function createDataLayer({
        * Points a form's draft at another object, or at none (`null`: keep its submissions only); on a published
        * form it goes live with the next publish.
        */
-      setTarget: (workspace: string, formId: string, mainObjectId: string | null, expectedRevision: number) =>
+      setTarget: (
+        workspace: string,
+        formId: string,
+        mainObjectId: string | null,
+        expectedRevision: number,
+        /** With People: each submission also makes a deal (Move to People with a deal). */
+        withDeal?: boolean,
+      ) =>
         formLists.write(workspace, {
           send: () =>
             call((options) =>
-              api.forms.setTarget({ workspace, formId, mainObjectId, expectedRevision, mutationId: mintId() }, options),
+              api.forms.setTarget(
+                {
+                  workspace,
+                  formId,
+                  mainObjectId,
+                  expectedRevision,
+                  ...(withDeal === undefined ? {} : { withDeal }),
+                  mutationId: mintId(),
+                },
+                options,
+              ),
             ),
           land: landForm(formId),
         }),
@@ -8126,9 +8163,22 @@ export function createDataLayer({
       /** Processes a failed submission again (AC-566). */
       retry: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.retry({ workspace, submissionId, mutationId: mintId() }, options)),
+      /** Use new (forms fix a4): writes one answer filing kept off the record over the record's value. */
+      /** Undo for Use new (forms fixes 2): the record's value before comes back. */
+      undoUseNewAnswer: (workspace: string, submissionId: string, questionId: string) =>
+        call((options) =>
+          api.submissions.undoUseNewAnswer({ workspace, submissionId, questionId, mutationId: mintId() }, options),
+        ),
+      useNewAnswer: (workspace: string, submissionId: string, questionId: string) =>
+        call((options) =>
+          api.submissions.useNewAnswer({ workspace, submissionId, questionId, mutationId: mintId() }, options),
+        ),
       /** Deletes a submission; the records it made stay (AC-575). */
       delete: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.delete({ workspace, submissionId, mutationId: mintId() }, options)),
+      /** Undo a delete (forms fixes 2): deletes are soft, so the submission comes back as it was. */
+      restore: (workspace: string, submissionId: string) =>
+        call((options) => api.submissions.restore({ workspace, submissionId, mutationId: mintId() }, options)),
       /**
        * Add to CRM: files submissions that aren't in the CRM with the form's
        * published mapping, in one `forms.file` job (follow it with `jobs`).
@@ -8146,8 +8196,26 @@ export function createDataLayer({
        * as a `forms.export` job. `id` is minted once per press (`newId`), so a
        * retry makes one export.
        */
-      export: (workspace: string, id: string, formId: string, select: SubmissionSelection): Promise<ExportView> =>
-        call((options) => api.submissions.export({ workspace, id, formId, select, mutationId: mintId() }, options)),
+      /**
+       * A small export in one answer (forms fixes 2): the file's name and its CSV, for the screen to save at once.
+       * More than 1,000 submissions is refused as `JOB_TOO_LARGE`; then `export` makes the file as a job.
+       */
+      exportNow: (workspace: string, formId: string, select: SubmissionSelection) =>
+        call((options) => api.submissions.exportNow({ workspace, formId, select }, options)),
+      export: async (
+        workspace: string,
+        id: string,
+        formId: string,
+        select: SubmissionSelection,
+      ): Promise<ExportView> => {
+        const view = await call((options) =>
+          api.submissions.export({ workspace, id, formId, select, mutationId: mintId() }, options),
+        );
+        // Followed as any job this tab started (forms fix a7): live, or read again on a timer while live updates are
+        // paused, so its end is heard either way and Download is offered.
+        await followJob(workspace, view.jobId);
+        return view;
+      },
       /** One export again: its row count once written, and where it downloads from. */
       getExport: (workspace: string, exportId: string): Promise<ExportView> =>
         call((options) => api.submissions.getExport({ workspace, exportId }, options)),

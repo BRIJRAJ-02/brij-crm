@@ -67,6 +67,7 @@ export function FileQuestion({ questionKey, label, words, value, error, files, o
         files.setBusy(questionKey, false);
         if (outcome.kind === 'done') {
           setPending(undefined);
+          files.setFailed?.(questionKey, false);
           focusNext.current = 'file';
           setSaid(words.fileUploaded(outcome.file.name));
           onChange(outcome.file);
@@ -79,9 +80,12 @@ export function FileQuestion({ questionKey, label, words, value, error, files, o
               ? words.tooMany
               : outcome.kind === 'offline'
                 ? words.offline
-                : words.fileFailed;
+                : outcome.kind === 'unavailable'
+                  ? words.fileUnavailable
+                  : words.fileFailed;
         setPending({ ...start, progress: 0, error: message });
         setSaid(message);
+        files.setFailed?.(questionKey, true);
       });
   };
   return (
@@ -118,6 +122,7 @@ export function FileQuestion({ questionKey, label, words, value, error, files, o
                   onRemove: () => {
                     focusNext.current = 'browse';
                     setPending(undefined);
+                    files?.setFailed?.(questionKey, false);
                   },
                 })}
           />
@@ -125,6 +130,7 @@ export function FileQuestion({ questionKey, label, words, value, error, files, o
         {held === undefined && !isGoing && (
           <FileDrop
             label={words.fileChoose}
+            typesText={words.fileTypes}
             acceptedTypes={FORM_UPLOAD_ACCEPT}
             maxSize={FORM_UPLOAD_MAX_BYTES}
             isDisabled={files === undefined}

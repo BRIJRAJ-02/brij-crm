@@ -8,6 +8,7 @@ import type { IconName } from '@crm/ui';
 import {
   bookingsHref,
   capturesHref,
+  formsHref,
   hospitalityHref,
   inboxHref,
   linkPageHref,
@@ -27,6 +28,7 @@ export type SidebarPage =
   | 'notes'
   | 'bookings'
   | 'captures'
+  | 'forms'
   | 'menus'
   | 'qr'
   | 'reservations'
@@ -54,6 +56,8 @@ export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
   notes: { label: strings.notes, icon: 'notebook', href: notesHref },
   bookings: { label: strings.bookings, icon: 'calendar-days', href: bookingsHref },
   captures: { label: strings.captures, icon: 'link', href: capturesHref },
+  // Forms (forms critique c, 5 November 2026): Captures' Forms tab as a row of its own, so a form is one click away.
+  forms: { label: strings.forms, icon: 'clipboard-list', href: formsHref },
   // The Hospitality apps' pages (spec 0065, AC-6510): the server offers each only while its app is installed.
   menus: { label: strings.menus, icon: 'utensils', href: (slug) => hospitalityHref(slug, 'menus') },
   qr: { label: strings.qrCodes, icon: 'qr-code', href: (slug) => hospitalityHref(slug, 'qr') },

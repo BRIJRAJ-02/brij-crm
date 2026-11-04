@@ -597,9 +597,19 @@ export function formAccess(
       readonly companyAttributeId: string;
       readonly unwritten: readonly string[];
     };
+    /**
+     * Further objects the write reaches (forms fix a3: a deal links its person and their company), each with every
+     * attribute hidden but the ones it writes: a link's own side on the record it links.
+     */
+    readonly also?: readonly {
+      readonly objectId: string;
+      readonly attributeIds: readonly string[];
+      readonly writable: ReadonlySet<string>;
+    }[];
   },
 ): Access {
   const filing = target?.filing;
+  const also = target?.also ?? [];
   const fields: [string, FieldLevel][] =
     target === undefined
       ? []
@@ -608,6 +618,9 @@ export function formAccess(
             target.writable.has(id) || id === filing?.companyAttributeId ? [] : [[id, 'hidden']],
           ),
           ...(filing?.unwritten ?? []).map((id): [string, FieldLevel] => [id, 'hidden']),
+          ...also.flatMap((each) =>
+            each.attributeIds.flatMap((id): [string, FieldLevel][] => (each.writable.has(id) ? [] : [[id, 'hidden']])),
+          ),
         ];
   const objects: [string, ObjectLevel][] =
     target === undefined
@@ -615,6 +628,7 @@ export function formAccess(
       : [
           [target.objectId, 'write'],
           ...(filing === undefined ? [] : [[filing.companies, 'write'] as [string, ObjectLevel]]),
+          ...also.map((each): [string, ObjectLevel] => [each.objectId, 'write']),
         ];
   return Object.freeze({
     principal: Object.freeze({ kind: 'form', formId }),

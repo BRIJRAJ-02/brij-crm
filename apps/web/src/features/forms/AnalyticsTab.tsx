@@ -15,23 +15,13 @@ import type {
   FormView,
 } from '@crm/data';
 import { useFormAnalytics } from '@crm/data/react';
-import {
-  DescriptionList,
-  EmptyState,
-  FieldGroup,
-  SegmentedControl,
-  SettingsStack,
-  Skeleton,
-  Stats,
-  type StatItem,
-} from '@crm/ui';
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { ButtonLink, EmptyState, SegmentedControl, SettingsStack, Skeleton, Stats, type StatItem } from '@crm/ui';
+import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { PageInsights } from '../insights/PageInsights.tsx';
+import { formHref } from './paths.ts';
 import { useFormToolbarSlot } from './toolbarSlot.ts';
 import { strings } from './strings.ts';
-
-/** The chart, loaded with the first tab that has figures to draw: never in the editor's own chunk (AC-6331). */
-const Chart = lazy(() => import('@crm/ui/charts').then((charts) => ({ default: charts.Chart })));
 
 /** The ranges the tab offers (AC-6321). */
 const RANGES: readonly FormAnalyticsRange[] = [7, 30, 90];
@@ -92,6 +82,12 @@ function sourceWords(source: string): string {
   return source;
 }
 
+/** A question's name as the owner wrote it, or a plain stand in for one left blank. */
+function nameOf(label: string | undefined): string {
+  const name = label?.trim() ?? '';
+  return name === '' ? strings.analyticsUnnamed : name;
+}
+
 /** Props for AnalyticsTab. */
 export interface AnalyticsTabProps {
   readonly data: DataLayer;
@@ -100,26 +96,10 @@ export interface AnalyticsTabProps {
 }
 
 /**
- * The hero figure (T22, 5 November 2026: one figure leads): completion, the rate people compare forms on, finishes
- * of starts (a view may never be a fill), said with the counts behind it rather than against a period with nothing.
+ * The five figure cards (T45, one row): Views, Starts, Finished, Completion and Median time, each against the period
+ * before only when there was something before ("+100% vs 30 days before" from nothing says nothing).
  */
-function heroOf(analytics: FormAnalytics): readonly StatItem[] {
-  const { totals } = analytics;
-  return [
-    {
-      id: 'completion',
-      label: strings.analyticsCompletion,
-      value: percent(totals.completions, totals.starts),
-      comparison: strings.analyticsFinishedOf(figure(totals.completions), figure(totals.starts)),
-    },
-  ];
-}
-
-/**
- * The figures under the hero, each against the period before only when there was something before (T22: "+100% vs
- * 30 days before" from nothing says nothing).
- */
-function headlineOf(analytics: FormAnalytics): readonly StatItem[] {
+function statsOf(analytics: FormAnalytics): readonly StatItem[] {
   const { totals, previous, range } = analytics;
   const median = totals.medianMs;
   const hadBefore = previous.views > 0;
@@ -135,6 +115,18 @@ function headlineOf(analytics: FormAnalytics): readonly StatItem[] {
       label: strings.analyticsStarts,
       value: figure(totals.starts),
       ...(hadBefore ? compared(totals.starts, previous.starts, range, figure) : {}),
+    },
+    {
+      id: 'finished',
+      label: strings.analyticsCompletions,
+      value: figure(totals.completions),
+      ...(hadBefore ? compared(totals.completions, previous.completions, range, figure) : {}),
+    },
+    {
+      id: 'completion',
+      label: strings.analyticsCompletion,
+      value: percent(totals.completions, totals.starts),
+      comparison: strings.analyticsFinishedOf(figure(totals.completions), figure(totals.starts)),
     },
     {
       id: 'median',
@@ -207,7 +199,11 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
     return (
       <SettingsStack>
         {period}
-        <EmptyState icon="chart-line" title={strings.analyticsEmpty}>
+        <EmptyState
+          icon="chart-line"
+          title={strings.analyticsEmpty}
+          actions={<ButtonLink href={formHref(slug, form.id, 'share')}>{strings.analyticsShareIt}</ButtonLink>}
+        >
           {strings.analyticsEmptyText}
         </EmptyState>
       </SettingsStack>
@@ -220,7 +216,7 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
     return (
       <SettingsStack>
         {period}
-        <Stats label={strings.analyticsSummary} items={headlineOf(analytics)} />
+        <Stats label={strings.analyticsSummary} items={statsOf(analytics)} variant="cards" />
         <EmptyState icon="chart-line" title={strings.analyticsNoneInRange}>
           {strings.analyticsNoneInRangeText}
         </EmptyState>
@@ -230,83 +226,35 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
 
   const dayFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const dayOnly = new Intl.DateTimeFormat(undefined, { day: 'numeric', timeZone: 'UTC' });
-  const dayPoints = analytics.byDay.map((each) => {
-    const when = new Date(`${each.day}T00:00:00Z`);
-    // The axis takes the day number alone, so 30 and 90 day ranges don't run their labels together; the tooltip
-    // and the table view read `label`, which keeps the month.
-    return {
-      id: each.day,
-      label: dayFormat.format(when),
-      axisLabel: dayOnly.format(when),
-      value: each.views,
-      valueText: figure(each.views),
-    };
-  });
-  // Only the questions somebody reached: a bar per unreached question would be a row of zeroes saying nothing.
-  const dropOff = analytics.byQuestion.filter((row) => row.reached > 0);
-  // The axis takes the question's place in the form, so five bars never lose a label to a long question; the
-  // tooltip and the table view read `label`, which is the question itself.
-  const order = new Map(analytics.byQuestion.map((row, at) => [row.questionId, at + 1]));
-  const dropPoints = dropOff.map((row) => ({
-    id: row.questionId,
-    label: labels.get(row.questionId) ?? row.questionId,
-    axisLabel: strings.analyticsQuestionAt(order.get(row.questionId) ?? 0),
-    value: row.leftHere,
-    valueText: figure(row.leftHere),
-  }));
-
-  // Somebody started and nobody stopped: said in words, never as an empty chart (T22).
-  const nobodyLeft = dropPoints.every((point) => point.value === 0);
+  // Where people stop, by the question's own words, of those who started (T45: never "Q3", never a chart of two).
+  const steps = analytics.byQuestion
+    .filter((row) => row.reached > 0)
+    .map((row) => ({
+      id: row.questionId,
+      name: nameOf(labels.get(row.questionId)),
+      reached: row.reached,
+      stopped: row.leftHere,
+    }));
   return (
     <SettingsStack>
       {period}
-      <Stats label={strings.analyticsCompletion} items={heroOf(analytics)} size="large" />
-      <Stats label={strings.analyticsSummary} items={headlineOf(analytics)} />
-      {dayPoints.length > 1 && (
-        <Suspense fallback={<Skeleton shape="fill" />}>
-          <Chart
-            kind="line"
-            label={strings.analyticsChart(analytics.range)}
-            pointLabel={strings.analyticsDay}
-            valueLabel={strings.analyticsViews}
-            points={dayPoints}
-            formatTick={(value) => figure(value)}
-          />
-        </Suspense>
-      )}
-      {analytics.totals.starts > 0 && (
-        <FieldGroup tone="heading" headingLevel={2} label={strings.analyticsDropOff}>
-          {nobodyLeft ? (
-            <EmptyState layout="row" icon="circle-check" title={strings.analyticsAllFinished} />
-          ) : (
-            <Suspense fallback={<Skeleton shape="fill" />}>
-              <Chart
-                kind="bar"
-                label={strings.analyticsDropOffChart}
-                pointLabel={strings.analyticsQuestion}
-                valueLabel={strings.analyticsLeft}
-                points={dropPoints}
-                formatTick={(value) => figure(value)}
-              />
-            </Suspense>
-          )}
-        </FieldGroup>
-      )}
-      <FieldGroup tone="heading" headingLevel={2} label={strings.analyticsSources}>
-        {analytics.bySource.length === 0 ? (
-          <EmptyState layout="row" title={strings.analyticsNoSources} />
-        ) : (
-          // A short list, not a full width table: a source and its two counts read together (T22).
-          <DescriptionList
-            layout="compact"
-            items={analytics.bySource.map((row) => ({
-              id: row.source,
-              term: sourceWords(row.source),
-              description: strings.analyticsSourceLine(figure(row.views), figure(row.completions), row.views),
-            }))}
-          />
-        )}
-      </FieldGroup>
+      <PageInsights
+        stats={statsOf(analytics)}
+        started={analytics.totals.starts}
+        steps={steps}
+        stepLabel={strings.analyticsQuestion}
+        sources={analytics.bySource.map((row) => ({
+          id: row.source,
+          name: sourceWords(row.source),
+          views: row.views,
+          finished: row.completions,
+        }))}
+        days={analytics.byDay.map((each) => {
+          const when = new Date(`${each.day}T00:00:00Z`);
+          return { id: each.day, label: dayFormat.format(when), axisLabel: dayOnly.format(when), views: each.views };
+        })}
+        periodWords={strings.analyticsLastDays(analytics.range)}
+      />
     </SettingsStack>
   );
 }

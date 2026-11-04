@@ -85,6 +85,12 @@ export interface ChoiceSelectProps extends ChoiceTilesBase {
   readonly value?: string | null;
   readonly defaultValue?: string;
   readonly onChange?: (id: string) => void;
+  /**
+   * Focuses the chosen tile (or the first) as the grid mounts, so the arrows move between the tiles at once: a
+   * dialog whose first step is this choice (the form template gallery, 5 November 2026). Inline on a page, leave it
+   * off.
+   */
+  readonly autoFocus?: boolean;
 }
 
 /** A choice grid whose tiles each start something at once (a block kind adds that block). */
@@ -206,11 +212,14 @@ function SelectTile({
   keepsPicture,
   isLarge = false,
   isWide = false,
+  autoFocus = false,
 }: {
   readonly tile: ChoiceTile;
   readonly showsDescription: boolean;
   readonly keepsPicture: boolean;
   readonly isLarge?: boolean;
+  /** Takes focus as it mounts (the grid's `autoFocus`, on the chosen or first tile). */
+  readonly autoFocus?: boolean;
   /** A wide tile (`tileWidth="wide"`): its mark beside both its name and its line. */
   readonly isWide?: boolean;
 }) {
@@ -229,6 +238,7 @@ function SelectTile({
     {
       value: tile.id,
       isDisabled: tile.isDisabled === true,
+      autoFocus,
       'aria-labelledby': nameId,
       ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     },
@@ -313,6 +323,11 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
     );
   }
   const { label, tiles, value, defaultValue, onChange } = props;
+  // The tile `autoFocus` lands on: the chosen one, else the first that can be picked.
+  const focusId =
+    props.autoFocus === true
+      ? (value ?? defaultValue ?? tiles.find((tile) => tile.isDisabled !== true)?.id)
+      : undefined;
   const isLarge = props.pictureSize === 'large' && showsDescription && keepsPicture;
   return (
     <RadioGroup
@@ -332,6 +347,7 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
             keepsPicture={keepsPicture}
             isLarge={isLarge}
             isWide={props.tileWidth === 'wide'}
+            autoFocus={tile.id === focusId}
           />
         </WithTip>
       ))}

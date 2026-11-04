@@ -1,5 +1,5 @@
 import { isDataError, type SubmissionState } from '@crm/data';
-import { ButtonLink, EmptyState, LoadingNow, TopBar } from '@crm/ui';
+import { ButtonLink, EmptyState, LoadingNow, Table, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { EditorPending } from '../features/captures/EditorPending.tsx';
 import { FormEditor } from '../features/forms/FormEditor.tsx';
@@ -29,9 +29,12 @@ const STATES: readonly string[] = ['received', 'processing', 'processed', 'spam'
 export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
   validateSearch: (search: Record<string, unknown>): FormSearch => ({
     tab:
-      typeof search.tab === 'string' && (FORM_TABS as readonly string[]).includes(search.tab)
-        ? (search.tab as FormTab)
-        : 'form',
+      // Share was called Install until 5 November 2026: an old link still opens it.
+      search.tab === 'install'
+        ? 'share'
+        : typeof search.tab === 'string' && (FORM_TABS as readonly string[]).includes(search.tab)
+          ? (search.tab as FormTab)
+          : 'form',
     ...(typeof search.state === 'string' && STATES.includes(search.state)
       ? { state: search.state as SubmissionState }
       : {}),
@@ -48,17 +51,19 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
     try {
       const onSubmissions = deps.tab === 'submissions';
       // Every read at once: one round trip, not the form first and then its submissions.
-      const [form, target, members, objects, submissions, openSubmission, brand] = await Promise.all([
+      const [form, target, members, objects, submissions, openSubmission, brand, workspace] = await Promise.all([
         context.data.forms.get(params.slug, params.formId),
         context.data.forms.attributes(params.slug, params.formId),
         context.data.members.list(params.slug),
         context.data.objects.list(params.slug),
+        // A failed read of the submissions stays inside their tab (forms fix a6): the form, its tabs and its name stay.
         onSubmissions
-          ? context.data.submissions.list(
-              params.slug,
-              params.formId,
-              deps.state === undefined ? {} : { state: deps.state },
-            )
+          ? context.data.submissions
+              .list(params.slug, params.formId, deps.state === undefined ? {} : { state: deps.state })
+              .catch((error: unknown) => {
+                if (isDataError(error) && error.code === 'NOT_FOUND') throw error;
+                return { failed: isDataError(error) ? error.message : strings.failedText } as const;
+              })
           : Promise.resolve(undefined),
         onSubmissions && deps.submission !== undefined
           ? context.data.submissions.get(params.slug, deps.submission).catch(() => undefined)
@@ -72,8 +77,23 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
             return store;
           })
           .catch(() => undefined),
+        // How long the workspace keeps answers, said on Settings (forms critique b, S2); a failed read says nothing.
+        context.data.workspace.get(params.slug).catch(() => undefined),
       ]);
-      return { page: { form, target, members, objects, submissions, openSubmission, brand } };
+      const failed = submissions !== undefined && 'failed' in submissions ? submissions.failed : undefined;
+      return {
+        page: {
+          form,
+          target,
+          members,
+          objects,
+          submissions: submissions === undefined || 'failed' in submissions ? undefined : submissions,
+          ...(failed === undefined ? {} : { submissionsFailed: failed }),
+          openSubmission,
+          brand,
+          ...(workspace === undefined ? {} : { keepMonths: workspace.keepSubmissionsMonths ?? null }),
+        },
+      };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined };
       throw error;
@@ -86,16 +106,16 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
 });
 
 /**
- * The editor while it loads, in its shape: the tab strip (Form and Settings, which every form has; Install and
+ * The editor while it loads, in its shape: the tab strip (Form and Settings, which every form has; Share and
  * Submissions too when one of them is asked for, since only a published form has them), the asked one shown.
  */
 function FormPending() {
   const { tab } = Route.useSearch();
-  const published = tab === 'install' || tab === 'submissions' || tab === 'analytics';
+  const published = tab === 'share' || tab === 'submissions' || tab === 'analytics';
   const label: Readonly<Record<FormTab, string>> = {
     form: strings.tabForm,
     settings: strings.tabSettings,
-    install: strings.tabInstall,
+    share: strings.tabShare,
     submissions: strings.tabSubmissions,
     analytics: strings.tabAnalytics,
   };
@@ -104,6 +124,26 @@ function FormPending() {
       <EditorPending
         title={strings.forms}
         icon="clipboard-list"
+        currentPage="forms"
+        // Submissions loads as its table does (forms fix a6), not as the Form tab's cards.
+        {...(tab === 'submissions'
+          ? {
+              content: (
+                <Table
+                  label={strings.tabSubmissions}
+                  columns={[
+                    { id: 'person', label: strings.person, isRowHeader: true },
+                    { id: 'when', label: strings.when },
+                    { id: 'state', label: strings.state },
+                  ]}
+                  rows={[]}
+                  getRowId={() => ''}
+                  renderCell={() => null}
+                  isLoading
+                />
+              ),
+            }
+          : {})}
         // The Form tab opens with the draft's name, then Layout (spec 0063), above the questions.
         cards={tab === 'form' ? [strings.name, strings.layoutTitle] : [strings.name]}
         tabs={{
@@ -126,7 +166,7 @@ function FormRoute() {
   if (page === undefined) {
     return (
       <WorkspacePage
-        currentPage="captures"
+        currentPage="forms"
         page={{
           topBar: <TopBar title={strings.missingTitle} icon="clipboard-list" />,
           body: (
@@ -159,7 +199,9 @@ function FormRoute() {
       submissions={page.submissions}
       state={search.state}
       openSubmission={page.openSubmission}
+      {...(page.submissionsFailed === undefined ? {} : { submissionsFailed: page.submissionsFailed })}
       {...(page.brand === undefined ? {} : { brand: page.brand })}
+      {...('keepMonths' in page ? { keepMonths: page.keepMonths } : {})}
       {...(search.question === undefined ? {} : { question: search.question })}
     />
   );
@@ -169,7 +211,7 @@ function FormError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="forms"
       page={{
         topBar: <TopBar title={strings.forms} icon="clipboard-list" />,
         body: (

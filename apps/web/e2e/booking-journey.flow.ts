@@ -40,12 +40,17 @@ test.describe('the booking journey', () => {
     // Questions: answers go to People, and a required question is filed on a new People attribute.
     await page.getByRole('tab', { name: 'Questions' }).click();
     await expect(page.getByRole('button', { name: /Where the answers go/ })).toContainText('People');
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).fill('What do you want to cover?');
-    // A new question is kept with the booking until the host says otherwise (B3); here they file it on People.
-    await page.getByRole('button', { name: 'Kept with the booking only Save answer to' }).click();
-    await page.getByRole('option', { name: /^Creates/ }).click();
-    await page.getByText('Visitors must answer').click();
+    // A new question is kept with the booking until the host says otherwise (B3); here they file it on People, from
+    // the question's ⋯ (T40).
+    await page.getByRole('button', { name: 'More for What do you want to cover?' }).click();
+    await page.getByRole('menuitem', { name: /^Save answer to/ }).click();
+    await page.getByRole('menuitem', { name: /^New field on/ }).click();
+    // A switch's input sits under its drawn track: focus it and press Space, as a keyboard does.
+    await page.getByRole('switch', { name: 'Required' }).focus();
+    await page.keyboard.press('Space');
     await page.getByRole('button', { name: /^Save/ }).click();
     await expect(page.getByText('Added 1 field to Person.')).toBeVisible();
     // Saved means saved: the bar leaves once the question is filed (late trap #58).

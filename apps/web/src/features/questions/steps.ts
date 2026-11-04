@@ -270,3 +270,14 @@ export function startsAStep(flow: Flow, questionId: string): boolean {
 export function isFirstStep(flow: Flow, id: string): boolean {
   return itemsOf(flow)[0]?.id === id;
 }
+
+/**
+ * The flow with a question just put before `beforeId` taking over the start of that question's step (T39: "Add a
+ * question here" at the top of a step puts it in that step, not at the end of the one above).
+ */
+export function takeStepStart(flow: Flow, beforeId: string, questionId: string): Flow {
+  return {
+    ...flow,
+    steps: flow.steps.map((step) => (step.startsAt === beforeId ? { ...step, startsAt: questionId } : step)),
+  };
+}

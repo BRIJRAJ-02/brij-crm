@@ -77,3 +77,6 @@ export function choiceKeysOf(question: {
     return key;
   });
 }
+
+/** How many stars a rating may have, and how many it has when it says nothing (5, as every rating before 5 November 2026). */
+export const RATING_COUNT = { min: 3, max: 10, default: 5 } as const;

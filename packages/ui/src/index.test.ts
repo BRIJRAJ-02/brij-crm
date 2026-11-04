@@ -73,6 +73,7 @@ describe('@crm/ui', () => {
       'DisclosureGroup',
       'DragHandle',
       'EditorStatus',
+      'EmbedPreview',
       'EmptyState',
       'FIELD_TYPES',
       'Field',
@@ -255,10 +256,12 @@ describe('@crm/ui', () => {
       'fieldTypeOf',
       'fileIconName',
       'firstDayOfWeek',
+      'focusInCard',
       'focusLater',
       'formatDate',
       'formatDay',
       'formatFileSize',
+      'formatRelative',
       'iconOf',
       'isRefusal',
       'isSocialLinksDraftChanged',
@@ -283,6 +286,7 @@ describe('@crm/ui', () => {
       'useFileHref',
       'useFormatSettings',
       'useKeyboardPlatform',
+      'useNow',
       'usePhotoCrop',
     ]);
   });

@@ -53,8 +53,10 @@ export type UploadOutcome =
   | { readonly kind: 'rejected'; readonly message: string }
   /** Too many in a short time (429). */
   | { readonly kind: 'limited' }
-  /** The endpoint failed or has no file storage: another try may work. */
+  /** The endpoint failed: another try may work. */
   | { readonly kind: 'failed' }
+  /** It has no file storage (503, forms fix b8): another try can't help. */
+  | { readonly kind: 'unavailable' }
   /** The endpoint couldn't be reached at all. */
   | { readonly kind: 'offline' };
 
@@ -130,6 +132,8 @@ function readUpload(status: number, answer: unknown): UploadOutcome {
     };
   }
   if (status === 429) return { kind: 'limited' };
+  // The store isn't set up (forms fix b8): said as such, never as "try again", which can't help.
+  if (status === 503) return { kind: 'unavailable' };
   if ((status === 400 || status === 413) && isObject(answer) && typeof answer.message === 'string') {
     return { kind: 'rejected', message: answer.message };
   }

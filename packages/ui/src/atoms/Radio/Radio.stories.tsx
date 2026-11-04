@@ -131,6 +131,27 @@ export const WithInfo: Story = {
 };
 
 /** Cards: the choice is the first step of the form under it, each one saying what it adds (the link page's Add item). */
+/** A public form's choice (T42, Typeform's way): full width, a letter key before each, a letter picks it. */
+export const Letters: Story = {
+  args: { label: 'How big is your team?' },
+  render: (args) => (
+    <Stage width="dialog">
+      <RadioGroup {...args} variant="letters">
+        <Radio value="solo">Just me</Radio>
+        <Radio value="small">2 to 10</Radio>
+        <Radio value="large">More than 10</Radio>
+      </RadioGroup>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('radio', { name: 'Just me' }));
+    // A letter key picks its choice, and focus follows it.
+    await userEvent.keyboard('c');
+    await expect(canvas.getByRole('radio', { name: 'More than 10' })).toBeChecked();
+    await expect(canvas.getByRole('radio', { name: 'More than 10' })).toHaveFocus();
+  },
+};
+
 export const Cards: Story = {
   args: { label: 'What are you adding', defaultValue: 'link' },
   render: (args) => (

@@ -1,6 +1,6 @@
 // Brief
 // Purpose: New form opens a gallery of ready forms (spec 0063, AC-6323), so nobody starts from an empty page they then have to understand.
-// Main task: scan the names, press one, and land in its editor with the questions already filed into the CRM.
+// Main task: pick one from the list, see the form it makes beside it, and Use it to land in its editor.
 // Leaves out: editing the template (that is the builder), making templates of your own.
 import {
   isDataError,
@@ -9,7 +9,18 @@ import {
   type FormView,
   type OfferedFormTemplateId,
 } from '@crm/data';
-import { Button, Callout, EmptyState, Modal, TileGrid, type ChoiceTile, type IconName } from '@crm/ui';
+import type { PublicForm } from '@crm/contracts/forms';
+import {
+  Button,
+  Callout,
+  EmptyState,
+  HostedFormPreview,
+  Modal,
+  PhonePreview,
+  TileGrid,
+  type ChoiceTile,
+  type IconName,
+} from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -54,6 +65,22 @@ function tileOf(template: FormTemplateSummary): ChoiceTile {
   };
 }
 
+/** The form a template makes, as a visitor would see it: its words and questions in the hosted page's shape. */
+function sampleOf(template: FormTemplateSummary): PublicForm {
+  return {
+    key: `template-${template.id}`,
+    status: 'live',
+    versionNumber: 1,
+    headline: template.sample.headline,
+    buttonText: template.sample.buttonText,
+    language: 'en',
+    look: { colour: 'light', corners: 'rounded' },
+    layout: template.preview.layout,
+    questions: [...template.sample.questions],
+    offersMeeting: false,
+  };
+}
+
 /** Props for the gallery. */
 export interface TemplateGalleryProps {
   readonly data: DataLayer;
@@ -65,16 +92,20 @@ export interface TemplateGalleryProps {
 }
 
 /**
- * The gallery: a window of picture tiles, Blank form first, each one press to
- * a draft. The tiles are read through the data layer when it opens, and the id
- * is minted once per press, so a retry makes one form. While one is being
- * made, the pressed tile stays on and says so while the others turn off, so a
- * second press can't make a second form and a keyboard keeps its place. A read
+ * The gallery: a wide window listing the templates, Blank form first and
+ * picked as it opens, with a big preview of the picked one beside the list
+ * (the form as a visitor sees it), and Use <name> to make it. The tiles are
+ * read through the data layer when it opens, and the id is minted once per
+ * Use, so a retry makes one form. While one is being made, its tile stays on
+ * while the others turn off, so a second Use can't make a second form and a
+ * keyboard keeps its place. A read
  * that failed still offers a blank form, because a blank one needs nothing
  * from the catalog and New form could always make one before this existed.
  */
 export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: TemplateGalleryProps) {
   const [making, setMaking] = useState<string | undefined>(undefined);
+  // The template picked in the list, shown beside it (Blank, the first, until another is picked).
+  const [picked, setPicked] = useState<OfferedFormTemplateId | undefined>(undefined);
   const [failure, setFailure] = useState<string | undefined>(undefined);
   // Read once per opening: the list is the same on every workspace and changes only when we ship a new template.
   // Try again moves `readCount`, which is what makes the read in hand older than the one being waited for; the
@@ -145,6 +176,7 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
    */
   const close = () => {
     setMaking(undefined);
+    setPicked(undefined);
     setFailure(undefined);
     // A failed read is not shown again on the next opening: it reads once more first.
     if (phase.kind === 'failed') setReadCount((count) => count + 1);
@@ -164,11 +196,25 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
     </Button>
   );
 
+  const items = phase.kind === 'ready' ? phase.items : [];
+  const chosen = items.find((each) => each.id === picked) ?? items[0];
   return (
     <Modal
       variant="window"
+      isWide
       icon="clipboard-list"
       title={strings.galleryTitle}
+      // The big preview of the picked template, beside the list (Typeform's and Tally's galleries), drawn by the
+      // hosted page's own component; left out where the window is too narrow, since the list alone picks.
+      {...(chosen === undefined
+        ? {}
+        : {
+            aside: (
+              <PhonePreview>
+                <HostedFormPreview key={chosen.id} form={sampleOf(chosen)} />
+              </PhonePreview>
+            ),
+          })}
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open) close();
@@ -178,9 +224,23 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
       // faded tiles told nobody which one they had pressed (UX review, slice 8).
       {...(making === undefined ? {} : { status: strings.galleryMakingOne(makingName) })}
       actions={
-        <Button variant="secondary" onPress={close}>
-          {strings.cancel}
-        </Button>
+        <>
+          <Button variant="secondary" onPress={close}>
+            {strings.cancel}
+          </Button>
+          {chosen !== undefined && (
+            <Button
+              variant="primary"
+              isPending={making === chosen.id}
+              isDisabled={isBusy && making !== chosen.id}
+              onPress={() => {
+                start(chosen.id);
+              }}
+            >
+              {strings.galleryUse(chosen.name)}
+            </Button>
+          )}
+        </>
       }
     >
       {failure !== undefined && (
@@ -212,20 +272,23 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
       {phase.kind === 'ready' && phase.items.length > 0 && (
         <TileGrid
           variant="choice"
-          mode="action"
           label={strings.galleryTitle}
-          // A mark beside the name and its one short line: a list to scan, not pictures to compare.
+          // A mark beside the name and its one short line: a list to scan, not pictures to compare. Picking one
+          // shows it beside the list; Use makes it. Focus starts on the first, so the arrows browse at once.
           showsDescription
           tileWidth="wide"
+          // The gallery's first step is this choice: focus starts on the picked template (the owner's ask).
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus
+          autoFocus
+          value={chosen?.id ?? null}
           tiles={phase.items.map((template) =>
-            // While one is being made, the pressed tile stays on and the other nine turn off, so the one still
-            // lit is the one being made. Turning the pressed one off too threw a keyboard's focus to the
-            // document, and ten identically faded tiles said nothing about which had been pressed.
+            // While one is being made, the chosen tile stays on and the others turn off, so the one still lit is
+            // the one being made and a keyboard keeps its place on it.
             isBusy && making !== template.id ? { ...tileOf(template), isDisabled: true } : tileOf(template),
           )}
-          onAction={(id) => {
-            const picked = phase.items.find((each) => each.id === id);
-            if (picked !== undefined) start(picked.id);
+          onChange={(id) => {
+            const next = phase.items.find((each) => each.id === id);
+            if (next !== undefined) setPicked(next.id);
           }}
         />
       )}

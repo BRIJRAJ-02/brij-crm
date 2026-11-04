@@ -91,6 +91,7 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
   const here = objects.find((object) => object.apiSlug === params.object);
   const canInvite = permissions?.includes('members.invite') === true;
   const canMakeLists = permissions?.includes('lists.manage') === true;
+  const canMakeForms = permissions?.includes('forms.manage') === true;
   const viewId = params.viewId;
   const pathname = useLocation({ select: (location) => location.pathname });
   const actions = useMemo(
@@ -106,10 +107,11 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
               ...(viewId === undefined ? {} : { viewId }),
               canInvite,
               canMakeLists,
+              canMakeForms,
             }),
           ]
         : [],
-    [mode, slug, objects, here, viewId, canInvite, canMakeLists, record, pathname, lists],
+    [mode, slug, objects, here, viewId, canInvite, canMakeLists, canMakeForms, record, pathname, lists],
   );
   // Invite members opens the one Invite dialog over the page, as Home's setup step does.
   const [isInviting, setInviting] = useState(false);

@@ -18,6 +18,8 @@ export const strings = {
   colourOf: (label: string) => `${label === '' ? 'New option' : label} colour`,
   outcomeOf: (label: string) => `${label === '' ? 'New stage' : label} outcome`,
   daysOf: (label: string) => `${label === '' ? 'New stage' : label} target days`,
+  /** After a choice's number (`scores`): points. */
+  pointsUnit: 'pts',
   daysUnit: 'days',
   /** Under a status's stages: what the days field is. */
   daysNote: 'Days: how long a record should sit in a stage before it counts as stuck. Leave empty for none.',

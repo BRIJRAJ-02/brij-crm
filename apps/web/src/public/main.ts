@@ -12,7 +12,7 @@
 import '@crm/ui/styles.css';
 import { createPublicFormClient, loadCaptcha, type FormEventBody } from '@crm/data/public-form';
 import { mountFormLoading, mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
-import { guessCountry } from './country.ts';
+import { formCountry } from './country.ts';
 import { landingOf } from './landing.ts';
 import { contextFromFrame, contextOfPage, hiddenOf, prefillOf } from './context.ts';
 import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
@@ -192,9 +192,14 @@ async function start(): Promise<void> {
       for (const key of [...url.searchParams.keys()]) if (key !== 'resume') url.searchParams.delete(key);
       return url.toString();
     };
+    // A site's inline embed may ask for a clear ground and no headline (the Share tab's switches).
+    if (embed?.isTransparent === true) document.documentElement.dataset.ground = 'none';
     const drawn = mountHostedForm(root, form, {
       mode,
-      countryGuess: guessCountry(),
+      ...(embed === undefined
+        ? {}
+        : { embedLook: { isTransparent: embed.isTransparent, isTitleHidden: embed.isTitleHidden } }),
+      countryGuess: formCountry(form.country),
       // The answers that came back take the link's own prefill: a visitor coming back wants what they typed,
       // not what the address suggested the first time.
       prefill: form.resumed === undefined ? prefill : { ...prefill, ...resumedPrefill(form.resumed.answers) },

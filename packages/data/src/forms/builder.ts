@@ -15,6 +15,12 @@ export {
   answerWords,
   BOOKING_ANSWER_TYPES,
   CHOICE_TYPES,
+  // The visitor's copy's own limits (forms fix b1: Settings' Email them a copy).
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+  // A form's closing rule's own limits (forms fix b2).
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
   choiceKeysOf,
   FILES_ONTO,
   FORM_CHOICES_MAX,
@@ -22,6 +28,7 @@ export {
   FORM_QUESTIONS_MAX,
   FORM_ENDINGS_MAX,
   FORM_STEP_TITLE_MAX,
+  DEFAULT_HEADLINE,
   pathOf,
   // Jumps, the score and recall (spec 0063 slice 5): the builder's Flow view, its points rows and its preview.
   recall,
@@ -30,6 +37,7 @@ export {
   SCORED_TYPES,
   scoreOf,
   STEP_JUMPS_MAX,
+  RATING_COUNT,
   stepsOfBreaks,
   type FormLayout,
   FORM_SLUG,
@@ -117,6 +125,9 @@ export function previewOf(
       ...(question.placeholder === undefined || question.placeholder === ''
         ? {}
         : { placeholder: question.placeholder }),
+      ...(question.description === undefined || question.description === ''
+        ? {}
+        : { description: question.description }),
       required: question.required,
       ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
       ...(question.options === undefined ? {} : { options: question.options }),

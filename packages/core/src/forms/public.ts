@@ -18,6 +18,7 @@ import {
   scoreOf,
   storedContext,
   SubmitBody,
+  zoneCountry,
   type Facts,
   type FormDocument,
   type FormEnding,
@@ -42,6 +43,9 @@ import { recordSteps, routeSubmission, storedRoute, submissionDecision } from '.
 import { routeHostIds } from '../routing/hosts.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import {
+  isClosedByRule,
+  answersHeld,
+  pauseFull,
   loadForm,
   loadVersions,
   logicFormOf,
@@ -254,7 +258,7 @@ async function handedOff(tx: WorkspaceTx, submissionId: string, pageId: string) 
       context: formSubmissions.context,
     })
     .from(formSubmissions)
-    .where(eq(formSubmissions.id, submissionId));
+    .where(and(eq(formSubmissions.id, submissionId), isNull(formSubmissions.deletedAt)));
   if (row === undefined) return undefined;
   const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
   if (version === undefined) return undefined;
@@ -306,7 +310,8 @@ export async function handoffAnswers(
   const objectId = found.document.targets.main?.objectId;
   return found.document.questions.flatMap((question) => {
     if (!Object.hasOwn(answers, question.key)) return [];
-    const attributeId = question.filedOn?.attributeId;
+    // Only the person's own fields: one saved on the deal is the deal's, not the booking's.
+    const attributeId = question.filedOn?.objectRole === 'main' ? question.filedOn.attributeId : undefined;
     return [
       {
         key: question.key,
@@ -341,6 +346,14 @@ export async function handoffSubmission(
 /** What a form that isn't taking enquiries answers at its link (AC-549, AC-662). */
 export const FORM_CLOSED_MESSAGE = 'This form isn’t taking enquiries right now.';
 
+/** Whether this send's idempotency key already stored a submission on the form (a retry, answered as before). */
+async function alreadySent(tx: WorkspaceTx, formId: string, body: SubmitBody): Promise<boolean> {
+  const found = await tx.execute(sql`
+    select 1 from form_submissions where form_id = ${formId}::uuid and idempotency_key = ${body.idempotencyKey} limit 1
+  `);
+  return found.rows.length > 0;
+}
+
 /** Refuses (a programming error) any scope but the one the form's own public key made. */
 function checkPublicScope(scope: EngineScope, formId: string): void {
   const { principal } = scope.access;
@@ -357,6 +370,17 @@ function publicRow(form: FormRow | undefined): FormRow & { liveVersionId: string
   return { ...form, liveVersionId: form.liveVersionId };
 }
 
+/** The workspace's country for a guest form (forms fixes 2): the one it set, else its time zone's. */
+export async function workspaceCountry(tx: WorkspaceTx, workspaceId: string): Promise<string | undefined> {
+  const [row] = (
+    await tx.execute<{ country: string | null; time_zone: string }>(
+      sql`select country, time_zone from workspaces where id = ${workspaceId}::uuid`,
+    )
+  ).rows;
+  if (row === undefined) return undefined;
+  return row.country ?? zoneCountry(row.time_zone);
+}
+
 /** A live form as its hosted page renders it (AC-587, AC-659); a paused one with no questions (AC-662). */
 export async function getPublicForm(
   scope: EngineScope,
@@ -367,13 +391,17 @@ export async function getPublicForm(
     const form = publicRow(await loadForm(tx, input.formId));
     const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
     if (live === undefined) throw new Error('A live form names a version that is gone.');
+    // Closed by Pause, or by its own closing rule (forms fix b2): either way the page shows the closed message.
+    const isClosed = form.status === 'paused' || isClosedByRule(live.document);
+    const country = await workspaceCountry(tx, scope.workspaceId);
     const rendered = publicFormOf(live.document, {
       publicKey: form.publicKey,
-      status: form.status === 'paused' ? 'paused' : 'live',
+      status: isClosed ? 'paused' : 'live',
       versionNumber: live.number,
       ...(input.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: input.recaptchaSiteKey }),
     });
-    return form.status === 'paused' ? { ...rendered, questions: [] } : rendered;
+    const placed = country === undefined ? rendered : { ...rendered, country };
+    return isClosed ? { ...placed, questions: [] } : placed;
   });
 }
 
@@ -543,10 +571,25 @@ export async function submitForm(
     scope,
     async (context) => {
       const { tx } = context;
-      const form = publicRow(await loadForm(tx, input.formId));
-      if (form.status !== 'live') throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
-      const current = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+      const unlocked = publicRow(await loadForm(tx, input.formId));
+      // A send stored before the form closed, retried, still gets its answer (the replay below).
+      const isReplay = async () => alreadySent(tx, unlocked.id, body);
+      if (unlocked.status !== 'live' && !(await isReplay())) throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
+      const current = (await loadVersions(tx, [unlocked.liveVersionId])).get(unlocked.liveVersionId);
       if (current === undefined) throw new Error('A live form names a version that is gone.');
+      // A form that closes after a number of answers takes its sends one at a time (forms fixes 2), so two sends
+      // never both take the last place; every other form never waits on another's send.
+      const caps = current.document.closing?.after !== undefined;
+      const form = caps ? publicRow(await loadForm(tx, input.formId, true)) : unlocked;
+      // Its own closing rule, against the live version (forms fix b2). The idempotent replay below answers a send
+      // that landed before it closed, so a retried send still gets its answer.
+      // Counted once, under the lock: the same count says whether this send takes the last place (review).
+      const cap = current.document.closing?.after;
+      const held = cap === undefined ? 0 : await answersHeld(tx, form.id, cap);
+      const isClosed = form.status !== 'live' || isClosedByRule(current.document) || (cap !== undefined && held >= cap);
+      if (isClosed && !(await isReplay())) {
+        throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
+      }
       // The version the visitor filled in (AC-6302): a form published again while they filled it in is checked,
       // filed and routed as the version they saw, as long as that version was published on this form. An unknown
       // number, or none (a site's own form), is checked against the live one.
@@ -689,6 +732,9 @@ export async function submitForm(
         return { next: again, verdict: judged.verdict, replayed: true };
       }
       await attachUploads(tx, { submissionId: row.id, ids: claimedIds });
+      // The send that takes the last place pauses the form, in this same write (forms fixes 2): a page view then
+      // reads the paused form and counts nothing. Spam takes no place.
+      if (cap !== undefined && state !== 'spam' && held + 1 >= cap) await pauseFull(tx, form.id);
       if (state === 'received') {
         // The form is sent, so nothing stays saved for later (AC-6319), and today's visit is a completion
         // (AC-6320). Both ride in this transaction: a submission that doesn't commit changes neither. A spam or

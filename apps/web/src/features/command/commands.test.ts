@@ -356,6 +356,17 @@ describe('lists in the menu (spec 0048, AC-4827)', () => {
     expect(matchCommands(pages, 'old').some((command) => command.name === 'Old')).toBe(false);
   });
 
+  it('offers New form to someone who may make forms, so "new form" never makes a person (forms critique c)', () => {
+    expect(actionCommands('acme', OBJECTS).some((command) => command.id === 'form:new')).toBe(false);
+    const actions = actionCommands('acme', OBJECTS, { canMakeForms: true });
+    expect(actions.find((command) => command.id === 'form:new')).toMatchObject({
+      name: 'New form',
+      run: { kind: 'go', href: '/w/acme/captures/forms?new=form' },
+    });
+    expect(matchCommands(actions, 'new form')[0]?.id).toBe('form:new');
+    expect(matchCommands(actions, 'create form')[0]?.id).toBe('form:new');
+  });
+
   it('offers Create list only to someone who may make one, and Add to list on a record page', () => {
     expect(actionCommands('acme', OBJECTS).some((command) => command.id === 'list:new')).toBe(false);
     expect(

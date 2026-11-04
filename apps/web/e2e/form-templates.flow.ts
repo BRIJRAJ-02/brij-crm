@@ -1,8 +1,8 @@
 // The form template gallery against the running app (spec 0063, AC-6323):
 // Captures › Forms › New form opens a gallery of ten tiles, Blank first, each
 // with a preview of the form it would make and a one line purpose; pressing
-// one lands in the new form's editor with the template's questions already
-// filed onto People; Publish puts it live in one click, a setting saves itself,
+// one lands in the new form's editor with the template's questions (Feedback
+// is anonymous: it keeps its submissions only); Publish puts it live in one click, a setting saves itself,
 // and Discard changes puts it back. Shot in light and dark inside the real page layout, both
 // empty (nothing chosen yet) and chosen (the form it made), into
 // `scratchpad/s8-shots/`.
@@ -39,7 +39,7 @@ async function settled(page: Page): Promise<void> {
 test.describe('the form template gallery', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The gallery runs at desktop width.');
 
-  test('offers ten templates, and one press makes a draft that files onto People', async ({ page }) => {
+  test('offers twelve templates, and one press makes a draft from one', async ({ page }) => {
     test.setTimeout(240_000);
     const tag = randomUUID().slice(0, 8);
     const slug = `templates-${tag}`;
@@ -51,13 +51,13 @@ test.describe('the form template gallery', () => {
     await expect(gallery).toBeVisible({ timeout: 30_000 });
 
     // AC-6323's twelve tiles, Blank first, each with its purpose on the tile rather than in a tooltip.
-    const tiles = gallery.getByRole('group', { name: 'Start a form' }).getByRole('button');
+    const tiles = gallery.getByRole('radiogroup', { name: 'Start a form' }).getByRole('radio');
     await expect(tiles).toHaveCount(12);
     await expect(tiles.first()).toHaveAccessibleName('Blank form');
-    await expect(gallery.getByText('A rating, and why.')).toBeVisible();
+    await expect(gallery.getByText('A rating, and why. Anonymous.')).toBeVisible();
     // Both templates slice 5 held back are offered now: Lead qualification scores, Booking intake goes on to a page.
-    await expect(gallery.getByRole('button', { name: 'Lead qualification' })).toHaveCount(1);
-    await expect(gallery.getByRole('button', { name: 'Booking intake' })).toHaveCount(1);
+    await expect(gallery.getByRole('radio', { name: 'Lead qualification' })).toHaveCount(1);
+    await expect(gallery.getByRole('radio', { name: 'Booking intake' })).toHaveCount(1);
 
     // The gallery as it opens, in both themes, inside the real page. The theme change rides the colour
     // transition tokens, so the shot waits for it to finish: taken at once, dark caught the tiles mid fade with
@@ -70,14 +70,15 @@ test.describe('the form template gallery', () => {
     }
     await page.emulateMedia({ colorScheme: 'light' });
 
-    // One press makes the draft and opens its editor.
-    await gallery.getByRole('button', { name: 'Feedback' }).click();
+    // Picking one shows it beside the list; Use makes the draft and opens its editor.
+    await gallery.getByRole('radio', { name: 'Feedback' }).click();
+    await gallery.getByRole('button', { name: 'Use Feedback' }).click();
     await expect(page).toHaveURL(/\/captures\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
     await expect(page.getByRole('heading', { level: 1, name: /Feedback/ })).toBeVisible({ timeout: 30_000 });
 
-    // The template's own questions, with the rating it is named for (where each is saved shows in its editor).
-    await expect(page.getByText('Your name').first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('How was it?').first()).toBeVisible();
+    // The template's own questions, with the rating it is named for; anonymous, so nobody is asked who they are.
+    await expect(page.getByText('How was it?').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Your name')).toHaveCount(0);
 
     // The form the chosen tile made, in both themes.
     for (const scheme of SCHEMES) {
@@ -91,7 +92,7 @@ test.describe('the form template gallery', () => {
     // One click puts it live (5 November 2026): no name, link or field table asked first, then its link.
     const formUrl = page.url().replace(/\?.*$/, '');
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const ready = page.getByRole('dialog', { name: 'Your form is live' });
+    const ready = page.getByRole('dialog', { name: / is live$/ });
     await expect(ready).toBeVisible({ timeout: 30_000 });
     await expect(ready.getByRole('textbox')).toHaveCount(0);
     // The link is made from the name when it is free, else the form keeps its own key.
@@ -103,7 +104,11 @@ test.describe('the form template gallery', () => {
     // The words are edited on the preview (T21: press the headline, as Tally), saving themselves to the draft;
     // nothing has a Save, and Publish is the one primary. Below the widest screens the preview is a sheet.
     await page.goto(formUrl);
-    if ((await page.getByRole('button', { name: 'Edit the headline' }).count()) === 0) {
+    // The phone shows beside the questions on a laptop; below that it is behind Show preview.
+    await expect(
+      page.getByRole('button', { name: 'Edit the headline' }).or(page.getByRole('button', { name: 'Show preview' })),
+    ).toBeVisible({ timeout: 30_000 });
+    if (!(await page.getByRole('button', { name: 'Edit the headline' }).isVisible())) {
       await page.getByRole('button', { name: 'Show preview' }).click();
     }
     await page.getByRole('button', { name: 'Edit the headline' }).click();

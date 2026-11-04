@@ -221,7 +221,7 @@ async function workspaceFigures(tx: WorkspaceTx, weeks: Weeks): Promise<Workspac
         select count(*) filter (where received_at >= ${start}::timestamptz) as this_week,
           count(*) filter (where received_at < ${start}::timestamptz) as last_week
         from form_submissions
-        where form_id = any(array(select id from forms))
+        where form_id = any(array(select id from forms)) and deleted_at is null
           and received_at >= ${last}::timestamptz and received_at < ${now}::timestamptz
       `)
     ).rows[0],

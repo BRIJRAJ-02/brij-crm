@@ -1,12 +1,21 @@
 // Brief
-// Purpose: the form's look where it meets the workspace's brand kit (spec 0063, AC-6327): the Colours picker beside
-// the preview, and the preview wearing the kit, from the same colours the hosted page's stylesheet holds (0060, AC-7).
-// Main task: pick Brand or Plain and see the form take it at once, before publishing.
-// Leaves out: editing the kit, which is Settings › Brand, and the Light/Dark and Corners axes, which need none of it.
-import type { BrandKit, BrandStore, PublicForm } from '@crm/data';
-import type { FormLookTheme } from '@crm/data/forms';
+// Purpose: the form's look (spec 0063, AC-6327): one Design button over the preview holding Colour, Corners and
+// Colours, and the preview wearing the workspace's kit, from the same colours the hosted page's stylesheet holds.
+// Main task: change the look and see the form take it at once, before publishing.
+// Leaves out: editing the kit, which is Settings › Brand.
+import type { BrandKit, BrandStore, FormDocument, PublicForm } from '@crm/data';
 import { useBrand } from '@crm/data/react';
-import { HostedFormPreview, Select, type PageBrand, type PreviewTextChange } from '@crm/ui';
+import {
+  Button,
+  HostedFormPreview,
+  Popover,
+  SegmentedControl,
+  SettingsRow,
+  type HostedFormPreviewProps,
+  type PageBrand,
+  type PreviewTextChange,
+} from '@crm/ui';
+import { useRef, useState } from 'react';
 import { strings } from './strings.ts';
 
 /** The kit as the picker and the preview read it, or undefined while it loads. One held per workspace, so the
@@ -16,55 +25,132 @@ function useKit(brand: BrandStore, slug: string): BrandKit | undefined {
   return state.status === 'ready' ? state.value : undefined;
 }
 
-/** Props for the Colours picker. */
-export interface BrandThemeSelectProps {
-  readonly value: FormLookTheme;
+/** A form's look, as the Design popover changes it. */
+export type FormLook = FormDocument['look'];
+
+/** Props for the Design button. */
+export interface DesignButtonProps {
+  readonly look: FormLook;
   readonly isReadOnly: boolean;
-  readonly onChange: (theme: FormLookTheme) => void;
-  /** Said under Brand colours: where to put a kit the workspace hasn't saved yet. */
-  readonly hint?: string;
+  readonly onChange: (look: FormLook) => void;
+  /** The brand store the route loaded, to say where to add a kit the workspace hasn't saved yet. */
+  readonly brand?: BrandStore;
+  readonly slug: string;
 }
 
 /**
- * Colours: the workspace's brand kit, or the product's own (AC-6327). A workspace with nothing saved yet is given
- * its `hint`, since Brand would otherwise look like it did nothing.
+ * Design (5 November 2026: the look's three pickers over the preview read as clutter): one button over the preview
+ * opening a small panel with the form's look, each axis a row with its choices side by side: Colour (Light or Dark),
+ * Corners (Rounded or Square) and Colours (Workspace brand or Plain, AC-6327). Each change shows on the preview at
+ * once and goes live with the next publish.
  */
-export function BrandThemeSelect({ value, isReadOnly, onChange, hint }: BrandThemeSelectProps) {
+export function DesignButton({ look, isReadOnly, onChange, brand, slug }: DesignButtonProps) {
+  const [isOpen, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   return (
-    <Select
-      label={strings.theme}
-      isLabelHidden
-      size="sm"
-      isReadOnly={isReadOnly}
-      items={[
-        {
-          id: 'brand',
-          label: strings.themeBrand,
-          icon: 'palette',
-          ...(hint === undefined ? {} : { description: hint }),
-        },
-        { id: 'plain', label: strings.themePlain },
-      ]}
-      value={value}
-      onChange={(theme) => {
-        if (theme === 'brand' || theme === 'plain') onChange(theme);
-      }}
-    />
+    <>
+      <Button ref={triggerRef} size="sm" icon="palette" isExpanded={isOpen} onPress={() => setOpen(true)}>
+        {strings.design}
+      </Button>
+      <Popover
+        label={strings.design}
+        triggerRef={triggerRef}
+        isOpen={isOpen}
+        onOpenChange={setOpen}
+        width="panel"
+        // Over the questions, beside the preview it changes, never covering it.
+        placement="start top"
+      >
+        {brand === undefined ? (
+          <DesignRows look={look} isReadOnly={isReadOnly} onChange={onChange} />
+        ) : (
+          <DesignRowsWithKit brand={brand} slug={slug} look={look} isReadOnly={isReadOnly} onChange={onChange} />
+        )}
+      </Popover>
+    </>
+  );
+}
+
+/** The look's three rows, with the hint under Colours where the workspace has no kit yet. */
+function DesignRows({
+  look,
+  isReadOnly,
+  onChange,
+  hint,
+}: Pick<DesignButtonProps, 'look' | 'isReadOnly' | 'onChange'> & { readonly hint?: string }) {
+  return (
+    <>
+      <SettingsRow title={strings.colour}>
+        <SegmentedControl
+          label={strings.colour}
+          size="compact"
+          isFitted
+          isReadOnly={isReadOnly}
+          segments={[
+            { value: 'light', label: strings.light, icon: 'sun' },
+            { value: 'dark', label: strings.dark, icon: 'moon' },
+          ]}
+          value={look.colour}
+          onChange={(colour) => {
+            if (colour === 'light' || colour === 'dark') onChange({ ...look, colour });
+          }}
+        />
+      </SettingsRow>
+      <SettingsRow title={strings.corners}>
+        <SegmentedControl
+          label={strings.corners}
+          size="compact"
+          isFitted
+          isReadOnly={isReadOnly}
+          segments={[
+            { value: 'rounded', label: strings.rounded },
+            { value: 'square', label: strings.square },
+          ]}
+          value={look.corners}
+          onChange={(corners) => {
+            if (corners === 'rounded' || corners === 'square') onChange({ ...look, corners });
+          }}
+        />
+      </SettingsRow>
+      <SettingsRow
+        title={strings.theme}
+        // Where to add a kit, only while the workspace brand is picked and there is none to wear.
+        {...(hint === undefined || look.theme !== 'brand' ? {} : { description: hint })}
+      >
+        <SegmentedControl
+          label={strings.theme}
+          size="compact"
+          isFitted
+          isReadOnly={isReadOnly}
+          segments={[
+            { value: 'brand', label: strings.themeBrand },
+            { value: 'plain', label: strings.themePlain },
+          ]}
+          value={look.theme ?? 'plain'}
+          onChange={(theme) => {
+            if (theme === 'brand' || theme === 'plain') onChange({ ...look, theme });
+          }}
+        />
+      </SettingsRow>
+    </>
   );
 }
 
 /**
- * The picker where the workspace's kit is known (the Form tab): Brand says where to put a kit that is empty. The
- * kit is read through the store, so the picker and the preview never show different states of it.
+ * The rows where the workspace's kit is known (the Form tab): Workspace brand says where to put a kit that is
+ * empty. The kit is read through the store, so the rows and the preview never show different states of it.
  */
-export function BrandThemeSelectWithKit({
+function DesignRowsWithKit({
   brand,
   slug,
   ...rest
-}: Omit<BrandThemeSelectProps, 'hint'> & { readonly brand: BrandStore; readonly slug: string }) {
+}: Pick<DesignButtonProps, 'look' | 'isReadOnly' | 'onChange'> & {
+  readonly brand: BrandStore;
+  readonly slug: string;
+}) {
   const kit = useKit(brand, slug);
   const isEmpty = kit !== undefined && kit.accent === undefined && kit.logo === undefined;
-  return <BrandThemeSelect {...rest} {...(isEmpty ? { hint: strings.themeBrandEmpty } : {})} />;
+  return <DesignRows {...rest} {...(isEmpty ? { hint: strings.themeBrandEmpty } : {})} />;
 }
 
 /** Props for the branded preview. */
@@ -79,13 +165,15 @@ export interface BrandedFormPreviewProps {
   readonly mode?: 'preview' | 'page';
   /** The headline and the button, edited where they are (T21). */
   readonly onTextChange?: (change: PreviewTextChange) => void;
+  /** The thank-you message being edited, drawn in the form's place (HostedFormPreview's `ending`). */
+  readonly ending?: HostedFormPreviewProps['ending'];
 }
 
 /**
  * The preview wearing the workspace's kit. While the kit loads, or where the workspace has none, it draws the
  * product's own accent, which is what the hosted page draws too, so the two never disagree.
  */
-export function BrandedFormPreview({ brand, slug, form, step, mode, onTextChange }: BrandedFormPreviewProps) {
+export function BrandedFormPreview({ brand, slug, form, step, mode, onTextChange, ending }: BrandedFormPreviewProps) {
   const kit = useKit(brand, slug);
   const colours = brand.colours(kit?.accent, kit?.accentDark);
   const logoSrc = kit?.logo === undefined ? undefined : brand.logoSrc(slug, kit.logo.version);
@@ -100,6 +188,7 @@ export function BrandedFormPreview({ brand, slug, form, step, mode, onTextChange
       {...(step === undefined ? {} : { step })}
       {...(mode === undefined ? {} : { mode })}
       {...(onTextChange === undefined ? {} : { onTextChange })}
+      {...(ending === undefined ? {} : { ending })}
     />
   );
 }

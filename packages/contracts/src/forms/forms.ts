@@ -9,7 +9,8 @@ import { AttributeType, Timestamp } from '../values/attribute-values.ts';
 import { RecordRefDisplay } from '../values/options.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 import { SubmissionContext } from './context.ts';
-import { FormDocument } from './document.ts';
+import { CLOSED_MESSAGE_MAX } from './confirmation.ts';
+import { FormConfirmation, FormDocument } from './document.ts';
 import { PublicForm } from './public.ts';
 import { FormAnalytics, FormAnalyticsInput } from './visits.ts';
 import { FormTemplateSummary, OfferedFormTemplateId } from './templates.ts';
@@ -66,6 +67,8 @@ export const FormSummary = z.object({
   submissionsThisMonth: z.number().int().min(0),
   /** Spam waiting in the form, shown only when there is some. */
   spamCount: z.number().int().min(0),
+  /** Held for a spam check in Needs review (forms fixes 2), when there is any: Settings' Spam opens where they wait. */
+  reviewCount: z.number().int().min(1).optional(),
   lastSubmissionAt: Timestamp.optional(),
   /** Every stored submission, counted up to `FORM_COUNT_CAP`. */
   submissionCount: z.number().int().min(0),
@@ -136,6 +139,24 @@ export const SaveFormDraftInput = WorkspaceScoped.extend({
   expectedRevision: z.number().int().min(1),
   mutationId: Uuid,
 });
+/**
+ * The settings a form's version holds, changed from Settings and live at once (forms fixes 2, one save model): when it
+ * closes, what it says closed, the visitor's copy, Also create a deal. A present key is set, `null` clears it.
+ */
+export const ApplyFormSettingsInput = WorkspaceScoped.extend({
+  formId: Uuid,
+  expectedRevision: z.number().int().min(1),
+  settings: z.strictObject({
+    closing: FormDocument.shape.closing.unwrap().nullable().optional(),
+    closedMessage: z.string().max(CLOSED_MESSAGE_MAX).nullable().optional(),
+    confirmation: FormConfirmation.nullable().optional(),
+    deal: z.boolean().optional(),
+  }),
+  mutationId: Uuid,
+});
+/** Settings changed live. */
+export type ApplyFormSettingsInput = z.infer<typeof ApplyFormSettingsInput>;
+
 /** Saves the draft. */
 export type SaveFormDraftInput = z.infer<typeof SaveFormDraftInput>;
 
@@ -193,6 +214,8 @@ export const SetFormTargetInput = WorkspaceScoped.extend({
   formId: Uuid,
   mainObjectId: Uuid.nullable(),
   expectedRevision: z.number().int().min(1),
+  /** With People: each submission also makes a deal (Move to People with a deal, forms fixes 2). */
+  withDeal: z.boolean().optional(),
   mutationId: Uuid,
 });
 /** Points a form's draft at another object, or at none. */
@@ -263,6 +286,16 @@ export const FormTargetChoices = z.object({
   objectId: Uuid.optional(),
   objectName: z.string().optional(),
   items: z.array(FormAttributeChoice),
+  /**
+   * The standard Deals and its attributes, when the form saves to People and the reader may see Deals (forms fixes 2):
+   * with Also create a deal on, a question may go on the deal itself (its Value, its Source). Absent otherwise.
+   */
+  deal: z.object({ objectId: Uuid, objectName: z.string(), items: z.array(FormAttributeChoice) }).optional(),
+  /**
+   * True where visitors can't upload files here (no file store set up, forms fixes 2): a form asking for a file
+   * says so before it goes live. Absent where uploads work.
+   */
+  uploadsOff: z.literal(true).optional(),
 });
 /** The target object and its attributes. */
 export type FormTargetChoices = z.infer<typeof FormTargetChoices>;
@@ -340,6 +373,8 @@ export const SubmissionSummary = z.object({
   firstAnswers: z.array(SubmissionAnswer).max(SUBMISSION_SUMMARY_QUESTIONS),
   /** Its link to the CRM: "Not in CRM", filing, or the record it filed into. */
   crm: SubmissionCrm,
+  /** It went to a record that was already there (forms fix a4): someone who sent before, or was in the CRM. */
+  isReturning: z.boolean().optional(),
 });
 /** A submission in its form's list. */
 export type SubmissionSummary = z.infer<typeof SubmissionSummary>;
@@ -360,6 +395,11 @@ export const SubmissionView = SubmissionSummary.extend({
   records: z.array(SubmissionRecord),
   failure: z.string().optional(),
   refused: z.array(z.object({ questionId: z.string(), message: z.string() })),
+  /**
+   * The answers that differed from what the record already held and were not written, since their question fills
+   * only an empty value (forms fix a4): the panel says so beside each, with Use new.
+   */
+  kept: z.array(z.object({ questionId: z.string() })).default([]),
   /** The day its files go (`YYYY-MM-DD`), for one our spam check caught: released before then, it keeps them. */
   filesRemovedOn: z.string().optional(),
   /** Who was given the new record and why (AC-567); `rotationId` when a rotation chose them (AC-1050). */
@@ -398,6 +438,11 @@ export type SubmissionIdInput = z.infer<typeof SubmissionIdInput>;
 export const SubmissionWriteInput = SubmissionIdInput.extend({ mutationId: Uuid });
 /** A change to one submission. */
 export type SubmissionWriteInput = z.infer<typeof SubmissionWriteInput>;
+
+/** One answer filing kept off a record, to write over the record's value now (forms fix a4). */
+export const UseNewAnswerInput = SubmissionWriteInput.extend({ questionId: z.string().min(1).max(64) });
+/** One kept answer to write now. */
+export type UseNewAnswerInput = z.infer<typeof UseNewAnswerInput>;
 
 /**
  * How a member settles a submission the content checks held for review:
@@ -523,6 +568,16 @@ export const ExportSubmissionsInput = WorkspaceScoped.extend({
 /** Exporting a form's submissions. */
 export type ExportSubmissionsInput = z.infer<typeof ExportSubmissionsInput>;
 
+/** A small export downloaded at once, with no job (forms fixes 2): the form and the selection. */
+export const ExportNowInput = WorkspaceScoped.extend({ formId: Uuid, select: SubmissionSelection });
+/** A small export downloaded at once. */
+export type ExportNowInput = z.infer<typeof ExportNowInput>;
+
+/** A small export's file: its name and its CSV. */
+export const ExportNowFile = z.object({ fileName: z.string(), csv: z.string() });
+/** A small export's file. */
+export type ExportNowFile = z.infer<typeof ExportNowFile>;
+
 /** One export by id (only its starter sees it). */
 export const ExportIdInput = WorkspaceScoped.extend({ exportId: Uuid });
 /** One export by id. */
@@ -584,6 +639,7 @@ export const formsContract = {
   /** Makes a draft from one template (AC-6323); needs `forms.manage`, as every other form write does. */
   createFromTemplate: oc.input(CreateFromTemplateInput).output(FormView),
   saveDraft: oc.input(SaveFormDraftInput).output(FormView),
+  applySettings: oc.input(ApplyFormSettingsInput).output(FormView),
   publish: oc.input(PublishFormInput).output(FormView),
   updateSettings: oc.input(UpdateFormSettingsInput).output(FormView),
   rotateSecret: oc.input(RotateFormSecretInput).output(FormView),
@@ -608,8 +664,16 @@ export const submissionsContract = {
   addToCrm: oc.input(AddToCrmInput).output(AddToCrmResult),
   /** Export as CSV: starts a `forms.export` job; download from `downloadPath` once it succeeded. */
   export: oc.input(ExportSubmissionsInput).output(ExportView),
+  /** At most 1,000 submissions as CSV in the answer itself (forms fixes 2); more is `JOB_TOO_LARGE`, then `export`. */
+  exportNow: oc.input(ExportNowInput).output(ExportNowFile),
   /** One export the caller started. */
   getExport: oc.input(ExportIdInput).output(ExportView),
   retry: oc.input(SubmissionWriteInput).output(SubmissionView),
+  /** Use new (forms fix a4): writes one kept answer over the record's value, through the member's own access. */
+  useNewAnswer: oc.input(UseNewAnswerInput).output(SubmissionView),
+  /** Undo for Use new (forms fixes 2): the record's value before comes back. */
+  undoUseNewAnswer: oc.input(UseNewAnswerInput).output(SubmissionView),
   delete: oc.input(SubmissionWriteInput).output(z.object({ deleted: z.literal(true) })),
+  /** Undo a delete (forms fixes 2): deletes are soft, so the submission comes back as it was. */
+  restore: oc.input(SubmissionWriteInput).output(SubmissionView),
 };

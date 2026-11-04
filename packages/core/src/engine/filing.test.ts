@@ -138,6 +138,9 @@ describe('the domain an email files by (AC-5912 to AC-5914)', () => {
   it('skips free mail by the workspace domain list, country domains included', () => {
     expect(filingDomains('sam@gmail.com')).toBeUndefined();
     expect(filingDomains('lea@hotmail.se')).toBeUndefined();
+    // A one letter name files no company: `b@g.com` made one called "G" (forms critique, 5 November 2026).
+    expect(filingDomains('b@g.com')).toBeUndefined();
+    expect(filingDomains('ann@hp.com')).toEqual({ host: 'hp.com', registrable: 'hp.com' });
     expect(filingDomains('ana@yahoo.com.mx')).toBeUndefined();
     expect(filingDomains('not an email')).toBeUndefined();
     // Names reserved for examples and tests never make a company.

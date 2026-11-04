@@ -41,6 +41,8 @@ export function answerWords(value: unknown, options: AnswerWordsOptions = {}): s
   // A signature is a drawing: it reads as the fact of it, never its file's name.
   if (options.answerType === 'signature') return options.signed ?? 'Signed';
   if (typeof value === 'string') return value.trim();
+  // A consent reads as what it is (forms fix b9): "Yes" and "No" under a long wording read as a question answered.
+  if (typeof value === 'boolean' && options.answerType === 'consent') return value ? 'Agreed' : 'Not agreed';
   if (typeof value === 'boolean') return value ? (options.yes ?? 'Yes') : (options.no ?? 'No');
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
   if (Array.isArray(value)) {

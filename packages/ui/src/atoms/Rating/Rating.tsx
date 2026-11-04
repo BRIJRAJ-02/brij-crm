@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent } from 'react';
+import { useId, type KeyboardEvent, type MouseEvent } from 'react';
 import { FieldError, RadioButton, RadioField, RadioGroup } from 'react-aria-components';
 import { FieldLabel } from '../FieldLabel/FieldLabel.tsx';
 import { Icon } from '../Icon/Icon.tsx';
@@ -8,7 +8,8 @@ import styles from './Rating.module.css';
 /** The number of stars. */
 export const RATING_MAX = 5;
 
-const STARS = Array.from({ length: RATING_MAX }, (_, index) => index + 1);
+/** The stars, 1 to `count`. */
+const starsOf = (count: number) => Array.from({ length: count }, (_, index) => index + 1);
 
 /** Props for Rating. */
 export interface RatingProps {
@@ -38,7 +39,14 @@ export interface RatingProps {
     readonly aside?: string | undefined;
     readonly error?: string | undefined;
     readonly isLabelHidden?: boolean;
+    /**
+     * What the first and last star mean, under the row at its two ends ("Poor", "Excellent"), read with the
+     * group: a form's Rating, as a Scale's end words are.
+     */
+    readonly ends?: { readonly start?: string | undefined; readonly end?: string | undefined };
   };
+  /** How many stars, 3 to 10 (a form's Rating sets it); 5 when left out, the rating attribute's. */
+  readonly count?: number;
 }
 
 /**
@@ -54,12 +62,17 @@ export function Rating({
   isDisabled = false,
   variant = 'default',
   field,
+  count = RATING_MAX,
 }: RatingProps) {
   const current = value ?? defaultValue ?? null;
+  const all = starsOf(Math.min(10, Math.max(3, Math.round(count))));
+  const endsId = useId();
+  const ends = field?.ends;
+  const hasEnds = ends !== undefined && (ends.start !== undefined || ends.end !== undefined);
   if (isReadOnly) {
     return (
-      <span className={styles.root} role="img" aria-label={strings.rated(label, current)}>
-        {STARS.map((star) => (
+      <span className={styles.root} role="img" aria-label={strings.rated(label, current, all.length)}>
+        {all.map((star) => (
           <span key={star} className={styles.star} data-on={current !== null && star <= current ? '' : undefined}>
             <Icon name="star" size="sm" isFilled />
           </span>
@@ -79,7 +92,7 @@ export function Rating({
     if (event.key === 'Delete' || event.key === 'Backspace') onChange?.(null);
   };
 
-  const stars = STARS.map((star) => (
+  const stars = all.map((star) => (
     <RadioField key={star} value={String(star)} aria-label={strings.stars(star)} className={styles.field}>
       <RadioButton className={styles.choice} data-on={current !== null && star <= current ? '' : undefined}>
         <Icon name="star" size={field === undefined ? 'sm' : 'md'} isFilled />
@@ -95,6 +108,7 @@ export function Rating({
         className={field === undefined ? styles.root : styles.form}
         data-variant={variant}
         {...(field === undefined || field.isLabelHidden === true ? { 'aria-label': label } : {})}
+        {...(hasEnds ? { 'aria-describedby': endsId } : {})}
         orientation="horizontal"
         isDisabled={isDisabled}
         isInvalid={field?.error !== undefined}
@@ -109,6 +123,12 @@ export function Rating({
           <>
             {field.isLabelHidden !== true && <FieldLabel label={label} aside={field.aside} tone="strong" />}
             <span className={styles.root}>{stars}</span>
+            {hasEnds && (
+              <span id={endsId} className={styles.ends}>
+                <span>{ends.start}</span>
+                <span>{ends.end}</span>
+              </span>
+            )}
             <FieldError className={styles.error}>{field.error}</FieldError>
           </>
         )}

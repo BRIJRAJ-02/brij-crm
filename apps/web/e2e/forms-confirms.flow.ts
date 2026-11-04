@@ -136,23 +136,12 @@ test.describe('confirms on forms', () => {
     await expect(adding).toBeHidden();
     expect(addToCrm()).toBe(1);
 
-    // Deleting a submission asks first and names who sent it; Escape is Cancel, the submission stays open; Cancel keeps it.
+    // Deleting a submission is one click with Undo (forms fixes 2: deletes are soft): no confirm, one call, and
+    // Undo puts it back. A refusal says why in a toast; the submission stays.
     const deleteSubmission = calls(page, 'submissions/delete');
+    const restoreSubmission = calls(page, 'submissions/restore');
     await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=submissions`);
     await page.getByRole('row').filter({ hasText: 'Grace Hopper' }).first().click();
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
-    const confirm = page.getByRole('alertdialog', { name: 'Delete the submission from Grace Hopper?' });
-    await expect(confirm).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(confirm).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
-    expect(deleteSubmission()).toBe(0);
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect(confirm).toBeVisible();
-    await confirm.getByRole('button', { name: /^Cancel/ }).click();
-    await expect(confirm).toBeHidden();
-    expect(deleteSubmission()).toBe(0);
-    // A refusal says why inside the dialog, which stays open; the same press sent one call.
     await page.route(
       '**/api/rpc/submissions/delete',
       (route) =>
@@ -166,16 +155,15 @@ test.describe('confirms on forms', () => {
       { times: 1 },
     );
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect(confirm).toBeVisible();
-    await confirm.getByRole('button', { name: 'Delete submission' }).click();
-    await expect(confirm.getByText('Try again in a moment.')).toBeVisible();
-    await expect(confirm).toBeVisible();
+    await expect(page.getByText('Try again in a moment.')).toBeVisible();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
     expect(deleteSubmission()).toBe(1);
-    // The next press deletes it, with one more call.
-    await confirm.getByRole('button', { name: 'Delete submission' }).click();
-    await expect(confirm).toBeHidden();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(page.getByRole('row').filter({ hasText: 'Grace Hopper' })).toHaveCount(0);
     expect(deleteSubmission()).toBe(2);
+    await page.getByRole('button', { name: 'Undo' }).first().click();
+    await expect(page.getByRole('row').filter({ hasText: 'Grace Hopper' }).first()).toBeVisible();
+    expect(restoreSubmission()).toBe(1);
 
     // The editor's Pause acts at once too, its toast offering Undo, which resumes it.
     await page.goto(`/w/${slug}/captures/forms/${live.id}`);
@@ -186,9 +174,9 @@ test.describe('confirms on forms', () => {
     await page.getByRole('button', { name: 'Undo' }).first().click();
     await expect.poll(setStatus).toBe(4);
 
-    // Removing a site from the Install tab asks first; Escape keeps it; Remove site saves the list without it.
+    // Removing a site from the Share tab asks first; Escape keeps it; Remove site saves the list without it.
     const settings = calls(page, 'forms/updateSettings');
-    await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=install`);
+    await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=share`);
     await page.getByRole('button', { name: 'For developers' }).click();
     await page.getByLabel('Site address').fill('https://acme.com');
     await page.getByRole('button', { name: 'Add site' }).click();

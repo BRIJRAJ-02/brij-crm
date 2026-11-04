@@ -255,6 +255,11 @@
 
   /* A plain stack (the Captures editors): its rows without hairlines between them. */
   /* Nested in a field's rhythm (a rule's conditions): no breath above, and the field's own step between parts. */
+  /* A tab of plain rows: the control stays near its label on a wide screen. */
+  .stack[data-width='readable'] {
+    max-inline-size: var(--size-dialog-wide);
+  }
+
   .stack[data-variant='nested'] {
     gap: var(--space-8);
     padding-block-start: 0;
@@ -271,9 +276,13 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* Never wider than its row: a row of several small fields (a question's points per choice) wraps onto a second
+     line rather than running past the card's edge (5 November 2026). */
   .rowControl {
     display: flex;
     flex: none;
+    flex-wrap: wrap;
+    max-inline-size: 100%;
     gap: var(--space-8);
     align-items: center;
     justify-content: flex-end;

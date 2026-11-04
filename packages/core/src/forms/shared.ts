@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   choiceKeysOf,
+  closedByRule,
   formStrings,
   FormDocument,
   recalledKeys,
@@ -23,6 +24,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
+import { companyFilingTarget } from '../engine/filing.ts';
 
 const { attributeOptions, forms, formVersions, objects } = schema;
 
@@ -196,6 +198,20 @@ export function fileable(attributes: ReadonlyMap<string, AttributeDef>): readonl
     .sort((a, b) => a.position - b.position);
 }
 
+/**
+ * The attributes an answer may be filed on, read from the database: `fileable`'s, with record references kept only
+ * where a typed name can link one (forms fixes 2): a person's Company, which a company name finds or makes. Any other
+ * link (a deal's people, a custom relationship) has no name to go by, so it is never offered.
+ */
+export async function fileableOn(
+  tx: WorkspaceTx,
+  objectId: string,
+  attributes: ReadonlyMap<string, AttributeDef>,
+): Promise<readonly AttributeDef[]> {
+  const company = (await companyFilingTarget(tx, objectId, attributes))?.companyAttributeId;
+  return fileable(attributes).filter((attribute) => attribute.type !== 'record_reference' || attribute.id === company);
+}
+
 /** An object's singular name. */
 export async function objectName(tx: WorkspaceTx, objectId: string): Promise<string> {
   const [row] = await tx.select({ name: objects.singularName }).from(objects).where(eq(objects.id, objectId));
@@ -216,7 +232,7 @@ export async function publishAttributes(
   objectId: string | null,
 ): Promise<ReadonlyMap<string, PublishAttribute>> {
   if (objectId === null) return new Map();
-  const attributes = fileable(await loadAttributes(tx, objectId));
+  const attributes = await fileableOn(tx, objectId, await loadAttributes(tx, objectId));
   const name = await objectName(tx, objectId);
   const writesObject = objectLevel(access, objectId) === 'write';
   return new Map(
@@ -323,6 +339,7 @@ export function publicQuestionOf(question: FormQuestion, withPoints = false): Pu
     answerType: question.answerType,
     ...(question.choices === undefined ? {} : choicesOf(question)),
     ...(question.placeholder === undefined || question.placeholder === '' ? {} : { placeholder: question.placeholder }),
+    ...(question.description === undefined || question.description === '' ? {} : { description: question.description }),
     required: question.required,
     ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
     ...(question.options === undefined ? {} : { options: question.options }),
@@ -407,6 +424,9 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
     language: document.language,
     look: document.look,
     questions: document.questions.map((question) => publicQuestionOf(question, readsScore(document))),
+    ...(document.closedMessage === undefined || document.closedMessage === ''
+      ? {}
+      : { closedMessage: document.closedMessage }),
     ...layoutOf(document),
     ...((document.endings ?? []).length === 0
       ? {}
@@ -418,4 +438,60 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
     ...(savesProgress(document) ? { savesProgress: true } : {}),
     ...(context.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: context.recaptchaSiteKey }),
   };
+}
+
+/**
+ * Whether a live form's own closing rule has closed it by the clock (forms fix b2): its moment has passed. No count
+ * is read: a form that reaches its number of answers is paused by the send that fills it (`pauseIfFull`, forms
+ * fixes 2), so a page view, an upload and a saved part fill cost no read of the submissions at all.
+ */
+export function isClosedByRule(document: FormDocument, now = new Date()): boolean {
+  return closedByRule(
+    { closing: document.closing?.at === undefined ? undefined : { at: document.closing.at } },
+    {
+      now,
+      answers: 0,
+    },
+  );
+}
+
+/**
+ * Whether a form holds as many answers as its closing rule closes after (spam and deleted ones left out). Reads at
+ * most that many rows, and only when the rule names a number: the send path under the form's lock, Publish and
+ * Resume.
+ */
+export async function isFull(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
+  const after = document.closing?.after;
+  if (after === undefined) return false;
+  return (await answersHeld(tx, formId, after)) >= after;
+}
+
+/** How many answers a form holds (spam and deleted ones left out), counted up to `upTo`. */
+export async function answersHeld(tx: WorkspaceTx, formId: string, upTo: number): Promise<number> {
+  const counted = await tx.execute<{ n: number }>(sql`
+    select count(*)::int as n from (
+      select 1 from form_submissions
+      where form_id = ${formId}::uuid and state <> 'spam' and deleted_at is null limit ${upTo}
+    ) kept
+  `);
+  return counted.rows[0]?.n ?? 0;
+}
+
+/** Pauses a live form now (it has reached its number of answers), as Pause does. */
+export async function pauseFull(tx: WorkspaceTx, formId: string): Promise<void> {
+  await tx
+    .update(forms)
+    .set({ status: 'paused', updatedAt: sql`now()` })
+    .where(and(eq(forms.id, formId), eq(forms.status, 'live')));
+}
+
+/**
+ * Pauses a live form that has reached its number of answers (forms fixes 2): Taking answers turns off, as Pause
+ * does, so the page says the closed message and nothing counts again until someone raises the number or resumes it.
+ * Answers whether it paused.
+ */
+export async function pauseIfFull(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
+  if (!(await isFull(tx, formId, document))) return false;
+  await pauseFull(tx, formId);
+  return true;
 }

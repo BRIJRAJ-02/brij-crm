@@ -27,24 +27,25 @@ test.describe('the form journey', () => {
     const formUrl = page.url().replace(/\?.*$/, '');
 
     // A question mapped onto an attribute People already has.
-    await page.getByRole('button', { name: 'Add a question' }).click();
+    await page.getByRole('button', { name: 'Add a question', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your role?');
-    await page
-      .getByRole('button', { name: /Save answer to$/ })
-      .last()
-      .click();
-    await page.getByRole('option', { name: 'Job title', exact: true }).click();
-    await expect(page.getByRole('listbox')).toBeHidden();
-    // Where the answer is saved shows in the question's editor, not on its row (T17).
-    await expect(page.getByRole('button', { name: /Save answer to$/ }).last()).toContainText('Job title');
+    // Save answer to is under the question's ⋯ (T40), Keep with the answer until a field is picked.
+    await page.getByRole('button', { name: 'More for What is your role?' }).click();
+    await page.getByRole('menuitem', { name: /^Save answer to/ }).click();
+    await page.getByRole('menuitem', { name: 'Job title', exact: true }).click();
+    await page.getByRole('button', { name: 'More for What is your role?' }).click();
+    await expect(page.getByRole('menuitem', { name: /^Save answer to/ })).toContainText('Job title');
+    await page.keyboard.press('Escape');
 
-    // Named on the page, as a title (Tally's way); then the first publish is one click, with nothing asked.
-    const title = page.getByRole('textbox', { name: 'Name', exact: true });
+    // Named on the page, as its one title (Tally's way): the headline, which an Untitled form takes as its name too.
+    // Then the first publish is one click, with nothing asked.
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
     await title.fill(`Talk to us ${tag}`);
     await title.press('Tab');
     await expect(page.getByRole('heading', { level: 1 })).toContainText(`Talk to us ${tag}`, { timeout: 15_000 });
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: / is live$/ })).toBeVisible({ timeout: 30_000 });
     expect(await page.getByRole('dialog', { name: 'Publish your form' }).count()).toBe(0);
     await page.keyboard.press('Escape');
     await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
@@ -72,14 +73,14 @@ test.describe('the form journey', () => {
     await expect(row).toHaveCount(1, { timeout: 30_000 });
     await expect(row).toContainText('Rear admiral');
 
-    // Changing which object the form saves to would unfile the question: asked first; Cancel keeps People.
+    // Changing which object the form saves to moves the saved questions: asked first, naming them; Cancel keeps People.
     await page.goto(`${formUrl}?tab=settings`);
     await page
       .getByRole('button', { name: /Save answers to$/ })
       .last()
       .click();
     await page.getByRole('option', { name: 'Companies', exact: true }).click();
-    const confirm = page.getByRole('alertdialog', { name: 'Change which object submissions are saved to?' });
+    const confirm = page.getByRole('dialog', { name: 'Save answers to Companies?' });
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(confirm).toBeHidden();
@@ -88,7 +89,11 @@ test.describe('the form journey', () => {
     // A change saves to the draft by itself; Discard changes (⋯, asks first) puts it back to what is live. The
     // button's words are edited on the preview (T21), pressing the button.
     await page.goto(formUrl);
-    if ((await page.getByRole('button', { name: 'Edit the button' }).count()) === 0) {
+    // The phone shows beside the questions on a laptop; below that it is behind Show preview.
+    await expect(
+      page.getByRole('button', { name: 'Edit the button' }).or(page.getByRole('button', { name: 'Show preview' })),
+    ).toBeVisible({ timeout: 30_000 });
+    if (!(await page.getByRole('button', { name: 'Edit the button' }).isVisible())) {
       await page.getByRole('button', { name: 'Show preview' }).click();
     }
     await page.getByRole('button', { name: 'Edit the button' }).click();
@@ -108,7 +113,11 @@ test.describe('the form journey', () => {
     await page.reload();
     await expect(page.getByText('Live', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     // The button's words are what is live again.
-    if ((await page.getByRole('button', { name: 'Edit the button' }).count()) === 0) {
+    // The phone shows beside the questions on a laptop; below that it is behind Show preview.
+    await expect(
+      page.getByRole('button', { name: 'Edit the button' }).or(page.getByRole('button', { name: 'Show preview' })),
+    ).toBeVisible({ timeout: 30_000 });
+    if (!(await page.getByRole('button', { name: 'Edit the button' }).isVisible())) {
       await page.getByRole('button', { name: 'Show preview' }).click();
     }
     await page.getByRole('button', { name: 'Edit the button' }).click();

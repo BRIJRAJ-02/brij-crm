@@ -159,6 +159,30 @@ describe('a sidebar drag', () => {
   });
 });
 
+// An item's grip and More are out of the tab order (forms fixes 2): one stop per item, Right and Left reach them.
+describe('the sidebar’s tab stops', () => {
+  it('keeps every grip out of the tab order, and reaches one from its item with Right, and back with Left', async () => {
+    await render(<Records order={['Companies', 'People', 'Deals']} onReorder={vi.fn()} />);
+    await frame();
+    expect(['Companies', 'People', 'Deals'].map((name) => grip(name).tabIndex)).toEqual([-1, -1, -1]);
+    const people = document.querySelector<HTMLElement>('a[href="/people"]');
+    if (people === null) throw new Error('No People item.');
+    // It says Right reaches them, since they are out of the tab order.
+    expect(people.getAttribute('aria-keyshortcuts')).toBe('ArrowRight');
+    people.focus();
+    const press = (key: string) => {
+      document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    };
+    press('ArrowRight');
+    expect(grip('People')).toHaveFocus();
+    press('ArrowLeft');
+    expect(people).toHaveFocus();
+    press('ArrowRight');
+    press('Escape');
+    expect(people).toHaveFocus();
+  });
+});
+
 // The workspace's own logo at the head (spec 0060): one upload in Settings › Brand heads the switcher.
 describe('the workspace logo at the head', () => {
   /** A wordmark four times as wide as it is tall, as a data address the library's image check lets through. */

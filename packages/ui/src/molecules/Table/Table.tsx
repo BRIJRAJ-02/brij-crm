@@ -50,6 +50,12 @@ export interface TableColumn {
   readonly isCurrent?: boolean;
   /** `quiet` tints the whole column a step off the page (a week's weekend, when few work). */
   readonly tone?: 'quiet';
+  /**
+   * Where the cell goes in a `phoneLayout="rows"` table on a phone: `title` on the row's first line, `meta` on its
+   * second line after the others, `hidden` left out there (it still shows on a wider screen and is in the row's
+   * accessible content everywhere else). Left out, a cell is `meta`.
+   */
+  readonly phone?: 'title' | 'meta' | 'hidden';
 }
 
 /** How a Table shares its width. */
@@ -119,6 +125,12 @@ interface TableBase<T> {
   readonly layout?: TableLayout;
   /** A row's look: `total` sets a row of sums apart (a hairline in the control edge above it, no hover). */
   readonly getRowTone?: (row: T) => 'total' | undefined;
+  /**
+   * `rows`: below 480px of the frame (a phone) each row reads as two lines, its `title` column over its `meta`
+   * columns, with no header row and nothing to scroll sideways (a form's submissions, as Mail and Linear list on a
+   * phone). `table` (the default) keeps the columns, scrolling with `isScrollable`.
+   */
+  readonly phoneLayout?: 'table' | 'rows';
 }
 
 /** The handle column's id, kept apart from any column the caller names. */
@@ -153,6 +165,7 @@ export function Table<T>({
   isHeaderHidden = false,
   layout = 'auto',
   getRowTone,
+  phoneLayout = 'table',
 }: TableProps<T>) {
   const isSelectable = selected !== undefined && onSelectedChange !== undefined;
   // A scrollable frame fades the end that hides columns, so it shows there is more to scroll to.
@@ -179,6 +192,7 @@ export function Table<T>({
       className={styles.root}
       aria-label={label}
       data-layout={layout === 'even' ? 'even' : undefined}
+      data-phone={phoneLayout === 'rows' ? 'rows' : undefined}
       {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
       {...(isSelectable
         ? {
@@ -271,6 +285,7 @@ export function Table<T>({
                   data-row-tone={getRowTone?.(item.row)}
                   data-lead={(layout === 'even' && column.isRowHeader === true) || undefined}
                   data-gutter-handle={(handleInGutter && column.id === firstColumnId) || undefined}
+                  data-phone={phoneLayout === 'rows' ? (column.phone ?? 'meta') : undefined}
                 >
                   {handleInGutter && column.id === firstColumnId && (
                     <span className={styles.gutter}>
@@ -301,6 +316,7 @@ export function Table<T>({
       data-fade={fade}
       data-edge={atPageEdge ? 'page' : undefined}
       data-layout={layout === 'even' ? 'even' : undefined}
+      data-phone={phoneLayout === 'rows' ? 'rows' : undefined}
       // How many columns share the width evenly, so an even table's least width holds each at size-column-min.
       style={{ '--table-shared': String(shown.filter((each) => each.isRowHeader !== true).length) }}
     >

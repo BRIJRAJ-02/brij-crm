@@ -15,7 +15,8 @@ export function formTemplate(id: FormTemplateId) {
 
 /**
  * The gallery's tiles (AC-6323), in the order the contract offers them: each
- * template's name, its one line purpose, and the small preview of its look.
+ * template's name, its one line purpose, the small preview of its look, and
+ * its words and questions for the big preview beside the list.
  * A template held back in code is not in this list.
  */
 export function offeredFormTemplates(): FormTemplateSummary[] {
@@ -27,6 +28,22 @@ export function offeredFormTemplates(): FormTemplateSummary[] {
       name: template.name,
       purpose: template.purpose,
       preview: { layout: template.layout, rows: [...template.preview] },
+      // The gallery's big preview: the words and questions a visitor would see, never where answers are filed.
+      sample: {
+        headline: template.headline,
+        buttonText: template.buttonText,
+        questions: template.questions.map((question) => ({
+          id: question.id,
+          key: question.key,
+          label: question.label,
+          answerType: question.answerType,
+          required: question.required,
+          ...(question.placeholder === undefined ? {} : { placeholder: question.placeholder }),
+          ...(question.choices === undefined ? {} : { choices: [...question.choices] }),
+          ...(question.options === undefined ? {} : { options: question.options }),
+        })),
+      },
+      ...(template.keepsSubmissionsOnly === true ? { keepsSubmissionsOnly: true } : {}),
     };
   });
 }

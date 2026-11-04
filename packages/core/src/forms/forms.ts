@@ -23,7 +23,7 @@ import {
   isOfferedTemplate,
   publishProblem,
   recordFactProblem,
-  type FormDocument,
+  FormDocument,
   type FormQuestion,
   type FormStatus,
   type FormSummary,
@@ -52,11 +52,14 @@ import { isPeopleObject, publishedDocuments, stampConsentVersions } from './cons
 import {
   canSeeForm,
   fileable,
+  fileableOn,
   liveObjectOf,
   loadForm,
   loadVersions,
   millis,
+  isFull,
   objectName,
+  pauseIfFull,
   publicFormOf,
   publishAttributes,
   workspacePublicKey,
@@ -153,6 +156,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
     ...(live === undefined ? {} : { liveVersionNumber: live.number, live: live.document }),
     submissionsThisMonth: count?.month ?? 0,
     spamCount: count?.spam ?? 0,
+    ...((count?.review ?? 0) === 0 ? {} : { reviewCount: count?.review }),
     ...(count?.last === undefined || count.last === null ? {} : { lastSubmissionAt: count.last }),
     submissionCount: count?.total ?? 0,
     updatedAt: form.updatedAt,
@@ -177,25 +181,31 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
 async function countsOf(
   tx: WorkspaceTx,
   formIds: readonly string[],
-): Promise<ReadonlyMap<string, { month: number; spam: number; last: string | null; total: number }>> {
+): Promise<ReadonlyMap<string, { month: number; spam: number; review: number; last: string | null; total: number }>> {
   if (formIds.length === 0) return new Map();
   const rows = await tx.execute<{
     form_id: string;
     month: number;
     spam: number;
+    review: number;
     last: string | null;
     total: number;
   }>(sql`
     select f.id::text as form_id,
       (select count(*)::int from (
-        select 1 from form_submissions s where s.form_id = f.id and s.state <> 'spam'
+        select 1 from form_submissions s where s.form_id = f.id and s.state <> 'spam' and s.deleted_at is null
           and s.received_at >= date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'
         limit ${FORM_COUNT_CAP}) c) as month,
       (select count(*)::int from (
-        select 1 from form_submissions s where s.form_id = f.id and s.state = 'spam' limit ${FORM_COUNT_CAP}) c) as spam,
+        select 1 from form_submissions s where s.form_id = f.id and s.state = 'spam' and s.deleted_at is null
+        limit ${FORM_COUNT_CAP}) c) as spam,
+      (select count(*)::int from (
+        select 1 from form_submissions s where s.form_id = f.id and s.state = 'needs_review' and s.deleted_at is null
+        limit ${FORM_COUNT_CAP}) c) as review,
       (select to_char(max(s.received_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-        from form_submissions s where s.form_id = f.id and s.state <> 'spam') as last,
-      (select count(*)::int from (select 1 from form_submissions s where s.form_id = f.id limit ${FORM_COUNT_CAP}) c) as total
+        from form_submissions s where s.form_id = f.id and s.state <> 'spam' and s.deleted_at is null) as last,
+      (select count(*)::int from (
+        select 1 from form_submissions s where s.form_id = f.id and s.deleted_at is null limit ${FORM_COUNT_CAP}) c) as total
     from forms f where f.id = any(${`{${formIds.join(',')}}`}::uuid[])
   `);
   return new Map(rows.rows.map((row) => [row.form_id, row]));
@@ -251,6 +261,7 @@ export async function listForms(
         ...(row.liveNumber === null ? {} : { liveVersionNumber: row.liveNumber }),
         submissionsThisMonth: count?.month ?? 0,
         spamCount: count?.spam ?? 0,
+        ...((count?.review ?? 0) === 0 ? {} : { reviewCount: count?.review }),
         ...(count?.last === undefined || count.last === null ? {} : { lastSubmissionAt: count.last }),
         submissionCount: count?.total ?? 0,
         updatedAt: row.updatedAt,
@@ -288,8 +299,32 @@ export async function formAttributes(
     const form = await visibleForm(tx, scope, input.formId);
     const objectId = form.mainObjectId;
     if (objectId === null) return { items: [] };
-    return targetChoices(tx, scope, objectId);
+    const main = await targetChoices(tx, scope, objectId);
+    // The deal's fields too (forms fixes 2), for a form saving people: Also create a deal can then take answers onto
+    // the deal itself. Only when the reader may see Deals, so a hidden object stays absent.
+    if (!(await isPeopleObject(tx, objectId))) return main;
+    const dealsId = await standardDealsId(tx);
+    if (dealsId === undefined || objectLevel(scope.access, dealsId) === 'none') return main;
+    const deal = await targetChoices(tx, scope, dealsId);
+    return { ...main, deal: { objectId: dealsId, objectName: deal.objectName ?? '', items: deal.items } };
   });
+}
+
+/** The workspace's live standard Deals, if it has one. */
+async function standardDealsId(tx: WorkspaceTx): Promise<string | undefined> {
+  const [found] = await tx
+    .select({ id: objects.id })
+    .from(objects)
+    .where(and(eq(objects.standardKey, 'deals'), isNull(objects.archivedAt)));
+  return found?.id;
+}
+
+/** The standard Deals a form's deal goes to, refused when the workspace has none live (Move to People with a deal). */
+async function standardDeals(tx: WorkspaceTx, scope: EngineScope): Promise<string> {
+  const id = await standardDealsId(tx);
+  if (id === undefined) throw refuseOn('CONFIG_INVALID', 'Deals is not available in this workspace.', 'deal');
+  await checkObject(tx, scope.access, id, 'write');
+  return id;
 }
 
 /**
@@ -297,7 +332,7 @@ export async function formAttributes(
  * see, with whether they may write each. A form's Where it goes and a booking page's (spec 0057, AC-5706) list these.
  */
 export async function targetChoices(tx: WorkspaceTx, scope: EngineScope, objectId: string): Promise<FormTargetChoices> {
-  const attributes = fileable(await loadAttributes(tx, objectId));
+  const attributes = await fileableOn(tx, objectId, await loadAttributes(tx, objectId));
   const writesObject = objectLevel(scope.access, objectId) === 'write';
   const items = attributes.flatMap((attribute) => {
     const level = fieldLevel(scope.access, { id: attribute.id, objectId });
@@ -756,7 +791,8 @@ export async function createFormFromTemplate(
       }
       // The tile's name is what the person chose between; `formName` is what the form itself is called.
       const name = input.name?.trim() ?? template.formName ?? template.name;
-      const objectId = await defaultObject(tx, scope.access);
+      // An anonymous template (Feedback, NPS) keeps its submissions only: no object, nothing filed (AC-6323).
+      const objectId = template.keepsSubmissionsOnly === true ? undefined : await defaultObject(tx, scope.access);
       const bookingPageId = template.endsWithBooking === true ? await intakeBookingPage(tx, scope) : undefined;
       if (objectId === undefined) {
         const kept = await insertForm(tx, scope, {
@@ -838,6 +874,30 @@ function checkDraft(form: FormRow, document: FormDocument): void {
   if ((document.targets.main?.objectId ?? null) !== form.mainObjectId) {
     throw refuse('CONFIG_INVALID', 'A form’s answers go to one object. Change it in Settings, where answers go.');
   }
+}
+
+/**
+ * Refuses Also create a deal (forms fix a3) unless the form saves to the standard People and the deal goes to the
+ * workspace's standard Deals, live, that the saver may write: a submission then makes the deal beside the person.
+ */
+async function checkDealTarget(tx: WorkspaceTx, scope: EngineScope, document: FormDocument): Promise<void> {
+  const deal = document.targets.deal;
+  if (deal === undefined) return;
+  const main = document.targets.main;
+  const refusal = refuseOn(
+    'CONFIG_INVALID',
+    'A deal is made beside a person. Save submissions to People first.',
+    'deal',
+  );
+  if (main === undefined || !(await isPeopleObject(tx, main.objectId))) throw refusal;
+  const [found] = await tx
+    .select({ standardKey: objects.standardKey, archivedAt: objects.archivedAt })
+    .from(objects)
+    .where(eq(objects.id, deal.objectId));
+  if (found?.standardKey !== 'deals' || found.archivedAt !== null) {
+    throw refuseOn('CONFIG_INVALID', 'Deals is not available in this workspace.', 'deal');
+  }
+  await checkObject(tx, scope.access, deal.objectId, 'write');
 }
 
 /** Saves `document` as the draft, starting the next version when the draft is the live one. */
@@ -930,28 +990,51 @@ export async function saveFormDraft(
       const form = await visibleForm(tx, scope, input.formId, true);
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
+      // A document its schema refuses is a refusal with its own words, never a raw parse error (forms QA, 5 Nov).
+      const parsed = FormDocument.safeParse(input.document);
+      if (!parsed.success) {
+        const [issue] = parsed.error.issues;
+        throw refuseOn(
+          'CONFIG_INVALID',
+          issue?.message ?? 'That form can’t be saved.',
+          issue?.path.join('.') || 'document',
+        );
+      }
       checkDraft(form, input.document);
-      await checkFormAddresses(tx, scope.workspaceId, input.document, options.publicOrigins ?? []);
+      const stored =
+        form.draftVersionId === null
+          ? undefined
+          : (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
+      // The remembered mappings are the server's (setFormTarget): whatever a client sends, the stored ones stay.
+      const { filedBefore: _sent, ...sent } = input.document;
+      const document: FormDocument =
+        stored?.document.filedBefore === undefined ? sent : { ...sent, filedBefore: stored.document.filedBefore };
+      // Also create a deal is checked when it is newly turned on (publish checks it always): a member who can't write
+      // Deals can still fix a typo on a form someone else set to make deals.
+      if (document.targets.deal?.objectId !== stored?.document.targets.deal?.objectId) {
+        await checkDealTarget(tx, scope, document);
+      }
+      await checkFormAddresses(tx, scope.workspaceId, document, options.publicOrigins ?? []);
       // A form's conditions never read a person's or a company's field (its editor offers none), refused in publish's
       // words: every member who sees the form reads its draft, so a stored one would show them a field's id and the
       // value looked for, even a field hidden from them (security review, 23 October 2026).
-      const readsField = recordFactProblem(input.document);
+      const readsField = recordFactProblem(document);
       if (readsField !== undefined) {
         throw refuseOn('CONFIG_INVALID', readsField.message, readsField.questionId ?? 'routing');
       }
       // A newly chosen booking page goes through the access door; one already chosen stays, so others can still edit.
-      const chosen = bookingPageOf(input.document);
+      const chosen = bookingPageOf(document);
       if (chosen !== undefined && form.draftVersionId !== null) {
         const before = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
-        if (bookingPageOf(before?.document) !== chosen) await checkBookingTarget(tx, scope, input.document, 'seen');
-      } else if (chosen !== undefined) await checkBookingTarget(tx, scope, input.document, 'seen');
+        if (bookingPageOf(before?.document) !== chosen) await checkBookingTarget(tx, scope, document, 'seen');
+      } else if (chosen !== undefined) await checkBookingTarget(tx, scope, document, 'seen');
       // Routing's booking pages go through the door the same way: only pages newly named (spec 0043, AC-1605).
       const earlier =
         form.draftVersionId === null
           ? undefined
           : (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
-      await checkFormRoutes(tx, scope, input.document.routing.rules, 'seen', earlier?.document.routing.rules ?? []);
-      await writeDraft(tx, scope, form, input.document);
+      await checkFormRoutes(tx, scope, document.routing.rules, 'seen', earlier?.document.routing.rules ?? []);
+      await writeDraft(tx, scope, form, document);
       const saved = await loadForm(tx, form.id);
       if (saved === undefined) throw new Error('The form went away under its save.');
       return viewOf(tx, scope, saved);
@@ -997,6 +1080,7 @@ export async function publishForm(
       const draft = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
       if (draft === undefined) throw new Error('The draft version went away.');
       checkDraft(form, draft.document);
+      await checkDealTarget(tx, scope, draft.document);
       await checkBookingTarget(tx, scope, draft.document, 'live');
       await checkFormRoutes(tx, scope, draft.document.routing.rules, 'live');
       // Again on publish (spec 0056, AC-5612): a redirect that has come to name another workspace's page is refused.
@@ -1018,6 +1102,10 @@ export async function publishForm(
               },
             }),
         attributes: await publishAttributes(tx, scope.access, form.mainObjectId),
+        // A question saved on the deal is checked against the deal's own fields (forms fixes 2).
+        ...(draft.document.targets.deal === undefined
+          ? {}
+          : { dealAttributes: await publishAttributes(tx, scope.access, draft.document.targets.deal.objectId) }),
         // So a refusal names the object the form files onto, not People whatever it is (27 October 2026).
         ...(form.mainObjectId === null ? {} : { objectName: await objectName(tx, form.mainObjectId) }),
         // A consent is kept on a person (AC-1053): a form keeping its submissions only, or filing elsewhere, can't ask one.
@@ -1082,9 +1170,155 @@ export async function publishForm(
         { liveVersionId: form.draftVersionId, status: form.status === 'draft' ? 'live' : form.status },
         true,
       );
+      // A version that closes after fewer answers than the form already has goes live closed (forms fixes 2).
+      await pauseIfFull(tx, form.id, draft.document);
       const published = await loadForm(tx, form.id);
       if (published === undefined) throw new Error('The form went away under its publish.');
       return viewOf(tx, scope, published);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * The settings a form's version holds that Settings changes (forms fixes 2, 6 November 2026, one save model): when it
+ * stops taking answers, what it says closed, the visitor's copy, and Also create a deal. Each present key is set
+ * (`null` clears it); an absent one stays as it was.
+ */
+export interface LiveSettings {
+  readonly closing?: FormDocument['closing'] | null;
+  readonly closedMessage?: string | null;
+  readonly confirmation?: FormDocument['confirmation'] | null;
+  /** On: each submission makes a deal on the standard Deals. Off: none, and answers saved on the deal stay kept. */
+  readonly deal?: boolean;
+}
+
+/** A document with `settings` applied over it. */
+function withSettings(document: FormDocument, settings: LiveSettings, dealsId: string | undefined): FormDocument {
+  const { closing, closedMessage, confirmation, ...rest } = document;
+  const pick = <T>(value: T | null | undefined, was: T | undefined): T | undefined =>
+    value === undefined ? was : value === null ? undefined : value;
+  const nextClosing = pick(settings.closing, closing);
+  const nextMessage = pick(settings.closedMessage === '' ? null : settings.closedMessage, closedMessage);
+  const nextCopy = pick(settings.confirmation, confirmation);
+  let next: FormDocument = {
+    ...rest,
+    ...(nextClosing === undefined ? {} : { closing: nextClosing }),
+    ...(nextMessage === undefined ? {} : { closedMessage: nextMessage }),
+    ...(nextCopy === undefined ? {} : { confirmation: nextCopy }),
+  };
+  if (settings.deal === true && dealsId !== undefined) {
+    next = { ...next, targets: { ...next.targets, deal: { objectId: dealsId } } };
+  } else if (settings.deal === false) {
+    const { deal: _deal, ...targets } = next.targets;
+    next = {
+      ...next,
+      targets,
+      // No deal, so nothing is saved on one: those answers stay with the submission.
+      questions: next.questions.map((question) => {
+        if (question.filedOn?.objectRole !== 'deal') return question;
+        const { filedOn: _filed, ...rest } = question;
+        return { ...rest, kept: true as const };
+      }),
+    };
+  }
+  return next;
+}
+
+/**
+ * Changes the settings a form's version holds, live at once (forms fixes 2: Settings has one save model, every row
+ * saving and applying as it changes, as Name, Owner and Email each submission already did). On a published form the
+ * live version is published again with the change and nothing else, so edits waiting on the Form tab stay waiting;
+ * the draft takes the change too, so Publish never undoes it. A form never published keeps it in its draft.
+ */
+export async function applyFormSettings(
+  scope: EngineScope,
+  input: { readonly formId: string; readonly expectedRevision: number; readonly settings: LiveSettings },
+  hooks: readonly AfterWrite[] = [],
+): Promise<FormView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const form = await visibleForm(tx, scope, input.formId, true);
+      if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
+      checkRevision(form, input.expectedRevision);
+      if (form.draftVersionId === null) throw new Error('A form always has a draft version.');
+      const dealsId = input.settings.deal === true ? await standardDeals(tx, scope) : undefined;
+      const parse = (document: FormDocument): FormDocument => {
+        const parsed = FormDocument.safeParse(document);
+        if (parsed.success) return parsed.data;
+        const [issue] = parsed.error.issues;
+        throw refuseOn(
+          'CONFIG_INVALID',
+          issue?.message ?? 'That setting can’t be saved.',
+          issue?.path.join('.') || 'settings',
+        );
+      };
+      const versions = await loadVersions(tx, [
+        form.draftVersionId,
+        ...(form.liveVersionId === null ? [] : [form.liveVersionId]),
+      ]);
+      const draft = versions.get(form.draftVersionId);
+      if (draft === undefined) throw new Error('The draft version went away.');
+      const live = form.liveVersionId === null ? undefined : versions.get(form.liveVersionId);
+      if (live === undefined) {
+        const next = parse(withSettings(draft.document, input.settings, dealsId));
+        if (input.settings.deal === true) await checkDealTarget(tx, scope, next);
+        await writeDraft(tx, scope, form, next);
+      } else {
+        const nextLive = parse(withSettings(live.document, input.settings, dealsId));
+        if (input.settings.deal === true) await checkDealTarget(tx, scope, nextLive);
+        const by = actorRow(scope.actor);
+        const [top] = await tx
+          .select({ number: max(formVersions.number) })
+          .from(formVersions)
+          .where(eq(formVersions.formId, form.id));
+        const number = (top?.number ?? 0) + 1;
+        const [published] = await tx
+          .insert(formVersions)
+          .values({
+            workspaceId: scope.workspaceId,
+            formId: form.id,
+            number,
+            document: nextLive,
+            ...audit(scope),
+            publishedAt: sql`now()`,
+            publishedByType: by.type,
+            publishedById: by.id,
+            publishedByMemberId: by.memberId,
+          })
+          .returning({ id: formVersions.id });
+        if (published === undefined) throw new Error('The version wasn’t written.');
+        const hadEdits = form.draftVersionId !== form.liveVersionId;
+        if (hadEdits) {
+          // The edits waiting on the Form tab take the change too, numbered after the version just published.
+          await tx
+            .update(formVersions)
+            .set({
+              number: number + 1,
+              document: parse(withSettings(draft.document, input.settings, dealsId)),
+              updatedAt: sql`now()`,
+              updatedByType: by.type,
+              updatedById: by.id,
+              updatedByMemberId: by.memberId,
+            })
+            .where(eq(formVersions.id, form.draftVersionId));
+        }
+        await touchForm(
+          tx,
+          scope,
+          form.id,
+          { liveVersionId: published.id, ...(hadEdits ? {} : { draftVersionId: published.id }) },
+          true,
+        );
+        // Closes after fewer answers than it has: closed now.
+        if (input.settings.closing !== undefined) await pauseIfFull(tx, form.id, nextLive);
+      }
+      const saved = await loadForm(tx, form.id);
+      if (saved === undefined) throw new Error('The form went away under its change.');
+      return viewOf(tx, scope, saved);
     },
     hooks,
   );
@@ -1210,6 +1444,9 @@ function nextStatus(form: FormRow, wanted: FormStatus): FormStatus | undefined {
   return undefined;
 }
 
+/** Why a form that has its number of answers can't be opened again as it is. */
+export const FORM_FULL = 'It already has the answers it closes after. Raise the number in Closes, then publish.';
+
 /** Pauses and resumes a form (Accepting), archives and restores it (AC-549); anything else is 409 `FORM_STATE`. */
 export async function setFormStatus(
   scope: EngineScope,
@@ -1231,6 +1468,13 @@ export async function setFormStatus(
         );
       }
       if (next === form.status) return viewOf(tx, scope, form);
+      // A form that closed by reaching its number of answers stays closed until the number is raised (forms fixes 2).
+      if (next === 'live' && form.liveVersionId !== null) {
+        const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+        if (live !== undefined && (await isFull(tx, form.id, live.document))) {
+          throw refuse('FORM_STATE', FORM_FULL);
+        }
+      }
       await touchForm(tx, scope, form.id, { status: next, archivedAt: next === 'archived' ? sql`now()` : null }, false);
       const moved = await loadForm(tx, form.id);
       if (moved === undefined) throw new Error('The form went away under its change.');
@@ -1292,6 +1536,55 @@ function fileDefaults(
   });
 }
 
+/**
+ * The draft's remembered filings with the object it files onto now added (forms fix a2): each filed question's
+ * attribute on that object, by question id. An object with nothing filed keeps what was remembered for it.
+ */
+function rememberFiling(document: FormDocument): Readonly<Record<string, Readonly<Record<string, string>>>> {
+  const before = document.filedBefore ?? {};
+  const objectId = document.targets.main?.objectId;
+  if (objectId === undefined) return before;
+  const now = Object.fromEntries(
+    document.questions.flatMap((question) =>
+      question.filedOn?.objectRole !== 'main' ? [] : [[question.id, question.filedOn.attributeId] as const],
+    ),
+  );
+  return Object.keys(now).length === 0 ? before : { ...before, [objectId]: now };
+}
+
+/** The document with its remembered filings, left out when there are none, so an old document reads as it did. */
+function withFiledBefore(
+  document: FormDocument,
+  filedBefore: Readonly<Record<string, Readonly<Record<string, string>>>>,
+): FormDocument {
+  const { filedBefore: _old, ...rest } = document;
+  return Object.keys(filedBefore).length === 0 ? rest : { ...rest, filedBefore: { ...filedBefore } };
+}
+
+/**
+ * Puts back where each question was saved on an object it is moved back to: only onto an attribute still live
+ * there, that the question's answers still fit, that no other question holds, and only for a question not filed or
+ * kept off the CRM since.
+ */
+function restoreFiling(
+  questions: readonly FormQuestion[],
+  remembered: Readonly<Record<string, string>> | undefined,
+  live: readonly AttributeDef[],
+): FormQuestion[] {
+  if (remembered === undefined) return [...questions];
+  const byId = new Map(live.map((attribute) => [attribute.id, attribute]));
+  const used = new Set(questions.flatMap((question) => question.filedOn?.attributeId ?? []));
+  return questions.map((question) => {
+    const attributeId = remembered[question.id];
+    const attribute = attributeId === undefined ? undefined : byId.get(attributeId);
+    if (question.filedOn !== undefined || attribute === undefined || used.has(attribute.id)) return question;
+    if (!fitsAttribute(question.answerType, attribute.type)) return question;
+    used.add(attribute.id);
+    const { kept: _kept, ...rest } = question;
+    return { ...rest, filedOn: { objectRole: 'main' as const, attributeId: attribute.id } };
+  });
+}
+
 /** A question filed nowhere: kept with the submission only. */
 function unfiled(question: FormQuestion): FormQuestion {
   const { filedOn, ...rest } = question;
@@ -1319,7 +1612,13 @@ function sameDraft(before: FormDocument, after: FormDocument): boolean {
  */
 export async function setFormTarget(
   scope: EngineScope,
-  input: { readonly formId: string; readonly mainObjectId: string | null; readonly expectedRevision: number },
+  input: {
+    readonly formId: string;
+    readonly mainObjectId: string | null;
+    readonly expectedRevision: number;
+    /** With People: also make a deal for each submission, on the standard Deals (Move to People with a deal). */
+    readonly withDeal?: boolean;
+  },
   hooks: readonly AfterWrite[] = [],
 ): Promise<FormView> {
   requirePermission(scope, 'forms.manage');
@@ -1338,20 +1637,54 @@ export async function setFormTarget(
       const draft = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
       if (draft === undefined) throw new Error('The draft version went away.');
       let document: FormDocument;
+      // The mapping on the object it leaves is remembered, and the one it comes back to put back (forms fix a2):
+      // trying Deals and returning to People never loses where Description was saved.
+      const filedBefore = rememberFiling(draft.document);
       if (objectId === null) {
-        document = { ...draft.document, questions: draft.document.questions.map(unfiled), targets: {} };
+        document = withFiledBefore(
+          { ...draft.document, questions: draft.document.questions.map(unfiled), targets: {} },
+          filedBefore,
+        );
       } else {
         const object = await writableObject(tx, scope, objectId);
         const attributes = await loadAttributes(tx, objectId);
         const match = matchOf(fileable(attributes));
-        const kept = draft.document.questions.map((question) =>
-          question.filedOn !== undefined && attributes.has(question.filedOn.attributeId) ? question : unfiled(question),
+        const isPeople = await isPeopleObject(tx, objectId);
+        // Move to People with a deal (forms fixes 2): a form saving to Deals saves the person, and makes the deal
+        // beside them with every answer it saved on Deals still on the deal.
+        const deal = !isPeople
+          ? undefined
+          : input.withDeal === true
+            ? { objectId: await standardDeals(tx, scope) }
+            : draft.document.targets.deal;
+        const dealAttributes = deal === undefined ? undefined : await loadAttributes(tx, deal.objectId);
+        const kept = draft.document.questions.map((question): FormQuestion => {
+          const filed = question.filedOn;
+          if (filed === undefined) return question;
+          // On the new object itself (Deals again, after Undo): saved on its record.
+          if (attributes.has(filed.attributeId)) {
+            return filed.objectRole === 'main'
+              ? question
+              : { ...question, filedOn: { objectRole: 'main', attributeId: filed.attributeId } };
+          }
+          if (dealAttributes?.has(filed.attributeId) === true) {
+            return { ...question, filedOn: { objectRole: 'deal', attributeId: filed.attributeId } };
+          }
+          return unfiled(question);
+        });
+        const restored = restoreFiling(kept, filedBefore[objectId], fileable(attributes));
+        const { [objectId]: _back, ...remembered } = filedBefore;
+        document = withFiledBefore(
+          {
+            ...draft.document,
+            questions: fileDefaults(restored, attributes, object.primaryAttributeId),
+            targets: {
+              main: { objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) },
+              ...(deal === undefined ? {} : { deal }),
+            },
+          },
+          remembered,
         );
-        document = {
-          ...draft.document,
-          questions: fileDefaults(kept, attributes, object.primaryAttributeId),
-          targets: { main: { objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
-        };
       }
       if (objectId === form.mainObjectId && sameDraft(draft.document, document)) return viewOf(tx, scope, form);
       await tx.update(forms).set({ mainObjectId: objectId }).where(eq(forms.id, form.id));

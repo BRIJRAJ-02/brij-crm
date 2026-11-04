@@ -14,7 +14,8 @@
 // only leaves the email out.
 import { sql } from 'drizzle-orm';
 import { EmailAddress, EmailTimeZone, type EmailRow, type FormConfirmationEmail } from '@crm/contracts/emails';
-import { pathOf, recall, scoreOf, sendsConfirmation, type FormDocument } from '@crm/contracts';
+import { brandLogoPath, pathOf, recall, scoreOf, sendsConfirmation, type FormDocument } from '@crm/contracts';
+import { brandRowOf } from '../brand/brand.ts';
 import type { WorkspaceTx } from '@crm/db';
 import type { WriteContext } from '../engine/write.ts';
 import { queueFormConfirmation } from '../emails/queue.ts';
@@ -60,6 +61,8 @@ export function confirmationRows(
       if (!onPath.has(question.key)) return [];
       const given = answers[question.key];
       if (given === undefined) return [];
+      // A consent left unticked is not something they sent (forms fix b9): their copy says nothing of it.
+      if (question.answerType === 'consent' && given !== true) return [];
       const label = recall(question.label, { answers, score }).trim().slice(0, 200);
       const value =
         question.answerType === 'signature' ? SIGNED_WORD : answerWords(given, question.answerType).slice(0, 4_000);
@@ -93,7 +96,7 @@ async function confirmOne(tx: WorkspaceTx, workspaceId: string, submissionId: st
     from form_submissions s
     join forms f on f.workspace_id = s.workspace_id and f.id = s.form_id
     join workspaces w on w.id = s.workspace_id
-    where s.workspace_id = ${workspaceId} and s.id = ${submissionId}
+    where s.workspace_id = ${workspaceId} and s.id = ${submissionId} and s.deleted_at is null
   `);
   const row = found.rows[0];
   // Spam and held submissions never get one (AC-6318); a failed filing still means the visitor's message arrived.
@@ -112,14 +115,20 @@ async function confirmOne(tx: WorkspaceTx, workspaceId: string, submissionId: st
   const score = scoreOf(logicFormOf(document), answers);
   const subject = document.confirmation?.subject;
   const line = document.confirmation?.line;
+  const headline = document.headline.trim();
+  // The workspace's logo heads the copy (forms fixes 2, critique b3), as the form's own page serves it.
+  const logoVersion = (await brandRowOf(tx, workspaceId))?.logoVersion ?? undefined;
+  const logoPath = logoVersion === undefined ? undefined : brandLogoPath('forms', form.publicKey, logoVersion);
   const params: FormConfirmationEmail = {
     formName: form.name.slice(0, 200),
+    ...(headline === '' ? {} : { headline: recall(headline, { answers, score }).replace(/\s+/g, ' ').slice(0, 200) }),
     // The form's own words, with any recall read as plain text (never HTML), exactly as the ending shows them.
     ...(subject === undefined || subject === '' ? {} : { subject: recall(subject, { answers, score }).slice(0, 200) }),
     ...(line === undefined || line === '' ? {} : { message: recall(line, { answers, score }).slice(0, 2_000) }),
     answers: [...confirmationRows(document, answers)],
     submittedAt: row.received_at,
     ...(timeZone.success ? { timeZone: timeZone.data } : {}),
+    ...(logoPath === undefined ? {} : { logoPath }),
   };
   await queueFormConfirmation(tx, {
     submissionId,

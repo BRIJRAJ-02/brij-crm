@@ -120,16 +120,21 @@ describe('the templates in code (AC-6324)', () => {
     for (const id of FORM_TEMPLATE_IDS) expect(FORM_TEMPLATES[id].id).toBe(id);
   });
 
+  /** Every template but Blank, which starts empty and so is the one a publish refuses until it has a question. */
+  const FILLED = FORM_TEMPLATE_IDS.filter((id) => id !== 'blank');
+
   it.each([...FORM_TEMPLATE_IDS])('%s parses as a FormDocument, filed and unfiled alike', (id: FormTemplateId) => {
     const template = FORM_TEMPLATES[id];
     // Unfiled (a member who may write no object): every question is kept with the submission.
     const kept = FormDocument.safeParse(templateDocument(template, undefined));
     expect(kept.success, JSON.stringify(kept.error?.issues)).toBe(true);
     expect(kept.data?.questions.every((question) => question.kept === true)).toBe(true);
-    expect(kept.data?.questions.length).toBeGreaterThan(0);
+    // Blank starts empty; every other template asks something.
+    if (id === 'blank') expect(kept.data?.questions).toEqual([]);
+    else expect(kept.data?.questions.length).toBeGreaterThan(0);
   });
 
-  it.each([...FORM_TEMPLATE_IDS])('%s publishes on a fresh workspace', async (id: FormTemplateId) => {
+  it.each(FILLED)('%s publishes on a fresh workspace', async (id: FormTemplateId) => {
     const w = await workspace();
     const template = FORM_TEMPLATES[id];
     const before = await attributeCount(w);
@@ -153,6 +158,50 @@ describe('the templates in code (AC-6324)', () => {
   });
 });
 
+describe('Blank is truly empty, and anonymous templates keep their submissions only (AC-6323)', () => {
+  it('starts Blank with no questions, and a publish says to add one first', async () => {
+    const w = await workspace();
+    const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'blank' });
+    expect(created.name).toBe('Untitled form');
+    expect(created.draft.questions).toEqual([]);
+    expect(
+      await refusalOf(
+        publishForm(w.scope, { formId: created.id, expectedRevision: created.revision, slug: 'blank-one' }),
+      ),
+    ).toMatchObject([
+      { code: 'CONFIG_INVALID', message: 'Add a question first. A form with no questions has nothing to send.' },
+    ]);
+  });
+
+  it.each(['feedback', 'nps'] as const)(
+    '%s asks nobody who they are, files nothing, and publishes as a submissions only form',
+    async (id) => {
+      const w = await workspace();
+      const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: id });
+      expect(created.draft.targets).toEqual({});
+      expect(created.draft.questions.some((each) => each.answerType === 'email' || each.key === 'name')).toBe(false);
+      expect(created.draft.questions.every((each) => each.filedOn === undefined)).toBe(true);
+      const published = await publishForm(w.scope, {
+        formId: created.id,
+        expectedRevision: created.revision,
+        slug: `anon-${id}-${String(Date.now() % 100_000)}`,
+      });
+      expect(published.status).toBe('live');
+      expect(published.live?.targets).toEqual({});
+      expect(listFormTemplates().items.find((each) => each.id === id)?.keepsSubmissionsOnly).toBe(true);
+    },
+  );
+
+  it('gives every tile its words and questions for the gallery’s big preview, and no filing', () => {
+    for (const item of listFormTemplates().items) {
+      const template = FORM_TEMPLATES[item.id];
+      expect(item.sample.headline).toBe(template.headline);
+      expect(item.sample.questions.map((each) => each.key)).toEqual(template.questions.map((each) => each.key));
+      expect(JSON.stringify(item.sample)).not.toContain('filesOnto');
+    }
+  });
+});
+
 describe('the gallery it offers (AC-6323)', () => {
   it('offers the contract’s ten, in order, each with a purpose and a preview', () => {
     const { items } = listFormTemplates();
@@ -163,7 +212,8 @@ describe('the gallery it offers (AC-6323)', () => {
     for (const item of items) {
       expect(item.name.length).toBeGreaterThan(0);
       expect(item.purpose.length).toBeGreaterThan(0);
-      expect(item.preview.rows.length).toBeGreaterThan(0);
+      // Blank draws no rows: it starts empty.
+      if (item.id !== 'blank') expect(item.preview.rows.length).toBeGreaterThan(0);
     }
   });
 
@@ -271,17 +321,13 @@ describe('filing a template onto the workspace’s standard attributes (AC-6323)
   it('keeps an open answer with the submission rather than writing it onto the person', async () => {
     const w = await workspace();
     // A support form's "What is happening?" and an NPS "why" are not a person's description (security review).
-    for (const templateId of ['support_request', 'nps', 'feedback'] as const) {
+    // Nor Contact us' message or a demo's goal (forms fix a5): each shows on the person's timeline instead.
+    for (const templateId of ['support_request', 'nps', 'feedback', 'contact_us', 'demo_request'] as const) {
       const created = await createFormFromTemplate(w.scope, { id: newId(), templateId });
       const open = created.draft.questions.filter((each) => each.answerType === 'long_text');
       expect(open.length).toBeGreaterThan(0);
       expect(open.every((each) => each.filedOn === undefined && each.kept === true)).toBe(true);
     }
-    // Contact us keeps its filing: a short line about the person genuinely is a description.
-    const contact = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'contact_us' });
-    expect(contact.draft.questions.find((each) => each.key === 'message')?.filedOn?.attributeId).toBe(
-      w.attribute('people.description'),
-    );
   });
 
   it('files a Steps template’s breaks, one per step the template names', async () => {
@@ -339,7 +385,12 @@ describe('Booking intake ends with Book a meeting (AC-6323)', () => {
     await createBookingPage(colleague, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' });
     const mine = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
     const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' });
-    expect(created.draft.after).toEqual({ kind: 'booking', bookingPageId: mine.id, countdownSeconds: 5, message: '' });
+    expect(created.draft.after).toEqual({
+      kind: 'booking',
+      bookingPageId: mine.id,
+      countdownSeconds: 5,
+      message: FORM_TEMPLATES.booking_intake.thanks,
+    });
     // And it publishes as it stands: the page is live and the maker's to use.
     const live = await publishForm(w.scope, { formId: created.id, expectedRevision: created.revision });
     expect(live.status).toBe('live');
@@ -348,7 +399,7 @@ describe('Booking intake ends with Book a meeting (AC-6323)', () => {
   it('thanks the visitor when there is no page to go on to, and never picks one the maker can’t use', async () => {
     const w = await workspace();
     const none = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' });
-    expect(none.draft.after).toEqual({ kind: 'message', message: '' });
+    expect(none.draft.after).toEqual({ kind: 'message', message: FORM_TEMPLATES.booking_intake.thanks });
     // A paused page is not one to send anyone to.
     const page = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
     await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
@@ -365,16 +416,16 @@ describe('Booking intake ends with Book a meeting (AC-6323)', () => {
       scopes: ['forms.manage', 'data.write'],
     });
     const hidden = await createFormFromTemplate(key, { id: newId(), templateId: 'booking_intake' });
-    expect(hidden.draft.after).toEqual({ kind: 'message', message: '' });
+    expect(hidden.draft.after).toEqual({ kind: 'message', message: FORM_TEMPLATES.booking_intake.thanks });
     // The owner, who may use it, goes on to it.
     const found = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'booking_intake' });
     expect(found.draft.after).toMatchObject({ kind: 'booking', bookingPageId: page.id });
   });
 
-  it('leaves every other template’s ending as the plain thank you', async () => {
+  it('leaves every other template’s ending as its own thank you', async () => {
     const w = await workspace();
     await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
     const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'demo_request' });
-    expect(created.draft.after).toEqual({ kind: 'message', message: '' });
+    expect(created.draft.after).toEqual({ kind: 'message', message: FORM_TEMPLATES.demo_request.thanks });
   });
 });

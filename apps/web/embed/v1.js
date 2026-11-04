@@ -216,10 +216,12 @@
     // A bar above the page holds its name and Close. Close used to float over the page's own top corner, where a
     // form's long heading ran under it, and a booking page and a form each framed it differently; the bar gives
     // both the same head and keeps Close off whatever the page puts there (3 November 2026).
-    '.hd{flex:none;display:flex;align-items:center;gap:8px;block-size:48px;box-sizing:border-box;padding:0 8px 0 20px;' +
-    'border-block-end:1px solid var(--tfx-line);font:600 15px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--tfx-fg)}' +
+    // The bar holds Close alone, on the page's own ground with no line under it, so the dialog reads as the form
+    // with a way out rather than a window around it (5 November 2026).
+    '.hd{flex:none;display:flex;align-items:center;justify-content:flex-end;block-size:40px;box-sizing:border-box;' +
+    'padding:8px 8px 0;background:var(--tfx-bg);color:var(--tfx-fg)}' +
     '.hd span{flex:1;min-inline-size:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-    '.panel .sk{inset-block-start:48px}' +
+    '.panel .sk{inset-block-start:40px}' +
     '.x{flex:none;display:grid;place-items:center;inline-size:32px;block-size:32px;' +
     'padding:0;border:0;border-radius:8px;background:transparent;color:var(--tfx-fg);cursor:pointer;transition:background 120ms ease-out}' +
     '.x:hover{background:var(--tfx-sk)}' +
@@ -292,6 +294,11 @@
     });
     src.searchParams.set('embed', '1');
     src.searchParams.set('mode', mode);
+    // An inline form's look, as the Share tab wrote it: a clear ground (the site's background shows through) and
+    // the headline left to the site.
+    if (mode === 'inline' && element.getAttribute('data-timefix-ground') === 'none')
+      src.searchParams.set('ground', 'none');
+    if (mode === 'inline' && element.getAttribute('data-timefix-head') === 'none') src.searchParams.set('head', 'none');
     src.searchParams.set('fid', id);
     src.searchParams.set('host', location.origin);
     if (kind === 'form') src.searchParams.set('ctx', JSON.stringify(context(element, mode)));
@@ -386,16 +393,20 @@
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
     var head = document.createElement('div');
     head.className = 'hd';
-    var label = document.createElement('span');
-    // The words on the button that opened it, so what you pressed is what the panel is called.
-    label.textContent = cut(
-      element.getAttribute('data-timefix-title') ||
-        element.getAttribute('data-timefix-text') ||
-        element.textContent.trim() ||
-        made.frame.title,
-      60,
+    // The words on the button that opened it name the panel for screen readers, so what you pressed is what it is
+    // called; nothing in the bar shows them.
+    panel.setAttribute(
+      'aria-label',
+      cut(
+        element.getAttribute('data-timefix-title') ||
+          element.getAttribute('data-timefix-text') ||
+          element.textContent.trim() ||
+          made.frame.title,
+        60,
+      ),
     );
-    head.appendChild(label);
+    // Only Close in the bar (5 November 2026): the form's own headline is right under it, so naming it again in the
+    // bar said it twice. The panel keeps the name for screen readers.
     head.appendChild(close);
     var start = document.createElement('span');
     var end = document.createElement('span');

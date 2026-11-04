@@ -135,6 +135,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   linkPageFetch: OutsideFetch;
   /** The private store a link page's pictures are kept in (spec 0061); absent, nothing can be stored here. */
   files: FileStore | undefined;
+  /**
+   * Whether a form's visitors can upload files here (the form uploads' store is set up): the builder warns before a
+   * form asking for a file goes live without it (forms fixes 2).
+   */
+  takesFormFiles: boolean;
   /** The app's own address (`APP_URL`): an invitation's link is `<appUrl>/invite/<token>`. */
   appUrl: string;
   /**

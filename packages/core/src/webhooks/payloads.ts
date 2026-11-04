@@ -166,7 +166,7 @@ export async function formWebhookData(tx: WorkspaceTx, submissionId: string): Pr
     select s.id, s.form_id, f.name as form_name, s.answers, s.context
     from form_submissions s
     join forms f on f.workspace_id = s.workspace_id and f.id = s.form_id
-    where s.id = ${submissionId}::uuid
+    where s.id = ${submissionId}::uuid and s.deleted_at is null
   `);
   const row = found.rows[0];
   if (row === undefined) return undefined;

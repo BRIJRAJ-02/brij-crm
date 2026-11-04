@@ -89,7 +89,7 @@ import { RecordDetails } from './RecordDetails.tsx';
 import { RecordDuplicateBanner } from '../duplicates/RecordDuplicateBanner.tsx';
 import { PendingRelatedCard, RelatedCards, RelatedSections, type RelatedSource } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
-import { recordLinks } from './timeline.ts';
+import { recordLinks, submissionLinks } from './timeline.ts';
 
 /** Props for the record page: what its route loaded through the data layer. */
 export interface RecordPageProps {
@@ -440,6 +440,7 @@ function RecordScreen({
   }, [keptId, keptName, mergedName, navigate, object.apiSlug, object.singularName, recordId, slug, tab, toasts]);
   const unnamed = strings.unnamed(object.singularName);
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
+  const submissionHref = useMemo(() => submissionLinks(slug), [slug]);
   // Add as person on a meeting (spec 0024, AC-609): one function while the page stays, so timeline entries keep
   // their memo. The data layer says why in a toast when it is refused; the meetings event updates the timeline.
   const addPerson = useCallback(
@@ -665,6 +666,7 @@ function RecordScreen({
         feedFor={feedFor}
         link={link}
         taskHref={taskHref}
+        submissionHref={submissionHref}
         onAddPerson={addPerson}
         {...(canAddTasks ? { onLogActivity: () => openLog('new') } : {})}
       />
@@ -732,6 +734,7 @@ function RecordScreen({
           recent={recent}
           link={link}
           taskHref={taskHref}
+          submissionHref={submissionHref}
           onViewAll={() => {
             openTab('activity');
           }}

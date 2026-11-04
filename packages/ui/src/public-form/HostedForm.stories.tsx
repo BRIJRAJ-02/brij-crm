@@ -537,3 +537,20 @@ export const BrandFromRead: Story = {
     await waitFor(() => expect(canvasElement.querySelector('img[src^="/api/public/forms/"]')).toBeNull());
   },
 };
+
+/** A question with a description: a quiet line under its answer, which the question's group is described by. */
+export const WithDescription: Story = {
+  args: {
+    form: {
+      ...LEAD,
+      questions: LEAD.questions.map((question) =>
+        question.key === 'name' ? { ...question, description: 'As you would like us to address you.' } : question,
+      ),
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Your name' })).toHaveAccessibleDescription(
+      'As you would like us to address you.',
+    );
+  },
+};

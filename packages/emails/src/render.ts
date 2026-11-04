@@ -64,6 +64,8 @@ function role(name: Role): { readonly className: string; readonly style: EmailSt
 
 /** The logo's drawn height: the space token the guest pages draw it at. */
 const LOGO_HEIGHT = pixels(SPACE[16]);
+/** The workspace's own logo's drawn height over the heading (forms fixes 2): its width follows its shape. */
+const BRAND_LOGO_HEIGHT = pixels(SPACE[32]);
 /** The wordmark files' shape (860 by 210), so the logo keeps it at any height. */
 const LOGO_WIDTH = Math.round((LOGO_HEIGHT * 860) / 210);
 
@@ -501,6 +503,22 @@ function EmailLayout({ document, options }: { readonly document: EmailDocument; 
                       padding: SPACE[32],
                     },
                   },
+                  document.logo === undefined
+                    ? null
+                    : h('img', {
+                        // Only an address of ours: a logo from anywhere else is refused, as a link would be.
+                        src: onAppOrigin(document.logo.url, options.appOrigin, options.publicOrigins ?? []),
+                        alt: document.logo.alt,
+                        height: BRAND_LOGO_HEIGHT,
+                        style: {
+                          display: 'block',
+                          height: `${String(BRAND_LOGO_HEIGHT)}px`,
+                          width: 'auto',
+                          maxWidth: '100%',
+                          border: '0',
+                          margin: `0 0 ${SPACE[16]}`,
+                        } satisfies EmailStyle,
+                      }),
                   document.eyebrow === undefined
                     ? null
                     : h(
