@@ -85,7 +85,7 @@ describe('the embed script', () => {
     expect(lifts).toContain('0px');
   });
 
-  it('opens a corner button panel at full size, with the button words above the page and Close beside them', async () => {
+  it('opens a corner button panel at full size, named by the button words, with only Close in its bar', async () => {
     holder({
       'data-timefix-booking': 'ada/intro',
       'data-timefix-mode': 'floating',
@@ -102,7 +102,9 @@ describe('the embed script', () => {
     expect(panel).toBeDefined();
     // The grow from the button used to outweigh the open state, so the panel stayed at 88% of its size.
     await expect.poll(() => panel && getComputedStyle(panel).transform, { timeout: 2000 }).toBe('none');
-    expect(panel?.querySelector('.hd span')?.textContent).toBe('Book a call');
+    // The bar holds only Close (5 November 2026); the button words name the panel for screen readers.
+    expect(panel?.getAttribute('aria-label')).toBe('Book a call');
+    expect(panel?.querySelector('.hd span')).toBeNull();
     expect(panel?.querySelector('.hd button[aria-label="Close"]')).not.toBeNull();
   });
 });
