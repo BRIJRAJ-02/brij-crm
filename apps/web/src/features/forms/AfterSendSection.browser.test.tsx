@@ -73,7 +73,7 @@ const page_ = (status: 'live' | 'paused'): BookingPageView =>
 let shown: InApp | undefined;
 let latest: FormDocument = DRAFT;
 /** Each thank-you message whose words took focus, in order: what the editor's preview then shows. */
-let edited: ('default' | { readonly endingId: string })[] = [];
+let edited: ('default' | { readonly endingId: string } | undefined)[] = [];
 let ids = 0;
 
 beforeAll(async () => {
@@ -125,11 +125,14 @@ describe('After they send (T39)', () => {
     edited = [];
     await show(DRAFT);
     await userEvent.click(page.getByRole('textbox', { name: 'Thank-you message' }));
-    await expect.poll(() => edited).toEqual(['default']);
+    await expect.poll(() => edited[0]).toBe('default');
     await userEvent.click(page.getByRole('button', { name: 'Send some people somewhere else' }));
     await expect.poll(() => latest.endings?.length).toBe(1);
     await userEvent.click(page.getByRole('textbox', { name: 'Heading' }));
     await expect.poll(() => edited.at(-1)).toEqual({ endingId: 'ending_1' });
+    // Leaving its words gives the preview back to the form.
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await expect.poll(() => edited.at(-1)).toBeUndefined();
   });
 
   it('reads as one sentence, the thank you words edited under it, and never says ending', async () => {

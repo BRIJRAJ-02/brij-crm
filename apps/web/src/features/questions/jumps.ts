@@ -109,9 +109,7 @@ export function questionJumpChoices(
   const asked = questions.filter(isAsked);
   const at = asked.findIndex((question) => question.id === questionId);
   const later = asked.flatMap((question, index): JumpChoice[] =>
-    index <= at
-      ? []
-      : [{ id: `step:${question.key}`, label: strings.jumpToQuestion(index + 1, questionName(question)) }],
+    index <= at ? [] : [{ id: `step:${question.key}`, label: strings.jumpToQuestion(questionName(question)) }],
   );
   return [
     ...later,
@@ -124,11 +122,11 @@ export function questionJumpChoices(
 
 /**
  * Where a visitor goes after question `questionId` with One at a time when no jump matched: the next question they
- * see, by its place and words ("Question 4 · Budget"), or undefined at the last one, where the form is sent.
+ * see, by its place and words ("Budget"), or undefined at the last one, where the form is sent.
  */
 export function nextQuestionName(questions: readonly FormQuestion[], questionId: string): string | undefined {
   const asked = questions.filter(isAsked);
   const at = asked.findIndex((question) => question.id === questionId);
   const next = at < 0 ? undefined : asked[at + 1];
-  return next === undefined ? undefined : strings.jumpToQuestion(at + 2, questionName(next));
+  return next === undefined ? undefined : strings.jumpToQuestion(questionName(next));
 }

@@ -65,6 +65,9 @@ for (const layout of ['classic', 'steps', 'conversational'] as const) {
     // After the question's words in reading order.
     const words = [...host.querySelectorAll('label, p')].find((each) => each.textContent.includes('Budget'));
     expect(words?.compareDocumentPosition(shown)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    // Said by a screen reader as focus enters the answer: the question's group is described by the line.
+    const group = host.querySelector('[role="group"][aria-label="Budget"]');
+    expect(group?.getAttribute('aria-describedby')).toBe(shown.id);
     // A question with none draws none.
     expect(host.textContent.match(/A rough number is fine\./g)?.length).toBe(1);
   });

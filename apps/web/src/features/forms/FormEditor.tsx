@@ -900,8 +900,8 @@ export function FormEditor(props: FormEditorProps) {
               />
             )}
             <QuestionsSection
-              // A never published form with nothing in it (Blank) opens on its first question, ready to type.
-              startsWithQuestion={!isPublished}
+              // A new form never saved since it was made with nothing in it (Blank) opens on its first question.
+              startsWithQuestion={!isPublished && form.revision === 1}
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               {...(questionStats === undefined ? {} : { stats: questionStats })}
               onOpened={openRow}

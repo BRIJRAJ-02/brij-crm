@@ -125,14 +125,14 @@ describe('One at a time: a question’s rules (AC-6313)', () => {
 
   it('offers only the questions below it a visitor sees, by place and words, then the endings', () => {
     expect(questionJumpChoices(questions, endings, 'q2')).toEqual([
-      { id: 'step:team', label: 'Question 3 · team' },
-      { id: 'step:notes', label: 'Question 4 · notes' },
+      { id: 'step:team', label: 'team' },
+      { id: 'step:notes', label: 'notes' },
       { id: 'ending:e1', label: 'Thank-you message: Not a fit' },
     ]);
   });
 
   it('names the next question as where everyone else goes, and none after the last', () => {
-    expect(nextQuestionName(questions, 'q2')).toBe('Question 3 · team');
+    expect(nextQuestionName(questions, 'q2')).toBe('team');
     expect(nextQuestionName(questions, 'q4')).toBeUndefined();
   });
 

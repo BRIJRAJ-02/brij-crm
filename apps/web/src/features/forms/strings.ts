@@ -141,14 +141,15 @@ export const strings = {
   layoutClassic: 'Classic',
   layoutSteps: 'Steps',
   layoutOneAtATime: 'One at a time',
-  colour: 'Colour',
+  /** The look's Light or Dark (5 November 2026: Colour beside Colours read as one thing twice). */
+  colour: 'Mode',
   light: 'Light',
   dark: 'Dark',
   corners: 'Corners',
   rounded: 'Rounded',
   square: 'Square',
   /** The look's third axis (spec 0063, AC-6327): the workspace's brand kit, or the product's own colours. */
-  theme: 'Colours',
+  theme: 'Brand',
   themeBrand: 'Workspace brand',
   themePlain: 'Plain',
   /** The one button over the preview that holds the look (5 November 2026): Colour, Corners and Colours. */

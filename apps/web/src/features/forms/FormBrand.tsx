@@ -49,7 +49,7 @@ export function DesignButton({ look, isReadOnly, onChange, brand, slug }: Design
   const triggerRef = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <Button ref={triggerRef} size="sm" icon="palette" onPress={() => setOpen(true)}>
+      <Button ref={triggerRef} size="sm" icon="palette" isExpanded={isOpen} onPress={() => setOpen(true)}>
         {strings.design}
       </Button>
       <Popover
@@ -58,7 +58,8 @@ export function DesignButton({ look, isReadOnly, onChange, brand, slug }: Design
         isOpen={isOpen}
         onOpenChange={setOpen}
         width="panel"
-        placement="bottom end"
+        // Over the questions, beside the preview it changes, never covering it.
+        placement="start top"
       >
         {brand === undefined ? (
           <DesignRows look={look} isReadOnly={isReadOnly} onChange={onChange} />
@@ -111,7 +112,11 @@ function DesignRows({
           }}
         />
       </SettingsRow>
-      <SettingsRow title={strings.theme} {...(hint === undefined ? {} : { description: hint })}>
+      <SettingsRow
+        title={strings.theme}
+        // Where to add a kit, only while the workspace brand is picked and there is none to wear.
+        {...(hint === undefined || look.theme !== 'brand' ? {} : { description: hint })}
+      >
         <SegmentedControl
           label={strings.theme}
           size="compact"

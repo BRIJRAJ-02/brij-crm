@@ -14,6 +14,7 @@ import {
   FormHeader,
   FormThanks,
   FormTrap,
+  descriptionIdOf,
   QuestionSlot,
   TIMEFIX_LOGO,
 } from './FormParts.tsx';
@@ -474,7 +475,7 @@ export function HostedFormSteps({
                 )}
                 {/* The question's description, quiet, under the heading it explains (5 November 2026). */}
                 {isOpen && question.description !== undefined && question.description !== '' && (
-                  <p className={styles.describe} data-mode={mode}>
+                  <p id={descriptionIdOf(question)} className={styles.describe} data-mode={mode}>
                     {state.read(question.description)}
                   </p>
                 )}

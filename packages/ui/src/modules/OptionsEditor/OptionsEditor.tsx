@@ -131,7 +131,7 @@ function ScoreField({
 }) {
   const [typed, setTyped] = useState<string | undefined>(undefined);
   const settled = value === undefined ? '' : String(value);
-  const text = typed === undefined || Number(typed) === value ? settled : typed;
+  const text = typed !== undefined && (typed.trim() === '' || Number(typed) !== value) ? typed : settled;
   return (
     <Field
       label={label}
@@ -563,7 +563,7 @@ export function OptionsEditor({
                   {isChoice && scores !== undefined && (
                     <span className={styles.score}>
                       <ScoreField
-                        label={scores.label(name)}
+                        label={scores.label(name === '' ? placeName(index) : name)}
                         value={scores.of(option.id)}
                         isReadOnly={isReadOnly}
                         onChange={(points) => {

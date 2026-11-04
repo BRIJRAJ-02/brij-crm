@@ -81,7 +81,7 @@ export interface AfterSendSectionProps {
    * A thank-you message's words took focus (T47, 5 November 2026): the preview shows that message in the form's
    * place while it is edited, `default` for what everyone else sees, else the ending's id.
    */
-  readonly onEditEnding?: (which: 'default' | { readonly endingId: string }) => void;
+  readonly onEditEnding?: (which: 'default' | { readonly endingId: string } | undefined) => void;
 }
 
 /** The facts a rule here may read: every question, and the score once a question gives points. */
@@ -445,6 +445,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
               changeEnding(ending.id, next);
             }}
             onFocus={() => props.onEditEnding?.({ endingId: ending.id })}
+            onBlur={() => props.onEditEnding?.(undefined)}
           />
         )}
         {then.kind === 'redirect' && (
@@ -551,6 +552,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
             changeEnding(ending.id, next);
           }}
           onFocus={() => props.onEditEnding?.({ endingId: ending.id })}
+          onBlur={() => props.onEditEnding?.(undefined)}
         />
       </Card>
     );
@@ -598,7 +600,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
           isReadOnly={isReadOnly}
           showGaps={showGaps}
           onDraftChange={onDraftChange}
-          onEditThanks={() => props.onEditEnding?.('default')}
+          onEditThanks={(isEditing) => props.onEditEnding?.(isEditing ? 'default' : undefined)}
         />
       </Card>
       {/* The score (Typeform's): only once a question gives points, as one row. */}
@@ -678,8 +680,8 @@ interface AfterDefaultProps {
   readonly isReadOnly: boolean;
   readonly showGaps: boolean;
   readonly onDraftChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
-  /** The thank you's words took focus: the preview shows it. */
-  readonly onEditThanks?: (() => void) | undefined;
+  /** The thank you's words took focus (true) or left them (false): the preview shows it meanwhile. */
+  readonly onEditThanks?: ((isEditing: boolean) => void) | undefined;
 }
 
 /** What everyone else gets (AC-570, AC-1055): the thank you page, a booking page, or a link. */
@@ -926,7 +928,16 @@ function AfterDefault({
           value={after.message}
           maxLength={2_000}
           isReadOnly={isReadOnly}
-          {...(onEditThanks === undefined ? {} : { onFocus: onEditThanks })}
+          {...(onEditThanks === undefined
+            ? {}
+            : {
+                onFocus: () => {
+                  onEditThanks(true);
+                },
+                onBlur: () => {
+                  onEditThanks(false);
+                },
+              })}
           onChange={(message) => {
             onDraftChange((before) => ({ ...before, after: { kind: 'message', message } }));
           }}
@@ -948,6 +959,8 @@ interface EndingFieldsProps {
   readonly onChange: (change: Partial<FormEnding>) => void;
   /** Its words took focus: the preview shows it. */
   readonly onFocus?: (() => void) | undefined;
+  /** Its words lost focus: the preview shows the form again. */
+  readonly onBlur?: (() => void) | undefined;
 }
 
 /** An ending (AC-6315): its heading and line, each with Insert an answer, then an optional button. */
@@ -960,6 +973,7 @@ function EndingFields({
   showGaps,
   onChange,
   onFocus,
+  onBlur,
 }: EndingFieldsProps) {
   const headingRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const lineRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
@@ -985,6 +999,7 @@ function EndingFields({
         maxLength={120}
         isReadOnly={isReadOnly}
         {...(onFocus === undefined ? {} : { onFocus })}
+        {...(onBlur === undefined ? {} : { onBlur })}
         {...(isReadOnly
           ? {}
           : {
@@ -1011,6 +1026,7 @@ function EndingFields({
         isMultiline
         isReadOnly={isReadOnly}
         {...(onFocus === undefined ? {} : { onFocus })}
+        {...(onBlur === undefined ? {} : { onBlur })}
         {...(isReadOnly
           ? {}
           : {

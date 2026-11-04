@@ -109,10 +109,8 @@ describe('One at a time: a question’s own rules (AC-6313)', () => {
     await userEvent.click(page.getByRole('menuitem', { name: 'Add logic' }));
     // One sentence, ready: If Budget is Under $1k → past Team size (where everyone goes anyway) to the one after.
     await expect.element(page.getByText('After this question', { exact: true })).toBeVisible();
-    await expect.element(page.getByText('Otherwise → Question 3 · Team size')).toBeVisible();
-    await expect
-      .element(page.getByRole('button', { name: /Jump to, Jump 1$/ }))
-      .toHaveTextContent('Question 4 · Anything else?');
+    await expect.element(page.getByText('Otherwise → Team size')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /Jump to, Jump 1$/ })).toHaveTextContent('Anything else?');
     // Right under the question it follows, before the next question.
     expect(order('After this question')).toBeGreaterThan(order('Budget'));
     expect(order('After this question')).toBeLessThan(order('Team size'));
@@ -120,8 +118,8 @@ describe('One at a time: a question’s own rules (AC-6313)', () => {
     // Only forward: the questions below it, then the thank-you messages.
     await userEvent.click(page.getByRole('button', { name: /Jump to, Jump 1$/ }));
     expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent)).toEqual([
-      'Question 3 · Team size',
-      'Question 4 · Anything else?',
+      'Team size',
+      'Anything else?',
       'Thank-you message: Not a fit',
     ]);
     await page.screenshot({ path: '.vitest/shots/one-at-a-time-rules-light.png' });

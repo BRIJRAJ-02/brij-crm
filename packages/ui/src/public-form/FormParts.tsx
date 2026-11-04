@@ -307,6 +307,11 @@ export function FormClosed({
   );
 }
 
+/** The id of a question's description line, which its slot names as its description. */
+export function descriptionIdOf(question: PublicQuestion): string {
+  return `question-${question.key}-description`;
+}
+
 /**
  * One question's slot: what the checker reads focus leaving, the email typo
  * hint under it ("Did you mean ada@gmail.com?" with Use it), announced
@@ -329,6 +334,7 @@ export function QuestionSlot({
 }) {
   const hint = state.hints[question.key];
   const error = state.errors[question.key];
+  const hasDescription = question.description !== undefined && question.description !== '';
   const slot = useRef<HTMLDivElement>(null);
   // A required question left empty nudges once beside its line (T23, Typeform): a short shake through the Web
   // Animations API, so the hosted page's tight stylesheet carries none of it; nothing under reduced motion.
@@ -359,10 +365,21 @@ export function QuestionSlot({
       className={styles.question}
       data-invalid={error === undefined ? undefined : true}
       onBlur={(event) => state.blur(question, event)}
+      // With a description, the slot is the question's group, named by its words and described by the line, so a
+      // screen reader says the line as focus enters the answer, wherever the line is drawn (DS review).
+      {...(hasDescription
+        ? {
+            role: 'group',
+            'aria-label': state.read(question.label),
+            'aria-describedby': descriptionIdOf(question),
+          }
+        : {})}
     >
       {children}
-      {isDescriptionShown && question.description !== undefined && question.description !== '' && (
-        <p className={styles.description}>{state.read(question.description)}</p>
+      {isDescriptionShown && hasDescription && (
+        <p id={descriptionIdOf(question)} className={styles.description}>
+          {state.read(question.description ?? '')}
+        </p>
       )}
       {question.answerType === 'email' && (
         <div className={styles.suggestion} aria-live="polite">

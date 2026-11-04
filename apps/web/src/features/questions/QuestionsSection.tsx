@@ -1222,6 +1222,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           props.keptWith === 'submission' &&
           question.points === undefined &&
           SCORED_TYPES.includes(question.answerType);
+        // No points, where the numbers sit beside the choices and no Points row holds a way to stop.
+        const canStopScore = question.points !== undefined && CHOICE_TYPES.includes(question.answerType);
         // How they heard about you (spec 0067, AC-6703): a form's one choice or short text question.
         const canBeSource = props.keptWith === 'submission' && SOURCE_ANSWER_TYPES.has(question.answerType);
         // One at a time: Add logic, while it has no rules (once it has, + Add a rule sits under them).
@@ -1244,6 +1246,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                   );
                   focusOn(`${id}:show`);
                 }
+                if (key === 'nopoints') onChange((before) => changeQuestion(before, id, { points: null }, liveIds));
                 if (key === 'points') {
                   onChange((before) => changeQuestion(before, id, { points: startingPoints(question) }, liveIds));
                 }
@@ -1314,6 +1317,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               {canScore && (
                 <MenuItem id="points" icon="target">
                   {strings.givePoints}
+                </MenuItem>
+              )}
+              {canStopScore && (
+                <MenuItem id="nopoints" icon="target">
+                  {strings.stopPoints}
                 </MenuItem>
               )}
               <MenuItem id="duplicate" icon="copy">
@@ -1739,7 +1747,8 @@ function ChoicesEditor({ choices, isReadOnly, onChange, onInvalidChange, points 
                 const next = [...points.values];
                 while (next.length <= at) next.push(0);
                 next[at] = value ?? 0;
-                points.onChange(next.every((each) => each === 0) ? undefined : next);
+                // Only No points ends scoring: a box emptied while a new number is typed never takes the rest away.
+                points.onChange(next);
               },
             },
           })}
@@ -2185,16 +2194,9 @@ function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
       </SettingsRow>
     );
   }
-  // A choice's number sits beside the choice itself, in the choices list (critique 8): here only the way to stop.
-  const choices = question.choices ?? [];
-  return (
-    <SettingsRow
-      title={strings.points}
-      {...(choices.every((choice) => choice.trim() === '') ? { description: strings.pointsNoChoices } : {})}
-    >
-      {stop}
-    </SettingsRow>
-  );
+  // A choice's number sits beside the choice itself, in the choices list (critique 8), and No points is in the
+  // question's ⋯ beside Give points: no row is left here holding a lone remove (review, 5 November 2026).
+  return null;
 }
 
 /** What a step's jumps may read: the questions before it and its own (AC-6313), in the form's order. */
