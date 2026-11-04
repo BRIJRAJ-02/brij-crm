@@ -16,15 +16,23 @@ describe('first run’s steps', () => {
   it('are Your name, Your workspace, Your booking page, Your link page, the calendar and Invite your team', () => {
     expect(welcomeSteps(true)).toEqual(['about', 'workspace', 'booking', 'handle', 'calendar', 'invite']);
     expect(welcomeSteps(false)).toEqual(['about', 'workspace', 'booking', 'handle', 'invite']);
-    // Another workspace counts its own steps.
-    expect(welcomeSteps(true, true)).toEqual(['workspace', 'booking', 'handle', 'calendar', 'invite']);
+    // Another workspace is one step: the workspace, then it opens (foolproof audit, 5 November 2026).
+    expect(welcomeSteps(true, true)).toEqual(['workspace']);
   });
 
   it('leave out Your booking page for someone who already has one, and always ask Your link', () => {
     // A handle is made with every membership, so Your link is where its owner takes it or changes it.
-    expect(welcomeSteps(true, true, { booking: true })).toEqual(['workspace', 'handle', 'calendar', 'invite']);
-    // Invite your team always stays, so there is a last step to land on.
-    expect(welcomeSteps(false, true, { booking: true })).toEqual(['workspace', 'handle', 'invite']);
+    expect(welcomeSteps(true, false, { booking: true })).toEqual(['about', 'workspace', 'handle', 'calendar', 'invite']);
+  });
+
+  it('never repeat the setup for another workspace: no booking page, link page, calendar or invite again', () => {
+    for (const calendarSync of [true, false]) {
+      for (const booking of [true, false]) {
+        expect(welcomeSteps(calendarSync, true, { booking })).toEqual(['workspace']);
+      }
+    }
+    // Its one step has nothing after it, so creating it opens the workspace.
+    expect(nextStep(welcomeSteps(true, true), 'workspace')).toBeUndefined();
   });
 
   it('go back from Your workspace only: the first step has nothing before it, and the workspace is made by then', () => {
@@ -137,6 +145,7 @@ describe('where /welcome goes', () => {
   it('opens the last used workspace it is given, and keeps the steps open for another (spec 0031)', () => {
     expect(welcomeLanding([acme, beta], undefined, beta)).toEqual({ kind: 'open', slug: 'beta' });
     expect(welcomeLanding([acme, beta], undefined, beta, true)).toEqual({ kind: 'steps', workspace: undefined });
-    expect(welcomeLanding([acme, beta], 'beta', acme, true)).toEqual({ kind: 'steps', workspace: beta });
+    // Another workspace has no steps after it, so an old link to one opens the workspace it names.
+    expect(welcomeLanding([acme, beta], 'beta', acme, true)).toEqual({ kind: 'open', slug: 'beta' });
   });
 });

@@ -57,13 +57,16 @@ export interface WelcomeDone {
  * they have none. Your link is always asked: a handle is made with every
  * membership (26 Oct 2026), so the step is where its owner sees the one they
  * were given and takes it or changes it, rather than finding it later in
- * Settings. Another workspace (spec 0031) starts at Your workspace, so the
- * steps about the person are left out of its count.
+ * Settings. Another workspace (spec 0031) is Your workspace alone, then the new
+ * workspace opens, as Linear's and Attio's New workspace do (foolproof audit, 5
+ * November 2026): first run already showed this person the link page, the
+ * booking page, the calendar and inviting, and each is one click from the new
+ * workspace's sidebar.
  */
 export function welcomeSteps(calendarSync: boolean, another = false, done: WelcomeDone = {}): readonly WelcomeStep[] {
+  if (another) return ['workspace'];
   return STEPS.filter((step) => {
     if (step === 'calendar' && !calendarSync) return false;
-    if (step === 'about' && another) return false;
     if (step === 'booking' && done.booking === true) return false;
     return true;
   });
@@ -148,7 +151,8 @@ export type WelcomeLanding<W> =
  * workspace, that workspace (or their first); else the steps from the
  * start. A workspace that isn't theirs is passed over, never shown. `home`
  * is the one to open (spec 0031: the last opened, else the oldest), and
- * `another` keeps the steps open for someone making another workspace.
+ * `another` keeps Your workspace open for someone making another one (and
+ * opens the one it names, since another workspace has no steps after it).
  */
 export function welcomeLanding<W extends { readonly slug: string }>(
   workspaces: readonly W[],
@@ -157,6 +161,8 @@ export function welcomeLanding<W extends { readonly slug: string }>(
   another = false,
 ): WelcomeLanding<W> {
   const made = asked === undefined ? undefined : workspaces.find((each) => each.slug === asked);
+  // Another workspace has no steps after it: an old link to one of them opens the workspace it names.
+  if (made !== undefined && another) return { kind: 'open', slug: made.slug };
   // Your booking page always follows the workspace, so the one just made keeps the steps open.
   if (made !== undefined) return { kind: 'steps', workspace: made };
   if (another) return { kind: 'steps', workspace: undefined };

@@ -168,6 +168,8 @@ async function renderWelcome(
   inviteRoles?: WelcomeScreenProps['inviteRoles'],
   /** The handle the workspace's link page was made with, as the loader reads it once the workspace exists. */
   heldHandle?: string,
+  /** Making another workspace (spec 0031): the workspace Back returns to. */
+  leaveTo?: WelcomeScreenProps['leaveTo'],
 ): Promise<AnyRouter> {
   const toasts = createToasts();
   const rootRoute = createRootRoute();
@@ -183,12 +185,18 @@ async function renderWelcome(
         <WelcomeScreen
           data={data}
           user={USER}
-          step={shownStep(search.step, workspace !== undefined, false, welcomeSteps(calendarSync))}
+          step={shownStep(
+            search.step,
+            workspace !== undefined,
+            leaveTo !== undefined,
+            welcomeSteps(calendarSync, leaveTo !== undefined),
+          )}
           calendarSync={calendarSync}
           workspace={workspace}
           calendarResult={search.calendar}
           inviteRoles={inviteRoles}
           linkPageHandle={workspace === undefined ? undefined : heldHandle}
+          leaveTo={leaveTo}
         />
       );
     },
@@ -408,6 +416,26 @@ describe('first run’s steps', () => {
     copied.mockRestore();
     await page.getByRole('button', { name: 'Go to dashboard' }).click();
     await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
+  });
+
+  it('makes another workspace in one step and opens it, with no setup again', async () => {
+    const fake = fakeData();
+    const router = await renderWelcome(fake.data, '/welcome?another=1', true, undefined, undefined, {
+      slug: 'acme',
+      name: 'Acme',
+    });
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Create a workspace' })).toBeVisible();
+    // One step: no count, and Back returns to the workspace it came from (not Sign out).
+    expect(page.getByText(/Step \d of \d/).query()).toBeNull();
+    await expect.element(page.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/w/acme');
+    await expect.element(page.getByText('Available', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Create workspace' }).click();
+    // Straight into the new workspace: no booking page, link page, calendar or invite step.
+    await expect.element(page.getByText('People')).toBeVisible();
+    expect(router.state.location.pathname).toBe('/w/ada');
+    expect(fake.created.map((each) => each.slug)).toEqual(['ada']);
+    expect(fake.pages).toEqual([]);
+    expect(fake.handles).toEqual([]);
   });
 
   it('starts Your link with the handle the workspace made, which arrives after the screen first drew', async () => {
