@@ -1323,6 +1323,8 @@ function QuestionHead({
       size="sm"
       icon={TYPE_ICONS[question.answerType]}
       iconRight="chevrons-up-down"
+      // On a phone the icon and chevron stand alone, so the question keeps the room to be read.
+      isLabelCollapsible
       label={strings.typeMenu(typeName)}
       isDisabled={isReadOnly || isLocked}
     >
