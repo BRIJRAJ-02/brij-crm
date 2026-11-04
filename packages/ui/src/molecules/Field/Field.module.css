@@ -341,7 +341,13 @@
     border-radius: var(--radius-md);
     background: transparent;
     box-shadow: none;
+    outline: var(--border-width-hairline) solid transparent;
+    outline-offset: calc(-1 * var(--border-width-hairline));
     cursor: text;
+    transition:
+      outline-color var(--duration-hover) var(--ease-hover),
+      background-color var(--duration-hover) var(--ease-hover),
+      box-shadow var(--duration-hover) var(--ease-hover);
   }
 
   /* Underline: a public form's one large answer (One at a time, Typeform's way): no box or fill, a thick line in
@@ -483,8 +489,15 @@
 
   /* Editable, it says so under the pointer and while typed in: a soft fill, as Notion's and Linear's titles do
      (the owner, 5 November 2026: "this doesn't look editable"). */
-  .root[data-variant='title']:not([data-readonly]) .box:hover,
-  .root[data-variant='title']:not([data-readonly]) .box:focus-within {
+  .root[data-variant='title']:not([data-readonly]) .box:hover {
+    outline-color: var(--border-subtle);
     background: var(--surface-hover);
+  }
+
+  /* Typed in, it is a field: the raised fill and the accent ring every field wears. */
+  .root[data-variant='title']:not([data-readonly]) .box:focus-within {
+    outline-color: var(--accent-line);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-focus);
   }
 }

@@ -10,18 +10,8 @@ import {
   type FormView,
   type OfferedFormTemplateId,
 } from '@crm/data';
-import type { PublicForm } from '@crm/contracts/forms';
-import {
-  Button,
-  Callout,
-  EmptyState,
-  HostedFormPreview,
-  Modal,
-  TileGrid,
-  type ChoiceTile,
-  type IconName,
-} from '@crm/ui';
-import { useEffect, useState } from 'react';
+import { Button, Callout, EmptyState, Modal, TileGrid, Separator, type ChoiceTile, type IconName } from '@crm/ui';
+import { Fragment, useEffect, useState } from 'react';
 import { strings } from './strings.ts';
 
 /** What the gallery is doing: reading its tiles, showing them, or a read that failed. */
@@ -60,32 +50,9 @@ function tileOf(template: FormTemplateSummary): ChoiceTile {
   return {
     id: template.id,
     name: template.name,
+    // Its mark and words alone: the small pictures of each form went (the owner, 5 November 2026).
     icon: TEMPLATE_ICONS[template.id],
-    // The form it makes, small (forms fixes 3, after Miro's and Typeform's template grids): each card shows its own
-    // form, at every width, so no side pane is needed to see one.
-    thumbnail: <HostedFormPreview form={sampleOf(template)} size="thumbnail" />,
     description: template.purpose,
-  };
-}
-
-/**
- * The form a template makes, as a visitor would see it: its words and questions in the hosted page's shape. Blank
- * shows the empty form it really makes, Untitled form with nothing asked yet (forms fixes 3: it showed a sample's
- * own headline, someone else's words).
- */
-function sampleOf(template: FormTemplateSummary): PublicForm {
-  const isBlank = template.id === 'blank';
-  return {
-    key: `template-${template.id}`,
-    status: 'live',
-    versionNumber: 1,
-    headline: isBlank ? strings.untitledForm : template.sample.headline,
-    buttonText: template.sample.buttonText,
-    language: 'en',
-    look: { colour: 'light', corners: 'rounded' },
-    layout: template.preview.layout,
-    questions: isBlank ? [] : [...template.sample.questions],
-    offersMeeting: false,
   };
 }
 
@@ -267,35 +234,46 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
         </EmptyState>
       )}
       {phase.kind === 'ready' && phase.items.length > 0 && (
-        <TileGrid
-          variant="choice"
-          label={strings.galleryTitle}
-          // Each card is the form it makes, small, over its name and one short line (forms fixes 3: the grid fills the
-          // window, as Miro's does). Use, Enter or a double click makes it. Focus starts on the first.
-          showsDescription
-          keepsPicture
-          pictureSize="large"
-          // The gallery's first step is this choice: focus starts on the picked template (the owner's ask).
-          // eslint-disable-next-line jsx-a11y-x/no-autofocus
-          autoFocus
-          value={chosen?.id ?? null}
-          tiles={phase.items.map((template) =>
-            // While one is being made, the chosen tile stays on and the others turn off, so the one still lit is
-            // the one being made and a keyboard keeps its place on it.
-            isBusy && making !== template.id ? { ...tileOf(template), isDisabled: true } : tileOf(template),
+        <>
+          {/* Blank form first, on its own, then the ready ones under a "Templates" line (the owner, 5 November 2026:
+              "simple tiles", no pictures). Two grids share one choice, so Use <name> uses whichever was picked last. */}
+          {[items.filter((each) => each.id === 'blank'), items.filter((each) => each.id !== 'blank')].map(
+            (group, at) =>
+              group.length === 0 ? null : (
+                <Fragment key={at === 0 ? 'blank' : 'templates'}>
+                  {at === 1 && <Separator label={strings.galleryTemplates} />}
+                  <TileGrid
+                    variant="choice"
+                    label={at === 0 ? strings.galleryTitle : strings.galleryTemplates}
+                    // One simple tile shape for both: the mark beside the name, the line under it.
+                    tileWidth="wide"
+                    showsDescription
+                    keepsPicture
+                    // The gallery's first step is this choice: focus starts on the picked template (the owner's ask).
+                    // eslint-disable-next-line jsx-a11y-x/no-autofocus
+                    autoFocus={group.some((each) => each.id === chosen?.id)}
+                    value={chosen?.id ?? null}
+                    tiles={group.map((template) =>
+                      // While one is being made, the chosen tile stays on and the others turn off, so the one still lit
+                      // is the one being made and a keyboard keeps its place on it.
+                      isBusy && making !== template.id ? { ...tileOf(template), isDisabled: true } : tileOf(template),
+                    )}
+                    onChange={(id) => {
+                      const next = items.find((each) => each.id === id);
+                      if (next !== undefined) setPicked(next.id);
+                    }}
+                    // Enter on a template, or a double click, uses it, as Use <name> does (forms fixes 3).
+                    onConfirm={(id) => {
+                      const next = items.find((each) => each.id === id);
+                      if (next === undefined) return;
+                      setPicked(next.id);
+                      start(next.id);
+                    }}
+                  />
+                </Fragment>
+              ),
           )}
-          onChange={(id) => {
-            const next = phase.items.find((each) => each.id === id);
-            if (next !== undefined) setPicked(next.id);
-          }}
-          // Enter on a template, or a double click, uses it, as Use <name> does (forms fixes 3).
-          onConfirm={(id) => {
-            const next = phase.items.find((each) => each.id === id);
-            if (next === undefined) return;
-            setPicked(next.id);
-            start(next.id);
-          }}
-        />
+        </>
       )}
     </Modal>
   );
