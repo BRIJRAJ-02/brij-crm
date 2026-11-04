@@ -371,8 +371,10 @@ export const OpenHead: Story = {
 };
 
 /**
- * The open card's actions in its head (actionsIn="head", forms fixes 3, after Typeform's and Sprig's cards): the type
- * as one labelled menu at the start, Required and the ⋯ at the end, the question's words the body's first field.
+ * The open card's actions in its head (actionsIn="head", forms fixes 3, after Typeform's and Sprig's cards): the grip,
+ * then Required, the ⋯ and the chevron at the end, on the body's inset; the body's first boxes are the answer type (a
+ * Button's field variant) and the question's words, each named inside its box, their values on one line (the owner,
+ * 5 November 2026).
  */
 export const ActionsInHead: Story = {
   render: () => (
@@ -383,26 +385,32 @@ export const ActionsInHead: Story = {
         openIds={new Set(['budget'])}
         onOpenChange={() => undefined}
         actionsIn="head"
-        renderOpenHead={() => (
-          <Button
-            variant="secondary"
-            size="sm"
-            icon="chevron-down"
-            iconRight="chevrons-up-down"
-            label="Dropdown, answer type"
-          >
-            Dropdown
-          </Button>
-        )}
+        renderOpenHead={() => <></>}
         renderOpen={(id) => (
           <>
+            <Button
+              variant="field"
+              fieldName="Type"
+              icon="chevron-down"
+              iconRight="chevrons-up-down"
+              label="Dropdown, answer type"
+            >
+              Dropdown
+            </Button>
             <Field
               label="Question"
               isLabelHidden
-              size="lg"
+              prefix="Question"
+              prefixWidth="label"
               value={QUESTIONS.find((item) => item.id === id)?.label ?? ''}
             />
-            <Field label="Placeholder" size="sm" placeholder="Placeholder text (optional)" />
+            <Field
+              label="Placeholder"
+              isLabelHidden
+              prefix="Placeholder"
+              prefixWidth="label"
+              placeholder="Shown until they type"
+            />
           </>
         )}
         renderFooterStart={() => <Checkbox label="Required" />}
@@ -412,10 +420,23 @@ export const ActionsInHead: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: 'Dropdown, answer type' })).toBeVisible();
+    const type = canvas.getByRole('button', { name: 'Dropdown, answer type' });
+    await expect(type).toBeVisible();
     await expect(canvas.getByRole('checkbox', { name: 'Required' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'More for Budget' })).toBeVisible();
-    await expect(canvas.getByRole('textbox', { name: 'Question' })).toHaveValue('Budget');
+    const words = canvas.getByRole('textbox', { name: 'Question' });
+    await expect(words).toHaveValue('Budget');
+    // The boxes share their edges and height, and the type's value starts on the words' line.
+    const typeBox = type.getBoundingClientRect();
+    const wordsBox = words.parentElement?.getBoundingClientRect();
+    await expect(typeBox.left).toBe(wordsBox?.left);
+    await expect(typeBox.right).toBe(wordsBox?.right);
+    await expect(typeBox.height).toBe(wordsBox?.height);
+    await expect(type.querySelector('svg')?.getBoundingClientRect().left).toBe(words.getBoundingClientRect().left);
+    // The head's chevron ends on the boxes' edge.
+    await expect(canvas.getByRole('button', { name: 'Close Budget' }).getBoundingClientRect().right).toBe(
+      typeBox.right,
+    );
   },
 };
 

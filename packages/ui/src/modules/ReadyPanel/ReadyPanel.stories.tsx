@@ -158,8 +158,8 @@ export const InDialog: Story = {
 };
 
 /**
- * Share: one narrow centred column, as a form's live dialog and Share tab draw it. The QR code first, the link with
- * Copy link (the one primary), one row of equal buttons, then the onward row.
+ * Share, as a form's live dialog and Share tab draw it: the link with Copy link (the one primary), one row of equal
+ * buttons under it, the QR code beside them on its light tile with Download under it, then the onward row.
  */
 export const Share: Story = {
   parameters: { crm: { screenshot: false } },
@@ -192,13 +192,24 @@ export const Share: Story = {
     const ways = [...(canvas.getByRole('group', { name: 'Send the link' }).children as HTMLCollectionOf<HTMLElement>)];
     const sizes = new Set(ways.map((each) => String(Math.round(each.getBoundingClientRect().width))));
     await expect(sizes.size).toBe(1);
+    // The link is the hero: Copy link is the one primary, as tall as the address beside it.
     const copy = canvas.getByRole('button', { name: 'Copy link' });
     await expect(copy).toHaveAttribute('data-variant', 'primary');
+    const address = canvas.getByText('lead-qualification').parentElement;
     await expect(Math.round(copy.getBoundingClientRect().height)).toBe(
-      Math.round(ways[0]?.getBoundingClientRect().height ?? 0),
+      Math.round(address?.getBoundingClientRect().height ?? 0),
     );
+    // The code and its download are one thing: Download sits right under the code (wide) or beside it (narrow), never
+    // in the row of ways.
+    const code = canvas.getByRole('img', { name: 'QR code for the link' }).getBoundingClientRect();
+    const save = canvas.getByRole('button', { name: /^Download QR code/ });
+    const saved = save.getBoundingClientRect();
+    const isUnder = saved.top >= code.bottom && saved.top - code.bottom < 24;
+    const isBeside = saved.left >= code.right && saved.left - code.right < 24;
+    await expect(isUnder || isBeside).toBe(true);
+    await expect(canvas.getByRole('group', { name: 'Send the link' })).not.toContainElement(save);
     // The QR code saves as PNG from its menu, handed the code's own SVG.
-    await userEvent.click(canvas.getByRole('button', { name: /^QR code/ }));
+    await userEvent.click(save);
     await settleAnimations();
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
     await expect(args.onDownloadQr).toHaveBeenCalledWith('png', expect.any(SVGSVGElement));

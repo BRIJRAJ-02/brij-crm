@@ -27,6 +27,7 @@ import {
   Avatar,
   Button,
   ButtonLink,
+  Card,
   CopyButton,
   DatePicker,
   Field,
@@ -457,372 +458,380 @@ export function SettingsTab({
   };
 
   return (
-    // The full width Settings › General uses (lane 3c): the labels at the start, the controls at the end, no dead
-    // column beside a 780px one.
+    // As Settings › General: each group's rows in a Card under its heading, full width (the owner, 5 November 2026:
+    // "group them properly").
     <SettingsStack>
       <SettingsSection title={strings.groupForm}>
-        {isPublished && (
-          <>
-            <SettingsRow title={strings.name} control="field">
-              <Field
-                label={strings.name}
+        <Card>
+          {isPublished && (
+            <>
+              <SettingsRow title={strings.name} control="field">
+                <Field
+                  label={strings.name}
+                  isLabelHidden
+                  value={settings.values.name}
+                  maxLength={80}
+                  isRequired
+                  isReadOnly={isReadOnly}
+                  onChange={(name) => {
+                    settings.set({ name });
+                  }}
+                  onBlur={settings.leaveName}
+                  // Enter saves it too, so a name typed and left by Esc or a shortcut isn't lost.
+                  onSubmit={settings.leaveName}
+                  {...(nameError === undefined ? {} : { error: nameError })}
+                />
+              </SettingsRow>
+              <SettingsRow title={strings.address} meta={tip(strings.address, strings.linkHelp)} control="field">
+                <Field
+                  label={strings.address}
+                  isLabelHidden
+                  prefix={data.forms.hostedUrl('').replace(/^https?:\/\//, '')}
+                  value={settings.values.address}
+                  maxLength={40}
+                  isRequired
+                  isReadOnly={isReadOnly}
+                  onChange={(text) => {
+                    settings.set({ address: text.toLowerCase() });
+                  }}
+                  onBlur={settings.leaveAddress}
+                  onSubmit={settings.leaveAddress}
+                  {...(linkError === undefined ? {} : { error: linkError })}
+                  // Beside the box on its line, at the field's own height: one control height on the row (lane 3c).
+                  after={<CopyButton value={link} label={strings.copyLink} isIconOnly size="lg" />}
+                />
+              </SettingsRow>
+            </>
+          )}
+          {isPublished && (
+            <SettingsRow title={strings.acceptingRow} meta={tip(strings.acceptingRow, strings.acceptingHelp)}>
+              <Switch
+                label={strings.acceptingRow}
                 isLabelHidden
-                value={settings.values.name}
-                maxLength={80}
-                isRequired
+                isSelected={form.status !== 'paused'}
                 isReadOnly={isReadOnly}
-                onChange={(name) => {
-                  settings.set({ name });
+                onChange={(isOn) => {
+                  onStatusChange(isOn ? 'live' : 'paused');
                 }}
-                onBlur={settings.leaveName}
-                // Enter saves it too, so a name typed and left by Esc or a shortcut isn't lost.
-                onSubmit={settings.leaveName}
-                {...(nameError === undefined ? {} : { error: nameError })}
               />
             </SettingsRow>
-            <SettingsRow title={strings.address} meta={tip(strings.address, strings.linkHelp)} control="field">
-              <Field
-                label={strings.address}
+          )}
+          {/* When it stops by itself (forms fix b2): never, on a day, or after a number of answers; and what it says. */}
+          <SettingsRow title={strings.closesRow} meta={tip(strings.closesRow, strings.closesHelp)} control="field">
+            <Select
+              label={strings.closesRow}
+              isLabelHidden
+              savesOnPick
+              items={[
+                { id: 'never', label: strings.closesNever },
+                { id: 'date', label: strings.closesOnDate },
+                { id: 'count', label: strings.closesAfterCount },
+              ]}
+              value={closing}
+              isReadOnly={isReadOnly}
+              onChange={(id) => {
+                if (id === null || id === closing) return;
+                const kind = id as ClosingKind;
+                const next =
+                  kind === 'never'
+                    ? undefined
+                    : kind === 'date'
+                      ? { at: closingOnDay(nextWeek(), timeZone) }
+                      : { after: DEFAULT_CLOSE_AFTER };
+                setCountText(undefined);
+                onSettingsChange({ closing: next ?? null }, (before) => {
+                  const { closing: _was, ...rest } = before;
+                  return next === undefined ? rest : { ...rest, closing: next };
+                });
+              }}
+            />
+          </SettingsRow>
+          {closing === 'date' && (
+            <SettingsRow title={strings.closesDay} control="field">
+              <DatePicker
+                label={strings.closesDay}
                 isLabelHidden
-                prefix={data.forms.hostedUrl('').replace(/^https?:\/\//, '')}
-                value={settings.values.address}
-                maxLength={40}
-                isRequired
+                value={dayOfClosing(draft.closing?.at, timeZone)}
                 isReadOnly={isReadOnly}
+                {...(closingError === undefined ? {} : { error: closingError })}
+                onChange={(day) => {
+                  if (day === null) return;
+                  // A day already gone would close the form the moment it is published, without a word.
+                  if (day < dayIn(Date.now(), timeZone)) {
+                    setClosingError(strings.closesPast);
+                    return;
+                  }
+                  setClosingError(undefined);
+                  const at = { at: closingOnDay(day, timeZone) };
+                  onSettingsChange({ closing: at }, (before) => ({ ...before, closing: at }));
+                }}
+              />
+            </SettingsRow>
+          )}
+          {closing === 'count' && (
+            <SettingsRow title={strings.closesCount} control="field">
+              <Field
+                label={strings.closesCount}
+                isLabelHidden
+                inputMode="numeric"
+                value={countText ?? String(draft.closing?.after ?? DEFAULT_CLOSE_AFTER)}
+                isReadOnly={isReadOnly}
+                {...(closingError === undefined ? {} : { error: closingError })}
+                // Typed freely (it can be emptied to type again), saved as it is left when a whole number from 1 to the
+                // limit, as Name is: each keystroke going live would publish a version per digit.
                 onChange={(text) => {
-                  settings.set({ address: text.toLowerCase() });
+                  setCountText(text);
+                  setClosingError(countOf(text) === undefined ? strings.closesCountError(CLOSE_AFTER_MAX) : undefined);
                 }}
-                onBlur={settings.leaveAddress}
-                onSubmit={settings.leaveAddress}
-                {...(linkError === undefined ? {} : { error: linkError })}
-                // Beside the box on its line, at the field's own height: one control height on the row (lane 3c).
-                after={<CopyButton value={link} label={strings.copyLink} isIconOnly size="lg" />}
+                onBlur={leaveCount}
+                onSubmit={leaveCount}
               />
             </SettingsRow>
-          </>
-        )}
-        {isPublished && (
-          <SettingsRow title={strings.acceptingRow} meta={tip(strings.acceptingRow, strings.acceptingHelp)}>
-            <Switch
-              label={strings.acceptingRow}
-              isLabelHidden
-              isSelected={form.status !== 'paused'}
-              isReadOnly={isReadOnly}
-              onChange={(isOn) => {
-                onStatusChange(isOn ? 'live' : 'paused');
-              }}
-            />
-          </SettingsRow>
-        )}
-        {/* When it stops by itself (forms fix b2): never, on a day, or after a number of answers; and what it says. */}
-        <SettingsRow title={strings.closesRow} meta={tip(strings.closesRow, strings.closesHelp)} control="field">
-          <Select
-            label={strings.closesRow}
-            isLabelHidden
-            savesOnPick
-            items={[
-              { id: 'never', label: strings.closesNever },
-              { id: 'date', label: strings.closesOnDate },
-              { id: 'count', label: strings.closesAfterCount },
-            ]}
-            value={closing}
-            isReadOnly={isReadOnly}
-            onChange={(id) => {
-              if (id === null || id === closing) return;
-              const kind = id as ClosingKind;
-              const next =
-                kind === 'never'
-                  ? undefined
-                  : kind === 'date'
-                    ? { at: closingOnDay(nextWeek(), timeZone) }
-                    : { after: DEFAULT_CLOSE_AFTER };
-              setCountText(undefined);
-              onSettingsChange({ closing: next ?? null }, (before) => {
-                const { closing: _was, ...rest } = before;
-                return next === undefined ? rest : { ...rest, closing: next };
-              });
-            }}
-          />
-        </SettingsRow>
-        {closing === 'date' && (
-          <SettingsRow title={strings.closesDay} control="field">
-            <DatePicker
-              label={strings.closesDay}
-              isLabelHidden
-              value={dayOfClosing(draft.closing?.at, timeZone)}
-              isReadOnly={isReadOnly}
-              {...(closingError === undefined ? {} : { error: closingError })}
-              onChange={(day) => {
-                if (day === null) return;
-                // A day already gone would close the form the moment it is published, without a word.
-                if (day < dayIn(Date.now(), timeZone)) {
-                  setClosingError(strings.closesPast);
-                  return;
-                }
-                setClosingError(undefined);
-                const at = { at: closingOnDay(day, timeZone) };
-                onSettingsChange({ closing: at }, (before) => ({ ...before, closing: at }));
-              }}
-            />
-          </SettingsRow>
-        )}
-        {closing === 'count' && (
-          <SettingsRow title={strings.closesCount} control="field">
+          )}
+          <SettingsRow title={strings.closedMessageRow} control="field">
             <Field
-              label={strings.closesCount}
+              label={strings.closedMessageRow}
               isLabelHidden
-              inputMode="numeric"
-              value={countText ?? String(draft.closing?.after ?? DEFAULT_CLOSE_AFTER)}
+              value={typed.closedMessage ?? draft.closedMessage ?? ''}
+              placeholder={strings.closedMessageDefault}
+              maxLength={CLOSED_MESSAGE_MAX}
               isReadOnly={isReadOnly}
-              {...(closingError === undefined ? {} : { error: closingError })}
-              // Typed freely (it can be emptied to type again), saved as it is left when a whole number from 1 to the
-              // limit, as Name is: each keystroke going live would publish a version per digit.
               onChange={(text) => {
-                setCountText(text);
-                setClosingError(countOf(text) === undefined ? strings.closesCountError(CLOSE_AFTER_MAX) : undefined);
+                setTyped((before) => ({ ...before, closedMessage: text }));
               }}
-              onBlur={leaveCount}
-              onSubmit={leaveCount}
+              onBlur={() => {
+                leaveText('closedMessage');
+              }}
+              onSubmit={() => {
+                leaveText('closedMessage');
+              }}
             />
           </SettingsRow>
-        )}
-        <SettingsRow title={strings.closedMessageRow} control="field">
-          <Field
-            label={strings.closedMessageRow}
-            isLabelHidden
-            value={typed.closedMessage ?? draft.closedMessage ?? ''}
-            placeholder={strings.closedMessageDefault}
-            maxLength={CLOSED_MESSAGE_MAX}
-            isReadOnly={isReadOnly}
-            onChange={(text) => {
-              setTyped((before) => ({ ...before, closedMessage: text }));
-            }}
-            onBlur={() => {
-              leaveText('closedMessage');
-            }}
-            onSubmit={() => {
-              leaveText('closedMessage');
-            }}
-          />
-        </SettingsRow>
+        </Card>
       </SettingsSection>
       <SettingsSection title={strings.groupCrm}>
-        <SettingsRow
-          title={strings.saveAnswersTo}
-          meta={tip(strings.saveAnswersTo, strings.savingHelpTip)}
-          control="field"
-        >
-          <Select
-            label={strings.saveAnswersTo}
-            isLabelHidden
-            savesOnPick
-            items={[
-              ...liveObjects.map((object) => ({ id: object.id, label: object.pluralName, icon: object.icon })),
-              { id: KEEP_ONLY, label: strings.onlySubmissions, isApart: liveObjects.length > 0 },
-            ]}
-            value={savingTo}
-            isReadOnly={isReadOnly}
-            isDisabled={isRetargeting}
-            onChange={(id) => {
-              if (id === null || id === savingTo) return;
-              onRetarget(id === KEEP_ONLY ? null : id);
-            }}
-          />
-        </SettingsRow>
-        {/* A form already saving to Deals saves no person: one press moves it to People, with a deal (forms fix a3). */}
-        {people !== undefined && deals !== undefined && savingTo === deals.id && (
-          <SettingsRow title={strings.dealsNoPerson} meta={tip(strings.dealsNoPerson, strings.dealsNoPersonTip)}>
-            <Button
-              isDisabled={isRetargeting || isReadOnly}
-              onPress={() => {
-                onRetarget(people.id, true);
-              }}
-            >
-              {strings.dealsMove}
-            </Button>
-          </SettingsRow>
-        )}
-        {offersDeal && (
-          <SettingsRow title={strings.alsoDeal} meta={tip(strings.alsoDeal, strings.alsoDealTip)}>
-            <Switch
-              label={strings.alsoDeal}
+        <Card>
+          <SettingsRow
+            title={strings.saveAnswersTo}
+            meta={tip(strings.saveAnswersTo, strings.savingHelpTip)}
+            control="field"
+          >
+            <Select
+              label={strings.saveAnswersTo}
               isLabelHidden
-              isSelected={draft.targets.deal !== undefined}
+              savesOnPick
+              items={[
+                ...liveObjects.map((object) => ({ id: object.id, label: object.pluralName, icon: object.icon })),
+                { id: KEEP_ONLY, label: strings.onlySubmissions, isApart: liveObjects.length > 0 },
+              ]}
+              value={savingTo}
               isReadOnly={isReadOnly}
-              onChange={(isOn) => {
-                if (!isOn && dealQuestions > 0) {
-                  setDealOffOpen(true);
-                  return;
-                }
-                setDeal(isOn);
+              isDisabled={isRetargeting}
+              onChange={(id) => {
+                if (id === null || id === savingTo) return;
+                onRetarget(id === KEEP_ONLY ? null : id);
               }}
             />
           </SettingsRow>
-        )}
-        <Modal
-          title={strings.dealOffTitle}
-          variant="confirm"
-          tone="danger"
-          isOpen={isDealOffOpen}
-          onOpenChange={setDealOffOpen}
-          actions={
-            <>
-              <Button slot="close">{strings.cancel}</Button>
+          {/* A form already saving to Deals saves no person: one press moves it to People, with a deal (forms fix a3). */}
+          {people !== undefined && deals !== undefined && savingTo === deals.id && (
+            <SettingsRow title={strings.dealsNoPerson} meta={tip(strings.dealsNoPerson, strings.dealsNoPersonTip)}>
               <Button
-                variant="danger-solid"
+                isDisabled={isRetargeting || isReadOnly}
                 onPress={() => {
-                  setDealOffOpen(false);
-                  setDeal(false);
+                  onRetarget(people.id, true);
                 }}
               >
-                {strings.dealOffAction}
+                {strings.dealsMove}
               </Button>
-            </>
-          }
-        >
-          <p>{strings.dealOffText(dealQuestions)}</p>
-        </Modal>
-        {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
-        {isFiling && (
-          <SettingsRow title={strings.owner} meta={tip(strings.owner, ownerTip)} control="field">
+            </SettingsRow>
+          )}
+          {offersDeal && (
+            <SettingsRow title={strings.alsoDeal} meta={tip(strings.alsoDeal, strings.alsoDealTip)}>
+              <Switch
+                label={strings.alsoDeal}
+                isLabelHidden
+                isSelected={draft.targets.deal !== undefined}
+                isReadOnly={isReadOnly}
+                onChange={(isOn) => {
+                  if (!isOn && dealQuestions > 0) {
+                    setDealOffOpen(true);
+                    return;
+                  }
+                  setDeal(isOn);
+                }}
+              />
+            </SettingsRow>
+          )}
+          <Modal
+            title={strings.dealOffTitle}
+            variant="confirm"
+            tone="danger"
+            isOpen={isDealOffOpen}
+            onOpenChange={setDealOffOpen}
+            actions={
+              <>
+                <Button slot="close">{strings.cancel}</Button>
+                <Button
+                  variant="danger-solid"
+                  onPress={() => {
+                    setDealOffOpen(false);
+                    setDeal(false);
+                  }}
+                >
+                  {strings.dealOffAction}
+                </Button>
+              </>
+            }
+          >
+            <p>{strings.dealOffText(dealQuestions)}</p>
+          </Modal>
+          {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
+          {isFiling && (
+            <SettingsRow title={strings.owner} meta={tip(strings.owner, ownerTip)} control="field">
+              <Select
+                label={strings.owner}
+                isLabelHidden
+                items={ownerItems}
+                value={settings.values.owner}
+                isReadOnly={isReadOnly}
+                {...(ownerError === undefined ? {} : { error: ownerError })}
+                onChange={(id) => {
+                  settings.pick({ owner: id ?? NOBODY });
+                }}
+              />
+            </SettingsRow>
+          )}
+        </Card>
+      </SettingsSection>
+      <SettingsSection title={strings.groupEmails}>
+        <Card>
+          <SettingsRow
+            title={strings.emailEach}
+            meta={tip(strings.emailEach, strings.noticesHint(ownerIsTold))}
+            control="field"
+          >
             <Select
-              label={strings.owner}
+              label={strings.emailEach}
               isLabelHidden
-              items={ownerItems}
-              value={settings.values.owner}
+              selectionMode="multiple"
+              placeholder={ownerIsTold ? strings.noticesNobody : strings.nobody}
+              items={notifyItems}
+              values={notifyValues}
+              isSearchable={members.length > 8}
+              searchLabel={strings.noticesSearch}
               isReadOnly={isReadOnly}
-              {...(ownerError === undefined ? {} : { error: ownerError })}
-              onChange={(id) => {
-                settings.pick({ owner: id ?? NOBODY });
+              {...(notifyError === undefined ? {} : { error: notifyError })}
+              onValuesChange={(ids) => {
+                settings.pick({
+                  notify: [
+                    ...ids.filter((id) => id !== HIDDEN_NOTIFY),
+                    ...(ids.includes(HIDDEN_NOTIFY) ? hiddenNotify : []),
+                  ],
+                });
               }}
             />
           </SettingsRow>
-        )}
-      </SettingsSection>
-      <SettingsSection title={strings.groupEmails}>
-        <SettingsRow
-          title={strings.emailEach}
-          meta={tip(strings.emailEach, strings.noticesHint(ownerIsTold))}
-          control="field"
-        >
-          <Select
-            label={strings.emailEach}
-            isLabelHidden
-            selectionMode="multiple"
-            placeholder={ownerIsTold ? strings.noticesNobody : strings.nobody}
-            items={notifyItems}
-            values={notifyValues}
-            isSearchable={members.length > 8}
-            searchLabel={strings.noticesSearch}
-            isReadOnly={isReadOnly}
-            {...(notifyError === undefined ? {} : { error: notifyError })}
-            onValuesChange={(ids) => {
-              settings.pick({
-                notify: [
-                  ...ids.filter((id) => id !== HIDDEN_NOTIFY),
-                  ...(ids.includes(HIDDEN_NOTIFY) ? hiddenNotify : []),
-                ],
-              });
-            }}
-          />
-        </SettingsRow>
-        {/* The visitor's own copy (spec 0063, AC-6318; forms fix b1): built on the server, never offered here before. */}
-        <SettingsRow
-          title={strings.copyRow}
-          meta={tip(strings.copyRow, strings.copyHelp)}
-          // Its reason in view, not only on hover, when there is nowhere to send a copy.
-          {...(hasEmailQuestion ? {} : { description: strings.copyNeedsEmail })}
-        >
-          <Switch
-            label={strings.copyRow}
-            isLabelHidden
-            isSelected={copyOn}
-            isReadOnly={isReadOnly}
-            isDisabled={!hasEmailQuestion && !copyOn}
-            onChange={(isOn) => {
-              const next = { ...draft.confirmation, on: isOn };
-              onSettingsChange({ confirmation: next }, (before) => ({ ...before, confirmation: next }));
-            }}
-          />
-        </SettingsRow>
-        {copyOn && (
-          <>
-            <SettingsRow title={strings.copySubject} control="field">
-              <Field
-                label={strings.copySubject}
-                isLabelHidden
-                value={typed.subject ?? draft.confirmation?.subject ?? ''}
-                placeholder={strings.copySubjectDefault}
-                maxLength={CONFIRMATION_SUBJECT_MAX}
-                isReadOnly={isReadOnly}
-                onChange={(subject) => {
-                  setTyped((before) => ({ ...before, subject }));
-                }}
-                onBlur={() => {
-                  leaveText('subject');
-                }}
-                onSubmit={() => {
-                  leaveText('subject');
-                }}
-              />
-            </SettingsRow>
-            <SettingsRow title={strings.copyLine} control="field">
-              <Field
-                label={strings.copyLine}
-                isLabelHidden
-                value={typed.line ?? draft.confirmation?.line ?? ''}
-                placeholder={strings.copyLineDefault}
-                maxLength={CONFIRMATION_LINE_MAX}
-                isWrapping
-                isReadOnly={isReadOnly}
-                onChange={(line) => {
-                  setTyped((before) => ({ ...before, line }));
-                }}
-                onBlur={() => {
-                  leaveText('line');
-                }}
-              />
-            </SettingsRow>
-          </>
-        )}
+          {/* The visitor's own copy (spec 0063, AC-6318; forms fix b1): built on the server, never offered here before. */}
+          <SettingsRow
+            title={strings.copyRow}
+            meta={tip(strings.copyRow, strings.copyHelp)}
+            // Its reason in view, not only on hover, when there is nowhere to send a copy.
+            {...(hasEmailQuestion ? {} : { description: strings.copyNeedsEmail })}
+          >
+            <Switch
+              label={strings.copyRow}
+              isLabelHidden
+              isSelected={copyOn}
+              isReadOnly={isReadOnly}
+              isDisabled={!hasEmailQuestion && !copyOn}
+              onChange={(isOn) => {
+                const next = { ...draft.confirmation, on: isOn };
+                onSettingsChange({ confirmation: next }, (before) => ({ ...before, confirmation: next }));
+              }}
+            />
+          </SettingsRow>
+          {copyOn && (
+            <>
+              <SettingsRow title={strings.copySubject} control="field">
+                <Field
+                  label={strings.copySubject}
+                  isLabelHidden
+                  value={typed.subject ?? draft.confirmation?.subject ?? ''}
+                  placeholder={strings.copySubjectDefault}
+                  maxLength={CONFIRMATION_SUBJECT_MAX}
+                  isReadOnly={isReadOnly}
+                  onChange={(subject) => {
+                    setTyped((before) => ({ ...before, subject }));
+                  }}
+                  onBlur={() => {
+                    leaveText('subject');
+                  }}
+                  onSubmit={() => {
+                    leaveText('subject');
+                  }}
+                />
+              </SettingsRow>
+              <SettingsRow title={strings.copyLine} control="field">
+                <Field
+                  label={strings.copyLine}
+                  isLabelHidden
+                  value={typed.line ?? draft.confirmation?.line ?? ''}
+                  placeholder={strings.copyLineDefault}
+                  maxLength={CONFIRMATION_LINE_MAX}
+                  isWrapping
+                  isReadOnly={isReadOnly}
+                  onChange={(line) => {
+                    setTyped((before) => ({ ...before, line }));
+                  }}
+                  onBlur={() => {
+                    leaveText('line');
+                  }}
+                />
+              </SettingsRow>
+            </>
+          )}
+        </Card>
       </SettingsSection>
       <SettingsSection title={strings.groupAnswers}>
-        {/* How long answers are kept is the workspace's (Settings › General); the form says it, and where to change it. */}
-        {/* The workspace's own setting, under its own name, as a field height Select (lane 3c): it was a 26px
+        <Card>
+          {/* How long answers are kept is the workspace's (Settings › General); the form says it, and where to change it. */}
+          {/* The workspace's own setting, under its own name, as a field height Select (lane 3c): it was a 26px
             button off to Settings › General among field height controls. */}
-        {keepMonths !== undefined && (
-          <KeepSubmissionsRow
-            data={data}
-            slug={slug}
-            months={keepMonths}
-            canChange={canChangeWorkspace && !isReadOnly}
-            onSaved={(message, undo) => {
-              toasts.toast({ tone: 'success', message, action: { label: strings.undo, onAction: undo } });
-            }}
-            onFailed={(message) => {
-              toasts.toast({ tone: 'danger', message });
-            }}
-          />
-        )}
-        {isPublished && (
-          // Review opens where something waits: Needs review first, else Spam; with neither, it says so instead of
-          // opening an empty list (forms fixes 2).
-          <SettingsRow
-            title={strings.spamRow}
-            meta={tip(strings.spamRow, strings.spamSummary)}
-            {...(form.reviewCount === undefined && form.spamCount === 0 ? { description: strings.spamNone } : {})}
-          >
-            {/* Review opens where something waits; with nothing caught, View spam still opens the filter, so where
-                spam goes is never a guess (lane 3c). At the field's height, as every control here. */}
-            <ButtonLink
-              href={`${formHref(slug, form.id, 'submissions')}&state=${form.reviewCount === undefined ? 'spam' : 'needs_review'}`}
-              variant="secondary"
-              size="lg"
+          {keepMonths !== undefined && (
+            <KeepSubmissionsRow
+              data={data}
+              slug={slug}
+              months={keepMonths}
+              canChange={canChangeWorkspace && !isReadOnly}
+              onSaved={(message, undo) => {
+                toasts.toast({ tone: 'success', message, action: { label: strings.undo, onAction: undo } });
+              }}
+              onFailed={(message) => {
+                toasts.toast({ tone: 'danger', message });
+              }}
+            />
+          )}
+          {isPublished && (
+            // Review opens where something waits: Needs review first, else Spam; with neither, it says so instead of
+            // opening an empty list (forms fixes 2).
+            <SettingsRow
+              title={strings.spamRow}
+              meta={tip(strings.spamRow, strings.spamSummary)}
+              {...(form.reviewCount === undefined && form.spamCount === 0 ? { description: strings.spamNone } : {})}
             >
-              {form.reviewCount !== undefined || form.spamCount > 0 ? strings.spamReview : strings.spamView}
-            </ButtonLink>
-          </SettingsRow>
-        )}
+              {/* Review opens where something waits; with nothing caught, View spam still opens the filter, so where
+                spam goes is never a guess (lane 3c). At the field's height, as every control here. */}
+              <ButtonLink
+                href={`${formHref(slug, form.id, 'submissions')}&state=${form.reviewCount === undefined ? 'spam' : 'needs_review'}`}
+                variant="secondary"
+                size="lg"
+              >
+                {form.reviewCount !== undefined || form.spamCount > 0 ? strings.spamReview : strings.spamView}
+              </ButtonLink>
+            </SettingsRow>
+          )}
+        </Card>
       </SettingsSection>
     </SettingsStack>
   );

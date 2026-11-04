@@ -17,9 +17,18 @@ import { TooltipKbdContext } from '../Tooltip/tooltip-kbd.ts';
 import { useFooterRole } from './footer-keys.ts';
 import styles from './Button.module.css';
 
-/** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours. */
+/** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours, `field` for a picker drawn as a Field's box among Fields (a form question's answer type), its `fieldName` inside. */
 export type ButtonVariant =
-  'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed' | 'link' | 'warning';
+  | 'secondary'
+  | 'primary'
+  | 'danger'
+  | 'danger-solid'
+  | 'ghost'
+  | 'ghost-danger'
+  | 'dashed'
+  | 'link'
+  | 'warning'
+  | 'field';
 
 /** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs; `public` is a hosted form's own button (Continue, OK, Send), the height of the form's fields (`size-input`, which the form raises to its public size) with room at the sides, so a short word never draws a square. */
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch' | 'public';
@@ -29,6 +38,11 @@ interface ButtonLook {
   readonly size?: ButtonSize;
   /** A trailing icon, such as `chevron-down` on a button that opens a menu. */
   readonly iconRight?: IconName;
+  /**
+   * With `variant="field"`: the name inside the box before the value ("Type"), at the width and with the divider of
+   * a Field's `prefixWidth="label"` name, so a picker in a stack of named Fields starts its value on their line.
+   */
+  readonly fieldName?: string;
   /** Keycaps shown after the label: `ESC`, `⌘↵`, or several. */
   readonly kbd?: string | readonly string[];
   /**
@@ -205,6 +219,9 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
   const swapped = shown.isSwapped ? { 'data-swapped': true } : {};
   return (
     <>
+      {variant === 'field' && look.fieldName !== undefined && (
+        <span className={styles.fieldName}>{look.fieldName}</span>
+      )}
       {isPending ? (
         <Spinner />
       ) : face.icon !== undefined ? (

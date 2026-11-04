@@ -120,23 +120,24 @@ describe('the gallery (AC-6323)', () => {
       .element(page.getByRole('radio', { name: 'Feedback' }))
       .toHaveAccessibleDescription('A rating, and why. Anonymous.');
     await expect.element(page.getByText('Start from an empty page.')).toBeVisible();
-    const group = document.querySelector('[role="radiogroup"]');
-    expect(group?.querySelectorAll('[data-tile]').length).toBe(TEMPLATES.length);
-    // Each tile is the form it makes, small, over its name and line (forms fixes 3, after Miro's template grid).
-    expect(group?.querySelectorAll('[data-tile][data-tall]').length).toBe(TEMPLATES.length);
-    expect(group?.querySelectorAll('[data-tile][data-described]').length).toBe(TEMPLATES.length);
-    await expect.element(page.getByRole('button', { name: 'Use Blank form' })).toBeVisible();
+    // Blank form on its own, then the rest under a Templates line, each a simple tile: no pictures (5 November 2026).
+    const groups = document.querySelectorAll('[role="radiogroup"]');
+    expect(groups.length).toBe(2);
+    expect(groups[0]?.querySelectorAll('[data-tile]').length).toBe(1);
+    expect(document.querySelectorAll('[role="radiogroup"] [data-tile]').length).toBe(TEMPLATES.length);
+    expect(document.querySelectorAll('[role="radiogroup"] [data-tile][data-tall]').length).toBe(0);
+    expect(document.querySelectorAll('[role="radiogroup"] [data-tile][data-described]').length).toBe(TEMPLATES.length);
+    await expect.element(page.getByRole('button', { name: 'Start Blank form' })).toBeVisible();
   });
 
-  it('shows each template as a visitor sees it, on its own card, and the arrows move the pick', async () => {
+  it('puts Blank form first on its own, then the templates under a Templates line, with no pictures', async () => {
     await open();
-    // Blank shows the empty form it makes, never a sample's words (forms fixes 3).
-    await expect.element(page.getByText('Untitled form')).toBeVisible();
-    await userEvent.keyboard('{ArrowDown}');
-    // Each card holds its own form: the Feedback form's headline and question.
-    await expect.element(page.getByText('How did we do?')).toBeVisible();
-    await expect.element(page.getByText('How was it?')).toBeVisible();
-    await expect.element(page.getByRole('button', { name: 'Use Feedback' })).toBeVisible();
+    await expect.element(page.getByRole('radiogroup', { name: 'Templates' })).toBeVisible();
+    await expect.element(page.getByText('Templates', { exact: true })).toBeVisible();
+    // No form is drawn on a tile: Blank's own empty form and the samples' words are gone.
+    expect(document.body.textContent).not.toContain('How did we do?');
+    await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
+    await expect.element(page.getByRole('button', { name: 'Start Feedback' })).toBeVisible();
   });
 
   it('makes a draft from the picked template on Use and hands it back', async () => {
@@ -144,14 +145,14 @@ describe('the gallery (AC-6323)', () => {
     await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
     // Picking alone makes nothing.
     expect(run.asked).toEqual([]);
-    await userEvent.click(page.getByRole('button', { name: 'Use Feedback' }).element());
+    await userEvent.click(page.getByRole('button', { name: 'Start Feedback' }).element());
     await expect.poll(() => run.made.map((form) => form.id)).toEqual([MADE.id]);
     expect(run.asked).toEqual([{ templateId: 'feedback' }]);
   });
 
   it('uses a template on Enter, as Use does (forms fixes 3)', async () => {
     const run = await open();
-    await userEvent.keyboard('{ArrowDown}');
+    await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
     await expect.element(page.getByRole('radio', { name: 'Feedback' })).toHaveFocus();
     await userEvent.keyboard('{Enter}');
     await expect.poll(() => run.asked).toEqual([{ templateId: 'feedback' }]);
@@ -172,7 +173,7 @@ describe('the gallery (AC-6323)', () => {
         }),
     });
     await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
-    await userEvent.click(page.getByRole('button', { name: 'Use Feedback' }).element());
+    await userEvent.click(page.getByRole('button', { name: 'Start Feedback' }).element());
     // The status names the template, so the person knows which one is being made, and it is announced politely.
     await expect.element(page.getByText('Making your Feedback…')).toBeVisible();
     await expect.element(page.getByRole('radio', { name: 'Feedback' })).toBeEnabled();
@@ -215,7 +216,7 @@ describe('the gallery (AC-6323)', () => {
   it('lets Cancel out of a create that never settles', async () => {
     // A request that hangs must not be a modal only a page reload escapes.
     const run = await open({ create: () => new Promise<FormView>(() => undefined) });
-    await userEvent.click(page.getByRole('button', { name: 'Use Blank form' }).element());
+    await userEvent.click(page.getByRole('button', { name: 'Start Blank form' }).element());
     await expect.element(page.getByText('Making your Blank form…')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Cancel' }).element());
     expect(run.closedCount()).toBe(1);
@@ -229,16 +230,14 @@ describe('the gallery (AC-6323)', () => {
     expect(run.asked).toEqual([]);
   });
 
-  it('draws each template as the form it makes, on a phone too, in both themes', async () => {
+  it('draws Blank form and the templates as simple tiles, on a phone too, in both themes', async () => {
     for (const width of [1280, 390] as const) {
       for (const theme of ['light', 'dark'] as const) {
         await page.viewport(width, width === 390 ? 844 : 900);
         document.documentElement.dataset.theme = theme;
         await open();
-        await userEvent.keyboard('{ArrowDown}');
-        await expect.element(page.getByRole('button', { name: 'Use Feedback' })).toBeVisible();
-        // Every card shows its own form, at every width (forms fixes 3).
-        await expect.element(page.getByText('How did we do?')).toBeVisible();
+        await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
+        await expect.element(page.getByRole('button', { name: 'Start Feedback' })).toBeVisible();
         await new Promise((resolve) => globalThis.setTimeout(resolve, 500));
         await page.screenshot({ path: `.vitest/shots/gallery-${String(width)}-${theme}.png` });
         shown?.unmount();

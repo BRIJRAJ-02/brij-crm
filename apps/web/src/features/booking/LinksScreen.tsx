@@ -5,8 +5,10 @@
 import { isDataError, type BookingPageView, type DataLayer, type ManagedPageView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
+  BookingPagePicture,
   Button,
   focusLater,
+  linkHue,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -87,6 +89,24 @@ function factsOf(page: BookingPageView): readonly string[] {
     ...(page.scheduleId === null ? [] : [page.scheduleName]),
     ...(page.location.type === 'video' ? [] : [strings.locationChip[page.location.type]]),
   ];
+}
+
+/** The weekdays in a page's weekly hours, Monday first. */
+const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+/**
+ * A page's picture on its card (5 November 2026, the forms list's new card worn here too): its title and lengths
+ * over a month whose open days are the ones its weekly hours book, in its colour.
+ */
+function pictureOf(page: BookingPageView) {
+  return (
+    <BookingPagePicture
+      title={page.title}
+      lengths={page.durations.length === 0 ? '' : strings.minutesChoice(page.durations)}
+      openDays={WEEK.map((day) => page.availability.weekly[day].length > 0)}
+      hue={linkHue(page.id)}
+    />
+  );
 }
 
 /** The cards, New booking page, and each card's switch, Copy link, Open and menu, read from the data layer's held list. */
@@ -180,6 +200,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       ...(isViewOnly ? {} : { href: pageEditorHref(slug, page.id) }),
       // No colour dot (the bookings critique, A22, B-16): a dot before the title read as a status. The state is a
       // badge, as on a form's card, and the switch.
+      // What the page looks like to a guest, small: its month, its open days in its colour.
+      picture: pictureOf(page),
       facts: factsOf(page),
       // The link Copy link copies, as a path.
       ...(isDraft ? {} : { address: publicBookingPath(page) }),
@@ -216,6 +238,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
             },
           }),
       ...(isDraft ? {} : { copyValue: publicBookingUrl(page) }),
+      // Beside the link it copies, an icon: the foot holds the address, Copy, Open and ⋯ on one quiet line.
+      isCopyQuiet: true,
       actions: (
         <>
           {/* Off, there is nothing to open: the muted title and the switch say why. */}
@@ -294,6 +318,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
             ),
           })}
       empty={{ title: strings.emptyTitle, icon: 'calendar-clock' }}
+      hasPictures
       errorTitle={strings.failedTitle}
       onRetry={() => {
         data.bookingPages.view(slug).reload();
@@ -354,6 +379,7 @@ export function LinksPending() {
       status="loading"
       cards={[]}
       empty={{ title: strings.emptyTitle, icon: 'calendar-clock' }}
+      hasPictures
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}
     />

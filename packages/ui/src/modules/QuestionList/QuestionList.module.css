@@ -506,6 +506,21 @@
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* With its own head, the open card's head and body share one inset (the owner, 5 November 2026: "keep it
+     aligned"): the grip starts and the chevron ends on the body's boxes' edges, and the body's rows sit space-12
+     apart, with space-12 above the first and below the last. */
+  .row[data-open-head] .head {
+    padding-inline: var(--space-16);
+  }
+
+  .row[data-open-head] .handle {
+    inline-size: auto;
+  }
+
+  .row[data-open-head] .body {
+    padding-block: var(--space-12);
+  }
+
   /* A row that lets its gap out keeps its head inside its corners itself (it no longer clips). */
   .row[data-gap]:not([data-kind='step']) .head {
     border-radius: inherit;
@@ -553,7 +568,7 @@
     }
 
     .row[data-open-head] .head {
-      padding-inline-start: var(--space-4);
+      padding-inline-start: var(--space-16);
     }
 
     .row[data-open-head] .head:hover {

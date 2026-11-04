@@ -6,6 +6,7 @@
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
 import { ROLES as BUILT_IN_ROLES } from '@crm/contracts/roles';
+import { formPictureOf } from '@crm/contracts/forms';
 import type {
   InsightPages,
   InsightPeriod,
@@ -1440,6 +1441,8 @@ function toFormSummary(form: FormView): FormSummary {
     ...(form.lastSubmissionAt === undefined ? {} : { lastSubmissionAt: form.lastSubmissionAt }),
     submissionCount: form.submissionCount,
     ...(form.questionCount === undefined ? {} : { questionCount: form.questionCount }),
+    // The card's picture from the draft the answer carries, so a saved edit shows on its card at once.
+    picture: formPictureOf(form.draft),
     updatedAt: form.updatedAt,
   };
 }
@@ -7994,6 +7997,7 @@ export function createDataLayer({
                 spamCount: 0,
                 submissionCount: 0,
                 ...(source.questionCount === undefined ? {} : { questionCount: source.questionCount }),
+                ...(source.picture === undefined ? {} : { picture: source.picture }),
                 updatedAt: new Date().toISOString(),
               };
         return formLists.write(workspace, {

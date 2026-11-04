@@ -55,8 +55,9 @@ export const strings = {
   mustAnswer: 'Visitors must answer',
   /** The question card's footer switch (critique c: one word everywhere). */
   required: 'Required',
-  /** The type menu at the start of an open question's head. */
+  /** The type box, the first row of an open question's body, and its name inside the box. */
   typeMenu: (type: string) => `${type}, answer type`,
+  typeName: 'Type',
   /** The groups the type menu lists (critique c: a short, grouped list, picked first). */
   typeGroups: {
     text: 'Text',
@@ -66,7 +67,7 @@ export const strings = {
     presets: 'Ready-made',
   },
   /** The placeholder, edited in place under the question, quiet. */
-  placeholderInline: 'Placeholder text (optional)',
+  placeholderInline: 'Optional',
   /** An open question's one ⋯. */
   questionActions: (name: string) => `More for ${name}`,
   keepWithAnswer: 'Keep with the answer',

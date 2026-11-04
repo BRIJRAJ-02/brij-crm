@@ -134,6 +134,38 @@ export function ReadyPanel({
   // the middle gives way to an ellipsis when the field is short.
   const cut = link.lastIndexOf('/', link.length - 2) + 1;
   const hasTail = cut > link.indexOf('//') + 2 && cut < link.length;
+  const linkRow = (
+    <div
+      className={styles.link}
+      role="group"
+      {...(isShare ? { 'aria-label': linkLabel } : { 'aria-labelledby': linkId })}
+      data-probe="edge row"
+    >
+      <span ref={linkRef} className={styles.address}>
+        {hasTail ? (
+          <>
+            <span className={styles.addressStart}>{link.slice(0, cut)}</span>
+            <span className={styles.addressEnd}>{link.slice(cut)}</span>
+          </>
+        ) : (
+          <span className={styles.addressStart}>{link}</span>
+        )}
+      </span>
+      <CopyButton
+        value={link}
+        label={strings.copyLink}
+        announcement={strings.linkCopied}
+        size="lg"
+        variant={copyVariant}
+        sourceRef={linkRef}
+      />
+      {!isShare && canShare && (
+        <Button icon="share" size="lg" onPress={share}>
+          {strings.share}
+        </Button>
+      )}
+    </div>
+  );
   return (
     <section
       className={styles.root}
@@ -156,84 +188,75 @@ export function ReadyPanel({
           </div>
         </div>
       )}
-      {isShare && (
-        <div className={styles.hero}>
-          <QrCode ref={codeRef} value={link} label={qrLabel} size="sm" />
-        </div>
-      )}
       {!isShare && (
         <span id={linkId} className={styles.linkLabel} data-probe="edge">
           {linkLabel}
         </span>
       )}
-      <div
-        className={styles.link}
-        role="group"
-        {...(isShare ? { 'aria-label': linkLabel } : { 'aria-labelledby': linkId })}
-        data-probe="edge row"
-      >
-        <span ref={linkRef} className={styles.address}>
-          {hasTail ? (
-            <>
-              <span className={styles.addressStart}>{link.slice(0, cut)}</span>
-              <span className={styles.addressEnd}>{link.slice(cut)}</span>
-            </>
-          ) : (
-            <span className={styles.addressStart}>{link}</span>
-          )}
-        </span>
-        <CopyButton
-          value={link}
-          label={strings.copyLink}
-          announcement={strings.linkCopied}
-          size={isShare ? 'md' : 'lg'}
-          variant={copyVariant}
-          sourceRef={linkRef}
-        />
-        {!isShare && canShare && (
-          <Button icon="share" size="lg" onPress={share}>
-            {strings.share}
-          </Button>
-        )}
-      </div>
-      {isShare && (
-        <div className={styles.ways} role="group" aria-label={strings.sendLink}>
-          <ButtonLink
-            icon="mail"
-            href={`mailto:?subject=${encodeURIComponent(shareTitle ?? title ?? link)}&body=${encodeURIComponent(link)}`}
-            isExternal
-          >
-            {strings.email}
-          </ButtonLink>
-          <ButtonLink icon="message-square" href={`https://wa.me/?text=${encodeURIComponent(link)}`} isExternal>
-            {strings.whatsapp}
-          </ButtonLink>
-          {canShare && (
-            <Button icon="share" onPress={share}>
-              {strings.more}
-            </Button>
-          )}
-          {onDownloadQr !== undefined && (
-            <MenuTrigger>
-              <Button icon="download" isPending={saving !== undefined} label={strings.qrCodeName}>
-                {strings.qrCode}
-              </Button>
-              <Menu
-                label={strings.downloadQr}
-                onAction={(key) => {
-                  download(key === 'svg' ? 'svg' : 'png');
-                }}
+      {isShare ? (
+        <div className={styles.body}>
+          <div className={styles.main}>
+            {linkRow}
+            <div className={styles.ways} role="group" aria-label={strings.sendLink}>
+              {/* The link row's height, so the card's controls are one size (the owner: "same size and shape"). */}
+              <ButtonLink
+                icon="mail"
+                size="lg"
+                href={`mailto:?subject=${encodeURIComponent(shareTitle ?? title ?? link)}&body=${encodeURIComponent(link)}`}
+                isExternal
               >
-                <MenuItem id="png" icon="download">
-                  {strings.downloadPng}
-                </MenuItem>
-                <MenuItem id="svg" icon="download">
-                  {strings.downloadSvg}
-                </MenuItem>
-              </Menu>
-            </MenuTrigger>
-          )}
+                {strings.email}
+              </ButtonLink>
+              <ButtonLink
+                icon="message-square"
+                size="lg"
+                href={`https://wa.me/?text=${encodeURIComponent(link)}`}
+                isExternal
+              >
+                {strings.whatsapp}
+              </ButtonLink>
+              {canShare && (
+                <Button icon="share" size="lg" onPress={share}>
+                  {strings.more}
+                </Button>
+              )}
+            </div>
+          </div>
+          {/* The code on a light tile of its own, its download right under it, so the code and its file are one thing. */}
+          <div className={styles.code}>
+            <div className={styles.tile} data-theme="light">
+              <QrCode ref={codeRef} value={link} label={qrLabel} size="sm" ground="clear" />
+            </div>
+            {onDownloadQr !== undefined && (
+              <MenuTrigger>
+                <Button
+                  icon="download"
+                  iconRight="chevron-down"
+                  variant="ghost"
+                  isPending={saving !== undefined}
+                  label={strings.downloadName}
+                >
+                  {strings.download}
+                </Button>
+                <Menu
+                  label={strings.downloadQr}
+                  onAction={(key) => {
+                    download(key === 'svg' ? 'svg' : 'png');
+                  }}
+                >
+                  <MenuItem id="png" icon="download">
+                    {strings.downloadPng}
+                  </MenuItem>
+                  <MenuItem id="svg" icon="download">
+                    {strings.downloadSvg}
+                  </MenuItem>
+                </Menu>
+              </MenuTrigger>
+            )}
+          </div>
         </div>
+      ) : (
+        linkRow
       )}
       {isShare && onward !== undefined && (
         <AriaLink

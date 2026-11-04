@@ -3,6 +3,7 @@ import { Link as AriaLink } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import type { Hue } from '../../hue.ts';
@@ -58,13 +59,26 @@ export interface LinkCardProps {
   readonly toggle?: LinkCardToggle;
   /** The public link Copy link copies. Left out (a form not published yet: there is nothing to copy), no Copy link. */
   readonly copyValue?: string;
+  /** Copy link as a quiet ghost icon (named by its label and tooltip) rather than a labelled button: a card with a picture. */
+  readonly isCopyQuiet?: boolean;
   /** Open and the ··· menu: ghost icon Buttons at the footer's end, 8px apart. */
   readonly actions?: ReactNode;
+  /**
+   * What the link opens, drawn small on a stage across the card's top (5 November 2026, the owner: "make these cards
+   * look much prettier"): a form's first questions (`HostedFormPreview size="thumbnail"`), a booking page's month
+   * (`BookingPagePicture`). It sits on a sheet that lifts on hover; it is hidden from assistive tech and takes no
+   * press of its own, so a press on it opens the card.
+   */
+  readonly picture?: ReactNode;
+  /** The link's state as a dot and a word at the start of the facts line ("Live", "Draft", "Paused"). */
+  readonly status?: { readonly label: string; readonly hue: Hue };
+  /** The footer's start, in the address's place: one quiet control of the card's own (a form's "12 submissions"). */
+  readonly lead?: ReactNode;
 }
 
 /**
  * One link as a card (spec 0025's links, spec 0023's forms; the owner's card grid, 20 October 2026; restyled
- * 4 November 2026): a small colour dot and the title (a link over the whole card to its editor) with a state
+ * 4 November 2026; a picture of what it opens across its top, 5 November 2026): a small colour dot and the title (a link over the whole card to its editor) with a state
  * badge, the on or off switch at the top end, the facts, then one footer line with the public link at its start
  * and Copy link and the card's actions at its end. The controls sit above the card's link, so each does its own
  * thing and stays in the tab order after the title.
@@ -82,7 +96,11 @@ export function LinkCard({
   isPending = false,
   toggle,
   copyValue,
+  isCopyQuiet = false,
   actions,
+  picture,
+  status,
+  lead,
 }: LinkCardProps) {
   const titleId = useId();
   const addressRef = useRef<HTMLParagraphElement>(null);
@@ -97,7 +115,15 @@ export function LinkCard({
       data-hue={edge}
       data-off={isOff || undefined}
       data-pending={isPending || undefined}
+      data-pictured={picture === undefined ? undefined : ''}
     >
+      {picture !== undefined && (
+        // What the link opens, small: a picture only (the title names the card), so it is hidden and inert, and a
+        // press on it lands on the title's link under it.
+        <div className={styles.stage} aria-hidden="true" inert>
+          <div className={styles.sheet}>{picture}</div>
+        </div>
+      )}
       <div className={styles.body}>
         <div className={styles.head}>
           <div className={styles.titleRow}>
@@ -118,12 +144,19 @@ export function LinkCard({
           </div>
           {toggle !== undefined && <CardSwitch toggle={toggle} isPending={isPending} />}
         </div>
-        {facts.length > 0 && <p className={styles.facts}>{facts.join(' · ')}</p>}
+        {(facts.length > 0 || status !== undefined) && (
+          <p className={styles.facts}>
+            {status !== undefined && <StatusDot hue={status.hue}>{status.label}</StatusDot>}
+            {facts.length > 0 && <span className={styles.factsText}>{facts.join(' · ')}</span>}
+          </p>
+        )}
       </div>
-      {(hasFoot || address !== undefined) && (
+      {(hasFoot || address !== undefined || lead !== undefined) && (
         <div className={styles.foot} role="group" aria-label={strings.actionsFor(title)}>
           {/* The public link sits where it is copied from, so the card spends one line on it, not two. */}
-          {address !== undefined ? (
+          {lead !== undefined ? (
+            <div className={styles.lead}>{lead}</div>
+          ) : address !== undefined ? (
             <p ref={addressRef} className={styles.address}>
               {address}
             </p>
@@ -132,14 +165,29 @@ export function LinkCard({
           )}
           {copyValue !== undefined && (
             <span className={styles.control}>
-              <CopyButton
-                value={copyValue}
-                label={strings.copyLink}
-                announcement={strings.linkCopied}
-                isDisabled={isPending}
-                size="lg"
-                sourceRef={addressRef}
-              />
+              {isCopyQuiet ? (
+                <Tooltip content={strings.copyLink}>
+                  <CopyButton
+                    value={copyValue}
+                    label={strings.copyLink}
+                    announcement={strings.linkCopied}
+                    isDisabled={isPending}
+                    size="lg"
+                    variant="ghost"
+                    isIconOnly
+                    sourceRef={addressRef}
+                  />
+                </Tooltip>
+              ) : (
+                <CopyButton
+                  value={copyValue}
+                  label={strings.copyLink}
+                  announcement={strings.linkCopied}
+                  isDisabled={isPending}
+                  size="lg"
+                  sourceRef={addressRef}
+                />
+              )}
             </span>
           )}
           {actions !== undefined && actions !== null && actions !== false && (
@@ -173,10 +221,11 @@ function CardSwitch({ toggle, isPending }: { readonly toggle: LinkCardToggle; re
   );
 }
 
-/** A card standing in while the grid loads: the same shape, its lines as skeletons. */
-export function LinkCardSkeleton() {
+/** A card standing in while the grid loads: the same shape, its lines as skeletons, with the picture's stage when the cards have one. */
+export function LinkCardSkeleton({ hasPicture = false }: { readonly hasPicture?: boolean }) {
   return (
     <div className={styles.root} data-loading="" aria-hidden="true">
+      {hasPicture && <div className={styles.stage} />}
       <div className={styles.body}>
         <span className={styles.skeletonTitle}>
           <Skeleton width="medium" />

@@ -236,6 +236,11 @@
     grid-template-columns: repeat(auto-fill, minmax(min(var(--size-column), 100%), 1fr));
   }
 
+  /* Full (`tileWidth="full"`): one tile a row at the grid's whole width, a column of choices. */
+  .root[data-full] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .tile[data-described][data-tall] .name {
     grid-row: 2;
     align-self: start;

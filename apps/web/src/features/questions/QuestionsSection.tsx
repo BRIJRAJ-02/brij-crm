@@ -1181,6 +1181,24 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         if (question === undefined) return null;
         return (
           <>
+            {/* Its answer type first, a box like the two under it with its name inside (the owner, 5 November 2026). */}
+            <TypeRow
+              question={question}
+              allowed={allowed}
+              isLocked={isLocked(question)}
+              {...(props.locked === undefined ? {} : { lockReason: props.locked.reason })}
+              isReadOnly={isReadOnly}
+              onType={(type) => {
+                onChange((before) =>
+                  changeQuestion(
+                    before,
+                    id,
+                    typeChange(question, [...attributes, ...(props.deal?.items ?? [])], type),
+                    liveIds,
+                  ),
+                );
+              }}
+            />
             <QuestionHead
               question={question}
               isReadOnly={isReadOnly}
@@ -1226,32 +1244,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           </>
         );
       }}
-      // The open card's head (forms fixes 3, after Typeform's and Sprig's cards): its answer type as one labelled
-      // menu, then Required and the ⋯ at its end; the words are the body's first field, full width.
+      // The open card's head (forms fixes 3, after Typeform's and Sprig's cards): the grip, then Required, the ⋯ and
+      // the chevron at its end; the type and the words are the body's first boxes, full width (the owner, 5 November
+      // 2026). Nothing at its start: the words sit right under it, so a second name above them only repeated them.
       actionsIn="head"
-      renderOpenHead={(id) => {
-        const question = questions.find((each) => each.id === id);
-        if (question === undefined) return null;
-        return (
-          <TypeRow
-            question={question}
-            allowed={allowed}
-            isLocked={isLocked(question)}
-            {...(props.locked === undefined ? {} : { lockReason: props.locked.reason })}
-            isReadOnly={isReadOnly}
-            onType={(type) => {
-              onChange((before) =>
-                changeQuestion(
-                  before,
-                  id,
-                  typeChange(question, [...attributes, ...(props.deal?.items ?? [])], type),
-                  liveIds,
-                ),
-              );
-            }}
-          />
-        );
-      }}
+      renderOpenHead={() => <></>}
       renderFooterStart={(id) => {
         if (stepOfRow(id) !== undefined) return null;
         const question = questions.find((each) => each.id === id);
@@ -1532,7 +1529,9 @@ function QuestionHead({ question, isReadOnly, isJustAdded, problem, onLabel, onS
         // A consent's label is its exact wording, shown beside the tick box (spec 0023, AC-1053).
         label={isConsent ? strings.consentWording : strings.question}
         isLabelHidden
-        size="lg"
+        // Its name inside the box, as the Placeholder's is under it (the owner, 5 November 2026).
+        prefix={isConsent ? strings.consentWording : strings.question}
+        prefixWidth="label"
         isWrapping
         placeholder={
           isConsent
@@ -1607,7 +1606,10 @@ function QuestionEditor({
         <Field
           ref={descriptionRef}
           label={strings.description}
-          size="sm"
+          isLabelHidden
+          // Its name inside the box, every field in the card one size (the owner, 5 November 2026).
+          prefix={strings.description}
+          prefixWidth="label"
           isWrapping
           placeholder={strings.descriptionPlaceholder}
           value={question.description}
@@ -1669,7 +1671,9 @@ function QuestionEditor({
       {!NO_PLACEHOLDER_TYPES.includes(question.answerType) && (
         <Field
           label={strings.placeholder}
-          size="sm"
+          isLabelHidden
+          prefix={strings.placeholder}
+          prefixWidth="label"
           placeholder={strings.placeholderInline}
           value={question.placeholder ?? ''}
           maxLength={80}
@@ -1721,28 +1725,28 @@ interface TypeRowProps {
 }
 
 /**
- * An open question's answer type, at the start of its head (forms fixes 3, after Typeform's type select): the type's
- * icon, name and a chevron on a secondary button, named "<type>, answer type", opening the grouped type menu. It was a
- * ghost menu squeezed beside the question's words.
+ * An open question's answer type, the first row of its body (the owner, 5 November 2026: "the field type inside"): a
+ * Field's box with its name inside ("Type"), then the type's icon and name and the chevrons, the whole box the
+ * trigger of the grouped type menu, named "<type>, answer type". It was a secondary button in the card's head.
  */
 function TypeRow({ question, allowed, isLocked, lockReason, isReadOnly, onType }: TypeRowProps) {
   const typeName = strings.answerTypes[CHOICE_FAMILY.has(question.answerType) ? 'choice' : question.answerType];
+  const isFixed = isReadOnly || isLocked;
   const typeButton = (
     <Button
-      variant="secondary"
-      size="sm"
+      variant="field"
+      fieldName={strings.typeName}
       icon={TYPE_ICONS[question.answerType]}
-      iconRight="chevrons-up-down"
-      // On a phone the icon and chevron stand alone, so Required and the ⋯ keep their place in the head.
-      isLabelCollapsible
+      // A type that can't change reads as a read only Field: no chevrons offering a menu.
+      {...(isFixed ? {} : { iconRight: 'chevrons-up-down' as const })}
       label={strings.typeMenu(typeName)}
-      isDisabled={isReadOnly || isLocked}
+      isDisabled={isFixed}
     >
       {typeName}
     </Button>
   );
   if (isLocked && lockReason !== undefined) return <Tooltip content={lockReason}>{typeButton}</Tooltip>;
-  if (isReadOnly || isLocked) return typeButton;
+  if (isFixed) return typeButton;
   return (
     <TypeMenu label={strings.answerType} allowed={allowed} current={question.answerType} onPick={onType}>
       {typeButton}

@@ -73,9 +73,11 @@ interface ChoiceTilesBase {
    * Only read with `showsDescription`, and ignored without it. `wide` lays the tiles out as a list to scan: each at
    * least a column wide, its mark beside both its name and its line rather than above the line. For a long run of
    * choices read by name (the form template picker, 12 of them, 4 November 2026: "Dont need thumbnails here"), where
-   * narrow tiles broke names mid word and stacked the line under the mark.
+   * narrow tiles broke names mid word and stacked the line under the mark. `full` lays the same tiles one to a row at
+   * the grid's whole width: a short run of choices stacked as a column beside what they change (the Share tab's three
+   * embed placements over their switches, the site preview beside them, the owner, 5 November 2026).
    */
-  readonly tileWidth?: 'wide';
+  readonly tileWidth?: 'wide' | 'full';
 }
 
 /** A choice grid that keeps one tile chosen. */
@@ -338,7 +340,8 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
         className={styles.root}
         role="group"
         aria-label={label}
-        data-wide={(showsDescription && props.tileWidth === 'wide') || undefined}
+        data-wide={(showsDescription && props.tileWidth !== undefined) || undefined}
+        data-full={(showsDescription && props.tileWidth === 'full') || undefined}
       >
         {tiles.map((tile) => (
           <ActionTile
@@ -347,7 +350,7 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
             onAction={onAction}
             showsDescription={showsDescription}
             keepsPicture={keepsPicture}
-            isWide={props.tileWidth === 'wide'}
+            isWide={props.tileWidth !== undefined}
           />
         ))}
       </div>
@@ -365,7 +368,8 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
     <RadioGroup
       className={styles.root}
       data-large={isLarge || undefined}
-      data-wide={(showsDescription && props.tileWidth === 'wide') || undefined}
+      data-wide={(showsDescription && props.tileWidth !== undefined) || undefined}
+      data-full={(showsDescription && props.tileWidth === 'full') || undefined}
       {...(isLabelVisible ? { 'aria-labelledby': labelId } : { 'aria-label': label })}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
@@ -378,7 +382,7 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
             showsDescription={showsDescription}
             keepsPicture={keepsPicture}
             isLarge={isLarge}
-            isWide={props.tileWidth === 'wide'}
+            isWide={props.tileWidth !== undefined}
             autoFocus={tile.id === focusId}
             onConfirm={props.onConfirm}
           />

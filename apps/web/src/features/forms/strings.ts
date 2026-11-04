@@ -31,10 +31,13 @@ export const strings = {
   // The template gallery (spec 0063, AC-6323; 5 November 2026: pick one, see it beside the list, then use it).
   galleryTitle: 'Start a form',
   /** The gallery's one primary, naming the template it makes. */
-  galleryUse: (name: string) => `Use ${name}`,
+  galleryStart: 'Start',
+  /** The Start button's full name, so a screen reader hears which form it makes. */
+  galleryStartWith: (name: string) => `Start ${name}`,
   /** Said in the title bar, and announced politely, while a template is being turned into a draft. */
   galleryMakingOne: (name: string) => `Making your ${name}…`,
   /** What the blank template is called in that line, when the tiles never loaded and only Blank is reachable. */
+  galleryTemplates: 'Templates',
   galleryBlankName: 'blank form',
   galleryFailedTitle: 'The templates didn’t load',
   /** Read by screen readers while the tiles are on their way; the tile and lines only show after the loading delay. */
@@ -63,12 +66,16 @@ export const strings = {
   notAccepting: 'Paused',
   /** The list card's state badge for a form never published (lane 3c: a badge, never a greyed title). */
   draftBadge: 'Draft',
+  /** The list card's state for a published form taking submissions (5 November 2026: a dot and a word). */
+  liveStatus: 'Live',
+  /** The list card's mark beside the count when a submission came since the reader last looked. */
+  newBadge: 'New',
+  /** The count link's name, its visible words first: "12 submissions to Contact us". */
+  submissionsOf: (count: string, name: string) => `${count} to ${name}`,
+  /** A card's picture of a form whose row carries none: the hosted form's default button. */
+  sendButton: 'Send',
   /** The card's meta line (lane 3c, Klaviyo's list): "5 questions · edited 2h ago · 4 submissions". */
   editedAgo: (when: string) => `edited ${when}`,
-  /** The list's sort (lane 3c), the record lists' sort chip: by when it changed, or by name. */
-  sortLabel: 'Sort forms',
-  sortUpdated: 'Updated',
-  sortName: 'Name',
   /** Turning a form off from the list asks first: it ends something (lane 3c). */
   pauseForm: 'Pause',
   resumeForm: 'Resume',
@@ -907,8 +914,6 @@ export const strings = {
   analyticsAnswersLatest: (shown: string) => `From the latest ${shown} submissions.`,
   analyticsNoAnswers: 'Nobody answered this yet',
   analyticsAnswersOf: (question: string) => `Answers to ${question}`,
-  analyticsLatestOf: (question: string) => `Latest answers to ${question}`,
-  analyticsLatest: 'Latest answers',
   analyticsAnswer: 'Answer',
   analyticsShare: 'Share',
   analyticsBar: 'Share of responses',

@@ -204,6 +204,16 @@
     min-inline-size: var(--size-column-min);
   }
 
+  /* A name inside the box: one width for every field in the stack, so their values line up, closed by a hairline
+     divider with the box's gap on either side (the owner, 5 November 2026). Button's field variant draws the same. */
+  .root[data-prefix-width='label'] .prefix[data-text] {
+    flex: none;
+    align-self: center;
+    inline-size: var(--size-column-min);
+    padding-inline-end: var(--space-6);
+    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
   .lock {
     display: inline-flex;
     color: var(--text-tertiary);
@@ -327,19 +337,27 @@
     box-shadow: none;
   }
 
-  /* A page's own title (a note's): no box, border, fill or ring, in the note
-     title type, so it reads as the page's heading and not as a form. The caret
-     marks focus, as in a document. Read only it stays plain text (after the
+  /* A page's own title (a note's): no box, border or fill at rest, in the note
+     title type, so it reads as the page's heading and not as a form; under the
+     pointer a soft fill, and focused the field's ring (rules at the end). Read only it stays plain text (after the
      read only box it undoes), and a refusal shows as the line under it. */
   .root[data-variant='title'] .box {
     block-size: auto;
     min-block-size: 0;
-    padding: 0;
+    /* A little room around the words, given back by the margin, so a hover's fill frames them without moving them. */
+    margin-inline: calc(-1 * var(--space-6));
+    padding: var(--space-2) var(--space-6);
     border: none;
-    border-radius: 0;
+    border-radius: var(--radius-md);
     background: transparent;
     box-shadow: none;
+    outline: var(--border-width-hairline) solid transparent;
+    outline-offset: calc(-1 * var(--border-width-hairline));
     cursor: text;
+    transition:
+      outline-color var(--duration-hover) var(--ease-hover),
+      background-color var(--duration-hover) var(--ease-hover),
+      box-shadow var(--duration-hover) var(--ease-hover);
   }
 
   /* Underline: a public form's one large answer (One at a time, Typeform's way): no box or fill, a thick line in
@@ -477,5 +495,19 @@
       overflow: clip;
       min-block-size: 0;
     }
+  }
+
+  /* Editable, it says so under the pointer and while typed in: a soft fill, as Notion's and Linear's titles do
+     (the owner, 5 November 2026: "this doesn't look editable"). */
+  .root[data-variant='title']:not([data-readonly]) .box:hover {
+    outline-color: var(--border-subtle);
+    background: var(--surface-hover);
+  }
+
+  /* Typed in, it is a field: the raised fill and the accent ring every field wears. */
+  .root[data-variant='title']:not([data-readonly]) .box:focus-within {
+    outline-color: var(--accent-line);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-focus);
   }
 }

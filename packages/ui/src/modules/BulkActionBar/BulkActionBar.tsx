@@ -46,9 +46,11 @@ export interface BulkActionBarProps {
   /**
    * `inline` (the default) sits where it is put; `floating` floats centred
    * over the bottom of its nearest positioned container, above the rows: the
-   * DataGrid's frame, through its `floatingBar`.
+   * DataGrid's frame, through its `floatingBar`; `footer` centres it in a
+   * page's sticky foot (PreviewFooter), for a list that is not a DataGrid
+   * (Forms' Submissions).
    */
-  readonly placement?: 'inline' | 'floating';
+  readonly placement?: 'inline' | 'floating' | 'footer';
   /**
    * False sends it away: it sinks out (at once after a key), inert, keeping
    * what it last said, then calls `onLeft` and draws nothing. Keep it

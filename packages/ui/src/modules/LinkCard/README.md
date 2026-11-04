@@ -26,6 +26,16 @@ On 4 November 2026 the owner's team said the cards "look like AI". The thick col
 - The public link moved into the footer, at its start, beside Copy link: one line fewer, and the link sits where it is copied from.
 - The padding is even on both sides now that no stripe needs room.
 
+On 5 November 2026 the owner asked again, of the forms list: "Can we make these cards look much prettier", and then "looks AI generated bland". Every card was the same three lines of grey text over a row of outlined buttons. A card can now carry a picture of what it opens:
+
+- `picture` draws it on a stage across the card's top: a sheet the width of half a panel on surface-sunken (faintly tinted with the link's colour when it has one), cut at the stage's foot, lifting space-4 on hover. A form's card draws its own form there (`HostedFormPreview size="thumbnail"`: its headline and first questions, in its own Light or Dark), so the cards stop looking alike; a booking page's card draws its month (`BookingPagePicture`).
+- `status` puts the state first on the facts line as a dot and a word ("Live", "Draft", "Paused"), in place of a badge mixing states with news.
+- `lead` gives the footer's start to one control of the card's own (a form's "24 submissions", a draft's Edit), and `isCopyQuiet` makes Copy link a ghost icon with a tooltip, so the foot holds one word link and two quiet icons instead of three outlined buttons.
+
+Why a variant and not a new card: the link over the whole card, the switch, the footer and the states are all LinkCard's, and the booking pages list wears the same picture.
+
+References (Mobbin, 5 November 2026): Flodesk's forms grid (screen 8fa09a9c-094f-4371-9bd3-fa1c4ef0b7d4) gave the picture of the form itself on a tinted stage over a quiet name and count; Jira's forms (f19dd390-f093-459e-b969-53aff80b390a) the same layout with a generic sheet, which is what the real form replaces; Aboard's forms list (513eca59-3661-4831-97b3-a35b2d7e6632) the counts as quiet words, not buttons; Tally's list (39fe800c-a785-43d8-be2c-0379f9ba4211) "Draft" and the count as one quiet word each.
+
 References (Mobbin, 20 October 2026):
 
 - Calendly's event types gave the title over its facts, and a real "Copy link" button beside a quiet open icon and the ··· menu.
@@ -71,9 +81,13 @@ References (Mobbin, 20 October 2026):
 - **`facts`:** one line of muted text under the title, joined with " · " ("30 min · One on one"; "12 submissions · 2 spam"; "No submissions yet").
 - **`address`:** the public link as a path, muted, at the footer's start, truncated first when the card is narrow ("/b/k3x9", "/f/contact-us"). It can be selected, and Copy link selects it when the clipboard refuses. Leave it out while there is no link (a form never published).
 - **`badge`:** a grey Badge beside the title, for a state the switch can't say ("Not published", "Private", "Copying…"). Never "Off".
-- **`isOff`:** the card reads quieter, its title in text-secondary. No badge: the switch says it.
+- **`isOff`:** the card reads quieter, its title in text-secondary and its picture without colour. No badge: the switch says it.
 - **`toggle`:** the Switch at the top end, its label hidden (read by screen readers). `hint` says what it does now in a tooltip on hover ("Taking bookings", "Accepting submissions"); `isDisabled` with `disabledReason` puts the reason there instead. Leave it out when there is nothing to switch yet (a form never published), rather than a disabled switch.
 - **`copyValue`:** a labelled secondary "Copy link" button in the footer, after the link. Leave it out when there is nothing to copy (a form not published yet), rather than showing a disabled button whose reason can't be reached.
+- **`picture`:** what the link opens, small, on a stage across the card's top (a form's `HostedFormPreview size="thumbnail"`, a booking page's `BookingPagePicture`). It is hidden from assistive tech and inert, and the title's link lies over it, so a press on it opens the card. On hover (a fine pointer) its sheet lifts space-4 in `duration-move`; reduced motion keeps it still. `LinkCardSkeleton hasPicture` (LinkGrid's `hasPictures`) draws the stage while the grid loads, so nothing jumps.
+- **`status`:** the state as a StatusDot at the facts line's start, a middle dot after it ("● Live · edited 2 minutes ago").
+- **`lead`:** the footer's start in the address's place: one ghost control of the card's own, its icon lined up with the title.
+- **`isCopyQuiet`:** Copy link as a ghost icon, named "Copy link" with a tooltip, for a card whose foot already has a word link.
 - **`actions`:** Open and the ··· menu, ghost icon Buttons at `size="lg"`, at the footer's end. Leave Open out when the link is off.
 - **The footer group:** the whole footer is a group named for the card ("Actions for Intro call"), so each card's "Copy link" is told apart. It sits on the card's own surface, with no band.
 - **Footer size:** every footer control is drawn at 30px (Button `lg`) and pressed at 32px, and they sit at least space-8 apart.
@@ -91,6 +105,7 @@ References (Mobbin, 20 October 2026):
 - pending (quieter, not a link, controls wait);
 - read only (switch disabled with why, no menu);
 - a long title (two lines, then cut).
+- pictured (a stage across the top, a status dot, a lead link, a quiet Copy link), and its loading shape.
 
 **Hover:** fine pointer only; it raises the border.
 

@@ -9,6 +9,7 @@ export * from './dial-codes.ts';
 export * from './email-hint.ts';
 export * from './breaks.ts';
 export * from './path.ts';
+export * from './picture.ts';
 export * from './recall.ts';
 export * from './score.ts';
 export * from './presets.ts';

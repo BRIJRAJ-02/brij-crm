@@ -32,6 +32,7 @@ import {
   FieldGroup,
   Modal,
   Panel,
+  PreviewFooter,
   RecordChip,
   RelativeTime,
   LinkListToolbar,
@@ -364,6 +365,10 @@ export function SubmissionsTab({
   const waiting = rows.filter((submission) => submission.state === 'needs_review').length;
   // What a bulk action acts on: the picked rows still in view (a filter or a search may hide some).
   const picked = shown.filter((submission) => selected.has(submission.id));
+  // The bulk bar stays mounted while it sinks out after the selection clears, so its exit plays (BulkActionBar's
+  // isOpen and onLeft).
+  const [isBarShown, setBarShown] = useState(false);
+  if ((picked.length > 0 || bulk !== undefined) && !isBarShown) setBarShown(true);
   const canRelease = picked.some((submission) => submission.state === 'spam' || submission.state === 'needs_review');
   const canMarkSpam = picked.some((submission) => submission.state !== 'spam');
   const addable = picked.filter((submission) => submission.crm.state === 'not_in_crm' && submission.crm.canAddToCrm);
@@ -752,60 +757,6 @@ export function SubmissionsTab({
           {strings.needReview(waiting)}
         </Callout>
       )}
-      {canManage && picked.length > 0 && (
-        <BulkActionBar
-          count={picked.length}
-          total={shown.length}
-          onClear={() => {
-            setSelected(new Set());
-          }}
-          {...(bulk === undefined ? {} : { progress: bulk })}
-        >
-          {canRelease && (
-            <Button
-              onPress={() => {
-                settleAll('release');
-              }}
-            >
-              {strings.notSpam}
-            </Button>
-          )}
-          {addable.length > 0 && (
-            <Button
-              isPending={busy === 'add'}
-              onPress={() => {
-                const ids = addable.map((submission) => submission.id);
-                if (ids.length === 1) addToCrm(ids);
-                else {
-                  setAddFailure(undefined);
-                  setAddingMany(ids);
-                  setIsAddingMany(true);
-                }
-              }}
-            >
-              {strings.addToCrm}
-            </Button>
-          )}
-          {canMarkSpam && (
-            <Button
-              onPress={() => {
-                settleAll('spam');
-              }}
-            >
-              {strings.markSpam}
-            </Button>
-          )}
-          <Button
-            variant="danger"
-            icon="trash"
-            onPress={() => {
-              deleteAll(picked.map((submission) => submission.id));
-            }}
-          >
-            {strings.deleteSubmission}
-          </Button>
-        </BulkActionBar>
-      )}
       {isEmpty ? (
         <EmptyState
           icon="inbox"
@@ -865,6 +816,71 @@ export function SubmissionsTab({
             )
           }
         />
+      )}
+      {/* At the view's foot, centred, as the records grid, lists and trash float theirs (the owner, 5 November 2026:
+          "this popup should be on the bottom"): last in the body, so on a short list it sits at the view's bottom and
+          on a long one it sticks there and, scrolled to the end, follows the last row rather than covering it. It
+          stays mounted while it sinks out, until onLeft. */}
+      {canManage && isBarShown && (
+        <PreviewFooter>
+          <BulkActionBar
+            placement="footer"
+            isOpen={picked.length > 0 || bulk !== undefined}
+            onLeft={() => {
+              setBarShown(false);
+            }}
+            count={picked.length}
+            total={shown.length}
+            onClear={() => {
+              setSelected(new Set());
+            }}
+            {...(bulk === undefined ? {} : { progress: bulk })}
+          >
+            {canRelease && (
+              <Button
+                onPress={() => {
+                  settleAll('release');
+                }}
+              >
+                {strings.notSpam}
+              </Button>
+            )}
+            {addable.length > 0 && (
+              <Button
+                isPending={busy === 'add'}
+                onPress={() => {
+                  const ids = addable.map((submission) => submission.id);
+                  if (ids.length === 1) addToCrm(ids);
+                  else {
+                    setAddFailure(undefined);
+                    setAddingMany(ids);
+                    setIsAddingMany(true);
+                  }
+                }}
+              >
+                {strings.addToCrm}
+              </Button>
+            )}
+            {canMarkSpam && (
+              <Button
+                onPress={() => {
+                  settleAll('spam');
+                }}
+              >
+                {strings.markSpam}
+              </Button>
+            )}
+            <Button
+              variant="danger"
+              icon="trash"
+              onPress={() => {
+                deleteAll(picked.map((submission) => submission.id));
+              }}
+            >
+              {strings.deleteSubmission}
+            </Button>
+          </BulkActionBar>
+        </PreviewFooter>
       )}
       {open !== undefined && (
         <Panel

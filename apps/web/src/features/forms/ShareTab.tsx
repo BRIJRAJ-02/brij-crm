@@ -1,8 +1,8 @@
 // Brief
 // Purpose: a form's Share tab (spec 0023, 0023-embeds.md; T44, b5 to b10, S4, S7), in the order a person needs it:
-// the link (one pill with Copy, its QR code and the ways to send it, the same block as the live dialog), then put it
-// on a site (three ways as tiles, a made up site showing the pick, the words, colour and look beside it rewriting
-// the snippet), then the developer material in one quiet sheet.
+// the link (the link with Copy, the ways to send it, its QR code beside them; the same block as the live dialog), then
+// put it on a site (three ways stacked as a column with their words, colour and look under them, a made up site beside
+// it showing the pick, the snippet below), then the developer material in one quiet sheet.
 // Main task: press Copy link, or pick how it shows and copy its snippet. Nothing else needs touching for it to work.
 // Leaves out: analytics; the booking page's own embed lives with the booking page.
 import { BRAND_QUICK_PICKS, type FormQuestion, type FormView } from '@crm/data';
@@ -180,28 +180,31 @@ export function ShareTab({ slug, form, isReadOnly, onFormChange }: ShareTabProps
 
   return (
     <>
-      {/* Row 1 (T44, S4): the link, the same block as the live dialog: its QR code, the link with Copy link, and the
-          ways to send it, one row of equal buttons. */}
+      {/* Row 1 (T44, S4): the link, the same block as the live dialog: the link with Copy link, the ways to send it
+          under it, and its QR code beside them with its download. */}
       <Card title={strings.linkTitle}>
         <ShareBlock name={form.name} link={link} />
       </Card>
       {/* Row 2 (b6): how it shows on a site, the made up site beside the choices showing the pick, and the snippet
           they write. One way to copy: the code block's own Copy. */}
       <Card title={strings.websiteTitle} actions={<InfoTip label={strings.websiteTitle}>{strings.websiteTip}</InfoTip>}>
-        <TileGrid
-          variant="choice"
-          label={strings.embedMode}
-          showsDescription
-          tiles={EMBED_TILES}
-          value={mode}
-          onChange={(id) => {
-            const tile = EMBED_TILES.find((each) => each.id === id);
-            if (tile !== undefined) setMode(tile.id);
-          }}
-        />
+        {/* The three ways stacked as a column, their settings right under them, the made up site beside the
+            column showing the pick (the owner, 5 November 2026: three wide tiles across the top left dead space
+            under the switches). On a phone the site goes under the column. */}
         <TileGrid columns="two">
-          {/* Flush: the first control starts on the made up site's top line. */}
           <SettingsStack variant="flush">
+            <TileGrid
+              variant="choice"
+              label={strings.embedMode}
+              showsDescription
+              tileWidth="full"
+              tiles={EMBED_TILES}
+              value={mode}
+              onChange={(id) => {
+                const tile = EMBED_TILES.find((each) => each.id === id);
+                if (tile !== undefined) setMode(tile.id);
+              }}
+            />
             {mode === 'inline' ? (
               <>
                 <Switch
