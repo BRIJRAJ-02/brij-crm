@@ -600,6 +600,7 @@ function AfterDefault({
     <>
       <SegmentedControl
         label={strings.afterEveryone}
+        isLabelVisible
         size="compact"
         isFitted
         segments={[
@@ -789,8 +790,8 @@ function RouteFields({ rule, usable, pageList, isReadOnly, showGaps, onChange }:
     <>
       {usable.length > 0 && (
         <SegmentedControl
-          label={strings.afterEveryone}
-          isLabelVisible={false}
+          label={strings.sendTo}
+          isLabelVisible
           size="compact"
           isFitted
           segments={[
@@ -926,6 +927,7 @@ function EndingFields({ ending, draft, pages, isReadOnly, isJustAdded, showGaps,
       />
       <SegmentedControl
         label={strings.endingButton}
+        isLabelVisible
         size="compact"
         isFitted
         segments={[

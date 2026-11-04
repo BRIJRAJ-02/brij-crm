@@ -665,6 +665,8 @@ export const strings = {
   thankYouPage: 'Thank you page',
   /** What everyone no rule sends elsewhere gets, as the default row's choice. */
   afterEveryone: 'Everyone else',
+  /** A rule's destination, over its choice of a booking page or a link. */
+  sendTo: 'Send to',
   afterKindThanks: 'Thank you page',
   afterKindBooking: 'Booking page',
   afterKindLink: 'Link',
