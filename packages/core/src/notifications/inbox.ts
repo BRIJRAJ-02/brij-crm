@@ -35,6 +35,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { submissionNotices } from '../forms/submissions.ts';
 import { linkedDisplays, readTaskViews } from '../tasks/tasks.ts';
 import { hostOf } from '../webhooks/addresses.ts';
+import { bookingAccess, bookingReaderOf, pageManagerOf } from '../booking/seen.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 
 /** What a notification id that isn't the caller's (or doesn't exist) answers. */
@@ -113,6 +114,12 @@ interface NotificationRow extends Record<string, unknown> {
   readonly booking_guest: string | null;
   readonly booking_starts_at: string | null;
   readonly booking_status: 'confirmed' | 'cancelled' | null;
+  /** Who may still reach that booking, read again on every list (security review): its host, page and co-hosts. */
+  readonly booking_host: string | null;
+  readonly booking_page_id: string | null;
+  readonly booking_page_scope: string | null;
+  readonly booking_page_owner: string | null;
+  readonly booking_cohosts: readonly string[] | null;
   /** The sort moment for the cursor: made (inbox) or done (done), with microseconds. */
   readonly at: string;
 }
@@ -126,7 +133,11 @@ const NOTIFICATION_COLUMNS = sql`n.id::text as id, n.kind, n.actor_type, n.actor
   n.due_task_id::text as due_task_id, dtk.title as due_title, c.body, nt.title as note_title,
   n.webhook_endpoint_id::text as webhook_endpoint_id, whe.url as webhook_url,
   bk.id::text as booking_id, bkp.title as booking_title, bk.visitor_name as booking_guest,
-  ${millis('bk.starts_at')} as booking_starts_at, bk.status as booking_status`;
+  ${millis('bk.starts_at')} as booking_starts_at, bk.status as booking_status,
+  bk.host_member_id::text as booking_host, bk.page_id::text as booking_page_id, bkp.scope as booking_page_scope,
+  bkp.owner_member_id::text as booking_page_owner,
+  (select array_agg(bh.member_id::text) from booking_hosts bh
+    where bk.id is not null and bh.workspace_id = bk.workspace_id and bh.booking_id = bk.id) as booking_cohosts`;
 
 /** The comment a notification is about, joined when it is live (a deleted one's notifications are gone already). */
 const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id and c.id = n.comment_id
@@ -211,6 +222,21 @@ async function visibleViews(
       // A guest booked one of the reader's pages (B-12): the reader is its host, told in the booking's own write, so
       // it is theirs to see while the booking lives; the guest's person only when it reads for them.
       if (row.booking_id === null || row.booking_starts_at === null || row.booking_status === null) return [];
+      // Read again on every list (hidden means absent): a host the booking was reassigned away from, or a member who
+      // lost `booking.manage` or their reach, no longer sees who booked what. The one booking rule (`seen.ts`).
+      if (!can(scope.access, 'booking.manage') || row.booking_host === null || row.booking_page_scope === null) {
+        return [];
+      }
+      const reach = bookingAccess(bookingReaderOf(scope.access), {
+        hostMemberId: row.booking_host,
+        ...(row.booking_page_id === null ? {} : { pageId: row.booking_page_id }),
+        ownerMemberId:
+          row.booking_page_owner === null
+            ? undefined
+            : pageManagerOf({ scope: row.booking_page_scope, ownerMemberId: row.booking_page_owner }),
+        coHostIds: row.booking_cohosts ?? [],
+      });
+      if (reach === undefined) return [];
       const record = row.record_id === null ? undefined : records.get(row.record_id);
       return [
         {

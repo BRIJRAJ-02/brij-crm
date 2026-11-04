@@ -443,6 +443,28 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
     expect(stored.rows).toEqual([{ emailed: true }]);
   });
 
+  it('stops showing a booking’s notice once its reader lost the booking or booking.manage (hidden means absent)', async () => {
+    const w = await workspace();
+    const bea = await w.addMember('Bea', 'member');
+    const page = await createBookingPage(bea, { id: newId(), title: 'Bea call', timeZone: 'UTC', settings: {} }, NOW);
+    const booked = await bookPublicSlot(await enterBookingPage({ db }, page.publicKey), deps(), bookInput());
+    const beaInbox = () => listNotifications(bea, { status: 'inbox', kind: 'booking' });
+    expect((await beaInbox()).items.map((item) => item.bookingId)).toEqual([booked.bookingId]);
+    // Demoted to a guest (no booking.manage): the notice is absent, not shown as locked.
+    expect(
+      (await listNotifications(rescope(bea, { role: 'guest' }), { status: 'inbox', kind: 'booking' })).items,
+    ).toEqual([]);
+    // The owner's booking, its notice moved to a member with no reach to it (a reassign away): absent too.
+    const owners = await livePage(w);
+    const theirs = await bookPublicSlot(owners.entry, deps(), bookInput({ start: '2026-11-02T10:00:00.000Z' }));
+    const cal = await w.addMember('Cal', 'member');
+    const calId = cal.actor.id ?? '';
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update notifications set member_id = ${calId} where booking_id = ${theirs.bookingId}`),
+    );
+    expect((await listNotifications(cal, { status: 'inbox', kind: 'booking' })).items).toEqual([]);
+  });
+
   it('links the booking to the form submission a hand off names, only when its form sends visitors to this page (AC-1058)', async () => {
     const w = await workspace();
     const { page, entry } = await livePage(w);

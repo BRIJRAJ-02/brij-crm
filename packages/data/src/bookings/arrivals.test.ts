@@ -68,6 +68,26 @@ describe('booking arrivals', () => {
     expect(run.watching()).toBe(0);
   });
 
+  it('never takes an older notice coming into view for a new one (a newer one marked read elsewhere)', async () => {
+    // 25 unread notices, a minute apart; the page holds the newest 24. Then the newest is marked read in another
+    // tab, so the oldest slides into the page: old news, not an arrival. A new one after it still toasts.
+    const at = (n: number) => new Date(Date.parse('2026-11-04T10:00:00.000Z') + n * 60_000).toISOString();
+    const made = (n: number): NotificationView => ({ ...notice(String(n), `Guest ${String(n)}`), createdAt: at(n) });
+    const newestFirst = (from: number, to: number) =>
+      Array.from({ length: to - from + 1 }, (_, index) => made(to - index));
+    const run = harness([newestFirst(2, 25), newestFirst(1, 24), [made(26), ...newestFirst(1, 24)]]);
+    const heard: BookingArrival[] = [];
+    run.arrivals.listen('acme', (arrival) => heard.push(arrival));
+    await run.flush();
+    run.arrivals.changed('acme');
+    await run.flush();
+    expect(heard).toEqual([]);
+    expect(run.refreshed).toEqual([]);
+    run.arrivals.changed('acme');
+    await run.flush();
+    expect(heard.map((each) => each.guestName)).toEqual(['Guest 26']);
+  });
+
   it('says nothing of a cancelled one, and reads nothing with no one listening', async () => {
     const run = harness([[], [notice('4', 'Gone', 'cancelled')]]);
     run.arrivals.changed('acme');

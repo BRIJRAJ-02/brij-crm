@@ -21,6 +21,8 @@ as $function$
           pg_catalog.now() + interval '5 minutes',
           least(b.created_at + interval '24 hours', b.starts_at - interval '1 hour')
         )
+        -- A minute's wait, keyed below, so a burst of changed links sends the guest one email with the last one.
+        when 'meeting_link' then pg_catalog.now() + interval '1 minute'
         else pg_catalog.now()
       end as run_at
     from public.bookings b
@@ -37,7 +39,8 @@ as $function$
       ),
       run_at => booking.run_at,
       max_attempts => 5,
-      job_key => case when crm_enqueue_booking_mail.kind like 'reminder_%' or crm_enqueue_booking_mail.kind = 'pending_expire'
+      job_key => case when crm_enqueue_booking_mail.kind like 'reminder_%'
+          or crm_enqueue_booking_mail.kind in ('pending_expire', 'meeting_link')
         then 'crm-booking:' || booking.workspace_id::text || ':' || booking.id::text || ':' || crm_enqueue_booking_mail.kind
       end,
       job_key_mode => 'replace'

@@ -2,16 +2,15 @@
 // guest's booking writes a `booking` notification for each host in the booking's own write (migration 0179), and that
 // write's `notifications` change event names the host, so this needs no event of its own: on each such event naming
 // the member (and on a `bookings` event, once the server sends one), it reads the member's unread booking notices
-// and hands each one it hasn't seen to the listeners. The first read after a listener starts only learns what is
-// already there, so opening Bookings never toasts old news. Only while a screen listens; the reads are coalesced
+// and hands on each one made after the newest it already knew (a watermark on `createdAt`, with the ids made at that
+// very moment, so a tie is never told twice). The first read after a listener starts only learns the watermark, so
+// opening Bookings never toasts old news, and an older notice coming into view (a newer one marked read elsewhere)
+// is never taken for a new one (state review). Only while a screen listens; the reads are coalesced
 // (one per `ARRIVAL_COALESCE_MS`), never more than one out at a time. Plain, no React; the timer comes in for tests.
 import type { NotificationView } from '@crm/contracts';
 
 /** How long a burst of events waits before one read. */
 export const ARRIVAL_COALESCE_MS = 400;
-
-/** How many of the newest unread booking notices one read looks at (one page of the inbox holds 50). */
-export const ARRIVALS_READ = 20;
 
 /** One booking that arrived: who booked which page, and when it starts. */
 export interface BookingArrival {
@@ -47,8 +46,8 @@ export interface BookingArrivals {
 
 interface Entry {
   readonly listeners: Set<(arrival: BookingArrival) => void>;
-  /** The notices already known; undefined until the first read learned them. */
-  seen: Set<string> | undefined;
+  /** The newest `createdAt` known (ms), and the notices made at that moment; undefined until the first read. */
+  mark: { readonly at: number; readonly ids: ReadonlySet<string> } | undefined;
   reading: boolean;
   again: boolean;
   stopWatch: (() => void) | undefined;
@@ -91,11 +90,20 @@ export function createBookingArrivals(deps: ArrivalsDeps): BookingArrivals {
       .then(
         (views) => {
           if (entries.get(workspace) !== entry) return;
-          const first = entry.seen === undefined;
-          const seen = entry.seen ?? new Set<string>();
-          const fresh = views.filter((view) => !seen.has(view.id));
-          for (const view of fresh) seen.add(view.id);
-          entry.seen = seen;
+          const first = entry.mark === undefined;
+          const mark = entry.mark ?? { at: Number.NEGATIVE_INFINITY, ids: new Set<string>() };
+          const atOf = (view: NotificationView) => Date.parse(view.createdAt);
+          const fresh = first
+            ? []
+            : views.filter((view) => atOf(view) > mark.at || (atOf(view) === mark.at && !mark.ids.has(view.id)));
+          const newest = Math.max(mark.at, ...views.map(atOf));
+          entry.mark = {
+            at: newest,
+            ids: new Set([
+              ...(newest === mark.at ? mark.ids : []),
+              ...views.filter((view) => atOf(view) === newest).map((view) => view.id),
+            ]),
+          };
           if (first || fresh.length === 0) return;
           deps.refresh(workspace);
           // Oldest first, so two that came together toast in the order they were made.
@@ -122,7 +130,7 @@ export function createBookingArrivals(deps: ArrivalsDeps): BookingArrivals {
       if (entry === undefined) {
         entry = {
           listeners: new Set(),
-          seen: undefined,
+          mark: undefined,
           reading: false,
           again: false,
           stopWatch: undefined,
@@ -134,7 +142,7 @@ export function createBookingArrivals(deps: ArrivalsDeps): BookingArrivals {
       held.listeners.add(listener);
       if (held.listeners.size === 1) {
         held.stopWatch = deps.watch(workspace);
-        if (held.seen === undefined) read(workspace, held);
+        if (held.mark === undefined) read(workspace, held);
       }
       return () => {
         held.listeners.delete(listener);

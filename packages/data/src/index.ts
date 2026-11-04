@@ -445,7 +445,7 @@ import type {
   NotificationSettingsChange,
 } from './inbox/store.ts';
 import { createUnreadCounts, type UnreadSource } from './inbox/unread.ts';
-import { ARRIVALS_READ, createBookingArrivals, type BookingArrival } from './bookings/arrivals.ts';
+import { createBookingArrivals, type BookingArrival } from './bookings/arrivals.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -2762,7 +2762,7 @@ export function createDataLayer({
             api.notifications.list({ workspace, status: 'inbox', kind: 'booking', unreadOnly: true }, options),
           ),
         )
-        .then((page) => page.items.slice(0, ARRIVALS_READ)),
+        .then((page) => page.items),
     watch,
     refresh: (workspace) => {
       refreshBookings(workspace);

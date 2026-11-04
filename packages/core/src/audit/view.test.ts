@@ -267,6 +267,7 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'booking.record_linked': [
     row('booking.record_linked', 'booking', booking, { before: { recordId: null }, after: { recordId: record } }),
   ],
+  'booking.meeting_link_set': [row('booking.meeting_link_set', 'booking', booking)],
   'booking.record_unlinked': [
     row('booking.record_unlinked', 'booking', booking, { before: { recordId: record }, after: { recordId: null } }),
   ],

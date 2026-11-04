@@ -76,6 +76,8 @@ export const AUDIT_ACTIONS = [
   // A booking linked to a record by hand from its card, and the link taken off (polish F2).
   'booking.record_linked',
   'booking.record_unlinked',
+  // A meeting link added by hand, which emails the guest (B-07): the row names the booking, never the link.
+  'booking.meeting_link_set',
   // Spec 0033 (AC-899): an owner changed the workspace's sign in rules, or signed everyone out of it.
   'workspace_security.changed',
   'workspace_security.signed_out_everyone',

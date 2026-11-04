@@ -41,5 +41,6 @@ ALTER TABLE "notifications" ADD CONSTRAINT "notifications_subject" CHECK (
     and "submission_id" is null and "join_request_id" is null and "automation_id" is null)
   or ("kind"::text = 'booking' and "booking_id" is not null
     and "thread_id" is null and "comment_id" is null and "task_id" is null and "note_id" is null
-    and "submission_id" is null and "join_request_id" is null and "automation_id" is null)
+    and "submission_id" is null and "join_request_id" is null and "automation_id" is null
+    and "webhook_endpoint_id" is null and "due_task_id" is null)
 );

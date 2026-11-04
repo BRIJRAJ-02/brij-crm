@@ -12,7 +12,7 @@ import { enterBookingPage, systemScope } from '../access/door.ts';
 import { mintScope } from '../access/mint.ts';
 import { createSchedule, listSchedules, updateSchedule } from '../availability/schedules.ts';
 import type { BookingCalendar } from '../booking/calendar.ts';
-import { cancelBooking, hostTarget } from '../booking/change.ts';
+import { cancelBooking, hostTarget, setMeetingLink } from '../booking/change.ts';
 import { createTimeBlock, removeTimeBlock } from '../booking/blocks.ts';
 import { bookAsHost } from '../booking/host.ts';
 import { listWorkspaceBookings } from '../booking/list.ts';
@@ -224,6 +224,30 @@ describe('bookings on reach (AC-1262)', () => {
     expect(
       await refusalOf(cancelBooking(hostTarget(w.as(w.bo), w.bookingId), { calendar, now: () => NOW }, {})),
     ).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('refuses a meeting link from See and answers it absent to no reach, writing and queuing nothing', async () => {
+    const w = await world('view');
+    const url = 'https://meet.example.com/abc-defg-hij';
+    expect(await refusalOf(setMeetingLink(hostTarget(w.as(w.priya), w.bookingId), { url }, NOW))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(await refusalOf(setMeetingLink(hostTarget(w.as(w.bo), w.bookingId), { url }, NOW))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    const stored = await testQuery<{ video_url: string | null }>(
+      ownerUrl,
+      `select video_url from bookings where workspace_id = $1 and id = $2`,
+      [w.workspaceId, w.bookingId],
+    );
+    expect(stored[0]?.video_url ?? null).not.toBe(url);
+    const jobs = await testQuery<{ key: string }>(
+      ownerUrl,
+      `select key from graphile_worker._private_jobs where key like $1`,
+      [`%${w.bookingId}%meeting_link%`],
+    );
+    expect(jobs).toEqual([]);
+    expect(await w.audit('booking.meeting_link_set')).toEqual([]);
   });
 
   it('lets Manage see the guest and cancel, audited as changed for Bea', async () => {

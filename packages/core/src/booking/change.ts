@@ -887,11 +887,20 @@ export async function setMeetingLink(
   return inWorkspace(target.scope, async (tx) => {
     const { row, page } = await readTarget(tx, target, true);
     checkChangeable(row, now, 'changed');
+    // A request the host hasn't answered has no meeting yet: its guest would get a link for a time not agreed.
+    if (row.approval === 'pending') throw refuse('BOOKING_CLOSED', 'Confirm or decline this request first.');
     if (row.videoUrl === input.url) return { videoUrl: input.url };
     await tx
       .update(bookings)
       .set({ videoUrl: input.url, ...updatedBy(actorOf(target, page)) })
       .where(eq(bookings.id, row.id));
+    // Audited (security review): the link goes out to an outside guest as if from the host. The row names the
+    // booking only, never the link.
+    await writeAudit(tx, target.scope.workspaceId, target.scope.actor, {
+      action: 'booking.meeting_link_set',
+      targetType: 'booking',
+      targetId: row.id,
+    });
     await enqueueBookingMail(tx, row.id, ['meeting_link']);
     return { videoUrl: input.url };
   });

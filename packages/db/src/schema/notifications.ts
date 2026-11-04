@@ -154,7 +154,8 @@ export const notifications = pgTable(
           and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)
         or (${t.kind}::text = 'booking' and ${t.bookingId} is not null
           and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
-          and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)`,
+          and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null
+          and ${t.webhookEndpointId} is null and ${t.dueTaskId} is null)`,
     ),
     foreignKey({
       name: 'notifications_automation',

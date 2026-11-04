@@ -391,6 +391,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, actor: { kind: 'unknown' }, action: 'booking.record_unlinked', target: booking, params: {} },
     'Unknown person unlinked a record from Intro call on dayTime(2026-10-24T09:30)',
   ],
+  [
+    { ...base, actor: { kind: 'unknown' }, action: 'booking.meeting_link_set', target: booking, params: {} },
+    'Unknown person added a meeting link to Intro call on dayTime(2026-10-24T09:30)',
+  ],
   // Scheduling access (spec 0037, AC-1257): over one person, or everyone's.
   [
     { ...base, action: 'delegation.granted', target: member(bea), params: { level: 'manage', over: ada } },
