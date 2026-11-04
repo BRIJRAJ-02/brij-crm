@@ -63,6 +63,12 @@ export interface AccentPickerProps {
   readonly isDisabled?: boolean;
   /** Under the hex, on the picker's own left edge: a Disclosure with a second colour (a dark one, under More). */
   readonly children?: ReactNode;
+  /**
+   * `below` (the default) puts the hex under the swatches. `inline` puts it at the end of the swatches' row, the
+   * swatches at the control height so the row is one height: a short picker beside a preview (a form's embed
+   * button colour, the owner, 5 November 2026: the hex alone under the row read as orphaned).
+   */
+  readonly hexPlacement?: 'below' | 'inline';
 }
 
 /** The radio value of the default swatch, beside the picks' own hexes. */
@@ -87,6 +93,7 @@ export function AccentPicker({
   isReadOnly = false,
   isDisabled = false,
   children,
+  hexPlacement = 'below',
 }: AccentPickerProps) {
   const picks = quickPicks.filter((pick) => HEX.test(pick.value));
   const picked = value !== undefined && HEX.test(value) ? value : undefined;
@@ -182,8 +189,29 @@ export function AccentPicker({
       </div>
     );
   }
+  // The hex for a brand's exact value: under the swatches, or (`inline`) ending their row at the control height.
+  const hex = (
+    <div className={styles.hex}>
+      <Field
+        label={strings.hex}
+        isLabelHidden
+        {...(hexPlacement === 'inline' ? { size: 'sm' as const } : {})}
+        value={typed ?? picked ?? ''}
+        placeholder={strings.hexPlaceholder}
+        maxLength={7}
+        isDisabled={isDisabled}
+        {...(refused ? { error: strings.hexRefusal } : {})}
+        onChange={(next) => {
+          setTyped(next);
+          setRefused(false);
+        }}
+        onBlur={commitTyped}
+        onSubmit={commitTyped}
+      />
+    </div>
+  );
   return (
-    <div className={styles.root}>
+    <div className={styles.root} data-hex={hexPlacement}>
       {isLabelHidden ? (
         <VisuallyHidden>
           <span id={labelId}>{label}</span>
@@ -272,24 +300,9 @@ export function AccentPicker({
             onPreview?.(event.target.value.toLowerCase());
           }}
         />
+        {hexPlacement === 'inline' && hex}
       </div>
-      <div className={styles.hex}>
-        <Field
-          label={strings.hex}
-          isLabelHidden
-          value={typed ?? picked ?? ''}
-          placeholder={strings.hexPlaceholder}
-          maxLength={7}
-          isDisabled={isDisabled}
-          {...(refused ? { error: strings.hexRefusal } : {})}
-          onChange={(next) => {
-            setTyped(next);
-            setRefused(false);
-          }}
-          onBlur={commitTyped}
-          onSubmit={commitTyped}
-        />
-      </div>
+      {hexPlacement === 'below' && hex}
       {note}
       {children}
     </div>

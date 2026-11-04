@@ -97,20 +97,10 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  /* Under the label, past the box. */
-  .description,
-  .error {
-    padding-inline-start: calc(var(--size-check) + var(--space-8));
-  }
-
+  /* Under the label, past the box (the error line too, through FieldError's `inset`). */
   .description {
+    padding-inline-start: calc(var(--size-check) + var(--space-8));
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
-  .error {
-    color: var(--danger);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }

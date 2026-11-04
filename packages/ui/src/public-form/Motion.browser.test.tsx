@@ -40,12 +40,11 @@ afterEach(() => {
 
 const field = () => host.querySelector('input');
 
-/** Draws the one at a time form and goes past its welcome screen (T42) by Enter, as its hint says. */
+/** Draws the one at a time form, which opens straight on its first question, focus in it. */
 async function started(form: PublicForm = FORM) {
   drawn = mountHostedForm(host, form, { mode: 'page' });
-  await expect.element(page.getByRole('button', { name: 'Start' })).toBeInTheDocument();
-  await userEvent.keyboard('{Enter}');
   await expect.poll(() => field()).not.toBeNull();
+  await expect.poll(() => host.contains(document.activeElement)).toBe(true);
 }
 const form = () => host.querySelector<HTMLFormElement>('form:not([aria-hidden])');
 
@@ -88,15 +87,18 @@ it('goes back with the quiet up arrow, keeping what was typed', async () => {
   await expect.element(page.getByLabelText('Your name')).toHaveValue('Ada');
 });
 
-it('opens on a welcome screen with the headline once, never above a question (T42)', async () => {
+it('opens straight on its first question, the headline small above it, then for screen readers only', async () => {
   drawn = mountHostedForm(host, FORM, { mode: 'page' });
-  await expect.element(page.getByRole('heading', { name: 'Tell us about your project' })).toBeVisible();
-  expect(field()).toBeNull();
-  await userEvent.click(page.getByRole('button', { name: 'Start' }));
+  // No welcome screen and no Start (the owner, 5 November 2026): the first question, its field focused.
+  expect(page.getByRole('button', { name: 'Start' }).query()).toBeNull();
   await expect.element(page.getByLabelText('Your name')).toHaveFocus();
-  // The headline stays for screen readers only, and the place reads "1 of 2" beside the arrows.
-  expect([...host.querySelectorAll('h1')].at(-1)?.getBoundingClientRect().width ?? 0).toBeLessThanOrEqual(1);
+  await expect.element(page.getByRole('heading', { name: 'Tell us about your project' })).toBeVisible();
   await expect.element(page.getByText('1 of 2', { exact: true }).first()).toBeVisible();
+  // On the next question the headline stays for screen readers only.
+  await userEvent.fill(page.getByRole('textbox'), 'Ada');
+  await userEvent.keyboard('{Enter}');
+  await expect.element(page.getByLabelText('Work email')).toHaveFocus();
+  expect([...host.querySelectorAll('h1')].at(-1)?.getBoundingClientRect().width ?? 0).toBeLessThanOrEqual(1);
   expect(form()?.dataset.enter).toBe('forward');
 });
 

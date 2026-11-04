@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import { ToggleButtonGroup, type Key } from 'react-aria-components';
+import { FieldError } from '../../atoms/FieldError/FieldError.tsx';
 import { ToggleButton } from '../../atoms/Button/Button.tsx';
 import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -114,9 +115,9 @@ export function ChoiceChips({
         </p>
       )}
       {error !== undefined && (
-        <p id={errorId} className={styles.error}>
+        <FieldError kind="standalone" id={errorId}>
           {error}
-        </p>
+        </FieldError>
       )}
     </div>
   );

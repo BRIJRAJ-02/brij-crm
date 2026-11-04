@@ -216,19 +216,19 @@ export const TemplateNight: Story = templated('night');
 /** Split: the form's own frame, its headline in the template's face. */
 export const TemplateSplit: Story = templated('split');
 
-/** Send with nothing filled: each required question says so, the summary lists them as links, the first takes focus. */
+/**
+ * Send with nothing filled: each required question says so under itself, with the one error line every type draws,
+ * and the first takes focus; no summary repeats them (the design critique, 5 November 2026).
+ */
 export const Errors: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(canvas.getByLabelText('Your name')).toHaveFocus());
     await expect(canvas.getAllByText('Answer this question.')).toHaveLength(2);
-    await waitFor(() => expect(canvas.getByText('2 answers need a look')).toBeInTheDocument());
-    // A summary link takes focus to its question.
-    await userEvent.click(canvas.getByRole('link', { name: 'Work email' }));
-    await waitFor(() => expect(canvas.getByLabelText('Work email')).toHaveFocus());
-    // Fixing one clears its error and shortens the summary at once.
+    await expect(canvas.queryByText(/need(s)? a look/)).toBeNull();
+    // Fixing one clears its error at once.
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
-    await waitFor(() => expect(canvas.getByText('1 answer needs a look')).toBeInTheDocument());
+    await waitFor(() => expect(canvas.getAllByText('Answer this question.')).toHaveLength(1));
   },
 };
 

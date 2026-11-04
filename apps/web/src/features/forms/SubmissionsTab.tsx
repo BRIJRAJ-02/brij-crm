@@ -44,7 +44,6 @@ import {
 import { formatDate, StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { pageHeading } from '../navigation/focus.ts';
 import { recordLinks } from '../records/timeline.ts';
 import { AnswerList, answerText, holdsFile, PhoneAnswer } from '../questions/AnswerList.tsx';
@@ -54,7 +53,6 @@ import { spamReason } from './spam-reason.ts';
 import { markSeen } from './seen.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
-import { useFormToolbarSlot } from './toolbarSlot.ts';
 
 /** Props for the Submissions tab: what its route loaded through the data layer. */
 export interface SubmissionsTabProps {
@@ -98,6 +96,7 @@ const ALL = 'all';
 
 /** The email column's id: a question's id is lower case letters, digits, - and _, so none looks like it. */
 const EMAIL_COLUMN = ':email';
+
 const FILTERS: readonly SubmissionState[] = ['processed', 'needs_review', 'spam', 'failed'];
 
 /** Each state's dot: filed green, a look needed orange, failed red, the rest gray. */
@@ -140,7 +139,6 @@ export function SubmissionsTab({
   hasSubmissions,
   spamCount = 0,
 }: SubmissionsTabProps) {
-  const slot = useFormToolbarSlot();
   // Opening the answers clears the form's New on the list, for this reader in this browser (forms critique c).
   useEffect(() => {
     markSeen(slug, formId);
@@ -348,11 +346,16 @@ export function SubmissionsTab({
   const hasEmailColumn = nameQuestion !== undefined && shown.some((submission) => submission.email !== undefined);
   const columns: readonly TableColumn[] = [
     // On a phone each row is two lines (forms fixes 2): the person, then when and its state; the rest open with it.
-    { id: 'person', label: strings.person, isRowHeader: true, isInline: true, phone: 'title' },
+    // Every column is as wide as its content, as People's are, and the last takes what is left, so the values sit
+    // side by side from the start edge (the owner, 5 November 2026: even columns made Person huge and the values
+    // float apart).
+    { id: 'person', label: strings.person, isRowHeader: true, isInline: true, phone: 'title', size: 'fit' },
     // When and State lead after the person, so a long email or answer scrolling the table sideways never hides them.
-    { id: 'when', label: strings.when },
-    { id: 'state', label: strings.state },
-    ...(hasEmailColumn ? [{ id: EMAIL_COLUMN, label: strings.email, phone: 'hidden' as const }] : []),
+    { id: 'when', label: strings.when, size: 'fit' },
+    { id: 'state', label: strings.state, size: 'fit' },
+    ...(hasEmailColumn
+      ? [{ id: EMAIL_COLUMN, label: strings.email, phone: 'hidden' as const, size: 'fit' as const }]
+      : []),
     // The questions the list carries answers for (the server sends each row's first answers), in the form's order,
     // but the one the Person column already says. A question earns a column when some row answered it.
     ...questions
@@ -365,8 +368,11 @@ export function SubmissionsTab({
           }),
       )
       .slice(0, ANSWER_COLUMNS)
-      .map((question) => ({ id: question.id, label: question.label, phone: 'hidden' as const })),
+      .map((question) => ({ id: question.id, label: question.label, phone: 'hidden' as const, size: 'fit' as const })),
   ];
+  const sized: readonly TableColumn[] = columns.map((column, index) =>
+    index === columns.length - 1 ? { ...column, size: 'fill' } : column,
+  );
 
   /** Marks every picked submission spam, or not spam, one after another, with progress in the bar. */
   const settleAll = (kind: 'spam' | 'release') => {
@@ -669,6 +675,7 @@ export function SubmissionsTab({
         );
       }
       case EMAIL_COLUMN:
+        // Plain text, never the email's link chip: a row has one click target, which opens it (forms fix a10).
         return <TruncatedText>{submission.email ?? ''}</TruncatedText>;
       case 'state':
         return <StatusDot hue={stateHue(submission, isFiling)}>{stateLabel(submission, isFiling)}</StatusDot>;
@@ -685,9 +692,10 @@ export function SubmissionsTab({
 
   return (
     <>
-      {/* The filter and search sit at the end of the tab strip, as Captures' do: no row of their own. */}
-      {/* Before the first submission there is nothing to search, filter or export: only the empty state shows. */}
-      {isEmpty ? null : slot === null ? toolbar : createPortal(toolbar, slot)}
+      {/* The search, filter and Export sit in a row of their own under the tabs, where People and Companies keep
+          theirs, at the controls' one height (the owner, 5 November 2026). Before the first submission there is
+          nothing to search, filter or export: only the empty state shows. */}
+      {isEmpty ? null : toolbar}
       {state === undefined && waiting > 0 && (
         <Callout
           tone="warning"
@@ -770,7 +778,7 @@ export function SubmissionsTab({
       ) : (
         <Table
           label={strings.tabSubmissions}
-          columns={columns}
+          columns={sized}
           rows={shown}
           getRowId={(submission) => submission.id}
           renderCell={cell}
@@ -778,6 +786,19 @@ export function SubmissionsTab({
           // Tally's and Typeform's response tables do, rather than pushing When and State off the page.
           isScrollable
           phoneLayout="rows"
+          // The rows run out to the tab's edges, the checkbox on the tabs' line, with the count under them as the
+          // records grid's footer says it; Load more sits beside the count while there are more.
+          edge="page"
+          footer={
+            <>
+              {held.next === undefined ? strings.submissionCount(shown.length) : strings.submissionsShown(shown.length)}
+              {held.next !== undefined && (
+                <Button variant="ghost" onPress={loadMore} isPending={busy === 'more'}>
+                  {strings.loadMore}
+                </Button>
+              )}
+            </>
+          }
           {...(canManage
             ? {
                 selected,
@@ -805,11 +826,6 @@ export function SubmissionsTab({
             )
           }
         />
-      )}
-      {held.next !== undefined && (
-        <Button onPress={loadMore} isPending={busy === 'more'}>
-          {strings.loadMore}
-        </Button>
       )}
       {open !== undefined && (
         <Panel

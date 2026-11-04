@@ -21,8 +21,8 @@ import styles from './Button.module.css';
 export type ButtonVariant =
   'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed' | 'link' | 'warning';
 
-/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs. */
-export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch';
+/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs; `public` is a hosted form's own button (Continue, OK, Send), the height of the form's fields (`size-input`, which the form raises to its public size) with room at the sides, so a short word never draws a square. */
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch' | 'public';
 
 interface ButtonLook {
   readonly variant?: ButtonVariant;
@@ -222,7 +222,7 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
         face.provider !== undefined && (
           <ProviderMark
             provider={face.provider}
-            size={look.size === 'lg' || look.size === 'touch' ? 'md' : 'sm'}
+            size={look.size === 'lg' || look.size === 'touch' || look.size === 'public' ? 'md' : 'sm'}
             {...('markTone' in face && face.markTone !== undefined ? { tone: face.markTone } : {})}
           />
         )

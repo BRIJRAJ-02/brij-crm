@@ -1,5 +1,6 @@
 import { useId, type KeyboardEvent, type MouseEvent } from 'react';
-import { FieldError, RadioButton, RadioField, RadioGroup } from 'react-aria-components';
+import { RadioButton, RadioField, RadioGroup } from 'react-aria-components';
+import { FieldError } from '../FieldError/FieldError.tsx';
 import { FieldLabel } from '../FieldLabel/FieldLabel.tsx';
 import { Icon } from '../Icon/Icon.tsx';
 import { strings } from './strings.ts';
@@ -95,7 +96,7 @@ export function Rating({
   const stars = all.map((star) => (
     <RadioField key={star} value={String(star)} aria-label={strings.stars(star)} className={styles.field}>
       <RadioButton className={styles.choice} data-on={current !== null && star <= current ? '' : undefined}>
-        <Icon name="star" size={field === undefined ? 'sm' : 'md'} isFilled />
+        <Icon name="star" size={field === undefined ? 'sm' : 'lg'} isFilled />
       </RadioButton>
     </RadioField>
   ));
@@ -129,7 +130,7 @@ export function Rating({
                 <span>{ends.end}</span>
               </span>
             )}
-            <FieldError className={styles.error}>{field.error}</FieldError>
+            {field.error !== undefined && <FieldError>{field.error}</FieldError>}
           </>
         )}
       </RadioGroup>

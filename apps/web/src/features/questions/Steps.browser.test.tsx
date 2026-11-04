@@ -118,9 +118,11 @@ describe('Layout (AC-6302)', () => {
       .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
       .toBe('Step 1 of 2');
     await userEvent.click(page.getByText('One at a time', { exact: true }));
-    // One at a time opens on its welcome screen (T42) while no question is being edited: the headline and Start.
-    await expect.element(page.getByText('Start', { exact: true })).toBeInTheDocument();
-    expect(document.querySelector('[role="progressbar"]')).toBeNull();
+    // One at a time opens straight on its first question (5 November 2026): no Start, the place along the top.
+    await expect
+      .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
+      .toMatch(/^1 of /);
+    expect(page.getByText('Start', { exact: true }).query()).toBeNull();
   });
 });
 

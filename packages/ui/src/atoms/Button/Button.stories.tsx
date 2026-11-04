@@ -198,6 +198,27 @@ export const ExtraLarge: Story = {
   },
 };
 
+/** `public`: a hosted form's own button, the fields' height with room at the sides, never a square. */
+export const Public: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Button size="public" variant="primary" iconRight="check">
+        OK
+      </Button>
+      <Button size="public" variant="primary">
+        Send
+      </Button>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const ok = canvas.getByRole('button', { name: 'OK' }).getBoundingClientRect();
+    const send = canvas.getByRole('button', { name: 'Send' }).getBoundingClientRect();
+    await expect(ok.height).toBe(send.height);
+    await expect(ok.width).toBeGreaterThanOrEqual(2 * ok.height);
+  },
+};
+
 /** `lg` is drawn at 30px and pressed at 32: an invisible pixel past its border all round. */
 export const LargeHitArea: Story = {
   parameters: { crm: { screenshot: false } },

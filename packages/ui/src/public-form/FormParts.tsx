@@ -10,7 +10,6 @@ import {
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Button, ButtonLink } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
-import { Link } from '../atoms/Link/Link.tsx';
 import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { usePageVariables } from '../lib/page-variables.ts';
@@ -19,10 +18,8 @@ import { safeImageSrc } from '../lib/safe-image-src.ts';
 import { templateAttributes } from '../lib/page-template.ts';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import type { EmbedLook } from './HostedForm.tsx';
-import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
-import { labelOf } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
 import type { HostedFormMode, HostedFormState } from './use-hosted-form.ts';
 
@@ -183,18 +180,24 @@ export function FormHeader({
   heading,
   isSubheadingShown = true,
   isVisuallyHidden = false,
+  size = 'full',
 }: {
   readonly form: PublicForm;
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
   readonly isSubheadingShown?: boolean;
+  /**
+   * `small` is the form's name over its first question, One at a time (Tally's way, the owner, 5 November 2026): the
+   * question leads, the name only says whose form it is.
+   */
+  readonly size?: 'full' | 'small';
   /** Kept for screen readers only: a site's inline embed asked to leave the headline to the site. */
   readonly isVisuallyHidden?: boolean;
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
   const header = (
     <header className={styles.header}>
-      <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
+      <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode} data-size={size}>
         {form.headline}
       </Heading>
       {isSubheadingShown && form.subheading !== undefined && <p className={styles.subheading}>{form.subheading}</p>}
@@ -238,7 +241,7 @@ export function FormThanks({
         // A real link, through `ButtonLink`'s `safeHref`: an owner's typed address is untrusted, so a `javascript:`
         // one is refused rather than run, and the visitor keeps a link's own middle click and new tab. A preview
         // never leaves the page it is drawn in.
-        <ButtonLink variant="primary" href={button.url} isExternal isDisabled={state.preview}>
+        <ButtonLink variant="primary" size="public" href={button.url} isExternal isDisabled={state.preview}>
           {button.label}
         </ButtonLink>
       )}
@@ -397,36 +400,6 @@ export function QuestionSlot({
   );
 }
 
-/**
- * Above the button after a submit that found problems: how many, then each
- * question's label as a link that focuses it (its message sits under it). Announced politely;
- * it shrinks as answers are fixed and leaves with the last.
- */
-export function ErrorSummary({
-  state,
-  among,
-}: {
-  readonly state: HostedFormState;
-  /** Only these questions (a step's); every question when left out. */
-  readonly among?: readonly PublicQuestion[];
-}) {
-  const listed = among === undefined ? state.summary : state.summary.filter((question) => among.includes(question));
-  const count = listed.length;
-  if (count === 0) return null;
-  // A status, not an alert: focus already went to the first problem, so this is said politely.
-  return (
-    <Callout tone="danger" isPolite title={state.words.needsALook(count)}>
-      <span className={styles.summaryList}>
-        {listed.map((question) => (
-          <Link key={question.key} href={`#question-${question.key}`} onPress={() => state.focus(question.key)}>
-            {labelOf(question, state.words, state.read)}
-          </Link>
-        ))}
-      </span>
-    </Callout>
-  );
-}
-
 /** A failure that isn't about a question ("That did not go through…"), in one alert line. */
 export function FormAlert({ state }: { readonly state: HostedFormState }) {
   const [isCopied, setCopied] = useState(false);
@@ -579,9 +552,9 @@ export function FormLoading({
   // One at a time form never loses one (spec 0063, AC-6306). Its colours follow the visitor's own light or dark
   // setting until the form's look arrives.
   const isOpen = layout === 'conversational' || layout === 'unknown';
-  // One at a time opens on its welcome screen (T42): the headline, its line and Start, with no question yet.
+  // One at a time opens straight on its first question (5 November 2026): one question under the name.
   const questions =
-    layout === 'classic' || layout === 'unknown' ? LOADING_QUESTIONS : isOpen ? 0 : LOADING_QUESTIONS - 1;
+    layout === 'classic' || layout === 'unknown' ? LOADING_QUESTIONS : isOpen ? 1 : LOADING_QUESTIONS - 1;
   return (
     <FormGround mode={mode} kind={isOpen ? 'open' : 'card'} isLoading>
       <VisuallyHidden>

@@ -145,6 +145,9 @@ const SAVE_AFTER_MS = 1_000;
 /** The editor: the TopBar (name, Preview, Publish, menu), then the status line, tabs and the tab. */
 export function FormEditor(props: FormEditorProps) {
   const { slug, members, objects, tab } = props;
+  // The live dialog says where answers go by the object's plural ("Answers go to People"), as the sidebar names it.
+  const pluralOf = (target: FormTargetChoices) =>
+    objects.find((object) => object.id === target.objectId)?.pluralName ?? target.objectName ?? '';
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const router = useRouter();
@@ -178,7 +181,7 @@ export function FormEditor(props: FormEditorProps) {
     [data, slug],
   );
   const jobs = useJobFollower(data.jobs.view(slug, 'mine'), heldJobs);
-  // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
+  // The end of the tab strip, where a tab draws its own tools (Analytics' period).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // The Flow view (spec 0063, AC-6325): the steps, their jumps and the endings, read only, from the Form tab.
   const [isFlowOpen, setFlowOpen] = useState(false);
@@ -448,7 +451,7 @@ export function FormEditor(props: FormEditorProps) {
     // The first publish says it in its live dialog, with Change; a later one in a toast with Undo.
     if (!isPublished) {
       setLiveFiling({
-        objectName: target.objectName ?? '',
+        objectName: pluralOf(target),
         made: made.flatMap((each) => plans.find((plan) => plan.questionId === each.questionId)?.title ?? []),
       });
       return { document: next, choices };
@@ -593,7 +596,7 @@ export function FormEditor(props: FormEditorProps) {
         // The first time, the Ready dialog says it is live and hands over the link.
         if (!wasPublished) {
           if (target.objectName !== undefined && view.live?.targets.main !== undefined) {
-            const objectName = target.objectName;
+            const objectName = pluralOf(target);
             setLiveFiling((before) => before ?? { objectName, made: [] });
           } else setLiveFiling(undefined);
           setJustLive(view);
@@ -1317,7 +1320,9 @@ export function FormEditor(props: FormEditorProps) {
               // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
               <Tabs
                 variant="bar"
-                end={<div ref={setToolbarSlot} />}
+                // Only Analytics draws its period at the strip's end; Submissions keeps its tools in a row of its own
+                // under the tabs, as People does, so no empty slot wraps onto a line of its own on a phone.
+                {...(current === 'analytics' ? { end: <div ref={setToolbarSlot} /> } : {})}
                 label={strings.tabs}
                 selectedKey={current}
                 onSelectionChange={(value) => {

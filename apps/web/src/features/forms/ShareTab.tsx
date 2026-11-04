@@ -53,6 +53,12 @@ export const EMBED_TILES: readonly (ChoiceTile & { readonly id: EmbedMode })[] =
   { id: 'floating', name: strings.embedFloating, icon: 'message-square', description: strings.embedFloatingHint },
 ];
 
+/**
+ * The corner button's quick colours: the brand picks less blue, which the first swatch (Accent, the product's own
+ * blue) already is (the owner, 5 November 2026: two near identical blues side by side).
+ */
+const EMBED_PICKS = BRAND_QUICK_PICKS.filter((pick) => pick.hue !== 'blue');
+
 /** The most sites a form lists (the contract's cap). */
 const SITES_MAX = 20;
 
@@ -174,8 +180,8 @@ export function ShareTab({ slug, form, isReadOnly, onFormChange }: ShareTabProps
 
   return (
     <>
-      {/* Row 1 (T44, S4): the link, the same block as the live dialog: one pill, Copy, its QR code and the ways to
-          send it. */}
+      {/* Row 1 (T44, S4): the link, the same block as the live dialog: its QR code, the link with Copy link, and the
+          ways to send it, one row of equal buttons. */}
       <Card title={strings.linkTitle}>
         <ShareBlock name={form.name} link={link} />
       </Card>
@@ -194,7 +200,8 @@ export function ShareTab({ slug, form, isReadOnly, onFormChange }: ShareTabProps
           }}
         />
         <TileGrid columns="two">
-          <SettingsStack variant="plain">
+          {/* Flush: the first control starts on the made up site's top line. */}
+          <SettingsStack variant="flush">
             {mode === 'inline' ? (
               <>
                 <Switch
@@ -217,7 +224,8 @@ export function ShareTab({ slug, form, isReadOnly, onFormChange }: ShareTabProps
               <AccentPicker
                 label={strings.embedColour}
                 defaultName={strings.embedColourDefault}
-                quickPicks={BRAND_QUICK_PICKS}
+                quickPicks={EMBED_PICKS}
+                hexPlacement="inline"
                 value={accent}
                 onChange={setAccent}
               />
@@ -248,17 +256,23 @@ export function ShareTab({ slug, form, isReadOnly, onFormChange }: ShareTabProps
           </Callout>
         )}
       </Card>
-      {/* The developer material in one quiet sheet (b10): the prefill link, the site's own HTML, the sites that may
+      {/* The developer material in one sheet (b10), opened from a card of its own like the rows above it: the prefill link, the site's own HTML, the sites that may
           post and signed posts, out of the way of everyone who only pastes the snippet. */}
-      <Button
-        variant="ghost"
-        icon="code"
-        onPress={() => {
-          setDeveloperOpen(true);
-        }}
-      >
-        {strings.advancedTitle}
-      </Button>
+      <Card
+        title={strings.advancedTitle}
+        description={strings.advancedHint}
+        actions={
+          <Button
+            icon="code"
+            label={strings.advancedOpenName}
+            onPress={() => {
+              setDeveloperOpen(true);
+            }}
+          >
+            {strings.advancedOpen}
+          </Button>
+        }
+      />
       <Modal title={strings.advancedTitle} variant="sheet" isOpen={isDeveloperOpen} onOpenChange={setDeveloperOpen}>
         <SettingsStack variant="plain">
           {/* Prefill (spec 0063, AC-6309): a link that fills a question, and every question's key to fill. */}

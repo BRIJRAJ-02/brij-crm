@@ -71,13 +71,13 @@ async function draw() {
 }
 
 describe('the Share tab (AC-11, T44)', () => {
-  it('leads with the link block the live dialog uses: the pill, Copy, Open, the QR code and the ways to send it', async () => {
+  it('leads with the block the live dialog uses, under a heading: the QR code, Copy link and the ways to send it', async () => {
     await draw();
+    await expect.element(page.getByRole('heading', { name: 'Share the link' })).toBeVisible();
     await expect.element(page.getByRole('group', { name: 'Link' })).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Copy link/ })).toBeVisible();
-    await expect.element(page.getByRole('link', { name: 'Open' })).toBeVisible();
     await expect.element(page.getByRole('img', { name: 'QR code for the form’s link' })).toBeInTheDocument();
-    await expect.element(page.getByRole('button', { name: 'PNG' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /^QR code/ })).toBeVisible();
     expect(page.getByRole('link', { name: 'Email' }).element().getAttribute('href')).toMatch(/^mailto:/);
   });
 
@@ -103,12 +103,19 @@ describe('the Share tab (AC-11, T44)', () => {
     expect(snippetCode()).toContain('data-timefix-text="Ask us"');
     // A light form names its Colour, so a dialog's frame matches the form inside it (b7).
     expect(snippetCode()).toContain('data-timefix-theme="light"');
+    // Button colour: one blue (the Accent swatch), never a second near identical one, and the hex on the row.
+    const colour = page.getByRole('radiogroup', { name: 'Button colour' });
+    expect(colour.getByRole('radio', { name: /Blue/ }).query()).toBeNull();
+    const hex = page.getByRole('textbox', { name: 'Hex' }).element().getBoundingClientRect();
+    const any = page.getByRole('button', { name: 'Any colour' }).element().getBoundingClientRect();
+    expect(Math.abs(hex.top + hex.height / 2 - (any.top + any.height / 2))).toBeLessThanOrEqual(2);
   });
 
-  it('keeps the developer material in one quiet sheet, closed until asked for', async () => {
+  it('keeps the developer material in one sheet, opened from a card of its own', async () => {
     await draw();
     expect(page.getByText('Your own HTML').query()).toBeNull();
-    await userEvent.click(page.getByRole('button', { name: 'For developers' }));
+    await expect.element(page.getByRole('heading', { name: 'For developers' })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Open For developers' }));
     const sheet = page.getByRole('dialog', { name: 'For developers' });
     await expect.element(sheet).toBeVisible();
     await expect.element(sheet.getByText('Your own HTML')).toBeVisible();

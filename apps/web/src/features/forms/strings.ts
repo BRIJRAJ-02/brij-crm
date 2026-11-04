@@ -47,6 +47,8 @@ export const strings = {
   turnOffFailed: (name: string) => `Couldn’t pause ${name}. It’s still live.`,
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
+  /** Under a list with more to load: how many are shown so far. */
+  submissionsShown: (n: number) => `${count(n, 'submission', 'submissions')} shown`,
   noSubmissionsYet: 'No submissions yet',
   /** A draft card's one action: back into its builder to finish it and publish. */
   editDraft: 'Edit',
@@ -176,24 +178,17 @@ export const strings = {
   liveTitle: 'Your form is live',
   /** The live dialog's one line (T44): the form's own name, then "is live". */
   liveTitleOf: (name: string) => `${name} is live`,
-  /** The live dialog's line on where answers go: "Answers go to People · 1 new field: Budget". */
+  /** The live dialog's footer line on where answers go, Change after it: "Answers go to People · 1 new field: Budget". */
   liveFiling: (objectName: string, made: readonly string[]) =>
     made.length === 0
-      ? `Answers go to ${objectName}.`
-      : `Answers go to ${objectName} · ${made.length === 1 ? '1 new field' : `${String(made.length)} new fields`}: ${made.join(', ')}.`,
+      ? `Answers go to ${objectName}`
+      : `Answers go to ${objectName} · ${made.length === 1 ? '1 new field' : `${String(made.length)} new fields`}: ${made.join(', ')}`,
   /** Opens where the live dialog's line is changed (Settings › CRM). */
   changeFiling: 'Change',
-  /** The live dialog's quiet way to the Share tab's embeds. */
+  /** The live dialog's row to the Share tab's embeds. */
   putOnSite: 'Put it on your site',
   qrLabel: 'QR code for the form’s link',
-  qrDownload: 'Download the QR code',
-  qrPng: 'PNG',
-  qrSvg: 'SVG',
   qrDownloadFailed: 'The QR code didn’t download. Try again.',
-  sendLink: 'Send the link',
-  sendEmail: 'Email',
-  sendWhatsapp: 'WhatsApp',
-  sendMore: 'More',
   name: 'Name',
   /** An example of a name, never the name an unnamed form gets: Publish refuses a blank one. */
   namePlaceholder: 'Contact us',
@@ -381,7 +376,7 @@ export const strings = {
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
   /** The Share tab's first Card: the form's link (not "Share" again under the Share tab). */
-  linkTitle: 'Link',
+  linkTitle: 'Share the link',
   shareTip: 'Opens the form on its own page.',
   link: 'Link',
   copy: 'Copy',
@@ -418,6 +413,9 @@ export const strings = {
   embedCouldBookLink: 'Set what happens after it’s sent',
   embedSnippet: 'Embed snippet',
   advancedTitle: 'For developers',
+  advancedHint: 'Prefill links, your own HTML, allowed sites and signed posts.',
+  advancedOpen: 'Open',
+  advancedOpenName: 'Open For developers',
   ownFormTitle: 'Your own HTML',
   ownFormSnippet: 'Form HTML',
   taggingText:

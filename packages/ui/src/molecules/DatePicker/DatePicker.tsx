@@ -26,7 +26,6 @@ import {
   DateRangePicker as AriaDateRangePicker,
   DateRangePickerStateContext,
   DateSegment,
-  FieldError,
   Group,
   Label,
   RangeCalendar,
@@ -34,6 +33,7 @@ import {
   Text,
   type DateValue,
 } from 'react-aria-components';
+import { FieldError } from '../../atoms/FieldError/FieldError.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -582,10 +582,7 @@ function FieldParts({ look }: { readonly look: DateFieldLook }) {
           {description}
         </Text>
       )}
-      <FieldError className={styles.error}>
-        <Icon name="circle-alert" size="xs" />
-        {look.error}
-      </FieldError>
+      {look.error !== undefined && <FieldError>{look.error}</FieldError>}
     </>
   );
 }
