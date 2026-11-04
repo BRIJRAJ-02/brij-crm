@@ -1,6 +1,7 @@
 import {
   addToCrm,
   deleteSubmission,
+  restoreSubmission,
   getExport,
   startSubmissionsExport,
   getSubmission,
@@ -65,6 +66,12 @@ export const submissionsRouter = member.submissions.router({
   delete: member.submissions.delete.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       deleteSubmission(context.scope, { submissionId: input.submissionId }, hooks),
+    ),
+  ),
+  // Undo a delete (forms fixes 2): deletes are soft.
+  restore: member.submissions.restore.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      restoreSubmission(context.scope, { submissionId: input.submissionId }, hooks),
     ),
   ),
   // Add to CRM (spec 0023 follow-up): the member's `forms.file` job over the submissions that qualify.

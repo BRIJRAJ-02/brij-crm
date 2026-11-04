@@ -189,14 +189,16 @@ async function countsOf(
   }>(sql`
     select f.id::text as form_id,
       (select count(*)::int from (
-        select 1 from form_submissions s where s.form_id = f.id and s.state <> 'spam'
+        select 1 from form_submissions s where s.form_id = f.id and s.state <> 'spam' and s.deleted_at is null
           and s.received_at >= date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'
         limit ${FORM_COUNT_CAP}) c) as month,
       (select count(*)::int from (
-        select 1 from form_submissions s where s.form_id = f.id and s.state = 'spam' limit ${FORM_COUNT_CAP}) c) as spam,
+        select 1 from form_submissions s where s.form_id = f.id and s.state = 'spam' and s.deleted_at is null
+        limit ${FORM_COUNT_CAP}) c) as spam,
       (select to_char(max(s.received_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-        from form_submissions s where s.form_id = f.id and s.state <> 'spam') as last,
-      (select count(*)::int from (select 1 from form_submissions s where s.form_id = f.id limit ${FORM_COUNT_CAP}) c) as total
+        from form_submissions s where s.form_id = f.id and s.state <> 'spam' and s.deleted_at is null) as last,
+      (select count(*)::int from (
+        select 1 from form_submissions s where s.form_id = f.id and s.deleted_at is null limit ${FORM_COUNT_CAP}) c) as total
     from forms f where f.id = any(${`{${formIds.join(',')}}`}::uuid[])
   `);
   return new Map(rows.rows.map((row) => [row.form_id, row]));

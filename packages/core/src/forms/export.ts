@@ -11,7 +11,7 @@
 // access is the one it was written under (`exportAccessKey`); the daily
 // cleanup deletes it after.
 import { createHash } from 'node:crypto';
-import { and, desc, eq, inArray, lt, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import * as z from 'zod';
 import {
   answerWords,
@@ -447,6 +447,7 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     .where(
       and(
         eq(formSubmissions.formId, form.id),
+        isNull(formSubmissions.deletedAt),
         selectionTest(select),
         at.after === undefined
           ? undefined

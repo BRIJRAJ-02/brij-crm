@@ -23,7 +23,7 @@ import {
   type InsightSessionPage,
   type PageKind,
 } from '@crm/contracts';
-import { inArray, sql } from 'drizzle-orm';
+import { and, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import { can, fieldLevel } from '../access/policy.ts';
@@ -178,7 +178,7 @@ async function heardAnswers(
           (ask) => sql`
             select left(trim(s.answers ->> ${ask.key}), 80) as answer
             from form_submissions s
-            where s.form_id = ${ask.formId} and s.state <> 'spam'
+            where s.form_id = ${ask.formId} and s.state <> 'spam' and s.deleted_at is null
               and s.received_at >= (${period.from}::date)::timestamp at time zone 'UTC'
               and s.received_at < (${period.to}::date + 1)::timestamp at time zone 'UTC'`,
         ),
@@ -276,7 +276,7 @@ async function submissionPeople(
   const rows: Row[] = await tx
     .select(COLUMNS)
     .from(formSubmissions)
-    .where(inArray(formSubmissions.id, [...ids]));
+    .where(and(inArray(formSubmissions.id, [...ids]), isNull(formSubmissions.deletedAt)));
   const shown = await visibleRows(tx, scope, rows);
   const names = await displays(
     tx,

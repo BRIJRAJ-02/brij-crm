@@ -25,6 +25,7 @@ import { jobKinds } from './kinds/index.ts';
 import {
   MAINTENANCE_DAILY,
   maintenanceDaily,
+  deletedSweepStatement,
   retentionSweepStatement,
   spamSweepStatement,
 } from './kinds/maintenance-daily.ts';
@@ -645,6 +646,8 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     for (const [statement, index] of [
       [spamSweepStatement(t.workspaceId, 500), 'form_submissions_spam'],
       [retentionSweepStatement(t.workspaceId, 12, 500), 'form_submissions_by_received'],
+      // Deleted submissions past their 30 days (forms fixes 2).
+      [deletedSweepStatement(t.workspaceId, 500), 'form_submissions_deleted'],
     ] as const) {
       const plan = await db.withWorkspace(t.workspaceId, async (tx) => {
         // A handful of rows would make a sequential scan the cheapest plan; switched off, the planner shows whether

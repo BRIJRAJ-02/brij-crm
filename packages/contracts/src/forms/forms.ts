@@ -633,4 +633,6 @@ export const submissionsContract = {
   /** Use new (forms fix a4): writes one kept answer over the record's value, through the member's own access. */
   useNewAnswer: oc.input(UseNewAnswerInput).output(SubmissionView),
   delete: oc.input(SubmissionWriteInput).output(z.object({ deleted: z.literal(true) })),
+  /** Undo a delete (forms fixes 2): deletes are soft, so the submission comes back as it was. */
+  restore: oc.input(SubmissionWriteInput).output(SubmissionView),
 };

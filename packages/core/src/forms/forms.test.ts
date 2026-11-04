@@ -49,6 +49,7 @@ import { workspacePublicKey } from './shared.ts';
 import type { CaptchaVerdict } from './spam.ts';
 import {
   deleteSubmission,
+  restoreSubmission,
   getSubmission,
   listSubmissions,
   markSubmissionSpam,
@@ -1469,6 +1470,20 @@ describe('the submissions screen’s reads (AC-572, AC-573)', () => {
       submissionsThisMonth: 2,
       spamCount: 1,
     });
+    // Deletes are soft (forms fixes 2): out of every list and count, back as it was with Undo, and only once.
+    expect((await listSubmissions(w.scope, { formId: live.id })).items.map((item) => item.id)).not.toContain(
+      processed.id,
+    );
+    expect(await refusalOf(restoreSubmission(member, { submissionId: processed.id }))).toMatchObject([
+      { code: 'FORBIDDEN' },
+    ]);
+    const back = await restoreSubmission(w.scope, { submissionId: processed.id });
+    expect(back.id).toBe(processed.id);
+    expect((await listSubmissions(w.scope, { formId: live.id })).items.map((item) => item.id)).toContain(processed.id);
+    expect((await listForms(w.scope, { archived: false })).items[0]).toMatchObject({ submissionsThisMonth: 3 });
+    expect(await refusalOf(restoreSubmission(w.scope, { submissionId: processed.id }))).toMatchObject([
+      { code: 'FORM_STATE' },
+    ]);
   });
 });
 

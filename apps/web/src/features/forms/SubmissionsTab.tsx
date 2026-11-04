@@ -166,23 +166,11 @@ export function SubmissionsTab({
       : { for: page, items: [], ...(page.nextCursor === undefined ? {} : { next: page.nextCursor }) };
   const rows = [...page.items, ...held.items];
   const [busy, setBusy] = useState<string | undefined>(undefined);
-  // The submission Delete asks about, held as it opens: the panel moving underneath never changes what is deleted.
-  const [confirmingId, setConfirmingId] = useState<string | undefined>(undefined);
-  const isConfirmingDelete = confirmingId !== undefined;
-  const setConfirmingDelete = (isOpen: boolean) => {
-    setConfirmingId(isOpen ? open?.id : undefined);
-  };
-  // A refused delete says why inside its confirm, which stays open (the owner's rule, 21 October 2026).
-  const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined);
   // Adding many at once asks first (the confirms rule, 21 October 2026); one from the panel stays one click.
   // The picked ids stay while the dialog plays its exit, so its title keeps its count.
   const [addingMany, setAddingMany] = useState<readonly string[]>([]);
   const [isAddingMany, setIsAddingMany] = useState(false);
   const [addFailure, setAddFailure] = useState<string | undefined>(undefined);
-  // Bulk Delete asks first, since a submission can't come back; the picked ids stay while the dialog plays its exit.
-  const [deletingMany, setDeletingMany] = useState<readonly string[]>([]);
-  const [isDeletingMany, setIsDeletingMany] = useState(false);
-  const [deleteManyFailure, setDeleteManyFailure] = useState<string | undefined>(undefined);
 
   const go = (submissionId?: string, nextState: SubmissionState | undefined = state) => {
     if (nextState !== state) setSelected(new Set());
@@ -227,7 +215,6 @@ export function SubmissionsTab({
   const act = (kind: 'release' | 'spam' | 'retry' | 'delete', submissionId: string) => {
     if (busy !== undefined) return;
     setBusy(kind);
-    if (kind === 'delete') setDeleteFailure(undefined);
     const done =
       kind === 'release' || kind === 'spam'
         ? settleOne(submissionId, kind)
@@ -243,16 +230,27 @@ export function SubmissionsTab({
     done.then(
       () => {
         setBusy(undefined);
-        setConfirmingDelete(false);
-        toasts.toast({ tone: 'success', message: said[kind] });
+        // A delete is one click with Undo (forms fixes 2): deletes are soft, so it comes back as it was.
+        toasts.toast({
+          tone: 'success',
+          message: said[kind],
+          ...(kind === 'delete'
+            ? {
+                action: {
+                  label: strings.undo,
+                  onAction: () => {
+                    undoDelete([submissionId], true);
+                  },
+                },
+              }
+            : {}),
+        });
         if (kind === 'delete') go(undefined);
         else void router.invalidate();
       },
       (error: unknown) => {
         setBusy(undefined);
-        const message = isDataError(error) ? error.message : strings.failedText;
-        if (kind === 'delete') setDeleteFailure(message);
-        else toasts.toast({ tone: 'danger', message });
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
       },
     );
   };
@@ -301,7 +299,7 @@ export function SubmissionsTab({
   const after = at >= 0 ? shown[at + 1] : undefined;
   useEffect(() => {
     // Never under a dialog: J would change the submission an open Delete acts on.
-    if (open === undefined || isConfirmingDelete || isDeletingMany || isAddingMany) return undefined;
+    if (open === undefined || isAddingMany) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
       const target = event.target;
@@ -390,14 +388,30 @@ export function SubmissionsTab({
     );
   };
 
+  /** Undo: puts deleted submissions back, and reopens the one that was open. */
+  const undoDelete = (ids: readonly string[], reopen: boolean) => {
+    Promise.all(ids.map((id) => data.submissions.restore(slug, id))).then(
+      () => {
+        toasts.toast({ tone: 'success', message: strings.restoredMany(ids.length) });
+        const [only] = ids;
+        if (reopen && only !== undefined) go(only);
+        else void router.invalidate();
+      },
+      (error: unknown) => {
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+        void router.invalidate();
+      },
+    );
+  };
+
   /**
-   * Deletes the picked submissions one after another, with progress in the bar, as the other bulk actions run. A
-   * refusal stops there: the confirm stays open saying why, and the ones not deleted yet stay picked.
+   * Deletes the picked submissions one after another, with progress in the bar, as the other bulk actions run, then
+   * offers Undo for every one deleted (forms fixes 2: deletes are soft, so it asks nothing first). A refusal stops
+   * there and says why; the ones not deleted yet stay picked.
    */
   const deleteAll = (ids: readonly string[]) => {
     if (bulk !== undefined) return;
     let done = 0;
-    setDeleteManyFailure(undefined);
     setBulk({ label: strings.deletingMany, value: 0 });
     const step = (index: number): Promise<void> => {
       const id = ids[index];
@@ -411,9 +425,17 @@ export function SubmissionsTab({
     step(0).then(
       () => {
         setBulk(undefined);
-        setIsDeletingMany(false);
         setSelected(new Set());
-        toasts.toast({ tone: 'success', message: strings.deletedMany(done) });
+        toasts.toast({
+          tone: 'success',
+          message: strings.deletedMany(done),
+          action: {
+            label: strings.undo,
+            onAction: () => {
+              undoDelete(ids, false);
+            },
+          },
+        });
         // The bar that held Delete goes with the selection, so focus goes to the page's heading, not the body.
         focusLater(() => pageHeading(document));
         // The open one may be among them: the panel closes with it.
@@ -423,9 +445,21 @@ export function SubmissionsTab({
       (error: unknown) => {
         setBulk(undefined);
         setSelected(new Set(ids.slice(done)));
-        setDeletingMany(ids.slice(done));
         const reason = isDataError(error) ? error.message : strings.failedText;
-        setDeleteManyFailure(done === 0 ? reason : `${strings.deletedSome(done, ids.length)} ${reason}`);
+        toasts.toast({
+          tone: 'danger',
+          message: done === 0 ? reason : `${strings.deletedSome(done, ids.length)} ${reason}`,
+          ...(done === 0
+            ? {}
+            : {
+                action: {
+                  label: strings.undo,
+                  onAction: () => {
+                    undoDelete(ids.slice(0, done), false);
+                  },
+                },
+              }),
+        });
         void router.invalidate();
       },
     );
@@ -674,11 +708,9 @@ export function SubmissionsTab({
           <Button
             variant="danger"
             icon="trash"
+            isPending={bulk?.label === strings.deletingMany}
             onPress={() => {
-              if (bulk !== undefined) return;
-              setDeleteManyFailure(undefined);
-              setDeletingMany(picked.map((submission) => submission.id));
-              setIsDeletingMany(true);
+              deleteAll(picked.map((submission) => submission.id));
             }}
           >
             {strings.deleteSubmission}
@@ -785,7 +817,14 @@ export function SubmissionsTab({
                 // Delete keeps the footer's start, away from the main action; a failed one keeps Retry in view and
                 // folds its other choices into More, so the footer never holds four buttons on a phone.
                 footerStart: (
-                  <Button variant="danger" icon="trash" onPress={() => setConfirmingDelete(true)}>
+                  <Button
+                    variant="danger"
+                    icon="trash"
+                    isPending={busy === 'delete'}
+                    onPress={() => {
+                      act('delete', open.id);
+                    }}
+                  >
                     {strings.deleteSubmission}
                   </Button>
                 ),
@@ -858,72 +897,6 @@ export function SubmissionsTab({
           />
         </Panel>
       )}
-      <Modal
-        title={strings.deleteSubmissionTitle(
-          open === undefined ? undefined : (open.mainRecord?.name ?? nameOf(open) ?? open.email),
-        )}
-        variant="confirm"
-        tone="danger"
-        isOpen={isConfirmingDelete}
-        isBusy={busy === 'delete'}
-        onOpenChange={(isOpen) => {
-          if (busy === 'delete') return;
-          setConfirmingDelete(isOpen);
-          if (!isOpen) setDeleteFailure(undefined);
-        }}
-        actions={
-          <>
-            <Button slot="close" isDisabled={busy === 'delete'}>
-              {strings.cancel}
-            </Button>
-            <Button
-              variant="danger-solid"
-              icon="trash"
-              isPending={busy === 'delete'}
-              onPress={() => {
-                if (confirmingId !== undefined) act('delete', confirmingId);
-              }}
-            >
-              {strings.deleteSubmissionAction}
-            </Button>
-          </>
-        }
-      >
-        {deleteFailure !== undefined && <Callout tone="danger">{deleteFailure}</Callout>}
-        <p>{strings.deleteSubmissionText}</p>
-      </Modal>
-      <Modal
-        title={strings.deleteManyTitle(deletingMany.length)}
-        variant="confirm"
-        tone="danger"
-        isOpen={isDeletingMany}
-        isBusy={bulk !== undefined}
-        onOpenChange={(isOpen) => {
-          if (bulk !== undefined || isOpen) return;
-          setIsDeletingMany(false);
-          setDeleteManyFailure(undefined);
-        }}
-        actions={
-          <>
-            <Button slot="close" isDisabled={bulk !== undefined}>
-              {strings.cancel}
-            </Button>
-            <Button
-              variant="danger-solid"
-              icon="trash"
-              isPending={bulk !== undefined}
-              onPress={() => {
-                deleteAll(deletingMany);
-              }}
-            >
-              {strings.deleteManyAction(deletingMany.length)}
-            </Button>
-          </>
-        }
-      >
-        {deleteManyFailure !== undefined && <Callout tone="danger">{deleteManyFailure}</Callout>}
-        <p>{strings.deleteManyText}</p>
-      </Modal>
       <Modal
         title={strings.addManyTitle(addingMany.length, ADD_MAX)}
         isOpen={isAddingMany}

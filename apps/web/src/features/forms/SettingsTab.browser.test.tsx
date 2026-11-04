@@ -452,6 +452,7 @@ describe('Settings as plain rows (T21)', () => {
       label: 'Budget',
       answerType: 'number' as const,
       required: false,
+      update: 'fill' as const,
       filedOn: { objectRole: 'deal' as const, attributeId: '0199f0a0-0000-7000-8000-0000000000b1' },
     };
     const draft: FormDocument = {

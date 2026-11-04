@@ -834,6 +834,8 @@ export {
 } from './forms/export.ts';
 export {
   deleteSubmission,
+  restoreSubmission,
+  DELETED_SUBMISSIONS_KEPT_DAYS,
   getSubmission,
   listSubmissions,
   markSubmissionSpam,

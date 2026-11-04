@@ -4,7 +4,7 @@
 // read its main record; one with no main record yet (received, spam,
 // failed) only with `forms.manage`. Answers to attributes the reader can't
 // see are left out, the same rule as everywhere else (hidden means absent).
-import { and, desc, eq, inArray, lt, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import {
   SPAM_FILES_KEPT_DAYS,
   SubmissionContext,
@@ -266,6 +266,7 @@ export async function listSubmissions(
       .where(
         and(
           eq(formSubmissions.formId, form.id),
+          isNull(formSubmissions.deletedAt),
           input.state === undefined ? sql`${formSubmissions.state} <> 'spam'` : eq(formSubmissions.state, input.state),
           after === undefined
             ? undefined
@@ -365,7 +366,10 @@ export async function submissionNotices(
 ): Promise<ReadonlyMap<string, SubmissionNotice>> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
-  const rows = await tx.select(COLUMNS).from(formSubmissions).where(inArray(formSubmissions.id, unique));
+  const rows = await tx
+    .select(COLUMNS)
+    .from(formSubmissions)
+    .where(and(inArray(formSubmissions.id, unique), isNull(formSubmissions.deletedAt)));
   const forms = await loadForms(
     tx,
     rows.map((row) => row.formId),
@@ -391,11 +395,22 @@ export async function submissionNotices(
 }
 
 /** One submission in full, as the reader may see it, read inside an open transaction (NOT_FOUND for one they can't). */
-export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string): Promise<SubmissionView> {
+export async function viewIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  submissionId: string,
+  /** A deleted one too: only Undo reads one, to put it back. */
+  withDeleted = false,
+): Promise<SubmissionView> {
   const [row] = await tx
     .select(COLUMNS)
     .from(formSubmissions)
-    .where(eq(formSubmissions.id, checkId(submissionId, UNKNOWN_SUBMISSION)));
+    .where(
+      and(
+        eq(formSubmissions.id, checkId(submissionId, UNKNOWN_SUBMISSION)),
+        withDeleted ? undefined : isNull(formSubmissions.deletedAt),
+      ),
+    );
   if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   const form = await loadForm(tx, row.formId);
   if (form === undefined || !canSeeForm(scope.access, form)) {
@@ -504,9 +519,9 @@ export async function getSubmission(
 }
 
 /** Locks a submission the reader may see, for a change. */
-async function lockedSubmission(tx: WorkspaceTx, scope: EngineScope, submissionId: string) {
+async function lockedSubmission(tx: WorkspaceTx, scope: EngineScope, submissionId: string, withDeleted = false) {
   const id = checkId(submissionId, UNKNOWN_SUBMISSION);
-  await viewIn(tx, scope, id);
+  await viewIn(tx, scope, id, withDeleted);
   const [row] = await tx
     .select({
       id: formSubmissions.id,
@@ -751,7 +766,17 @@ export async function useNewAnswer(
   return result;
 }
 
-/** Deletes a submission (AC-575): its answers go; the records it created stay. */
+/** How long a deleted submission can be put back before the daily cleanup removes it for good. */
+export const DELETED_SUBMISSIONS_KEPT_DAYS = 30;
+
+/** What Undo on a submission that is no longer in the bin says. */
+export const NOT_DELETED = 'That submission is no longer deleted, or it was removed for good.';
+
+/**
+ * Deletes a submission (AC-575; soft since forms fixes 2, 6 November 2026): it leaves every list, count and export at
+ * once, the records it created stay, and Undo (`restoreSubmission`) puts it back until the daily cleanup removes it
+ * for good after `DELETED_SUBMISSIONS_KEPT_DAYS`.
+ */
 export async function deleteSubmission(
   scope: EngineScope,
   input: { readonly submissionId: string },
@@ -765,9 +790,37 @@ export async function deleteSubmission(
       const row = await lockedSubmission(tx, scope, input.submissionId);
       // Its notifications go with it: the inboxes showing one hear of it.
       await withdrawSubmissionNotices(context, sql`n.submission_id = ${row.id}`);
-      await tx.delete(formSubmissions).where(eq(formSubmissions.id, row.id));
+      await tx
+        .update(formSubmissions)
+        .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+        .where(eq(formSubmissions.id, row.id));
     },
     hooks,
   );
   return { deleted: true };
+}
+
+/** Puts back a submission deleted a moment ago (Undo), as it was; its notices stay withdrawn. */
+export async function restoreSubmission(
+  scope: EngineScope,
+  input: { readonly submissionId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const row = await lockedSubmission(tx, scope, input.submissionId, true);
+      const restored = await tx
+        .update(formSubmissions)
+        .set({ deletedAt: null, updatedAt: sql`now()` })
+        .where(and(eq(formSubmissions.id, row.id), isNotNull(formSubmissions.deletedAt)))
+        .returning({ id: formSubmissions.id });
+      if (restored.length === 0) throw refuse('FORM_STATE', NOT_DELETED);
+      return viewIn(tx, scope, row.id);
+    },
+    hooks,
+  );
+  return result;
 }

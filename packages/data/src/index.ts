@@ -7864,6 +7864,9 @@ export function createDataLayer({
       /** Deletes a submission; the records it made stay (AC-575). */
       delete: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.delete({ workspace, submissionId, mutationId: mintId() }, options)),
+      /** Undo a delete (forms fixes 2): deletes are soft, so the submission comes back as it was. */
+      restore: (workspace: string, submissionId: string) =>
+        call((options) => api.submissions.restore({ workspace, submissionId, mutationId: mintId() }, options)),
       /**
        * Add to CRM: files submissions that aren't in the CRM with the form's
        * published mapping, in one `forms.file` job (follow it with `jobs`).

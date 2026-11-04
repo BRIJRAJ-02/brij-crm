@@ -577,14 +577,9 @@ export const strings = {
   retry: 'Retry',
   deleteSubmission: 'Delete',
   /** Names the submission by who sent it: "Delete the submission from Grace Hopper?". */
-  deleteSubmissionTitle: (who: string | undefined) =>
-    who === undefined ? 'Delete this submission?' : `Delete the submission from ${who}?`,
-  deleteSubmissionText: 'Its answers are gone for good; the people and records it made stay.',
-  deleteSubmissionAction: 'Delete submission',
-  /** Bulk Delete (asks first: a submission can't come back): "Delete 3 submissions?". */
-  deleteManyTitle: (n: number) => `Delete ${count(n, 'submission', 'submissions')}?`,
-  deleteManyText: 'Their answers are gone for good; the people and records they made stay.',
-  deleteManyAction: (n: number) => `Delete ${count(n, 'submission', 'submissions')}`,
+  /** Undo of a delete (forms fixes 2: deletes are soft, so Delete asks nothing first). */
+  restoredMany: (n: number) =>
+    n === 1 ? 'Submission restored.' : `${count(n, 'submission', 'submissions')} restored.`,
   deletingMany: 'Deleting…',
   deletedMany: (n: number) => `${count(n, 'submission', 'submissions')} deleted.`,
   deletedSome: (done: number, of: number) => `Deleted ${String(done)} of ${String(of)}; the rest are still picked.`,

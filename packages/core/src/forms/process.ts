@@ -1157,7 +1157,7 @@ export async function processSubmission(
   const { tx } = context;
   const found = await tx.execute<SubmissionRow>(sql`
     select id::text, form_id::text, version_id::text, state, answers, assignment
-    from form_submissions where id = ${submissionId} for update
+    from form_submissions where id = ${submissionId} and deleted_at is null for update
   `);
   const submission = found.rows[0];
   if (submission === undefined || submission.state !== 'received') return;

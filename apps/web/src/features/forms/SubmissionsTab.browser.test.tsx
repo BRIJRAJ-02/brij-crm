@@ -77,6 +77,8 @@ const OPEN: SubmissionView = {
 
 let shown: InApp | undefined;
 const used: string[] = [];
+/** What Delete and Undo asked the server for, in order. */
+const calls: string[] = [];
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -86,6 +88,7 @@ afterEach(() => {
   shown?.unmount();
   shown = undefined;
   used.length = 0;
+  calls.length = 0;
 });
 
 async function show(open: SubmissionView | undefined, spamCount = 2) {
@@ -93,6 +96,14 @@ async function show(open: SubmissionView | undefined, spamCount = 2) {
     submissions: {
       useNewAnswer: (_slug: string, _submissionId: string, questionId: string) => {
         used.push(questionId);
+        return Promise.resolve(open);
+      },
+      delete: (_slug: string, submissionId: string) => {
+        calls.push(`delete ${submissionId}`);
+        return Promise.resolve({ deleted: true });
+      },
+      restore: (_slug: string, submissionId: string) => {
+        calls.push(`restore ${submissionId}`);
         return Promise.resolve(open);
       },
     },
@@ -139,5 +150,17 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     (document.activeElement as HTMLElement | null)?.blur();
     await userEvent.keyboard('j');
     await expect.poll(() => app.router.state.location.href).toContain(`submission=${id(2)}`);
+  });
+
+  it('deletes in one click, asking nothing, and Undo puts it back and opens it again (forms fixes 2)', async () => {
+    const app = await show(OPEN);
+    await userEvent.click(page.getByRole('button', { name: 'Delete', exact: true }));
+    expect(page.getByRole('button', { name: 'Delete submission' }).query()).toBeNull();
+    expect(calls).toEqual([`delete ${id(1)}`]);
+    await expect.element(page.getByText('Submission deleted.')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+    await expect.poll(() => calls).toEqual([`delete ${id(1)}`, `restore ${id(1)}`]);
+    await expect.element(page.getByText('Submission restored.')).toBeVisible();
+    await expect.poll(() => app.router.state.location.href).toContain(`submission=${id(1)}`);
   });
 });

@@ -262,6 +262,11 @@ export const formSubmissions = pgTable(
     receivedAt: timestamptz('received_at').notNull().defaultNow(),
     processedAt: timestamptz('processed_at'),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+    /**
+     * When it was deleted (forms fixes 2, 6 November 2026): deletes are soft, so Undo puts it back; every read leaves
+     * it out, and the daily cleanup removes it for good after `DELETED_SUBMISSIONS_KEPT_DAYS`. Null while it is live.
+     */
+    deletedAt: timestamptz('deleted_at'),
   },
   (t) => [
     primaryKey({ name: 'form_submissions_pkey', columns: [t.workspaceId, t.id] }),
@@ -294,6 +299,10 @@ export const formSubmissions = pgTable(
     index('form_submissions_open')
       .on(t.workspaceId, t.state)
       .where(sql`${t.state} <> 'processed'`),
+    // The deleted ones, oldest first: the daily cleanup's walk to remove them for good.
+    index('form_submissions_deleted')
+      .on(t.workspaceId, t.deletedAt, t.id)
+      .where(sql`${t.deletedAt} is not null`),
     // A record's submissions as their main record: the purge clears it when the record goes for good (spec 0022).
     index('form_submissions_by_main_record')
       .on(t.workspaceId, t.mainRecordId)

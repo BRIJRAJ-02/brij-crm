@@ -2733,6 +2733,13 @@ Object.assign(WRITES, {
     await m.client.submissions.delete({ workspace: m.slug, submissionId, mutationId });
     return [];
   },
+  'submissions.restore': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'spam');
+    await m.client.submissions.delete({ workspace: m.slug, submissionId, mutationId: newId() });
+    await m.client.submissions.restore({ workspace: m.slug, submissionId, mutationId });
+    return [];
+  },
 });
 
 /** A rotation of the member and a second member, both with their own hours (spec 0029: a rotation needs 2). */
@@ -3378,6 +3385,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'forms.syncStart': 3,
   'submissions.retry': 3,
   'submissions.delete': 3,
+  'submissions.restore': 3,
 };
 
 // Teams (spec 0031, slice 8): every team write stores a `members` row (everyone's team list reads again), naming the

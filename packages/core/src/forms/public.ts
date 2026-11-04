@@ -255,7 +255,7 @@ async function handedOff(tx: WorkspaceTx, submissionId: string, pageId: string) 
       context: formSubmissions.context,
     })
     .from(formSubmissions)
-    .where(eq(formSubmissions.id, submissionId));
+    .where(and(eq(formSubmissions.id, submissionId), isNull(formSubmissions.deletedAt)));
   if (row === undefined) return undefined;
   const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
   if (version === undefined) return undefined;

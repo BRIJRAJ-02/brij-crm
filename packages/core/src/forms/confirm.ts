@@ -95,7 +95,7 @@ async function confirmOne(tx: WorkspaceTx, workspaceId: string, submissionId: st
     from form_submissions s
     join forms f on f.workspace_id = s.workspace_id and f.id = s.form_id
     join workspaces w on w.id = s.workspace_id
-    where s.workspace_id = ${workspaceId} and s.id = ${submissionId}
+    where s.workspace_id = ${workspaceId} and s.id = ${submissionId} and s.deleted_at is null
   `);
   const row = found.rows[0];
   // Spam and held submissions never get one (AC-6318); a failed filing still means the visitor's message arrived.

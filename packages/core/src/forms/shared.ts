@@ -451,7 +451,8 @@ export async function isClosedByRule(tx: WorkspaceTx, formId: string, document: 
   if (closing.after === undefined) return false;
   const counted = await tx.execute<{ n: number }>(sql`
     select count(*)::int as n from (
-      select 1 from form_submissions where form_id = ${formId}::uuid and state <> 'spam' limit ${closing.after}
+      select 1 from form_submissions
+      where form_id = ${formId}::uuid and state <> 'spam' and deleted_at is null limit ${closing.after}
     ) kept
   `);
   return closedByRule(document, { now, answers: counted.rows[0]?.n ?? 0 });
