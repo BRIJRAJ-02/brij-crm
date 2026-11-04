@@ -34,7 +34,7 @@ import {
 } from '@crm/ui';
 import type { ReactNode } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { zoneDisplay } from '../../public/booking/time.ts';
+import { zoneDisplay, zoneName } from '../../public/booking/time.ts';
 import { editorSearch, useRecordSearch } from '../records/links.ts';
 import { strings } from './strings.ts';
 import { useNow } from './useNow.ts';
@@ -58,6 +58,8 @@ export interface HostBookingActions {
   readonly rotations: () => Promise<readonly RotationView[]>;
   /** Marks a past booking as a no show, or takes the mark back (spec 0043, AC-1613). */
   readonly markNoShow: (bookingId: string, noShow: boolean) => Promise<void>;
+  /** Adds or changes the meeting's link by hand (B-07): shown at once, the guest emailed; throws on a refusal. */
+  readonly setMeetingLink?: (bookingId: string, url: string) => Promise<void>;
   /** Says how a change outside the card went (Copy guest link, a link taken off with its Undo). */
   readonly notify: (tone: 'success' | 'danger', message: string, action?: ToastAction) => void;
   /** Linking a booking to a record by hand (polish F2); left out, the card offers no link. */
@@ -103,7 +105,7 @@ function dayOf(instant: string, zone: string): string {
  * A dialog the card's buttons open: Reschedule, Cancel booking (a confirm), Reassign and Host away's Reassign (both
  * drawn by its screen), or Link to a record.
  */
-export type BookingAsk = 'move' | 'cancel' | 'reassign' | 'reassignAway' | 'link';
+export type BookingAsk = 'move' | 'cancel' | 'reassign' | 'reassignAway' | 'link' | 'meetingLink';
 
 /**
  * The card's changes in its footer, one row as Google Calendar's and Cal.com's event cards hold them (Join, before
@@ -136,6 +138,8 @@ export function useBookingActions({
   readonly dialogs: ReactNode;
   /** Focuses More, when the footer has it: where focus goes when a control on the card goes away under it. */
   readonly focusMore?: () => void;
+  /** The guest's link, read on the press, for the card's CopyButton. */
+  readonly guestLink: () => Promise<string>;
   /**
    * Takes the hand made link off at once, with Undo (polish F2), when the card has More and the member may change the
    * link: the linked record's object is one they may link from. The card's row offers it as its ×; More holds it too.
@@ -145,13 +149,20 @@ export function useBookingActions({
   const [open, setOpen] = useState<BookingAsk | undefined>(undefined);
   // Each opening mounts a fresh dialog (an empty reason, no old refusal).
   const [opens, setOpens] = useState(0);
-  const [copying, setCopying] = useState(false);
   const moveRef = useRef<HTMLButtonElement>(null);
-  // More, which holds Cancel booking: focus goes back to it when Cancel's confirm is dismissed.
+  // Cancel, beside Reschedule: focus goes back to it when its confirm is dismissed.
   const cancelRef = useRef<HTMLButtonElement>(null);
+  // More (Link to a record, Reassign): where focus goes when a control on the card goes away under it.
+  const moreRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (focusOnMount === undefined) return;
-    focusLater(() => (focusOnMount === 'move' ? moveRef.current : cancelRef.current));
+    focusLater(() =>
+      focusOnMount === 'move'
+        ? moveRef.current
+        : focusOnMount === 'cancel'
+          ? cancelRef.current
+          : (moreRef.current ?? cancelRef.current),
+    );
     // Only as the card opens again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -163,26 +174,12 @@ export function useBookingActions({
     setOpens((count) => count + 1);
     setOpen(kind);
   };
-  // The link is read on demand (it is the guest's key), so the clipboard is handed the read itself while the press
-  // still counts as the person's (Safari refuses a write made after an awaited request).
-  const copy = async () => {
-    setCopying(true);
-    const url = actions.guestLink(booking.id).then(({ path }) => new URL(path, globalThis.location.origin).toString());
-    try {
-      if (typeof ClipboardItem === 'function') {
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'text/plain': url.then((text) => new Blob([text], { type: 'text/plain' })) }),
-        ]);
-      } else {
-        await navigator.clipboard.writeText(await url);
-      }
-      actions.notify('success', strings.guestLinkCopied);
-    } catch (error) {
-      actions.notify('danger', isDataError(error) ? messageOf(error) : strings.copyFailed);
-    } finally {
-      setCopying(false);
-    }
-  };
+  /**
+   * The guest's link, read only on the press (it is the guest's key): CopyButton hands the clipboard the read itself
+   * and says Copied in place, so no toast (C11). A refused read throws, and CopyButton says it couldn't copy.
+   */
+  const guestLink = () =>
+    actions.guestLink(booking.id).then(({ path }) => new URL(path, globalThis.location.origin).toString());
   // A no show (spec 0043, AC-1613): once the meeting has started, its host marks it, and can take it back.
   const [marking, setMarking] = useState(false);
   const now = useNow();
@@ -211,7 +208,7 @@ export function useBookingActions({
   // focus goes to More, which holds Link to a record.
   const unlink = () => {
     if (linking === undefined || linked === undefined) return;
-    focusLater(() => cancelRef.current);
+    focusLater(() => moreRef.current ?? cancelRef.current);
     linking.link(booking.id, null).then(
       () => {
         actions.notify('success', strings.unlinkedToast(linked.name), {
@@ -240,28 +237,33 @@ export function useBookingActions({
       )}
     </>
   ) : null;
-  // One row, as Google Calendar and Cal.com keep it: Reschedule, then More holding Copy guest link, Link to a record,
-  // Reassign and Cancel booking (danger, still asking first). Join goes before them, from the card. Once started,
-  // Mark no show, with More holding Link to a record.
+  // One row, as Calendly's booking panel keeps it (B-06): Reschedule, Cancel beside it in the danger tone (still
+  // asking first), then More holding Link to a record and Reassign. Join goes before them, from the card. Once
+  // started, Mark no show, with More holding Link to a record.
+  const moreMenu = (items: ReactNode) => (
+    <MenuTrigger>
+      <Button ref={moreRef} size="lg" variant="ghost" icon="ellipsis" label={strings.moreForBooking} />
+      <Menu
+        label={strings.moreForBooking}
+        onAction={(key) => {
+          if (key === 'reassign') {
+            // In the week's popover the screen closes the card first, so Reassign never opens under it.
+            if (onAsk === undefined) onReassign?.();
+            else onAsk('reassign');
+          } else if (key === 'link') ask('link');
+          else if (key === 'unlink') unlink();
+        }}
+      >
+        {items}
+      </Menu>
+    </MenuTrigger>
+  );
   const footer = !isConfirmed ? undefined : hasStarted ? (
     <>
       <Button size="lg" icon="user-x" isPending={marking} onPress={() => void markNoShow()}>
         {booking.noShow === true ? strings.undoNoShow : strings.markNoShow}
       </Button>
-      {canLink && (
-        <MenuTrigger>
-          <Button ref={cancelRef} size="lg" variant="ghost" icon="ellipsis" label={strings.moreForBooking} />
-          <Menu
-            label={strings.moreForBooking}
-            onAction={(key) => {
-              if (key === 'link') ask('link');
-              else if (key === 'unlink') unlink();
-            }}
-          >
-            {linkItems}
-          </Menu>
-        </MenuTrigger>
-      )}
+      {canLink && moreMenu(linkItems)}
     </>
   ) : (
     <>
@@ -270,42 +272,20 @@ export function useBookingActions({
           {strings.reschedule}
         </Button>
       )}
-      <MenuTrigger>
-        <Button
-          ref={cancelRef}
-          size="lg"
-          variant="ghost"
-          icon="ellipsis"
-          label={strings.moreForBooking}
-          isPending={copying}
-        />
-        <Menu
-          label={strings.moreForBooking}
-          onAction={(key) => {
-            if (key === 'copy') void copy();
-            else if (key === 'reassign') {
-              // In the week's popover the screen closes the card first, so Reassign never opens under it.
-              if (onAsk === undefined) onReassign?.();
-              else onAsk('reassign');
-            } else if (key === 'cancel') ask('cancel');
-            else if (key === 'link') ask('link');
-            else if (key === 'unlink') unlink();
-          }}
-        >
-          <MenuItem id="copy" icon="copy">
-            {strings.copyGuestLink}
-          </MenuItem>
-          {linkItems}
-          {onReassign !== undefined && (
-            <MenuItem id="reassign" icon="users-round">
-              {strings.reassignAction}
-            </MenuItem>
-          )}
-          <MenuItem id="cancel" icon="circle-x" isDanger>
-            {strings.cancelBooking}
-          </MenuItem>
-        </Menu>
-      </MenuTrigger>
+      <Button ref={cancelRef} size="lg" variant="danger" label={strings.cancelBooking} onPress={() => ask('cancel')}>
+        {strings.cancelShort}
+      </Button>
+      {(canLink || onReassign !== undefined) &&
+        moreMenu(
+          <>
+            {linkItems}
+            {onReassign !== undefined && (
+              <MenuItem id="reassign" icon="users-round">
+                {strings.reassignAction}
+              </MenuItem>
+            )}
+          </>,
+        )}
     </>
   );
   const dialogs =
@@ -320,11 +300,13 @@ export function useBookingActions({
         onDone={() => setOpen(undefined)}
       />
     ) : undefined;
-  const hasMore = isConfirmed && (!hasStarted || canLink);
+  const hasMore = isConfirmed && (canLink || (!hasStarted && onReassign !== undefined));
+  const hasFocusTarget = isConfirmed && (hasMore || !hasStarted);
   return {
     actions: footer,
     dialogs,
-    ...(hasMore ? { focusMore: () => focusLater(() => cancelRef.current) } : {}),
+    guestLink,
+    ...(hasFocusTarget ? { focusMore: () => focusLater(() => moreRef.current ?? cancelRef.current) } : {}),
     ...(hasMore && canUnlink ? { unlink } : {}),
   };
 }
@@ -368,6 +350,16 @@ export function BookingDialog({
         linking={actions.linking}
         notify={actions.notify}
         isOpen={ask === 'link'}
+        onClose={onClose}
+      />
+    );
+  }
+  if (shown === 'meetingLink') {
+    return actions.setMeetingLink === undefined || ask !== 'meetingLink' ? null : (
+      <MeetingLinkDialog
+        booking={booking}
+        setMeetingLink={actions.setMeetingLink}
+        notify={actions.notify}
         onClose={onClose}
       />
     );
@@ -447,6 +439,24 @@ function MoveDialog({
       new Date(start),
     );
   const minutes = Math.round((Date.parse(booking.endsAt) - Date.parse(booking.startsAt)) / 60_000);
+  // The guest's own clock under each time (B-05), when it reads differently from the member's: a move is never
+  // made blind to their night. A zone this browser doesn't know shows nothing.
+  const theirZone = booking.visitorTimeZone;
+  const theirPlace = theirZone === '' ? '' : zoneName(theirZone).replace(/ time$/, '');
+  const theirTimeOf = (start: string): string | undefined => {
+    if (theirZone === '' || theirZone === zone) return undefined;
+    try {
+      const theirs = new Intl.DateTimeFormat(locale, {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12,
+        timeZone: theirZone,
+      }).format(new Date(start));
+      return theirs === timeName(start) ? undefined : theirs;
+    } catch {
+      return undefined;
+    }
+  };
   const move = () => {
     if (time === undefined) return;
     setBusy(true);
@@ -528,11 +538,20 @@ function MoveDialog({
           />
           <SlotList
             heading={shown === undefined ? strings.findingTimes : dayName(shown)}
-            slots={(shown === undefined ? [] : (byDay.get(shown) ?? [])).map((start) => ({
-              id: start,
-              label: timeName(start),
-              name: strings.slotName(timeName(start), shown === undefined ? '' : dayName(shown), minutes),
-            }))}
+            slots={(shown === undefined ? [] : (byDay.get(shown) ?? [])).map((start) => {
+              const name = strings.slotName(timeName(start), shown === undefined ? '' : dayName(shown), minutes);
+              const theirs = theirTimeOf(start);
+              return {
+                id: start,
+                label: timeName(start),
+                ...(theirs === undefined
+                  ? { name }
+                  : {
+                      name: strings.slotTheirsName(name, theirs, theirPlace),
+                      detail: strings.slotTheirs(theirs, theirPlace),
+                    }),
+              };
+            })}
             value={time}
             onChange={setTime}
             hour12={hour12}
@@ -764,6 +783,97 @@ function LinkRecordDialog({
             );
           }}
           {...(shownError === undefined ? {} : { error: shownError })}
+        />
+      </Form>
+    </Modal>
+  );
+}
+
+/** Whether a pasted meeting link is one the server takes: https, with a host name. */
+function isMeetingLink(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'https:' && url.hostname.includes('.');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Add meeting link (B-07): a video call no calendar made a link for. The host pastes the call's https link; it shows on
+ * the booking at once and the guest and their guests are emailed it. A refusal stays here, with what was typed.
+ */
+export function MeetingLinkDialog({
+  booking,
+  setMeetingLink,
+  notify,
+  onClose,
+}: {
+  readonly booking: BookingListItem;
+  readonly setMeetingLink: (bookingId: string, url: string) => Promise<void>;
+  readonly notify: HostBookingActions['notify'];
+  readonly onClose: () => void;
+}) {
+  const formId = useId();
+  const [url, setUrl] = useState(booking.videoUrl ?? '');
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const isChange = booking.videoUrl !== undefined;
+  const save = () => {
+    if (busy) return;
+    const link = url.trim();
+    if (!isMeetingLink(link)) {
+      setError(strings.meetingLinkInvalid);
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    setMeetingLink(booking.id, link).then(
+      () => {
+        notify('success', strings.meetingLinkSaved(booking.visitorName));
+        onClose();
+      },
+      (caught: unknown) => {
+        setBusy(false);
+        setError(messageOf(caught));
+      },
+    );
+  };
+  const title = isChange ? strings.changeMeetingLink : strings.addMeetingLink;
+  return (
+    <Modal
+      title={title}
+      isOpen
+      isBusy={busy}
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={busy}>
+            {strings.cancel}
+          </Button>
+          <Button variant="primary" type="submit" form={formId} kbd="⌘↵" isPending={busy}>
+            {busy ? strings.savingMeetingLink : strings.saveMeetingLink}
+          </Button>
+        </>
+      }
+    >
+      <Form id={formId} isBusy={busy} onSubmit={save} label={title}>
+        <Field
+          label={strings.meetingLinkField}
+          hint={strings.meetingLinkHint(booking.visitorName)}
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          placeholder={strings.meetingLinkPlaceholder}
+          value={url}
+          onChange={(next) => {
+            setUrl(next);
+            setError(undefined);
+          }}
+          isDisabled={busy}
+          {...(error === undefined ? {} : { error })}
         />
       </Form>
     </Modal>

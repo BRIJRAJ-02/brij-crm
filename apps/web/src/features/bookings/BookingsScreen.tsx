@@ -31,9 +31,9 @@ import {
   Button,
   ButtonLink,
   Callout,
+  CopyButton,
   DescriptionList,
   EmptyState,
-  Link,
   MeetingCard,
   memoIntl,
   Menu,
@@ -63,7 +63,7 @@ import {
   type MeetingCardRow,
 } from '@crm/ui';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { offsetLabel, zoneDisplay } from '../../public/booking/time.ts';
+import { offsetLabel, zoneDisplay, zoneName } from '../../public/booking/time.ts';
 import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { availabilityHref, calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
@@ -88,7 +88,13 @@ import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { assignedItems } from './assignment.ts';
 import { AwayReassignDialog } from './AwayReassignDialog.tsx';
 import { ReassignDialog } from './ReassignDialog.tsx';
-import { BookingDialog, useBookingActions, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
+import {
+  BookingDialog,
+  MeetingLinkDialog,
+  useBookingActions,
+  type BookingAsk,
+  type HostBookingActions,
+} from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingMove } from './useBookingMove.ts';
 import type { HostsChoice } from './toolbarSlot.ts';
@@ -196,6 +202,45 @@ function whenOf(startsAt: string, endsAt: string, locale: string, zone: string):
     timeZone: zone,
   }).format(new Date(startsAt));
   return `${day} · ${timeRange(startsAt, endsAt, locale, zone)}`;
+}
+
+/** When a booking was made, on the member's clock: "2 Nov, 14:03". */
+function bookedWhenOf(createdAt: string, locale: string, zone: string): string {
+  return memoIntl(
+    `bookings-booked|${locale}|${zone}`,
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: zone,
+      }),
+  ).format(new Date(createdAt));
+}
+
+/**
+ * The guest's own clock at the booking's start (B-05), "03:30 London", only when it reads differently from the
+ * member's: the same clock would be a line saying nothing.
+ */
+function theirTimeOf(booking: BookingListItem, locale: string, zone: string): string | undefined {
+  const theirs = booking.visitorTimeZone;
+  if (theirs === '' || theirs === zone) return undefined;
+  const clockIn = (each: string) =>
+    memoIntl(
+      `bookings-their-time|${locale}|${each}`,
+      () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: each }),
+    );
+  const at = new Date(booking.startsAt);
+  let time: string;
+  try {
+    time = clockIn(theirs).format(at);
+  } catch {
+    // A zone this browser doesn't know: nothing rather than a wrong clock.
+    return undefined;
+  }
+  if (time === clockIn(zone).format(at)) return undefined;
+  return strings.theirTime(time, zoneName(theirs).replace(/ time$/, ''));
 }
 
 /**
@@ -373,6 +418,7 @@ export function BookingCard({
   focusOnMount,
   headingLevel = 4,
   managesHost,
+  variant = 'popover',
 }: {
   readonly booking: BookingListItem;
   readonly personHref: string | undefined;
@@ -390,6 +436,8 @@ export function BookingCard({
    * on a booking whose host they Manage (spec 0030 AC-777, spec 0037 AC-1337). Absent, only booking.admin sees it.
    */
   readonly managesHost?: ((memberId: string) => boolean) | undefined;
+  /** `panel` in Bookings › List's side panel: the title at its edge, the actions first, each section headed. */
+  readonly variant?: 'popover' | 'panel';
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
@@ -435,7 +483,9 @@ export function BookingCard({
     locale,
     ...(onAsk === undefined ? {} : { onAsk: (kind: BookingAsk) => onAsk(kind, seats) }),
     // Host away's Reassign sits in the notice, not the footer: the card focuses it itself (below).
-    ...(focusOnMount === undefined || focusOnMount === 'reassignAway' ? {} : { focusOnMount }),
+    ...(focusOnMount === undefined || focusOnMount === 'reassignAway' || focusOnMount === 'meetingLink'
+      ? {}
+      : { focusOnMount }),
     ...(canReassign && seats.length > 0
       ? {
           onReassign: () => {
@@ -551,109 +601,221 @@ export function BookingCard({
         {hasActions && footer.actions}
       </>
     );
+  const format = useFormatSettings();
+  const isAhead = Date.parse(booking.endsAt) > now.getTime();
+  // The guest's own clock at the start (B-05), only when it isn't the member's: "Their time: 03:30 London".
+  const theirTime = theirTimeOf(booking, format.locale, timeZone);
+  // Add meeting link (B-07): a video call still to come, confirmed, by a member who may change it.
+  const [addingLink, setAddingLink] = useState(false);
+  const meetingLinkRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    // Its dialog dismissed in the week, the card opens again with focus back on Add meeting link.
+    if (focusOnMount === 'meetingLink') focusLater(() => meetingLinkRef.current);
+    // Only as the card opens again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const canAddLink =
+    actions?.setMeetingLink !== undefined &&
+    isConfirmed &&
+    isAhead &&
+    booking.location.type === 'video' &&
+    !booking.eventFailed;
+  // What the guest wrote: their note, the page's own questions (spec 0057, AC-5714), the chat they booked by.
+  const answersRows: MeetingCardRow[] = [
+    ...(booking.note === undefined
+      ? []
+      : [{ id: 'note', icon: 'message-square' as const, label: strings.note, value: strings.quoted(booking.note) }]),
+    // Label then answer as a submission shows them, the ones the person record didn't take marked.
+    ...(booking.answers === undefined || booking.answers.length === 0
+      ? []
+      : [
+          {
+            id: 'answers',
+            icon: 'file-text' as const,
+            label: strings.answers,
+            value: strings.answerCount(booking.answers.length),
+            // Said once for the row when the person's record refused some, as a submission's panel says it.
+            ...(booking.answers.some((answer) => answer.saved === false) ? { detail: strings.someNotSaved } : {}),
+            children: (
+              <AnswerList
+                answers={booking.answers}
+                markOf={(answer) =>
+                  'saved' in answer && answer.saved === false ? questionStrings.notSavedMark : undefined
+                }
+              />
+            ),
+          },
+        ]),
+    ...(booking.chat === undefined
+      ? []
+      : [
+          {
+            id: 'chat',
+            icon: 'bot' as const,
+            label: strings.bookedHow,
+            value: strings.bookedByChat,
+            action: (
+              <Button
+                variant="ghost"
+                isExpanded={isChatOpen}
+                controls={chatId}
+                onPress={() => setChatOpen((open) => !open)}
+              >
+                {isChatOpen ? strings.hideChat : strings.viewChat(booking.chat.length)}
+              </Button>
+            ),
+            children: (
+              <div id={chatId} hidden={!isChatOpen}>
+                {isChatOpen && (
+                  <DescriptionList
+                    layout="stacked"
+                    items={booking.chat.map((line, index) => ({
+                      id: String(index),
+                      term: line.role === 'visitor' ? strings.chatVisitor : strings.chatAssistant,
+                      description: line.text,
+                    }))}
+                  />
+                )}
+              </div>
+            ),
+          },
+        ]),
+  ];
+  // What happened to it, oldest first: booked, moved, a no show, cancelled and why, the round robin's assignment.
+  const historyRows: MeetingCardRow[] = [
+    {
+      id: 'booked',
+      icon: 'calendar-check',
+      label: strings.bookedHow,
+      value: strings.bookedOn(bookedWhenOf(booking.createdAt, format.locale, timeZone)),
+    },
+    ...(booking.reschedules === 0
+      ? []
+      : [
+          {
+            id: 'moved',
+            icon: 'calendar-clock' as const,
+            label: strings.movedLabel,
+            value: strings.movedTimes(booking.reschedules),
+          },
+        ]),
+    ...(booking.noShow === true
+      ? [{ id: 'no-show', icon: 'user-x' as const, label: strings.noShow, value: strings.markedNoShowRow }]
+      : []),
+    ...(booking.status === 'cancelled'
+      ? [
+          {
+            id: 'reason',
+            icon: 'circle-x' as const,
+            label: strings.cancelReason,
+            value: strings.cancelledBy(booking.cancelledBy),
+            ...(booking.cancelReason === undefined ? {} : { detail: strings.quoted(booking.cancelReason) }),
+          },
+        ]
+      : []),
+    ...assigned.map((item, index) => ({
+      id: `assigned-${String(index)}`,
+      icon: 'users-round' as const,
+      label: item.term,
+      value: item.description,
+    })),
+  ];
   return (
     <>
       <MeetingCard
         headingLevel={headingLevel}
+        variant={variant}
         title={strings.cardTitle(booking.visitorName, booking.pageTitle)}
-        when={whenOf(booking.startsAt, booking.endsAt, locale, timeZone)}
+        when={whenOf(booking.startsAt, booking.endsAt, format.locale, timeZone)}
         status={statusOf(booking)}
         {...(notices === undefined ? {} : { notices })}
-        peopleLabel={strings.cardPeople}
-        people={[
+        sections={[
           {
-            id: `${booking.id}-guest`,
-            name: booking.visitorName,
-            ...(personHref === undefined ? {} : { href: personHref }),
-            // See only holds no email (AC-1262): the guest's name alone, never an empty line to copy.
-            ...(booking.visitorEmail === '' ? {} : { detail: booking.visitorEmail, isDetailCopyable: true }),
-          },
-          ...booking.guests.map((guest) => ({ id: `${booking.id}-${guest}`, name: guest })),
-        ]}
-        rows={[
-          ...(isColleagues
-            ? [{ id: 'host', icon: 'user' as const, label: strings.hostRow, value: booking.hostName }]
-            : []),
-          { id: 'where', ...whereRowOf(booking, Date.parse(booking.endsAt) > now.getTime()) },
-          ...(linked === undefined ? [] : [linked]),
-          ...(booking.note === undefined
-            ? []
-            : [
-                {
-                  id: 'note',
-                  icon: 'message-square' as const,
-                  label: strings.note,
-                  value: strings.quoted(booking.note),
-                },
-              ]),
-          // The answers to the page's own questions (spec 0057, AC-5714), label then answer as a submission shows them,
-          // the ones the person record didn't take marked.
-          ...(booking.answers === undefined || booking.answers.length === 0
-            ? []
-            : [
-                {
-                  id: 'answers',
-                  icon: 'file-text' as const,
-                  label: strings.answers,
-                  value: strings.answerCount(booking.answers.length),
-                  // Said once for the row when the person's record refused some, as a submission's panel says it.
-                  ...(booking.answers.some((answer) => answer.saved === false) ? { detail: strings.someNotSaved } : {}),
-                  children: (
-                    <AnswerList
-                      answers={booking.answers}
-                      markOf={(answer) =>
-                        'saved' in answer && answer.saved === false ? questionStrings.notSavedMark : undefined
-                      }
-                    />
-                  ),
-                },
-              ]),
-          ...(booking.chat === undefined
-            ? []
-            : [
-                {
-                  id: 'chat',
-                  icon: 'bot' as const,
-                  label: strings.bookedHow,
-                  value: strings.bookedByChat,
-                  action: (
-                    <Button
-                      variant="ghost"
-                      isExpanded={isChatOpen}
-                      controls={chatId}
-                      onPress={() => setChatOpen((open) => !open)}
-                    >
-                      {isChatOpen ? strings.hideChat : strings.viewChat(booking.chat.length)}
-                    </Button>
-                  ),
-                  children: (
-                    <div id={chatId} hidden={!isChatOpen}>
-                      {isChatOpen && (
-                        <DescriptionList
-                          layout="stacked"
-                          items={booking.chat.map((line, index) => ({
-                            id: String(index),
-                            term: line.role === 'visitor' ? strings.chatVisitor : strings.chatAssistant,
-                            description: line.text,
-                          }))}
+            id: 'guest',
+            label: strings.guestSection,
+            people: [
+              {
+                id: `${booking.id}-guest`,
+                name: booking.visitorName,
+                ...(personHref === undefined ? {} : { href: personHref }),
+                // See only holds no email (AC-1262): the guest's name alone, never an empty line to copy.
+                ...(booking.visitorEmail === '' ? {} : { detail: booking.visitorEmail, isDetailCopyable: true }),
+              },
+              ...booking.guests.map((guest) => ({ id: `${booking.id}-${guest}`, name: guest })),
+            ],
+            rows: [
+              ...(isColleagues
+                ? [{ id: 'host', icon: 'user' as const, label: strings.hostRow, value: booking.hostName }]
+                : []),
+              ...(theirTime === undefined
+                ? []
+                : [{ id: 'their-time', icon: 'globe' as const, label: strings.theirTimeLabel, value: theirTime }]),
+              ...(hasActions && isConfirmed && isAhead
+                ? [
+                    {
+                      id: 'guest-link',
+                      icon: 'link' as const,
+                      label: strings.guestLinkRow,
+                      value: strings.guestLinkRow,
+                      detail: strings.guestLinkDetail,
+                      action: (
+                        <CopyButton
+                          value={footer.guestLink}
+                          label={strings.copyGuestLink}
+                          isIconOnly
+                          variant="ghost"
+                          announcement={strings.guestLinkCopied}
                         />
-                      )}
-                    </div>
-                  ),
-                },
-              ]),
-          ...(booking.cancelReason === undefined
-            ? []
-            : [{ id: 'reason', icon: 'circle-x' as const, label: strings.cancelReason, value: booking.cancelReason }]),
-          ...assigned.map((item, index) => ({
-            id: `assigned-${String(index)}`,
-            icon: 'users-round' as const,
-            label: item.term,
-            value: item.description,
-          })),
+                      ),
+                    },
+                  ]
+                : []),
+              ...(linked === undefined ? [] : [linked]),
+            ],
+          },
+          {
+            id: 'location',
+            label: strings.locationSection,
+            rows: [
+              {
+                id: 'where',
+                ...whereRowOf(booking, isAhead),
+                ...(canAddLink
+                  ? {
+                      action: (
+                        <Button
+                          ref={meetingLinkRef}
+                          variant="ghost"
+                          icon={booking.videoUrl === undefined ? 'plus' : 'pencil'}
+                          onPress={() => {
+                            if (onAsk !== undefined) onAsk('meetingLink', seats);
+                            else setAddingLink(true);
+                          }}
+                        >
+                          {booking.videoUrl === undefined ? strings.addMeetingLink : strings.changeMeetingLink}
+                        </Button>
+                      ),
+                    }
+                  : {}),
+              },
+            ],
+          },
+          ...(answersRows.length === 0 ? [] : [{ id: 'answers', label: strings.answersSection, rows: answersRows }]),
+          { id: 'history', label: strings.historySection, rows: historyRows },
         ]}
         {...(footerActions === undefined ? {} : { actions: footerActions })}
       />
+      {addingLink && actions?.setMeetingLink !== undefined && (
+        <MeetingLinkDialog
+          booking={booking}
+          setMeetingLink={actions.setMeetingLink}
+          notify={actions.notify}
+          onClose={() => {
+            setAddingLink(false);
+            focusLater(() => meetingLinkRef.current);
+          }}
+        />
+      )}
       {hasActions && footer.dialogs}
       {reassigning && actions !== undefined && (
         <ReassignDialog
@@ -2106,6 +2268,12 @@ const spanOf = (item: MeetingListItem) =>
     ? { startsAt: item.booking.startsAt, endsAt: item.booking.endsAt }
     : { startsAt: item.event.startsAt, endsAt: item.event.endsAt };
 
+/** A booking as the list holds it now, or as it was when asked about. */
+function heldBooking(items: readonly MeetingListItem[], booking: BookingListItem): BookingListItem {
+  for (const item of items) if (item.kind === 'booking' && item.booking.id === booking.id) return item.booking;
+  return booking;
+}
+
 /** A meeting's row id: its kind and its id, so a booking and an event never share one. */
 const rowIdOf = (item: MeetingListItem) => (item.kind === 'booking' ? `b:${item.booking.id}` : `e:${item.event.id}`);
 
@@ -2121,6 +2289,10 @@ function groupsOf(
   locale: string,
   me: string | undefined,
   zone: string,
+  /** The People object, for a guest's chip; absent, the chip still shows their name and face. */
+  peopleObjectId: string | undefined,
+  /** A booking's quick changes on its row (Reschedule, Cancel), when it has any. */
+  quickActionsOf: (booking: BookingListItem) => ReactNode,
 ): readonly BookingListGroup[] {
   const now = new Date();
   // Days and times in the member's zone, the one the week is drawn in.
@@ -2170,6 +2342,28 @@ function groupsOf(
               ...(me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
                 ? {}
                 : { hostName: item.booking.hostName }),
+              // The columns (A18): who as their chip, the page by its colour, where it stands as a Tag, and the quick
+              // changes on hover or focus.
+              chip: {
+                objectId: peopleObjectId ?? 'people',
+                recordId: item.booking.personRecordId ?? item.booking.id,
+                name: item.booking.visitorName,
+                kind: 'person' as const,
+              },
+              // A colleague's booking (an admin's Everyone, a team page) names its host beside the page.
+              source: {
+                name:
+                  me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
+                    ? item.booking.pageTitle
+                    : strings.pageAndHost(item.booking.pageTitle, item.booking.hostName),
+                hue: linkHue(item.booking.pageId),
+              },
+              ...(item.booking.status === 'confirmed' && Date.parse(item.booking.endsAt) <= now.getTime()
+                ? item.booking.noShow === true
+                  ? { status: { label: strings.noShow, hue: 'red' as const } }
+                  : {}
+                : { status: statusOf(item.booking) }),
+              quickActions: quickActionsOf(item.booking),
               // Every booking says where it stands (the owner, 22 October 2026): Cancelled (above), Needs a host
               // (round robin, spec 0029, AC-749), No show (spec 0043), else Confirmed while it is ahead (a past one
               // needs no tag). Calendar events have their calendar's dot instead.
@@ -2193,7 +2387,8 @@ function groupsOf(
             return {
               ...shared,
               title: item.event.title,
-              ...(calendar === undefined ? {} : { calendar }),
+              ...(calendar === undefined ? {} : { calendar, source: calendar }),
+              ...(isCancelled ? { status: { label: strings.cancelled, hue: 'gray' as const } } : {}),
               attendees: item.attendees,
               moreAttendees: item.attendeeCount - item.attendees.length,
             };
@@ -2276,6 +2471,10 @@ export interface BookingsListScreenProps {
   /** The host's changes to a booking from its card (AC-640). */
   readonly actions?: HostBookingActions;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
+  /** The booking whose card opens first (an email's or the Inbox's link to one booking, `open` in the address). */
+  readonly openFirst?: string | undefined;
+  /** Whether Connect a calendar may be offered: false when calendar sync is off for the deployment. */
+  readonly canConnectCalendar?: boolean;
 }
 
 /**
@@ -2324,10 +2523,14 @@ export function BookingsListScreen({
   onSearch,
   actions,
   hosts,
+  openFirst,
+  canConnectCalendar = true,
 }: BookingsListScreenProps) {
   const personHref = usePersonHref(slug, objects);
   // The member's zone (their Preferences, else the browser's): each row's day band and time.
-  const { timeZone } = useFormatSettings();
+  // One clock for every time on the screen (C13): the member's language and zone, as the week and the card read them.
+  const format = useFormatSettings();
+  const { timeZone } = format;
   const listNow = useNow();
   const calendarList = useCalendarList(calendars);
   const byCalendar = new Map(
@@ -2344,7 +2547,41 @@ export function BookingsListScreen({
   // The open meeting by row id, read from the list as it is now: a change shows in the panel.
   // A colleague's booking (an admin's view, a team page) names its host rather than "You".
   const me = useMyAccess()?.memberId;
-  const [openId, setOpenId] = useState<string | undefined>(undefined);
+  const [openId, setOpenId] = useState<string | undefined>(openFirst === undefined ? undefined : `b:${openFirst}`);
+  // A row's Reschedule or Cancel (B-06): its dialog, drawn here, with focus back on the row's title once it closes.
+  const [rowAsk, setRowAsk] = useState<
+    { readonly booking: BookingListItem; readonly kind: 'move' | 'cancel'; readonly opening: number } | undefined
+  >(undefined);
+  const openings = useRef(0);
+  const people = objects.find((object) => object.standardKey === 'people');
+  const quickActionsOf = (booking: BookingListItem): ReactNode =>
+    actions === undefined ||
+    booking.seeOnly === true ||
+    booking.status !== 'confirmed' ||
+    Date.parse(booking.startsAt) <= listNow.getTime() ? undefined : (
+      <>
+        {booking.reschedules < 5 && (
+          <Button
+            variant="ghost"
+            icon="calendar-clock"
+            label={strings.rescheduleRow(booking.pageTitle, booking.visitorName)}
+            onPress={() => {
+              openings.current += 1;
+              setRowAsk({ booking, kind: 'move', opening: openings.current });
+            }}
+          />
+        )}
+        <Button
+          variant="ghost-danger"
+          icon="circle-x"
+          label={strings.cancelRow(booking.pageTitle, booking.visitorName)}
+          onPress={() => {
+            openings.current += 1;
+            setRowAsk({ booking, kind: 'cancel', opening: openings.current });
+          }}
+        />
+      </>
+    );
   const tab = search.tab;
   // One booking page's bookings: calendar events have no page, so the server is asked for bookings only, and paging
   // stays whole.
@@ -2404,8 +2641,19 @@ export function BookingsListScreen({
         <BookingList
           // Rows' times are on the member's clock: the list's name says so for screen readers.
           label={`${strings.listLabel[tab]}, ${strings.timesIn(zoneDisplay(timeZone, listNow.getTime()))}`}
-          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me, timeZone)}
+          groups={groupsOf(
+            items,
+            (calendarId) => byCalendar.get(calendarId),
+            personHref,
+            format.locale,
+            me,
+            timeZone,
+            people?.id,
+            quickActionsOf,
+          )}
+          layout="columns"
           onOpen={setOpenId}
+          {...(open === undefined ? {} : { openId: rowIdOf(open) })}
           emptyState={
             search.link !== undefined || search.cal !== undefined || source !== 'all' ? (
               <EmptyState
@@ -2432,8 +2680,10 @@ export function BookingsListScreen({
                       <ButtonLink variant="primary" icon="link" href={linksHref(slug)}>
                         {strings.shareBookingPage}
                       </ButtonLink>
-                      {calendarList.status === 'ready' && !hasCalendar && (
-                        <Link href={calendarsHref(slug)}>{strings.connectCalendar}</Link>
+                      {canConnectCalendar && calendarList.status === 'ready' && !hasCalendar && (
+                        <ButtonLink variant="secondary" icon="calendar-plus" href={calendarsHref(slug)}>
+                          {strings.connectCalendar}
+                        </ButtonLink>
                       )}
                     </>
                   ) : undefined
@@ -2481,6 +2731,7 @@ export function BookingsListScreen({
           {open.kind === 'booking' ? (
             <BookingCard
               headingLevel={4}
+              variant="panel"
               booking={open.booking}
               personHref={personHref(open.booking)}
               locale={locale}
@@ -2490,6 +2741,18 @@ export function BookingsListScreen({
             <EventCard event={open.event} connection={undefined} locale={locale} headingLevel={4} />
           )}
         </Panel>
+      )}
+      {rowAsk !== undefined && actions !== undefined && (
+        <BookingDialog
+          key={rowAsk.opening}
+          // The booking as the list holds it now (cancelled at once behind its confirm), or as it was asked about.
+          booking={heldBooking(items, rowAsk.booking)}
+          actions={actions}
+          locale={format.locale}
+          ask={rowAsk.kind}
+          onClose={() => setRowAsk(undefined)}
+          onDone={() => setRowAsk(undefined)}
+        />
       )}
     </PageColumn>
   );

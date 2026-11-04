@@ -142,7 +142,7 @@ export const strings = {
   eventFailed: 'This booking isn’t on your calendar: the event couldn’t be made. Add it by hand.',
   video: 'Video call',
   /** Under a video call still to come that no calendar made a link for, as the host's email says it. */
-  videoNoLink: 'No link was made. Send the guest one.',
+  videoNoLink: 'No link yet.',
   phone: 'Phone call to their number',
   calendar: 'Calendar',
   /** An event's call, as the card's row. */
@@ -296,6 +296,50 @@ export const strings = {
   cancelBooking: 'Cancel booking',
   /** The booking card's overflow menu. */
   moreForBooking: 'More for this booking',
+  /** The panel's Cancel, beside Reschedule (B-06): short on screen, named in full. */
+  cancelShort: 'Cancel',
+  // The booking panel's sections (A17, after Calendly's booking panel).
+  guestSection: 'Guest',
+  locationSection: 'Location',
+  answersSection: 'Answers',
+  historySection: 'History',
+  /** The guest's own clock at the start, when it isn't the member's (B-05). */
+  theirTimeLabel: 'Their time',
+  theirTime: (time: string, place: string) => `Their time: ${time} ${place}`,
+  /** The guest's own page for the booking: copied in place, never shown (it carries their key). */
+  guestLinkRow: 'Guest link',
+  guestLinkDetail: 'Where they move or cancel it. Share it only with them.',
+  // Add meeting link (B-07): a video call no calendar made a link for.
+  addMeetingLink: 'Add meeting link',
+  changeMeetingLink: 'Change link',
+  meetingLinkField: 'Meeting link',
+  meetingLinkPlaceholder: 'https://meet.google.com/abc-defg-hij',
+  meetingLinkHint: (guest: string) => `${guest} is emailed it.`,
+  meetingLinkInvalid: 'Paste the meeting’s link, starting https://',
+  saveMeetingLink: 'Save and email',
+  savingMeetingLink: 'Saving',
+  meetingLinkSaved: (guest: string) => `Link saved. ${guest} is emailed it.`,
+  // The panel's History.
+  bookedOn: (when: string) => `Booked ${when}`,
+  movedLabel: 'Moved',
+  movedTimes: (count: number) => (count === 1 ? 'Moved once' : `Moved ${String(count)} times`),
+  markedNoShowRow: 'Marked as a no show',
+  cancelledBy: (by: 'guest' | 'host' | 'calendar' | undefined) =>
+    by === 'guest'
+      ? 'Cancelled by the guest'
+      : by === 'calendar'
+        ? 'Cancelled from the calendar'
+        : by === 'host'
+          ? 'Cancelled by the host'
+          : 'Cancelled',
+  /** A List row's quick change, named with the booking: "Reschedule Intro call with Grace Hopper". */
+  rescheduleRow: (page: string, guest: string) => `Reschedule ${page} with ${guest}`,
+  cancelRow: (page: string, guest: string) => `Cancel ${page} with ${guest}`,
+  /** A List row's page column on a colleague's booking: "Sales intro · Sam Lee". */
+  pageAndHost: (page: string, host: string) => `${page} · ${host}`,
+  /** A time in Reschedule, with the guest's own under it when their clock reads differently. */
+  slotTheirs: (time: string, place: string) => `${time} ${place}`,
+  slotTheirsName: (name: string, time: string, place: string) => `${name}, ${time} for them in ${place}`,
   // Linking a booking to a record by hand (polish F2).
   linkRecord: 'Link to a record',
   changeLinkedRecord: 'Change linked record',

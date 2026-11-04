@@ -52,6 +52,7 @@ export function hostActions(
     reassign: (bookingId, to) => data.bookings.reassign(slug, bookingId, to),
     rotations: () => data.rotations.held(slug),
     markNoShow: (bookingId, noShow) => data.bookings.markNoShow(slug, bookingId, noShow),
+    setMeetingLink: (bookingId, url) => data.bookings.setMeetingLink(slug, bookingId, url),
     notify: (tone, message, action) => toasts.toast({ tone, message, ...(action === undefined ? {} : { action }) }),
     ...(objects === undefined ? {} : { linking: bookingLinking(data, slug, objects) }),
   };

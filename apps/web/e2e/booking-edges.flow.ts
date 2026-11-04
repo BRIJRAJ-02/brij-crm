@@ -89,8 +89,8 @@ test.describe('the booking journey’s edges', () => {
     await page.goto(`/w/${slug}/bookings/list`);
     await page.getByText('Intro call').first().click();
     const panel = page.getByRole('dialog', { name: /Booking/ });
-    await panel.getByRole('button', { name: 'More for this booking' }).click();
-    await page.getByRole('menuitem', { name: 'Cancel booking' }).click();
+    // Cancel sits beside Reschedule (B-06).
+    await panel.getByRole('button', { name: 'Cancel booking' }).click();
     // Asked first, in a dialog, naming who it is with.
     const confirm = page.getByRole('alertdialog', { name: 'Cancel Intro call with Vera Visitor?' });
     await expect(confirm).toBeVisible();

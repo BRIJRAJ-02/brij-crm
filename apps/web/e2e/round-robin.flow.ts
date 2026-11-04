@@ -149,8 +149,9 @@ test.describe('round robin', () => {
       .getByRole('region', { name: /^Upcoming meetings/ })
       .getByRole('listitem')
       .filter({ hasText: `Visitor ${String(moved)}` });
-    await expect(row).toContainText(`${was} and`);
-    await row.getByRole('button', { name: 'Sales intro' }).click();
+    // A colleague's booking names its host beside the page ("Sales intro · Sam").
+    await expect(row).toContainText(`· ${was}`);
+    await row.getByRole('button', { name: `Visitor ${String(moved)}` }).click();
     await page.getByRole('button', { name: 'More for this booking' }).click();
     await page.getByRole('menuitem', { name: 'Reassign' }).click();
     await page
@@ -158,6 +159,6 @@ test.describe('round robin', () => {
       .getByRole('button', { name: 'Reassign', exact: true })
       .click();
     await expect(page.getByText('Reassigned. Guest and hosts are emailed.')).toBeVisible();
-    await expect(row).not.toContainText(`${was} and`, { timeout: 10_000 });
+    await expect(row).not.toContainText(`· ${was}`, { timeout: 10_000 });
   });
 });

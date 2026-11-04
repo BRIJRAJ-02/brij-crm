@@ -89,6 +89,8 @@ function List({ objects, pages }: ListLoaded) {
       pages={pages}
       locale={navigator.languages[0] ?? 'en-GB'}
       actions={actions}
+      // An email's or the Inbox's link to one booking (B-20) opens its card; the address keeps it no longer.
+      openFirst={Route.useSearch().open}
       onSearch={(next) =>
         void navigate({
           to: '/w/$slug/bookings/list',
