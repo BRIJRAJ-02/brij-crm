@@ -383,3 +383,15 @@ describe('the honeypot input', () => {
     expect(QUESTION_KEY.test(HONEYPOT_INPUT_NAME)).toBe(false);
   });
 });
+
+describe('publishProblem on an empty form (a Blank template, AC-6323)', () => {
+  it('refuses a form with no questions, plainly, before asking for an email', () => {
+    const empty = FormDocument.parse({ questions: [], targets: {} });
+    expect(publishProblem({ name: 'Untitled form', slug: 'untitled', document: empty, attributes: new Map() })).toEqual(
+      {
+        code: 'QUESTIONS_MISSING',
+        message: 'Add a question first. A form with no questions has nothing to send.',
+      },
+    );
+  });
+});

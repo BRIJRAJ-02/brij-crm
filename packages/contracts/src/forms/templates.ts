@@ -7,6 +7,7 @@
 // list and never used to look anything up.
 import * as z from 'zod';
 import { FORM_LAYOUTS } from './path.ts';
+import { PublicQuestion } from './public.ts';
 
 /**
  * The templates the gallery offers, in the order AC-6323 names them: Blank
@@ -80,7 +81,8 @@ export const FORM_TEMPLATE_PREVIEW_ROWS_MAX = 3;
 /** A tile's little preview of the form it would make: the layout it uses, and the first few answers' shapes. */
 export const FormTemplatePreview = z.object({
   layout: z.enum(FORM_LAYOUTS),
-  rows: z.array(FormTemplatePreviewRow).min(1).max(FORM_TEMPLATE_PREVIEW_ROWS_MAX),
+  // Blank shows no rows: it starts empty.
+  rows: z.array(FormTemplatePreviewRow).max(FORM_TEMPLATE_PREVIEW_ROWS_MAX),
 });
 /** A tile's little preview of the form it would make. */
 export type FormTemplatePreview = z.infer<typeof FormTemplatePreview>;
@@ -97,6 +99,20 @@ export const FormTemplateSummary = z.object({
   /** Why you would pick it, in one line. */
   purpose: z.string(),
   preview: FormTemplatePreview,
+  /**
+   * The form it makes, as a visitor would see it: the gallery's big preview beside the list draws it with the hosted
+   * page's own component. Its words and questions only, never filing, which is the workspace's.
+   */
+  sample: z.object({
+    headline: z.string(),
+    buttonText: z.string(),
+    questions: z.array(PublicQuestion),
+  }),
+  /**
+   * Keeps its submissions only (spec 0063, AC-6323): an anonymous form (Feedback, NPS) asks no name or email and
+   * adds nobody to the CRM. Absent: its answers go to the CRM as every form's do.
+   */
+  keepsSubmissionsOnly: z.boolean().optional(),
 });
 /** One tile in the gallery. */
 export type FormTemplateSummary = z.infer<typeof FormTemplateSummary>;

@@ -120,16 +120,21 @@ describe('the templates in code (AC-6324)', () => {
     for (const id of FORM_TEMPLATE_IDS) expect(FORM_TEMPLATES[id].id).toBe(id);
   });
 
+  /** Every template but Blank, which starts empty and so is the one a publish refuses until it has a question. */
+  const FILLED = FORM_TEMPLATE_IDS.filter((id) => id !== 'blank');
+
   it.each([...FORM_TEMPLATE_IDS])('%s parses as a FormDocument, filed and unfiled alike', (id: FormTemplateId) => {
     const template = FORM_TEMPLATES[id];
     // Unfiled (a member who may write no object): every question is kept with the submission.
     const kept = FormDocument.safeParse(templateDocument(template, undefined));
     expect(kept.success, JSON.stringify(kept.error?.issues)).toBe(true);
     expect(kept.data?.questions.every((question) => question.kept === true)).toBe(true);
-    expect(kept.data?.questions.length).toBeGreaterThan(0);
+    // Blank starts empty; every other template asks something.
+    if (id === 'blank') expect(kept.data?.questions).toEqual([]);
+    else expect(kept.data?.questions.length).toBeGreaterThan(0);
   });
 
-  it.each([...FORM_TEMPLATE_IDS])('%s publishes on a fresh workspace', async (id: FormTemplateId) => {
+  it.each(FILLED)('%s publishes on a fresh workspace', async (id: FormTemplateId) => {
     const w = await workspace();
     const template = FORM_TEMPLATES[id];
     const before = await attributeCount(w);
@@ -153,6 +158,50 @@ describe('the templates in code (AC-6324)', () => {
   });
 });
 
+describe('Blank is truly empty, and anonymous templates keep their submissions only (AC-6323)', () => {
+  it('starts Blank with no questions, and a publish says to add one first', async () => {
+    const w = await workspace();
+    const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'blank' });
+    expect(created.name).toBe('Untitled form');
+    expect(created.draft.questions).toEqual([]);
+    expect(
+      await refusalOf(
+        publishForm(w.scope, { formId: created.id, expectedRevision: created.revision, slug: 'blank-one' }),
+      ),
+    ).toMatchObject([
+      { code: 'CONFIG_INVALID', message: 'Add a question first. A form with no questions has nothing to send.' },
+    ]);
+  });
+
+  it.each(['feedback', 'nps'] as const)(
+    '%s asks nobody who they are, files nothing, and publishes as a submissions only form',
+    async (id) => {
+      const w = await workspace();
+      const created = await createFormFromTemplate(w.scope, { id: newId(), templateId: id });
+      expect(created.draft.targets).toEqual({});
+      expect(created.draft.questions.some((each) => each.answerType === 'email' || each.key === 'name')).toBe(false);
+      expect(created.draft.questions.every((each) => each.filedOn === undefined)).toBe(true);
+      const published = await publishForm(w.scope, {
+        formId: created.id,
+        expectedRevision: created.revision,
+        slug: `anon-${id}-${String(Date.now() % 100_000)}`,
+      });
+      expect(published.status).toBe('live');
+      expect(published.live?.targets).toEqual({});
+      expect(listFormTemplates().items.find((each) => each.id === id)?.keepsSubmissionsOnly).toBe(true);
+    },
+  );
+
+  it('gives every tile its words and questions for the gallery’s big preview, and no filing', () => {
+    for (const item of listFormTemplates().items) {
+      const template = FORM_TEMPLATES[item.id];
+      expect(item.sample.headline).toBe(template.headline);
+      expect(item.sample.questions.map((each) => each.key)).toEqual(template.questions.map((each) => each.key));
+      expect(JSON.stringify(item.sample)).not.toContain('filesOnto');
+    }
+  });
+});
+
 describe('the gallery it offers (AC-6323)', () => {
   it('offers the contract’s ten, in order, each with a purpose and a preview', () => {
     const { items } = listFormTemplates();
@@ -163,7 +212,8 @@ describe('the gallery it offers (AC-6323)', () => {
     for (const item of items) {
       expect(item.name.length).toBeGreaterThan(0);
       expect(item.purpose.length).toBeGreaterThan(0);
-      expect(item.preview.rows.length).toBeGreaterThan(0);
+      // Blank draws no rows: it starts empty.
+      if (item.id !== 'blank') expect(item.preview.rows.length).toBeGreaterThan(0);
     }
   });
 
