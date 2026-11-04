@@ -130,6 +130,8 @@ export interface FormStrings {
   readonly pressEnter: string;
   /** The key itself, on its keycap: "Enter ↵". */
   readonly enterKey: string;
+  /** When a form closes while it is being filled in: keeps what the visitor wrote (forms QA, 5 November 2026). */
+  readonly copyAnswers: string;
   /** A yes or no question's two answers, drawn as two choices (critique c, 9). */
   readonly yes: string;
   readonly no: string;
@@ -272,6 +274,7 @@ const EN: FormStrings = {
   start: 'Start',
   pressEnter: 'press',
   enterKey: 'Enter ↵',
+  copyAnswers: 'Copy my answers',
   yes: 'Yes',
   no: 'No',
   previousQuestion: 'Previous question',

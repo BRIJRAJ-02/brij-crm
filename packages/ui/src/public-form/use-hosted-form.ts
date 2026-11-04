@@ -4,6 +4,7 @@
 // question on submit; a shown error clears the moment it is fixed, but a new
 // one never appears while typing), the email typo hint, the send and what
 // follows it. No markup: Classic and the step layouts draw from it.
+import { answerText } from './SentAnswers.tsx';
 import {
   checkAnswers,
   formStrings,
@@ -163,6 +164,13 @@ export interface HostedFormState {
   /** What a polite live line says after an answer shows or hides questions; empty otherwise. */
   readonly shownNote: string;
   readonly alert: string;
+  /**
+   * The form was closed while this visitor filled it in (a send answered closed): the form and their answers stay
+   * on screen, the closed line shows above Send, and they can copy what they wrote (forms QA, 5 November 2026).
+   */
+  readonly isClosedMidFill: boolean;
+  /** What they wrote, as plain lines ("Your name: Ada"), for Copy my answers. */
+  readonly answersText: () => string;
   readonly isSending: boolean;
   /** The page's file calls for a file question, where it has them (never in a preview). */
   readonly files: HostedFileHandlers | undefined;
@@ -342,6 +350,33 @@ export function useHostedForm({
   const [isSubmitted, setSubmitted] = useState(false);
   const [isSending, setSending] = useState(false);
   const [alert, setAlert] = useState('');
+  const [isClosedMidFill, setClosedMidFill] = useState(false);
+  // A press in progress (pointer down, not yet up): a check on leaving a field waits for it to end, so an error line
+  // never pushes Send down between its press and release and loses the press (forms QA, 5 November 2026).
+  const pressing = useRef(false);
+  const afterPress = useRef<(() => void)[]>([]);
+  useEffect(() => {
+    const down = () => {
+      pressing.current = true;
+    };
+    const up = () => {
+      // After the click the release makes, so Send's own check runs first.
+      globalThis.setTimeout(() => {
+        pressing.current = false;
+        const held = afterPress.current;
+        afterPress.current = [];
+        for (const each of held) each();
+      }, 0);
+    };
+    globalThis.addEventListener('pointerdown', down, true);
+    globalThis.addEventListener('pointerup', up, true);
+    globalThis.addEventListener('pointercancel', up, true);
+    return () => {
+      globalThis.removeEventListener('pointerdown', down, true);
+      globalThis.removeEventListener('pointerup', up, true);
+      globalThis.removeEventListener('pointercancel', up, true);
+    };
+  }, []);
   // The file questions with a file still going: the form won't send until they are in.
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [trap, setTrap] = useState('');
@@ -520,15 +555,20 @@ export function useHostedForm({
     const value = answerOf(question, answers[question.key]);
     if (isBlank(value) && !touched.has(question.key)) return;
     const message = messageOf(form, question, value);
-    setErrors((current) =>
-      message === undefined ? without(current, question.key) : { ...current, [question.key]: message },
-    );
-    if (question.answerType === 'email' && message === undefined && typeof value === 'string') {
-      const suggestion = suggestEmail(value);
-      setHints((current) =>
-        suggestion === undefined ? without(current, question.key) : { ...current, [question.key]: suggestion },
+    const mark = () => {
+      setErrors((current) =>
+        message === undefined ? without(current, question.key) : { ...current, [question.key]: message },
       );
-    }
+      if (question.answerType === 'email' && message === undefined && typeof value === 'string') {
+        const suggestion = suggestEmail(value);
+        setHints((current) =>
+          suggestion === undefined ? without(current, question.key) : { ...current, [question.key]: suggestion },
+        );
+      }
+    };
+    // Focus left because something is being pressed: the line under the field waits until the press is over.
+    if (pressing.current) afterPress.current.push(mark);
+    else mark();
   };
 
   const takeHint = (question: PublicQuestion) => {
@@ -651,8 +691,10 @@ export function useHostedForm({
           show(outcome.fields, form.questions);
           return;
         case 'closed':
-          setView({ kind: 'closed' });
-          setFocusTarget('heading');
+          // Closed while they filled it in: everything they typed stays, with the closed line above Send and a
+          // way to keep their words, rather than the whole form swapped for one sentence.
+          setClosedMidFill(true);
+          setAlert(words.closed);
           return;
         case 'offline':
           setAlert(words.offline);
@@ -698,6 +740,17 @@ export function useHostedForm({
     read,
     shownNote,
     alert,
+    isClosedMidFill,
+    answersText: () =>
+      form.questions
+        .flatMap((question) => {
+          if (!shown.has(question.key)) return [];
+          const text = answerText(question.answerType, answers[question.key], words.signed);
+          return text === ''
+            ? []
+            : [`${question.label.trim() === '' ? words.untitledQuestion : read(question.label)}: ${text}`];
+        })
+        .join('\n'),
     isSending,
     files:
       preview || onUpload === undefined

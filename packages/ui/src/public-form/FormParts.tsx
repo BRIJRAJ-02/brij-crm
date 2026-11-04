@@ -389,10 +389,28 @@ export function ErrorSummary({
 
 /** A failure that isn't about a question ("That did not go through…"), in one alert line. */
 export function FormAlert({ state }: { readonly state: HostedFormState }) {
+  const [isCopied, setCopied] = useState(false);
   return (
-    <p className={styles.alert} role="alert">
-      {state.alert}
-    </p>
+    <>
+      <p className={styles.alert} role="alert">
+        {state.alert}
+      </p>
+      {/* Closed while they filled it in: their answers stay on screen, and one press keeps them. */}
+      {state.isClosedMidFill && (
+        <span className={styles.again}>
+          <Button
+            icon={isCopied ? 'check' : 'copy'}
+            onPress={() => {
+              void navigator.clipboard.writeText(state.answersText()).then(() => {
+                setCopied(true);
+              });
+            }}
+          >
+            {isCopied ? state.words.copiedLink : state.words.copyAnswers}
+          </Button>
+        </span>
+      )}
+    </>
   );
 }
 
