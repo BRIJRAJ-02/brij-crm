@@ -27,20 +27,14 @@ export interface CalendarStepProps {
 /**
  * Connect your calendar: what the last connect came back with, then Connect
  * Google Calendar (Google Calendar's mark, the one primary), Connect Outlook
- * (a working secondary where this deployment offers Outlook; elsewhere off,
- * its words saying why: "Outlook coming soon") and Skip for now; once
- * connected, Continue. Focus starts on the first button that works, so Enter
+ * (only where this deployment offers Outlook; elsewhere not shown) and Skip
+ * for now; once connected, Continue. Focus starts on the first button that works, so Enter
  * does the step.
  */
 export function CalendarStep({ result, view, onConnect, connecting, onFinish }: CalendarStepProps) {
   const state = useCalendar(view);
-  // Outlook works only where the deployment turned it on (CALENDAR_OUTLOOK); unknown while the list loads.
-  const outlook =
-    state.status === 'loading'
-      ? 'loading'
-      : state.status === 'ready' && state.enabled && state.providers.includes('microsoft')
-        ? 'on'
-        : 'off';
+  // Outlook works only where the deployment turned it on (CALENDAR_OUTLOOK); while the list loads it isn't shown.
+  const isOutlookOn = state.status === 'ready' && state.enabled && state.providers.includes('microsoft');
   const isConnecting = connecting !== undefined;
   const first = useRef<HTMLButtonElement>(null);
   const isConnected = result === 'connected';
@@ -74,21 +68,19 @@ export function CalendarStep({ result, view, onConnect, connecting, onFinish }: 
           >
             {connecting === 'google' ? strings.connectingGoogle : strings.connectGoogle}
           </Button>
-          {/* Where Outlook is on, a working button beside Google's; where it isn't, off with the reason as its words. */}
-          <Button
-            size="lg"
-            isFullWidth="center"
-            provider="outlook"
-            isPending={connecting === 'microsoft'}
-            isDisabled={outlook !== 'on' || isConnecting}
-            onPress={() => onConnect('microsoft')}
-          >
-            {connecting === 'microsoft'
-              ? strings.connectingOutlook
-              : outlook === 'off'
-                ? strings.outlookSoon
-                : strings.connectOutlook}
-          </Button>
+          {/* Outlook only where this deployment turned it on: never a dead button (foolproof audit, 5 November 2026). */}
+          {isOutlookOn && (
+            <Button
+              size="lg"
+              isFullWidth="center"
+              provider="outlook"
+              isPending={connecting === 'microsoft'}
+              isDisabled={isConnecting}
+              onPress={() => onConnect('microsoft')}
+            >
+              {connecting === 'microsoft' ? strings.connectingOutlook : strings.connectOutlook}
+            </Button>
+          )}
           <Button variant="ghost" size="lg" isFullWidth="center" onPress={onFinish}>
             {strings.skipForNow}
           </Button>

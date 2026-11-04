@@ -112,8 +112,6 @@ export const strings = {
   connectingGoogle: 'Opening Google',
   connectOutlook: 'Connect Outlook',
   connectingOutlook: 'Opening Outlook',
-  /** Outlook's button where this deployment doesn't offer it: off, and its words say why. */
-  outlookSoon: 'Outlook coming soon',
   opening: 'Opening your workspace',
   /** What a connect that came back with `?calendar=` says. */
   results: {

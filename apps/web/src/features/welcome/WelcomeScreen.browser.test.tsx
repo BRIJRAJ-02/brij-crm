@@ -351,8 +351,9 @@ describe('first run’s steps', () => {
 
     await expect.element(page.getByRole('heading', { level: 1, name: 'Connect your calendar' })).toBeVisible();
     await expect.element(page.getByText('Step 5 of 6')).toBeVisible();
-    // Outlook isn't on here: its button is off, and its words say why.
-    await expect.element(page.getByRole('button', { name: 'Outlook coming soon' })).toBeDisabled();
+    // Outlook isn't on here, so there is no Outlook button at all: never a dead control (foolproof audit).
+    await expect.element(page.getByRole('button', { name: /Connect Google Calendar/ })).toBeVisible();
+    expect(page.getByRole('button', { name: /Outlook/ }).query()).toBeNull();
     // Skip for now, the step's clear secondary action (spec 0058, AC-25).
     await page.getByRole('button', { name: 'Skip for now' }).click();
 
