@@ -69,9 +69,11 @@
     white-space: nowrap;
   }
 
+  /* Quick actions, or the settings variant's Find a setting: one control the sidebar's width. */
   .search {
     display: flex;
     flex: none;
+    flex-direction: column;
     padding: var(--space-8);
   }
 
@@ -274,10 +276,13 @@
     inline-size: var(--size-sidebar-collapsed);
   }
 
-  /* A phone's settings list (AppShell's phoneSidebar="full"): the open sidebar, the whole screen wide. */
-  .root[data-full] {
-    inline-size: 100%;
-    border-inline-end: none;
+  /* A phone's settings list (AppShell's phoneSidebar="full", the shell under 480px): the open sidebar, the whole
+     screen wide. */
+  @container app-shell (width < 480px) {
+    .root[data-full] {
+      inline-size: 100%;
+      border-inline-end: none;
+    }
   }
 
   .root[data-collapsed] .head {

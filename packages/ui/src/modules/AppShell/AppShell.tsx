@@ -20,7 +20,7 @@ import { strings } from './strings.ts';
 
 /**
  * What the shell tells the pieces inside it: whether the page is narrower than `bp-page-compact`, and (for the
- * sidebar alone) whether it fills a phone's whole width as a list (`phoneSidebar="full"`).
+ * sidebar alone) whether it is a phone's list (`phoneSidebar="full"`), the whole width under 480px.
  */
 export const AppShellContext = createContext({ isCompact: false, isFull: false });
 
@@ -113,8 +113,8 @@ export function AppShell({
   const mainId = useId();
   const isCompact = useSyncExternalStore(subscribe, isCompactNow, () => false);
   const isPhone = useSyncExternalStore(subscribePhone, isPhoneNow, () => false);
-  // A phone's settings list: the sidebar open (not the rail) and the whole width, the page hidden behind it.
-  const isFull = isPhone && phoneSidebar === 'full';
+  // A phone's settings list: the sidebar open (not the rail) and, by the shell's container query, the whole width.
+  const isFull = phoneSidebar === 'full';
   // The panels open that asked for room (Panel's `pushesPage`), widest first: the main column narrows by the widest.
   const [pushes, setPushes] = useState<readonly PanelWidth[]>([]);
   const push = useCallback((width: PanelWidth) => {
@@ -129,7 +129,10 @@ export function AppShell({
   const pushed = isCompact || pushes.length === 0 ? undefined : pushes.includes('lg') ? 'lg' : 'md';
   // One object while the width class holds, so a panel opening (AppShell's state) doesn't re-render every reader.
   const shell = useMemo(() => ({ isCompact, isFull: false }), [isCompact]);
-  const sidebarShell = useMemo(() => ({ isCompact: isCompact && !isFull, isFull }), [isCompact, isFull]);
+  const sidebarShell = useMemo(
+    () => ({ isCompact: isCompact && !(isFull && isPhone), isFull }),
+    [isCompact, isFull, isPhone],
+  );
   return (
     <AppShellContext value={shell}>
       <PanelPushContext value={push}>

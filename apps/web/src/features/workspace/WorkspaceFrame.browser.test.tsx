@@ -6,6 +6,8 @@
 // through the data layer (AC-931, AC-935), and [ toggles the rail outside a text field; while the member's sidebar
 // loads nothing guesses at their order, and one that couldn't be read draws the defaults. Tasks and the Inbox carry
 // their counts as badges. Sign out asks first (the owner, 21 October 2026).
+// The phone tests measure layout, so the library's styles load first, as main.tsx loads them.
+import '@crm/ui/styles.css';
 import type { DataLayer, DueTasksSnapshot, NavOperation, NavSnapshot, NavState } from '@crm/data';
 import { createToasts, UiProvider } from '@crm/ui';
 import {
@@ -156,6 +158,8 @@ async function renderFrame(
   more: Partial<Pick<WorkspaceFrameProps, 'objects' | 'currentPage' | 'isMissing' | 'roleLabel' | 'workspaces'>> & {
     readonly layer?: DataLayer;
     readonly roleLabel?: string;
+    /** Where the frame opens (the start page by default); a settings address draws the frame there too. */
+    readonly at?: string;
   } = {},
 ): Promise<AnyRouter> {
   const layer = more.layer ?? data;
@@ -178,16 +182,28 @@ async function renderFrame(
     </WorkspaceFrame>
   );
   const start = createRoute({ getParentRoute: () => rootRoute, path: '/w/acme/start', component: frame });
-  const preferences = createRoute({
+  // Settings opens on Profile (5 November 2026); inside Settings, its pages draw the frame too.
+  const inSettings = settings !== undefined;
+  const profile = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/w/acme/settings/account/preferences',
-    component: () => <p>Preferences page</p>,
+    path: '/w/acme/settings/account/profile',
+    component: inSettings ? frame : () => <p>Profile page</p>,
+  });
+  const home = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/w/acme/settings',
+    component: inSettings ? frame : () => <p>Settings</p>,
+  });
+  const teams = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/w/acme/settings/teams',
+    component: inSettings ? frame : () => <p>Teams page</p>,
   });
   const signIn = createRoute({ getParentRoute: () => rootRoute, path: '/sign-in', component: () => <p>Sign in</p> });
-  const home = createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <p>Home</p> });
+  const index = createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <p>Home</p> });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([start, preferences, signIn, home]),
-    history: createMemoryHistory({ initialEntries: ['/w/acme/start'] }),
+    routeTree: rootRoute.addChildren([start, profile, home, teams, signIn, index]),
+    history: createMemoryHistory({ initialEntries: [more.at ?? '/w/acme/start'] }),
   });
   const host = document.createElement('div');
   document.body.append(host);
@@ -228,7 +244,7 @@ describe('the workspace frame’s sidebar', () => {
     const settings = [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find((link) =>
       link.textContent.startsWith('Settings'),
     );
-    expect(settings?.getAttribute('href')).toBe('/w/acme/settings/account/preferences');
+    expect(settings?.getAttribute('href')).toBe('/w/acme/settings/account/profile');
     expect(settings?.querySelector('kbd')).not.toBeNull();
     expect(settings?.getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+,$/);
   });
@@ -236,7 +252,8 @@ describe('the workspace frame’s sidebar', () => {
   it('opens Settings on ⌘, (Ctrl+, off a Mac)', async () => {
     const router = await renderFrame();
     await pressSettingsKey(document.body);
-    expect(router.state.location.pathname).toBe('/w/acme/settings/account/preferences');
+    // Settings opens on its first entry, Profile (5 November 2026).
+    expect(router.state.location.pathname).toBe('/w/acme/settings/account/profile');
   });
 
   it('leaves a text field’s ⌘, alone, so a draft is never left behind', async () => {
@@ -248,7 +265,10 @@ describe('the workspace frame’s sidebar', () => {
   });
 
   it('inside Settings, swaps the app sidebar for Settings with its way back and its groups', async () => {
-    await renderFrame({ current: 'preferences', backHref: '/w/acme/objects/people' });
+    await renderFrame(
+      { current: 'preferences', backHref: '/w/acme/objects/people' },
+      { at: '/w/acme/settings/account/profile' },
+    );
     const nav = document.querySelector('nav[aria-label="Settings"]');
     expect(nav).not.toBeNull();
     expect(document.querySelector('nav[aria-label="Main navigation"]')).toBeNull();
@@ -259,8 +279,8 @@ describe('the workspace frame’s sidebar', () => {
       const labelledBy = group.getAttribute('aria-labelledby');
       return labelledBy === null ? group.getAttribute('aria-label') : document.getElementById(labelledBy)?.textContent;
     });
-    // Scheduling left Settings on 25 October 2026: Calendars and Round robin are tabs of Bookings.
-    expect(groups).toEqual(['Account', 'Workspace']);
+    // Regrouped on 5 November 2026; Super admin is for operators alone.
+    expect(groups).toEqual(['Account', 'Workspace', 'People', 'Scheduling', 'Data']);
     // Every entry is a page in Settings: no link out to Captures.
     expect(nav?.textContent).not.toContain('In Captures');
     expect(nav?.querySelector('a[aria-current="page"]')?.textContent).toBe('Preferences');
@@ -664,5 +684,80 @@ describe('leaving the workspace from its menu', () => {
     await page.getByRole('button', { name: /workspace menu/ }).click();
     await expect.element(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
     expect(page.getByRole('menuitem', { name: 'Leave workspace' }).elements()).toHaveLength(0);
+  });
+});
+
+describe('Find a setting (5 November 2026)', () => {
+  const field = () => page.getByRole('textbox', { name: 'Find a setting' });
+  const nav = () => document.querySelector('nav[aria-label="Settings"]');
+
+  it('sits under the head and filters the entries, a tab’s too, saying where each sits', async () => {
+    await renderFrame({ current: 'profile', backHref: '/w/acme/start' }, { at: '/w/acme/settings/account/profile' });
+    await field().fill('teams');
+    const links = [...(nav()?.querySelectorAll('a[href]') ?? [])].filter(
+      (link) => link.getAttribute('aria-label') !== 'Leave settings',
+    );
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/w/acme/settings/teams']);
+    expect(links[0]?.textContent).toContain('People › Members');
+    // Back to the whole list once the field is empty.
+    await field().fill('');
+    expect(nav()?.textContent).toContain('Notifications');
+  });
+
+  it('opens the first match on Enter, and empties the field on the new page', async () => {
+    const router = await renderFrame(
+      { current: 'profile', backHref: '/w/acme/start' },
+      { at: '/w/acme/settings/account/profile' },
+    );
+    await field().fill('team');
+    await act(async () => {
+      page
+        .getByRole('textbox', { name: 'Find a setting' })
+        .element()
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(router.state.location.pathname).toBe('/w/acme/settings/teams');
+  });
+
+  it('says so when nothing matches, and Escape brings the list back', async () => {
+    await renderFrame({ current: 'profile', backHref: '/w/acme/start' }, { at: '/w/acme/settings/account/profile' });
+    await field().fill('zebra');
+    expect(nav()?.textContent).toContain('No setting matches');
+    expect(nav()?.querySelector('a[aria-current]')).toBeNull();
+    await act(async () => {
+      field()
+        .element()
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect((field().element() as HTMLInputElement).value).toBe('');
+    expect(nav()?.textContent).toContain('Profile');
+  });
+});
+
+describe('Settings on a phone (5 November 2026)', () => {
+  beforeEach(async () => {
+    await page.viewport(390, 844);
+  });
+  afterEach(async () => {
+    await page.viewport(1280, 800);
+  });
+
+  it('opens on the list of every setting, labelled, the whole width, with the page hidden', async () => {
+    await renderFrame({ backHref: '/w/acme/start' }, { at: '/w/acme/settings' });
+    const nav = document.querySelector<HTMLElement>('nav[aria-label="Settings"]');
+    expect(nav).not.toBeNull();
+    // Open, not the rail: every entry's name is on screen.
+    expect(nav?.hasAttribute('data-collapsed')).toBe(false);
+    expect(nav?.getBoundingClientRect().width).toBe(390);
+    expect(document.querySelector<HTMLElement>('main')?.checkVisibility()).toBe(false);
+    await expect.element(page.getByRole('link', { name: 'Sign in and security' })).toBeVisible();
+  });
+
+  it('shows a page alone, with no rail beside it', async () => {
+    await renderFrame({ current: 'profile', backHref: '/w/acme/start' }, { at: '/w/acme/settings/account/profile' });
+    expect(document.querySelector<HTMLElement>('nav[aria-label="Settings"]')?.checkVisibility()).toBe(false);
+    expect(document.querySelector<HTMLElement>('main')?.checkVisibility()).toBe(true);
   });
 });

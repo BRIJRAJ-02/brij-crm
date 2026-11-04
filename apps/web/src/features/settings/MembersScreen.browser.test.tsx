@@ -2,7 +2,7 @@
 // Cancel invite on an invitation (Keep invitation, never a second Cancel), Remove from workspace and Transfer ownership on a
 // member each open a danger confirm; the way out changes nothing, and the verb runs once, busy while the server
 // works, with the server's refusal inside the dialog, which stays open. Someone else's role changes at once, no
-// confirm. The Joining tab: Asking to join, Pending invitations, then Other ways to join (the invite link, whose
+// confirm. The Invitations tab: Asking to join, Pending invitations, then Other ways to join (the invite link, whose
 // limits save with a toast and Undo, then Company email). A member reads one note and no controls.
 import type {
   RolesOverview,
@@ -399,9 +399,9 @@ async function renderMembers(
   };
 }
 
-/** Opens the Joining tab and picks Cancel invite on Grace's row. */
+/** Opens the Invitations tab and picks Cancel invite on Grace's row. */
 async function pickCancelInvite(): Promise<void> {
-  await page.getByRole('tab', { name: /Joining/ }).click();
+  await page.getByRole('tab', { name: /Invitations/ }).click();
   await page.getByRole('button', { name: 'Actions for the invitation to grace@example.com' }).click();
   await page.getByRole('menuitem', { name: 'Cancel invite' }).click();
 }
@@ -627,7 +627,7 @@ describe('transferring ownership asks first (AC-813)', () => {
   });
 });
 
-describe('the Joining tab', () => {
+describe('the Invitations tab', () => {
   it('counts invitations and requests, and holds Asking to join, Pending invitations, then Other ways to join', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer, { requests: [REQUEST], link: LINK, domains: DOMAINS });
@@ -637,15 +637,15 @@ describe('the Joining tab', () => {
         .getByRole('tab')
         .elements()
         .map((tab) => tab.textContent.replaceAll(/\d/g, '')),
-    ).toEqual(['Members', 'Joining', 'Teams', 'Roles']);
+    ).toEqual(['Members', 'Invitations', 'Teams']);
     // Its count is the pending invitations plus the requests waiting: 1 and 1.
     expect(
       page
-        .getByRole('tab', { name: /Joining/ })
+        .getByRole('tab', { name: /Invitations/ })
         .element()
         .textContent.replaceAll(/\s/g, ''),
-    ).toBe('Joining2');
-    await page.getByRole('tab', { name: /Joining/ }).click();
+    ).toBe('Invitations2');
+    await page.getByRole('tab', { name: /Invitations/ }).click();
     const panel = page.getByRole('tabpanel');
     await expect.element(panel.getByRole('heading', { name: 'Asking to join' })).toBeVisible();
     // The invite link's limits sit folded under Link settings, whose trigger is a heading of its own.
@@ -667,7 +667,7 @@ describe('the Joining tab', () => {
   it('leaves Asking to join out while nobody waits', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer, { link: LINK });
-    await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('tab', { name: /Invitations/ }).click();
     await expect.element(page.getByRole('heading', { name: 'Pending invitations' })).toBeVisible();
     expect(page.getByRole('heading', { name: 'Asking to join' }).elements()).toHaveLength(0);
   });
@@ -675,7 +675,7 @@ describe('the Joining tab', () => {
   it('says the invite link saved, and Undo puts the old limit back', async () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('tab', { name: /Invitations/ }).click();
     await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
@@ -691,7 +691,7 @@ describe('the Joining tab', () => {
   it('never turns the link back on: turning it off closes the open Undo', async () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('tab', { name: /Invitations/ }).click();
     await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
@@ -710,7 +710,7 @@ describe('the Joining tab', () => {
   it('closes the open Undo when the tab is left, so a remount can’t act on an old one', async () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('tab', { name: /Invitations/ }).click();
     await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
@@ -723,7 +723,7 @@ describe('the Joining tab', () => {
   it('leaves another admin’s newer value alone, and says so', async () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     const { reload } = await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('tab', { name: /Invitations/ }).click();
     await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
@@ -740,7 +740,7 @@ describe('the Joining tab', () => {
   it('says the link saved when it is turned on, with no Undo', async () => {
     const counted = layerWith(() => Promise.resolve(), { enabled: false, uses: 0, isSpent: false });
     await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('tab', { name: /Invitations/ }).click();
     // A click on the switch's own input, which the row's text covers in this unstyled page.
     (page.getByRole('switch', { name: 'Invite link' }).element() as HTMLElement).click();
     await expect.element(page.getByText('Invite link saved.')).toBeVisible();
@@ -748,10 +748,10 @@ describe('the Joining tab', () => {
     expect(counted.calls.setLink).toEqual([{ enabled: true }]);
   });
 
-  it('opens on Joining while someone asks to join', async () => {
+  it('opens on Invitations while someone asks to join', async () => {
     const waiting = layerWith(() => Promise.resolve());
     await renderMembers(waiting.layer, { requests: [REQUEST] });
-    await expect.element(page.getByRole('tab', { name: /Joining/ })).toHaveAttribute('aria-selected', 'true');
+    await expect.element(page.getByRole('tab', { name: /Invitations/ })).toHaveAttribute('aria-selected', 'true');
     await expect.element(page.getByRole('heading', { name: 'Asking to join' })).toBeVisible();
   });
 
@@ -796,13 +796,13 @@ describe('a member who can’t invite', () => {
     // this harness doesn't mount.
     await expect.element(page.getByRole('row', { name: /Linus Torvalds/ })).toBeVisible();
     expect(page.getByText('Only owners and admins can change this.').elements()).toHaveLength(0);
-    // No Joining tab: only Members, Teams and Roles.
+    // No Invitations tab: only Members and Teams.
     expect(
       page
         .getByRole('tab')
         .elements()
         .map((tab) => tab.textContent.replaceAll(/\d/g, '')),
-    ).toEqual(['Members', 'Teams', 'Roles']);
+    ).toEqual(['Members', 'Teams']);
     expect(page.getByRole('button', { name: /Role for/ }).elements()).toHaveLength(0);
     // Their own row's menu says what they can do (spec 0037, AC-1243); nobody else's has one.
     expect(page.getByRole('button', { name: /Actions for/ }).elements()).toHaveLength(1);

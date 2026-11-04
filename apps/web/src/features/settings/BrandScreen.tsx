@@ -85,10 +85,7 @@ const TEMPLATES: readonly { readonly id: PageTemplate; readonly name: string }[]
  * A template's look as its own thumbnail wears it: a template that follows the visitor's light or dark (Classic,
  * Split) is drawn light, as a first visitor most often meets it; Night stays dark and Studio light.
  */
-const ownLook = (template: PageTemplate) => {
-  const look = themeForTemplate(template, DEFAULT_PAGE_THEME);
-  return look.mode === 'system' ? { ...look, mode: 'light' as const } : look;
-};
+const ownLook = (template: PageTemplate) => themeForTemplate(template, DEFAULT_PAGE_THEME);
 
 /** A template's name, as the picker says it. */
 const nameOf = (template: PageTemplate): string => TEMPLATES.find((one) => one.id === template)?.name ?? template;
@@ -375,6 +372,8 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
                       thumbnail: (
                         <LinkPageThumbnail
                           theme={ownLook(template.id)}
+                          // Classic and Split follow the visitor: drawn light, as most visitors see them.
+                          mode="light"
                           size="large"
                           {...(colours === undefined ? {} : { variables: colours.variables })}
                           profile={{

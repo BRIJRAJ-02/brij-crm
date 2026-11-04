@@ -39,7 +39,7 @@ Ported from the artifact's Toolbar card (ViewBar is new: the artifact drew it as
 
 Bars: with and without actions; the views loading; the page loading (TopBar). ViewBar: grouped (a Private section) and locked choices; tools only (no switcher); its end with Table chosen, with Board chosen and View settings open beside a lock line, disabled (`isDisabled` on `settings` and `layout`), by keyboard, and on a phone. Toolbar: with unsaved changes (Save shows) and without. SortChip: FilterChip's states (hover and focus per part), with more sorts, a long name, and read only (no remove part).
 
-On a phone (21 October 2026): TopBar is a size container, so its Breadcrumbs show only the current place under 480px; ViewBar is a size container: under 480px View settings and Table or Board show their icons alone (`isLabelCollapsible` on Button and SegmentedControl), keeping their names, and should it still be too narrow the bar scrolls sideways on its own, never the page.
+On a phone (21 October 2026): TopBar is a size container, so its Breadcrumbs show only the current place under 480px, and its end gives way before the title does; `back` (`{ label, href }`, 5 November 2026) puts a ghost chevron link before the title there, and only there: the way up from a settings page when the shell hides the sidebar (AppShell's `phoneSidebar="hidden"`). Why a prop: under 480px the trail is the title alone, so nothing else led back to the list; ViewBar is a size container: under 480px View settings and Table or Board show their icons alone (`isLabelCollapsible` on Button and SegmentedControl), keeping their names, and should it still be too narrow the bar scrolls sideways on its own, never the page.
 
 ## Keyboard
 
@@ -47,7 +47,7 @@ Tab reaches the switcher and each action in the bars: in the view bar the switch
 
 ## Differences from the artifact
 
-- `TopBar` names its title `title`, and its end slot is `children`; `crumbs`, `titleRef` and `isLoading` are new.
+- `TopBar` names its title `title`, and its end slot is `children`; `crumbs`, `titleRef`, `isLoading` and `back` are new.
 - `ViewBar` is new, replacing the second TopBar the artifact drew for the view bar.
 - `Toolbar`'s end slot is `end`, so the unsaved changes sit apart from the view's condition.
 - `SortChip` takes `attribute`, `direction` and `more` rather than its text as children, and is drawn as a FilterChip.

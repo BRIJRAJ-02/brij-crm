@@ -405,7 +405,7 @@ describe('saving at once', () => {
 });
 
 describe('keeping submissions (spec 0023, AC-1054)', () => {
-  const keepSelect = () => page.getByRole('button', { name: new RegExp(strings.keepSubmissions) });
+  const keepSelect = () => page.getByRole('button', { name: new RegExp(`^(?!About ).*${strings.keepSubmissions}`) });
   const pick = async (choice: '12' | '24' | 'forever') => {
     await userEvent.click(keepSelect());
     await userEvent.click(page.getByRole('option', { name: strings.keepChoices[choice] }));
@@ -459,7 +459,9 @@ describe('keeping submissions (spec 0023, AC-1054)', () => {
     await renderGeneral({ asMember: true });
     // Read only, the choice is shown as text and nothing opens to change it.
     await expect.element(page.getByText(strings.keepChoices.forever)).toBeVisible();
-    expect(page.getByRole('button', { name: new RegExp(strings.keepSubmissions) }).elements()).toEqual([]);
+    expect(
+      page.getByRole('button', { name: new RegExp(`^(?!About ).*${strings.keepSubmissions}`) }).elements(),
+    ).toEqual([]);
   });
 });
 

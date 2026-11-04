@@ -214,6 +214,8 @@ export function AvailabilityScreen({
   // The team's week is Bookings › Roster, a tab of its own (31 October 2026), so no Mine | Team switch stands here.
   const tools = (
     <SectionBar
+      // With no Bookings strip to sit on (Settings › Scheduling › Availability), its own bar under the TopBar.
+      variant={slot === null ? 'bar' : 'inline'}
       start={switcher}
       end={
         <>
@@ -443,7 +445,13 @@ export function AvailabilityPending() {
   // New schedule waits in the TopBar, so it doesn't move when the editor arrives. The Viewing Select shows only
   // once colleagues are known, so it doesn't stand here.
   const waiting = <NewScheduleButton isDisabled onPress={() => undefined} />;
-  const tools = <SectionBar start={<SwitcherPending />} end={<>{actionSlot === null && waiting}</>} />;
+  const tools = (
+    <SectionBar
+      variant={slot === null ? 'bar' : 'inline'}
+      start={<SwitcherPending />}
+      end={<>{actionSlot === null && waiting}</>}
+    />
+  );
   return (
     <WorkspacePage
       currentPage="bookings"

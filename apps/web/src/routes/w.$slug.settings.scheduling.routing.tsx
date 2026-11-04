@@ -33,7 +33,7 @@ function RoutingRoute() {
   const navigate = useNavigate({ from: Route.fullPath });
   if (members === undefined) return <SettingsMissing backTo="home" />;
   return (
-    <SchedulingSettingsPage title={strings.routing}>
+    <SchedulingSettingsPage title={strings.routing} hasToolsInBar>
       <RoutingScreen
         data={data}
         slug={slug}
