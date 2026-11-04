@@ -125,6 +125,13 @@ type Story = StoryObj<typeof meta>;
  * name's initials stand in.
  */
 export const Restaurant: Story = {
+  // Shot at a phone's width: the desktop page with its photos is over the 200 KB baseline limit, and Plain shows the
+  // desktop layout while Gallery, Hours, Location and Menu show each section.
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <BusinessPage {...args} />
+    </Stage>
+  ),
   parameters: { crm: { preview: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -149,6 +156,8 @@ export const Restaurant: Story = {
 
 /** Reservations not open and no phone: Directions is the action, never a dead end. */
 export const DirectionsOnly: Story = {
+  // Restaurant's page with one difference, checked in play, so no shot of its own (the full page is over 200 KB).
+  parameters: { crm: { screenshot: false } },
   args: { place: { ...PLACE, phone: undefined } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -160,6 +169,8 @@ export const DirectionsOnly: Story = {
 
 /** A place in Bengaluru: its hours read on a 12 hour clock, as people there read them. */
 export const TwelveHourClock: Story = {
+  // Restaurant's page with one difference, checked in play, so no shot of its own (the full page is over 200 KB).
+  parameters: { crm: { screenshot: false } },
   args: { place: { ...PLACE, country: 'IN' } },
   play: async ({ canvasElement }) => {
     await expect((await within(canvasElement).findAllByText(/12:00\s?pm – 11:00\s?pm/i)).length).toBeGreaterThan(0);
@@ -177,6 +188,8 @@ export const Plain: Story = {
 
 /** Several places: the place on its own line under the name, and the other places after Location. */
 export const SeveralPlaces: Story = {
+  // Restaurant's page with one difference, checked in play, so no shot of its own (the full page is over 200 KB).
+  parameters: { crm: { screenshot: false } },
   args: {
     placeName: 'Indiranagar',
     places: [
@@ -197,6 +210,8 @@ export const SeveralPlaces: Story = {
 
 /** Reserve once the reservation flow is open: a link to the place's reservation page, `/r/<key>` (Table seating). */
 export const ReserveOpen: Story = {
+  // Restaurant's page with one difference, checked in play, so no shot of its own (the full page is over 200 KB).
+  parameters: { crm: { screenshot: false } },
   args: { reserve: { kind: 'open', href: '/r/AbCdEfGhIjKlMnOp' } },
   play: async ({ canvasElement }) => {
     for (const reserve of within(canvasElement).getAllByRole('link', { name: 'Reserve a table' })) {
@@ -221,6 +236,8 @@ export const FullMenuLink: Story = {
 
 /** Open now: Thursday from 10 until 1 at night. */
 export const OpenNow: Story = {
+  // Restaurant's page with one difference, checked in play, so no shot of its own (the full page is over 200 KB).
+  parameters: { crm: { screenshot: false } },
   args: {
     place: {
       ...PLACE,
