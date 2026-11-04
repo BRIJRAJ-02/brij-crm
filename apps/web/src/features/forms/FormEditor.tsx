@@ -1486,6 +1486,9 @@ function FormTitle({
       <Field
         label={strings.formLine}
         isLabelHidden
+        // The same quiet field as the title, one step down (forms fixes 3, the design critic).
+        variant="title"
+        size="sm"
         isWrapping
         placeholder={strings.formLinePlaceholder}
         value={subheading}

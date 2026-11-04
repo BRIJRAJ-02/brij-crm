@@ -1049,9 +1049,9 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         </>
       }
       items={items}
-      // A quiet + between the cards, always there (T39: adding in between was "a find"); not on a read only list,
-      // nor while only the cards with rules show.
-      {...(isReadOnly || isLogicOnly ? {} : { gaps: 'shown' as const, renderGap: gapFor })}
+      // The + between two cards shows while a pointer is over the gap or focus is in it (forms fixes 3, the design
+      // critic: a + under every card was noise); not on a read only list, nor while only the cards with rules show.
+      {...(isReadOnly || isLogicOnly ? {} : { renderGap: gapFor })}
       openIds={shownOpen}
       onOpenChange={(id, isOpen) => {
         // The question or divider a publish refused stays open until it is fixed.

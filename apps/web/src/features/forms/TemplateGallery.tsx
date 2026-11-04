@@ -17,7 +17,6 @@ import {
   EmptyState,
   HostedFormPreview,
   Modal,
-  PhonePreview,
   TileGrid,
   type ChoiceTile,
   type IconName,
@@ -62,6 +61,9 @@ function tileOf(template: FormTemplateSummary): ChoiceTile {
     id: template.id,
     name: template.name,
     icon: TEMPLATE_ICONS[template.id],
+    // The form it makes, small (forms fixes 3, after Miro's and Typeform's template grids): each card shows its own
+    // form, at every width, so no side pane is needed to see one.
+    thumbnail: <HostedFormPreview form={sampleOf(template)} size="thumbnail" />,
     description: template.purpose,
   };
 }
@@ -210,18 +212,6 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
       isWide
       icon="clipboard-list"
       title={strings.galleryTitle}
-      // The big preview of the picked template, beside the list (Typeform's and Tally's galleries), drawn by the
-      // hosted page's own component; left out where the window is too narrow, since the list alone picks.
-      {...(chosen === undefined
-        ? {}
-        : {
-            // The phone takes the pane's height (forms fixes 3: capped, it sat small in a tall empty pane).
-            aside: (
-              <PhonePreview size="pane">
-                <HostedFormPreview key={chosen.id} form={sampleOf(chosen)} />
-              </PhonePreview>
-            ),
-          })}
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open) close();
@@ -280,10 +270,11 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
         <TileGrid
           variant="choice"
           label={strings.galleryTitle}
-          // A mark beside the name and its one short line: a list to scan, not pictures to compare. Picking one
-          // shows it beside the list; Use makes it. Focus starts on the first, so the arrows browse at once.
+          // Each card is the form it makes, small, over its name and one short line (forms fixes 3: the grid fills the
+          // window, as Miro's does). Use, Enter or a double click makes it. Focus starts on the first.
           showsDescription
-          tileWidth="wide"
+          keepsPicture
+          pictureSize="large"
           // The gallery's first step is this choice: focus starts on the picked template (the owner's ask).
           // eslint-disable-next-line jsx-a11y-x/no-autofocus
           autoFocus
