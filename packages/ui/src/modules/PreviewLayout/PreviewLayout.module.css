@@ -198,6 +198,24 @@
     max-block-size: var(--size-page-card);
   }
 
+  /* previewSurface="canvas": a sunken canvas under the frame, which is as tall as what it shows and centred on it,
+     so a short form is never a full height slab. */
+  .preview[data-surface='canvas'] .stage {
+    align-items: center;
+    padding: var(--space-16);
+    border-radius: var(--radius-lg);
+    background: var(--surface-sunken);
+  }
+
+  /* What the frame shows keeps its own height on the canvas, so the frame can hug it. */
+  .screen[data-hug] > :only-child {
+    flex: none;
+  }
+
+  .preview[data-surface='canvas'] .head {
+    justify-content: flex-end;
+  }
+
   /* PhonePreview size="pane": a pane given to the preview alone, so the phone takes its whole height. */
   .preview[data-place='bare'][data-size='pane'] {
     padding-block: 0;
