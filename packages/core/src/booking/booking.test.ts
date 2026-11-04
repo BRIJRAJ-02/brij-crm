@@ -238,9 +238,40 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
       tx.execute<{ video_url: string | null }>(sql`select video_url from bookings where id = ${booked.bookingId}`),
     );
     expect(stored.rows[0]?.video_url).toBe(link);
-    // The contract takes https only.
+    // The contract takes https only, with no name or password in it, and no longer than a booking's video_url holds.
     expect(BookingLocation.safeParse({ type: 'video', link: 'http://meet.example.com/x' }).success).toBe(false);
     expect(BookingLocation.safeParse({ type: 'video', link: 'javascript:alert(1)' }).success).toBe(false);
+    expect(BookingLocation.safeParse({ type: 'video', link: 'https://ada:secret@meet.example.com/x' }).success).toBe(
+      false,
+    );
+    const long = `https://meet.example.com/${'a'.repeat(2_000)}`;
+    expect(BookingLocation.safeParse({ type: 'video', link: long }).success).toBe(false);
+    // Kept as one spelling.
+    expect(BookingLocation.parse({ type: 'video', link: 'HTTPS://Meet.Example.com/x' })).toEqual({
+      type: 'video',
+      link: 'https://meet.example.com/x',
+    });
+  });
+
+  it('keeps a host’s own meeting link from a member who may only see the page (critic B-07)', async () => {
+    const w = await workspace();
+    const link = 'https://meet.example.com/team-room';
+    const made = await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'Talk to us',
+        timeZone: 'UTC',
+        scope: 'workspace',
+        settings: { durations: [30], location: { type: 'video', link } },
+      },
+      NOW,
+    );
+    expect(made.location).toEqual({ type: 'video', link });
+    const bea = await w.addMember('Bea', 'member');
+    const seen = (await listBookingPages(bea, NOW)).find((page) => page.id === made.id);
+    expect(seen?.canChange).toBe(false);
+    expect(seen?.location).toEqual({ type: 'video' });
   });
 
   it('answers a guest on a draft as if there were no page, and pausing a draft keeps it a draft (4 Nov 2026)', async () => {

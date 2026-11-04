@@ -176,10 +176,20 @@ export function defaultAvailability(timeZone: string): BookingAvailability {
  */
 export const MeetingLink = z
   .url({ error: 'Give the meeting link, starting https://.' })
-  .max(2_048)
-  .refine((value) => URL.canParse(value) && new URL(value).protocol === 'https:', {
-    error: 'Give the meeting link, starting https://.',
-  });
+  // A booking's video_url holds at most 2000 (migration 0041), and it is copied there with each booking.
+  .max(2_000, 'Keep the meeting link to 2000 characters.')
+  .refine(
+    (value) => {
+      if (!URL.canParse(value)) return false;
+      const url = new URL(value);
+      // https only, and never a name or password in it: a secret in an address, and one the email's call button
+      // refuses.
+      return url.protocol === 'https:' && url.username === '' && url.password === '';
+    },
+    { error: 'Give the meeting link, starting https://.' },
+  )
+  // Kept as the browser would write it, so what is stored and sent is one spelling.
+  .transform((value) => new URL(value).href);
 /** A host's own meeting link. */
 export type MeetingLink = z.infer<typeof MeetingLink>;
 

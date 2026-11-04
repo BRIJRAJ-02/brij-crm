@@ -31,6 +31,7 @@ import { blockOccurrences } from './blocks.ts';
 import { handLinkOf, linkedRecords, linksOf, seenLinks } from './links.ts';
 import { shownAsEvent } from './owned.ts';
 import { shownAnswers } from './questions.ts';
+import { withoutMeetingLink } from './mail-queue.ts';
 import {
   bookingAccess,
   bookingReaderIn,
@@ -230,7 +231,8 @@ function itemOf(
       id: row.id,
       pageId: row.pageId,
       pageTitle,
-      location: place.success ? place.data : { type: 'video' },
+      // Never the host's own meeting link: that is the booking's, and this reader isn't on it (critic B-07).
+      location: place.success ? withoutMeetingLink(place.data) : { type: 'video' },
       hostMemberId: row.hostMemberId,
       hostName: hostName ?? '',
       needsHost: row.needsHostAt !== null,

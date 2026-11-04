@@ -57,7 +57,7 @@ export async function recordEvent(
     .update(bookings)
     .set(
       written === undefined
-        ? { eventFailedAt: sql`now()`, ...(ownLink === undefined ? {} : { videoUrl: ownLink }) }
+        ? { eventFailedAt: sql`now()`, ...(ownLink === undefined ? {} : { videoUrl: ownLink, updatedAt: sql`now()` }) }
         : {
             meetingId: written.meetingId ?? null,
             videoUrl: written.videoUrl ?? ownLink ?? null,
@@ -66,6 +66,16 @@ export async function recordEvent(
           },
     )
     .where(eq(bookings.id, bookingId));
+}
+
+/**
+ * A location as anyone who hasn't booked may see it: a host's own meeting link left out (critic B-07), for the public
+ * page, a member who may only see the page, and a booking seen over its host.
+ */
+export function withoutMeetingLink<Location extends { readonly type: string }>(
+  location: Location,
+): Location | { readonly type: 'video' } {
+  return location.type === 'video' ? { type: 'video' } : location;
 }
 
 /** A video page's own meeting link, when its host gave one (critic B-07). */

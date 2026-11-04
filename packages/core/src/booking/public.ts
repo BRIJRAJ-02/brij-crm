@@ -109,7 +109,7 @@ import {
   routeBooking,
   type BookingRouting,
 } from '../routing/booking.ts';
-import { enqueueBookingMail, ownMeetingLink, recordEvent } from './mail-queue.ts';
+import { enqueueBookingMail, ownMeetingLink, recordEvent, withoutMeetingLink } from './mail-queue.ts';
 import { checkOneOffLink, oneOffStateOf, oneOffTokenHash, useOneOffLink } from './one-off-links.ts';
 import { ensureManageToken, managePath, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { queueBookingWebhook } from '../webhooks/queue.ts';
@@ -251,7 +251,7 @@ function initialsOf(name: string): string {
 
 /** The location a visitor may see: a host's own meeting link is never on the page, only in a booking's emails. */
 function publicLocation(page: PageRecord): PublicLocation {
-  return page.location.type === 'video' ? { type: 'video' } : page.location;
+  return page.location.type === 'video' ? { type: 'video' } : withoutMeetingLink(page.location);
 }
 
 /** Reads account pictures (schema auth, through the identity login): the public page's host picture. */

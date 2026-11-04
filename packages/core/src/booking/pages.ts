@@ -62,6 +62,7 @@ import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 import { BOOKING_DRAFT_KEYS } from '@crm/contracts';
 import { changedOnly, diffPage, publishedSnapshot } from './drafts.ts';
 import { keepVersion } from './versions.ts';
+import { withoutMeetingLink } from './mail-queue.ts';
 import {
   checkAnswersObject,
   checkNoNewWall,
@@ -378,7 +379,12 @@ function viewOf(
     createdAt: page.createdAt.toISOString(),
     updatedAt: page.updatedAt.toISOString(),
   };
-  return draftedView(view, page, (questions) => seen(questions, page.answersObjectId));
+  const drafted = draftedView(view, page, (questions) => seen(questions, page.answersObjectId));
+  // A host's own meeting link is for those who change the page and those who booked (critic B-07): a member who may
+  // only see it (a workspace link, a colleague's page) gets the location without it, the draft's included.
+  return changeable
+    ? drafted
+    : { ...drafted, location: withoutMeetingLink(drafted.location) };
 }
 
 /**
