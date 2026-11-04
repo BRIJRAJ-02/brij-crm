@@ -2354,7 +2354,7 @@ export function createDataLayer({
   });
   /**
    * A member's booking write under a mutation id this tab knows (B-17): its `bookings` echo (and, for a booking made
-   * here, its person's `records` echo, `echoes`) is skipped, since the write already reads every held Bookings view
+   * here, its person's `records` echo, `echoes`) is skipped, since each such write reads every held Bookings view
    * again on its answer.
    */
   const bookingWrite = async <T>(echoes: number, send: (mutationId: string) => Promise<T>): Promise<T> => {
@@ -4334,7 +4334,11 @@ export function createDataLayer({
       confirm: (workspace: string, bookingId: string): Promise<boolean> =>
         bookingWrite(1, (mutationId) =>
           call((options) => api.bookingFlow.confirm({ workspace, bookingId, mutationId }, options)),
-        ).then((answer) => answer.confirmed),
+        ).then((answer) => {
+          // Its own echo is skipped, so this tab's held Bookings views read the answer now.
+          refreshBookings(workspace);
+          return answer.confirmed;
+        }),
       decline: (workspace: string, bookingId: string, reason?: string): Promise<boolean> =>
         bookingWrite(1, (mutationId) =>
           call((options) =>
@@ -4343,7 +4347,10 @@ export function createDataLayer({
               options,
             ),
           ),
-        ).then((answer) => answer.declined),
+        ).then((answer) => {
+          refreshBookings(workspace);
+          return answer.declined;
+        }),
     },
     bookingPages: {
       /** A new page's id: mint it once per New page, and send the same one again on a retry. */
