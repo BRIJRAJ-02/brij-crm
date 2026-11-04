@@ -466,6 +466,9 @@ describe('Settings as plain rows (T21)', () => {
     };
     await show({ ...formView({}), draft }, []);
     (page.getByRole('switch', { name: 'Also create a deal' }).element() as HTMLElement).click();
+    // An answer is saved on the deal, so turning it off asks first (forms fixes 3).
+    expect(deals).toEqual([]);
+    await page.getByRole('button', { name: 'Stop creating deals', exact: true }).click();
     expect(deals).toEqual([undefined]);
     expect(filings).toEqual([['main', 'kept']]);
   });
