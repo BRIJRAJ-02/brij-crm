@@ -28,8 +28,6 @@ const NEAR = '200px';
 
 /** How many days the week strip shows, from today. */
 const WEEK = 7;
-/** A day's length, for walking the strip forward from now (a day's key is read in the visitor's zone). */
-const DAY_MS = 86_400_000;
 
 /** A chip's address: the booking page on that day, that time chosen (`at`) for that length (`len`). */
 export function chipHref(href: string, start: string, minutes: number): string {
@@ -101,7 +99,16 @@ export function LinkPageTimes({ block, level, onPress, onNear }: LinkPageTimesPr
   const freeDays = new Set(
     times?.status === 'ready' ? times.starts.map((start) => dayKey.format(new Date(start))) : [],
   );
-  const week = Array.from({ length: WEEK }, (_, at) => new Date(now + at * DAY_MS));
+  // Each day stepped by the calendar from today's noon, so a clock change never skips or repeats one.
+  const noon = new Date(now);
+  noon.setHours(12, 0, 0, 0);
+  const week = Array.from({ length: WEEK }, (_, at) => {
+    const day = new Date(noon);
+    day.setDate(noon.getDate() + at);
+    return day;
+  });
+  // The strip says where the free times are; with none read (an error) it would read as a fully booked week.
+  const showsWeek = times === undefined || times.status !== 'error';
   return (
     <section ref={rootRef} className={styles.root} aria-labelledby={titleId} aria-busy={isLoading || undefined}>
       <span className={styles.head}>
@@ -110,19 +117,21 @@ export function LinkPageTimes({ block, level, onPress, onNear }: LinkPageTimesPr
         </Title>
         <span className={styles.length}>{strings.minutes(block.duration)}</span>
       </span>
-      <ol className={styles.week} aria-hidden="true">
-        {week.map((day, at) => (
-          <li
-            key={dayKey.format(day)}
-            className={styles.day}
-            data-today={at === 0 || undefined}
-            data-free={freeDays.has(dayKey.format(day)) || undefined}
-          >
-            <span className={styles.weekday}>{weekday.format(day)}</span>
-            <span className={styles.dayNumber}>{dayNumber.format(day)}</span>
-          </li>
-        ))}
-      </ol>
+      {showsWeek && (
+        <ol className={styles.week} aria-hidden="true">
+          {week.map((day, at) => (
+            <li
+              key={dayKey.format(day)}
+              className={styles.day}
+              data-today={at === 0 || undefined}
+              data-free={freeDays.has(dayKey.format(day)) || undefined}
+            >
+              <span className={styles.weekday}>{weekday.format(day)}</span>
+              <span className={styles.dayNumber}>{dayNumber.format(day)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
       {isLoading ? (
         <div className={styles.chips}>
           <VisuallyHidden>{strings.timesLoading}</VisuallyHidden>

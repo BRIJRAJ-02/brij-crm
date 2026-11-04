@@ -36,7 +36,7 @@ export const bentoStrings = {
   newAudio: 'Add an audio intro',
   editAudio: 'Edit audio intro',
   audioFile: 'Recording',
-  audioTypes: 'MP3, M4A, OGG or WebM, up to 1.5 MB',
+  audioTypes: 'MP3, M4A, OGG or WebM, about a minute and a half',
   audioTitle: 'Title',
   audioTitlePlaceholder: 'Hi, I’m Ada',
   audioTooBig: 'That recording is too long. Keep it under 1.5 MB, about a minute and a half.',

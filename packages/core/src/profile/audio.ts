@@ -24,6 +24,9 @@ export function audioExtension(type: ProfileAudioType): 'mp3' | 'm4a' | 'ogg' | 
   return type === 'audio/ogg' ? 'ogg' : 'webm';
 }
 
+/** The MP4 brands a recording carries: a phone's voice memo, an export, a stream's segment. */
+const AUDIO_BRANDS = new Set(['M4A ', 'M4B ', 'mp41', 'mp42', 'isom', 'iso2', 'iso5', 'iso6', 'dash', '3gp4', '3gp5']);
+
 /** The type `bytes` begin as among the four a link page stores, or undefined. */
 export function profileAudioTypeOf(bytes: Uint8Array): ProfileAudioType | undefined {
   const at = (offset: number, ...expected: readonly number[]) =>
@@ -31,8 +34,12 @@ export function profileAudioTypeOf(bytes: Uint8Array): ProfileAudioType | undefi
   // An MP3 starts with its ID3 tag, or straight away with a frame's sync word (eleven set bits).
   if (at(0, 0x49, 0x44, 0x33)) return 'audio/mpeg';
   if (bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0) return 'audio/mpeg';
-  // An MP4 container names its type in its first box: `ftyp`, four bytes in.
-  if (at(4, 0x66, 0x74, 0x79, 0x70)) return 'audio/mp4';
+  // An MP4 container names its type in its first box (`ftyp`, four bytes in) and its brand after it: only the
+  // brands a recording is made with, so a still picture (HEIC, AVIF) in the same container is refused.
+  if (at(4, 0x66, 0x74, 0x79, 0x70)) {
+    const brand = String.fromCharCode(...bytes.subarray(8, 12));
+    return AUDIO_BRANDS.has(brand) ? 'audio/mp4' : undefined;
+  }
   if (at(0, 0x4f, 0x67, 0x67, 0x53)) return 'audio/ogg';
   // WebM is Matroska: the EBML header's id.
   if (at(0, 0x1a, 0x45, 0xdf, 0xa3)) return 'audio/webm';

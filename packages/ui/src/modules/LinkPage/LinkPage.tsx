@@ -2205,9 +2205,12 @@ export function LinkPage({
   const variablesRef = usePageVariables(variables);
   const isSplit = drawn?.template === 'split';
   // A profile card leads the page in place of the hero (AC-6808), except in Split, whose panel is who the page is.
-  const leadsWithCard = !isSplit && layout === 'page' && (blocks?.some((block) => block.kind === 'profile') ?? false);
+  // Only a card the owner put first leads: one further down the page leaves the hero where it is.
+  const leadsWithCard =
+    !isSplit && layout === 'page' && blocks?.find((block) => block.kind !== 'banner')?.kind === 'profile';
   // Split's panel always offers Book when the page has a booking page (AC-6801); elsewhere only the caller's.
-  const heroBook = book ?? (isSplit ? pageBook : undefined);
+  // The profile card carries Book when it leads, so the header never draws a second one.
+  const heroBook = leadsWithCard ? undefined : (book ?? (isSplit ? pageBook : undefined));
   const bookHref = ownPath(heroBook?.href);
   // Split leads with its cover in the panel when the page has one (AC-6801, AC-6802).
   const hasCover =

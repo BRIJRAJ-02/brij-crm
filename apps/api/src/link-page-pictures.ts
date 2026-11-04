@@ -191,15 +191,17 @@ export function audioResponse(
   const asked = range === undefined ? null : /^bytes=(\d*)-(\d*)$/.exec(range.trim());
   if (asked === null) return new Response(new Uint8Array(stored.bytes), { headers });
   const [, from = '', to = ''] = asked;
+  // A part of the file is this visitor's answer alone: an edge never keeps it for the next one.
+  const partial = { ...headers, 'cache-control': 'private, max-age=300' };
   // `bytes=-500` is the last 500; `bytes=100-` runs to the end.
   const start = from === '' ? Math.max(0, size - Number(to)) : Number(from);
   const end = from === '' || to === '' ? size - 1 : Math.min(Number(to), size - 1);
   if ((from === '' && to === '') || !Number.isSafeInteger(start) || start > end || start >= size) {
-    return new Response(null, { status: 416, headers: { ...headers, 'content-range': `bytes */${String(size)}` } });
+    return new Response(null, { status: 416, headers: { ...partial, 'content-range': `bytes */${String(size)}` } });
   }
   return new Response(stored.bytes.slice(start, end + 1), {
     status: 206,
-    headers: { ...headers, 'content-range': `bytes ${String(start)}-${String(end)}/${String(size)}` },
+    headers: { ...partial, 'content-range': `bytes ${String(start)}-${String(end)}/${String(size)}` },
   });
 }
 

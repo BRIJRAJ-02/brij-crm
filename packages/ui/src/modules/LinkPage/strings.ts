@@ -103,6 +103,9 @@ export const strings = {
   stepNumber: (at: number) => String(at).padStart(2, '0'),
   /** Events when every one has passed. */
   noEvents: 'Nothing coming up right now',
+  /** The logos' drift, stopped and started for a visitor who can't hover (WCAG 2.2.2). */
+  pauseLogos: 'Pause the logos',
+  playLogos: 'Play the logos',
   /** After an event's time: where it is. */
   atPlace: (place: string) => ` · ${place}`,
   /** A work card or event that opens elsewhere. */

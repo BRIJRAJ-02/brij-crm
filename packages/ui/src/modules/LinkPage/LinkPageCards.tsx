@@ -128,14 +128,14 @@ function Card({
   readonly isPressable?: boolean;
 }) {
   return (
-    <section
+    <article
       className={styles.card}
       data-card={kind}
       data-pressable={isPressable || undefined}
       {...(labelledBy === undefined ? {} : { 'aria-labelledby': labelledBy })}
     >
       {children}
-    </section>
+    </article>
   );
 }
 
@@ -316,7 +316,7 @@ function AudioCard({
             />
           ))}
         </span>
-        <span className={styles.time}>
+        <span className={styles.time} role="status">
           {failed && asked ? strings.introFailed : length === undefined ? '' : clockOf(length - elapsed)}
         </span>
       </span>
@@ -391,6 +391,8 @@ function TimelineCard({
  */
 function LogosCard({ block, level }: { readonly block: Extract<CardBlock, { kind: 'logos' }>; readonly level: 2 | 3 }) {
   const titleId = useId();
+  // The drift stops for good when a visitor asks (WCAG 2.2.2): a keyboard or a finger can't hover to hold it.
+  const [isPaused, setPaused] = useState(false);
   const logos = block.images.flatMap((image) => {
     const src = safeImageSrc(image.src);
     return src === undefined ? [] : [{ ...image, src }];
@@ -413,7 +415,7 @@ function LogosCard({ block, level }: { readonly block: Extract<CardBlock, { kind
       <CardTitle id={titleId} level={level} icon="building">
         {block.title ?? strings.clients}
       </CardTitle>
-      <div className={styles.marquee}>
+      <div className={styles.marquee} data-paused={isPaused || undefined}>
         <ul className={styles.track} data-drifts={logos.length > 2 || undefined}>
           {logos.map((image) => logo(image, false))}
         </ul>
@@ -423,9 +425,25 @@ function LogosCard({ block, level }: { readonly block: Extract<CardBlock, { kind
           </ul>
         )}
       </div>
+      {logos.length > 2 && (
+        <span className={styles.marqueeControl}>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={isPaused ? 'play' : 'pause'}
+            label={isPaused ? strings.playLogos : strings.pauseLogos}
+            onPress={() => {
+              setPaused((was) => !was);
+            }}
+          />
+        </span>
+      )}
     </Card>
   );
 }
+
+/** How long an event stays on the card after it starts: one that is running is still worth finding. */
+const EVENT_RUNS_MS = 3 * 3_600_000;
 
 /** A path on this site's own origin, or undefined. */
 function ownPath(href: string | undefined): string | undefined {
@@ -455,7 +473,7 @@ function WorkCard({
         {block.title ?? strings.work}
       </CardTitle>
       <ul className={styles.pieces}>
-        {block.items.map((item) => {
+        {block.items.map((item, index) => {
           const href = webHref(item.href);
           const src = item.image === undefined ? undefined : safeImageSrc(item.image.src);
           const body = (
@@ -486,7 +504,7 @@ function WorkCard({
             </>
           );
           return (
-            <li key={item.title} className={styles.pieceItem}>
+            <li key={`${String(index)}-${item.title}`} className={styles.pieceItem}>
               {href === undefined ? (
                 <span className={styles.piece}>{body}</span>
               ) : (
@@ -516,7 +534,7 @@ function WorkCard({
 function StepsCard({ block, level }: { readonly block: Extract<CardBlock, { kind: 'steps' }>; readonly level: 2 | 3 }) {
   const titleId = useId();
   const [shown, setShown] = useState('0');
-  const at = Number(shown);
+  const at = Math.min(Number(shown), block.items.length - 1);
   const step = block.items[at] ?? block.items[0];
   const StepTitle = level === 2 ? 'h3' : 'h4';
   return (
@@ -525,7 +543,7 @@ function StepsCard({ block, level }: { readonly block: Extract<CardBlock, { kind
         {block.title ?? strings.howIWork}
       </CardTitle>
       {step !== undefined && (
-        <div key={shown} className={styles.step} aria-live="polite">
+        <div key={shown} className={styles.step}>
           <StepTitle className={styles.stepTitle}>
             <span className={styles.stepNumber}>{strings.stepNumber(at + 1)}</span> {step.title}
           </StepTitle>
@@ -611,7 +629,11 @@ function EventsCard({
     `bento-when:${locale}:${timeZone}`,
     () => new Intl.DateTimeFormat(locale, { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone }),
   );
-  const coming = block.items.filter((event) => Date.parse(event.at) >= now);
+  const coming = block.items.filter((event) => Date.parse(event.at) + EVENT_RUNS_MS >= now);
+  const date = memoIntl(
+    `bento-date:${locale}:${timeZone}`,
+    () => new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone }),
+  );
   return (
     <Card kind="events" labelledBy={titleId}>
       <CardTitle id={titleId} level={level} icon="calendar-days">
@@ -633,6 +655,7 @@ function EventsCard({
                 <span className={styles.pieceWords}>
                   <span className={styles.rowTitle}>{event.title}</span>
                   <span className={styles.quiet}>
+                    <VisuallyHidden>{date.format(at)}, </VisuallyHidden>
                     <time dateTime={event.at}>{when.format(at)}</time>
                     {event.place !== undefined && strings.atPlace(event.place)}
                   </span>

@@ -26,7 +26,7 @@ describe('profileAudioTypeOf', () => {
   it('reads each of the four types by its first bytes', () => {
     expect(profileAudioTypeOf(Uint8Array.from([...id3(4), ...FRAME]))).toBe('audio/mpeg');
     expect(profileAudioTypeOf(Uint8Array.from(FRAME))).toBe('audio/mpeg');
-    expect(profileAudioTypeOf(Uint8Array.from([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x4d, 0x34, 0x41]))).toBe(
+    expect(profileAudioTypeOf(Uint8Array.from([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x4d, 0x34, 0x41, 0x20]))).toBe(
       'audio/mp4',
     );
     expect(profileAudioTypeOf(Uint8Array.from([0x4f, 0x67, 0x67, 0x53, 0, 2]))).toBe('audio/ogg');
@@ -38,6 +38,10 @@ describe('profileAudioTypeOf', () => {
     expect(profileAudioTypeOf(Uint8Array.from([0x89, 0x50, 0x4e, 0x47]))).toBeUndefined();
     expect(profileAudioTypeOf(new TextEncoder().encode('<html><script>'))).toBeUndefined();
     expect(profileAudioTypeOf(new Uint8Array())).toBeUndefined();
+    // HEIC is an MP4 container too: its brand is a picture's, so it is no recording.
+    expect(
+      profileAudioTypeOf(Uint8Array.from([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63])),
+    ).toBeUndefined();
   });
 });
 
@@ -55,7 +59,7 @@ describe('checkProfileAudio', () => {
   });
 
   it('keeps an M4A as it came, and refuses one over 1.5 MB', () => {
-    const head = [0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70];
+    const head = [0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x4d, 0x34, 0x41, 0x20];
     const small = Uint8Array.from([...head, 1, 2, 3]);
     expect(checkProfileAudio(small)).toEqual({ ok: true, type: 'audio/mp4', bytes: small });
     const big = new Uint8Array(PROFILE_AUDIO_MAX_BYTES + 1);

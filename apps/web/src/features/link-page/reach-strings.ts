@@ -119,7 +119,7 @@ export const reachStrings = {
   size: 'Width on a grid',
   sizeSmall: 'One column',
   sizeWide: 'Two columns',
-  sizeSmallText: 'A third of a wide screen, the whole of a phone',
+  sizeSmallText: 'A third of a wide screen; widens to close a gap in its row',
   sizeWideText: 'Two thirds of a wide screen',
 
   // Insights (AC-6118 to AC-6120).

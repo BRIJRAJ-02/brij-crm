@@ -337,8 +337,13 @@
     animation: drift calc(var(--duration-pulse) * 16) linear infinite;
   }
 
-  .marquee:is(:hover, :focus-within) .track {
+  .marquee:is(:hover, :focus-within, [data-paused]) .track {
     animation-play-state: paused;
+  }
+
+  .marqueeControl {
+    display: flex;
+    justify-content: flex-end;
   }
 
   @keyframes drift {
@@ -461,6 +466,12 @@
     animation: step-in var(--duration-move) var(--ease-out);
   }
 
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
   @keyframes step-in {
     from {
       opacity: 0;
@@ -495,7 +506,10 @@
 
   @media (prefers-reduced-motion: reduce) {
     .cell[data-enter],
-    .step,
+    .step {
+      animation-name: fade-in;
+    }
+
     .track[data-drifts],
     .dot[data-state='open'] {
       animation: none;
@@ -510,11 +524,16 @@
       transform: none;
     }
 
-    /* Held still, the logos wrap instead of drifting out of view. */
+    /* Held still, the logos wrap instead of drifting out of view, drawn once, and nothing offers to pause them. */
     .marquee,
     .track {
       flex-wrap: wrap;
       mask-image: none;
+    }
+
+    .track[aria-hidden='true'],
+    .marqueeControl {
+      display: none;
     }
   }
 }

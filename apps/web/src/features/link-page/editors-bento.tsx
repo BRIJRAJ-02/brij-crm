@@ -288,7 +288,6 @@ export function AudioEditor(props: BlockEditorProps) {
         label={audio === undefined ? words.audioFile : words.audioReplace}
         acceptedTypes={AUDIO_TYPES}
         typesText={words.audioTypes}
-        maxSize={AUDIO_MAX_BYTES}
         isPending={isSending}
         {...errorOf(problems, 'audio')}
         onFiles={(files) => {
