@@ -4,7 +4,7 @@
 // exactly the phrases the spec lists, and all zone math in luxon (the slot
 // engine's library), so "tomorrow" is the visitor's tomorrow wherever the
 // server runs.
-import { isNumberToCall, visitorNameProblem } from '@crm/contracts';
+import { isNumberToCall, VISITOR_NAME_MAX, visitorNameProblem } from '@crm/contracts';
 import { DateTime } from 'luxon';
 
 /** A time the visitor asked for: one instant, or a window with the words to say it back in. */
@@ -369,7 +369,8 @@ export function readIntroducedName(text: string): string | undefined {
 
 /** A heard name, or undefined when the book input would refuse it (control characters, a web address; B-06, B-07). */
 function heardName(name: string): string | undefined {
-  return visitorNameProblem(name) === undefined ? name : undefined;
+  // The book input's own limits too, length among them (review, 5 Nov 2026): a chat booking skips its parse.
+  return name.length <= VISITOR_NAME_MAX && visitorNameProblem(name) === undefined ? name : undefined;
 }
 
 /** A message that is little more than a name ("Ada Lovelace", "Ada, ada@example.com"), or undefined. */

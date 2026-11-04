@@ -31,7 +31,6 @@ import { computeSlots, type BookedSpan, type DateOverride, type Span, type Weekl
 
 const { bookingHosts, bookingPageMembers, bookingPages, bookings } = schema;
 
-/** A page as the services read it: its row, the settings parsed, and the hours it books by. */
 /**
  * The notice a page's times keep, in minutes: its own minimum notice, none on a private page (spec 0027, AC-707), and
  * never under an hour on a page that confirms each booking first (spec 0062, AC-6203: a request needs time to be
@@ -44,6 +43,7 @@ export function noticeMinutesOf(
   return page.requiresConfirmation ? Math.max(60, own) : own;
 }
 
+/** A page as the services read it: its row, the settings parsed, and the hours it books by. */
 export interface PageRecord extends BookingPageSettings {
   /**
    * The hours the page books by (spec 0035, AC-965): its schedule's, else its
