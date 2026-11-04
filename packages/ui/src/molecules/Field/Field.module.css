@@ -424,6 +424,14 @@
     text-align: end;
   }
 
+  /* The quiet line under a title (variant="title" size="sm"): the same no box field, in body type and secondary
+     colour, so a form's line under its headline reads as its subtitle rather than a boxed input. */
+  .root[data-variant='title'][data-size='sm'] .input {
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
+  }
+
   /* In a popover (a grid cell's editor, a list's search) the popover's own edge frames the field: its focus is
      the accent edge alone, since a halo inside the popover read as a second ring around it. A refused field
      keeps its halo: its edge stays danger, so the halo is its only sign of focus. */
