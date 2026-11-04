@@ -340,6 +340,8 @@ export const SubmissionSummary = z.object({
   firstAnswers: z.array(SubmissionAnswer).max(SUBMISSION_SUMMARY_QUESTIONS),
   /** Its link to the CRM: "Not in CRM", filing, or the record it filed into. */
   crm: SubmissionCrm,
+  /** It went to a record that was already there (forms fix a4): someone who sent before, or was in the CRM. */
+  isReturning: z.boolean().optional(),
 });
 /** A submission in its form's list. */
 export type SubmissionSummary = z.infer<typeof SubmissionSummary>;
@@ -360,6 +362,11 @@ export const SubmissionView = SubmissionSummary.extend({
   records: z.array(SubmissionRecord),
   failure: z.string().optional(),
   refused: z.array(z.object({ questionId: z.string(), message: z.string() })),
+  /**
+   * The answers that differed from what the record already held and were not written, since their question fills
+   * only an empty value (forms fix a4): the panel says so beside each, with Use new.
+   */
+  kept: z.array(z.object({ questionId: z.string() })).default([]),
   /** The day its files go (`YYYY-MM-DD`), for one our spam check caught: released before then, it keeps them. */
   filesRemovedOn: z.string().optional(),
   /** Who was given the new record and why (AC-567); `rotationId` when a rotation chose them (AC-1050). */
@@ -398,6 +405,11 @@ export type SubmissionIdInput = z.infer<typeof SubmissionIdInput>;
 export const SubmissionWriteInput = SubmissionIdInput.extend({ mutationId: Uuid });
 /** A change to one submission. */
 export type SubmissionWriteInput = z.infer<typeof SubmissionWriteInput>;
+
+/** One answer filing kept off a record, to write over the record's value now (forms fix a4). */
+export const UseNewAnswerInput = SubmissionWriteInput.extend({ questionId: z.string().min(1).max(64) });
+/** One kept answer to write now. */
+export type UseNewAnswerInput = z.infer<typeof UseNewAnswerInput>;
 
 /**
  * How a member settles a submission the content checks held for review:
@@ -611,5 +623,7 @@ export const submissionsContract = {
   /** One export the caller started. */
   getExport: oc.input(ExportIdInput).output(ExportView),
   retry: oc.input(SubmissionWriteInput).output(SubmissionView),
+  /** Use new (forms fix a4): writes one kept answer over the record's value, through the member's own access. */
+  useNewAnswer: oc.input(UseNewAnswerInput).output(SubmissionView),
   delete: oc.input(SubmissionWriteInput).output(z.object({ deleted: z.literal(true) })),
 };

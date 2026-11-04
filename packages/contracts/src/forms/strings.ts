@@ -52,6 +52,12 @@ export interface FormStrings {
   readonly fileBusy: string;
   /** Said under the file question when an upload failed. */
   readonly fileFailed: string;
+  /** Said when the form can't take files at all just now (forms fix b8): the answers can still go. */
+  readonly fileUnavailable: string;
+  /** What a file question takes, under its drop area (forms fix b8). */
+  readonly fileTypes: string;
+  /** Under the button, once, when a file didn't upload: pressing again sends the rest without it (forms fix b8). */
+  readonly sendWithoutFile: (button: string) => string;
   readonly previewNote: string;
   readonly recaptchaNotice: string;
   readonly honeypot: string;
@@ -215,6 +221,9 @@ const EN: FormStrings = {
   fileRemoved: (name) => `${name} removed.`,
   fileBusy: 'Wait a moment while your answer saves.',
   fileFailed: 'That file did not upload. Try again, or choose another file.',
+  fileUnavailable: 'This form can’t take files right now. You can still send your answers without it.',
+  fileTypes: 'PDF, images or Office files',
+  sendWithoutFile: (button) => `Your file didn’t upload. Press ${button} again to send your answers without it.`,
   previewNote: 'A preview of the form. It can’t be filled in here.',
   recaptchaNotice: 'This form is protected by reCAPTCHA. Google’s Privacy Policy and Terms of Service apply.',
   honeypot: 'Leave this empty',

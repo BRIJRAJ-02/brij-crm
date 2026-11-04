@@ -674,7 +674,7 @@ export { UiProvider, useKeyboardPlatform, type FormatSettings, type UiProviderPr
 export { LOADING_TIMING, useDelayedLoading, type LoadingTiming } from './provider/useDelayedLoading.ts';
 export { LoadingNow, type LoadingNowProps } from './provider/LoadingNow.tsx';
 export { FormatScope, type FormatScopeProps } from './provider/FormatScope.tsx';
-export { FileLinksContext, useFileHref, useFormatSettings } from './provider/context.ts';
+export { FileLinksContext, useFileHref, useFormatSettings, useNow } from './provider/context.ts';
 export { SiteIconsContext } from './provider/site-icons.ts';
-export { formatDate, formatDay, type DateFormat } from './lib/format.ts';
+export { formatDate, formatDay, formatRelative, type DateFormat } from './lib/format.ts';
 export { firstDayOfWeek, type WeekStart } from './lib/month.ts';

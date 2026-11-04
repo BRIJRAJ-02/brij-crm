@@ -171,6 +171,10 @@ export type ActivityEntryShape =
       /** The submission's id. */
       readonly itemId: string;
       readonly action: 'created' | 'updated' | 'matched' | 'linked';
+      /** The form it came through, for the submission's address. */
+      readonly formId?: string;
+      /** The answers as words, label then answer: present only when the reader may open the submission. */
+      readonly answers?: readonly { readonly label: string; readonly text: string }[];
       /** The submission's address, which the screen adds. */
       readonly href?: string;
     });
@@ -374,7 +378,14 @@ export function toActivityEntry(item: ActivityItem, context: EntryContext): Acti
   }
   if (item.kind === 'submission') {
     if (item.itemId === undefined || item.action === undefined) return undefined;
-    return { ...base, kind: 'submission', itemId: item.itemId, action: item.action };
+    return {
+      ...base,
+      kind: 'submission',
+      itemId: item.itemId,
+      action: item.action,
+      ...(item.formId === undefined ? {} : { formId: item.formId }),
+      ...(item.answers === undefined ? {} : { answers: item.answers }),
+    };
   }
   if (item.kind === 'task') {
     if (item.itemId === undefined) return undefined;

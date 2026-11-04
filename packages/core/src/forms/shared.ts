@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   choiceKeysOf,
+  closedByRule,
   formStrings,
   FormDocument,
   recalledKeys,
@@ -407,6 +408,9 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
     language: document.language,
     look: document.look,
     questions: document.questions.map((question) => publicQuestionOf(question, readsScore(document))),
+    ...(document.closedMessage === undefined || document.closedMessage === ''
+      ? {}
+      : { closedMessage: document.closedMessage }),
     ...layoutOf(document),
     ...((document.endings ?? []).length === 0
       ? {}
@@ -418,4 +422,22 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
     ...(savesProgress(document) ? { savesProgress: true } : {}),
     ...(context.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: context.recaptchaSiteKey }),
   };
+}
+
+/**
+ * Whether a live form's own closing rule has closed it (forms fix b2): its moment has passed, or it holds as many
+ * answers (spam left out) as it closes after. Counts only when the rule names a number, and stops at that number.
+ */
+export async function isClosedByRule(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
+  const closing = document.closing;
+  if (closing === undefined) return false;
+  const now = new Date();
+  if (closedByRule(document, { now, answers: 0 })) return true;
+  if (closing.after === undefined) return false;
+  const counted = await tx.execute<{ n: number }>(sql`
+    select count(*)::int as n from (
+      select 1 from form_submissions where form_id = ${formId}::uuid and state <> 'spam' limit ${closing.after}
+    ) kept
+  `);
+  return closedByRule(document, { now, answers: counted.rows[0]?.n ?? 0 });
 }

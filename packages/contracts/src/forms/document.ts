@@ -28,6 +28,12 @@ import {
 import { POINTS_LIMIT, SCORED_TYPES } from './score.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
+import {
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+} from './confirmation.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 
 /** A question's id inside its document: stable across versions, never shown. */
@@ -303,10 +309,12 @@ export const FormSpam = z.strictObject({
 /** The bot checks' settings. */
 export type FormSpam = z.infer<typeof FormSpam>;
 
-/** How long a confirmation's own subject and line may be. */
-export const CONFIRMATION_SUBJECT_MAX = 120;
-/** How long a confirmation's own line may be. */
-export const CONFIRMATION_LINE_MAX = 500;
+export {
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+} from './confirmation.ts';
 
 /**
  * The visitor's confirmation email (spec 0063, AC-6318): off by default. When
@@ -345,7 +353,22 @@ export const FormDocument = z
     /** Where submissions go in the CRM: `main` is the object each one adds or updates. Absent, they stay in Submissions only. */
     targets: z.strictObject({
       main: z.strictObject({ objectId: Uuid, matchAttributeId: Uuid.optional() }).optional(),
+      /**
+       * Also create a deal (forms fix a3, 5 November 2026): with People as `main`, each submission also makes a
+       * record on this object (the standard Deals), named after the person and linked to them and their company.
+       * Absent on every document written before it, which makes no deal.
+       */
+      deal: z.strictObject({ objectId: Uuid }).optional(),
     }),
+    /**
+     * Where each question was saved on an object the form moved away from (forms fix a2, 5 November 2026): by
+     * object id, each question's attribute there. Moving back puts them back, so trying another object never loses
+     * a mapping for good. Only the server writes it (`setFormTarget`); it never reaches a visitor.
+     */
+    filedBefore: z
+      .record(Uuid, z.record(z.string().max(64), Uuid))
+      .refine((objects) => Object.keys(objects).length <= 50, { error: 'Too many remembered objects.' })
+      .optional(),
     /** Classic, Steps or One at a time (spec 0063, AC-6302): in the version, so a visitor mid fill never sees it change. */
     layout: z.enum(FORM_LAYOUTS).default('classic'),
     /** The breaks between steps, in the questions' order. Drawn only by Steps. */
@@ -390,8 +413,36 @@ export const FormDocument = z
      * time, off for Classic until it grows past `SAVE_PROGRESS_CLASSIC_MIN` questions.
      */
     saveProgress: z.boolean().optional(),
+    /**
+     * When it stops taking answers by itself (forms fix b2, 5 November 2026): at a moment, after a number of
+     * answers (spam left out), or both, whichever comes first. Absent: only Pause closes it.
+     */
+    closing: z
+      .strictObject({
+        at: z.iso.datetime({ offset: true }).optional(),
+        after: z
+          .number()
+          .int({ error: 'Give a whole number of answers.' })
+          .min(1, { error: 'Close after at least one answer.' })
+          .max(CLOSE_AFTER_MAX)
+          .optional(),
+      })
+      .optional(),
+    /** What a closed form (paused, or past `closing`) says to a visitor; the language's own line when absent. */
+    closedMessage: z
+      .string()
+      .trim()
+      .max(CLOSED_MESSAGE_MAX, { error: `Keep the message to ${String(CLOSED_MESSAGE_MAX)} characters.` })
+      .optional(),
   })
   .superRefine((document, context) => {
+    if (document.targets.deal !== undefined && document.targets.main === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['targets', 'deal'],
+        message: 'A deal is made beside the person. Save submissions to People first.',
+      });
+    }
     const seen = { ids: new Set<string>(), keys: new Set<string>(), attributes: new Set<string>() };
     let files = 0;
     let signatures = 0;
@@ -626,4 +677,18 @@ export function savesProgress(document: Pick<FormDocument, 'layout' | 'questions
   if (document.saveProgress !== undefined) return document.saveProgress;
   if (document.layout !== 'classic') return true;
   return document.questions.length > SAVE_PROGRESS_CLASSIC_MIN;
+}
+
+/**
+ * Whether a form's own closing rule has closed it (forms fix b2): its moment has passed, or it holds as many
+ * answers as it closes after. `answers` is the form's count of stored submissions, spam left out. Pure.
+ */
+export function closedByRule(
+  document: Pick<FormDocument, 'closing'>,
+  input: { readonly now: Date; readonly answers: number },
+): boolean {
+  const closing = document.closing;
+  if (closing === undefined) return false;
+  if (closing.at !== undefined && Date.parse(closing.at) <= input.now.getTime()) return true;
+  return closing.after !== undefined && input.answers >= closing.after;
 }

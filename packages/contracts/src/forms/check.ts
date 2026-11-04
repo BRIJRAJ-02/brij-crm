@@ -317,7 +317,15 @@ function checkOne(
     }
     case 'number': {
       if (typeof raw !== 'string' && typeof raw !== 'number') return { error: words.number };
-      const value = String(raw).trim().replaceAll(',', '');
+      // A comma is a thousands separator only between groups of three digits (1,500); a lone comma is a decimal
+      // mark as most of Europe writes it (1,5 is 1.5). Anything else ("1,2,3") is refused, never quietly changed
+      // into another number (forms QA, 5 November 2026).
+      const typed = String(raw).trim();
+      const value = /^[-+]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(typed)
+        ? typed.replaceAll(',', '')
+        : /^[-+]?\d+,\d+$/.test(typed) && !/^[-+]?\d{1,3},\d{3}$/.test(typed)
+          ? typed.replace(',', '.')
+          : typed;
       return NUMBER.test(value) && value.length <= 40 ? { value } : { error: words.number };
     }
     case 'dropdown':

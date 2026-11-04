@@ -5,11 +5,21 @@
 import type { NavEntry, NavPage, NavPrefs, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
 import { navKey, sectionItems, sectionOrder } from '@crm/data/navigation';
 import type { IconName } from '@crm/ui';
-import { bookingsHref, capturesHref, inboxHref, linkPageHref, navObjects, notesHref, tasksHref } from './objects.ts';
+import {
+  bookingsHref,
+  capturesHref,
+  formsHref,
+  inboxHref,
+  linkPageHref,
+  navObjects,
+  notesHref,
+  tasksHref,
+} from './objects.ts';
 import { strings } from './strings.ts';
 
 /** A page the sidebar marks current that isn't an object's: Tasks, Bookings and Captures (the trash is in Settings). */
-export type SidebarPage = 'home' | 'insights' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'captures';
+export type SidebarPage =
+  'home' | 'insights' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'captures' | 'forms';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {
@@ -33,6 +43,8 @@ export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
   notes: { label: strings.notes, icon: 'notebook', href: notesHref },
   bookings: { label: strings.bookings, icon: 'calendar-days', href: bookingsHref },
   captures: { label: strings.captures, icon: 'link', href: capturesHref },
+  // Forms (forms critique c, 5 November 2026): Captures' Forms tab as a row of its own, so a form is one click away.
+  forms: { label: strings.forms, icon: 'clipboard-list', href: formsHref },
 };
 
 /** Each section's title. */

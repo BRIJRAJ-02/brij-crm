@@ -9,6 +9,7 @@ import {
   releaseSubmission,
   resolveSubmission,
   retrySubmission,
+  useNewAnswer,
 } from '@crm/core';
 import { exportDownloadPath } from '@crm/contracts';
 import { commitWrite } from '../../hooks.ts';
@@ -53,6 +54,12 @@ export const submissionsRouter = member.submissions.router({
   retry: member.submissions.retry.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       retrySubmission(context.scope, context.jobs, { submissionId: input.submissionId }, hooks),
+    ),
+  ),
+  // Use new (forms fix a4): one kept answer written over the record's value, through the member's own access.
+  useNewAnswer: member.submissions.useNewAnswer.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      useNewAnswer(context.scope, { submissionId: input.submissionId, questionId: input.questionId }, hooks),
     ),
   ),
   delete: member.submissions.delete.handler(({ context, input }) =>

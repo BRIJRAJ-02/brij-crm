@@ -22,7 +22,7 @@ function CapturesRoute() {
   return (
     <CapturesCreateProvider slug={slug} tab={tab}>
       <WorkspacePage
-        currentPage="captures"
+        currentPage={tab === 'forms' ? 'forms' : 'captures'}
         page={{
           topBar: <CapturesTopBar slug={slug} tab={tab} />,
           body: (

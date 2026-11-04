@@ -28,7 +28,9 @@ import {
   Button,
   ButtonLink,
   Callout,
+  Badge,
   EditorStatus,
+  EmptyState,
   Field,
   SettingsStack,
   focusLater,
@@ -104,6 +106,10 @@ export interface FormEditorProps {
   readonly objects: readonly ObjectSummary[];
   readonly tab: FormTab;
   readonly submissions: SubmissionPage | undefined;
+  /** How many months the workspace keeps answers; null keeps them; absent when it couldn't be read (critique b S2). */
+  readonly keepMonths?: number | null;
+  /** Why the Submissions tab's page didn't load (forms fix a6): said in the tab, with Try again, the form still here. */
+  readonly submissionsFailed?: string;
   readonly state: SubmissionState | undefined;
   readonly openSubmission: SubmissionView | undefined;
   /** On the Form tab, the question to open and bring into view. */
@@ -163,7 +169,11 @@ export function FormEditor(props: FormEditorProps) {
   const [isRetargeting, setRetargeting] = useState(false);
   // A blocked Publish shows every incomplete Settings field's message at once, wherever it was pressed from.
   const [showGaps, setShowGaps] = useState(false);
-  const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
+  const heldJobs = useMemo(
+    () => ({ get: (jobId: string) => data.jobs.get(slug, jobId), follow: data.jobs.follow }),
+    [data, slug],
+  );
+  const jobs = useJobFollower(data.jobs.view(slug, 'mine'), heldJobs);
   // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // The Flow view (spec 0063, AC-6325): the steps, their jumps and the endings, read only, from the Form tab.
@@ -275,6 +285,7 @@ export function FormEditor(props: FormEditorProps) {
   if (!isPublished && canManage && form.name !== strings.untitledForm && draft.headline === DEFAULT_HEADLINE) {
     setDraft({ ...draft, headline: form.name });
   }
+  const viewOnly = !canManage && isPublished;
 
   // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
   // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
@@ -580,12 +591,14 @@ export function FormEditor(props: FormEditorProps) {
     else if (step.kind === 'ask') setRetargetAsk(step.ask);
   };
 
-  const retarget = (objectId: string | null) => {
+  const retarget = (objectId: string | null, isUndo = false) => {
     if (isRetargeting) return;
     setRetargeting(true);
     const settled = () => {
       setRetargeting(false);
     };
+    // Where it saved before, for Undo (forms fix a2): the server remembered the mapping, so going back restores it.
+    const before = draft.targets.main?.objectId ?? null;
     flush()
       .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision))
       .then(async (view) => {
@@ -596,6 +609,18 @@ export function FormEditor(props: FormEditorProps) {
         latest.current = next;
         setTarget(choices);
         settled();
+        if (isUndo) return;
+        const toName = objects.find((object) => object.id === objectId)?.pluralName ?? strings.thisObject;
+        toasts.toast({
+          tone: 'success',
+          message: objectId === null ? strings.retargetOffDone : strings.retargetDone(toName),
+          action: {
+            label: strings.undo,
+            onAction: () => {
+              retarget(before, true);
+            },
+          },
+        });
       })
       .catch((error: unknown) => {
         settled();
@@ -638,7 +663,10 @@ export function FormEditor(props: FormEditorProps) {
       title={form.name}
       icon="clipboard-list"
       crumbs={[{ id: 'forms', label: strings.forms, href: formsHref(slug) }]}
-      meta={<EditorStatus tone={status.tone} text={status.text} />}
+      // A member who may only view a live form sees its answers, and says so in the bar (forms fix a10).
+      meta={
+        viewOnly ? <Badge text={strings.viewOnly} isWhole /> : <EditorStatus tone={status.tone} text={status.text} />
+      }
     >
       <EditorActions
         // A draft has no link yet: Copy link shows from the first publish, as the forms list shows it.
@@ -723,7 +751,14 @@ export function FormEditor(props: FormEditorProps) {
 
   // Before the first publish, Form and Settings: what happens after sending, routing and the owner are set before
   // anyone fills it in (late trap #47); Install and Submissions wait for a live form.
-  const current: FormTab = isPublished || tab === 'settings' ? tab : 'form';
+  // A member who may only view a live form gets its Submissions and Analytics, not a locked builder (forms fix a10).
+  const current: FormTab = viewOnly
+    ? tab === 'analytics'
+      ? 'analytics'
+      : 'submissions'
+    : isPublished || tab === 'settings'
+      ? tab
+      : 'form';
   const notices = (
     <>
       {form.status === 'paused' && (
@@ -739,7 +774,7 @@ export function FormEditor(props: FormEditorProps) {
       {current !== 'settings' && form.live?.after.kind === 'booking' && (
         <AfterPageNotice slug={slug} formId={form.id} live={form.live} />
       )}
-      {!canManage && (
+      {!canManage && !viewOnly && (
         <Callout tone="info" title={strings.readOnlyTitle}>
           {strings.readOnlyText}
         </Callout>
@@ -793,6 +828,10 @@ export function FormEditor(props: FormEditorProps) {
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
             onStatusChange={setStatus}
+            onDraftChange={(change) => {
+              setDraft(change);
+            }}
+            {...(props.keepMonths === undefined ? {} : { keepMonths: props.keepMonths })}
           />
         );
       case 'install':
@@ -801,6 +840,19 @@ export function FormEditor(props: FormEditorProps) {
         // Only a live form has analytics, and the tab is offered only once it is published (see the tab list).
         return <AnalyticsTab data={data} slug={slug} form={form} />;
       case 'submissions':
+        if (props.submissionsFailed !== undefined) {
+          return (
+            <EmptyState
+              tone="error"
+              title={strings.submissionsFailedTitle}
+              onRetry={() => {
+                void router.invalidate();
+              }}
+            >
+              {props.submissionsFailed}
+            </EmptyState>
+          );
+        }
         return props.submissions === undefined ? null : (
           <SubmissionsTab
             slug={slug}
@@ -816,6 +868,8 @@ export function FormEditor(props: FormEditorProps) {
             followJob={jobs.follow}
             isFiling={form.live?.targets.main !== undefined}
             hasSubmissions={form.submissionCount > 0}
+            // Spam is for those who manage forms: a member's count would name rows they can't open.
+            spamCount={canManage ? form.spamCount : 0}
           />
         );
       default:
@@ -1186,7 +1240,7 @@ export function FormEditor(props: FormEditorProps) {
 
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="forms"
       page={{
         topBar,
         body: (
@@ -1202,11 +1256,17 @@ export function FormEditor(props: FormEditorProps) {
                   if ((FORM_TABS as readonly string[]).includes(value)) goTab(value as FormTab);
                 }}
                 tabs={[
-                  { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
-                  { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
+                  ...(viewOnly
+                    ? []
+                    : [
+                        { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
+                        { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
+                      ]),
+                  ...(isPublished && !viewOnly
+                    ? [{ id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') }]
+                    : []),
                   ...(isPublished
                     ? [
-                        { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
                         {
                           id: 'submissions',
                           label: strings.tabSubmissions,
@@ -1221,7 +1281,12 @@ export function FormEditor(props: FormEditorProps) {
                     : []),
                 ]}
               >
-                {(isPublished ? FORM_TABS : (['form', 'settings'] as const)).map((id) => (
+                {(viewOnly
+                  ? (['submissions', 'analytics'] as const)
+                  : isPublished
+                    ? FORM_TABS
+                    : (['form', 'settings'] as const)
+                ).map((id) => (
                   <TabPanel key={id} id={id} variant="fill">
                     {id === current && layout}
                   </TabPanel>

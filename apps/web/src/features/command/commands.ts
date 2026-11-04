@@ -235,6 +235,8 @@ export interface CommandPlace {
   readonly canInvite?: boolean;
   /** The member holds `lists.manage` (spec 0048, AC-4827). */
   readonly canMakeLists?: boolean;
+  /** The member holds `forms.manage`: New form (forms critique c). */
+  readonly canMakeForms?: boolean;
 }
 
 /** What a view page is asked to do from the menu, as its address carries it (`?do=`). */
@@ -313,6 +315,17 @@ export function actionCommands(
       icon: 'plus',
       terms: strings.createListTerms,
       run: { kind: 'new-list' },
+    });
+  }
+  // New form (forms critique c, 5 November 2026: "new form" and Enter made a person named "new form"): the template
+  // gallery over Forms, Blank its first tile.
+  if (place.canMakeForms === true) {
+    here.push({
+      id: 'form:new',
+      name: strings.newForm,
+      icon: 'clipboard-list',
+      terms: strings.newFormTerms,
+      run: go(`${formsHref(slug)}?new=form`),
     });
   }
   return [...creates, ...here, ...themes];

@@ -528,6 +528,25 @@ describe('the visitor’s confirmation (AC-6318)', () => {
     expect(byLabel['Your signature']).toBe(SIGNED_WORD);
     // An answer with angle brackets keeps them as characters: text in, text out, never markup.
     expect(byLabel['Your name']).toBe('Asha <b>Rao</b>');
+    // A consent reads as Agreed; one left unticked isn't in their copy at all (forms fix b9).
+    const withConsent = {
+      ...document,
+      questions: [
+        ...document.questions,
+        {
+          id: 'news',
+          key: 'news',
+          label: 'Send me news',
+          answerType: 'consent' as const,
+          required: false,
+          update: 'fill' as const,
+        },
+      ],
+    };
+    const ticked = confirmationRows(withConsent, { name: 'Asha', news: true });
+    expect(ticked.find((row) => row.label === 'Send me news')?.value).toBe('Agreed');
+    const unticked = confirmationRows(withConsent, { name: 'Asha', news: false });
+    expect(unticked.some((row) => row.label === 'Send me news')).toBe(false);
   });
 
   it('sends nothing when the visitor gave no email address', async () => {

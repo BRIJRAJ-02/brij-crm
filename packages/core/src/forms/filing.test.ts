@@ -176,10 +176,14 @@ describe('Add to CRM and the CRM link state', () => {
     const [failed, spam] = await submissionIds(w, live.id);
     if (failed === undefined || spam === undefined) throw new Error('Two submissions expected.');
     await processNow(w, failed.id);
+    // All leaves spam out (forms fix a8); the Spam filter shows it.
     const listed = await listSubmissions(w.scope, { formId: live.id });
     expect(listed.items.map((item) => [item.state, item.crm])).toEqual([
-      ['spam', { state: 'not_in_crm', canAddToCrm: false }],
       ['failed', { state: 'not_in_crm', canAddToCrm: true }],
+    ]);
+    const spams = await listSubmissions(w.scope, { formId: live.id, state: 'spam' });
+    expect(spams.items.map((item) => [item.state, item.crm])).toEqual([
+      ['spam', { state: 'not_in_crm', canAddToCrm: false }],
     ]);
     await editAttribute(w.scope, { attributeId: timezone, isRequired: false });
 

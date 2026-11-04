@@ -15,6 +15,12 @@ export {
   answerWords,
   BOOKING_ANSWER_TYPES,
   CHOICE_TYPES,
+  // The visitor's copy's own limits (forms fix b1: Settings' Email them a copy).
+  CONFIRMATION_LINE_MAX,
+  CONFIRMATION_SUBJECT_MAX,
+  // A form's closing rule's own limits (forms fix b2).
+  CLOSE_AFTER_MAX,
+  CLOSED_MESSAGE_MAX,
   choiceKeysOf,
   FILES_ONTO,
   FORM_CHOICES_MAX,

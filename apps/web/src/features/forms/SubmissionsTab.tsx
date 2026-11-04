@@ -17,9 +17,11 @@ import {
   MenuItem,
   MenuTrigger,
   Avatar,
+  Badge,
   BulkActionBar,
   focusLater,
   Button,
+  ButtonLink,
   Callout,
   CopyButton,
   DescriptionList,
@@ -32,6 +34,7 @@ import {
   LinkListToolbar,
   Separator,
   Select,
+  ShortcutTooltip,
   Table,
   TruncatedText,
   type TableColumn,
@@ -39,13 +42,15 @@ import {
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
 import { formatDate, StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pageHeading } from '../navigation/focus.ts';
 import { recordLinks } from '../records/timeline.ts';
-import { AnswerList, answerText, holdsFile } from '../questions/AnswerList.tsx';
+import { AnswerList, answerText, holdsFile, PhoneAnswer } from '../questions/AnswerList.tsx';
 import { answerFiling, notSavedReasons } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
+import { spamReason } from './spam-reason.ts';
+import { markSeen } from './seen.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
 import { useFormToolbarSlot } from './toolbarSlot.ts';
@@ -75,6 +80,8 @@ export interface SubmissionsTabProps {
   readonly isFiling: boolean;
   /** Whether the form has any submission at all, spam included; without one the tab shows only its empty state. */
   readonly hasSubmissions: boolean;
+  /** Spam waiting in the form: All leaves it out, and a chip opens the Spam filter (forms fix a8). */
+  readonly spamCount?: number;
 }
 
 /** How many answers get a column of their own; the rest are in the open submission. */
@@ -130,8 +137,13 @@ export function SubmissionsTab({
   followJob,
   isFiling,
   hasSubmissions,
+  spamCount = 0,
 }: SubmissionsTabProps) {
   const slot = useFormToolbarSlot();
+  // Opening the answers clears the form's New on the list, for this reader in this browser (forms critique c).
+  useEffect(() => {
+    markSeen(slug, formId);
+  }, [slug, formId, page]);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [bulk, setBulk] = useState<{ readonly label: string; readonly value: number } | undefined>(undefined);
@@ -154,7 +166,12 @@ export function SubmissionsTab({
       : { for: page, items: [], ...(page.nextCursor === undefined ? {} : { next: page.nextCursor }) };
   const rows = [...page.items, ...held.items];
   const [busy, setBusy] = useState<string | undefined>(undefined);
-  const [isConfirmingDelete, setConfirmingDelete] = useState(false);
+  // The submission Delete asks about, held as it opens: the panel moving underneath never changes what is deleted.
+  const [confirmingId, setConfirmingId] = useState<string | undefined>(undefined);
+  const isConfirmingDelete = confirmingId !== undefined;
+  const setConfirmingDelete = (isOpen: boolean) => {
+    setConfirmingId(isOpen ? open?.id : undefined);
+  };
   // A refused delete says why inside its confirm, which stays open (the owner's rule, 21 October 2026).
   const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined);
   // Adding many at once asks first (the confirms rule, 21 October 2026); one from the panel stays one click.
@@ -240,6 +257,24 @@ export function SubmissionsTab({
     );
   };
 
+  // Use new (forms fix a4): one kept answer written over the record's value, the panel read again after.
+  const [usingNew, setUsingNew] = useState<string | undefined>(undefined);
+  const applyNew = (submissionId: string, questionId: string) => {
+    if (usingNew !== undefined) return;
+    setUsingNew(questionId);
+    data.submissions.useNewAnswer(slug, submissionId, questionId).then(
+      () => {
+        setUsingNew(undefined);
+        toasts.toast({ tone: 'success', message: strings.usedNew });
+        void router.invalidate();
+      },
+      (error: unknown) => {
+        setUsingNew(undefined);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+      },
+    );
+  };
+
   // The question that names the person (the starting Name question, key `name`): a row not in the CRM shows its
   // answer as the person, and its email in a column of its own.
   const nameQuestion = questions.find((question) => question.key === 'name');
@@ -260,6 +295,34 @@ export function SubmissionsTab({
             (text) => text?.toLowerCase().includes(needle) === true,
           ),
         );
+  // The open submission's neighbours in the list as shown, for the panel's arrows and J and K.
+  const at = open === undefined ? -1 : shown.findIndex((submission) => submission.id === open.id);
+  const before = at > 0 ? shown[at - 1] : undefined;
+  const after = at >= 0 ? shown[at + 1] : undefined;
+  useEffect(() => {
+    // Never under a dialog: J would change the submission an open Delete acts on.
+    if (open === undefined || isConfirmingDelete || isDeletingMany || isAddingMany) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      ) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      const next = key === 'j' ? after : key === 'k' ? before : undefined;
+      if (next === undefined) return;
+      event.preventDefault();
+      go(next.id);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+    };
+  });
+
   const waiting = rows.filter((submission) => submission.state === 'needs_review').length;
   // What a bulk action acts on: the picked rows still in view (a filter or a search may hide some).
   const picked = shown.filter((submission) => selected.has(submission.id));
@@ -406,10 +469,14 @@ export function SubmissionsTab({
     );
   };
 
-  /** Exports the picked rows, or else what the filter shows, as CSV; the file downloads once its job is done. */
+  /**
+   * Exports the picked rows, or else what the filter shows, as CSV (forms fix a7): one toast that says it is being
+   * prepared, then turns into Download, which saves the file in place rather than opening a tab.
+   */
   const exportCsv = () => {
     // The picked rows; else what the table shows when a search narrows it; else the filter.
     const ids = (picked.length > 0 ? picked : query.trim() === '' ? [] : shown).map((submission) => submission.id);
+    const preparing = toasts.toast({ tone: 'info', message: strings.exportStarted, isBusy: true });
     data.submissions
       .export(
         slug,
@@ -421,8 +488,8 @@ export function SubmissionsTab({
       )
       .then(
         (view) => {
-          toasts.toast({ tone: 'info', message: strings.exportStarted });
           followJob(view.jobId, (job) => {
+            toasts.dismiss(preparing);
             toasts.toast(
               job.status === 'succeeded'
                 ? {
@@ -431,8 +498,7 @@ export function SubmissionsTab({
                     action: {
                       label: strings.download,
                       onAction: () => {
-                        // A new tab, so an expired file's error never replaces the app.
-                        window.open(view.downloadPath, '_blank', 'noopener');
+                        downloadFile(view.downloadPath, view.fileName);
                       },
                     },
                   }
@@ -441,15 +507,17 @@ export function SubmissionsTab({
           });
         },
         (error: unknown) => {
+          toasts.dismiss(preparing);
           toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
         },
       );
   };
 
-  // One clear action for the rows: Export, only when there are rows. Form wide actions live in the top bar's menu.
+  // One clear action for the rows: Export, only when there are rows, naming the picked ones when some are.
+  const exportLabel = picked.length > 0 ? strings.exportSelected(picked.length) : strings.exportButton;
   const exportButton = (
-    <Button icon="download" label={strings.exportButton} isLabelCollapsible onPress={exportCsv}>
-      {strings.exportButton}
+    <Button icon="download" label={exportLabel} isLabelCollapsible onPress={exportCsv}>
+      {exportLabel}
     </Button>
   );
 
@@ -482,6 +550,17 @@ export function SubmissionsTab({
               );
             }}
           />
+          {/* All leaves spam out (forms fix a8): one quiet way to it, counted. */}
+          {state === undefined && spamCount > 0 && (
+            <Button
+              icon="circle-alert"
+              onPress={() => {
+                go(undefined, 'spam');
+              }}
+            >
+              {strings.spamChip(spamCount)}
+            </Button>
+          )}
           {canManage && rows.length > 0 && exportButton}
         </>
       }
@@ -494,11 +573,24 @@ export function SubmissionsTab({
         return <RelativeTime value={submission.receivedAt} />;
       case 'person': {
         // The record it filed into; else the name it gave, or its email (the State column says if it is in the CRM).
+        // One click target per row (forms fix a10): the chip shows who, never links away; the row opens the panel,
+        // which links to the record. "Returning" when it went to a record that was already there (forms fix a4).
         const crm = submission.crm;
-        if (crm.state !== 'linked')
-          return <TruncatedText>{nameOf(submission) ?? submission.email ?? ''}</TruncatedText>;
-        const href = link(crm.record.objectId, crm.record.recordId);
-        return <RecordChip display={crm.record} {...(href === undefined ? {} : { href })} isFlat />;
+        const returning = submission.isReturning === true ? <Badge text={strings.returning} isWhole /> : null;
+        if (crm.state !== 'linked') {
+          return (
+            <>
+              <TruncatedText>{nameOf(submission) ?? submission.email ?? ''}</TruncatedText>
+              {returning}
+            </>
+          );
+        }
+        return (
+          <>
+            <RecordChip display={crm.record} isFlat />
+            {returning}
+          </>
+        );
       }
       case EMAIL_COLUMN:
         return <TruncatedText>{submission.email ?? ''}</TruncatedText>;
@@ -507,6 +599,9 @@ export function SubmissionsTab({
       default: {
         // An answer column: this question's answer, cut to the cell, the whole of it in a tooltip when cut.
         const answer = submission.firstAnswers.find((each) => each.questionId === column);
+        // A phone reads as the panel shows it, spaced with its flag (forms critique a).
+        if (answer?.answerType === 'phone')
+          return <PhoneAnswer answer={answer} text={answerText(answer)} surface="card" />;
         return <TruncatedText>{answer === undefined ? '' : answerText(answer)}</TruncatedText>;
       }
     }
@@ -650,7 +745,36 @@ export function SubmissionsTab({
               {formName} · <RelativeTime value={open.receivedAt} />
             </>
           }
-          actions={<StatusDot hue={stateHue(open, isFiling)}>{stateLabel(open, isFiling)}</StatusDot>}
+          actions={
+            <>
+              <StatusDot hue={stateHue(open, isFiling)}>{stateLabel(open, isFiling)}</StatusDot>
+              {/* The one before and after in the list, without closing (forms fix a, Gmail's and Attio's K and J). */}
+              <ShortcutTooltip content={strings.previousSubmission} kbd="K">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="chevron-up"
+                  label={strings.previousSubmission}
+                  isDisabled={before === undefined}
+                  onPress={() => {
+                    if (before !== undefined) go(before.id);
+                  }}
+                />
+              </ShortcutTooltip>
+              <ShortcutTooltip content={strings.nextSubmission} kbd="J">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="chevron-down"
+                  label={strings.nextSubmission}
+                  isDisabled={after === undefined}
+                  onPress={() => {
+                    if (after !== undefined) go(after.id);
+                  }}
+                />
+              </ShortcutTooltip>
+            </>
+          }
           isStacked
           isOpen
           onClose={() => {
@@ -705,6 +829,13 @@ export function SubmissionsTab({
                             {strings.addToCrm}
                           </Button>
                         )}
+                        {/* A form that keeps answers only had no way to the CRM from here (forms fix a10): the one
+                            way is to turn saving on, where it is set; Sync then adds the earlier ones. */}
+                        {!isFiling && open.state === 'processed' && (
+                          <ButtonLink variant="primary" href={formHref(slug, formId, 'settings')}>
+                            {strings.turnOnCrm}
+                          </ButtonLink>
+                        )}
                       </>
                     )}
                   </>
@@ -712,7 +843,19 @@ export function SubmissionsTab({
               }
             : {})}
         >
-          <SubmissionDetail submission={open} link={link} isFiling={isFiling} />
+          <SubmissionDetail
+            submission={open}
+            link={link}
+            isFiling={isFiling}
+            {...(canManage
+              ? {
+                  onUseNew: (questionId: string) => {
+                    applyNew(open.id, questionId);
+                  },
+                }
+              : {})}
+            {...(usingNew === undefined ? {} : { usingNew })}
+          />
         </Panel>
       )}
       <Modal
@@ -738,7 +881,7 @@ export function SubmissionsTab({
               icon="trash"
               isPending={busy === 'delete'}
               onPress={() => {
-                if (open !== undefined) act('delete', open.id);
+                if (confirmingId !== undefined) act('delete', confirmingId);
               }}
             >
               {strings.deleteSubmissionAction}
@@ -823,13 +966,32 @@ function SubmissionDetail({
   submission,
   link,
   isFiling,
+  onUseNew,
+  usingNew,
 }: {
   readonly submission: SubmissionView;
   readonly link: ReturnType<typeof recordLinks>;
   readonly isFiling: boolean;
+  /** Use new (forms fix a4): writes a kept answer over the record's value; absent for a reader who only views. */
+  readonly onUseNew?: (questionId: string) => void;
+  /** The kept answer being written now. */
+  readonly usingNew?: string;
 }) {
+  // Why a submission sits in Spam or Needs review, in one line (forms fix a8).
+  const why =
+    submission.state === 'spam' || submission.state === 'needs_review'
+      ? spamReason(submission.signals, submission.state)
+      : undefined;
+  const keptAnswers = submission.kept.flatMap((each) => {
+    const answer = submission.answers.find((one) => one.questionId === each.questionId);
+    return answer === undefined ? [] : [answer];
+  });
   const source = cameFromOf(submission);
-  const filing = answerFiling(submission.answers, submission.crm, isFiling, submission.refused);
+  // A kept answer isn't on the record (forms fix a4): it counts as not saved until Use new writes it.
+  const filing = answerFiling(submission.answers, submission.crm, isFiling, [
+    ...submission.refused,
+    ...submission.kept.map((each) => ({ questionId: each.questionId })),
+  ]);
   const reasons = submission.crm.state === 'linked' ? notSavedReasons(submission.answers, submission.refused) : [];
   return (
     <>
@@ -838,6 +1000,7 @@ function SubmissionDetail({
           {submission.failure}
         </Callout>
       )}
+      {why !== undefined && <Callout tone="info">{why}</Callout>}
       {submission.filesRemovedOn !== undefined && submission.answers.some(holdsFile) && (
         // Its files are kept so a real one can be released with them (late trap #52), but a bot may have sent them.
         <Callout tone="warning" title={strings.spamFilesTitle}>
@@ -856,6 +1019,41 @@ function SubmissionDetail({
             }))}
           />
           <p>{strings.notSavedNext}</p>
+        </Callout>
+      )}
+      {keptAnswers.length > 0 && submission.mainRecord !== undefined && (
+        // A returning person's new answers that filing left as they were (their question fills only an empty value):
+        // said, never dropped in silence, with Use new beside each (forms fix a4).
+        <Callout tone="info" title={strings.keptTitle(keptAnswers.length, submission.mainRecord.name)}>
+          <DescriptionList
+            layout="stacked"
+            items={keptAnswers.map((answer) => ({
+              id: answer.questionId,
+              term: answer.label,
+              // The new answer itself, then Use new: what would be written is always in view.
+              description: (
+                <>
+                  {answer.answerType === 'phone' ? (
+                    <PhoneAnswer answer={answer} text={answerText(answer)} surface="panel" />
+                  ) : (
+                    answerText(answer)
+                  )}{' '}
+                  {onUseNew !== undefined && (
+                    <Button
+                      size="sm"
+                      isPending={usingNew === answer.questionId}
+                      label={strings.useNewLabel(answer.label)}
+                      onPress={() => {
+                        onUseNew(answer.questionId);
+                      }}
+                    >
+                      {strings.useNew}
+                    </Button>
+                  )}
+                </>
+              ),
+            }))}
+          />
         </Callout>
       )}
       <FieldGroup
@@ -906,4 +1104,18 @@ function SubmissionDetail({
       )}
     </>
   );
+}
+
+/**
+ * Saves a file the server sends as an attachment, in place (forms fix a7): an anchor with `download`, so the page
+ * stays and no tab opens. An expired file's error comes back as the browser's own failed download.
+ */
+function downloadFile(href: string, fileName: string): void {
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = fileName;
+  anchor.rel = 'noopener';
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
 }

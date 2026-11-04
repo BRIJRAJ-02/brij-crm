@@ -812,6 +812,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       markSpam: os.submissions.markSpam.handler(notServed),
       resolve: os.submissions.resolve.handler(notServed),
       retry: os.submissions.retry.handler(notServed),
+      useNewAnswer: os.submissions.useNewAnswer.handler(notServed),
       delete: os.submissions.delete.handler(notServed),
       addToCrm: os.submissions.addToCrm.handler(notServed),
       export: os.submissions.export.handler(notServed),

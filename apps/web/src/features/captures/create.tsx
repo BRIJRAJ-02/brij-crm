@@ -2,7 +2,7 @@
 // Purpose: Captures' one New, owned by the Captures layout, so it sits in the TopBar at one place and one width on both tabs, loading or not.
 // Main task: make a booking page on Links (its dialog, then its editor) and a form on Forms (its template gallery, then its builder).
 // Leaves out: the lists themselves (each tab's screen) and what a new page or form holds (their editors).
-import { Button, Tooltip } from '@crm/ui';
+import { Button } from '@crm/ui';
 import { useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { linksHref, managedPageHref, pageEditorHref } from '../booking/links.ts';
@@ -12,7 +12,7 @@ import { formHref } from '../forms/paths.ts';
 import { strings as formStrings } from '../forms/strings.ts';
 import { TemplateGallery } from '../forms/TemplateGallery.tsx';
 import { useCan } from '../workspace/WorkspacePage.tsx';
-import type { CaptureTab } from './tabs.ts';
+import { formsHref, type CaptureTab } from './tabs.ts';
 
 /** The tab's New, as the TopBar and an empty list offer it. */
 export interface CapturesCreate {
@@ -56,6 +56,8 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
   const isAskedTeamLink = tab === 'links' && search.new === 'team-link' && canManageForms;
   // New › Managed page (`?new=managed`, spec 0037, AC-1333): `booking.admin`'s, as the template itself is.
   const isAskedManaged = tab === 'links' && search.new === 'managed' && canBookTeams;
+  // The command menu's New form arrives as `?new=form` (forms critique c): the template gallery opens over Forms.
+  const isAskedForm = tab === 'forms' && search.new === 'form' && canManageForms;
 
   const value: CapturesCreate =
     tab === 'links'
@@ -119,9 +121,10 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
       <TemplateGallery
         data={data}
         slug={slug}
-        isOpen={isPickingTemplate}
+        isOpen={isPickingTemplate || isAskedForm}
         onClose={() => {
           setPickingTemplate(false);
+          if (isAskedForm) void navigate({ href: formsHref(slug), replace: true });
         }}
         onCreated={(form) => {
           setPickingTemplate(false);
@@ -139,19 +142,12 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
  */
 export function CapturesNewButton() {
   const create = useCapturesCreate();
-  if (create === undefined) return null;
-  const button = (
-    <Button
-      variant="primary"
-      icon="plus"
-      label={create.label}
-      isPending={create.isPending}
-      isDisabled={create.create === undefined}
-      {...(create.create === undefined ? {} : { onPress: create.create })}
-    >
+  // Someone who may not make forms doesn't see New on Forms at all (forms fix a10): a faded button whose reason
+  // only a hover could find read as broken. The forms they may open are still listed.
+  if (create?.create === undefined) return null;
+  return (
+    <Button variant="primary" icon="plus" label={create.label} isPending={create.isPending} onPress={create.create}>
       {bookingStrings.newButton}
     </Button>
   );
-  if (create.refusal === undefined) return button;
-  return <Tooltip content={create.refusal}>{button}</Tooltip>;
 }

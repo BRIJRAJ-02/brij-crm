@@ -63,23 +63,36 @@ describe('the forms’ confirms (AC-18)', () => {
     await expectOneLine('Remove https://acme.com?', 'Remove site');
   });
 
-  it('changing or turning off where submissions are saved asks with one line and two buttons', async () => {
+  it('changing or turning off where answers are saved names the questions, with a normal button (forms fix a2)', async () => {
     await show(() => (
       <RetargetFormDialog
-        ask={{ objectId: 'deals', filedCount: 3, objectName: 'People', nextName: 'Deals' }}
+        ask={{
+          objectId: 'deals',
+          filedCount: 3,
+          filedLabels: ['Name', 'Email', 'Description'],
+          objectName: 'People',
+          nextName: 'Deals',
+        }}
         onClose={() => undefined}
         onConfirm={() => undefined}
       />
     ));
-    await expectOneLine('Change which object submissions are saved to?', 'Change object');
+    // Nothing is lost (the mapping is remembered), so it is a plain dialog, not an alert with a red button.
+    const confirm = page.getByRole('dialog', { name: 'Save answers to Deals?' });
+    await expect.element(confirm).toBeVisible();
+    await expect
+      .element(confirm.getByText('Name, Email, and Description stop saving to People. Switching back restores them.'))
+      .toBeVisible();
+    const buttons = confirm.getByRole('button').all();
+    expect(buttons.map((button) => button.element().textContent)).toEqual(['CancelESC', 'Save to Deals↵']);
     shown?.unmount();
     await show(() => (
       <RetargetFormDialog
-        ask={{ objectId: null, filedCount: 3, objectName: 'People', nextName: '' }}
+        ask={{ objectId: null, filedCount: 1, filedLabels: ['Email'], objectName: 'People', nextName: '' }}
         onClose={() => undefined}
         onConfirm={() => undefined}
       />
     ));
-    await expectOneLine('Stop saving submissions to the CRM?', 'Stop saving');
+    await expect.element(page.getByRole('dialog', { name: 'Stop saving answers to the CRM?' })).toBeVisible();
   });
 });

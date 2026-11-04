@@ -132,6 +132,8 @@ export const PublicForm = z.object({
     theme: z.enum(FORM_LOOK_THEMES).optional(),
   }),
   questions: z.array(PublicQuestion),
+  /** What a closed form says in place of its questions (forms fix b2): the owner's words, else the language's line. */
+  closedMessage: z.string().optional(),
   /** Classic when absent (spec 0063, AC-6302): Steps and One at a time load their own code on the page. */
   layout: z.enum(FORM_LAYOUTS).optional(),
   /** With Steps, the steps over `questions` (`stepsOf`); absent otherwise, since no other layout draws them. */

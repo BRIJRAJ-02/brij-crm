@@ -16,6 +16,8 @@ export type HostedUploadOutcome =
   | { readonly kind: 'rejected'; readonly message: string }
   | { readonly kind: 'limited' }
   | { readonly kind: 'failed' }
+  /** The form can't take files at all just now (its store isn't set up): trying again can't help. */
+  | { readonly kind: 'unavailable' }
   | { readonly kind: 'offline' };
 
 /** Sends one file, reporting progress from 0 to 100. Never throws. */
@@ -30,6 +32,11 @@ export interface HostedFileHandlers {
   readonly remove: HostedRemoveUpload;
   /** Marks the question busy while a file goes, so the form won't send until it is in. */
   readonly setBusy: (key: string, busy: boolean) => void;
+  /**
+   * Marks a question whose file didn't upload (forms fix b8): the form asks once before it sends without it, rather
+   * than sending in silence. Optional, so a page that never gives it keeps working.
+   */
+  readonly setFailed?: (key: string, failed: boolean) => void;
 }
 
 /** Whether a held answer is an uploaded file. */

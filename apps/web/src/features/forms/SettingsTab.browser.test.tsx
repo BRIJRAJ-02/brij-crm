@@ -31,6 +31,7 @@ const MEMBERS: readonly MemberSummary[] = [
   { id: BEA, name: 'Bea Brown', email: 'bea@acme.com' },
 ];
 
+const DEALS = '0199f0a0-0000-7000-8000-0000000000de';
 const OBJECTS = [
   {
     id: PEOPLE,
@@ -42,6 +43,19 @@ const OBJECTS = [
     standardKey: 'people',
     access: 'write',
     position: 0,
+    isStandard: true,
+    isArchived: false,
+  },
+  {
+    id: DEALS,
+    apiSlug: 'deals',
+    singularName: 'Deal',
+    pluralName: 'Deals',
+    icon: 'handshake',
+    hue: 'green',
+    standardKey: 'deals',
+    access: 'write',
+    position: 2,
     isStandard: true,
     isArchived: false,
   },
@@ -211,6 +225,14 @@ function Editor({ initial }: { readonly initial: FormView }) {
         onStatusChange={(status) => {
           statuses.push(status);
         }}
+        keepMonths={12}
+        onDraftChange={(change) => {
+          const next = change(form.draft);
+          deals.push(next.targets.deal?.objectId);
+          copies.push(next.confirmation?.on);
+          closings.push(next.closing);
+          setForm({ ...form, draft: next });
+        }}
       />
     </>
   );
@@ -220,6 +242,9 @@ let shown: InApp | undefined;
 /** What the tab asked the editor for: where answers are saved, and opening or closing the form. */
 const retargets: (string | null)[] = [];
 const statuses: string[] = [];
+const deals: (string | undefined)[] = [];
+const copies: (boolean | undefined)[] = [];
+const closings: FormDocument['closing'][] = [];
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -230,6 +255,9 @@ afterEach(() => {
   shown = undefined;
   retargets.length = 0;
   statuses.length = 0;
+  deals.length = 0;
+  copies.length = 0;
+  closings.length = 0;
 });
 
 async function show(
@@ -383,14 +411,11 @@ describe('Settings as plain rows (T21)', () => {
       expect(page.getByRole('heading', { name: gone, exact: true }).query()).toBeNull();
     }
     expect(page.getByRole('textbox', { name: 'Headline' }).query()).toBeNull();
-    for (const row of [
-      'Name',
-      'Link',
-      'Save answers to',
-      'Owner',
-      'Email each submission to',
-      'Accepting submissions',
-    ]) {
+    // Grouped under headings (the owner, 5 November 2026: less text, never less structure).
+    for (const group of ['Form', 'CRM', 'Emails', 'Answers']) {
+      await expect.element(page.getByRole('heading', { name: group, exact: true })).toBeVisible();
+    }
+    for (const row of ['Name', 'Link', 'Save answers to', 'Owner', 'Email each submission to', 'Taking answers']) {
       await expect.element(page.getByText(row, { exact: true }).first()).toBeVisible();
     }
     await expect.element(page.getByRole('button', { name: 'Copy link' })).toBeVisible();
@@ -405,9 +430,50 @@ describe('Settings as plain rows (T21)', () => {
     expect(retargets).toEqual([null]);
   });
 
-  it('closes and opens the form from Accepting submissions', async () => {
+  it('offers Also create a deal under People instead of Deals as a place of its own (forms fix a3)', async () => {
     await show(formView({}), []);
-    (page.getByRole('switch', { name: 'Accepting submissions' }).element() as HTMLElement).click();
+    const saving = page.getByRole('button', { name: /Save answers to$/ }).last();
+    await saving.click();
+    expect(page.getByRole('listbox').getByRole('option', { name: 'Deals' }).query()).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    const deal = page.getByRole('switch', { name: 'Also create a deal' });
+    await expect.element(deal).not.toBeChecked();
+    (deal.element() as HTMLElement).click();
+    expect(deals).toEqual([DEALS]);
+  });
+
+  it('turns on Email them a copy, then shows its subject and message (forms fix b1)', async () => {
+    await show(formView({}), []);
+    expect(page.getByRole('textbox', { name: 'Subject' }).query()).toBeNull();
+    (page.getByRole('switch', { name: 'Email them a copy' }).element() as HTMLElement).click();
+    expect(copies).toEqual([true]);
+    await expect
+      .element(page.getByRole('textbox', { name: 'Subject' }))
+      .toHaveAttribute('placeholder', 'We got your message');
+    await expect.element(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
+  });
+
+  it('closes after a number of answers, chosen from Closes (forms fix b2)', async () => {
+    await show(formView({}), []);
+    const closes = page.getByRole('button', { name: /Closes$/ }).last();
+    await expect.element(closes).toHaveTextContent('Never');
+    await closes.click();
+    await page.getByRole('listbox').getByRole('option', { name: 'After a number of answers' }).click();
+    expect(closings).toEqual([{ after: 100 }]);
+    await expect.element(page.getByRole('textbox', { name: 'Number of answers' })).toHaveValue('100');
+    await expect.element(page.getByRole('textbox', { name: 'Message when closed' })).toBeVisible();
+  });
+
+  it('says how long answers are kept, linking to where it is set (critique b S2)', async () => {
+    await show(formView({}), []);
+    await expect
+      .element(page.getByRole('link', { name: 'For 12 months' }))
+      .toHaveAttribute('href', '/w/acme/settings/general');
+  });
+
+  it('closes and opens the form from Taking answers', async () => {
+    await show(formView({}), []);
+    (page.getByRole('switch', { name: 'Taking answers' }).element() as HTMLElement).click();
     expect(statuses).toEqual(['paused']);
   });
 });

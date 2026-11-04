@@ -145,11 +145,16 @@ export type ActivityEntry =
   | (EntryBase & {
       /**
        * A form submission that touched the record (spec 0023): the form is
-       * the actor ("Contact us created this record from a submission").
+       * the actor ("Contact us submission created this record").
        */
       readonly kind: 'submission';
       readonly action: 'created' | 'updated' | 'matched' | 'linked';
-      /** The submission's page, routed. */
+      /**
+       * The visitor's answers as plain words, label then answer: given only when the reader may open the
+       * submission. Folded under Show answers, so a busy timeline stays one line per submission.
+       */
+      readonly answers?: readonly { readonly label: string; readonly text: string }[];
+      /** The submission's page, routed: Open submission. */
       readonly href?: string;
     });
 
@@ -891,15 +896,10 @@ function hasDetail(entry: ActivityEntry): boolean {
   if (entry.kind === 'call' || entry.kind === 'logged_meeting') {
     return entry.outcome !== undefined || entry.duration !== undefined || entry.excerpt !== undefined;
   }
-  if (
-    entry.kind === 'created' ||
-    entry.kind === 'deleted' ||
-    entry.kind === 'merged' ||
-    entry.kind === 'links' ||
-    entry.kind === 'submission'
-  ) {
+  if (entry.kind === 'created' || entry.kind === 'deleted' || entry.kind === 'merged' || entry.kind === 'links') {
     return false;
   }
+  if (entry.kind === 'submission') return (entry.answers?.length ?? 0) > 0 || entry.href !== undefined;
   return entry.title !== undefined || entry.excerpt !== undefined;
 }
 
@@ -984,6 +984,53 @@ function ChangesDetail({
   );
 }
 
+/**
+ * A submission's detail (forms fix a1): Show answers, which unfolds the visitor's answers label then answer, and
+ * Open submission. Text only, never markup, since a visitor typed them. The choice is the entry's own, as a run of
+ * changes keeps its own.
+ */
+function SubmissionDetail({
+  entry,
+  detailId,
+}: {
+  readonly entry: Extract<ActivityEntry, { kind: 'submission' }>;
+  readonly detailId: string;
+}) {
+  const [isOpen, setOpen] = useState(false);
+  const answers = entry.answers ?? [];
+  // The actions first, so pressing Show answers never moves it out from under the pointer, and the answers it
+  // reveals come after it in reading order; they take the entry's width, as a note's card does.
+  return (
+    <>
+      <span id={detailId} className={styles.changesRow}>
+        {answers.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            isExpanded={isOpen}
+            controls={`${detailId}-answers`}
+            onPress={() => {
+              setOpen((open) => !open);
+            }}
+          >
+            {isOpen ? strings.hideAnswers : strings.showAnswers(answers.length)}
+          </Button>
+        )}
+        {entry.href !== undefined && <Link href={entry.href}>{strings.openSubmission}</Link>}
+      </span>
+      {isOpen && answers.length > 0 && (
+        <span id={`${detailId}-answers`} className={styles.card}>
+          {answers.map((answer, index) => (
+            <span key={`${answer.label}-${String(index)}`} className={styles.excerpt}>
+              {strings.answerLine(answer.label, answer.text)}
+            </span>
+          ))}
+        </span>
+      )}
+    </>
+  );
+}
+
 /** One entry: its marker on the rail, the actor and verb, the time, and what changed or was added. */
 /** Drawn again only when its entry changes, not with every scroll step of the feed. */
 const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: EntryProps) {
@@ -1000,12 +1047,13 @@ const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: Entr
     detail = <TaskRow entry={entry} title={entry.title} detailId={`${lineId}-detail`} />;
   } else if (entry.kind === 'call' || entry.kind === 'logged_meeting') {
     detail = hasDetail(entry) ? <LoggedDetail entry={entry} detailId={`${lineId}-detail`} /> : undefined;
+  } else if (entry.kind === 'submission') {
+    detail = hasDetail(entry) ? <SubmissionDetail entry={entry} detailId={`${lineId}-detail`} /> : undefined;
   } else if (
     entry.kind !== 'created' &&
     entry.kind !== 'deleted' &&
     entry.kind !== 'merged' &&
     entry.kind !== 'links' &&
-    entry.kind !== 'submission' &&
     (entry.title !== undefined || entry.excerpt !== undefined)
   ) {
     // With no title (a comment), the text itself is the way to it.

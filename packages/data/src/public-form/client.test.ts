@@ -76,6 +76,18 @@ describe('the hosted page’s client (spec 0023)', () => {
     expect(await offline.submit(form.key, submission)).toEqual({ kind: 'offline' });
   });
 
+  it('says a form with no file store can’t take files, never to try again (forms fix b8)', async () => {
+    const file = new File(['cv'], 'cv.pdf', { type: 'application/pdf' });
+    const none = endpoint(503, { code: 'API_UNAVAILABLE', message: 'File uploads are not available right now.' });
+    expect(await createPublicFormClient({ fetch: none.fetch }).upload(form.key, file, () => undefined)).toEqual({
+      kind: 'unavailable',
+    });
+    const broken = endpoint(500, { code: 'INTERNAL', message: 'x' });
+    expect(await createPublicFormClient({ fetch: broken.fetch }).upload(form.key, file, () => undefined)).toEqual({
+      kind: 'failed',
+    });
+  });
+
   it('sends a count as a beacon, and falls back to a keepalive post when there is none (AC-6320)', () => {
     const taken: { url: string; body: Blob }[] = [];
     const navigatorWas = globalThis.navigator;

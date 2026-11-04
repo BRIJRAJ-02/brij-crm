@@ -60,6 +60,8 @@ export function confirmationRows(
       if (!onPath.has(question.key)) return [];
       const given = answers[question.key];
       if (given === undefined) return [];
+      // A consent left unticked is not something they sent (forms fix b9): their copy says nothing of it.
+      if (question.answerType === 'consent' && given !== true) return [];
       const label = recall(question.label, { answers, score }).trim().slice(0, 200);
       const value =
         question.answerType === 'signature' ? SIGNED_WORD : answerWords(given, question.answerType).slice(0, 4_000);
@@ -112,8 +114,10 @@ async function confirmOne(tx: WorkspaceTx, workspaceId: string, submissionId: st
   const score = scoreOf(logicFormOf(document), answers);
   const subject = document.confirmation?.subject;
   const line = document.confirmation?.line;
+  const headline = document.headline.trim();
   const params: FormConfirmationEmail = {
     formName: form.name.slice(0, 200),
+    ...(headline === '' ? {} : { headline: recall(headline, { answers, score }).replace(/\s+/g, ' ').slice(0, 200) }),
     // The form's own words, with any recall read as plain text (never HTML), exactly as the ending shows them.
     ...(subject === undefined || subject === '' ? {} : { subject: recall(subject, { answers, score }).slice(0, 200) }),
     ...(line === undefined || line === '' ? {} : { message: recall(line, { answers, score }).slice(0, 2_000) }),

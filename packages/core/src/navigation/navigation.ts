@@ -224,7 +224,7 @@ function favouriteOf(kind: 'view' | 'record', id: string, label: string, object:
 const TOP_PAGES_BUILT: readonly NavPage[] = ['linkPage', 'tasks'];
 
 /**
- * The Scheduling pages the sidebar offers: Bookings and Captures. The Roster left the sidebar (owner, 30 October
+ * The Scheduling pages the sidebar offers: Bookings, Captures and Forms (Captures' Forms tab, a row of its own). The Roster left the sidebar (owner, 30 October
  * 2026) and is Bookings › Roster, a tab of its own (31 October 2026).
  */
 const SCHEDULING_PAGES_BUILT: readonly NavPage[] = NAV_SCHEDULING_PAGES.filter((page) => page !== 'roster');

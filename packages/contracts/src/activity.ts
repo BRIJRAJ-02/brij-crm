@@ -85,8 +85,9 @@ export const ActivityItem = z.object({
   outcome: z.string().optional(),
   meeting: MeetingView.optional(),
   /**
-   * A meeting a booking made (spec 0057, AC-5714): the visitor's answers to the booking page's own questions, label
-   * then answer as words, those the reader may see. Absent for any other entry.
+   * A meeting a booking made (spec 0057, AC-5714), or a submission (forms fix a1): the visitor's answers, label then
+   * answer as words, those the reader may see. A submission's entry carries it only for a reader who may open the
+   * submission, so its presence is what offers Open submission. Absent for any other entry.
    */
   answers: z.array(z.object({ label: z.string(), text: z.string() })).optional(),
   /** A submission entry (spec 0023): the form, and what the submission did to this record. */

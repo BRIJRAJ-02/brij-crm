@@ -172,7 +172,14 @@ export function scoreContent(input: {
   const signals: [string, number][] = [];
   const texts = Object.values(input.answers).filter((value): value is string => typeof value === 'string');
   if (texts.some((text) => MARKUP.test(text))) signals.push(['markup_links', 3]);
-  const links = texts.reduce((sum, text) => sum + linkCount(text), 0);
+  // A web address typed where the form asks for one is the answer, not a link pushed at us (forms QA, 5 November
+  // 2026: a recruiting form's website, LinkedIn, GitHub, portfolio and X held every honest visitor for review).
+  const asked = new Set(
+    input.questions.filter((question) => question.answerType === 'website').map((question) => question.key),
+  );
+  const links = Object.entries(input.answers)
+    .filter(([key, value]) => typeof value === 'string' && !asked.has(key))
+    .reduce((sum, [, value]) => sum + linkCount(value as string), 0);
   if (links >= 5) signals.push(['many_links', 4]);
   else if (links >= 3) signals.push(['links', 2]);
   else if (links === 2) signals.push(['links', 1]);

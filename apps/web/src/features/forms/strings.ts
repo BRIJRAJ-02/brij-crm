@@ -55,8 +55,14 @@ export const strings = {
   addressPending: '/f/…',
   thisMonth: (n: number) => `${count(n, 'submission', 'submissions')} this month`,
   spam: (n: number) => `${new Intl.NumberFormat().format(n)} spam`,
-  accepting: 'Live',
+  accepting: 'Taking answers',
   notAccepting: 'Paused',
+  /** The forms list (forms fix a9): when the last answer came, a form's answers since the reader last looked, and
+   * the way to its Submissions. */
+  lastAnswer: (when: string) => `last ${when}`,
+  newAnswers: 'New answers',
+  openSubmissions: 'Submissions',
+  openSubmissionsOf: (name: string) => `Open the submissions to ${name}`,
   notPublishedYet: 'Not published',
   /** Why Copy link is off on a form never published. */
   acceptingOf: (name: string) => `${name} is live`,
@@ -241,17 +247,58 @@ export const strings = {
   mappingQuestion: 'Question',
   mappingSavedAs: 'Saved as',
   retargetFailed: 'That didn’t change where submissions go.',
-  retargetTitle: 'Change which object submissions are saved to?',
-  retargetOffTitle: 'Stop saving submissions to the CRM?',
-  /** One line each (spec 0058, AC-18): what the change loses. */
-  retargetText: (to: string) => `Only questions matching a field on ${to} stay saved.`,
-  retargetOffText: 'New submissions make no record. Answers stay with them.',
+  retargetTitle: (to: string) => `Save answers to ${to}?`,
+  retargetOffTitle: 'Stop saving answers to the CRM?',
+  /**
+   * What the change does to the questions saved now, named (forms fix a2, 5 November 2026): they are remembered, so
+   * switching back saves them where they were.
+   */
+  retargetText: (questions: string, from: string) =>
+    `${questions} stop saving to ${from}. Switching back restores them.`,
+  moreQuestions: (n: number) => (n === 1 ? '1 more question' : `${String(n)} more questions`),
+  retargetDone: (to: string) => `Answers now save to ${to}.`,
+  retargetOffDone: 'Answers now stay in Submissions.',
+  /** Email them a copy (forms fix b1): the visitor's own copy of what they sent. */
+  copyRow: 'Email them a copy',
+  copyHelp: 'Each person gets a copy of their answers at the email they gave. Replies come to the form’s owner.',
+  copyNeedsEmail: 'Add an email question first, so there is somewhere to send it.',
+  copySubject: 'Subject',
+  copySubjectDefault: 'We got your message',
+  copyLine: 'Message',
+  copyLineDefault: 'Thanks, we got it. We will come back to you soon.',
+  /** Closes (forms fix b2): when the form stops taking answers by itself, and what it says then. */
+  closesRow: 'Closes',
+  closesHelp: 'Stop taking answers on a day, or after enough have come in. Pause stops it now. Goes live with Publish.',
+  closesNever: 'Never',
+  closesOnDate: 'On a date',
+  closesAfterCount: 'After a number of answers',
+  closesDay: 'Last day',
+  closesPast: 'Pick today or a day to come.',
+  closesCountError: (max: number) => `Give a whole number from 1 to ${max.toLocaleString('en')}.`,
+  /** Under a setting that waits for Publish on a live form (forms review): said, not only in a hover tip. */
+  goesLive: 'Goes live with Publish.',
+  closesCount: 'Number of answers',
+  closedMessageRow: 'Message when closed',
+  closedMessageDefault: 'This form isn’t taking answers right now.',
+  /** Settings' groups (the owner, 5 November 2026: less text never means less structure). */
+  groupForm: 'Form',
+  groupCrm: 'CRM',
+  groupEmails: 'Emails',
+  groupAnswers: 'Answers',
+  /** How long the workspace keeps answers (critique b S2): said here, changed in Settings › General. */
+  keptRow: 'Answers kept',
+  keptHelp: 'How long every form’s answers are kept is set for the whole workspace, in Settings › General.',
+  keptForever: 'Until deleted',
+  keptMonths: (months: number) => `For ${String(months)} months`,
+  /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
+  alsoDeal: 'Also create a deal',
+  alsoDealTip: 'Each submission also adds a deal, linked to the person and their company. Goes live with Publish.',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
     `Changes here go live when you publish. Until then, submissions are still saved to ${objectName}.`,
   savingWaitsKeptOnly:
     'Changes here go live when you publish. Until then, submissions are still kept with the form only.',
-  retargetAction: 'Change object',
+  retargetAction: (to: string) => `Save to ${to}`,
   retargetOffAction: 'Stop saving',
   filedOn: (object: string, attribute: string) => `${object} › ${attribute}`,
   keptOnly: 'Kept with the submission only',
@@ -287,13 +334,15 @@ export const strings = {
   noticesOthers: (count: number) => (count === 1 ? '1 other person' : `${String(count)} other people`),
   noticesOthersHint: 'People you can’t see in this workspace',
   spamTitle: 'Spam',
-  spamSummary: 'On. Doubtful sends wait for review.',
+  spamSummary: 'On. Bots go to Spam, and doubtful sends wait in Needs review for you.',
   detailsTitle: 'Details',
   spamReview: 'Review',
   settingsFailed: 'That didn’t save.',
 
   // Install tab
   readOnlyTitle: 'You can view this form',
+  /** In the bar, for a member who may only view a live form's answers (forms fix a10). */
+  viewOnly: 'View only',
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
   shareTip: 'Opens the form on its own page.',
@@ -520,7 +569,7 @@ export const strings = {
   markingSpam: 'Marking as spam…',
   markingNotSpam: 'Marking as not spam…',
   markedSpamMany: (n: number) => `${count(n, 'submission', 'submissions')} marked as spam.`,
-  releasedMany: (n: number) => `${count(n, 'submission', 'submissions')} marked as not spam. They are being processed.`,
+  releasedMany: (n: number) => `${count(n, 'submission', 'submissions')} marked as not spam.`,
   review: 'Review',
   needReview: (n: number) => `${count(n, 'submission needs', 'submissions need')} your review.`,
   searchSubmissions: 'Search submissions',
@@ -545,6 +594,37 @@ export const strings = {
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
   spamFilesTitle: 'Our spam check caught this',
   spamFiles: (day: string) => `Open files only if you trust the sender. Removed on ${day} unless marked Not spam.`,
+  /** The open submission's neighbours in the list (forms critique a). */
+  previousSubmission: 'Previous submission',
+  nextSubmission: 'Next submission',
+  /** A form that keeps answers only: the way to the CRM from a submission (forms fix a10). */
+  turnOnCrm: 'Save answers to the CRM',
+  /** All leaves spam out; this chip opens it (forms fix a8). */
+  spamChip: (n: number) => `${String(n)} spam`,
+  /** Why a submission is in Spam or Needs review, in one line (forms fix a8). */
+  spamWhy: {
+    bot: 'Our bot check caught it: it was filled in too fast or by a script.',
+    captcha: 'It didn’t pass the robot check.',
+    links: 'It is full of links.',
+    name: 'The name looks made up.',
+    email: 'It uses a throwaway email address.',
+    repeated: 'The same thing was sent several times.',
+    limit: 'Too many sends came from this address today.',
+    marked: 'Someone marked it as spam.',
+    doubtful: 'It looked doubtful, so it waits for you to say.',
+  },
+  /** Export names what it exports when rows are picked (forms fix a7). */
+  exportSelected: (n: number) => `Export ${String(n)} selected`,
+  /** The Submissions tab's own failure (forms fix a6): the form stays, the tab says it and offers Try again. */
+  submissionsFailedTitle: 'Submissions didn’t load',
+  /** A submission that went to a record already there (forms fix a4): a tag in the list. */
+  returning: 'Returning',
+  /** A returning person's answers filing left as they were, with Use new (forms fix a4). */
+  keptTitle: (count: number, name: string) =>
+    count === 1 ? `${name} already had a different answer here` : `${name} already had different answers here`,
+  useNew: 'Use new',
+  useNewLabel: (question: string) => `Use the new answer for ${question}`,
+  usedNew: 'Saved on the record.',
   /** Over the answers filing left off the record, each with why (late trap #50). */
   notSavedTitle: (count: number) =>
     count === 1 ? 'One answer wasn’t saved on the record' : `${String(count)} answers weren’t saved on the record`,
@@ -561,7 +641,7 @@ export const strings = {
   answersSomeSaved: (saved: number, total: number) => `${String(saved)} of ${String(total)} saved on the record`,
   /** Under Records while the job adds it. */
   answersFiling: 'Adding it to the CRM now.',
-  released: 'Released. It is being processed.',
+  released: 'Marked as not spam.',
   markedSpam: 'Marked as spam.',
   retried: 'Processing it again.',
   submissionDeleted: 'Submission deleted.',
@@ -731,7 +811,7 @@ export const strings = {
   saveAnswersTo: 'Save answers to',
   onlySubmissions: 'Only in Submissions',
   emailEach: 'Email each submission to',
-  acceptingRow: 'Accepting submissions',
+  acceptingRow: 'Taking answers',
   acceptingHelp: 'Turn off to close the form. Visitors see that it is closed.',
   spamRow: 'Spam',
   linkHelp: 'Links with the old address keep working.',

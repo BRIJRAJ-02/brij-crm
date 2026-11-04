@@ -130,6 +130,12 @@ describe('a form’s limits (AC-6310)', () => {
 });
 
 describe('answerWords', () => {
+  it('reads a consent as Agreed or Not agreed, never Yes or No (forms fix b9)', () => {
+    expect(answerWords(true, { answerType: 'consent' })).toBe('Agreed');
+    expect(answerWords(false, { answerType: 'consent' })).toBe('Not agreed');
+    expect(answerWords(true, { answerType: 'checkbox' })).toBe('Yes');
+  });
+
   it('reads every shape as words', () => {
     expect(answerWords({ picked: ['Sales', 'Support'], other: 'Billing' })).toBe('Sales, Support, Other: Billing');
     expect(answerWords({ line1: '1 Main St', city: 'Leeds', country: 'GB' })).toBe('1 Main St, Leeds, GB');

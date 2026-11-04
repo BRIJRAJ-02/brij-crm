@@ -1,4 +1,4 @@
-// Whether changing a form's object asks first: only when questions are saved onto the object now.
+// Whether changing a form's object asks first: only when questions are saved onto the object now, naming them.
 import { describe, expect, it } from 'vitest';
 import { retargetStep } from './retarget.ts';
 
@@ -20,10 +20,10 @@ const draftOn = (objectId: string | undefined, filedOn: readonly (typeof filed |
   }) as unknown as Parameters<typeof retargetStep>[0];
 
 describe('changing a form’s object', () => {
-  it('asks first when questions are saved onto the object, naming how many and both objects', () => {
+  it('asks first when questions are saved onto the object, naming them and both objects', () => {
     expect(retargetStep(draftOn(PEOPLE, [filed, filed, undefined]), OBJECTS, DEALS, 'this object')).toEqual({
       kind: 'ask',
-      ask: { objectId: DEALS, filedCount: 2, objectName: 'People', nextName: 'Deals' },
+      ask: { objectId: DEALS, filedCount: 2, filedLabels: ['Q0', 'Q1'], objectName: 'People', nextName: 'Deals' },
     });
   });
 

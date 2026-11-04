@@ -56,6 +56,7 @@ import {
   releaseSubmission,
   resolveSubmission,
   retrySubmission,
+  useNewAnswer,
 } from './submissions.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -93,7 +94,8 @@ async function workspace() {
   const system = testScope({ db, workspaceId: created.workspaceId, actor: SYSTEM_ACTOR });
   const query = <T extends Record<string, unknown>>(text: ReturnType<typeof sql>) =>
     db.withWorkspace(created.workspaceId, (tx) => tx.execute<T>(text)).then((result) => result.rows);
-  return { scope, system, ownerId: created.memberId, people, attribute, query };
+  const deals = created.objects.deals ?? '';
+  return { scope, system, ownerId: created.memberId, people, deals, attribute, query };
 }
 
 type Workspace = Awaited<ReturnType<typeof workspace>>;
@@ -500,6 +502,32 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     ]);
   });
 
+  it('closes by itself after a number of answers, or on its day, with its own message (forms fix b2)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, (document) => ({
+      ...document,
+      closing: { after: 1 },
+      closedMessage: 'Sign ups are full. See you next year.',
+    }));
+    const visitor = await enterPublicForm({ db }, live.publicKey);
+    expect((await getPublicForm(visitor.scope, { formId: visitor.formId })).status).toBe('live');
+    const first = body({ name: 'Ada', email: 'ada@example.com' });
+    await submit(live.publicKey, first);
+    expect(await getPublicForm(visitor.scope, { formId: visitor.formId })).toMatchObject({
+      status: 'paused',
+      questions: [],
+      closedMessage: 'Sign ups are full. See you next year.',
+    });
+    expect(await refusalOf(submit(live.publicKey, body({ email: 'grace@example.com' })))).toMatchObject([
+      { code: 'FORM_CLOSED' },
+    ]);
+    // The first send, retried, still gets its answer: it landed before the form closed.
+    await submit(live.publicKey, first);
+    const past = await liveForm(w, (document) => ({ ...document, closing: { at: '2020-01-01T00:00:00.000Z' } }));
+    const late = await enterPublicForm({ db }, past.publicKey);
+    expect((await getPublicForm(late.scope, { formId: late.formId })).status).toBe('paused');
+  });
+
   it('pauses and resumes, archives and restores, duplicates and deletes a form', async () => {
     const w = await workspace();
     const live = await liveForm(w);
@@ -767,6 +795,177 @@ describe('the content checks and Needs review (AC-563, AC-584, the spam follow-u
 });
 
 describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-565, AC-567)', () => {
+  it('keeps each object’s mapping when Save to moves away and back (forms fix a2)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const toDeals = await setFormTarget(w.scope, {
+      formId: live.id,
+      mainObjectId: w.deals,
+      expectedRevision: live.revision,
+    });
+    // On Deals nothing of People's mapping is filed, but it is remembered.
+    expect(toDeals.draft.questions.find((each) => each.key === 'about')?.filedOn).toBeUndefined();
+    expect(toDeals.draft.filedBefore?.[w.people]?.about).toBe(w.attribute('people.description'));
+    const back = await setFormTarget(w.scope, {
+      formId: live.id,
+      mainObjectId: w.people,
+      expectedRevision: toDeals.revision,
+    });
+    expect(back.draft.questions.find((each) => each.key === 'about')?.filedOn?.attributeId).toBe(
+      w.attribute('people.description'),
+    );
+    expect(back.draft.questions.find((each) => each.key === 'title')?.filedOn?.attributeId).toBe(
+      w.attribute('people.job_title'),
+    );
+    expect(back.draft.filedBefore?.[w.people]).toBeUndefined();
+  });
+
+  it('also creates a deal linked to the person and their company (forms fix a3)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, (document) => ({
+      ...document,
+      targets: { ...document.targets, deal: { objectId: w.deals } },
+    }));
+    await submit(live.publicKey, body({ name: 'Grace Hopper', email: 'grace@navy-labs.com', why: 'A demo' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const view = await getSubmission(w.scope, { submissionId: submission.id });
+    expect(view.state).toBe('processed');
+    const deal = view.records.find((each) => each.role === 'deal');
+    expect(deal).toMatchObject({ action: 'created', record: { name: 'Grace Hopper' } });
+    const [record] = await getRecords(w.scope, { ids: [deal?.record.recordId ?? ''] });
+    expect(record?.values[w.attribute('deals.associated_people')]).toEqual([
+      expect.objectContaining({ recordId: view.mainRecord?.recordId }),
+    ]);
+    expect(record?.values[w.attribute('deals.associated_company')]).toMatchObject({
+      objectId: expect.any(String) as string,
+    });
+    expect(record?.values[w.attribute('deals.owner')]).toEqual({ type: 'member', id: w.ownerId });
+  });
+
+  it('gives a deal’s timeline no answers for a reader who can’t see the person, and makes one deal per submission', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, (document) => ({
+      ...document,
+      targets: { ...document.targets, deal: { objectId: w.deals } },
+    }));
+    await submit(live.publicKey, body({ name: 'Grace Hopper', email: 'grace@navy-labs.com', why: 'A demo' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const deal = (await getSubmission(w.scope, { submissionId: submission.id })).records.find(
+      (each) => each.role === 'deal',
+    );
+    const dealId = deal?.record.recordId ?? '';
+    // The owner sees the answers on the deal's timeline; a member who sees Deals but not People gets the entry only.
+    const mine = (await getActivity(w.scope, { recordId: dealId })).entries.find((each) => each.kind === 'submission');
+    expect(mine?.answers?.length).toBeGreaterThan(0);
+    const noPeople: AccessRules = {
+      levels: [
+        { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+      ],
+      records: [],
+    };
+    const member = rescope(w.scope, { role: 'member', rules: noPeople });
+    const theirs = (await getActivity(member, { recordId: dealId })).entries.find((each) => each.kind === 'submission');
+    expect(theirs).toBeDefined();
+    expect(theirs?.answers).toBeUndefined();
+    // Filed again, it makes no second deal.
+    await w.query(sql`update form_submissions set state = 'received', processed_at = null where id = ${submission.id}`);
+    await processNow(w, submission.id);
+    expect(await w.query(sql`select 1 from form_submission_records where role = 'deal'`)).toHaveLength(1);
+  });
+
+  it('gives no answers to a reader who can’t see the form, though they see the record', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'ada@example.com', why: 'Engines' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const recordId = (await getSubmission(w.scope, { submissionId: submission.id })).mainRecord?.recordId ?? '';
+    // Its draft now files onto Deals, which this member can't see: the form is out of their reach.
+    const form = await getForm(w.scope, { formId: live.id });
+    await setFormTarget(w.scope, { formId: live.id, mainObjectId: w.deals, expectedRevision: form.revision });
+    const noDeals: AccessRules = {
+      levels: [
+        { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.deals }, level: 'none' },
+      ],
+      records: [],
+    };
+    const member = rescope(w.scope, { role: 'member', rules: noDeals });
+    const entry = (await getActivity(member, { recordId })).entries.find((each) => each.kind === 'submission');
+    expect(entry).toBeDefined();
+    expect(entry?.answers).toBeUndefined();
+  });
+
+  it('refuses Use new to a member who can’t write the field, see the record, or see the answer (forms fix a4)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const existing = await createRecord(w.scope, {
+      objectId: w.people,
+      values: {
+        [w.attribute('people.name')]: { firstName: 'Ada' },
+        [w.attribute('people.email_addresses')]: ['ada@example.com'],
+        [w.attribute('people.job_title')]: 'Countess',
+      },
+    });
+    await submit(live.publicKey, body({ name: 'Ada', email: 'ada@example.com', title: 'Engineer' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const title = w.attribute('people.job_title');
+    const as = (level: 'read' | 'hidden') =>
+      rescope(w.scope, {
+        role: 'member',
+        rules: {
+          levels: [
+            {
+              subject: { type: 'role', role: 'member' },
+              target: { type: 'attribute', objectId: w.people, attributeId: title },
+              level,
+            },
+          ],
+          records: [],
+        },
+      });
+    const input = { submissionId: submission.id, questionId: 'title' };
+    expect(await refusalOf(useNewAnswer(as('read'), input))).not.toEqual([]);
+    expect(await refusalOf(useNewAnswer(as('hidden'), input))).toMatchObject([{ code: 'FORM_STATE' }]);
+    const noPeople = rescope(w.scope, {
+      role: 'member',
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    expect(await refusalOf(useNewAnswer(noPeople, input))).toMatchObject([{ code: 'NOT_FOUND' }]);
+    const [record] = await getRecords(w.scope, { ids: [existing.recordId] });
+    expect(record?.values[title]).toBe('Countess');
+  });
+
+  it('refuses Also create a deal on a form that doesn’t save to People (forms fix a3)', async () => {
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId(), name: 'Deal form' });
+    const moved = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: w.deals,
+      expectedRevision: created.revision,
+    });
+    expect(
+      await refusalOf(
+        saveFormDraft(w.scope, {
+          formId: created.id,
+          document: { ...moved.draft, targets: { ...moved.draft.targets, deal: { objectId: w.deals } } },
+          expectedRevision: moved.revision,
+        }),
+      ),
+    ).toMatchObject([{ code: 'CONFIG_INVALID', field: 'deal' }]);
+  });
+
   it('creates the person as the form, with the owner, and records it on the submission and the timeline', async () => {
     const w = await workspace();
     const live = await liveForm(w);
@@ -805,11 +1004,34 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(record?.values[w.attribute('people.phone_numbers')]).toEqual([{ number: '+447700900123', country: 'GB' }]);
     expect(record?.values[w.attribute('people.owner')]).toEqual({ type: 'member', id: w.ownerId });
     const activity = await getActivity(w.scope, { recordId });
-    expect(activity.entries.find((entry) => entry.kind === 'submission')).toMatchObject({
+    const entry = activity.entries.find((each) => each.kind === 'submission');
+    expect(entry).toMatchObject({
       title: 'Contact us',
       action: 'created',
       actor: { type: 'form', id: live.id },
+      formId: live.id,
     });
+    // The answers ride on the entry as words (forms fix a1), so the record page shows what was sent.
+    expect(entry?.answers).toContainEqual({ label: expect.any(String) as string, text: 'Engines' });
+    expect(entry?.answers?.some((answer) => answer.text === 'ada@example.com')).toBe(true);
+    // One submission is one entry: the record's own creation entry is folded into it, not logged twice.
+    expect(activity.entries.filter((each) => each.kind === 'created')).toEqual([]);
+    expect(entry?.answers?.some((answer) => answer.text === 'Engineer')).toBe(true);
+    // An answer filed on a field hidden from the reader is absent from the entry, as from the submission itself.
+    const hidesTitle: AccessRules = {
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'attribute', objectId: w.people, attributeId: w.attribute('people.job_title') },
+          level: 'hidden',
+        },
+      ],
+      records: [],
+    };
+    const member = rescope(w.scope, { role: 'member', rules: hidesTitle });
+    const seen = (await getActivity(member, { recordId })).entries.find((each) => each.kind === 'submission');
+    expect(seen?.answers?.some((answer) => answer.text === 'Engineer')).toBe(false);
+    expect(seen?.answers?.some((answer) => answer.text === 'Engines')).toBe(true);
     await processNow(w, submission.id);
     expect(await w.query(sql`select 1 from form_submission_records`)).toHaveLength(1);
   });
@@ -836,8 +1058,46 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     const [record] = await getRecords(w.scope, { ids: [existing.recordId] });
     expect(record?.values[w.attribute('people.job_title')]).toBe('Countess');
     expect(record?.values[w.attribute('people.description')]).toBe('Wrote the first program');
-    expect((await getSubmission(w.scope, { submissionId: submission.id })).records).toMatchObject([
-      { action: 'updated', record: { recordId: existing.recordId } },
+    const view = await getSubmission(w.scope, { submissionId: submission.id });
+    expect(view.records).toMatchObject([{ action: 'updated', record: { recordId: existing.recordId } }]);
+    // The name and job title differed and were left as they were: the panel says so (forms fix a4), and the list
+    // tags them.
+    expect(view.kept).toEqual([{ questionId: 'name' }, { questionId: 'title' }]);
+    expect(view.isReturning).toBe(true);
+    const page = await listSubmissions(w.scope, { formId: live.id });
+    expect(page.items[0]?.isReturning).toBe(true);
+    // Use new writes it through the member's own access, and it no longer reads as kept.
+    const used = await useNewAnswer(w.scope, { submissionId: submission.id, questionId: 'title' });
+    expect(used.kept).toEqual([{ questionId: 'name' }]);
+    const [after] = await getRecords(w.scope, { ids: [existing.recordId] });
+    expect(after?.values[w.attribute('people.job_title')]).toBe('Engineer');
+    expect(await refusalOf(useNewAnswer(w.scope, { submissionId: submission.id, questionId: 'title' }))).toMatchObject([
+      { code: 'FORM_STATE' },
+    ]);
+  });
+
+  it('adds a returning visitor’s new phone number to the list, keeping the old one (forms fix a4)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const existing = await createRecord(w.scope, {
+      objectId: w.people,
+      values: {
+        [w.attribute('people.name')]: { firstName: 'Ada' },
+        [w.attribute('people.email_addresses')]: ['ada@example.com'],
+        [w.attribute('people.phone_numbers')]: [{ number: '+447700900123', country: 'GB' }],
+      },
+    });
+    await submit(
+      live.publicKey,
+      body({ name: 'Ada', email: 'ada@example.com', phone: { number: '+447700900999', country: 'GB' } }),
+    );
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const [record] = await getRecords(w.scope, { ids: [existing.recordId] });
+    expect(record?.values[w.attribute('people.phone_numbers')]).toEqual([
+      { number: '+447700900123', country: 'GB' },
+      { number: '+447700900999', country: 'GB' },
     ]);
   });
 
@@ -1025,7 +1285,13 @@ describe('the submissions screen’s reads (AC-572, AC-573)', () => {
     const first = await listSubmissions(w.scope, { formId: live.id, limit: 2 });
     expect(first.items).toHaveLength(2);
     const rest = await listSubmissions(w.scope, { formId: live.id, limit: 2, cursor: first.nextCursor ?? '' });
-    expect([...first.items, ...rest.items].map((item) => item.id)).toEqual(ids.map((row) => row.id).reverse());
+    // All leaves spam out (forms fix a8): the three real ones, newest first.
+    expect([...first.items, ...rest.items].map((item) => item.id)).toEqual(
+      ids
+        .filter((row) => row.state !== 'spam')
+        .map((row) => row.id)
+        .reverse(),
+    );
     expect(
       (await listSubmissions(w.scope, { formId: live.id, state: 'spam' })).items.map((item) => item.email),
     ).toEqual(['bot@example.com']);

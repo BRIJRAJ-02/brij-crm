@@ -74,3 +74,8 @@ Tab follows the questions. Enter in a single line field submits (Classic), conti
 A live form wears its workspace's kit (spec 0060, AC-4). `formBrand(form)` turns the read's `brand.logo` version into the logo's path on our own origin (`/api/public/forms/<key>/logo?v=`), drawn over the form at a control's height; the page's brand stylesheet brings the accent, which `FormGround` points the library's own names at inside the card, exactly as BookingFrame does, with every name falling back to its token. An app preview passes `brand` (`PageBrand`: a logo and the accent's `variables`) instead.
 
 A form that wears its kit wears its workspace's template too (spec 0068): `formBrand` carries `brand.template` and `FormGround` sets `data-template` (and Night's or Studio's `data-theme`, which wins over the form's own Colour) with the ground and the headline's face. A plain form names no kit and so no template.
+
+## A file that didn't upload, and a closed form's words (forms fixes b8, b2, 5 November 2026)
+
+- A file question names what it takes under its drop area ("PDF, images or Office files, up to 4 MB"). An upload the page's client answers `unavailable` (the form has no file store, 503) says the form can't take files now and that the answers can still go, never "try again". A failed file marks its question (`HostedFileHandlers.setFailed`, optional): the first press of Send then says the file didn't upload and that pressing again sends the rest without it, so a file is never left behind in silence. Test: `FileFailure.browser.test.tsx`.
+- A closed form (paused, or past its own closing rule) shows the owner's `closedMessage` when the form has one, else the language's line (`HostedFormState.closedLine`).

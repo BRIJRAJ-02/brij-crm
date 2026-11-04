@@ -24,7 +24,7 @@ import { isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
 import { companyFilingTarget } from '../engine/filing.ts';
-import { insertRecord, updateRecord } from '../engine/records.ts';
+import { insertRecord, readRecords, updateRecord } from '../engine/records.ts';
 import { uniqueKeyOf } from '../engine/unique.ts';
 import { currentItems, isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -428,16 +428,18 @@ export function matchKey(
 /**
  * The value an answer writes on a matched record (AC-558): `fill` only an
  * empty value, `always` overwrite; for a list (emails, domains) the answer's
- * items join the ones held, never replacing them. Undefined writes nothing.
+ * new items always join the ones held, never replacing them. Undefined writes nothing.
  */
 export function mergedValue(planned: Planned, current: unknown): unknown {
   const { attribute, value } = planned;
   const isEmpty = current === null || current === undefined || (Array.isArray(current) && current.length === 0);
+  // A list (emails, phones, domains) gains a new item whatever the question's rule (forms fix a4): a returning
+  // visitor's new phone number was dropped because the list wasn't empty, and the old ones are never replaced.
   if (attribute.isMulti && attribute.type !== 'select' && Array.isArray(value)) {
     const held: readonly unknown[] = Array.isArray(current) ? (current as unknown[]) : [];
     const seen = new Set(held.map((item) => JSON.stringify(item)));
     const added = (value as unknown[]).filter((item) => !seen.has(JSON.stringify(item)));
-    if (added.length === 0 || (!planned.always && !isEmpty)) return undefined;
+    if (added.length === 0) return undefined;
     return [...held, ...added];
   }
   if (!isEmpty && !planned.always) return undefined;
@@ -622,6 +624,8 @@ export type Filed =
       readonly action: 'created' | 'updated' | 'matched';
       readonly refused: readonly { questionId: string; message: string }[];
       readonly assignment: Assignment;
+      /** The answers that differed from the record's held value and were left as it was (forms fix a4). */
+      readonly kept?: readonly string[];
     }
   | {
       readonly kind: 'failed';
@@ -725,6 +729,7 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   let action: 'created' | 'updated' | 'matched';
   let skipped: readonly EngineRefusal[] = [];
   let gaveOwner: boolean;
+  let keptIds: readonly string[] = [];
   /** The attributes the write was asked for: a file's bytes are copied only for one the record really took. */
   let requested: ReadonlySet<string>;
   if (matchedId === undefined) {
@@ -757,6 +762,7 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
     const values = await changesFor(tx, recordId, planned, owner, ownerValue);
     requested = new Set(values.changes.keys());
     gaveOwner = values.gaveOwner;
+    keptIds = values.kept;
     if (values.changes.size === 0) {
       action = 'matched';
     } else {
@@ -822,7 +828,14 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
       role: 'main',
     })
     .onConflictDoNothing();
-  return { kind: 'filed', recordId, action, refused: allRefused, assignment: kept };
+  return {
+    kind: 'filed',
+    recordId,
+    action,
+    refused: allRefused,
+    assignment: kept,
+    ...(keptIds.length === 0 ? {} : { kept: keptIds }),
+  };
 }
 
 /** What a submission that wasn't filed records of its owner: a rotation's pick wasn't made, so it says so. */
@@ -927,13 +940,29 @@ export async function changesFor(
   owner: AttributeDef | undefined,
   ownerValue: unknown,
   held?: ReturnType<typeof heldValues>,
-): Promise<{ readonly changes: ReadonlyMap<string, unknown>; readonly gaveOwner: boolean }> {
+): Promise<{
+  readonly changes: ReadonlyMap<string, unknown>;
+  readonly gaveOwner: boolean;
+  /** The questions whose answer differed from a value the record holds, left as it was by their `fill` rule. */
+  readonly kept: readonly string[];
+}> {
   const ids = [...planned.map((each) => each.attribute.id), ...(owner === undefined ? [] : [owner.id])];
   const currentOf = held ?? heldValues(indexHeld(await currentItems(tx, [recordId], ids)), recordId);
   const changes = new Map<string, unknown>();
+  const kept: string[] = [];
   for (const each of planned) {
-    const next = mergedValue(each, currentOf(each.attribute));
+    const current = currentOf(each.attribute);
+    const next = mergedValue(each, current);
     if (next !== undefined) changes.set(each.attribute.id, next);
+    else if (
+      !each.always &&
+      !(each.attribute.isMulti && each.attribute.type !== 'select') &&
+      current !== null &&
+      current !== undefined &&
+      JSON.stringify(current) !== JSON.stringify(each.value)
+    ) {
+      kept.push(each.questionId);
+    }
   }
   let gaveOwner = false;
   // A matched record keeps its owner; one with none gets the form's choice (AC-567, processing rules).
@@ -944,7 +973,7 @@ export async function changesFor(
       gaveOwner = true;
     }
   }
-  return { changes, gaveOwner };
+  return { changes, gaveOwner, kept };
 }
 
 /** Current items grouped by record and attribute, each group in position order: built once for many records. */
@@ -1041,7 +1070,20 @@ export async function processSubmission(
         ),
       ),
   });
-  await settle(tx, submission.id, filed);
+  // Also create a deal (forms fix a3): beside the person, linked to them and their company, never failing the person.
+  const deal =
+    filed.kind === 'filed' && isPeople && document.targets.deal !== undefined
+      ? await fileDeal(context, {
+          form,
+          submissionId: submission.id,
+          personId: filed.recordId,
+          peopleObjectId: target.objectId,
+          peopleAttributes: attributes,
+          dealObjectId: document.targets.deal.objectId,
+          ...(filed.assignment.memberId === undefined ? {} : { ownerMemberId: filed.assignment.memberId }),
+        })
+      : undefined;
+  await settle(tx, submission.id, filed, deal?.ok === false ? { dealFailure: deal.failure } : {});
   // Each consent ticked becomes a consent record on the person, in this same transaction (AC-1053).
   if (filed.kind === 'filed' && isPeople && consents.kind === 'given') {
     await recordConsents(tx, {
@@ -1053,6 +1095,154 @@ export async function processSubmission(
   }
   await tellTeam(context, rules, submission.id);
   await tellVisitor(context, submission.id);
+}
+
+/** What a deal that couldn't be made says on its submission; the person is still filed. */
+export const DEAL_NOT_MADE = 'The person was saved, but their deal couldn’t be made.';
+
+/** What making a submission's deal ended as: its record, or why not. */
+export type DealFiled =
+  { readonly ok: true; readonly recordId: string } | { readonly ok: false; readonly failure: string };
+
+/** The record a person links on a relationship attribute now, if any (their company, read from either end). */
+async function linkedOn(tx: WorkspaceTx, recordId: string, attribute: AttributeDef | undefined) {
+  if (attribute?.relationshipId === undefined || attribute.relationshipId === null) return undefined;
+  const found = await tx.execute<{ id: string }>(sql`
+    select case when from_record_id = ${recordId}::uuid then to_record_id else from_record_id end::text as id
+    from record_links
+    where relationship_id = ${attribute.relationshipId}::uuid and active_until is null
+      and (from_record_id = ${recordId}::uuid or to_record_id = ${recordId}::uuid)
+    limit 1
+  `);
+  return found.rows[0]?.id;
+}
+
+/** A person's name as the deal takes it: their display name, else their first email, else the form's name. */
+async function dealName(tx: WorkspaceTx, scope: EngineScope, personId: string, formName: string): Promise<string> {
+  const [view] = await readRecords(tx, scope.access, [personId], { attributeIds: [] });
+  const name = view?.display.name.trim() ?? '';
+  return (name === '' ? formName : name).slice(0, 200);
+}
+
+/**
+ * Makes one deal for a submission (forms fix a3, 5 November 2026): on the standard Deals, named after the person,
+ * linked to them and to the company filing gave them, owned by the person's owner from this filing (else the form's
+ * maker, since Deals requires an owner). The form writes it with exactly those fields (`formAccess`'s `also`
+ * reaching the person's and the company's own side of each link), in its own savepoint: a refusal makes no deal and
+ * leaves the person filed, the submission saying why (`DEAL_NOT_MADE`).
+ */
+async function fileDeal(
+  context: WriteContext,
+  input: {
+    readonly form: FormRow;
+    readonly submissionId: string;
+    readonly personId: string;
+    readonly peopleObjectId: string;
+    readonly peopleAttributes: ReadonlyMap<string, AttributeDef>;
+    readonly dealObjectId: string;
+    readonly ownerMemberId?: string;
+  },
+): Promise<DealFiled> {
+  const { tx } = context;
+  const dealAttributes = await loadAttributes(tx, input.dealObjectId);
+  const live = (slug: string) =>
+    [...dealAttributes.values()].find((attribute) => attribute.apiSlug === slug && !isArchivedNow(attribute));
+  const name = live('name');
+  const people = live('associated_people');
+  const companyLink = live('associated_company');
+  const owner = live('owner');
+  if (name === undefined || people?.type !== 'record_reference' || people.relationshipId === null) {
+    return { ok: false, failure: DEAL_NOT_MADE };
+  }
+  // One deal per submission: filing it again (Add to CRM, a retry) never makes a second while the first is live.
+  const made = await tx.execute(sql`
+    select 1 from form_submission_records l
+    join records r on r.workspace_id = l.workspace_id and r.id = l.record_id and r.deleted_at is null
+    where l.submission_id = ${input.submissionId}::uuid and l.role = 'deal'
+    limit 1
+  `);
+  if (made.rows.length > 0) return { ok: true, recordId: '' };
+  const personCompany = [...input.peopleAttributes.values()].find((attribute) => attribute.apiSlug === 'company');
+  const companyId = await linkedOn(tx, input.personId, personCompany);
+  const companyObjectId =
+    companyId === undefined
+      ? undefined
+      : (
+          await tx.execute<{ object_id: string }>(
+            sql`select object_id::text from records where id = ${companyId}::uuid and deleted_at is null`,
+          )
+        ).rows[0]?.object_id;
+  const ownerId = input.ownerMemberId ?? input.form.createdById ?? undefined;
+  const values = new Map<string, unknown>([
+    [name.id, await dealName(tx, context.scope, input.personId, input.form.name)],
+    [people.id, [{ objectId: input.peopleObjectId, recordId: input.personId }]],
+  ]);
+  if (
+    companyLink?.type === 'record_reference' &&
+    companyLink.relationshipId !== null &&
+    companyId !== undefined &&
+    companyObjectId !== undefined
+  ) {
+    const reference = { objectId: companyObjectId, recordId: companyId };
+    values.set(companyLink.id, companyLink.isMulti ? [reference] : reference);
+  }
+  if (owner?.type === 'actor_reference' && ownerId !== undefined) {
+    const member = { type: 'member', id: ownerId };
+    values.set(owner.id, owner.isMulti ? [member] : member);
+  }
+  // Each link's other side: People's Associated deals, and the company's.
+  // Only a real two sided link's other side is made writable; with none, nothing on that object is.
+  const sides = async (objectId: string, pair: string | null | undefined) => {
+    const all = await loadAttributes(tx, objectId);
+    const side =
+      pair === null || pair === undefined
+        ? undefined
+        : [...all.values()].find(
+            (attribute) => attribute.relationshipId === pair && attribute.objectId !== input.dealObjectId,
+          );
+    return { objectId, attributeIds: [...all.keys()], writable: new Set(side === undefined ? [] : [side.id]) };
+  };
+  const also = [
+    await sides(input.peopleObjectId, people.relationshipId),
+    ...(companyObjectId === undefined || companyLink === undefined || !values.has(companyLink.id)
+      ? []
+      : [await sides(companyObjectId, companyLink.relationshipId)]),
+  ];
+  const writer = actingAs(
+    context,
+    enterAsForm(
+      context.scope,
+      input.form.id,
+      formAccess(input.form.id, {
+        objectId: input.dealObjectId,
+        attributeIds: [...dealAttributes.keys()],
+        // The values it writes, and the ones the deal takes from their defaults (Stage starts at its first stage).
+        writable: new Set([
+          ...values.keys(),
+          ...[...dealAttributes.values()]
+            .filter((attribute) => attribute.defaultValue !== null && attribute.defaultValue !== undefined)
+            .map((attribute) => attribute.id),
+        ]),
+        also,
+      }),
+    ),
+  );
+  const written = await writeSkipping(writer, values, (inner, given) =>
+    insertRecord(inner, { objectId: input.dealObjectId, values: given }),
+  );
+  if (!written.ok) return { ok: false, failure: DEAL_NOT_MADE };
+  await tx
+    .insert(formSubmissionRecords)
+    .values({
+      workspaceId: context.scope.workspaceId,
+      submissionId: input.submissionId,
+      objectId: input.dealObjectId,
+      recordId: written.value.recordId,
+      action: 'created',
+      role: 'deal',
+    })
+    .onConflictDoNothing();
+  return { ok: true, recordId: written.value.recordId };
 }
 
 /** A stored assignment as filing's `previous`, when there is one. */
@@ -1104,7 +1294,13 @@ export async function settle(
       processedAt: sql`now()`,
       mainRecordId: filed.recordId,
       assignment: filed.assignment,
-      outcome: { refused: filed.refused, ...extraOutcome },
+      // What filing did to the record, so the list can tag a returning person, and the answers it left as they were.
+      outcome: {
+        refused: filed.refused,
+        action: filed.action,
+        ...(filed.kept === undefined ? {} : { kept: filed.kept.map((questionId) => ({ questionId })) }),
+        ...extraOutcome,
+      },
       failure: null,
       updatedAt: sql`now()`,
     })
