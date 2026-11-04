@@ -2254,11 +2254,11 @@ function LiveDialog({
         </Button>
       }
     >
-      <ShareBlock name={live.title} link={publicBookingUrl(live)}>
-        <Link href={pageEditorHref(slug, live.id, 'share')} onPress={onPutOnSite}>
-          {publishStrings.putOnSite}
-        </Link>
-      </ShareBlock>
+      <ShareBlock
+        name={live.title}
+        link={publicBookingUrl(live)}
+        onward={{ label: publishStrings.putOnSite, href: pageEditorHref(slug, live.id, 'share'), onPress: onPutOnSite }}
+      />
     </Modal>
   );
 }

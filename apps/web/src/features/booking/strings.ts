@@ -124,7 +124,6 @@ export const strings = {
   durationsHelp: 'Guests pick one. Up to four.',
   addToCrmHelp: 'Each guest is found or added in the CRM.',
   opensInHelp: 'The view guests see first. They can switch.',
-  anyTime: 'Any time',
   /** The Questions tab's locked rows (critic A7): what every guest is asked first. */
   fixedName: 'Your name',
   fixedEmail: 'Your email',
