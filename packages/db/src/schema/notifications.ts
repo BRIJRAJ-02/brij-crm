@@ -80,7 +80,7 @@ export const notifications = pgTable(
     dueTaskId: uuid('due_task_id'),
     /** A webhook endpoint turned off after 3 days of failures (spec 0064, AC-6423): told to each owner and admin. */
     webhookEndpointId: uuid('webhook_endpoint_id'),
-    /** A guest booked one of the member's pages (migration 0176, B-12): the booking, told to its host. */
+    /** A guest booked one of the member's pages (migration 0179, B-12): the booking, told to its host. */
     bookingId: uuid('booking_id'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     readAt: timestamptz('read_at'),
@@ -184,7 +184,7 @@ export const notifications = pgTable(
     index('notifications_by_webhook_endpoint')
       .on(t.workspaceId, t.webhookEndpointId)
       .where(sql`${t.webhookEndpointId} is not null`),
-    // A booking's notice goes with it (a purge deletes the booking), one per recipient per booking (migration 0176).
+    // A booking's notice goes with it (a purge deletes the booking), one per recipient per booking (migration 0179).
     foreignKey({
       name: 'notifications_booking',
       columns: [t.workspaceId, t.bookingId],

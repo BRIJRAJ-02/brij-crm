@@ -77,7 +77,7 @@ A sidebar destination after Records, as Timefix's rail has it.
 
 ## A guest's new booking (B-12)
 
-- While any Bookings tab is open, a guest's booking on one of the member's pages raises a toast, "Ada Lovelace booked Intro call for Thu 5 Nov, 10:00.", with Open (the List with its card open, `?open=`), for 10 seconds (`useBookingArrivals.ts`, mounted once by the layout). The data layer hears it through the host's `booking` notice in the Inbox (written in the booking's own write, migration 0176) and its `notifications` change event (`data.bookings.arrivals`), reads Bookings' held lists again with it, and never toasts what was already there when the tab opened. A `bookings` change event from the server, when it lands, only needs to call the same `changed`.
+- While any Bookings tab is open, a guest's booking on one of the member's pages raises a toast, "Ada Lovelace booked Intro call for Thu 5 Nov, 10:00.", with Open (the List with its card open, `?open=`), for 10 seconds (`useBookingArrivals.ts`, mounted once by the layout). The data layer hears it through the host's `booking` notice in the Inbox (written in the booking's own write, migration 0179) and its `notifications` change event (`data.bookings.arrivals`), reads Bookings' held lists again with it, and never toasts what was already there when the tab opened. A `bookings` change event from the server, when it lands, only needs to call the same `changed`.
 - `?open=<booking id>` on the List is the address the host's emails, the Inbox and the toast use for one booking.
 
 ## Notes

@@ -1,5 +1,5 @@
 // New bookings as they arrive (bookings fix lane O, B-12): what the Bookings screens' "New booking" toast hears. A
-// guest's booking writes a `booking` notification for each host in the booking's own write (migration 0176), and that
+// guest's booking writes a `booking` notification for each host in the booking's own write (migration 0179), and that
 // write's `notifications` change event names the host, so this needs no event of its own: on each such event naming
 // the member (and on a `bookings` event, once the server sends one), it reads the member's unread booking notices
 // and hands each one it hasn't seen to the listeners. The first read after a listener starts only learns what is

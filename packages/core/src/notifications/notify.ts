@@ -394,7 +394,7 @@ export async function notifyWebhookOff(
 }
 
 /**
- * A guest booked (bookings fix lane O, B-12, migration 0176): one `booking` notification in each host's inbox (the
+ * A guest booked (bookings fix lane O, B-12, migration 0179): one `booking` notification in each host's inbox (the
  * assigned host, and every host of a collective booking), naming the booking and the guest's person record when the
  * booking filed one, written in the booking's own write so the two commit together. Active members only. The actor is
  * the booking itself (a guest is not a member). Each host already has the "New booking" email queued beside it, so the

@@ -107,7 +107,7 @@ interface NotificationRow extends Record<string, unknown> {
   /** A webhook endpoint turned off (spec 0064, AC-6423): the endpoint, and its address while it is still there. */
   readonly webhook_endpoint_id: string | null;
   readonly webhook_url: string | null;
-  /** A guest's booking (migration 0176, B-12): the booking, its page's title, the guest and the start, while it lives. */
+  /** A guest's booking (migration 0179, B-12): the booking, its page's title, the guest and the start, while it lives. */
   readonly booking_id: string | null;
   readonly booking_title: string | null;
   readonly booking_guest: string | null;
