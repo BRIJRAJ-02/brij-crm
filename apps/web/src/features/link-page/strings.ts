@@ -12,10 +12,13 @@ export const strings = {
   /** The page's place in Settings: a page of Profile's. */
   profile: 'Profile',
   blocks: 'Blocks',
-  blocksText: 'Drag to reorder.',
   // The figures (AC-5127): over the last 30 days, with the 30 before as the comparison. A number keeps its word on
   // its line (a no break space), so a phone never strands the "2" away from "views".
   noPresses: 'No clicks yet',
+  /** Under the blocks when their clicks didn't load. */
+  countsFailed: 'Clicks didn’t load.',
+  /** A count as a row's quiet figure ("1,204"). */
+  figure,
   presses: (count: number) => `${figure(count)}\u00a0${count === 1 ? 'click' : 'clicks'}`,
   noViewsYet: (days: number) => `No views yet in the last ${String(days)}\u00a0days.`,
   noViews: (days: number, before: number) =>
@@ -27,13 +30,14 @@ export const strings = {
   viewsUp: (before: number, days: number) => `, up from ${figure(before)} in the ${String(days)}\u00a0days before.`,
   viewsDown: (before: number, days: number) => `, down from ${figure(before)} in the ${String(days)}\u00a0days before.`,
   viewsSame: (days: number) => `, the same as the ${String(days)}\u00a0days before.`,
-  countsFailed: 'Views and clicks didn’t load.',
   add: 'Add',
   // The one Add modal (the owner's Add item design): the kind picker, then that kind's fields.
   addTitle: 'Add to your link page',
   addWhat: 'What are you adding',
   addItem: 'Add item',
   addHint: 'It lands at the end. Drag it anywhere after.',
+  /** The menu beside Add item: a new section, and bringing an old page across. */
+  moreWaysToAdd: 'More ways to add',
   newSection: 'New section',
   /** Leads a link's row when it names one of our own pages that is not in this workspace (spec 0056, AC-5612). */
   notInWorkspace: 'Not in this workspace, hidden from visitors',
@@ -91,30 +95,24 @@ export const strings = {
   roleHint: 'Optional. It sits under their name.',
   /** A testimonial's row in the editor's list, where it has nowhere to go. */
   testimonial: 'Testimonial',
-  identity: 'Who it’s from',
+  /** The editor's last card: who the page is from, and how it shows when shared or searched. */
+  details: 'Details',
   identityFailed: 'That didn’t save. Try again.',
   showJobTitle: 'Show my job title',
-  noJobTitle: 'Add a job title in Profile first.',
-  /** Under the switch: the title itself, and that it shows on booking pages too. */
-  jobTitleShown: (title: string) => `${title}, here and on your booking pages`,
+  /** Where the job title switch would be while there is no title to show: a link to Profile. */
+  addJobTitle: 'Add a job title in Profile',
   site: 'Company site',
-  siteHint: 'Your logo and name link here.',
   sitePlaceholder: 'https://acme.com',
   footLine: 'Closing line',
-  footLineHint: 'Sits above Powered by Timefix.',
   footLinePlaceholder: 'Replies within a day.',
-  sharing: 'Sharing and search',
-  sharingText: 'What people see when your page is shared, and whether it can be found.',
   indexable: 'Show in search engines',
-  shareImage: 'Preview image',
-  shareImageDrop: 'Upload a picture',
+  shareImage: 'Share image',
   shareImageAlt: 'Your page’s share picture',
-  shareImageRemove: 'Use the drawn one',
+  shareImageRemove: 'Remove',
   shareImageRemoving: 'Remove this picture?',
   shareImageRemoveText: 'Your link shows the card we draw instead.',
   appearance: 'Design',
-  appearanceText: 'Pick a template, then add your colour and photos.',
-  /** The four templates (spec 0068, AC-6801), each with the line that says who it suits. */
+  /** The four templates (spec 0068, AC-6801), each with the line that says who it suits (Settings › Brand). */
   template: 'Template',
   templateClassic: 'Classic',
   templateClassicText: 'Clean and calm. For consultants and agencies.',
@@ -125,11 +123,9 @@ export const strings = {
   templateSplit: 'Split',
   templateSplitText: 'Two columns on wide screens. For clinics and studios.',
   /** The template a page follows until its owner picks one: the workspace's, named. */
-  templateFollows: (name: string) => `Your workspace uses ${name}. Pick another for your page alone.`,
+  templateFollows: (name: string) => `${name}, from your workspace`,
   /** The one time note after the move to templates (AC-6805). */
   templateMoved: (name: string) => `Your page now uses ${name}.`,
-  templateMovedText: 'Templates replace the old looks. Your colour and photos are kept.',
-  templateMovedChoose: 'Choose another',
   templateMovedKeep: 'Keep it',
   colour: 'Colour',
   /** The default a link page's colour follows: the workspace's brand, else the product's own. */
@@ -137,7 +133,7 @@ export const strings = {
   /** A separate colour for dark pages, under More (AC-6). */
   colourMore: 'Dark colour',
   colourDarkDefault: 'Automatic',
-  avatar: 'Face',
+  avatar: 'Photo shape',
   avatarCircle: 'Circle',
   avatarRounded: 'Rounded',
   /** The photo pickers (AC-10, AC-13): the drop area's words, and what the preview shows. */
@@ -201,7 +197,8 @@ export const strings = {
   addHeadingText: 'A heading that groups what comes under it',
   viewPage: 'View page',
   /** The header's pill: the address itself, so its name says what pressing it does. */
-  openAddress: (address: string) => `${address}, open your page`,
+  /** The bar's address pill: its name says what pressing it does (WCAG 2.5.3, the visible words first). */
+  copyAddress: (address: string) => `${address}, copy link`,
   /** The header's Share: it opens the QR and the address to hand on. */
   share: 'Share',
   insights: 'Insights',
@@ -224,13 +221,9 @@ export const strings = {
   nowLive: 'Your page is live',
   liveFailed: 'That didn’t save. Try again.',
   // What the page opens on (27 Oct 2026): the page as something to hand out, with Edit page the way into the
-  // builder. The promise line says what a link page is for, since Home no longer explains it.
-  promise: 'Everything people need from you, behind one short link.',
-  shareOnline: 'Share online',
+  // builder.
   yourPage: 'Your page',
-  yourAddress: 'Your address',
   shareInPerson: 'Share in person',
-  downloadCode: 'Download',
   editPageAction: 'Edit page',
   doneEditing: 'Done',
   whatVisitorsSee: 'What visitors see',

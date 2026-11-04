@@ -1,4 +1,4 @@
-// Who a link page is from (3 Nov 2026) in Chromium: the job title's switch is off until there is a title to show,
+// Who a link page is from (3 Nov 2026) in Chromium: without a title to show, a link to Profile stands in the switch's place,
 // each field saves when it is left and only when it changed, what the server kept (the checked address) lands in
 // the field, and a refusal stays on its own field with what was typed still there. Checked by axe in both themes.
 import '@crm/ui/styles.css';
@@ -7,7 +7,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
-import { IdentityCard, type PageIdentity } from './IdentityCard.tsx';
+import { IdentityFields, type PageIdentity } from './IdentityFields.tsx';
 
 let shown: InApp | undefined;
 
@@ -21,20 +21,25 @@ afterEach(() => {
   resetTheme();
 });
 
+/** What the fields said about the switch, for the card's foot: a refusal, or undefined once it saves. */
+let refused: (string | undefined)[] = [];
+
 const OFF: PageIdentity = { showJobTitle: false, site: '', footLine: '' };
 
 /** The card, with a data layer whose profile update is `update`, and what it reported saved. */
 async function render(update: (slug: string, change: object) => Promise<MyProfile>, jobTitle?: string) {
   const saved: PageIdentity[] = [];
+  refused = [];
   shown = await renderInApp(
     () => (
       <main>
-        <IdentityCard
+        <IdentityFields
           data={{ profile: { update } } as unknown as DataLayer}
           slug="acme"
           jobTitle={jobTitle}
           identity={OFF}
           onSaved={(identity) => saved.push(identity)}
+          onSwitchRefused={(message) => refused.push(message)}
         />
       </main>
     ),
@@ -46,21 +51,30 @@ async function render(update: (slug: string, change: object) => Promise<MyProfil
 const profile = (fields: Partial<MyProfile>) => ({ bio: '', ...fields }) as MyProfile;
 
 describe('who the page is from', () => {
-  it('keeps the job title switch off until there is a title, and says where to add one', async () => {
+  it('offers a link to Profile, not a switch that cannot move, until there is a title', async () => {
     await render(vi.fn());
-    const toggle = page.getByRole('switch', { name: 'Show my job title' });
-    await expect.element(toggle).toBeDisabled();
-    await expect.element(page.getByText('Add a job title in Profile first.')).toBeVisible();
+    expect(page.getByRole('switch', { name: 'Show my job title' }).query()).toBeNull();
+    await expect
+      .element(page.getByRole('link', { name: 'Add a job title in Profile' }))
+      .toHaveAttribute('href', '/w/acme/settings/account/profile');
   });
 
-  it('saves the switch at once, with the title it will show beside it', async () => {
+  it('saves the switch at once, with the title it will show under it', async () => {
     const update = vi.fn((_slug: string, _change: object) => Promise.resolve(profile({ showJobTitle: true })));
     const saved = await render(update, 'Head of partnerships');
-    await expect.element(page.getByText('Head of partnerships, here and on your booking pages')).toBeVisible();
+    await expect.element(page.getByText('Head of partnerships')).toBeVisible();
     // The switch's input is visually hidden under its track, as React Aria draws it.
     await userEvent.click(page.getByRole('switch', { name: 'Show my job title' }), { force: true });
     expect(update).toHaveBeenCalledWith('acme', { showJobTitle: true });
     await vi.waitFor(() => expect(saved).toEqual([{ showJobTitle: true, site: '', footLine: '' }]));
+    expect(refused).toEqual([undefined]);
+  });
+
+  it('hands a refused switch to the card it sits in', async () => {
+    await render(() => Promise.reject(dataError('CONFIG_INVALID', 'That didn’t save.')), 'Head of partnerships');
+    await userEvent.click(page.getByRole('switch', { name: 'Show my job title' }), { force: true });
+    await vi.waitFor(() => expect(refused).toEqual([undefined, 'That didn’t save.']));
+    await expect.element(page.getByRole('switch', { name: 'Show my job title' })).not.toBeChecked();
   });
 
   it('saves a field when it is left, shows the address as kept, and sends nothing for no change', async () => {

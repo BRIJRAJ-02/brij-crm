@@ -14,4 +14,6 @@ export const shareStrings = {
   /** While the page is private (spec 0058, AC-23), under the code: the same words as everywhere. */
   privateLine: homeStrings.privateLine,
   goLive: 'Turn on Live',
+  /** The row of other ways to share under the address: Links for each place, Style the code, Add to Wallet. */
+  more: 'More ways to share',
 } as const;

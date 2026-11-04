@@ -119,7 +119,6 @@ describe('the overview’s first empty moment (AC-8) and a private page’s line
     const data = { linkPage: { load: () => new Promise(() => undefined) } } as unknown as DataLayer;
     await render(data, () => (
       <LinkPageOverview
-        data={data}
         slug="acme"
         handle="ada"
         address="https://timefix.com/ada"
@@ -130,7 +129,6 @@ describe('the overview’s first empty moment (AC-8) and a private page’s line
         onGoLive={() => undefined}
         linkPage={linkPageStore}
         items={[]}
-        quickPicks={[]}
       />
     ));
     await expect.element(page.getByText('Nothing on your page yet')).toBeVisible();
@@ -150,7 +148,6 @@ describe('a Private page’s overview (AC-23)', () => {
     const data = { linkPage: { load: () => new Promise(() => undefined) } } as unknown as DataLayer;
     const overview = (isPublic: boolean) => (
       <LinkPageOverview
-        data={data}
         slug="acme"
         handle="ada"
         address="https://timefix.com/ada"
@@ -161,7 +158,6 @@ describe('a Private page’s overview (AC-23)', () => {
         onGoLive={onGoLive}
         linkPage={linkPageStore}
         items={[]}
-        quickPicks={[]}
       />
     );
     await render(data, () => overview(false));
@@ -175,8 +171,10 @@ describe('a Private page’s overview (AC-23)', () => {
     expect(onGoLive).toHaveBeenCalledTimes(1);
     shown?.unmount();
     await render(data, () => overview(true));
-    await expect.element(page.getByText('Share online')).toBeVisible();
-    await expect.element(page.getByText('Share in person')).toBeVisible();
+    // Live: the code and its one Download; the address, Share links and Open live once, in the bar.
+    await expect.element(page.getByRole('button', { name: 'Download QR code' })).toBeVisible();
+    expect(page.getByText('Share online').query()).toBeNull();
+    expect(page.getByText('Everything people need from you, behind one short link.').query()).toBeNull();
     expect(page.getByRole('button', { name: 'Turn on Live' }).query()).toBeNull();
   });
 });
@@ -188,10 +186,12 @@ describe('the bar on a phone (AC-1)', () => {
       await render({}, () => (
         <TopBar title="Link page" icon="id-card">
           <HeaderActions
+            data={{} as DataLayer}
             live={{ isLive: true, setLive: () => undefined, goLive: () => undefined, switchRef: { current: null } }}
             handle="ada-lovelace-2"
             linkPage={linkPageStore}
             slug="acme"
+            quickPicks={[]}
             isEditing
             onEditing={() => undefined}
           />
@@ -200,7 +200,8 @@ describe('the bar on a phone (AC-1)', () => {
       const share = page.getByRole('button', { name: 'Share' });
       const done = page.getByRole('button', { name: 'Done' });
       await expect.element(share).toBeVisible();
-      await expect.element(page.getByRole('link', { name: /open your page/ })).toBeVisible();
+      // The address is a pill that copies the link in one press.
+      await expect.element(page.getByRole('button', { name: /copy link/ })).toBeVisible();
       // Nothing scrolls sideways, and the last control ends inside the screen.
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
       expect(done.element().getBoundingClientRect().right).toBeLessThanOrEqual(width);
@@ -317,7 +318,7 @@ describe('Design’s four templates (spec 0068, AC-6802, AC-6804, AC-6805)', () 
       onRemovePhoto: () => undefined,
     }) as const;
 
-  it('shows the four as large pictures with who each suits, ticks the one worn, and picks by keyboard', async () => {
+  it('shows the four as small pictures with a name each, ticks the one worn, and picks by keyboard', async () => {
     const onChange = vi.fn();
     await render({}, () => <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={onChange} extras={extras('studio')} />);
     const templates = page.getByRole('radiogroup', { name: 'Template' });
@@ -326,17 +327,19 @@ describe('Design’s four templates (spec 0068, AC-6802, AC-6804, AC-6805)', () 
     }
     const tiles = [...templates.element().querySelectorAll('[data-tile]')];
     expect(tiles).toHaveLength(4);
-    // Each tile draws the real page in its template, large.
+    // Each tile draws the real page in its template, small: the phone beside the card is the large one.
     expect(tiles.map((tile) => tile.querySelector('[data-thumbnail]')?.getAttribute('data-template'))).toEqual([
       'classic',
       'studio',
       'night',
       'split',
     ]);
-    expect(tiles.every((tile) => tile.querySelector('[data-size="large"]') !== null)).toBe(true);
+    expect(tiles.every((tile) => tile.querySelector('[data-size="large"]') === null)).toBe(true);
+    // No sentence under the templates.
+    expect(page.getByText('Clean and calm.', { exact: false }).query()).toBeNull();
     // A page with no template of its own wears the workspace's, and says so.
     await expect.element(templates.getByRole('radio', { name: 'Studio' })).toBeChecked();
-    await expect.element(page.getByText('Your workspace uses Studio.', { exact: false })).toBeVisible();
+    await expect.element(page.getByText('Studio, from your workspace')).toBeVisible();
     (templates.getByRole('radio', { name: 'Studio' }).element() as HTMLElement).focus();
     await userEvent.keyboard('{ArrowRight}');
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ template: 'night', ground: 'ink' }));
@@ -344,7 +347,7 @@ describe('Design’s four templates (spec 0068, AC-6802, AC-6804, AC-6805)', () 
     for (const gone of ['Background', 'Font', 'Buttons', 'Corners', 'Header', 'Mode', 'Looks']) {
       await expect.element(page.getByRole('radiogroup', { name: gone })).not.toBeInTheDocument();
     }
-    await expect.element(page.getByRole('radiogroup', { name: 'Face' })).toBeInTheDocument();
+    await expect.element(page.getByRole('radiogroup', { name: 'Photo shape' })).toBeInTheDocument();
     await expect.element(page.getByRole('status')).toHaveTextContent('Adjusted so text stays readable.');
   });
 
@@ -404,7 +407,10 @@ describe('Crop again (spec 0068, AC-6809)', () => {
     await render({}, () => (
       <AppearanceCard theme={{ ...DEFAULT_PAGE_THEME, header: 'cover' }} onChange={() => undefined} extras={extras} />
     ));
-    // The cover picker sits on the Design card itself since the templates (spec 0068, AC-6802).
+    // The cover picker sits on the Design card itself since the templates (spec 0068, AC-6802), as one row: its
+    // picture, Change, Adjust crop and Remove.
+    await expect.element(page.getByRole('button', { name: 'Change cover photo' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Remove cover photo' })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Adjust crop' }).first());
     expect(onPhoto).toHaveBeenCalledWith('cover', cover);
   });
@@ -490,7 +496,6 @@ function LiveOverview({ data }: { readonly data: DataLayer }) {
     <>
       <LiveSwitch live={live} />
       <LinkPageOverview
-        data={data}
         slug="acme"
         handle="ada"
         address="https://timefix.com/ada"
@@ -501,7 +506,6 @@ function LiveOverview({ data }: { readonly data: DataLayer }) {
         onGoLive={live.goLive}
         linkPage={linkPageStore}
         items={[]}
-        quickPicks={[]}
       />
     </>
   );

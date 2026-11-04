@@ -2,10 +2,11 @@
 export const strings = {
   title: 'Social links',
   shown: 'Show on this page',
-  yours: 'Your links',
   everywhere: 'Your links, set once for all your booking pages and your profile.',
   hiddenHere: 'Not shown on this page.',
   none: 'You haven’t added any yet.',
+  /** A link page's card with none: one quiet row under the title and its Add social links. */
+  noneYet: 'None yet',
   edit: 'Edit social links',
   add: 'Add social links',
   team: 'A team page names no host before booking, so it shows no one’s social links.',

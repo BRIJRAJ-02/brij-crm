@@ -280,9 +280,9 @@ export function pageFacts(page: { readonly durations: readonly number[]; readonl
   );
 }
 
-/** A link's address as its row shows it: without the scheme for a web address. */
-function shownAddress(url: string): string {
-  return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+/** A link's address as its row shows it: without its scheme (`https://`, `mailto:`, `tel:`), as people say it. */
+export function shownAddress(url: string): string {
+  return url.replace(/^(https?:\/\/|mailto:|tel:|sms:)/i, '').replace(/\/$/, '');
 }
 
 /** How a block's row reads; a link to one of our pages outside this workspace leads with saying so, and is off. */
@@ -557,7 +557,21 @@ export function figuresLine(counts: ProfileCounts): string {
   return said + strings.viewsSame(days);
 }
 
-/** A block's presses as its row's chip, said as clicks: none for a heading (it can't be pressed), "No clicks yet" for zero. */
+/**
+ * A block's presses as its row's quiet figure (owner, 5 November 2026: a chip under every row was noise): none for
+ * a block that can't be pressed, and none for zero, so a new page's list reads as its titles alone.
+ */
+export function pressesFigure(
+  item: ProfileItem,
+  counts: ProfileCounts | undefined,
+): { readonly text: string; readonly label: string } | undefined {
+  const [said] = pressesChip(item, counts);
+  if (said === undefined || counts === undefined) return undefined;
+  const presses = counts.presses.find((each) => each.id === item.id)?.presses ?? 0;
+  return presses === 0 ? undefined : { text: strings.figure(presses), label: said };
+}
+
+/** A block's presses as words, said as clicks: none for a heading (it can't be pressed), "No clicks yet" for zero. */
 export function pressesChip(item: ProfileItem, counts: ProfileCounts | undefined): readonly string[] {
   // A heading, a piece of writing and a set of questions have nowhere to go, so none of them counts a press
   // (AC-5207, AC-5211): a chip saying "No clicks yet" on one would read as a block nobody presses, not one
