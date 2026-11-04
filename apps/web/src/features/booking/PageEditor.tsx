@@ -120,6 +120,7 @@ import { sharingStrings } from './sharing-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
 import { publishStrings } from './publish-strings.ts';
+import { insightsHref } from '../insights/search.ts';
 import { activityStrings } from './activity-strings.ts';
 import { PageBookingsTab, PageInsightsTab } from './PageActivityTabs.tsx';
 import { ShareTimesCard } from './ShareTimesCard.tsx';
@@ -1094,8 +1095,18 @@ export function PageEditor({
                           },
                         },
                       ]),
+                  // Its Insights: a tab for whoever changes the page, this for whoever may only see it.
                   ...(isLocked
-                    ? []
+                    ? [
+                        {
+                          id: 'insights',
+                          label: publishStrings.insights,
+                          icon: 'chart-line' as const,
+                          onAction: () => {
+                            void navigate({ href: insightsHref(slug, { kind: 'booking', page: page.id }) });
+                          },
+                        },
+                      ]
                     : [
                         {
                           id: 'sharing',
@@ -2308,7 +2319,7 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
               <PreviewLayout
                 previewShare="wide"
                 bodyLayout="stack"
-                preview={<Skeleton shape="block" />}
+                {...(shown === 'bookings' || shown === 'insights' ? {} : { preview: <Skeleton shape="block" /> })}
                 {...(notices === undefined ? {} : { notices })}
               >
                 <SettingsStack width="readable" rows="inline">

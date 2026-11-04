@@ -11,6 +11,7 @@ import {
   BookingList,
   ButtonLink,
   EmptyState,
+  SectionBar,
   SegmentedControl,
   SettingsStack,
   Skeleton,
@@ -97,21 +98,23 @@ export function PageBookingsTab({ data, slug, pageId }: PageActivityProps) {
     return [...byDay].map(([label, rows]) => ({ id: label, label, rows }));
   }, [read, locale, timeZone]);
   return (
-    <SettingsStack width="readable">
-      <div>
-        <SegmentedControl
-          label={strings.when}
-          size="compact"
-          segments={[
-            { value: 'upcoming', label: strings.upcoming },
-            { value: 'past', label: strings.past },
-          ]}
-          value={when}
-          onChange={(value) => {
-            if (value === 'upcoming' || value === 'past') setWhen(value);
-          }}
-        />
-      </div>
+    <SettingsStack>
+      <SectionBar
+        start={
+          <SegmentedControl
+            label={strings.when}
+            size="compact"
+            segments={[
+              { value: 'upcoming', label: strings.upcoming },
+              { value: 'past', label: strings.past },
+            ]}
+            value={when}
+            onChange={(value) => {
+              if (value === 'upcoming' || value === 'past') setWhen(value);
+            }}
+          />
+        }
+      />
       {read.status === 'loading' ? (
         <Skeleton lines={4} />
       ) : read.status === 'error' ? (
@@ -140,11 +143,13 @@ export function PageBookingsTab({ data, slug, pageId }: PageActivityProps) {
         />
       )}
       {read.status === 'ready' && read.items.length > 0 && (
-        <div>
-          <ButtonLink href={pageBookingsHref(slug, pageId)} variant="ghost" icon="arrow-right">
-            {strings.allBookings}
-          </ButtonLink>
-        </div>
+        <SectionBar
+          start={
+            <ButtonLink href={pageBookingsHref(slug, pageId)} variant="ghost" icon="arrow-right">
+              {strings.allBookings}
+            </ButtonLink>
+          }
+        />
       )}
     </SettingsStack>
   );
@@ -164,17 +169,19 @@ export function PageInsightsTab({ data, slug, pageId }: PageActivityProps) {
   const fullHref = insightsHref(slug, { kind: 'booking', page: pageId });
   return (
     <SettingsStack>
-      <div>
-        <SegmentedControl
-          label={strings.period}
-          size="compact"
-          segments={RANGES.map((each) => ({ value: each, label: insightStrings.ranges[each] }))}
-          value={range}
-          onChange={(value) => {
-            if (value === '7' || value === '30' || value === '90') setRange(value);
-          }}
-        />
-      </div>
+      <SectionBar
+        start={
+          <SegmentedControl
+            label={strings.period}
+            size="compact"
+            segments={RANGES.map((each) => ({ value: each, label: insightStrings.ranges[each] }))}
+            value={range}
+            onChange={(value) => {
+              if (value === '7' || value === '30' || value === '90') setRange(value);
+            }}
+          />
+        }
+      />
       {state.status === 'loading' ? (
         <>
           <Stats label={insightStrings.summary} items={[]} isLoading />
@@ -197,11 +204,13 @@ export function PageInsightsTab({ data, slug, pageId }: PageActivityProps) {
       ) : (
         <>
           <InsightsBody numbers={state.insights} isRefreshing={state.isRefreshing} />
-          <div>
-            <ButtonLink href={fullHref} variant="ghost" icon="arrow-right">
-              {strings.allInsights}
-            </ButtonLink>
-          </div>
+          <SectionBar
+            start={
+              <ButtonLink href={fullHref} variant="ghost" icon="arrow-right">
+                {strings.allInsights}
+              </ButtonLink>
+            }
+          />
         </>
       )}
     </SettingsStack>

@@ -9,13 +9,13 @@ import type { DataLayer } from '@crm/data';
 import {
   Button,
   ButtonGroup,
-  Callout,
+  EmptyState,
+  SectionBar,
   Card,
   ChoiceChips,
   CopyButton,
   InfoTip,
   Skeleton,
-  Tooltip,
   useFormatSettings,
 } from '@crm/ui';
 import { useEffect, useMemo, useState } from 'react';
@@ -66,7 +66,13 @@ export function ShareTimesCard({ data, publicKey, title, duration, link, isLive 
   const [answer, setAnswer] = useState<{ readonly key: string; readonly read: TimesRead } | undefined>(undefined);
   const read = useMemo((): TimesRead => (answer?.key === key ? answer.read : { status: 'loading' }), [answer, key]);
   const [chosen, setChosen] = useState<readonly string[]>([]);
-  const [error, setError] = useState<string | undefined>(undefined);
+  // The day whose sixth time was refused: its chips say why, under them.
+  const [refusedDay, setRefusedDay] = useState<string | undefined>(undefined);
+  // The last times read, kept on screen while a longer read (Show the next week) is out, so nothing ticked vanishes.
+  const [lastTimes, setLastTimes] = useState<readonly string[] | undefined>(undefined);
+  if (read.status === 'ready' && read.times !== lastTimes) setLastTimes(read.times);
+  const shownTimes = read.status === 'ready' ? read.times : lastTimes;
+  const isLoadingMore = read.status === 'loading' && lastTimes !== undefined;
   useEffect(() => {
     if (!isLive) return;
     const controller = new AbortController();
@@ -104,14 +110,14 @@ export function ShareTimesCard({ data, publicKey, title, duration, link, isLive 
     [locale, timeZone],
   );
   const days = useMemo(() => {
-    if (read.status !== 'ready') return [];
+    if (shownTimes === undefined) return [];
     const byDay = new Map<string, string[]>();
-    for (const start of read.times) {
+    for (const start of shownTimes) {
       const day = dayFormat.format(new Date(start));
       byDay.set(day, [...(byDay.get(day) ?? []), start]);
     }
     return [...byDay];
-  }, [read, dayFormat]);
+  }, [shownTimes, dayFormat]);
   const sorted = [...chosen].sort();
   const isEnough = sorted.length >= SHARE_TIMES_MIN;
   const shareLink = timesLink(link, sorted, duration);
@@ -121,27 +127,25 @@ export function ShareTimesCard({ data, publicKey, title, duration, link, isLive 
     strings.textZone(zoneName),
     strings.textPick(shareLink),
   ].join('\n');
-  const copyLink = <CopyButton value={shareLink} label={strings.copyLink} isDisabled={!isEnough} />;
-  const copyText = <CopyButton value={text} label={strings.copyText} isDisabled={!isEnough} />;
-  // What the card says instead of times, when it has none to offer.
-  const line = !isLive ? strings.notLive : read.status === 'ready' && days.length === 0 ? strings.noTimes : undefined;
+  // What the card says under its title: not live yet, no times, or what Copy waits for (said, not only on hover).
+  const line = !isLive
+    ? strings.notLive
+    : shownTimes !== undefined && days.length === 0
+      ? strings.noTimes
+      : !isEnough
+        ? strings.pickMore
+        : undefined;
   return (
     <Card
       title={strings.title}
       actions={<InfoTip label={strings.title}>{strings.help}</InfoTip>}
       {...(line === undefined ? {} : { description: line })}
-      {...(error === undefined ? {} : { footerNote: error })}
     >
-      {isLive && read.status === 'loading' && <Skeleton lines={3} />}
+      {isLive && shownTimes === undefined && read.status === 'loading' && <Skeleton lines={3} />}
       {isLive && read.status === 'error' && (
-        <Callout
-          tone="danger"
-          actions={<Button onPress={() => setAttempt((count) => count + 1)}>{strings.tryAgain}</Button>}
-        >
-          {strings.failed}
-        </Callout>
+        <EmptyState tone="error" title={strings.failed} onRetry={() => setAttempt((count) => count + 1)} />
       )}
-      {isLive && read.status === 'ready' && (
+      {isLive && shownTimes !== undefined && read.status !== 'error' && (
         <>
           {days.map(([day, starts]) => (
             <ChoiceChips
@@ -150,24 +154,34 @@ export function ShareTimesCard({ data, publicKey, title, duration, link, isLive 
               choices={starts.map((start) => ({ id: start, label: timeFormat.format(new Date(start)) }))}
               // Only this day's chosen times are this group's; the others stay as they are.
               selected={chosen.filter((start) => starts.includes(start))}
+              {...(refusedDay === day ? { error: strings.tooMany } : {})}
               onChange={(ids) => {
                 const others = chosen.filter((start) => !starts.includes(start));
                 const next = [...others, ...ids];
                 if (next.length > SHARE_TIMES_MAX) {
-                  setError(strings.tooMany);
+                  setRefusedDay(day);
                   return;
                 }
-                setError(undefined);
+                setRefusedDay(undefined);
                 setChosen(next);
               }}
             />
           ))}
+          <SectionBar
+            start={
+              <Button
+                variant="ghost"
+                icon="calendar-plus"
+                isPending={isLoadingMore}
+                onPress={() => setWeeks((count) => count + 1)}
+              >
+                {strings.nextWeek}
+              </Button>
+            }
+          />
           <ButtonGroup label={strings.actions} layout="row">
-            <Button variant="ghost" icon="calendar-plus" onPress={() => setWeeks((count) => count + 1)}>
-              {strings.nextWeek}
-            </Button>
-            {isEnough ? copyLink : <Tooltip content={strings.pickMore}>{copyLink}</Tooltip>}
-            {isEnough ? copyText : <Tooltip content={strings.pickMore}>{copyText}</Tooltip>}
+            <CopyButton value={shareLink} label={strings.copyLink} isDisabled={!isEnough} />
+            <CopyButton value={text} label={strings.copyText} isDisabled={!isEnough} />
           </ButtonGroup>
         </>
       )}

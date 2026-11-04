@@ -4,7 +4,7 @@
 // Leaves out: the member's own default (Settings › Calendars), and the calendar for anyone but the owner, who reads "Set by Bea" only (spec 0037, AC-1273).
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from '@crm/data';
 import { useCalendarList, usePageDestination } from '@crm/data/react';
-import { Badge, ButtonLink, Card, FieldGroup, Select, SettingsRow } from '@crm/ui';
+import { Badge, ButtonLink, Card, Select, SettingsRow } from '@crm/ui';
 import { calendarOptions } from '../calendars/calendar-options.ts';
 import { DEFAULT_DESTINATION, destinationChoice, destinationHint } from './destination.ts';
 import { strings } from './strings.ts';
@@ -228,15 +228,15 @@ export function PageConflicts({ destination, calendars, settingsHref, canConnect
         </ButtonLink>
       }
     >
-      <FieldGroup
-        label={strings.checksConflictsIn}
-        layout="row"
-        {...(checked.length === 0 ? { hint: strings.noneChecked } : {})}
+      {/* One row in every state, as the Calendar card above (design review, 5 November 2026). */}
+      <SettingsRow
+        title={strings.checksConflictsIn}
+        {...(checked.length === 0 ? { description: strings.noneChecked } : {})}
       >
         {checked.map((item) => (
           <Badge key={item.id} size="chip" text={item.label} dot={item.hue ?? 'gray'} />
         ))}
-      </FieldGroup>
+      </SettingsRow>
     </Card>
   );
 }

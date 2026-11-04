@@ -25,13 +25,15 @@ export function TeamLinksMenu({ slug }: TeamLinksMenuProps) {
   const list = useCaptureList(data.bookingPages.view(slug));
   // While the pages load, the button holds its place (turned off) for anyone who may have something in it, so New
   // never shifts when it arrives (design review, 5 November 2026).
-  if (list.status !== 'ready') {
+  if (list.status === 'loading') {
     return canBookTeams || canManageForms ? (
-      <Button icon="users" label={strings.teamLinks} isLabelCollapsible isDisabled>
+      <Button icon="users" label={strings.teamLinks} isLabelCollapsible isPending>
         {strings.teamLinks}
       </Button>
     ) : null;
   }
+  // A failed read offers nothing rather than a dead button; the list below says it failed, with Try again.
+  if (list.status !== 'ready') return null;
   const workspace = list.items.find((page) => page.scope === 'workspace');
   // A Team link sends people on to a live team page: with none, there is nothing to make it in front of.
   const hasTeamPage = list.items.some((page) => page.kind === 'round_robin' && page.status === 'live');

@@ -5,7 +5,6 @@ export const shareTimesStrings = {
   notLive: 'Publish the page to share its times.',
   noTimes: 'No open times in these days.',
   failed: 'The open times couldn’t load.',
-  tryAgain: 'Try again',
   nextWeek: 'Show the next week',
   actions: 'Share the times',
   copyLink: 'Copy link',
