@@ -217,17 +217,19 @@ export function FormThanks({
 }) {
   const landed = state.view.kind === 'thanks' ? state.view : undefined;
   const text = landed?.text ?? '';
-  // An ending's own heading and line stand in for the thank you's (spec 0063, AC-6315); its line may be the only
-  // words it has, so an ending with none still reads as a thank you rather than as an empty card.
+  // An ending's own heading and line stand in for the thank you's (spec 0063, AC-6315).
   const title = landed?.heading ?? '';
   const button = landed?.button;
+  // An ending says what its owner wrote and no more (critique c): a line left empty stays empty, and the answers
+  // are not read back under it. The plain thank you keeps both.
+  const isEnding = title !== '';
   return (
     <FormConfirmation
       mode={mode}
       heading={heading}
-      title={title !== '' ? title : state.words.thanksTitle}
-      text={text !== '' ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
-      summary={<SentAnswers form={form} state={state} />}
+      title={isEnding ? title : state.words.thanksTitle}
+      text={text !== '' || isEnding ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
+      {...(isEnding ? {} : { summary: <SentAnswers form={form} state={state} /> })}
     >
       {button !== undefined && (
         // A real link, through `ButtonLink`'s `safeHref`: an owner's typed address is untrusted, so a `javascript:`

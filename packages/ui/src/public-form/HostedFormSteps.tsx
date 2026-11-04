@@ -160,7 +160,11 @@ export function HostedFormSteps({
   const [moved, setMoved] = useState<'forward' | 'back' | undefined>(undefined);
   const hasMoved = moved !== undefined;
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
-  const [focusesStep, setFocusesStep] = useState(false);
+  // One at a time on its own page, a fill coming back (no welcome screen) starts with focus in its question, so the
+  // first key types the answer (critique c, 8).
+  const [focusesStep, setFocusesStep] = useState(
+    form.layout === 'conversational' && mode === 'page' && resumedStepId !== undefined,
+  );
   const [round, setRound] = useState(0);
   // One at a time, the pointer picks on the question showing (each restarts the pause before going on).
   const [picks, setPicks] = useState(0);

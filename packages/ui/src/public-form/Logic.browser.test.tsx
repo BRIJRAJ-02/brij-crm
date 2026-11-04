@@ -136,6 +136,9 @@ describe('jumps, recall and endings on the page (spec 0063, AC-6313, AC-6315, AC
     await expect.poll(() => sent.length).toBe(1);
     expect(Object.keys(sent[0]?.answers ?? {}).sort()).toEqual(['budget', 'name']);
     await expect.element(page.getByRole('heading', { name: /not a fit/ })).toBeVisible();
+    // An ending says what its owner wrote: no line it was not given, and no read back of the answers (critique c).
+    expect(host.querySelector('dl')).toBeNull();
+    expect(host.textContent).not.toContain('Thanks, we got it.');
   });
 
   it('asks every step when no jump matches, and draws the ending in dark', async () => {
