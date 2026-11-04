@@ -350,44 +350,17 @@
     flex-direction: column;
   }
 
-  /* The details step takes the whole card, the heading row with it, and the card is as tall as the taller of the
-     month and the step: the step lies over the heading row and the month in one grid area, so a long form (a phone,
-     guests) grows the card once rather than scrolling inside it. What it covers goes at once: the 8 px slide is the
-     move, with nothing showing through. */
-  .card[data-place='card'] {
-    display: grid;
-    grid-template-rows: auto 1fr;
-  }
-
-  .stage[data-place='card'] {
-    display: contents;
-  }
-
-  .card[data-place='card'] > .head {
-    grid-area: 1 / 1;
-  }
-
-  .stage[data-place='card'] > .under {
-    grid-area: 2 / 1;
+  /* A step that takes the whole card (the details, the receipt) is the card's height, hugging its content (critics
+     C14, A11; first in a site's embed, 3 November 2026): kept at the month's height it left a screen of empty card
+     above Confirm. What the step covers leaves the layout at once (the 8 px slide is the move), instead of only going
+     out of sight; the month keeps its state and comes back with Back. */
+  .card[data-place='card'] > .head[inert],
+  .stage[data-place='card'] > .under[inert] {
+    display: none;
   }
 
   .stage[data-place='card'] > .cover {
     position: static;
-    grid-area: 1 / 1 / -1 / -1;
-  }
-
-  .head[inert],
-  .stage[data-place='card'] > .under[inert] {
-    transition: none;
-  }
-
-  /* A step that takes the whole card (the details, the receipt) is the card's height, hugging its content (critics
-     C14, A11; first in a site's embed, 3 November 2026): kept at the month's height it left a screen of empty card
-     above Confirm. What the step covers leaves the layout instead of only going out of sight; the month keeps its
-     state and comes back with Back. */
-  .card[data-place='card'] > .head[inert],
-  .stage[data-place='card'] > .under[inert] {
-    display: none;
   }
 
   .stage[data-moved] .cover {
@@ -846,17 +819,6 @@
   .root[data-template='night'] .card {
     background: var(--surface-subtle);
     box-shadow: var(--frame-glow);
-  }
-
-  /* Night's Book while no time is chosen: the accent at half strength on the dark card left its words under 3:1, so
-     the waiting button turns neutral (a raised fill, its edge, secondary words) and dims less. It reads as waiting,
-     not as the action, and its words hold 4.5:1. */
-  .root[data-template='night'] .footer:has([data-variant='primary'][data-disabled]) {
-    --accent: var(--surface-raised);
-    --accent-hover: var(--border);
-    --on-accent: var(--text-secondary);
-    --shadow-primary: none;
-    --opacity-disabled: var(--opacity-busy);
   }
 
   /* Split: on a wide page the rail is a sticky panel on the page's own ground (no card of its own: no border, no

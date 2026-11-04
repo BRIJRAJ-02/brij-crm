@@ -252,17 +252,30 @@ export const SplitNavy: Story = accented('split', NAVY_BRAND);
 export const SplitYellow: Story = accented('split', YELLOW_BRAND);
 
 /**
- * Night's Book before a time is chosen: neutral rather than the accent at half strength, so it reads as waiting
- * and its words still hold 4.5:1 on the dark card (spec 0068).
+ * Night before a time is chosen (spec 0068): no disabled Book at all since the bookings fix pass (critic A10), only
+ * the band's quiet line, so there is no half strength accent left to tune for the dark card.
  */
 export const NightBookWaiting: Story = {
   args: { brand: { logo: { src: LOGO, alt: 'Acme' }, variables: NAVY_BRAND, template: 'night' } },
-  render: (args) => <Interactive {...args} />,
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingFrame {...args} heading="Choose a time" footer={null} footerWaiting="Pick a time">
+        <MonthTiles
+          month="2026-10"
+          today="2026-10-08"
+          openDays={OPEN}
+          value="2026-10-08"
+          onChange={fn()}
+          onMonthChange={fn()}
+          canPrevious={false}
+          canNext
+        />
+      </BookingFrame>
+    </Stage>
+  ),
   play: async ({ canvas }) => {
-    const book = canvas.getByRole('button', { name: 'Book' });
-    await expect(book).toBeDisabled();
-    // Neutral: the waiting Book wears no accent.
-    await expect(getComputedStyle(book).backgroundColor).not.toBe('rgb(104, 120, 175)');
+    await expect(canvas.queryByRole('button', { name: /^Book/ })).toBeNull();
+    await expect(canvas.getByText('Pick a time')).toBeInTheDocument();
   },
 };
 
