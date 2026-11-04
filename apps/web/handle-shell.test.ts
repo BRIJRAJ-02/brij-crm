@@ -2,6 +2,7 @@
 // hands back the built shell rather than an error.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { TEMPLATE_LOOKS } from '@crm/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import {
   BOOT_ID,
@@ -464,8 +465,9 @@ describe('structured data and crawler text (spec 0061, AC-6121, AC-6122)', () =>
 });
 
 describe('the templates in the shell (spec 0068)', () => {
-  it('fixes the same names per template as the contract does', async () => {
-    const { TEMPLATE_LOOKS } = await import('@crm/contracts');
+  // Imported at the top, not inside the test: a cold import of the contracts barrel ran past the 5 s test
+  // budget on a loaded CI runner (run 41780114791).
+  it('fixes the same names per template as the contract does', () => {
     for (const [template, fixed] of Object.entries(TEMPLATE_LOOKS)) {
       const { header: _header, ...rest } = fixed;
       expect(SHELL_TEMPLATE_LOOKS[template], template).toEqual(rest);
