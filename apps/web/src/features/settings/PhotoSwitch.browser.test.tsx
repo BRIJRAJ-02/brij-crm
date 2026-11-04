@@ -17,7 +17,6 @@ import { page, userEvent } from 'vitest/browser';
 import { PhotoSwitch } from './PhotoSwitch.tsx';
 
 const TITLE = 'Show my photo on booking pages';
-const HINT = 'When off, your booking pages and profile show your initials.';
 const SHOWN: PictureChoiceState = { status: 'ready', isHidden: false, isSaving: false, canChange: true };
 
 beforeAll(async () => {
@@ -132,11 +131,12 @@ async function pressSwitch() {
 }
 
 describe('Show my photo on booking pages', () => {
-  it('starts on, saying it is the Google photo and what off does', async () => {
+  // Less text (5 November 2026): with a photo, the title says it all; no line under it.
+  it('starts on, with no line under its title', async () => {
     const { layer } = fakeChoice(SHOWN);
     await render(layer);
     await expect.element(theSwitch()).toBeChecked();
-    await expect.element(page.getByText(HINT)).toBeVisible();
+    expect(page.getByText(/initials/).elements()).toEqual([]);
   });
 
   it('turns off at once, confirms in a quiet toast once it lands, and Undo turns it back on', async () => {
@@ -206,12 +206,15 @@ describe('Show my photo on booking pages', () => {
     await expect.element(theSwitch()).toBeChecked();
   });
 
-  it('says the pages show initials while the account has no photo, and still saves the choice', async () => {
+  // Critic B (5 November 2026): the switch stood on with no photo to show.
+  it('is off and disabled while the account has no photo, saying why, and sends nothing', async () => {
     const { layer, sent } = fakeChoice(SHOWN);
     await render(layer, false);
-    await expect.element(page.getByText('You have no photo yet, so your pages show your initials.')).toBeVisible();
+    await expect.element(page.getByText('Add a photo first. Your pages show your initials.')).toBeVisible();
+    await expect.element(theSwitch()).not.toBeChecked();
+    await expect.element(theSwitch()).toBeDisabled();
     await pressSwitch();
-    expect(sent.map((each) => each.isHidden)).toEqual([true]);
+    expect(sent).toEqual([]);
   });
 
   it('is read only for a member with no sign in of their own', async () => {

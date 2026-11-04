@@ -148,10 +148,14 @@ async function renderGeneral({
 
 const nameField = () => page.getByRole('textbox', { name: strings.name });
 
-describe('the time zone', () => {
-  it('says what reads in it, under its title', async () => {
+describe('the rows', () => {
+  // Critic A #5 (5 November 2026): Brand owns the logo, so General has no Logo row; the time zone says what reads in
+  // it in its InfoTip, not a line under its title.
+  it('has no Logo row', async () => {
     await renderGeneral();
-    await expect.element(page.getByText(strings.timeZoneUse)).toBeVisible();
+    await expect.element(nameField()).toBeVisible();
+    expect(page.getByText('Logo', { exact: true }).elements()).toEqual([]);
+    expect(page.getByRole('link', { name: 'Open Brand' }).elements()).toEqual([]);
   });
 });
 

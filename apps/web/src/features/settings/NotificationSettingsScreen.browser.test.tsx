@@ -81,7 +81,8 @@ async function press(control: ReturnType<typeof page.getByRole>) {
 describe('Notifications', () => {
   it('names each switch plainly, with one InfoTip on the digest', async () => {
     await render();
-    await expect.element(page.getByText('Always in your Inbox. Choose what is also emailed.')).toBeVisible();
+    // One heading says it all, with no line under it (5 November 2026): the inbox always has everything.
+    await expect.element(page.getByRole('heading', { name: 'Also email me' })).toBeVisible();
     for (const [name, tip] of [['Daily digest', 'One email at 8am with what’s unread.']] as const) {
       await page.getByRole('button', { name: `About ${name}` }).click();
       await expect.element(page.getByText(tip)).toBeVisible();

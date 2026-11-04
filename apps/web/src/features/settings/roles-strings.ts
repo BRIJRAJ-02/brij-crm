@@ -13,7 +13,6 @@ export const strings = {
   list: 'List',
   compare: 'Compare',
   columns: { role: 'Role', description: 'Description', people: 'People', actions: 'Actions' },
-  builtIn: 'Built in',
   default: 'Default',
   peopleCount: people,
   rowActions: (name: string) => `Actions for ${name}`,

@@ -3,11 +3,22 @@
 // its words; and every sentence and variant, written out, as a reader sees it.
 import { AUDIT_KIND_NAMES, AUDIT_KINDS, AUDIT_NOT_LISTED, type AuditEntryView, type AuditPerson } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { entrySentence, kindOf, SENTENCE_ACTIONS, whoOf, type HistoryFormat } from './history-lines.ts';
+import {
+  byDay,
+  collapseRuns,
+  entrySentence,
+  kindOf,
+  RUN_GAP_MS,
+  SENTENCE_ACTIONS,
+  whoOf,
+  type HistoryFormat,
+} from './history-lines.ts';
 
 const format: HistoryFormat = {
   day: (at) => `day(${at.slice(0, 10)})`,
   dayTime: (at) => `dayTime(${at.slice(0, 16)})`,
+  // The tests read days in UTC.
+  dayKey: (at) => at.slice(0, 10),
 };
 
 const ada: AuditPerson = {
@@ -317,7 +328,7 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
       target: { ...rotation, isGone: true },
       params: { person: bea, units: -1 },
     },
-    'Ada Lovelace undid a −1 adjustment to Bea Rao’s count in a deleted round robin',
+    'Ada Lovelace undid a −1 adjustment to Bea Rao’s count in a round robin (since deleted)',
   ],
   [
     { ...base, action: 'booking.reassigned', target: booking, params: { seats: 1, from: ada, to: bea } },
@@ -347,6 +358,15 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
   [{ ...base, action: 'routing.skills_changed', target: workspace, params: {} }, 'Ada Lovelace changed routing skills'],
   [{ ...base, action: 'routing.tested', target: workspace, params: {} }, 'Ada Lovelace tested routing'],
   [{ ...base, action: 'form.created', target: form, params: {} }, 'Ada Lovelace made the form Contact us'],
+  // Never "made the form a deleted form" (critic A, 5 November 2026).
+  [
+    { ...base, action: 'form.created', target: { type: 'form', id: ID, isGone: true }, params: {} },
+    'Ada Lovelace made a form (since deleted)',
+  ],
+  [
+    { ...base, action: 'form.exported', target: { type: 'form', id: ID, name: 'Old', isGone: true }, params: {} },
+    'Ada Lovelace exported the submissions of a form (since deleted)',
+  ],
   [
     { ...base, action: 'form.exported', target: form, params: {} },
     'Ada Lovelace exported the submissions of Contact us',
@@ -389,11 +409,11 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
   ],
   [
     { ...base, action: 'list.restored', target: { type: 'list', id: ID, isGone: true }, params: {} },
-    'Ada Lovelace restored the list a deleted list',
+    'Ada Lovelace restored a list (since deleted)',
   ],
   [
     { ...base, action: 'list.archived', target: { type: 'list', id: ID, isGone: false }, params: {} },
-    'Ada Lovelace archived the list a list',
+    'Ada Lovelace archived a list',
   ],
   [
     { ...base, action: 'booking.no_show', target: booking, params: {} },
@@ -401,7 +421,7 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
   ],
   [
     { ...base, action: 'booking.no_show_undone', target: { type: 'booking', id: ID, isGone: true }, params: {} },
-    'Ada Lovelace took back the no show on a deleted booking',
+    'Ada Lovelace took back the no show on a booking (since deleted)',
   ],
   [
     { ...base, action: 'booking.record_linked', target: booking, params: {} },
@@ -605,6 +625,15 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed the Intro call managed page',
   ],
   [
+    {
+      ...base,
+      action: 'managed_page.changed',
+      target: { type: 'booking_page', id: ID, isGone: true },
+      params: { added: 0, removed: 0 },
+    },
+    'Ada Lovelace changed a managed page (since deleted)',
+  ],
+  [
     { ...base, action: 'managed_page.changed', target: managedPage, params: { added: 2, removed: 1 } },
     'Ada Lovelace changed who has the Intro call managed page (2 added, 1 taken off)',
   ],
@@ -709,5 +738,103 @@ describe('whoOf', () => {
     expect(whoOf({ kind: 'api_key' })).toEqual({ name: 'API key' });
     expect(whoOf({ kind: 'unknown' })).toEqual({ name: 'Unknown person' });
     expect(whoOf({ kind: 'asker', name: 'Cy Young' })).toEqual({ name: 'Cy Young', badge: 'Asked to join' });
+  });
+});
+
+describe('no sentence names a deleted thing twice (critic A, 5 November 2026)', () => {
+  it('never reads "the form a deleted form" or "a deleted" anywhere', () => {
+    for (const [entry] of SENTENCES) {
+      const gone =
+        'isGone' in entry.target
+          ? ({ ...entry, target: { type: entry.target.type, id: ID, isGone: true } } as AuditEntryView)
+          : entry;
+      const { full } = entrySentence(gone, format);
+      expect(full).not.toMatch(/the (form|list|round robin|booking page|managed page) a /);
+      expect(full).not.toMatch(/a deleted (form|list|round robin|booking page|booking)\b/);
+    }
+  });
+});
+
+describe('collapseRuns', () => {
+  const at = (minutes: number) => new Date(Date.parse('2026-11-05T12:00:00Z') - minutes * 60_000).toISOString();
+  const sales = { type: 'list', id: ID, name: 'Sales', isGone: false } as const;
+  const saved = (id: string, minutes: number, actor: AuditPerson = ada): AuditEntryView => ({
+    ...base,
+    id,
+    at: at(minutes),
+    actor,
+    action: 'list.updated',
+    target: sales,
+    params: {},
+  });
+
+  it('collapses the same change by the same person, close together, into one row with a count', () => {
+    const rows = collapseRuns([saved('a', 0), saved('b', 5), saved('c', 9)], format);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe('a');
+    expect(rows[0]?.count).toBe(3);
+    expect(rows[0]?.sentence).toEqual({
+      full: 'Ada Lovelace changed the list Sales 3 times',
+      change: 'Changed the list Sales 3 times',
+    });
+  });
+
+  it('keeps apart another person’s change, a different sentence, and a repeat more than the gap later', () => {
+    const roleChange = (id: string, to: 'admin' | 'member'): AuditEntryView => ({
+      ...base,
+      id,
+      at: at(1),
+      action: 'member.role_changed',
+      target: member(bea),
+      params: { from: 'guest', to },
+    });
+    expect(collapseRuns([saved('a', 0), saved('b', 1, bea)], format).map((row) => row.count)).toEqual([1, 1]);
+    expect(collapseRuns([roleChange('a', 'admin'), roleChange('b', 'member')], format)).toHaveLength(2);
+    const late = RUN_GAP_MS / 60_000 + 1;
+    expect(collapseRuns([saved('a', 0), saved('b', late)], format)).toHaveLength(2);
+  });
+
+  it('counts a run only while it is unbroken', () => {
+    const other = { ...saved('x', 2), action: 'list.archived' } as AuditEntryView;
+    expect(collapseRuns([saved('a', 0), other, saved('b', 3)], format).map((row) => row.count)).toEqual([1, 1, 1]);
+  });
+});
+
+describe('byDay', () => {
+  const entry = (id: string, when: string): AuditEntryView => ({
+    ...base,
+    id,
+    at: when,
+    action: 'routing.tested',
+    target: workspace,
+    params: {},
+  });
+  const rows = (...entries: AuditEntryView[]) => collapseRuns(entries, format, 0);
+
+  it('heads today’s rows Today, yesterday’s Yesterday, and older ones with their day', () => {
+    const days = byDay(
+      rows(
+        entry('a', '2026-11-05T09:00:00Z'),
+        entry('b', '2026-11-05T08:00:00Z'),
+        entry('c', '2026-11-04T23:00:00Z'),
+        entry('d', '2026-10-30T10:00:00Z'),
+      ),
+      format,
+      '2026-11-05T12:00:00Z',
+    );
+    expect(days.map((day) => [day.label, day.rows.map((row) => row.id)])).toEqual([
+      ['Today', ['a', 'b']],
+      ['Yesterday', ['c']],
+      ['day(2026-10-30)', ['d']],
+    ]);
+  });
+
+  it('turns over a month', () => {
+    const days = byDay(rows(entry('a', '2026-11-30T10:00:00Z')), format, '2026-12-01T09:00:00Z');
+    expect(days[0]?.label).toBe('Yesterday');
+  });
+
+  it('has no days for no rows', () => {
+    expect(byDay([], format, '2026-11-05T12:00:00Z')).toEqual([]);
   });
 });

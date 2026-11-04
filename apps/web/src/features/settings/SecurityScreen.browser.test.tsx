@@ -1,11 +1,11 @@
-// Sign in and devices in Chromium (spec 0033, AC-896; SA20, SA35): signing a device out when this session isn't
+// Sign in and security in Chromium (spec 0033, AC-896; SA20, SA35): signing a device out when this session isn't
 // fresh first only emails a code, so the confirm's button says "Email me a code", then "Sign out" once the code's
 // field shows; once the sign out lands, Recent activity reads its first page again. Signing out every other device
-// does the same.
+// does the same. The list merges one browser's sessions into one row, names the browser, and shows five rows first.
 import type { AccountSecurityState, AccountSession, AccountSessionsState, DataLayer } from '@crm/data';
 import { isSessionFresh } from '@crm/data';
 import { createToasts } from '@crm/ui';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { SecurityScreen } from './SecurityScreen.tsx';
@@ -48,9 +48,9 @@ afterEach(() => {
   shown = undefined;
 });
 
-function layer() {
+function layer(state: AccountSessionsState = SESSIONS) {
   const calls: string[] = [];
-  const sessions = held(SESSIONS);
+  const sessions = held(state);
   const security = held(STALE);
   const data = {
     account: {
@@ -125,5 +125,39 @@ describe('signing a device out, with a step up', () => {
     await expect.element(dialog).not.toBeInTheDocument();
     expect(calls).toEqual(['send', 'verify', 'signOutOthers']);
     expect(reads).toBe(1);
+  });
+});
+
+// Critics A #12 and B (5 November 2026): 19 rows, most of them one Mac's, each named "macOS".
+describe('the devices list', () => {
+  it('merges one browser’s sessions, names the browser, and shows this device and four more until Show more', async () => {
+    const others = ['Firefox on Windows', 'Safari on iOS', 'Edge on Windows', 'Chrome on Android', 'Firefox on Linux'];
+    const items = [
+      session('1', 'Chrome on macOS', true),
+      session('2', 'macOS', false),
+      session('3', 'macOS', false),
+      session('4', 'macOS', false),
+      ...others.map((label, index) => session(String(index + 5), label, false)),
+    ];
+    const { data, calls } = layer({ status: 'ready', items, loadingMore: false });
+    await render(data, () => undefined);
+    // Three sessions of an unknown browser on one Mac: one row, its browser said as unknown, with a count.
+    await expect.element(page.getByText('Unknown browser on macOS')).toBeVisible();
+    await expect.element(page.getByText('3 sessions')).toBeVisible();
+    // This device, the merged Mac, then three more: five rows; the last two wait for Show more.
+    await expect.element(page.getByText('Edge on Windows')).toBeVisible();
+    await expect.element(page.getByText('Chrome on Android')).not.toBeInTheDocument();
+    await page.getByRole('button', { name: 'Show more' }).click();
+    await expect.element(page.getByText('Firefox on Linux')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+    // Signing the merged row out ends every session it stands for.
+    await page.getByRole('button', { name: 'Sign out Unknown browser on macOS' }).click();
+    const dialog = page.getByRole('alertdialog', { name: 'Sign out Unknown browser on macOS?' });
+    await dialog.getByRole('button', { name: 'Email me a code' }).click();
+    await expect.element(dialog.getByText('Code sent. Check your email.')).toBeVisible();
+    await userEvent.keyboard('123456');
+    await vi.waitFor(() => {
+      expect(calls.filter((call) => call.startsWith('signOut '))).toHaveLength(3);
+    });
   });
 });

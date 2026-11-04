@@ -66,6 +66,9 @@ function ObjectName({ object }: { readonly object: ObjectSummary }) {
   );
 }
 
+/** The share of the custom object limit from which the meter shows; under it the count is noise. */
+const METER_FROM = 0.8;
+
 /** Settings, Objects: the meter, the live objects in order, and the Archived section. */
 export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -229,7 +232,8 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
           }
         : {})}
     >
-      {canManage && meter !== undefined && (
+      {/* The custom object meter only once the plan's room runs short (critic A #19): at 80% of it or more. */}
+      {canManage && meter !== undefined && meter.used >= meter.limit * METER_FROM && (
         <Meter label={strings.customObjects} value={meter.used} maxValue={meter.limit} />
       )}
       {!canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}

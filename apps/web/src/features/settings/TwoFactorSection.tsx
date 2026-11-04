@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Account › Sign in and devices' two factor sign in (spec 0033, AC-881, AC-883, AC-885): on or off, and backup codes.
+// Purpose: Account › Sign in and security' two factor sign in (spec 0033, AC-881, AC-883, AC-885): on or off, and backup codes.
 // Main task: set the authenticator app up (QR code with its three steps beside it, the first code under step 3, the
 // setup key under the code, then the backup codes saved), turn it off, or make new codes.
 // Leaves out: the workspace's requirement (milestone 4).

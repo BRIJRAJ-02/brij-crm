@@ -3,9 +3,8 @@
 /** Settings › Account › Notifications: the page's copy (AC-1179). Short labels; the help sits in InfoTips. */
 export const strings = {
   title: 'Notifications',
-  email: 'Email',
-  /** Under the Email heading: the inbox is always on (AC-1179), said where it's seen. */
-  emailDescription: 'Always in your Inbox. Choose what is also emailed.',
+  /** The one section's heading, which says what the switches do: the inbox always has everything (AC-1179). */
+  email: 'Also email me',
   mentions: 'Mentions',
   replies: 'Replies',
   assignments: 'Task assignments',

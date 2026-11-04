@@ -1,7 +1,7 @@
 // Brief
-// Purpose: Settings › Workspace › Security (spec 0033, milestone 4): how people sign in to this workspace, owners only.
-// Main task: require two factor sign in for everyone, set how long a sign in lasts here, or sign everyone out.
-// Leaves out: sign in methods and SSO (later), and each person's own devices (Account › Sign in and devices has those).
+// Purpose: Settings › People › Roles and access › Sign in rules (spec 0033, milestone 4): how people sign in to this workspace, owners only.
+// Main task: require two factor sign in for everyone, set how long a sign in lasts here, or sign everyone out: one Card of rows.
+// Leaves out: sign in methods and SSO (later), and each person's own two factor and devices (Account › Sign in and security has those).
 import {
   isDataError,
   SESSION_LENGTH_DAYS,
@@ -182,8 +182,8 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
           {error}
         </Callout>
       )}
-      <SettingsSection title={strings.twoFactor}>
-        <Card isBusy={saving === 'require'}>
+      <SettingsSection title={strings.section}>
+        <Card isBusy={saving !== undefined}>
           <SettingsRow
             title={strings.require}
             meta={<InfoTip label={strings.require}>{strings.requireInfo}</InfoTip>}
@@ -208,13 +208,11 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
               onChange={setRequire}
             />
           </SettingsRow>
-        </Card>
-      </SettingsSection>
-      <SettingsSection title={strings.sessions}>
-        <Card isBusy={saving === 'length'}>
           <SettingsRow
             title={strings.sessionLength}
             meta={<InfoTip label={strings.sessionLength}>{strings.sessionLengthInfo}</InfoTip>}
+            // One input width with every other input row (critics A #17 and B: the Select sat 84px wide).
+            control="field"
           >
             <Select
               savesOnPick
@@ -297,18 +295,15 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
 export function WorkspaceSecurityPending() {
   return (
     <SettingsPage title={strings.title} isLoading>
-      <SettingsSection title={strings.twoFactor}>
+      <SettingsSection title={strings.section}>
         <Card isBusy>
           <SettingsRow title={strings.require} meta={<InfoTip label={strings.require}>{strings.requireInfo}</InfoTip>}>
             <Skeleton shape="field" />
           </SettingsRow>
-        </Card>
-      </SettingsSection>
-      <SettingsSection title={strings.sessions}>
-        <Card isBusy>
           <SettingsRow
             title={strings.sessionLength}
             meta={<InfoTip label={strings.sessionLength}>{strings.sessionLengthInfo}</InfoTip>}
+            control="field"
           >
             <Skeleton shape="field" />
           </SettingsRow>
