@@ -25,9 +25,11 @@ export interface FinishLaterProps {
   readonly language: string;
   /** The step the visitor is on, so the link reopens there. */
   readonly stepId?: string | undefined;
+  /** `start` lines Finish later's words up with OK's edge above it (One at a time); `center` under a full button. */
+  readonly align?: 'center' | 'start';
 }
 
-export function FinishLater({ state, language, stepId }: FinishLaterProps) {
+export function FinishLater({ state, language, stepId, align = 'center' }: FinishLaterProps) {
   const { words, save } = state;
   const [isAsked, setAsked] = useState(false);
   const [emailed, setEmailed] = useState<'none' | 'sending' | 'sent' | 'needs-address' | 'failed'>('none');
@@ -37,7 +39,7 @@ export function FinishLater({ state, language, stepId }: FinishLaterProps) {
   const kept = save.kind === 'kept' ? save.kept : undefined;
   const isFailed = save.kind === 'failed';
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} data-align={align}>
       {/* One quiet line (T23, after Typeform): a tick and Saved once something is kept, and Finish later as a link
           that opens the ways back only when pressed. A failed save says so, with Try again, never a promise. */}
       <div className={styles.row}>

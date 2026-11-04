@@ -21,7 +21,7 @@ function BookingFallback({ state, mode, heading, url, text, summary }: FormBooki
     <FormConfirmation mode={mode} heading={heading} title={state.words.thanksTitle} text={text} summary={summary}>
       <Button
         variant="primary"
-        size="lg"
+        size="public"
         onPress={() => {
           state.goTo(url);
         }}

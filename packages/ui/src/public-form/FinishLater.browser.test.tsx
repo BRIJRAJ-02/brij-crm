@@ -82,8 +82,6 @@ it('never opens the ways back on its own: a save as they move on says Saved alon
     layout: 'conversational',
   };
   drawn = mountHostedForm(host, stepped, { mode: 'page', ...saver() });
-  // Past the welcome screen (T42) first.
-  await userEvent.click(page.getByRole('button', { name: 'Start' }));
   await expect.poll(() => host.querySelectorAll('input').length).toBeGreaterThan(0);
   const name = host.querySelector('input');
   if (name === null) throw new Error('the form drew no input');

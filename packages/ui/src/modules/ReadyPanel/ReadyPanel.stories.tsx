@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, spyOn, userEvent } from 'storybook/test';
+import { expect, fn, screen, spyOn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { probeAlignment } from '../../lib/alignment-probe.ts';
@@ -157,24 +157,50 @@ export const InDialog: Story = {
   },
 };
 
-/** The pill: the link as one pill (its own name strong), Copy and a quiet Open, and the caller's share row under it. */
-export const Pill: Story = {
+/**
+ * Share: one narrow centred column, as a form's live dialog and Share tab draw it. The QR code first, the link with
+ * Copy link (the one primary), one row of equal buttons, then the onward row.
+ */
+export const Share: Story = {
+  parameters: { crm: { screenshot: false } },
   args: {
     title: undefined,
-    variant: 'pill',
+    variant: 'share',
     link: 'https://timefix.com/f/lead-qualification',
-    openHref: 'https://timefix.com/f/lead-qualification',
-    children: <Skeleton shape="block" />,
+    shareTitle: 'Lead qualification',
+    onDownloadQr: fn(() => Promise.resolve()),
+    onward: { label: 'Put it on your site', href: '/forms/contact-us/share' },
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, args }) => {
     await settleAnimations();
     await expect(canvas.getByRole('group', { name: 'Link' })).toBeInTheDocument();
     await expect(canvas.getByText('lead-qualification')).toBeInTheDocument();
-    await expect(canvas.queryByRole('img', { name: 'QR code for the link' })).toBeNull();
-    await expect(canvas.queryByRole('button', { name: 'Share' })).toBeNull();
-    await expect(canvas.getByRole('link', { name: 'Open' })).toHaveAttribute(
+    await expect(canvas.getByRole('img', { name: 'QR code for the link' })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: 'Email' })).toHaveAttribute(
       'href',
-      'https://timefix.com/f/lead-qualification',
+      expect.stringMatching(/^mailto:/),
     );
+    await expect(canvas.getByRole('link', { name: 'WhatsApp' })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^https:\/\/wa\.me\//),
+    );
+    await expect(canvas.getByRole('link', { name: 'Put it on your site' })).toHaveAttribute(
+      'href',
+      '/forms/contact-us/share',
+    );
+    // One height and one width for the row: every way to pass it on is the same button.
+    const ways = [...(canvas.getByRole('group', { name: 'Send the link' }).children as HTMLCollectionOf<HTMLElement>)];
+    const sizes = new Set(ways.map((each) => String(Math.round(each.getBoundingClientRect().width))));
+    await expect(sizes.size).toBe(1);
+    const copy = canvas.getByRole('button', { name: 'Copy link' });
+    await expect(copy).toHaveAttribute('data-variant', 'primary');
+    await expect(Math.round(copy.getBoundingClientRect().height)).toBe(
+      Math.round(ways[0]?.getBoundingClientRect().height ?? 0),
+    );
+    // The QR code saves as PNG from its menu, handed the code's own SVG.
+    await userEvent.click(canvas.getByRole('button', { name: /^QR code/ }));
+    await settleAnimations();
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
+    await expect(args.onDownloadQr).toHaveBeenCalledWith('png', expect.any(SVGSVGElement));
   },
 };

@@ -31,7 +31,7 @@ export interface HostedFormStepsProps extends HostedFormProps {
   /**
    * In the builder's preview, which step (or question, one at a time) shows: the one being edited beside it, since
    * the inert preview can't be stepped through. Clamped to the steps there are; ignored outside the preview. Left
-   * out, a one at a time preview shows its welcome screen.
+   * out, the preview shows the first.
    */
   readonly previewStep?: number;
 }
@@ -162,10 +162,14 @@ export function HostedFormSteps({
   const [moved, setMoved] = useState<'forward' | 'back' | undefined>(undefined);
   const hasMoved = moved !== undefined;
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
-  // One at a time on its own page, a fill coming back (no welcome screen) starts with focus in its question, so the
-  // first key types the answer (critique c, 8).
+  // One at a time on its own page starts with focus in its question, so the first key types the answer (critique c,
+  // 8; it opens on the question since the welcome screen went, 5 November 2026): a fill coming back always, a new
+  // one only with a fine pointer, so a phone's keyboard never covers the page the moment it opens.
   const [focusesStep, setFocusesStep] = useState(
-    form.layout === 'conversational' && mode === 'page' && resumedStepId !== undefined,
+    form.layout === 'conversational' &&
+      mode === 'page' &&
+      (resumedStepId !== undefined ||
+        (typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(pointer: fine)').matches)),
   );
   const [round, setRound] = useState(0);
   // One at a time, the pointer picks on the question showing (each restarts the pause before going on).
@@ -197,13 +201,8 @@ export function HostedFormSteps({
   });
   const { words, preview } = state;
   const layout: StepsLayout = form.layout === 'conversational' ? 'conversational' : 'steps';
-  // One at a time opens on a welcome screen (T42, Typeform's way): the headline, its line and Start, so the
-  // questions never repeat the headline. Not for a fill being resumed, which goes straight back to its question, and
-  // in the builder's preview only while no question is being edited.
-  const [isWelcome, setWelcome] = useState(
-    layout === 'conversational' && form.headline.trim() !== '' && resumedStepId === undefined,
-  );
-  const welcomeRef = useRef<HTMLDivElement>(null);
+  // One at a time opens straight on its first question (the owner, 5 November 2026, after Typeform and Tally: "this
+  // shouldn't be the first"): no welcome screen and no Start, the headline small above question 1.
   const byKey = new Map(form.questions.map((question) => [question.key, question]));
   // A hidden question has nothing to draw (spec 0063), so a step of hidden questions alone is no step to show.
   const groups = state.path.steps.flatMap((shown) => {
@@ -218,7 +217,6 @@ export function HostedFormSteps({
   if (state.round !== round) {
     setRound(state.round);
     setIndex(0);
-    setWelcome(layout === 'conversational' && form.headline.trim() !== '');
     setMoved(undefined);
     setFocusesStep(false);
     setPicks(0);
@@ -233,7 +231,6 @@ export function HostedFormSteps({
     if (at > 0) setIndex(at);
   }
   const index = Math.max(0, Math.min(mode === 'preview' ? (previewStep ?? 0) : shownIndex, groups.length - 1));
-  const welcomes = isWelcome && (mode !== 'preview' || previewStep === undefined);
   const step = groups[index] ?? { id: undefined, title: undefined, questions: [] };
   const isLast = index >= groups.length - 1;
   const first = step.questions[0];
@@ -241,40 +238,17 @@ export function HostedFormSteps({
   // Only the step on screen is reached (AC-6321): the steps behind it were, the steps ahead have not been, and
   // that difference is the whole of the drop off bar on a stepped form.
   useEffect(() => {
-    if (state.view.kind === 'form' && !state.isClosed && !welcomes) {
+    if (state.view.kind === 'form' && !state.isClosed) {
       state.reached(step.questions.filter((question) => question.answerType !== 'hidden').map((q) => q.id));
     }
   });
 
   // A step reached by Continue or Back puts focus on its first question.
   useEffect(() => {
-    if (!focusesStep || first === undefined || welcomes) return;
+    if (!focusesStep || first === undefined) return;
     state.focus(first.key);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the step changes
-  }, [index, welcomes]);
-
-  const start = () => {
-    leaveFrom(welcomeRef.current, 'forward');
-    setMoved('forward');
-    setFocusesStep(true);
-    setWelcome(false);
-  };
-  // The welcome screen goes on with Enter wherever focus is (Typeform's way), as its hint says.
-  useEffect(() => {
-    if (!welcomes || preview || state.view.kind !== 'form' || state.isClosed) return undefined;
-    const onKey = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Enter' || event.defaultPrevented || event.isComposing) return;
-      if (event.target instanceof Element && event.target.closest('button, a, input, textarea, select') !== null) {
-        return;
-      }
-      event.preventDefault();
-      start();
-    };
-    globalThis.addEventListener('keydown', onKey);
-    return () => {
-      globalThis.removeEventListener('keydown', onKey);
-    };
-  });
+  }, [index]);
 
   const go = (next: number) => {
     setPicks(0);
@@ -351,20 +325,7 @@ export function HostedFormSteps({
     );
   } else if (state.view.kind === 'thanks')
     body = <FormThanks form={form} state={state} mode={mode} heading={refs.heading} />;
-  else if (welcomes) {
-    // The welcome screen (T42): the headline and its line, then Start with Enter beside it.
-    body = (
-      <div ref={welcomeRef} className={styles.welcome} data-enter={moved}>
-        <FormHeader form={form} mode={mode} heading={refs.heading} />
-        <div className={styles.buttons} data-layout={layout}>
-          <Button variant="primary" size="lg" onPress={start}>
-            {words.start}
-          </Button>
-          <EnterHint words={words} />
-        </div>
-      </div>
-    );
-  } else {
+  else {
     body = (
       <>
         {isOpen && groups.length > 0 ? (
@@ -381,10 +342,16 @@ export function HostedFormSteps({
             isVisuallyHidden={embedLook?.isTitleHidden === true}
           />
         ) : (
-          // One at a time the welcome screen showed the headline: each question keeps it for screen readers only.
-          <VisuallyHidden>
-            <FormHeader form={form} mode={mode} heading={refs.heading} isSubheadingShown={false} />
-          </VisuallyHidden>
+          // One at a time the headline sits small above the first question (Tally's way), its line under it; the
+          // questions after it keep it for screen readers only, so it is read once and never fights the question.
+          <FormHeader
+            form={form}
+            mode={mode}
+            heading={refs.heading}
+            size="small"
+            isSubheadingShown={index === 0}
+            isVisuallyHidden={index > 0 || form.headline.trim() === '' || embedLook?.isTitleHidden === true}
+          />
         )}
         {/* One step is no progress to show: only its title, when it has one. */}
         {!isOpen && (groups.length > 1 || step.title !== undefined) && (
@@ -514,13 +481,13 @@ export function HostedFormSteps({
             <div className={styles.buttons} data-layout={layout}>
               {/* One at a time, the way back is the quiet up arrow at the foot (T42); Steps keep Back here. */}
               {index > 0 && !isOpen && (
-                <Button variant="ghost" size="lg" icon="arrow-left" onPress={() => go(index - 1)}>
+                <Button variant="ghost" size="public" icon="arrow-left" onPress={() => go(index - 1)}>
                   {words.back}
                 </Button>
               )}
               <Button
                 variant="primary"
-                size="lg"
+                size="public"
                 type={preview ? 'button' : 'submit'}
                 isDisabled={state.isClosedMidFill}
                 {...(isOpen ? (isLast ? {} : { iconRight: 'check' as const }) : { isFullWidth: 'center' as const })}
@@ -529,7 +496,7 @@ export function HostedFormSteps({
               </Button>
               {isOpen && takesEnter(first) && <EnterHint words={words} />}
             </div>
-            <FinishLater state={state} language={form.language} stepId={step.id} />
+            <FinishLater state={state} language={form.language} stepId={step.id} align={isOpen ? 'start' : 'center'} />
           </div>
         </form>
         {/* One at a time's arrows and place (T42, Typeform's way): up to the question before, down on to the next

@@ -131,6 +131,14 @@ interface TableBase<T> {
    * phone). `table` (the default) keeps the columns, scrolling with `isScrollable`.
    */
   readonly phoneLayout?: 'table' | 'rows';
+  /**
+   * `page` runs the rows out through a page's `space-16` gutter to its edges, the first and last columns' text on
+   * the content edges, as a settings page's body does by itself (PageEdge): for a table directly in another page's
+   * body, such as a form editor's Submissions tab, whose text then lines up with the tabs above it.
+   */
+  readonly edge?: 'page';
+  /** A quiet band under the rows, as the records grid's footer: how many there are ("12 submissions"). */
+  readonly footer?: ReactNode;
 }
 
 /** The handle column's id, kept apart from any column the caller names. */
@@ -166,6 +174,8 @@ export function Table<T>({
   layout = 'auto',
   getRowTone,
   phoneLayout = 'table',
+  edge,
+  footer,
 }: TableProps<T>) {
   const isSelectable = selected !== undefined && onSelectedChange !== undefined;
   // A scrollable frame fades the end that hides columns, so it shows there is more to scroll to.
@@ -176,7 +186,7 @@ export function Table<T>({
   const showSkeleton = useDelayedLoading(isLoading);
   // Directly in a settings page's body the rows run out into the page's gutter, the first column's text on the
   // content edge, and a row's handle sits in that gutter, inside its first cell, rather than in a column of its own.
-  const atPageEdge = useContext(PageEdge);
+  const atPageEdge = useContext(PageEdge) || edge === 'page';
   // A table that also selects keeps the handle column: its checkboxes take the first cell's place.
   const handleInGutter = atPageEdge && onReorder !== undefined && !isSelectable;
   const firstColumnId = columns[0]?.id;
@@ -193,6 +203,7 @@ export function Table<T>({
       aria-label={label}
       data-layout={layout === 'even' ? 'even' : undefined}
       data-phone={phoneLayout === 'rows' ? 'rows' : undefined}
+      data-edge={atPageEdge ? 'page' : undefined}
       {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
       {...(isSelectable
         ? {
@@ -217,6 +228,7 @@ export function Table<T>({
             data-align={column.align ?? 'start'}
             data-size={column.size}
             data-handle={column.id === HANDLE || column.id === SELECT || undefined}
+            data-select={column.id === SELECT || undefined}
             data-sticky={isHeaderSticky || undefined}
             data-lead={(layout === 'even' && column.isRowHeader === true) || undefined}
             data-current={column.isCurrent === true || undefined}
@@ -269,7 +281,7 @@ export function Table<T>({
                   <SortableRowGrip id={item.id} label={strings.move(getRowLabel?.(item.row) ?? item.id)} />
                 </Cell>
               ) : column.id === SELECT ? (
-                <Cell className={styles.cell} data-handle>
+                <Cell className={styles.cell} data-handle data-select>
                   <Checkbox
                     slot="selection"
                     label={strings.select(getSelectLabel?.(item.row) ?? item.id)}
@@ -307,7 +319,7 @@ export function Table<T>({
       </TableBody>
     </AriaTable>
   );
-  return (
+  const framed = (
     <div
       ref={frameRef}
       className={styles.frame}
@@ -336,6 +348,13 @@ export function Table<T>({
           {table}
         </SortableList>
       )}
+    </div>
+  );
+  if (footer === undefined) return framed;
+  return (
+    <div className={styles.withFoot} data-edge={atPageEdge ? 'page' : undefined}>
+      {framed}
+      <div className={styles.foot}>{footer}</div>
     </div>
   );
 }

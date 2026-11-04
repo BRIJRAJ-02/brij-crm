@@ -817,3 +817,20 @@ export const RowGroups: Story = {
     await expect(canvas.getByRole('button', { name: 'About Buffer before' })).toBeInTheDocument();
   },
 };
+
+/** `flush`: a plain stack with no breath above, its first control on the line of what sits beside it. */
+export const StackFlush: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <SettingsStack variant="flush">
+        <Switch label="Clear background" />
+        <Switch label="Hide the title" />
+      </SettingsStack>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const stack = canvas.getByRole('switch', { name: 'Clear background' }).closest('[data-variant="flush"]');
+    await expect(stack === null ? '' : getComputedStyle(stack).paddingBlockStart).toBe('0px');
+  },
+};

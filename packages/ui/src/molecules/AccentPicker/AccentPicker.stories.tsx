@@ -78,6 +78,21 @@ export const RefusedHex: Story = {
 };
 
 /** The guard moved a pale yellow: the two colours the page draws, and one line (spec 0060, AC-6). */
+/** The hex at the end of the swatches' row, every swatch at the control height (a form's embed button colour). */
+export const InlineHex: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { hexPlacement: 'inline', value: '#ff5b59' },
+  play: async ({ canvas }) => {
+    const hex = canvas.getByRole('textbox', { name: 'Hex' });
+    const swatch = canvas.getByRole('button', { name: 'Any colour' });
+    // One row, one height: the field sits right after the swatches, centred on them.
+    const a = hex.getBoundingClientRect();
+    const b = swatch.getBoundingClientRect();
+    await expect(Math.abs(a.top + a.height / 2 - (b.top + b.height / 2))).toBeLessThanOrEqual(2);
+    await expect(a.left).toBeGreaterThan(b.right);
+  },
+};
+
 export const Adjusted: Story = {
   parameters: { crm: { screenshot: false } },
   args: { value: '#ffd400', drawn: { light: '#7a6700', dark: '#ffd400' } },

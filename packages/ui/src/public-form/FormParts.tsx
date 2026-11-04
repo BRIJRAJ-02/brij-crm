@@ -183,18 +183,24 @@ export function FormHeader({
   heading,
   isSubheadingShown = true,
   isVisuallyHidden = false,
+  size = 'full',
 }: {
   readonly form: PublicForm;
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
   readonly isSubheadingShown?: boolean;
+  /**
+   * `small` is the form's name over its first question, One at a time (Tally's way, the owner, 5 November 2026): the
+   * question leads, the name only says whose form it is.
+   */
+  readonly size?: 'full' | 'small';
   /** Kept for screen readers only: a site's inline embed asked to leave the headline to the site. */
   readonly isVisuallyHidden?: boolean;
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
   const header = (
     <header className={styles.header}>
-      <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
+      <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode} data-size={size}>
         {form.headline}
       </Heading>
       {isSubheadingShown && form.subheading !== undefined && <p className={styles.subheading}>{form.subheading}</p>}
@@ -238,7 +244,7 @@ export function FormThanks({
         // A real link, through `ButtonLink`'s `safeHref`: an owner's typed address is untrusted, so a `javascript:`
         // one is refused rather than run, and the visitor keeps a link's own middle click and new tab. A preview
         // never leaves the page it is drawn in.
-        <ButtonLink variant="primary" href={button.url} isExternal isDisabled={state.preview}>
+        <ButtonLink variant="primary" size="public" href={button.url} isExternal isDisabled={state.preview}>
           {button.label}
         </ButtonLink>
       )}
@@ -579,9 +585,9 @@ export function FormLoading({
   // One at a time form never loses one (spec 0063, AC-6306). Its colours follow the visitor's own light or dark
   // setting until the form's look arrives.
   const isOpen = layout === 'conversational' || layout === 'unknown';
-  // One at a time opens on its welcome screen (T42): the headline, its line and Start, with no question yet.
+  // One at a time opens straight on its first question (5 November 2026): one question under the name.
   const questions =
-    layout === 'classic' || layout === 'unknown' ? LOADING_QUESTIONS : isOpen ? 0 : LOADING_QUESTIONS - 1;
+    layout === 'classic' || layout === 'unknown' ? LOADING_QUESTIONS : isOpen ? 1 : LOADING_QUESTIONS - 1;
   return (
     <FormGround mode={mode} kind={isOpen ? 'open' : 'card'} isLoading>
       <VisuallyHidden>

@@ -104,6 +104,32 @@
     inline-size: var(--size-column-narrow);
   }
 
+  /* The hex inline (a form's embed button colour): it ends the swatches' row, and the swatches take the control
+     height, so the row is one height, the small field's. The row wraps by itself on a narrow slot, the hex going
+     to the next line whole, so the phone's six and five split is not needed. */
+  .root[data-hex='inline'] .swatch {
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
+  }
+
+  .root[data-hex='inline'] .row {
+    gap: var(--space-6);
+  }
+
+  @container (inline-size < 480px) {
+    .root[data-hex='inline'] .swatches {
+      max-inline-size: none;
+    }
+
+    .root[data-hex='inline'] .row {
+      align-items: center;
+    }
+
+    .root[data-hex='inline'] .swatch[data-any] {
+      margin-inline-start: 0;
+    }
+  }
+
   /* The guard's line (AC-6): the two colours it draws, then the one sentence, on the swatches' left edge. */
   .note {
     display: flex;

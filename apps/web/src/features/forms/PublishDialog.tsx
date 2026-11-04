@@ -2,11 +2,11 @@
 // Purpose: what the first publish ends on (spec 0058, AC-6, AC-21; T44): the form is live, here is its link. The
 // publish itself is one click with nothing asked first (the owner, 5 November 2026, after Tally): the name it has, a
 // link made from it, and answers matched to fields automatically; all of it changes later in Settings.
-// Main task: copy the link (the dialog's one primary), or pass it on from the share row.
-// Leaves out: the embed code (one quiet row to the Share tab, where it is set up with a preview), the name and
-// where answers go (Settings), and later publishes (a toast is enough).
+// Main task: copy the link (the dialog's one primary), or pass it on from the row of equal buttons.
+// Leaves out: the embed code (one row to the Share tab, where it is set up with a preview), changing the name and
+// where answers go (Settings; the footer says where they go, with Change), and later publishes (a toast is enough).
 import type { FormView } from '@crm/data';
-import { Button, Callout, Link, Modal } from '@crm/ui';
+import { Button, Link, Modal } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { formHref } from './paths.ts';
@@ -30,7 +30,7 @@ export interface LiveFiling {
   readonly made: readonly string[];
 }
 
-/** "<Form> is live": the link as a pill with Copy, the share row, a quiet way to the embeds, and Done. */
+/** "<Form> is live": the QR code, the link with Copy link, the share row, a row to the embeds, and Done. */
 export function ReadyDialog({ slug, form, onClose, filing }: ReadyDialogProps) {
   const { data } = useRouteContext({ from: '__root__' });
   // The last form stays while the Modal plays its exit.
@@ -47,6 +47,21 @@ export function ReadyDialog({ slug, form, onClose, filing }: ReadyDialogProps) {
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
       }}
+      // What the publish set up, said once as the footer's quiet line with the way to change it, on one line:
+      // "Answers go to People · Change" (the owner, 5 November 2026: the Callout wrapped Change onto its own line).
+      {...(filing === undefined || filing.objectName === ''
+        ? {}
+        : {
+            hint: (
+              <>
+                {strings.liveFiling(filing.objectName, filing.made)}
+                {' · '}
+                <Link href={formHref(slug, live.id, 'settings')} onPress={onClose}>
+                  {strings.changeFiling}
+                </Link>
+              </>
+            ),
+          })}
       actions={
         // Copy link is the dialog's one primary; Done only closes it. Focus starts on Done, so Enter and Esc both
         // close the dialog and the dialog is said with its name.
@@ -56,24 +71,11 @@ export function ReadyDialog({ slug, form, onClose, filing }: ReadyDialogProps) {
         </Button>
       }
     >
-      <ShareBlock name={live.name} link={data.forms.hostedUrl(live.publicKey)}>
-        <Link href={formHref(slug, live.id, 'share')} onPress={onClose}>
-          {strings.putOnSite}
-        </Link>
-        {/* What the publish set up, said once, with the way to change it (5 November 2026: was only a toast). */}
-        {filing !== undefined && filing.objectName !== '' && (
-          <Callout
-            tone="info"
-            actions={
-              <Link href={formHref(slug, live.id, 'settings')} onPress={onClose}>
-                {strings.changeFiling}
-              </Link>
-            }
-          >
-            {strings.liveFiling(filing.objectName, filing.made)}
-          </Callout>
-        )}
-      </ShareBlock>
+      <ShareBlock
+        name={live.name}
+        link={data.forms.hostedUrl(live.publicKey)}
+        onward={{ label: strings.putOnSite, href: formHref(slug, live.id, 'share'), onPress: onClose }}
+      />
     </Modal>
   );
 }

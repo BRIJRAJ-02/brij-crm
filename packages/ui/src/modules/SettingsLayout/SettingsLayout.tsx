@@ -262,7 +262,11 @@ export interface SettingsStackProps {
    * parts, for a rule's conditions under a quiet label (a form's Show only if and Logic, 4 November 2026), where the
    * page's space-16 and the tab's breath put a hole between the label and what it labels.
    */
-  readonly variant?: 'default' | 'plain' | 'nested';
+  /**
+   * `flush` is `plain` with no breath above it, so its first control starts on the same line as what sits beside it
+   * in a two column grid: a form's embed choices beside EmbedPreview's made up site (the owner, 5 November 2026).
+   */
+  readonly variant?: 'default' | 'plain' | 'nested' | 'flush';
   /**
    * `readable` holds the stack to `size-dialog-wide`, so a row's control stays near its label on a wide screen: a
    * tab of plain rows with no Card around them (a form's Settings, forms fixes 2), where the full width put a label
