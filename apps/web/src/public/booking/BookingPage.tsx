@@ -283,6 +283,9 @@ export function BookingPage({
   const [preview, setPreview] = useState<unknown>(undefined);
   // A failed first read is tried again once, quietly, before the page says it couldn't reach it (critic B-14).
   const quietRetries = useRef(1);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // A quiet retry still waiting when the page goes is let go.
+  useEffect(() => () => clearTimeout(retryTimer.current), []);
   const [attempt, setAttempt] = useState(0);
   // A page that turned out closed, with whose it is when the read said (critic B-09).
   const [closedHost, setClosedHost] = useState<{ readonly name: string; readonly image?: string } | undefined>(
@@ -367,7 +370,7 @@ export function BookingPage({
           // A failed (not busy) first read is tried again once, quietly, before the page says so (critic B-14).
           if (state === 'failed' && quietRetries.current > 0) {
             quietRetries.current -= 1;
-            globalThis.setTimeout(() => setAttempt((count) => count + 1), QUIET_RETRY_MS);
+            retryTimer.current = globalThis.setTimeout(() => setAttempt((count) => count + 1), QUIET_RETRY_MS);
             return;
           }
           setLoaded({ state });
@@ -470,7 +473,11 @@ export function BookingPage({
             : {
                 action: {
                   href: handle,
-                  label: strings.seePage(closedHost?.name.split(/\s+/u)[0] ?? handle.slice(1)),
+                  // Their first name when the page said whose it is, else a neutral way on, never the address.
+                  label:
+                    closedHost === undefined
+                      ? strings.seeTheirPage
+                      : strings.seePage(closedHost.name.split(/\s+/u)[0] ?? closedHost.name),
                 },
               })}
         >
@@ -1493,9 +1500,11 @@ function Booking({
   const controls = viewSwitch;
 
   // Book, once a time is picked (critic A10): until then its band holds a quiet line, and on a phone nothing.
-  const bookBar = (
+  // The ref goes on the one Book a visitor can reach: List's own over the month (whose band is inert under it), else
+  // the month's (review, 5 Nov 2026: with both holding it, Enter on a time could send focus to the inert copy).
+  const bookBarOf = (isReachable: boolean) => (
     <Button
-      ref={bookButton}
+      {...(isReachable ? { ref: bookButton } : {})}
       variant="primary"
       size="lg"
       isFullWidth="center"
@@ -1513,10 +1522,16 @@ function Booking({
           : strings.bookAt(dayHeading, timeLabel(time, zone, locale, hour12))}
     </Button>
   );
+  const isListCovering = view === 'list' && !isPastTimes;
+  const bookBar = bookBarOf(!isListCovering);
   const noticeLine =
     notice === undefined ? undefined : (
-      // Said as it shows: Back put focus on the day, and the reason is why.
-      <Callout tone="danger" isAnnounced>
+      // Said as it shows: Back put focus on the day, and the reason is why. A time gone by or a link's time taken
+      // is information, not a failure (review, 5 Nov 2026); a time taken under the visitor's Confirm stays a warning.
+      <Callout
+        tone={notice === strings.errors.atPast || notice === strings.errors.atGone ? 'info' : 'danger'}
+        isAnnounced
+      >
         {notice}
       </Callout>
     );
@@ -1617,7 +1632,7 @@ function Booking({
       footer={bookBar}
       {...(time === undefined ? { footerWaiting: strings.pickTime } : {})}
       {...(cover === undefined ? {} : { cover })}
-      {...(view === 'list' && !isPastTimes ? { coverFooter: bookBar } : {})}
+      {...(isListCovering ? { coverFooter: bookBarOf(true) } : {})}
     >
       {noticeLine}
       <MonthTiles

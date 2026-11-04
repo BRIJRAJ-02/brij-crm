@@ -14,10 +14,6 @@
     /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
     --panel-duration: 480ms;
 
-    /* A field's outline holds 3:1 on the card (critic A12): the app's quiet field border vanished on a dark card, so
-       the public form takes the strong border in light and the control border in dark. */
-    --field-border: light-dark(var(--border-strong), var(--control-border));
-
     display: flex;
     flex: 1;
     flex-direction: column;

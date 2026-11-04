@@ -313,49 +313,37 @@ export function BookingChat({
                       </span>
                     </div>
                   )}
-                  {line.confirm === undefined ? (
-                    // Quick replies as the page's own chips (critics C5, A9): the same control as the lengths.
-                    <div className={styles.suggestions}>
-                      <ChoiceChips
-                        label={strings.suggestions}
-                        isLabelHidden
-                        isSingle
-                        choices={line.suggestions.map((suggestion) => ({ id: suggestion, label: suggestion }))}
-                        selected={[]}
-                        onChange={(picked) => {
-                          const said = picked[0];
-                          if (said === undefined) return;
-                          onSend(said);
+                  {/* Quick replies are actions, so they stay buttons (review, 5 Nov 2026: toggle chips announced a
+                      pressed state for something that sends), in the secondary round look of a chip. */}
+                  <div
+                    className={styles.suggestions}
+                    data-confirm={line.confirm === undefined ? undefined : ''}
+                    role="group"
+                    aria-label={strings.suggestions}
+                  >
+                    {line.suggestions.map((suggestion) => (
+                      <Button
+                        key={suggestion}
+                        {...(line.confirm === undefined
+                          ? // Chips, as an AI chat's quick replies: a quiet outline, fully round.
+                            { variant: 'secondary' as const, isRound: true }
+                          : suggestion === line.confirm
+                            ? {
+                                variant: 'primary' as const,
+                                size: 'xl' as const,
+                                icon: 'check' as const,
+                                isFullWidth: 'center' as const,
+                              }
+                            : { variant: 'secondary' as const, size: 'xl' as const, isFullWidth: 'center' as const })}
+                        onPress={() => {
+                          onSend(suggestion);
                           focusField();
                         }}
-                      />
-                    </div>
-                  ) : (
-                    <div className={styles.suggestions} data-confirm="" role="group" aria-label={strings.suggestions}>
-                      {line.suggestions.map((suggestion) => (
-                        <Button
-                          key={suggestion}
-                          {...(line.confirm === undefined
-                            ? // Chips, as an AI chat's quick replies: a quiet outline, fully round.
-                              { variant: 'secondary' as const, isRound: true }
-                            : suggestion === line.confirm
-                              ? {
-                                  variant: 'primary' as const,
-                                  size: 'xl' as const,
-                                  icon: 'check' as const,
-                                  isFullWidth: 'center' as const,
-                                }
-                              : { variant: 'secondary' as const, size: 'xl' as const, isFullWidth: 'center' as const })}
-                          onPress={() => {
-                            onSend(suggestion);
-                            focusField();
-                          }}
-                        >
-                          {suggestion}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
+                      >
+                        {suggestion}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

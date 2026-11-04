@@ -172,9 +172,9 @@ function greetingOf(props: ChatPanelProps): Line {
   const isOffHours = starts.length > 0 && daytime.length < Math.min(3, starts.length);
   const text =
     offered.length === 0
-      ? strings.chatNoTimes(host.isTeam)
+      ? strings.chatNoTimes(host.first)
       : isOffHours
-        ? `${greeting} ${strings.chatOffHours(host.isTeam)}`
+        ? `${greeting} ${strings.chatOffHours(host.first)}`
         : greeting;
   return {
     id: 'greeting',

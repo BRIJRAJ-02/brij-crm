@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -103,7 +103,11 @@ export function SlotList({
 }: SlotListProps) {
   const listRef = useRef<HTMLUListElement>(null);
   const isLocked = variant === 'offers' && answered !== undefined;
-  const tabbable = slots.some((slot) => slot.id === value) ? value : slots[0]?.id;
+  // The tab stop: the picked time, else the one the keyboard last stood on, else the first (review, 5 Nov 2026: tabbing
+  // away and back returned to the first time).
+  const [lastFocused, setLastFocused] = useState<string | undefined>(undefined);
+  const has = (id: string | undefined) => id !== undefined && slots.some((slot) => slot.id === id);
+  const tabbable = has(value) ? value : has(lastFocused) ? lastFocused : slots[0]?.id;
   const slotButton = (id: string) =>
     [...(listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-slot]') ?? [])].find(
       (button) => button.dataset.slot === id,
@@ -206,6 +210,7 @@ export function SlotList({
                   data-slot={slot.id}
                   tabIndex={slot.id === tabbable ? 0 : -1}
                   onKeyDown={onKey}
+                  onFocus={() => setLastFocused(slot.id)}
                   data-busy={slot.isBusy === true ? '' : undefined}
                   {...(variant === 'picker' ? { 'aria-pressed': isPicked } : {})}
                   {...(variant === 'offers' && answered !== undefined

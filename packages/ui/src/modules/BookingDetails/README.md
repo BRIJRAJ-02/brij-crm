@@ -46,4 +46,4 @@ The chips are GuestChips (2 November 2026), shared with the manage page's guests
 - The note's label says it is optional in its own words, "Anything the host should know? (optional)" (critics C14, A11), with no hint under it.
 - The fields stop at a form's width (`size-dialog-form`), and the step's card hugs them (BookingFrame).
 - One foot band with Book's (critic C6): Back is a secondary button at Confirm's `lg` size, and Confirm takes the rest of the band, over a hairline.
-- Field outlines hold 3:1 on the card: the strong border in light, the control border in dark (critic A12).
+- Field outlines are unchanged: critic A12 (the quiet field border faint on a dark card) is the owner's call on the `field-border` token (owner exception, 20 Oct), raised rather than overridden here.

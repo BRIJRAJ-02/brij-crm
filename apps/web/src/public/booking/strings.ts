@@ -80,15 +80,17 @@ export const strings = {
    * The chat speaks as the host (owner, 4 Nov 2026: "that person is doing it", not an assistant): their first name on
    * a personal page, the team's name on a team page, and the core agent's replies in the same voice.
    */
+  // The assistant says what it is and whom it books for (review, 5 Nov 2026): under "Ada's booking assistant" it never
+  // claims to be Ada.
   chatGreeting: (who: { readonly label: string; readonly isTeam: boolean }, title: string, minutes: number) =>
-    `Hi, ${who.isTeam ? `it’s ${who.label}` : `I’m ${who.label}`}. When suits you for a ${String(minutes)} min ${title}?`,
+    `Hi, I can book you a ${String(minutes)} min ${title} with ${who.label}. When suits you?`,
   /** The chat's name over its first line (critic B-10): what it is, in the host's name. */
   chatAssistant: (host: string) => `${host}’s booking assistant`,
   /** Few of the host's times fall in the visitor's daytime (critic B-10): said once, in the greeting. */
-  chatOffHours: (isTeam: boolean) => `Most of ${isTeam ? 'our' : 'my'} open times fall outside your daytime.`,
+  chatOffHours: (host: string) => `Most of ${host}’s open times fall outside your daytime.`,
   /** The note, folded into the confirm card. */
   chatCardNote: (note: string) => `Note: ${note.length > 60 ? `${note.slice(0, 59)}…` : note}`,
-  chatNoTimes: (isTeam: boolean) => `${isTeam ? 'We’re' : 'I’m'} fully booked right now. Check back soon.`,
+  chatNoTimes: (host: string) => `${host} is fully booked right now. Check back soon.`,
   chatSuggestions: ['Something later', 'Next week'] as readonly string[],
   /**
    * What the prompt box asks after each reply (the owner, 4 Nov 2026: the words follow the conversation): the first
@@ -165,6 +167,7 @@ export const strings = {
   pausedBy: (host: string) => `${host} isn’t taking bookings here right now`,
   pausedText: 'Their other pages may still be open.',
   seePage: (host: string) => `See ${host}’s page`,
+  seeTheirPage: 'See their other pages',
   /** A one off link with nothing left to book (spec 0062, AC-6204). */
   linkUsedTitle: 'This link has been used',
   linkUsedText: 'Ask whoever sent it for a new one.',

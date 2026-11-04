@@ -54,7 +54,7 @@ export const Greeting: Story = {
     await waitFor(() => expect(canvas.getByRole('list', { name: 'Times on Fri 9 Oct' })).toBeVisible());
     await userEvent.click(canvas.getByRole('button', { name: '9:30 AM, Fri 9 Oct, 30 minutes' }));
     await expect(args.onPickTime).toHaveBeenCalledWith('Fri 9 Oct 9:30 AM');
-    await userEvent.click(canvas.getByRole('radio', { name: 'Next week' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Next week' }));
     await expect(args.onSend).toHaveBeenCalledWith('Next week');
     await expect(canvas.getByRole('button', { name: 'Send' })).toBeDisabled();
     const field = canvas.getByRole('textbox', { name: 'Message' });
@@ -261,7 +261,7 @@ export const Done: Story = {
   ),
   play: async ({ canvas }) => {
     await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Message' })).toBeDisabled());
-    await expect(canvas.queryByRole('radio', { name: 'Something later' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: 'Something later' })).toBeNull();
   },
 };
 
@@ -315,7 +315,7 @@ export const Extras: Story = {
     </Stage>
   ),
   play: async ({ canvas, args }) => {
-    await userEvent.click(canvas.getByRole('radio', { name: 'Add a guest' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Add a guest' }));
     await expect(args.onSend).toHaveBeenCalledWith('Add a guest');
   },
 };

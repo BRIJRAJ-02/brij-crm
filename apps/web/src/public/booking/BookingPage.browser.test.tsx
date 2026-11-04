@@ -189,9 +189,8 @@ describe('a next times chip’s time (spec 0061, AC-6110)', () => {
     fakeApi('month', [new Date(Date.parse(start) + 3_600_000).toISOString()]);
     openAt(`?at=${encodeURIComponent(start)}&len=30`);
     show();
-    await loaded();
-    await loaded();
-    expect(host?.textContent).toContain('That time was just taken. Here are the others.');
+    // The reads go through a few more promises since the slots read waits on the link hash: wait for the line.
+    await vi.waitFor(() => expect(host?.textContent).toContain('That time was just taken. Here are the others.'));
     expect(host?.textContent).not.toContain('Your name');
   });
 
@@ -201,9 +200,7 @@ describe('a next times chip’s time (spec 0061, AC-6110)', () => {
     // Yesterday: before the first read's window, so no answer could ever hold it.
     openAt(`?at=${encodeURIComponent(new Date(Date.now() - 86_400_000).toISOString())}&len=30`);
     show();
-    await loaded();
-    await loaded();
-    expect(host?.textContent).toContain('That time has passed. Here are the next ones.');
+    await vi.waitFor(() => expect(host?.textContent).toContain('That time has passed. Here are the next ones.'));
   });
 
   it('opens as it always did for an address whose at is no instant', async () => {

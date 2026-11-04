@@ -210,7 +210,13 @@ export async function GET(request) {
   const picture = profile === undefined ? undefined : await pictureOf(url.origin, profile.image);
   const loaded = await loadAssets();
 
-  const meeting = slug === undefined || isStrip ? undefined : await pageOf(url.origin, handle, slug);
+  const meeting =
+    slug === undefined || isStrip || profile === undefined ? undefined : await pageOf(url.origin, handle, slug);
+  // A page card for a page that isn't there (private, paused, deleted, or no such slug) is no card at all, briefly
+  // cached: it never falls back to drawing (and caching) the profile under every slug a caller tries (review).
+  if (slug !== undefined && !isStrip && meeting === undefined) {
+    return new Response('Not found', { status: 404, headers: { 'cache-control': CARD_CACHE_CONTROL_MISSED } });
+  }
   const source =
     meeting === undefined
       ? {

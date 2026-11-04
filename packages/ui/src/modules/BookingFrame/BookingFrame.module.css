@@ -464,6 +464,16 @@
     .stage[data-view='chat'] > .cover {
       position: static;
     }
+
+    /* The List view too: its days and times set the card's height, rather than a stretch of empty card under the
+       last time where the month's height used to be (review, 5 November 2026). */
+    .stage[data-view='list'] > .under {
+      display: none;
+    }
+
+    .stage[data-view='list'] > .cover {
+      position: static;
+    }
   }
 
   /* Stacked under the month (a phone), the times run on down the page with it: no box of their own and no second
@@ -697,8 +707,10 @@
      narrow that is not a frame of its own, so a media query would read the window and lay out two columns in a
      phone. First run's preview of a page that doesn't exist yet, and so can't be shown in a PreviewFrame. */
   @media (width >= 1024px) {
+    /* From the top, not centred: the card now hugs each step (the details, the receipt), and centred it jumped up and
+       down the page between steps with the rail beside it (review, 5 November 2026). */
     .root {
-      align-items: center;
+      align-items: flex-start;
       padding-block: var(--space-32);
     }
 
@@ -781,6 +793,7 @@
 
   /* Inside a site's embed the frame is the window: from a tablet's width the month and the day's times sit side by
      side, the host's block above them, rather than a phone's column stretched across a wide frame (critic B-11). */
+  /* 700px is the `bp-page-frame` token: a media query can't read a custom property, so it is written out here. */
   @media (700px <= width < 1024px) {
     .root[data-embedded]:not([data-compact]) .panes[data-panes='two'] {
       grid-template-columns: minmax(0, 1fr) var(--size-column-wide);

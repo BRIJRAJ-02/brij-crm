@@ -97,7 +97,7 @@ export function reportHeight(
 /**
  * Tells the site its booking page just booked (critic B-01, 4 November 2026), so it can thank the visitor or count
  * it: the message names nothing about the booking or the guest (no name, email, time or token), and goes to the
- * framing page's own origin only. The embed script hands it on as a `timefix:booked` event on the embed's element.
+ * framing page's own origin only, where the site hears it as a `message` event (`data.timefix === 1`, `data.type === 'booked'`).
  */
 export function postBooked(embed: Embed, post: PostToHost): void {
   post({ timefix: 1, type: 'booked', fid: embed.frameId }, embed.hostOrigin);
