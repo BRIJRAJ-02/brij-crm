@@ -213,7 +213,7 @@ describe('Settings › Apps', () => {
     });
     await expect.element(page.getByRole('heading', { name: 'Menu QR' })).toBeInTheDocument();
     // Menu is in already, so Menu QR's Install asks nothing more.
-    await userEvent.click(page.getByRole('button', { name: 'Install' }).first());
+    await userEvent.click(page.getByRole('button', { name: 'Install Menu QR', exact: true }));
     await expect.poll(() => calls).toEqual(['install:menu_qr:false']);
   });
 
@@ -226,8 +226,7 @@ describe('Settings › Apps', () => {
       pattern: '/w/$slug/settings/apps',
       at: '/w/acme/settings/apps',
     });
-    const installs = page.getByRole('button', { name: 'Install' });
-    await userEvent.click(installs.nth(1));
+    await userEvent.click(page.getByRole('button', { name: 'Install Menu QR', exact: true }));
     await expect.element(page.getByRole('heading', { name: 'Menu QR needs Menu' })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Install both' }));
     await expect.poll(() => calls).toEqual(['install:menu_qr:true']);
