@@ -289,6 +289,32 @@ export function SubmissionsTab({
             (text) => text?.toLowerCase().includes(needle) === true,
           ),
         );
+  // The open submission's neighbours in the list as shown, for the panel's arrows and J and K.
+  const at = open === undefined ? -1 : shown.findIndex((submission) => submission.id === open.id);
+  const before = at > 0 ? shown[at - 1] : undefined;
+  const after = at >= 0 ? shown[at + 1] : undefined;
+  useEffect(() => {
+    if (open === undefined) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      ) {
+        return;
+      }
+      const next = event.key === 'j' ? after : event.key === 'k' ? before : undefined;
+      if (next === undefined) return;
+      event.preventDefault();
+      go(next.id);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+    };
+  });
+
   const waiting = rows.filter((submission) => submission.state === 'needs_review').length;
   // What a bulk action acts on: the picked rows still in view (a filter or a search may hide some).
   const picked = shown.filter((submission) => selected.has(submission.id));
@@ -709,7 +735,34 @@ export function SubmissionsTab({
               {formName} · <RelativeTime value={open.receivedAt} />
             </>
           }
-          actions={<StatusDot hue={stateHue(open, isFiling)}>{stateLabel(open, isFiling)}</StatusDot>}
+          actions={
+            <>
+              <StatusDot hue={stateHue(open, isFiling)}>{stateLabel(open, isFiling)}</StatusDot>
+              {/* The one before and after in the list, without closing (forms fix a, Gmail's and Attio's K and J). */}
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="chevron-up"
+                label={strings.previousSubmission}
+                kbd="K"
+                isDisabled={before === undefined}
+                onPress={() => {
+                  if (before !== undefined) go(before.id);
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="chevron-down"
+                label={strings.nextSubmission}
+                kbd="J"
+                isDisabled={after === undefined}
+                onPress={() => {
+                  if (after !== undefined) go(after.id);
+                }}
+              />
+            </>
+          }
           isStacked
           isOpen
           onClose={() => {

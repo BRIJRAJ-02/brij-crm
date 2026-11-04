@@ -572,6 +572,9 @@ export const strings = {
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
   spamFilesTitle: 'Our spam check caught this',
   spamFiles: (day: string) => `Open files only if you trust the sender. Removed on ${day} unless marked Not spam.`,
+  /** The open submission's neighbours in the list (forms critique a). */
+  previousSubmission: 'Previous submission',
+  nextSubmission: 'Next submission',
   /** A form that keeps answers only: the way to the CRM from a submission (forms fix a10). */
   turnOnCrm: 'Save answers to the CRM',
   /** All leaves spam out; this chip opens it (forms fix a8). */
