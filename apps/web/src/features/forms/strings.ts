@@ -110,7 +110,7 @@ export const strings = {
   tabs: 'Form sections',
   tabForm: 'Form',
   tabSettings: 'Settings',
-  tabInstall: 'Install',
+  tabShare: 'Share',
   tabSubmissions: 'Submissions',
   tabAnalytics: 'Analytics',
   published: 'Published.',
@@ -169,6 +169,26 @@ export const strings = {
   // First publish (spec 0058, AC-13): one step, then the Ready panel (AC-6)
   publishTitle: 'Publish your form',
   liveTitle: 'Your form is live',
+  /** The live dialog's one line (T44): the form's own name, then "is live". */
+  liveTitleOf: (name: string) => `${name} is live`,
+  /** The live dialog's line on where answers go: "Answers go to People · 1 new field: Budget". */
+  liveFiling: (objectName: string, made: readonly string[]) =>
+    made.length === 0
+      ? `Answers go to ${objectName}.`
+      : `Answers go to ${objectName} · ${made.length === 1 ? '1 new field' : `${String(made.length)} new fields`}: ${made.join(', ')}.`,
+  /** Opens where the live dialog's line is changed (Settings › CRM). */
+  changeFiling: 'Change',
+  /** The live dialog's quiet way to the Share tab's embeds. */
+  putOnSite: 'Put it on your site',
+  qrLabel: 'QR code for the form’s link',
+  qrDownload: 'Download the QR code',
+  qrPng: 'PNG',
+  qrSvg: 'SVG',
+  qrDownloadFailed: 'The QR code didn’t download. Try again.',
+  sendLink: 'Send the link',
+  sendEmail: 'Email',
+  sendWhatsapp: 'WhatsApp',
+  sendMore: 'More',
   name: 'Name',
   /** An example of a name, never the name an unnamed form gets: Publish refuses a blank one. */
   namePlaceholder: 'Contact us',
@@ -345,6 +365,8 @@ export const strings = {
   viewOnly: 'View only',
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
+  /** The Share tab's first Card: the form's link (not "Share" again under the Share tab). */
+  linkTitle: 'Link',
   shareTip: 'Opens the form on its own page.',
   link: 'Link',
   copy: 'Copy',
@@ -360,9 +382,17 @@ export const strings = {
   embedPopup: 'Popup',
   embedFloating: 'Corner button',
   /** Each embed tile's tooltip (spec 0058, AC-11): what the visitor sees. */
-  embedInlineHint: 'Sits in your page and grows with the form.',
-  embedPopupHint: 'Your own button opens it in a dialog.',
-  embedFloatingHint: 'A button in the corner of every page opens it.',
+  embedInlineHint: 'Sits in your page.',
+  embedPopupHint: 'A button in your page opens it.',
+  embedFloatingHint: 'A button in the corner opens it.',
+  embedWords: 'Button words',
+  embedColour: 'Button colour',
+  embedColourDefault: 'Accent',
+  embedTransparent: 'Clear background',
+  embedTransparentHint: 'Your page’s background shows through.',
+  embedHideTitle: 'Hide the title',
+  embedHideTitleHint: 'When your page already says it.',
+  embedPreview: 'How the form sits on your site',
   /** Under the corner button's snippet: the one thing a site may want to change. */
   embedFloatingWords: 'Change its words in data-timefix-text.',
   /** The words on the popup's and the corner's button, until the site changes them. */
@@ -716,24 +746,17 @@ export const strings = {
   analyticsFaster: (by: string) => `${by} faster`,
   analyticsSlower: (by: string) => `${by} slower`,
   analyticsNoMedian: 'No finishes yet',
-  analyticsDay: 'Day',
-  analyticsChart: (days: number) => `Views per day over the last ${String(days)} days`,
-  analyticsDropOff: 'Where people stop',
-  analyticsDropOffChart: 'People who stopped on each question',
   analyticsQuestion: 'Question',
-  /** A question's place in the form, as the drop off chart's axis label: "Q4". */
-  analyticsQuestionAt: (at: number) => `Q${String(at)}`,
   analyticsSummary: 'Headline figures',
-  analyticsLeft: 'Stopped here',
-  analyticsSources: 'Where they come from',
-  analyticsSource: 'Source',
   analyticsCompletions: 'Finished',
   analyticsDirect: 'Direct',
   analyticsEmpty: 'No visits yet',
-  analyticsEmptyText: 'Share the form’s link to see how it performs.',
+  analyticsEmptyText: 'Numbers show here once people open the form.',
+  analyticsShareIt: 'Share the form',
+  analyticsUnnamed: 'A question with no words',
+  analyticsLastDays: (days: number) => `the last ${String(days)} days`,
   analyticsNoneInRange: 'No visits in this period',
   analyticsNoneInRangeText: 'Try a longer period.',
-  analyticsNoSources: 'Nothing yet',
   analyticsFailed: 'Analytics didn’t load',
   /** A question card's chip (AC-6322): "82% answered", or nothing at all when nobody reached it. */
   analyticsChip: (answered: string) => `${answered} answered`,
@@ -821,7 +844,4 @@ export const strings = {
   savingOffToast: 'Answers will stay in Submissions once you publish.',
   // Analytics (T22)
   analyticsFinishedOf: (finished: string, started: string) => `${finished} of ${started} who started finished`,
-  analyticsAllFinished: 'Everyone who started finished.',
-  analyticsSourceLine: (views: string, finished: string, count: number) =>
-    `${views} ${count === 1 ? 'view' : 'views'} · ${finished} finished`,
 } as const;

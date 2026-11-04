@@ -1,13 +1,21 @@
 // The arithmetic a chart draws with, pure so it is tested on its own: round axis ticks, the width of a bar and its
 // slot, how many x labels fit, a label cut to a width, and a line's path. No React, no DOM.
 
-/** The axis for values from zero to `max`: round ticks, 0 first, and the top one at or above `max`. */
-export function niceTicks(max: number, wanted = 4): { readonly ticks: readonly number[]; readonly top: number } {
+/**
+ * The axis for values from zero to `max`: round ticks, 0 first, and the top one at or above `max`. `isWhole` (counts:
+ * visits, people) keeps every tick a whole number, so two visitors never draw a 0.5 or a 2.5 (critique c, 4).
+ */
+export function niceTicks(
+  max: number,
+  wanted = 4,
+  isWhole = false,
+): { readonly ticks: readonly number[]; readonly top: number } {
   if (!Number.isFinite(max) || max <= 0) return { ticks: [0, 1], top: 1 };
   const rough = max / wanted;
   const power = 10 ** Math.floor(Math.log10(rough));
   const unit = rough / power;
-  const step = (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 2.5 ? 2.5 : unit <= 5 ? 5 : 10) * power;
+  const nice = (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 2.5 ? 2.5 : unit <= 5 ? 5 : 10) * power;
+  const step = isWhole ? Math.max(1, Math.ceil(nice)) : nice;
   const count = Math.ceil(max / step - 1e-9);
   // Multiply rather than add, so 0.1 steps carry no floating point dust.
   const ticks = Array.from({ length: count + 1 }, (_, index) => Number((index * step).toPrecision(12)));

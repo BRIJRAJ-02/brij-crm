@@ -34,9 +34,9 @@ export type FieldSize = 'md' | 'sm' | 'lg';
 /**
  * `default` is the boxed field; `search` the rounded search field; `cell` the bare input a grid cell edits in;
  * `copy` a value to copy, never to change: a public link, an embed code; `title` a page's own title (a note's),
- * with no box at all.
+ * with no box at all; `underline` a public form's one large answer (One at a time), a line in the accent under it.
  */
-export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title' | 'composer';
+export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title' | 'composer' | 'underline';
 
 /**
  * A text field that names a list it suggests from: the comment composer's

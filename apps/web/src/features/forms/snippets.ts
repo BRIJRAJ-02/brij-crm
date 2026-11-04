@@ -56,6 +56,10 @@ export interface EmbedTarget {
   readonly accent?: string;
   /** The corner button's mark; left out or `none`, the words alone. */
   readonly icon?: EmbedIcon;
+  /** Inline only: a clear ground, so the site's own background shows through (the Share tab's switch). */
+  readonly isTransparent?: boolean;
+  /** Inline only: the headline kept for screen readers only, since the site has its own (the Share tab's switch). */
+  readonly isTitleHidden?: boolean;
 }
 
 /** The corner button's colour: the library's accent, the blue the form's own button uses. */
@@ -80,13 +84,19 @@ export function embedSnippet(script: string, target: EmbedTarget, mode: EmbedMod
   const side = target.panel === 'side' && mode !== 'inline' ? ' data-timefix-panel="side"' : '';
   const mark = target.icon !== undefined && target.icon !== 'none' ? ` data-timefix-icon="${target.icon}"` : '';
   const colour = hexAccent(target.accent);
-  const look = `data-timefix-title="${escapeHtml(target.title)}"${target.theme === 'dark' ? ' data-timefix-theme="dark"' : ''}`;
+  // A form names its own Colour, light too, so a dialog's frame matches the form inside it rather than the visitor's
+  // system (b7, 5 November 2026); a booking page left light follows the visitor, as it always has.
+  const theme = target.theme === 'dark' || target.kind === 'form' ? ` data-timefix-theme="${target.theme}"` : '';
+  const look = `data-timefix-title="${escapeHtml(target.title)}"${theme}`;
+  const inlineLook = `${target.isTransparent === true ? ' data-timefix-ground="none"' : ''}${
+    target.isTitleHidden === true ? ' data-timefix-head="none"' : ''
+  }`;
   const holder =
     mode === 'popup'
       ? `<button type="button" ${kind} data-timefix-mode="popup"${side} ${look}>${escapeHtml(target.buttonText)}</button>`
       : mode === 'floating'
         ? `<div ${kind} data-timefix-mode="floating"${side}${mark} data-timefix-text="${escapeHtml(target.buttonText)}" data-timefix-color="${colour}" ${look}></div>`
-        : `<div ${kind} ${look}></div>`;
+        : `<div ${kind} ${look}${inlineLook}></div>`;
   return `${scriptTag(script)}\n${holder}`;
 }
 

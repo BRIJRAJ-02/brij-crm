@@ -221,8 +221,10 @@ export function RankingQuestion({ questionKey, label, words, choices, value, err
                 },
               }}
             />
+            {/* Unranked until the visitor makes the order theirs (critique c, 9): a number before then read as an
+                answer they never gave. The place keeps its width, so nothing moves when the numbers come. */}
             <span className={styles.place} data-answered={isAnswered || undefined} aria-hidden="true">
-              {index + 1}
+              {isAnswered ? index + 1 : ''}
             </span>
             <span>{choice}</span>
           </li>

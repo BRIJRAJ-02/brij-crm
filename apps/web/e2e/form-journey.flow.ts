@@ -45,7 +45,7 @@ test.describe('the form journey', () => {
     await title.press('Tab');
     await expect(page.getByRole('heading', { level: 1 })).toContainText(`Talk to us ${tag}`, { timeout: 15_000 });
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: / is live$/ })).toBeVisible({ timeout: 30_000 });
     expect(await page.getByRole('dialog', { name: 'Publish your form' }).count()).toBe(0);
     await page.keyboard.press('Escape');
     await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();

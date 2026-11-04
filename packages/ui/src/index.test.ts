@@ -72,6 +72,7 @@ describe('@crm/ui', () => {
       'DisclosureGroup',
       'DragHandle',
       'EditorStatus',
+      'EmbedPreview',
       'EmptyState',
       'FIELD_TYPES',
       'Field',

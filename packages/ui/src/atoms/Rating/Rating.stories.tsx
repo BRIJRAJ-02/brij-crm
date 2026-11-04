@@ -96,3 +96,16 @@ export const AsFormQuestion: Story = {
     await expect(group).toHaveAccessibleDescription('Pick one of the choices.');
   },
 };
+
+/** A form's Rating with seven stars and its end words under the row. */
+export const CountAndEnds: Story = {
+  render: () => (
+    <Stage width="dialog">
+      <Rating label="How was it?" count={7} field={{ ends: { start: 'Poor', end: 'Excellent' } }} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('radio')).toHaveLength(7);
+    await expect(canvas.getByText('Excellent')).toBeInTheDocument();
+  },
+};

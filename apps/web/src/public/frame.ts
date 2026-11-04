@@ -16,6 +16,10 @@ export type EmbedMode = 'inline' | 'popup';
 /** A frame the embed script made: how, its id on the host page, and the host's origin to post to. */
 export interface Embed {
   readonly mode: EmbedMode;
+  /** An inline embed asked for a clear ground (`ground=none`), so the site's background shows (the Share tab). */
+  readonly isTransparent: boolean;
+  /** An inline embed asked to keep the headline for screen readers only (`head=none`): the site has its own. */
+  readonly isTitleHidden: boolean;
   readonly frameId: string;
   readonly hostOrigin: string;
 }
@@ -48,7 +52,14 @@ export function embedOf(place: FramePlace): Embed | undefined {
   const parent = place.ancestorOrigins?.[0];
   // The browser's word wins where it has one.
   const hostOrigin = parent !== undefined ? originOf(parent) : originOf(params.get('host'));
-  return hostOrigin === undefined ? undefined : { mode, frameId, hostOrigin };
+  if (hostOrigin === undefined) return undefined;
+  return {
+    mode,
+    frameId,
+    hostOrigin,
+    isTransparent: mode === 'inline' && params.get('ground') === 'none',
+    isTitleHidden: mode === 'inline' && params.get('head') === 'none',
+  };
 }
 
 /** A message the frame sends its host, in the one shape the embed script takes. */

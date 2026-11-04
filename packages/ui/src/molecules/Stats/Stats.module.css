@@ -17,6 +17,19 @@
     min-inline-size: 0;
   }
 
+  /* Cards: each figure on Card's surface, hairline, corners and padding, a little closer together. */
+  .root[data-variant='cards'] {
+    gap: var(--space-12);
+  }
+
+  .root[data-variant='cards'] .stat {
+    padding: var(--space-12) var(--space-16);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+  }
+
   .label {
     font: var(--text-label);
     letter-spacing: var(--tracking-label);

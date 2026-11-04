@@ -89,11 +89,10 @@ test.describe('forms QA: stress', () => {
     await visitor.context().close();
   });
 
-  // BUG (forms QA, 5 November 2026): typing a bad answer and pressing Send straight away loses that press. Leaving
-  // the field draws its error line, which pushes Send down a line between the press and its release, so nothing is
-  // checked: no summary, and a required question left empty (Start date here) says nothing. Today the visitor has
-  // to press Send twice. (Typing into an optional field last hides it: no error line, no shift.)
-  test('bad input in each kind of field shows its message and sends nothing (BUG: fails today)', async ({
+  // Forms QA, 5 November 2026: typing a bad answer and pressing Send straight away used to lose that press (leaving
+  // the field drew its error line, which pushed Send down between the press and its release). The line now waits
+  // for the press to end, so the first press checks everything.
+  test('bad input in each kind of field shows its message and sends nothing, on the first press of Send', async ({
     page,
     browser,
   }) => {
@@ -230,9 +229,9 @@ test.describe('forms QA: stress', () => {
     await expect.poll(async () => (await submissionsOf(page, owner, form)).length, { timeout: 30_000 }).toBe(1);
   });
 
-  // BUG (forms QA, 5 November 2026): today a send to a form paused mid fill swaps the whole form for "This form isn’t
-  // taking enquiries right now.", and everything the visitor typed is gone, with nothing to copy.
-  test('a form closed while someone fills it in says so plainly, with their answers still on screen (BUG: fails today)', async ({
+  // Forms QA, 5 November 2026: a send to a form paused mid fill used to swap the whole form for the closed line, and
+  // everything the visitor typed was gone. Now the form stays, the line shows above Send, and Copy my answers keeps it.
+  test('a form closed while someone fills it in says so plainly, with their answers still on screen', async ({
     page,
     browser,
   }) => {
@@ -264,6 +263,7 @@ test.describe('forms QA: stress', () => {
     const story = visitor.getByLabel(/Tell us your story/);
     if ((await story.count()) > 0) await expect(story).toHaveValue('A long story I would hate to type again.');
     await expect(visitor.getByRole('heading', { name: /Thanks, we got it/ })).toHaveCount(0);
+    await expect(visitor.getByRole('button', { name: 'Copy my answers' })).toBeVisible();
     await visitor.context().close();
   });
 

@@ -9,7 +9,7 @@
 // stands as tall as its content within 2px. The popup traps focus, locks the
 // page's scroll, fills a phone's screen, closes on Escape and hands focus
 // back; the corner button opens it in the form's words. Then the site's own
-// HTML, taken from the Install tab, posts with where it came from, which the
+// HTML, taken from the Share tab, posts with where it came from, which the
 // submission keeps.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -261,14 +261,14 @@ test.describe('embeds and the site’s own form', () => {
     await visitor.getByRole('button', { name: 'Ask us anything' }).click();
     await expect(visitor.getByRole('dialog')).toBeVisible();
 
-    // The site's own HTML, from the Install tab, listed site and all.
+    // The site's own HTML, from the Share tab, listed site and all.
     await rpc(page, 'forms/updateSettings', {
       workspace,
       formId: live.id,
       allowedOrigins: [HOST],
       mutationId: randomUUID(),
     });
-    await page.goto(`/w/${workspace}/captures/forms/${live.id}?tab=install`);
+    await page.goto(`/w/${workspace}/captures/forms/${live.id}?tab=share`);
     await page.getByRole('button', { name: 'For developers' }).click();
     const own = await page.getByRole('textbox', { name: 'Form HTML' }).inputValue();
     expect(own).toContain(`data-timefix-form="${live.publicKey}"`);

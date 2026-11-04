@@ -52,8 +52,16 @@
     gap: var(--space-4);
   }
 
-  /* Two even rows on a narrow form: half the points (rounded up) in each, the first row the longer. */
+  /* On a phone's form (under 480px) the points keep one row, as Typeform's 0 to 10 does (critique c, 9): their
+     padding comes down to space-2, which a whole number still fits in at a phone's 16px. */
   @container (inline-size < 480px) {
+    .root[data-scale] .chips {
+      --space-8: var(--space-2);
+    }
+  }
+
+  /* Two even rows only where even that would clip a 10: half the points (rounded up) in each, the first the longer. */
+  @container (inline-size < 320px) {
     .root[data-columns] .chips {
       grid-auto-flow: row;
     }

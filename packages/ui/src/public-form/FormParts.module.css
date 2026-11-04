@@ -183,6 +183,12 @@
     outline: none;
   }
 
+  /* A site's inline embed (the Share tab's switch): a clear ground, so the site's own background shows through. */
+  :root[data-ground='none'],
+  .root[data-ground='none'] {
+    background: transparent;
+  }
+
   /* A template's face for the headline (spec 0068); the questions stay in the body face, as every control does. */
   .root[data-template] .headline {
     font-family: var(--form-face, var(--font-sans));
@@ -224,10 +230,6 @@
     flex-direction: column;
     gap: var(--space-8);
     margin-block-start: var(--space-24);
-  }
-
-  .loadingLine {
-    margin-block-end: var(--space-32);
   }
 
   /* The email typo hint: a muted line under the field with its Use it. */

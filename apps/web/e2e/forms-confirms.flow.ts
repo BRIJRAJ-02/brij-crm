@@ -186,9 +186,9 @@ test.describe('confirms on forms', () => {
     await page.getByRole('button', { name: 'Undo' }).first().click();
     await expect.poll(setStatus).toBe(4);
 
-    // Removing a site from the Install tab asks first; Escape keeps it; Remove site saves the list without it.
+    // Removing a site from the Share tab asks first; Escape keeps it; Remove site saves the list without it.
     const settings = calls(page, 'forms/updateSettings');
-    await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=install`);
+    await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=share`);
     await page.getByRole('button', { name: 'For developers' }).click();
     await page.getByLabel('Site address').fill('https://acme.com');
     await page.getByRole('button', { name: 'Add site' }).click();

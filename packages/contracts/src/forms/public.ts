@@ -83,6 +83,7 @@ export const PublicQuestion = z.object({
       latest: z.string().optional(),
       from: z.number().optional(),
       to: z.number().optional(),
+      count: z.number().optional(),
       lowLabel: z.string().optional(),
       highLabel: z.string().optional(),
       min: z.number().optional(),

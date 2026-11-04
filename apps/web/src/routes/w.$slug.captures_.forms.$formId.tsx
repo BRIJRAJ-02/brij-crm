@@ -29,9 +29,12 @@ const STATES: readonly string[] = ['received', 'processing', 'processed', 'spam'
 export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
   validateSearch: (search: Record<string, unknown>): FormSearch => ({
     tab:
-      typeof search.tab === 'string' && (FORM_TABS as readonly string[]).includes(search.tab)
-        ? (search.tab as FormTab)
-        : 'form',
+      // Share was called Install until 5 November 2026: an old link still opens it.
+      search.tab === 'install'
+        ? 'share'
+        : typeof search.tab === 'string' && (FORM_TABS as readonly string[]).includes(search.tab)
+          ? (search.tab as FormTab)
+          : 'form',
     ...(typeof search.state === 'string' && STATES.includes(search.state)
       ? { state: search.state as SubmissionState }
       : {}),
@@ -103,16 +106,16 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
 });
 
 /**
- * The editor while it loads, in its shape: the tab strip (Form and Settings, which every form has; Install and
+ * The editor while it loads, in its shape: the tab strip (Form and Settings, which every form has; Share and
  * Submissions too when one of them is asked for, since only a published form has them), the asked one shown.
  */
 function FormPending() {
   const { tab } = Route.useSearch();
-  const published = tab === 'install' || tab === 'submissions' || tab === 'analytics';
+  const published = tab === 'share' || tab === 'submissions' || tab === 'analytics';
   const label: Readonly<Record<FormTab, string>> = {
     form: strings.tabForm,
     settings: strings.tabSettings,
-    install: strings.tabInstall,
+    share: strings.tabShare,
     submissions: strings.tabSubmissions,
     analytics: strings.tabAnalytics,
   };

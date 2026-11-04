@@ -74,6 +74,23 @@ export const Default: Story = {
   },
 };
 
+/** An ending open in the builder: its words in the form's place, as the visitor reads them after sending. */
+export const Ending: Story = {
+  args: { form: CONTACT, ending: { heading: 'Thanks, we’ll call you', line: 'Usually within a day.' } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Thanks, we’ll call you')).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Send' })).toBeNull();
+  },
+};
+
+/** The plain thank you open in the builder. */
+export const ThankYou: Story = {
+  args: { form: CONTACT, ending: {} },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Thanks, we got it.')).toBeInTheDocument();
+  },
+};
+
 /** Dark colour and square corners: the whole of a form's look. */
 export const DarkSquare: Story = {
   args: { form: { ...CONTACT, look: { colour: 'dark', corners: 'square' } } },
