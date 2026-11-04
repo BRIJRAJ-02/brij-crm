@@ -421,7 +421,13 @@ import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from
 import { createDueTasks, type DueTasksSource } from './tasks/due.ts';
 import type { ActivityDraft, ActivityResult, NoteList, NoteSession, NotesStore } from './notes/store.ts';
 import type { Note as NoteWithBody } from '@crm/contracts';
-import type { CommentEmoji, CommentVersion, NotificationKind, NotificationStatus } from '@crm/contracts';
+import type {
+  CommentEmoji,
+  CommentVersion,
+  NotificationKind,
+  NotificationStatus,
+  NotificationView,
+} from '@crm/contracts';
 import type { CommentsStore, NewComment, RecordComments } from './comments/store.ts';
 import type { FilesStore, RecordFilesSource } from './files/store.ts';
 import type {
