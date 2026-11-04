@@ -39,6 +39,8 @@ interface SampleProps {
   readonly onChange?: (id: string, change: OptionsEditorChange) => void;
   readonly onMove?: (id: string, position: number) => void;
   readonly onArchive?: (id: string) => void;
+  /** Choices: a number beside each (a form question's points). */
+  readonly hasScores?: boolean;
 }
 
 /** The editor holding its own options, as AttributeSettings does before create. */
@@ -56,8 +58,10 @@ function SampleOptions({
   onChange,
   onMove,
   onArchive,
+  hasScores = false,
 }: SampleProps) {
   const [options, setOptions] = useState(initial);
+  const [scores, setScores] = useState<Readonly<Record<string, number | undefined>>>({});
   const made = useRef(0);
   const set = (id: string, change: Partial<OptionsEditorOption>) => {
     setOptions((before) => before.map((option) => (option.id === id ? { ...option, ...change } : option)));
@@ -73,6 +77,17 @@ function SampleOptions({
         startsWithBlank={startsWithBlank}
         {...(labelMaxLength === undefined ? {} : { labelMaxLength })}
         pending={new Set(pending)}
+        {...(hasScores
+          ? {
+              scores: {
+                of: (id: string) => scores[id],
+                label: (name: string) => `Points for ${name}`,
+                onChange: (id: string, points: number | undefined) => {
+                  setScores((before) => ({ ...before, [id]: points }));
+                },
+              },
+            }
+          : {})}
         errors={errors}
         newId={() => {
           made.current += 1;
@@ -378,5 +393,15 @@ export const ChoicesStartBlank: Story = {
     await expect(blank).not.toHaveFocus();
     await expect(blank).toHaveAttribute('placeholder', 'Type a choice');
     await expect(blank).toHaveAttribute('maxlength', '80');
+  },
+};
+
+/** Choices with a number beside each (`scores`): a form question's points, by the choice they score. */
+export const ChoicesWithScores: Story = {
+  args: { kind: 'choice', initial: SIZES, isDraft: true, limit: 40, hasScores: true },
+  play: async ({ canvas, userEvent }) => {
+    const medium = canvas.getByRole('textbox', { name: 'Points for Medium' });
+    await userEvent.type(medium, '5');
+    await expect(medium).toHaveValue('5');
   },
 };

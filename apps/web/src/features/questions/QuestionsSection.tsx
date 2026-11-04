@@ -1536,6 +1536,17 @@ function QuestionEditor({
           onChange={(next) => {
             onChange({ choices: next });
           }}
+          // Once the question gives points, each number sits beside the choice it scores (critique 8).
+          {...(Array.isArray(question.points) && SCORED_TYPES.includes(question.answerType)
+            ? {
+                points: {
+                  values: question.points,
+                  onChange: (points: readonly number[] | undefined) => {
+                    onChange({ points: points === undefined ? null : [...points] });
+                  },
+                },
+              }
+            : {})}
         />
       )}
       {family && !isLocked && (
@@ -1613,6 +1624,14 @@ interface ChoicesEditorProps {
   readonly onChange: (next: readonly string[]) => void;
   /** Whether a row holds a refused edit (a repeated choice), so the question can say it needs a fix. */
   readonly onInvalidChange: (isInvalid: boolean) => void;
+  /**
+   * What each choice is worth, by place, once the question gives points: a number beside each choice. `onChange`
+   * hands back the whole list, or undefined when nothing but zeros is left (the question scores nothing again).
+   */
+  readonly points?: {
+    readonly values: readonly number[];
+    readonly onChange: (points: readonly number[] | undefined) => void;
+  };
 }
 
 /** The longest choice the form contract takes (`document.ts`: "Keep a choice to 80 characters."). */
@@ -1628,7 +1647,7 @@ function mintChoiceId(): string {
  * the handle, rename in place, a quiet remove on each, and Add choice opens a
  * blank row where Enter adds it and stays for the next.
  */
-function ChoicesEditor({ choices, isReadOnly, onChange, onInvalidChange }: ChoicesEditorProps) {
+function ChoicesEditor({ choices, isReadOnly, onChange, onInvalidChange, points }: ChoicesEditorProps) {
   // A refused edit leaves with the list (the answer type changed): the question no longer needs a fix for it.
   const tellInvalid = useRef(onInvalidChange);
   useEffect(() => {
@@ -1671,6 +1690,25 @@ function ChoicesEditor({ choices, isReadOnly, onChange, onInvalidChange }: Choic
       newId={mintChoiceId}
       isReadOnly={isReadOnly}
       onInvalidChange={onInvalidChange}
+      {...(points === undefined
+        ? {}
+        : {
+            scores: {
+              of: (id: string) => {
+                const at = rowIds.indexOf(id);
+                return at < 0 ? undefined : (points.values[at] ?? 0);
+              },
+              label: strings.pointsFor,
+              onChange: (id: string, value: number | undefined) => {
+                const at = rowIds.indexOf(id);
+                if (at < 0) return;
+                const next = [...points.values];
+                while (next.length <= at) next.push(0);
+                next[at] = value ?? 0;
+                points.onChange(next.every((each) => each === 0) ? undefined : next);
+              },
+            },
+          })}
       onAdd={(option) => {
         commit([...rowIds, option.id], [...choices, option.label]);
       }}
@@ -1976,7 +2014,7 @@ function ShowWhenRules({
           }}
         />
         {/* What happens when it doesn't match, said (T41). */}
-        <Sentence lead="">{otherwise}</Sentence>
+        <Sentence>{otherwise}</Sentence>
         {!isReadOnly && showWhen.rules.length < CONDITIONS_MAX && (
           <span>
             <Button
@@ -2113,31 +2151,13 @@ function PointsEditor({ question, isReadOnly, onChange }: PointsEditorProps) {
       </SettingsRow>
     );
   }
-  // Each choice at its own place in the list, blanks skipped but never closed up: the score reads `points` against
-  // `choices` itself (`pointsOf`), so filtering first would hang every number below a blank choice on the wrong one.
+  // A choice's number sits beside the choice itself, in the choices list (critique 8): here only the way to stop.
   const choices = question.choices ?? [];
-  if (choices.every((choice) => choice.trim() === '')) {
-    return <SettingsRow title={strings.points} description={strings.pointsNoChoices} />;
-  }
-  // One row of small numbers, as the yes or no branch does, rather than a full width field per choice: the choices
-  // are listed right above, so each number only has to say which one it is for.
   return (
-    <SettingsRow title={strings.points}>
-      {choices.flatMap((choice, place) =>
-        choice.trim() === ''
-          ? []
-          : [
-              <PointsField
-                key={String(place)}
-                label={strings.pointsFor(choice)}
-                value={at(place)}
-                isReadOnly={isReadOnly}
-                onChange={(value) => {
-                  set(place, value);
-                }}
-              />,
-            ],
-      )}
+    <SettingsRow
+      title={strings.points}
+      {...(choices.every((choice) => choice.trim() === '') ? { description: strings.pointsNoChoices } : {})}
+    >
       {stop}
     </SettingsRow>
   );
@@ -2260,7 +2280,7 @@ function JumpRules({
           );
         })}
         {/* Where everyone else goes, always said (T41: a visible Otherwise). */}
-        <Sentence lead="">{strings.otherwiseLine(nextName ?? strings.theEnd)}</Sentence>
+        <Sentence>{strings.otherwiseLine(nextName ?? strings.theEnd)}</Sentence>
         {onAddRule !== undefined && (
           <span>
             <Button variant="ghost" size="sm" icon="plus" onPress={onAddRule}>
