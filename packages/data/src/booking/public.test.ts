@@ -27,6 +27,14 @@ function fake(answer: (url: string, init?: RequestInit) => Response) {
 const KEY = 'abcdefghijklmnop';
 
 describe('createBookingClient', () => {
+  it("asks for the page's first length by leaving the length out, for the read sent beside the page's facts", async () => {
+    const { client, calls } = fake(() => Response.json({ slots: [] }));
+    await client.slots(KEY, { from: '2026-11-02T00:00:00.000Z', to: '2026-11-09T00:00:00.000Z', tz: 'UTC' });
+    expect(calls[0]?.url).toBe(
+      `https://app.test/api/public/booking/${KEY}/slots?from=2026-11-02T00%3A00%3A00.000Z&to=2026-11-09T00%3A00%3A00.000Z&tz=UTC`,
+    );
+  });
+
   it('reads the page and its slots, and books with a JSON body, cookies left out', async () => {
     const { client, calls } = fake((url) =>
       Response.json(

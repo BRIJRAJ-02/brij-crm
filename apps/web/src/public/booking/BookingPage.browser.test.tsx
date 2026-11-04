@@ -216,3 +216,66 @@ describe('a next times chip’s time (spec 0061, AC-6110)', () => {
     expect(host?.textContent).not.toContain('Your name');
   });
 });
+
+describe('the times’ read (4 Nov 2026: the chat view sat on its loading shape for 2 to 3 seconds)', () => {
+  it('asks for the first times beside the page’s facts, not after them', async () => {
+    const asked: string[] = [];
+    // The facts never answer here: the times' read must already be out regardless.
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      asked.push(url);
+      return new Promise<Response>(() => undefined);
+    });
+    show();
+    await loaded();
+    const slots = asked.find((url) => url.includes('/slots'));
+    expect(slots).toBeDefined();
+    // With no length yet: the page's first, which the server picks.
+    expect(slots).not.toContain('duration=');
+  });
+
+  it('draws the times from that read, without asking again', async () => {
+    const start = new Date(Date.now() + 86_400_000);
+    start.setUTCHours(9, 0, 0, 0);
+    const api = fakeApi('month', [start.toISOString()]);
+    show();
+    await loaded();
+    await loaded();
+    expect(
+      api.mock.calls.filter(([input]) => String(input instanceof Request ? input.url : input).includes('/slots')),
+    ).toHaveLength(1);
+    expect(host?.textContent).toContain('9:00');
+  });
+
+  it('holds the chat’s own shape while the times load: a bubble, a day’s times and the prompt box', async () => {
+    // The facts answer at once, the times never do.
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/slots')) return new Promise<Response>(() => undefined);
+      if (url.includes('/viewer')) return Promise.resolve(answer({ isHost: false, canConnect: false }));
+      return Promise.resolve(
+        answer({
+          publicKey: KEY,
+          title: 'meeting',
+          description: '',
+          hostName: 'Ada',
+          durations: [30],
+          location: { type: 'video' },
+          hostTimeZone: 'UTC',
+          windowDays: 30,
+          defaultView: 'chat',
+        }),
+      );
+    });
+    show();
+    await loaded();
+    expect(chosenView()).toBe('chat');
+    // The view on show (the month under it is inert): far more than two bars, the bubble, the day's label, six times
+    // and the prompt box.
+    const shown = [...(host?.querySelectorAll('[aria-busy="true"]') ?? [])].filter(
+      (each) => each.closest('[inert]') === null,
+    );
+    const shapes = Math.max(0, ...shown.map((each) => each.querySelectorAll('[aria-hidden="true"]').length));
+    expect(shapes).toBeGreaterThanOrEqual(9);
+  });
+});

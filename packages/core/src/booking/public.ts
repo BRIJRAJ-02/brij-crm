@@ -922,11 +922,14 @@ export async function readPublicSlots(
   const now = deps.now?.() ?? new Date();
   const from = new Date(query.from);
   const to = new Date(query.to);
-  const { page, memberIds, team, shut } = await inWorkspace(entry.scope, async (tx) => {
+  const { page, memberIds, team, shut, duration } = await inWorkspace(entry.scope, async (tx) => {
     const live = await livePage(tx, entry);
-    checkDuration(live, query.duration);
+    // Left out, the page's first length: the one the page opens on (PublicSlotsQuery).
+    const length = query.duration ?? live.durations[0] ?? 0;
+    checkDuration(live, length);
     // Only through a form (AC-1388): without a hand off, no times.
-    if (await formOnlyShut(tx, live, link)) return { page: live, team: undefined, memberIds: [], shut: true };
+    if (await formOnlyShut(tx, live, link))
+      return { page: live, team: undefined, memberIds: [], shut: true, duration: length };
     const loaded = await loadTeam(tx, live);
     const handed =
       link === undefined || loaded?.kind !== 'round_robin'
@@ -939,6 +942,7 @@ export async function readPublicSlots(
       team: found,
       memberIds: found === undefined ? await membersOf(tx, live) : teamMemberIds(found),
       shut: false,
+      duration: length,
     };
   });
   if (shut) return { slots: [], calendar: 'ok' };
@@ -954,7 +958,7 @@ export async function readPublicSlots(
     const reads = await inWorkspace(entry.scope, (tx) =>
       readTeam(tx, page, team, busyByMember, { from, to, margin: BUSY_MARGIN_MS, now }),
     );
-    const found = teamSlots(page, team, reads, { duration: query.duration, from, to, now });
+    const found = teamSlots(page, team, reads, { duration, from, to, now });
     return {
       slots: found.slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
       calendar: found.blocked ? 'unreachable' : 'ok',
@@ -977,7 +981,7 @@ export async function readPublicSlots(
     limits: await limitChecks(tx, [host], from, to),
   }));
   const slots = pageSlots(page, {
-    duration: query.duration,
+    duration,
     from,
     to,
     now,

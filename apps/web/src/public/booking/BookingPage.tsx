@@ -15,6 +15,7 @@ import {
   isDataError,
   withPreviewDraft,
   type PublicBookingPage,
+  type PublicSlots,
   type PublicViewerAnswer,
   type SlotsOverlay,
 } from '@crm/data/booking';
@@ -24,6 +25,7 @@ import type {
   BookingDetailsValues,
 } from '@crm/ui/public-booking/details';
 import {
+  BookingChatGhost,
   BookingFrame,
   BookingMessage,
   Button,
@@ -33,7 +35,6 @@ import {
   DeferredSelect,
   MonthTiles,
   SegmentedControl,
-  Skeleton,
   SlotList,
   type BookingFact,
   type DeferredSelectItem,
@@ -158,9 +159,21 @@ export interface BookingPageProps {
 
 type Client = ReturnType<typeof createBookingClient>;
 
+/**
+ * The first chunk's times, asked for beside the page's facts rather than after them (4 Nov 2026: the times waited on
+ * the facts, then on the brand's stylesheet, a round trip each, 2 to 3 seconds on a phone): the zone and length it
+ * was read for, and its answer. The page takes it only when it wants exactly that read; anything else reads afresh.
+ */
+interface EarlySlots {
+  readonly zone: string;
+  /** The length asked for; undefined asked for the page's first, which the page opens on. */
+  readonly duration: number | undefined;
+  readonly answer: Promise<PublicSlots>;
+}
+
 type Loaded =
   | { readonly state: 'loading' }
-  | { readonly state: 'ready'; readonly page: PublicBookingPage }
+  | { readonly state: 'ready'; readonly page: PublicBookingPage; readonly early?: EarlySlots }
   | { readonly state: 'gone' | 'closed' | 'failed' | 'used' | 'invitation' };
 
 /** One slots read covers 62 days (two months of the month view). */
@@ -245,6 +258,25 @@ export function BookingPage({
   // The last preview message, kept until the page loads to lay it over.
   const [preview, setPreview] = useState<unknown>(undefined);
   const load = useCallback(() => {
+    // The first chunk's times, beside the facts (EarlySlots): only when the page opens on that chunk.
+    const zone = back.chosen.zone ?? timeZone;
+    const today = dayKey(now(), zone);
+    const opensOnFirst = back.chosen.day === undefined || back.chosen.day < addDays(today, CHUNK_DAYS);
+    const early: EarlySlots | undefined = opensOnFirst
+      ? {
+          zone,
+          duration: back.chosen.duration,
+          answer: client.slots(publicKey, {
+            from: new Date(Math.max(startOfDay(today, zone), now())).toISOString(),
+            to: new Date(startOfDay(addDays(today, CHUNK_DAYS), zone)).toISOString(),
+            tz: zone,
+            ...(back.chosen.duration === undefined ? {} : { duration: back.chosen.duration }),
+            ...(handoff === undefined ? {} : { p: handoff }),
+          }),
+        }
+      : undefined;
+    // Nobody may take it (the page turned out closed, or gone): its failure is then nobody's to report.
+    early?.answer.catch(() => undefined);
     (oneOffToken === undefined ? Promise.resolve(undefined) : oneOffHash(oneOffToken))
       .then((linkHash) => client.page(publicKey, handoff, linkHash))
       .then(
@@ -272,13 +304,18 @@ export function BookingPage({
           const pinned =
             page.brand?.template === 'night' ? 'dark' : page.brand?.template === 'studio' ? 'light' : undefined;
           if (pinned !== undefined && !isEditorPreview) document.documentElement.dataset.theme = pinned;
+          // A page that opens on Book by chat fetches the chat's code now, beside its times, not once they're in.
+          const opens = isEditorPreview
+            ? viewOf(page.defaultView)
+            : (savedView(addressPath) ?? viewOf(page.defaultView));
+          if (opens === 'chat') void import('./ChatPanel.tsx');
           // The brand it wears (spec 0060, AC-4), waited on a moment so the page draws in its colour from the start,
           // with its logo already decoded, so the logo is there with the header rather than pushing it down later.
           void Promise.all([
             wearStylesheet(document, brandHref('booking', page.publicKey, page.brand?.version)),
             preloadImage(railBrand(page).brand?.logo?.src),
           ]).then(() => {
-            setLoaded({ state: 'ready', page });
+            setLoaded({ state: 'ready', page, ...(early === undefined ? {} : { early }) });
           });
         },
         (error: unknown) => {
@@ -286,7 +323,7 @@ export function BookingPage({
           setLoaded({ state: code === 'NOT_FOUND' ? 'gone' : code === 'BOOKING_CLOSED' ? 'closed' : 'failed' });
         },
       );
-  }, [client, publicKey, handoff, oneOffToken, isEditorPreview, onAddress]);
+  }, [client, publicKey, handoff, oneOffToken, isEditorPreview, onAddress, back, timeZone, now, addressPath]);
   useEffect(load, [load]);
   useEffect(() => {
     if (isPreview) return;
@@ -345,6 +382,7 @@ export function BookingPage({
           startedAt={startedAt}
           onBooked={onBooked}
           onEnded={ended}
+          {...(loaded.early === undefined ? {} : { early: loaded.early })}
           chosen={back.chosen}
           {...(back.at === undefined ? {} : { at: back.at })}
           isPreview={isPreview}
@@ -500,14 +538,9 @@ export function LoadingBooking({
   );
 }
 
-/** The chat's shape while it loads: the greeting's place at the top and the composer's at the foot. */
+/** The chat's shape while it loads: the greeting's bubble, a day's times and the prompt box, where the chat puts them. */
 function ChatLoading() {
-  return (
-    <>
-      <Skeleton shape="block" lines={3} />
-      <Skeleton shape="block" />
-    </>
-  );
+  return <BookingChatGhost />;
 }
 
 /** No day is open until the times arrive. */
@@ -555,7 +588,10 @@ function Booking({
   isEditorPreview,
   addressPath,
   viewer,
+  early,
 }: {
+  /** The first chunk's times, asked for beside the page's facts: taken by the first read that wants exactly them. */
+  readonly early?: EarlySlots;
   readonly handoff?: string;
   readonly chosen: Chosen;
   /**
@@ -636,6 +672,8 @@ function Booking({
         ),
   );
   const [reload, setReload] = useState(0);
+  // Whether the read asked beside the page's facts has answered its chunk: it answers once, never a later read.
+  const isEarlyTaken = useRef(false);
   // Coming back to the page reads the times again, so hours the host changed meanwhile show (the owner, 22 October
   // 2026): the server answers with no-store, and nothing else would read them until a reload.
   useEffect(() => {
@@ -684,97 +722,110 @@ function Booking({
     const controller = new AbortController();
     const from = startOfDay(addDays(today, wanted * CHUNK_DAYS), zone);
     const to = startOfDay(addDays(today, (wanted + 1) * CHUNK_DAYS), zone);
-    client
-      .slots(
-        page.publicKey,
-        {
-          from: new Date(Math.max(from, now())).toISOString(),
-          to: new Date(to).toISOString(),
-          duration,
-          tz: zone,
-          // A form's hand off: a team page then offers only the hosts its routing chose (spec 0043).
-          ...(handoff === undefined ? {} : { p: handoff }),
-        },
-        controller.signal,
-      )
-      .then(
-        (answer) => {
-          const next = new Map(current);
-          next.set(
-            wanted,
-            answer.slots.map((slot) => slot.start),
-          );
-          const overlays = new Map(read.key === readKey ? read.overlays : []);
-          if (answer.viewer === undefined) overlays.delete(wanted);
-          else overlays.set(wanted, answer.viewer);
-          setRead({
-            key: readKey,
-            loaded: next,
-            overlays,
-            unreachable: answer.calendar === 'unreachable',
-            failed: false,
-          });
-          // The first open day is chosen on arrival (AC-665); further chunks on until one has times, the
-          // visitor's clashes left out while they're hidden (spec 0028), so a busy first chunk reads on.
-          const hidden = new Set(
-            notYou || showAll
-              ? []
-              : [...overlays.values()].filter((each) => each.calendar === 'ok').flatMap((each) => each.clashes),
-          );
-          const first = [...next.values()]
-            .flat()
-            .filter((start) => !hidden.has(start))
-            .sort()[0];
-          if (first === undefined && wanted + 1 < chunks) setWanted(wanted + 1);
-          setDay((picked) => picked ?? (first === undefined ? undefined : dayKey(Date.parse(first), zone)));
-          if (first !== undefined)
-            setMonth((shown) => (shown === monthOf(today) ? monthOf(dayKey(Date.parse(first), zone)) : shown));
-          // The time a next times chip asked for (spec 0061, AC-6110), answered by the read that covers it: it is
-          // chosen and the details form opens on it, as Match with your calendar's own times do. A time that went
-          // between the link page drawing the chip and this read says so, over that day's other times.
-          const asked = at === undefined ? undefined : Date.parse(at);
-          if (asked !== undefined && !isAtDone.current) {
-            // The read that covers the asked time answers it; a time no read can ever cover (one in the past, or
-            // past the page's horizon) is answered once the last chunk is in, so the page never waits in silence.
-            const covers = asked >= from && asked < to;
-            const isLast = wanted + 1 >= chunks;
-            if (covers || asked < from || isLast) {
-              isAtDone.current = true;
-              // A time the visitor's own calendar clashes with is no better an answer here than a taken one: the
-              // picker would not have offered it, so it takes the same line rather than opening the form on it.
-              const match = covers
-                ? (next.get(wanted) ?? []).find((start) => Date.parse(start) === asked && !hidden.has(start))
-                : undefined;
-              if (match === undefined) {
-                setNotice(strings.errors.atGone);
-                // Back's own path: focus lands on the chosen day, where the times the line promises are.
-                setStep({ step: 'pick', attempt: '', back: true });
-              } else {
-                const key = dayKey(asked, zone);
-                setDay(key);
-                setMonth(monthOf(key));
-                setTime(match);
-                setStep({ step: 'details', attempt: crypto.randomUUID(), back: false });
-              }
+    // The read asked beside the page's facts answers the first chunk, once, when it was read for this zone and length.
+    const isEarly =
+      early !== undefined &&
+      !isEarlyTaken.current &&
+      wanted === 0 &&
+      reload === 0 &&
+      early.zone === zone &&
+      (early.duration ?? page.durations[0]) === duration;
+    const request = isEarly
+      ? early.answer
+      : client.slots(
+          page.publicKey,
+          {
+            from: new Date(Math.max(from, now())).toISOString(),
+            to: new Date(to).toISOString(),
+            duration,
+            tz: zone,
+            // A form's hand off: a team page then offers only the hosts its routing chose (spec 0043).
+            ...(handoff === undefined ? {} : { p: handoff }),
+          },
+          controller.signal,
+        );
+    request.then(
+      (answer) => {
+        // A read this effect no longer wants (the early one, which nothing aborts) changes nothing.
+        if (controller.signal.aborted) return;
+        if (isEarly) isEarlyTaken.current = true;
+        const next = new Map(current);
+        next.set(
+          wanted,
+          answer.slots.map((slot) => slot.start),
+        );
+        const overlays = new Map(read.key === readKey ? read.overlays : []);
+        if (answer.viewer === undefined) overlays.delete(wanted);
+        else overlays.set(wanted, answer.viewer);
+        setRead({
+          key: readKey,
+          loaded: next,
+          overlays,
+          unreachable: answer.calendar === 'unreachable',
+          failed: false,
+        });
+        // The first open day is chosen on arrival (AC-665); further chunks on until one has times, the
+        // visitor's clashes left out while they're hidden (spec 0028), so a busy first chunk reads on.
+        const hidden = new Set(
+          notYou || showAll
+            ? []
+            : [...overlays.values()].filter((each) => each.calendar === 'ok').flatMap((each) => each.clashes),
+        );
+        const first = [...next.values()]
+          .flat()
+          .filter((start) => !hidden.has(start))
+          .sort()[0];
+        if (first === undefined && wanted + 1 < chunks) setWanted(wanted + 1);
+        setDay((picked) => picked ?? (first === undefined ? undefined : dayKey(Date.parse(first), zone)));
+        if (first !== undefined)
+          setMonth((shown) => (shown === monthOf(today) ? monthOf(dayKey(Date.parse(first), zone)) : shown));
+        // The time a next times chip asked for (spec 0061, AC-6110), answered by the read that covers it: it is
+        // chosen and the details form opens on it, as Match with your calendar's own times do. A time that went
+        // between the link page drawing the chip and this read says so, over that day's other times.
+        const asked = at === undefined ? undefined : Date.parse(at);
+        if (asked !== undefined && !isAtDone.current) {
+          // The read that covers the asked time answers it; a time no read can ever cover (one in the past, or
+          // past the page's horizon) is answered once the last chunk is in, so the page never waits in silence.
+          const covers = asked >= from && asked < to;
+          const isLast = wanted + 1 >= chunks;
+          if (covers || asked < from || isLast) {
+            isAtDone.current = true;
+            // A time the visitor's own calendar clashes with is no better an answer here than a taken one: the
+            // picker would not have offered it, so it takes the same line rather than opening the form on it.
+            const match = covers
+              ? (next.get(wanted) ?? []).find((start) => Date.parse(start) === asked && !hidden.has(start))
+              : undefined;
+            if (match === undefined) {
+              setNotice(strings.errors.atGone);
+              // Back's own path: focus lands on the chosen day, where the times the line promises are.
+              setStep({ step: 'pick', attempt: '', back: true });
+            } else {
+              const key = dayKey(asked, zone);
+              setDay(key);
+              setMonth(monthOf(key));
+              setTime(match);
+              setStep({ step: 'details', attempt: crypto.randomUUID(), back: false });
             }
           }
-        },
-        (error: unknown) => {
-          if (error instanceof DOMException && error.name === 'AbortError') return;
-          const end = pageEnded(isDataError(error) ? error.code : undefined);
-          if (end !== undefined) {
-            onEnded(end);
-            return;
-          }
-          setRead({
-            key: readKey,
-            loaded: current,
-            overlays: read.key === readKey ? read.overlays : new Map(),
-            unreachable: false,
-            failed: true,
-          });
-        },
-      );
+        }
+      },
+      (error: unknown) => {
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return;
+        if (isEarly) isEarlyTaken.current = true;
+        const end = pageEnded(isDataError(error) ? error.code : undefined);
+        if (end !== undefined) {
+          onEnded(end);
+          return;
+        }
+        setRead({
+          key: readKey,
+          loaded: current,
+          overlays: read.key === readKey ? read.overlays : new Map(),
+          unreachable: false,
+          failed: true,
+        });
+      },
+    );
     return () => controller.abort();
   }, [
     client,
@@ -792,6 +843,9 @@ function Booking({
     handoff,
     onEnded,
     at,
+    early,
+    reload,
+    page.durations,
   ]);
 
   const loaded = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();

@@ -263,7 +263,11 @@ export const PublicSlotsQuery = z
   .object({
     from: Timestamp,
     to: Timestamp,
-    duration: z.coerce.number().pipe(BookingDuration),
+    /**
+     * The meeting's length. Left out, the page's first (its default): what the page itself opens on, so the page can
+     * ask for its first times beside its facts rather than after them (4 Nov 2026).
+     */
+    duration: z.coerce.number().pipe(BookingDuration).optional(),
     tz: TimeZoneName,
     /** A form's signed hand off (spec 0043, AC-1609): the slots of the hosts its routing chose. */
     p: z.string().max(2_000).optional(),
@@ -504,6 +508,11 @@ export const PublicChatReply = z.object({
   confirm: z.string().optional(),
   /** With `confirm`: what it would book, so the page can draw the read back as a card (when, who). */
   readBack: z.object({ start: Timestamp, name: z.string(), email: z.string() }).optional(),
+  /**
+   * Which details a held time still waits on (4 Nov 2026): both, the name, the email or a number to call. The page's
+   * prompt box asks for exactly that. Absent when nothing is held, or once the details are read back.
+   */
+  asks: z.enum(['details', 'name', 'email', 'phone']).optional(),
   duration: BookingDuration,
   booked: PublicBooked.optional(),
 });
