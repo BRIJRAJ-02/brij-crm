@@ -204,6 +204,13 @@
     min-inline-size: var(--size-column-min);
   }
 
+  /* A name inside the box: one width for every field in the stack, so their values line up. */
+  .root[data-prefix-width='label'] .prefix[data-text] {
+    flex: none;
+    align-self: center;
+    inline-size: var(--size-column-min);
+  }
+
   .lock {
     display: inline-flex;
     color: var(--text-tertiary);
