@@ -2,6 +2,8 @@ import { IconScope } from '../atoms/Icon/Icon.tsx';
 import { icons } from '../atoms/Icon/icons.ts';
 import { providerArt } from '../atoms/ProviderMark/art.ts';
 import { ProviderArtContext } from '../atoms/ProviderMark/art-context.ts';
+import { useState } from 'react';
+import { createToastClearance, ToastClearanceContext } from './toast-clearance.ts';
 import { ToastRegion } from './ToastRegion.tsx';
 import { UiProviderBase, type UiProviderProps } from './UiProviderBase.tsx';
 
@@ -16,10 +18,14 @@ export { detectKeyboardPlatform, type UiProviderProps } from './UiProviderBase.t
  * here, never from the browser.
  */
 export function UiProvider(props: UiProviderProps) {
+  // The footers the toasts keep clear of (a drawer's Save and Cancel), claimed by Modal and Panel.
+  const [clearance] = useState(createToastClearance);
   return (
     <IconScope icons={icons}>
       <ProviderArtContext value={providerArt}>
-        <UiProviderBase {...props} toastRegion={<ToastRegion toasts={props.toasts} />} />
+        <ToastClearanceContext value={clearance}>
+          <UiProviderBase {...props} toastRegion={<ToastRegion toasts={props.toasts} />} />
+        </ToastClearanceContext>
       </ProviderArtContext>
     </IconScope>
   );

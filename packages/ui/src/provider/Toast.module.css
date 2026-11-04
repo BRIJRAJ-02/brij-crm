@@ -1,9 +1,15 @@
 /* The toast region and its toasts: a 36px confirmation at the bottom right,
    an icon, one sentence and dismiss. Each toast is its own view transition
    (named from --toast-name), so it rises in and the others slide; the
-   transition's animations are in the base layer. */
+   transition's animations are in the base layer. While an open drawer's,
+   sheet's or panel's footer sits where the toasts would, the region rises
+   (--toast-lift, measured by ToastRegion) to stand space-8 above it, so
+   Save and Cancel are never covered; it glides there as movement does. */
 @layer components {
   .region {
+    /* How far the toasts rise to clear a footer, in pixels; ToastRegion sets it while one is in the way. */
+    --toast-lift: calc(0 * var(--space-8));
+
     position: fixed;
     inset-block-end: var(--space-16);
     inset-inline-end: var(--space-16);
@@ -14,6 +20,17 @@
     gap: var(--space-8);
     max-inline-size: calc(100vw - 2 * var(--space-16));
     outline: none;
+    transition: translate var(--duration-move) var(--ease-in-out);
+  }
+
+  .region[data-lifted] {
+    translate: 0 calc(-1 * (var(--toast-lift) + var(--space-8)));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .region {
+      transition: none;
+    }
   }
 
   .region[data-focus-visible] {
