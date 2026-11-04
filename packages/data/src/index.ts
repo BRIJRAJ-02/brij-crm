@@ -242,6 +242,8 @@ export {
   type DuplicatePairsList,
   type DuplicatePairsState,
 } from './duplicates/store.ts';
+/** A booking a guest made, as Bookings' arrival toast hears it (B-12). */
+export type { BookingArrival } from './bookings/arrivals.ts';
 export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contracts';
 /** The settings Settings changes live on a form (forms fixes 2). */
 export type LiveSettingsChange = ApplyFormSettingsInput['settings'];
@@ -443,6 +445,7 @@ import type {
   NotificationSettingsChange,
 } from './inbox/store.ts';
 import { createUnreadCounts, type UnreadSource } from './inbox/unread.ts';
+import { ARRIVALS_READ, createBookingArrivals, type BookingArrival } from './bookings/arrivals.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -1687,6 +1690,7 @@ export function createDataLayer({
       store.clear();
     });
     unreadCounts.clear();
+    bookingArrivals.clear();
     trashedLookups.clear();
     void trash?.then((held) => {
       held.clear();
@@ -2390,6 +2394,8 @@ export function createDataLayer({
     void namesMe(workspace, event.memberIds).then((named) => {
       if (!named) return;
       unreadCounts.refresh(workspace);
+      // A guest's booking tells its host here (B-12): Bookings' "New booking" toast, and its lists read again.
+      bookingArrivals.changed(workspace);
       void inbox?.then((store) => {
         store.changed(workspace, event);
       });
@@ -2747,6 +2753,21 @@ export function createDataLayer({
     meetings.refreshHeld(workspace);
     homeReads.teamChanged(workspace);
   };
+  // New bookings as they arrive (B-12, `bookings/arrivals.ts`): heard through the host's booking notice.
+  const bookingArrivals = createBookingArrivals({
+    read: (workspace) =>
+      beforeRead(workspace)
+        .then(() =>
+          call((options) =>
+            api.notifications.list({ workspace, status: 'inbox', kind: 'booking', unreadOnly: true }, options),
+          ),
+        )
+        .then((page) => page.items.slice(0, ARRIVALS_READ)),
+    watch,
+    refresh: (workspace) => {
+      refreshBookings(workspace);
+    },
+  });
   /** A booking or a calendar changed: every held Bookings read of the workspace reads again. */
   const reloadBookings = (workspace: string) => {
     bookingsLists.reloadAll(workspace);
@@ -4917,6 +4938,12 @@ export function createDataLayer({
       recents: (workspace: string): HomeHeld<HomeRecentsState> => homeReads.recents(workspace),
     },
     bookings: {
+      /**
+       * Hears each booking a guest makes on one of the member's pages while it listens (B-12): the Bookings screens'
+       * "New booking" toast. Bookings' held reads read again as one arrives. The answer stops listening.
+       */
+      arrivals: (workspace: string, listener: (arrival: BookingArrival) => void): (() => void) =>
+        bookingArrivals.listen(workspace, listener),
       /** Why a round robin booking went to its host (spec 0029, AC-742): for its host and admins. */
       assignments: (workspace: string, bookingId: string): Promise<BookingAssignment[]> =>
         call((options) => api.bookings.assignments({ workspace, bookingId }, options)),

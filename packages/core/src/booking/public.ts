@@ -69,6 +69,7 @@ import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseAll, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { notifyBooking } from '../notifications/notify.ts';
 import type { BookingCalendar, BusyReader } from './calendar.ts';
 import {
   BUSY_MARGIN_MS,
@@ -1497,6 +1498,9 @@ export async function bookPublicSlot(
             .where(eq(bookings.id, bookingId));
         }
       }
+      // Its hosts hear of it in their Inbox (B-12), in this write, after the guest's person is filed so the notice can
+      // name them; the outbox's `notifications` row tells their open screens at once.
+      await notifyBooking(context, { bookingId, memberIds: [...new Set([host, ...hosts])] });
       return {
         bookingId,
         replayed: false,

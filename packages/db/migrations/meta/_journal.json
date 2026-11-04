@@ -1226,6 +1226,13 @@
       "when": 1795511001000,
       "tag": "0174_submission_trash",
       "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "7",
+      "when": 1795600000000,
+      "tag": "0176_booking_notifications",
+      "breakpoints": true
     }
   ]
 }

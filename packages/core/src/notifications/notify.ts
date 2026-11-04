@@ -24,7 +24,7 @@ import type { WriteContext } from '../engine/write.ts';
  */
 type SwitchedKind = Exclude<
   NotificationKind,
-  'form_submission' | 'join_request' | 'automation' | 'scheduling_changed' | 'webhook_off'
+  'form_submission' | 'join_request' | 'automation' | 'scheduling_changed' | 'webhook_off' | 'booking'
 >;
 
 /** The settings column that says whether a kind is emailed. */
@@ -391,4 +391,32 @@ export async function notifyWebhookOff(
     returning member_id::text as member_id
   `);
   return made.rows.map((row) => row.member_id);
+}
+
+/**
+ * A guest booked (bookings fix lane O, B-12, migration 0176): one `booking` notification in each host's inbox (the
+ * assigned host, and every host of a collective booking), naming the booking and the guest's person record when the
+ * booking filed one, written in the booking's own write so the two commit together. Active members only. The actor is
+ * the booking itself (a guest is not a member). Each host already has the "New booking" email queued beside it, so the
+ * row is marked emailed now and no notifications email or digest repeats it. Records the hosts in the write's
+ * `notifications` outbox row, so their open inbox and Bookings hear of it at once.
+ */
+export async function notifyBooking(
+  context: WriteContext,
+  input: { readonly bookingId: string; readonly memberIds: readonly string[] },
+): Promise<readonly string[]> {
+  if (input.memberIds.length === 0) return [];
+  const made = await context.tx.execute<{ member_id: string }>(sql`
+    insert into notifications (workspace_id, member_id, kind, actor_type, actor_id, booking_id, record_id, emailed_at)
+    select b.workspace_id, m.id, 'booking', 'booking', b.id, b.id, b.person_record_id, now()
+    from bookings b
+    join members m on m.workspace_id = b.workspace_id and m.status = 'active'
+      and m.id = any(${uuidList(input.memberIds)})
+    where b.id = ${input.bookingId}::uuid
+    on conflict do nothing
+    returning member_id::text as member_id
+  `);
+  const members = made.rows.map((row) => row.member_id);
+  if (members.length > 0) context.record({ notifications: members });
+  return members;
 }

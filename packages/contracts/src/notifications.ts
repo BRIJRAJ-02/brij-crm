@@ -30,7 +30,8 @@ export const MAX_NOTIFICATION_CURSOR = 256;
  * `join_request`, someone asks to join (flow pass); `task_due`, a task assigned to them is due today (migration 0135);
  * `automation`, an automation's notify action (parity #53); `scheduling_changed`, someone else changed the member's
  * scheduling (spec 0037, AC-1264), naming only who; `webhook_off`, a webhook endpoint turned off after 3 days of
- * failed deliveries (spec 0064, AC-6423), to owners and admins.
+ * failed deliveries (spec 0064, AC-6423), to owners and admins; `booking`, a guest booked one of the member's pages
+ * (bookings fix lane O, B-12), to its hosts.
  */
 export const NotificationKind = z.enum([
   'mention',
@@ -42,6 +43,7 @@ export const NotificationKind = z.enum([
   'automation',
   'scheduling_changed',
   'webhook_off',
+  'booking',
 ]);
 /** Why a member was notified. */
 export type NotificationKind = z.infer<typeof NotificationKind>;
@@ -78,6 +80,16 @@ export const NotificationView = z.object({
   formName: z.string().optional(),
   /** A webhook endpoint turned off (spec 0064): the endpoint, which Settings › Webhooks opens on; its host is the excerpt. */
   webhookEndpointId: Uuid.optional(),
+  /** A guest's booking (B-12): the booking, which Bookings' List opens on, and what the row says of it. */
+  bookingId: Uuid.optional(),
+  booking: z
+    .object({
+      pageTitle: z.string(),
+      guestName: z.string(),
+      startsAt: Timestamp,
+      status: z.enum(['confirmed', 'cancelled']),
+    })
+    .optional(),
   excerpt: z.string(),
 });
 /** One notification as its recipient sees it. */

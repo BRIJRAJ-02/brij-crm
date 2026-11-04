@@ -11,6 +11,7 @@ import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
 import { submitForm } from '../forms/public.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { newId } from '../engine/ids.ts';
+import { listNotifications } from '../notifications/inbox.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -417,6 +418,29 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
     );
     expect(stored.rows[0]?.meeting_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(stored.rows[0]?.manage_token_hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('tells its host in their Inbox, once, naming the booking and the guest, already emailed (B-12)', async () => {
+    const w = await workspace();
+    const { entry } = await livePage(w);
+    const input = bookInput();
+    const booked = await bookPublicSlot(entry, deps(), input);
+    // A retry of the same attempt answers the first booking and tells nobody again.
+    await bookPublicSlot(entry, deps(), input);
+    const inbox = await listNotifications(w.owner, { status: 'inbox', kind: 'booking' });
+    expect(inbox.items).toEqual([
+      expect.objectContaining({
+        kind: 'booking',
+        actor: { type: 'booking', id: booked.bookingId },
+        bookingId: booked.bookingId,
+        booking: { pageTitle: 'Intro call', guestName: 'Grace Hopper', startsAt: MONDAY_9, status: 'confirmed' },
+        record: expect.objectContaining({ name: 'Grace Hopper' }) as unknown,
+      }),
+    ]);
+    const stored = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ emailed: boolean }>(sql`select emailed_at is not null as emailed from notifications`),
+    );
+    expect(stored.rows).toEqual([{ emailed: true }]);
   });
 
   it('links the booking to the form submission a hand off names, only when its form sends visitors to this page (AC-1058)', async () => {
