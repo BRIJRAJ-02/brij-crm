@@ -56,23 +56,23 @@ export function ReadyDialog({ slug, form, onClose, filing }: ReadyDialogProps) {
         </Button>
       }
     >
-      {/* What the publish set up, said once, with the way to change it (5 November 2026: was only a toast). */}
-      {filing !== undefined && filing.objectName !== '' && (
-        <Callout
-          tone="info"
-          actions={
-            <Link href={formHref(slug, live.id, 'settings')} onPress={onClose}>
-              {strings.changeFiling}
-            </Link>
-          }
-        >
-          {strings.liveFiling(filing.objectName, filing.made)}
-        </Callout>
-      )}
       <ShareBlock name={live.name} link={data.forms.hostedUrl(live.publicKey)}>
         <Link href={formHref(slug, live.id, 'share')} onPress={onClose}>
           {strings.putOnSite}
         </Link>
+        {/* What the publish set up, said once, with the way to change it (5 November 2026: was only a toast). */}
+        {filing !== undefined && filing.objectName !== '' && (
+          <Callout
+            tone="info"
+            actions={
+              <Link href={formHref(slug, live.id, 'settings')} onPress={onClose}>
+                {strings.changeFiling}
+              </Link>
+            }
+          >
+            {strings.liveFiling(filing.objectName, filing.made)}
+          </Callout>
+        )}
       </ShareBlock>
     </Modal>
   );
