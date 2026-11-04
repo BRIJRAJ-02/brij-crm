@@ -66,6 +66,7 @@ import {
 } from '@crm/contracts';
 import { ensureLinkPage, publicProfilesOf } from '../../booking/handles.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
+import { DELETED_SUBMISSIONS_KEPT_DAYS } from '../../forms/submissions.ts';
 import type { WriteContext } from '../../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../registry.ts';
 import type { UploadStore } from '../../forms/uploads.ts';
@@ -490,6 +491,22 @@ export function spamSweepStatement(workspaceId: string, limit: number) {
 }
 
 /**
+ * One batch of submissions deleted more than `DELETED_SUBMISSIONS_KEPT_DAYS` ago (forms fixes 2: deletes are soft, so
+ * Undo can put one back), oldest first: a range of `form_submissions_deleted`. Exported for its EXPLAIN test.
+ */
+export function deletedSweepStatement(workspaceId: string, limit: number) {
+  return sql`
+    delete from form_submissions where (workspace_id, id) in (
+      select s.workspace_id, s.id from form_submissions s
+      where s.workspace_id = ${workspaceId} and s.deleted_at is not null
+        and s.deleted_at < now() - make_interval(days => ${DELETED_SUBMISSIONS_KEPT_DAYS}::integer)
+      order by s.deleted_at, s.id limit ${limit}
+      for update of s skip locked
+    )
+  `;
+}
+
+/**
  * One batch of submissions older than the workspace keeps them (12 or 24 months), never one still being filed: a
  * range of `form_submissions_by_received` up to one cutoff. Exported for its EXPLAIN test.
  */
@@ -515,8 +532,12 @@ export function retentionSweepStatement(workspaceId: string, months: number, lim
  */
 async function oldSubmissions(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
   const { tx, scope } = context;
-  const spam = await tx.execute(spamSweepStatement(scope.workspaceId, limit));
-  let count = spam.rowCount ?? 0;
+  const deleted = await tx.execute(deletedSweepStatement(scope.workspaceId, limit));
+  let count = deleted.rowCount ?? 0;
+  if (count < limit) {
+    const spam = await tx.execute(spamSweepStatement(scope.workspaceId, limit - count));
+    count += spam.rowCount ?? 0;
+  }
   if (count < limit) {
     const [kept] = await tx
       .execute<{ months: number | null }>(

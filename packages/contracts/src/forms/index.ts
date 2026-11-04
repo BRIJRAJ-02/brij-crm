@@ -5,6 +5,7 @@ export * from './answer-words.ts';
 export * from './check.ts';
 export * from './context.ts';
 export * from './dial-codes.ts';
+export * from './zone-country.ts';
 export * from './email-hint.ts';
 export * from './document.ts';
 export * from './forms.ts';

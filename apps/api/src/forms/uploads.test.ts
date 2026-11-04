@@ -271,3 +271,21 @@ describe('form uploads', () => {
     expect((await submit(live.publicKey, signed(drawn.fileId))).status).toBe(200);
   });
 });
+
+// The builder's warning (forms fixes 2): Where it goes' choices say when visitors can't upload a file here.
+describe('whether uploads work here', () => {
+  it('says nothing where the store is set up, and uploadsOff where none is', async () => {
+    const { m, live } = await formWithFile();
+    expect((await m.client.forms.attributes({ workspace: m.slug, formId: live.id })).uploadsOff).toBeUndefined();
+    const { app: storeless } = signInApp({ db, identity }, {}, {});
+    const other = await memberWithWorkspace(storeless);
+    const form = await other.client.forms.create({
+      workspace: other.slug,
+      id: newId(),
+      name: 'Apply',
+      mainObjectId: other.people.id,
+      mutationId: newId(),
+    });
+    expect((await other.client.forms.attributes({ workspace: other.slug, formId: form.id })).uploadsOff).toBe(true);
+  });
+});

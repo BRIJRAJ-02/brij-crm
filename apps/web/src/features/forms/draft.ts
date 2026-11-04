@@ -139,7 +139,9 @@ export function planNewAttributes(
 export { filedLine, fittingAttributes, type PlannedAttribute, type QuestionChange } from '../questions/questions.ts';
 
 /** The target's attributes as the publish check reads them. */
-export function publishAttributesOf(target: FormTargetChoices): ReadonlyMap<string, PublishAttribute> {
+export function publishAttributesOf(
+  target: Pick<FormTargetChoices, 'items' | 'objectName'>,
+): ReadonlyMap<string, PublishAttribute> {
   return new Map(
     target.items.map((item) => [
       item.attributeId,
@@ -391,4 +393,18 @@ export function firstWords(line: string): string {
     .split(/\s+/)
     .filter((word) => word !== '');
   return words.length <= FIRST_WORDS ? words.join(' ') : `${words.slice(0, FIRST_WORDS).join(' ')}…`;
+}
+
+/**
+ * Whether the builder warns that a form asks for a file where visitors can't upload one (forms fixes 2): a file or a
+ * signature question, and the api saying uploads are off here.
+ */
+export function uploadsOffFor(
+  target: Pick<FormTargetChoices, 'uploadsOff'>,
+  document: Pick<FormDocument, 'questions'>,
+) {
+  return (
+    target.uploadsOff === true &&
+    document.questions.some((question) => question.answerType === 'file' || question.answerType === 'signature')
+  );
 }

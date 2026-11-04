@@ -327,4 +327,101 @@
       outline: var(--border-width-thick) solid Highlight;
     }
   }
+
+  /* phoneLayout="rows": below 480px of the frame each row reads as two lines, its title over its meta cells, with
+     no header row and nothing to scroll sideways. The selection checkbox, when there is one, sits at the row's start
+     across both lines. */
+  .frame[data-phone='rows'] {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 480px) {
+    .root[data-phone='rows'],
+    .frame[data-scrollable] > .root[data-phone='rows'] {
+      display: block;
+      inline-size: 100%;
+      min-inline-size: 0;
+    }
+
+    /* The header keeps its row for screen readers and the arrow keys, its labels clipped out of sight; a select all
+       checkbox, when there is one, stays in view as the list's first line. */
+    .root[data-phone='rows'] .header {
+      display: block;
+      border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    }
+
+    .root[data-phone='rows'] .column[data-handle] {
+      display: flex;
+      align-items: center;
+      block-size: var(--size-row);
+      border-block-end: none;
+    }
+
+    .root[data-phone='rows'] .column:not([data-handle]),
+    .root[data-phone='rows'] .cell[data-phone='hidden'] {
+      position: absolute;
+      inline-size: var(--border-width-hairline);
+      block-size: var(--border-width-hairline);
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .root[data-phone='rows'] .header:not(:has(.column[data-handle])) {
+      position: absolute;
+      inline-size: var(--border-width-hairline);
+      block-size: var(--border-width-hairline);
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
+    .root[data-phone='rows'] .body {
+      display: block;
+    }
+
+    .root[data-phone='rows'] .row {
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2) var(--space-8);
+      align-items: baseline;
+      padding-block: var(--space-8);
+      padding-inline: var(--space-8);
+      border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    }
+
+    .root[data-phone='rows'] .row:has(.cell[data-handle]) {
+      padding-inline-start: var(--size-control);
+    }
+
+    .root[data-phone='rows'] .cell {
+      display: block;
+      block-size: auto;
+      min-inline-size: 0;
+      padding: 0;
+      border-block-end: none;
+      color: var(--text-secondary);
+      font: var(--text-label);
+      letter-spacing: var(--tracking-label);
+    }
+
+    .root[data-phone='rows'] .cell[data-phone='title'] {
+      flex-basis: 100%;
+      color: var(--text);
+      font: var(--text-body);
+      letter-spacing: var(--tracking-body);
+    }
+
+    .root[data-phone='rows'] .cell[data-handle] {
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      display: flex;
+      align-items: center;
+      inline-size: var(--size-control);
+      padding-inline: var(--space-4) 0;
+    }
+  }
 }

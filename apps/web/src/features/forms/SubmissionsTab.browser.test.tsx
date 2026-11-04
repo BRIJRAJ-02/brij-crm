@@ -77,6 +77,10 @@ const OPEN: SubmissionView = {
 
 let shown: InApp | undefined;
 const used: string[] = [];
+/** What Delete and Undo asked the server for, in order. */
+const calls: string[] = [];
+/** Whether the small export is refused as too large, so the job takes it. */
+let exportTooLarge = false;
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -86,6 +90,8 @@ afterEach(() => {
   shown?.unmount();
   shown = undefined;
   used.length = 0;
+  calls.length = 0;
+  exportTooLarge = false;
 });
 
 async function show(open: SubmissionView | undefined, spamCount = 2) {
@@ -93,6 +99,34 @@ async function show(open: SubmissionView | undefined, spamCount = 2) {
     submissions: {
       useNewAnswer: (_slug: string, _submissionId: string, questionId: string) => {
         used.push(questionId);
+        return Promise.resolve(open);
+      },
+      undoUseNewAnswer: (_slug: string, _submissionId: string, questionId: string) => {
+        used.push(`undo ${questionId}`);
+        return Promise.resolve(open);
+      },
+      delete: (_slug: string, submissionId: string) => {
+        calls.push(`delete ${submissionId}`);
+        return Promise.resolve({ deleted: true });
+      },
+      exportNow: () => {
+        calls.push('exportNow');
+        if (exportTooLarge) {
+          const error = Object.assign(new Error('More than 1,000 submissions export in the background.'), {
+            name: 'DataError',
+            code: 'JOB_TOO_LARGE',
+          });
+          return Promise.reject(error);
+        }
+        return Promise.resolve({ fileName: 'Talk to us - submissions.csv', csv: 'a,b\r\n' });
+      },
+      export: () => {
+        calls.push('export');
+        return new Promise(() => undefined);
+      },
+      newId: () => '0199f0a0-0000-7000-8000-0000000000ee',
+      restore: (_slug: string, submissionId: string) => {
+        calls.push(`restore ${submissionId}`);
         return Promise.resolve(open);
       },
     },
@@ -135,9 +169,56 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     await expect.element(page.getByText('Grace Hopper already had a different answer here')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Use the new answer for Job title' }));
     expect(used).toEqual(['title']);
+    // Undo puts the record's value before back (forms fixes 2).
+    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+    await expect.poll(() => used).toEqual(['title', 'undo title']);
     await expect.element(page.getByRole('button', { name: 'Previous submission' })).toBeDisabled();
     (document.activeElement as HTMLElement | null)?.blur();
     await userEvent.keyboard('j');
     await expect.poll(() => app.router.state.location.href).toContain(`submission=${id(2)}`);
+  });
+
+  it('deletes in one click, asking nothing, and Undo puts it back and opens it again (forms fixes 2)', async () => {
+    const app = await show(OPEN);
+    await userEvent.click(page.getByRole('button', { name: 'Delete', exact: true }));
+    expect(page.getByRole('button', { name: 'Delete submission' }).query()).toBeNull();
+    expect(calls).toEqual([`delete ${id(1)}`]);
+    await expect.element(page.getByText('Submission deleted.')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+    await expect.poll(() => calls).toEqual([`delete ${id(1)}`, `restore ${id(1)}`]);
+    await expect.element(page.getByText('Submission restored.')).toBeVisible();
+    await expect.poll(() => app.router.state.location.href).toContain(`submission=${id(1)}`);
+  });
+
+  it('reads each row as two lines on a phone, with nothing to scroll sideways (forms fixes 2)', async () => {
+    await page.viewport(390, 844);
+    try {
+      await show(undefined);
+      const row = page.getByRole('row').filter({ hasText: 'Ada Lovelace' });
+      await expect.element(row).toBeVisible();
+      // The header's labels are clipped out of sight but still read, select all stays in view, and the table fits.
+      const person = page.getByRole('columnheader', { name: 'Person' }).element().getBoundingClientRect();
+      expect(person.width).toBeLessThanOrEqual(1);
+      const selectAll = document.querySelector('thead [data-handle]')?.getBoundingClientRect();
+      expect(selectAll?.width ?? 0).toBeGreaterThan(1);
+      const frame = document.querySelector('[data-phone="rows"]')?.parentElement;
+      expect(frame === null || frame === undefined ? 0 : frame.scrollWidth - frame.clientWidth).toBeLessThanOrEqual(0);
+      // The person on the first line, when under it.
+      const name = row.getByRole('rowheader').element().getBoundingClientRect();
+      const when = row.getByRole('gridcell').nth(2).element().getBoundingClientRect();
+      expect(when.top).toBeGreaterThanOrEqual(name.bottom - 1);
+    } finally {
+      await page.viewport(1280, 900);
+    }
+  });
+
+  it('saves a small export at once, and sends a large one to the background (forms fixes 2)', async () => {
+    await show(undefined);
+    await userEvent.click(page.getByRole('button', { name: /Export/ }));
+    await expect.element(page.getByText('Saved Talk to us - submissions.csv.')).toBeVisible();
+    expect(calls).toEqual(['exportNow']);
+    exportTooLarge = true;
+    await userEvent.click(page.getByRole('button', { name: /Export/ }));
+    await expect.poll(() => calls).toEqual(['exportNow', 'exportNow', 'export']);
   });
 });

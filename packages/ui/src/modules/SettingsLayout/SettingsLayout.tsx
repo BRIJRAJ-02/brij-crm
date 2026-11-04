@@ -263,6 +263,12 @@ export interface SettingsStackProps {
    * page's space-16 and the tab's breath put a hole between the label and what it labels.
    */
   readonly variant?: 'default' | 'plain' | 'nested';
+  /**
+   * `readable` holds the stack to `size-dialog-wide`, so a row's control stays near its label on a wide screen: a
+   * tab of plain rows with no Card around them (a form's Settings, forms fixes 2), where the full width put a label
+   * some 850px from its switch at 1440. The default fills the page, as every settings page's Cards do.
+   */
+  readonly width?: 'full' | 'readable';
   readonly children: ReactNode;
 }
 
@@ -270,9 +276,13 @@ export interface SettingsStackProps {
  * The page body's rhythm inside a tab's panel: sections (Cards, Tables, a
  * Callout) stacked `space-16` apart, as they are directly in the body.
  */
-export function SettingsStack({ variant = 'default', children }: SettingsStackProps) {
+export function SettingsStack({ variant = 'default', width = 'full', children }: SettingsStackProps) {
   return (
-    <div className={styles.stack} data-variant={variant === 'default' ? undefined : variant}>
+    <div
+      className={styles.stack}
+      data-variant={variant === 'default' ? undefined : variant}
+      data-width={width === 'full' ? undefined : width}
+    >
       {children}
     </div>
   );

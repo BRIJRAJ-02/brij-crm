@@ -8,6 +8,7 @@ import {
   type FormDocument,
   type FormTargetChoices,
   type FormView,
+  type LiveSettingsChange,
   type MemberSummary,
   type ObjectSummary,
   type SubmissionPage,
@@ -64,6 +65,7 @@ import {
   withFlow,
   mintEndingId,
   withQuestions,
+  uploadsOffFor,
 } from './draft.ts';
 import { BrandedFormPreview, DesignButton } from './FormBrand.tsx';
 import { LogicMap } from './FlowView.tsx';
@@ -251,6 +253,7 @@ export function FormEditor(props: FormEditorProps) {
       slug: form.publicKey,
       document: draft,
       attributes: publishAttributesOf(target),
+      ...(target.deal === undefined ? {} : { dealAttributes: publishAttributesOf(target.deal) }),
     });
     return still?.code === problem.code &&
       still.questionId === problem.questionId &&
@@ -263,6 +266,48 @@ export function FormEditor(props: FormEditorProps) {
   const apply = (view: FormView) => {
     setForm(view);
     saved.current = { document: view.draft, revision: view.revision };
+  };
+
+  /**
+   * A setting Settings changes that the version holds (forms fixes 2, one save model): shown at once, then live at
+   * once on the server, edits waiting on the Form tab left waiting. The saved copy takes the change too, so the
+   * draft's own save never sends it as an edit.
+   */
+  const applySettings = (settings: LiveSettingsChange, change: (before: FormDocument) => FormDocument) => {
+    const shownBefore = latest.current;
+    const savedBefore = saved.current;
+    const next = change(latest.current);
+    setDraft(next);
+    latest.current = next;
+    saved.current = { ...saved.current, document: change(saved.current.document) };
+    // One after another, as the draft's saves are: each goes on from the revision the one before answered, so two
+    // quick changes never read as someone else's (the review's false conflict).
+    const sending = flush().then(async (revision) => {
+      const view = await data.forms.applySettings(slug, form.id, settings, revision);
+      apply(view);
+      // Words typed while it was out stay: the server's draft replaces the shown one only when nothing changed since.
+      if (latest.current === next) {
+        setDraft(view.draft);
+        latest.current = view.draft;
+      }
+      return view.revision;
+    });
+    inFlight.current = sending;
+    sending
+      .catch((error: unknown) => {
+        if (isDataError(error) && error.code === 'FORM_CHANGED') {
+          setConflict(true);
+          return;
+        }
+        saved.current = savedBefore;
+        setDraft(shownBefore);
+        latest.current = shownBefore;
+        toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
+        loadTheirs();
+      })
+      .finally(() => {
+        if (inFlight.current === sending) inFlight.current = undefined;
+      });
   };
 
   const loadTheirs = () => {
@@ -524,6 +569,7 @@ export function FormEditor(props: FormEditorProps) {
       slug: form.publicKey,
       document: draft,
       attributes: publishAttributesOf(target),
+      ...(target.deal === undefined ? {} : { dealAttributes: publishAttributesOf(target.deal) }),
       ...(target.objectName === undefined ? {} : { objectName: target.objectName }),
       canChangeAttributes: canBuild && canManage,
     });
@@ -553,7 +599,11 @@ export function FormEditor(props: FormEditorProps) {
           setJustLive(view);
           return;
         }
-        toasts.toast({ tone: 'success', message: strings.published });
+        toasts.toast(
+          view.live !== undefined && uploadsOffFor(target, view.live)
+            ? { tone: 'info', message: strings.publishedUploadsOff }
+            : { tone: 'success', message: strings.published },
+        );
         // Where answers are saved changed, and the form saves now: offer to save the earlier submissions the same way.
         if (filingChanged && view.live?.targets.main !== undefined && view.submissionCount > 0) {
           setSyncOffer(wasKeptOnly ? 'connected' : 'published');
@@ -614,14 +664,19 @@ export function FormEditor(props: FormEditorProps) {
   // Asked first when questions are saved onto the object now: the change clears where every one of them is saved,
   // and nothing takes it back. With nothing saved anywhere it stays one click.
   const [retargetAsk, setRetargetAsk] = useState<RetargetAsk | undefined>(undefined);
-  const askRetarget = (objectId: string | null) => {
+  const askRetarget = (objectId: string | null, withDeal?: boolean) => {
     if (isRetargeting) return;
+    // Moving a Deals form to People with a deal keeps every answer where it was saved (on the deal), so it asks nothing.
+    if (withDeal === true) {
+      retarget(objectId, false, true);
+      return;
+    }
     const step = retargetStep(draft, objects, objectId, strings.thisObject);
     if (step.kind === 'go') retarget(objectId);
     else if (step.kind === 'ask') setRetargetAsk(step.ask);
   };
 
-  const retarget = (objectId: string | null, isUndo = false) => {
+  const retarget = (objectId: string | null, isUndo = false, withDeal = false) => {
     if (isRetargeting) return;
     setRetargeting(true);
     const settled = () => {
@@ -629,10 +684,27 @@ export function FormEditor(props: FormEditorProps) {
     };
     // Where it saved before, for Undo (forms fix a2): the server remembered the mapping, so going back restores it.
     const before = draft.targets.main?.objectId ?? null;
+    // One save model (forms fixes 2): a live form with nothing else waiting takes the change live at once, as every
+    // other setting does; with edits waiting on the Form tab, it goes live with them on Publish.
+    const goesLiveNow = isPublished && !form.hasUnpublished && sameDocument(latest.current, saved.current.document);
     flush()
-      .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision))
-      .then(async (view) => {
+      .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision, withDeal || undefined))
+      .then(async (moved) => {
         const choices = await data.forms.attributes(slug, form.id);
+        const filed = objectId === null ? moved.draft : fileByLabel(moved.draft, choices.items);
+        const view = !goesLiveNow
+          ? moved
+          : await (
+              sameDocument(filed, moved.draft)
+                ? Promise.resolve(moved.revision)
+                : data.forms.saveDraft(slug, form.id, filed, moved.revision).then((saved) => saved.revision)
+            )
+              .then((revision) => data.forms.publish(slug, form.id, { expectedRevision: revision }))
+              .catch((error: unknown) => {
+                // Refused live (a field the object insists on): it waits in the draft, and the refusal says why.
+                toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
+                return data.forms.get(slug, form.id);
+              });
         apply(view);
         const next = objectId === null ? view.draft : fileByLabel(view.draft, choices.items);
         setDraft(next);
@@ -643,7 +715,17 @@ export function FormEditor(props: FormEditorProps) {
         const toName = objects.find((object) => object.id === objectId)?.pluralName ?? strings.thisObject;
         toasts.toast({
           tone: 'success',
-          message: objectId === null ? strings.retargetOffDone : strings.retargetDone(toName),
+          // With edits waiting on the Form tab, the change waits with them: the toast says so (review).
+          message:
+            isPublished && !goesLiveNow
+              ? objectId === null
+                ? strings.savingOffToast
+                : strings.savingChangedToast(toName)
+              : objectId === null
+                ? strings.retargetOffDone
+                : withDeal
+                  ? strings.retargetDealDone
+                  : strings.retargetDone(toName),
           action: {
             label: strings.undo,
             onAction: () => {
@@ -792,6 +874,12 @@ export function FormEditor(props: FormEditorProps) {
       {current !== 'settings' && form.live?.after.kind === 'booking' && (
         <AfterPageNotice slug={slug} formId={form.id} live={form.live} />
       )}
+      {/* A form asking for a file where visitors can't upload one (forms fixes 2): said before it goes live. */}
+      {current === 'form' && canManage && uploadsOffFor(target, draft) && (
+        <Callout tone="warning" title={strings.uploadsOffTitle}>
+          {strings.uploadsOffText}
+        </Callout>
+      )}
       {!canManage && !viewOnly && (
         <Callout tone="info" title={strings.readOnlyTitle}>
           {strings.readOnlyText}
@@ -846,9 +934,7 @@ export function FormEditor(props: FormEditorProps) {
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
             onStatusChange={setStatus}
-            onDraftChange={(change) => {
-              setDraft(change);
-            }}
+            onSettingsChange={applySettings}
             {...(props.keepMonths === undefined ? {} : { keepMonths: props.keepMonths })}
           />
         );
@@ -1082,6 +1168,7 @@ export function FormEditor(props: FormEditorProps) {
               }}
               attributes={target.items}
               objectName={target.objectName}
+              {...(draft.targets.deal === undefined || target.deal === undefined ? {} : { deal: target.deal })}
               liveIds={liveIds}
               newId={() => data.forms.newId()}
               toasts={toasts}

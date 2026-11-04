@@ -4,7 +4,7 @@
 // the replies, already cut to what the reader may see.
 import type { EmailRow, FormConfirmationEmail, FormResumeEmail, FormSubmissionEmail } from '@crm/contracts/emails';
 import type { DocumentRow, EmailBlock } from '../document.ts';
-import { formatMoment } from '../format.ts';
+import { formatShortMoment } from '../format.ts';
 import { clip, workspaceOf, type Template, type TemplateContext } from '../template.ts';
 
 /** A form's answers as stacked rows (questions run long), each linked when it carries an app path. */
@@ -31,7 +31,7 @@ function answersPreview(answers: readonly EmailRow[]): string | undefined {
 /** A new submission to a form, for one member told about it. */
 export const formSubmission: Template<FormSubmissionEmail> = (params, context) => {
   const who = params.submitter.name ?? params.submitter.email;
-  const when = formatMoment(params.submittedAt, params.timeZone);
+  const when = formatShortMoment(params.submittedAt, params.timeZone);
   // The sender is in the answers already (their name, their email): a From row said it twice (forms fix b4).
   const from = params.answers.length === 0 ? senderOf(params.submitter) : undefined;
   const blocks: EmailBlock[] = [
@@ -100,6 +100,10 @@ export const formConfirmation: Template<FormConfirmationEmail> = (params, contex
   return {
     subject: title,
     preheader: clip(opening, 140),
+    // The business's own logo heads its visitor's copy (forms fixes 2, critique b3); its name stays under it.
+    ...(params.logoPath === undefined
+      ? {}
+      : { logo: { url: context.link(params.logoPath), alt: workspaceOf(context) } }),
     eyebrow: workspaceOf(context),
     heading: title,
     blocks,
@@ -117,7 +121,7 @@ export const RESUME_SUBJECT = 'Finish your form when you’re ready';
  * to finish the form.
  */
 export const formResume: Template<FormResumeEmail> = (params, context) => {
-  const until = formatMoment(params.expiresAt, params.timeZone);
+  const until = formatShortMoment(params.expiresAt, params.timeZone);
   const opening = `Pick up ${params.formName} where you left off. This link works until ${until}.`;
   return {
     subject: RESUME_SUBJECT,

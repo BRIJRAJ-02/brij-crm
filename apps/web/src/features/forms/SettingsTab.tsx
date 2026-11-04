@@ -5,7 +5,15 @@
 // each row saves itself (where answers are saved goes live with the header's one Publish).
 // Leaves out: everything a visitor meets (the words, what happens after they send, the look), on the Form tab beside
 // the preview; each question's filing (set on the question).
-import type { FormDocument, FormTargetChoices, FormView, MemberSummary, ObjectSummary } from '@crm/data';
+import type {
+  FormDocument,
+  FormQuestion,
+  FormTargetChoices,
+  FormView,
+  LiveSettingsChange,
+  MemberSummary,
+  ObjectSummary,
+} from '@crm/data';
 import {
   CLOSE_AFTER_MAX,
   CLOSED_MESSAGE_MAX,
@@ -17,6 +25,7 @@ import { closingKind, closingOnDay, dayIn, dayOfClosing, type ClosingKind } from
 import { useCaptureList } from '@crm/data/react';
 import {
   Avatar,
+  Button,
   ButtonLink,
   CopyButton,
   DatePicker,
@@ -30,7 +39,7 @@ import {
   useFormatSettings,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { generalSettingsHref } from '../settings/nav.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
@@ -216,19 +225,36 @@ export interface SettingsTabProps {
   readonly members: readonly MemberSummary[];
   readonly isReadOnly: boolean;
   readonly settings: FormSettings;
-  /** Points the draft at an object, or at none (keep submissions only); the editor saves first and takes the answer. */
-  readonly onRetarget: (objectId: string | null) => void;
+  /**
+   * Points the draft at an object, or at none (keep submissions only); the editor saves first and takes the answer.
+   * `withDeal` moves a Deals form to People with a deal.
+   */
+  readonly onRetarget: (objectId: string | null, withDeal?: boolean) => void;
   /** A change of where submissions go is on its way. */
   readonly isRetargeting: boolean;
   /** Opens or closes the form (Pause, Resume): what the header's menu does too, as a setting. */
   readonly onStatusChange: (status: 'live' | 'paused') => void;
   /**
-   * A change to the draft from a setting that goes live with Publish (forms fix a3 Also create a deal, b1 Email them
-   * a copy): saved as the draft, as the Form tab's edits are.
+   * A setting the form's version holds (Closes, the closed message, Email them a copy, Also create a deal), live at
+   * once like every other row (forms fixes 2, one save model): `settings` is what the server sets, `change` the same
+   * change on the document shown.
    */
-  readonly onDraftChange: (change: (before: FormDocument) => FormDocument) => void;
+  readonly onSettingsChange: (settings: LiveSettingsChange, change: (before: FormDocument) => FormDocument) => void;
   /** How many months the workspace keeps answers (null: kept); absent, the row isn't shown (critique b S2). */
   readonly keepMonths?: number | null;
+}
+
+/** A question as it is once no deal is made: an answer saved on the deal is kept with the submission instead. */
+function offDeal(question: FormQuestion): FormQuestion {
+  if (question.filedOn?.objectRole !== 'deal') return question;
+  const { filedOn: _deal, ...rest } = question;
+  return { ...rest, kept: true };
+}
+
+/** A typed number of answers, when it is a whole number from 1 to the limit. */
+function countOf(text: string): number | undefined {
+  const n = /^\d+$/.test(text.trim()) ? Number.parseInt(text.trim(), 10) : Number.NaN;
+  return Number.isInteger(n) && n >= 1 && n <= CLOSE_AFTER_MAX ? n : undefined;
 }
 
 /** What Closes › After a number of answers starts at. */
@@ -262,7 +288,7 @@ export function SettingsTab({
   onRetarget,
   isRetargeting,
   onStatusChange,
-  onDraftChange,
+  onSettingsChange,
   keepMonths,
 }: SettingsTabProps) {
   const { data } = useRouteContext({ from: '__root__' });
@@ -347,6 +373,49 @@ export function SettingsTab({
   const { timeZone } = useFormatSettings();
   const [closingError, setClosingError] = useState<string | undefined>(undefined);
   const [countText, setCountText] = useState<string | undefined>(undefined);
+  // Words typed into a row that goes live, held until the field is left (as Name is), so a version isn't published
+  // per keystroke.
+  const [typed, setTyped] = useState<Partial<Record<'closedMessage' | 'subject' | 'line', string>>>({});
+  const leaveText = (key: 'closedMessage' | 'subject' | 'line') => {
+    const text = typed[key];
+    setTyped(({ [key]: _left, ...rest }) => rest);
+    if (text === undefined) return;
+    if (key === 'closedMessage') {
+      if (text.trim() === (draft.closedMessage ?? '')) return;
+      onSettingsChange({ closedMessage: text.trim() === '' ? null : text }, (before) => {
+        const { closedMessage: _was, ...rest } = before;
+        return text.trim() === '' ? rest : { ...rest, closedMessage: text };
+      });
+      return;
+    }
+    if (text === (draft.confirmation?.[key] ?? '')) return;
+    const next = { on: true, ...draft.confirmation, [key]: text };
+    onSettingsChange({ confirmation: next }, (before) => ({ ...before, confirmation: next }));
+  };
+  const leaveCount = () => {
+    if (countText === undefined) return;
+    const n = countOf(countText);
+    if (n === undefined) return;
+    setCountText(undefined);
+    if (n === draft.closing?.after) return;
+    onSettingsChange({ closing: { after: n } }, (before) => ({ ...before, closing: { after: n } }));
+  }; // Words still held when Settings closes (a shortcut, Back) are saved as if left, so nothing typed is lost.
+  const leaveAll = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    leaveAll.current = () => {
+      leaveText('closedMessage');
+      leaveText('subject');
+      leaveText('line');
+      leaveCount();
+    };
+  });
+  useEffect(
+    () => () => {
+      leaveAll.current();
+    },
+    [],
+  );
+
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
   const ownerIsTold =
     isFiling &&
@@ -371,7 +440,7 @@ export function SettingsTab({
   const tip = (label: string, text: string) => <InfoTip label={label}>{text}</InfoTip>;
 
   return (
-    <SettingsStack>
+    <SettingsStack width="readable">
       <SettingsSection title={strings.groupForm}>
         {isPublished && (
           <>
@@ -426,12 +495,7 @@ export function SettingsTab({
           </SettingsRow>
         )}
         {/* When it stops by itself (forms fix b2): never, on a day, or after a number of answers; and what it says. */}
-        <SettingsRow
-          title={strings.closesRow}
-          meta={tip(strings.closesRow, strings.closesHelp)}
-          control="field"
-          {...(isPublished ? { description: strings.goesLive } : {})}
-        >
+        <SettingsRow title={strings.closesRow} meta={tip(strings.closesRow, strings.closesHelp)} control="field">
           <Select
             label={strings.closesRow}
             isLabelHidden
@@ -446,14 +510,16 @@ export function SettingsTab({
             onChange={(id) => {
               if (id === null || id === closing) return;
               const kind = id as ClosingKind;
-              onDraftChange((before) => {
+              const next =
+                kind === 'never'
+                  ? undefined
+                  : kind === 'date'
+                    ? { at: closingOnDay(nextWeek(), timeZone) }
+                    : { after: DEFAULT_CLOSE_AFTER };
+              setCountText(undefined);
+              onSettingsChange({ closing: next ?? null }, (before) => {
                 const { closing: _was, ...rest } = before;
-                if (kind === 'never') return rest;
-                return {
-                  ...rest,
-                  closing:
-                    kind === 'date' ? { at: closingOnDay(nextWeek(), timeZone) } : { after: DEFAULT_CLOSE_AFTER },
-                };
+                return next === undefined ? rest : { ...rest, closing: next };
               });
             }}
           />
@@ -474,7 +540,8 @@ export function SettingsTab({
                   return;
                 }
                 setClosingError(undefined);
-                onDraftChange((before) => ({ ...before, closing: { at: closingOnDay(day, timeZone) } }));
+                const at = { at: closingOnDay(day, timeZone) };
+                onSettingsChange({ closing: at }, (before) => ({ ...before, closing: at }));
               }}
             />
           </SettingsRow>
@@ -488,17 +555,14 @@ export function SettingsTab({
               value={countText ?? String(draft.closing?.after ?? DEFAULT_CLOSE_AFTER)}
               isReadOnly={isReadOnly}
               {...(closingError === undefined ? {} : { error: closingError })}
-              // Typed freely (it can be emptied to type again), saved when a whole number from 1 to the limit.
+              // Typed freely (it can be emptied to type again), saved as it is left when a whole number from 1 to the
+              // limit, as Name is: each keystroke going live would publish a version per digit.
               onChange={(text) => {
                 setCountText(text);
-                const n = /^\d+$/.test(text.trim()) ? Number.parseInt(text.trim(), 10) : Number.NaN;
-                if (!Number.isInteger(n) || n < 1 || n > CLOSE_AFTER_MAX) {
-                  setClosingError(strings.closesCountError(CLOSE_AFTER_MAX));
-                  return;
-                }
-                setClosingError(undefined);
-                onDraftChange((before) => ({ ...before, closing: { after: n } }));
+                setClosingError(countOf(text) === undefined ? strings.closesCountError(CLOSE_AFTER_MAX) : undefined);
               }}
+              onBlur={leaveCount}
+              onSubmit={leaveCount}
             />
           </SettingsRow>
         )}
@@ -506,15 +570,18 @@ export function SettingsTab({
           <Field
             label={strings.closedMessageRow}
             isLabelHidden
-            value={draft.closedMessage ?? ''}
+            value={typed.closedMessage ?? draft.closedMessage ?? ''}
             placeholder={strings.closedMessageDefault}
             maxLength={CLOSED_MESSAGE_MAX}
             isReadOnly={isReadOnly}
             onChange={(text) => {
-              onDraftChange((before) => {
-                const { closedMessage: _was, ...rest } = before;
-                return text.trim() === '' ? rest : { ...rest, closedMessage: text };
-              });
+              setTyped((before) => ({ ...before, closedMessage: text }));
+            }}
+            onBlur={() => {
+              leaveText('closedMessage');
+            }}
+            onSubmit={() => {
+              leaveText('closedMessage');
             }}
           />
         </SettingsRow>
@@ -542,21 +609,32 @@ export function SettingsTab({
             }}
           />
         </SettingsRow>
+        {/* A form already saving to Deals saves no person: one press moves it to People, with a deal (forms fix a3). */}
+        {people !== undefined && deals !== undefined && savingTo === deals.id && (
+          <SettingsRow title={strings.dealsNoPerson} meta={tip(strings.dealsNoPerson, strings.dealsNoPersonTip)}>
+            <Button
+              isDisabled={isRetargeting || isReadOnly}
+              onPress={() => {
+                onRetarget(people.id, true);
+              }}
+            >
+              {strings.dealsMove}
+            </Button>
+          </SettingsRow>
+        )}
         {offersDeal && (
-          <SettingsRow
-            title={strings.alsoDeal}
-            meta={tip(strings.alsoDeal, strings.alsoDealTip)}
-            {...(isPublished ? { description: strings.goesLive } : {})}
-          >
+          <SettingsRow title={strings.alsoDeal} meta={tip(strings.alsoDeal, strings.alsoDealTip)}>
             <Switch
               label={strings.alsoDeal}
               isLabelHidden
               isSelected={draft.targets.deal !== undefined}
               isReadOnly={isReadOnly}
               onChange={(isOn) => {
-                onDraftChange((before) => {
+                onSettingsChange({ deal: isOn }, (before) => {
                   const { deal: _deal, ...rest } = before.targets;
-                  return { ...before, targets: isOn ? { ...rest, deal: { objectId: deals.id } } : rest };
+                  if (isOn) return { ...before, targets: { ...rest, deal: { objectId: deals.id } } };
+                  // No deal, so nothing is saved on one: those answers stay with the submission.
+                  return { ...before, targets: rest, questions: before.questions.map(offDeal) };
                 });
               }}
             />
@@ -611,11 +689,7 @@ export function SettingsTab({
           title={strings.copyRow}
           meta={tip(strings.copyRow, strings.copyHelp)}
           // Its reason in view, not only on hover, when there is nowhere to send a copy.
-          {...(hasEmailQuestion
-            ? isPublished
-              ? { description: strings.goesLive }
-              : {}
-            : { description: strings.copyNeedsEmail })}
+          {...(hasEmailQuestion ? {} : { description: strings.copyNeedsEmail })}
         >
           <Switch
             label={strings.copyRow}
@@ -624,7 +698,8 @@ export function SettingsTab({
             isReadOnly={isReadOnly}
             isDisabled={!hasEmailQuestion && !copyOn}
             onChange={(isOn) => {
-              onDraftChange((before) => ({ ...before, confirmation: { ...before.confirmation, on: isOn } }));
+              const next = { ...draft.confirmation, on: isOn };
+              onSettingsChange({ confirmation: next }, (before) => ({ ...before, confirmation: next }));
             }}
           />
         </SettingsRow>
@@ -634,15 +709,18 @@ export function SettingsTab({
               <Field
                 label={strings.copySubject}
                 isLabelHidden
-                value={draft.confirmation?.subject ?? ''}
+                value={typed.subject ?? draft.confirmation?.subject ?? ''}
                 placeholder={strings.copySubjectDefault}
                 maxLength={CONFIRMATION_SUBJECT_MAX}
                 isReadOnly={isReadOnly}
                 onChange={(subject) => {
-                  onDraftChange((before) => ({
-                    ...before,
-                    confirmation: { on: true, ...before.confirmation, subject },
-                  }));
+                  setTyped((before) => ({ ...before, subject }));
+                }}
+                onBlur={() => {
+                  leaveText('subject');
+                }}
+                onSubmit={() => {
+                  leaveText('subject');
                 }}
               />
             </SettingsRow>
@@ -650,13 +728,16 @@ export function SettingsTab({
               <Field
                 label={strings.copyLine}
                 isLabelHidden
-                value={draft.confirmation?.line ?? ''}
+                value={typed.line ?? draft.confirmation?.line ?? ''}
                 placeholder={strings.copyLineDefault}
                 maxLength={CONFIRMATION_LINE_MAX}
                 isWrapping
                 isReadOnly={isReadOnly}
                 onChange={(line) => {
-                  onDraftChange((before) => ({ ...before, confirmation: { on: true, ...before.confirmation, line } }));
+                  setTyped((before) => ({ ...before, line }));
+                }}
+                onBlur={() => {
+                  leaveText('line');
                 }}
               />
             </SettingsRow>
@@ -673,10 +754,21 @@ export function SettingsTab({
           </SettingsRow>
         )}
         {isPublished && (
-          <SettingsRow title={strings.spamRow} meta={tip(strings.spamRow, strings.spamSummary)}>
-            <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">
-              {strings.spamReview}
-            </ButtonLink>
+          // Review opens where something waits: Needs review first, else Spam; with neither, it says so instead of
+          // opening an empty list (forms fixes 2).
+          <SettingsRow
+            title={strings.spamRow}
+            meta={tip(strings.spamRow, strings.spamSummary)}
+            {...(form.reviewCount === undefined && form.spamCount === 0 ? { description: strings.spamNone } : {})}
+          >
+            {(form.reviewCount !== undefined || form.spamCount > 0) && (
+              <ButtonLink
+                href={`${formHref(slug, form.id, 'submissions')}&state=${form.reviewCount === undefined ? 'spam' : 'needs_review'}`}
+                variant="secondary"
+              >
+                {strings.spamReview}
+              </ButtonLink>
+            )}
           </SettingsRow>
         )}
       </SettingsSection>

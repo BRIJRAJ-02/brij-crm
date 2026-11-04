@@ -92,6 +92,7 @@ async function tellEach(
     join forms f on f.workspace_id = s.workspace_id and f.id = s.form_id
     join workspaces w on w.id = s.workspace_id
     where s.workspace_id = ${scope.workspaceId} and s.id = ${submissionId} and s.state in ('processed', 'failed')
+      and s.deleted_at is null
   `);
   const row = found.rows[0];
   if (row === undefined) return [];

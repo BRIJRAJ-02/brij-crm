@@ -123,6 +123,8 @@ export const FormConfirmationEmail = z.strictObject({
   answers: Answers,
   submittedAt: Instant,
   timeZone: EmailTimeZone.optional(),
+  /** The workspace's logo, as the form's page serves it (forms fixes 2): it heads the email. Absent with none. */
+  logoPath: AppPath.optional(),
 });
 /** The visitor's copy of what they sent. */
 export type FormConfirmationEmail = z.infer<typeof FormConfirmationEmail>;

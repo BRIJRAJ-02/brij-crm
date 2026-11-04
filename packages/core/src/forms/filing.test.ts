@@ -25,7 +25,14 @@ import { cancelJob, getJob } from '../jobs/service.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope, startJobForTest, testScope } from '../testing.ts';
 import { jobTestKit } from '../../test/jobs-kit.ts';
-import { exportFile, exportPart, getExport, startSubmissionsExport } from './export.ts';
+import {
+  EXPORT_NOW_MAX,
+  exportFile,
+  exportPart,
+  exportSubmissionsNow,
+  getExport,
+  startSubmissionsExport,
+} from './export.ts';
 import { addToCrm, NOT_MAPPED, ON_ANOTHER_OBJECT, previewSync, startSync } from './filing.ts';
 import { createForm, getForm, listForms, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
 import { HIDDEN_TARGET, processSubmission } from './process.ts';
@@ -366,6 +373,21 @@ describe('the CSV export', () => {
     expect(lines[1]).toContain(",'+news,");
     expect(lines[2]).toContain('"Engineer, Senior"');
     expect((await getExport(w.scope, { exportId })).rowCount).toBe(2);
+    // A small export downloads at once, with no job (forms fixes 2): the same file the job wrote.
+    const now = await exportSubmissionsNow(w.scope, { formId: live.id, select: { kind: 'filter' } });
+    expect(now.fileName).toBe(started.fileName);
+    expect(now.csv.split('\r\n').slice(1)).toEqual(text.split('\r\n').slice(1));
+    // More than it takes at once is refused, so the screen starts the job instead.
+    await w.query(sql`
+      insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, state, answers)
+      select workspace_id, form_id, version_id, gen_random_uuid(), 'held', answers
+      from form_submissions, generate_series(1, ${EXPORT_NOW_MAX})
+      where form_id = ${live.id}::uuid
+      limit ${EXPORT_NOW_MAX}
+    `);
+    expect(
+      await refusalOf(exportSubmissionsNow(w.scope, { formId: live.id, select: { kind: 'filter' } })),
+    ).toMatchObject([{ code: 'JOB_TOO_LARGE' }]);
 
     // Anyone else: as if it didn't exist.
     expect(await refusalOf(getExport(w.other, { exportId }))).toMatchObject([{ code: 'NOT_FOUND' }]);

@@ -77,6 +77,7 @@ async function answersFor(
       from form_submissions s
       left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
       where s.id in (select jsonb_array_elements_text(${JSON.stringify([...new Set(submissionIds)])}::jsonb)::uuid)
+        and s.deleted_at is null
     `)
   ).rows;
   const forms = await loadForms(
@@ -133,7 +134,10 @@ export const submissionSource: ActivitySource = async ({ tx, scope, record, afte
       to_char(l.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at
     from form_submission_records l
     join forms f on f.workspace_id = l.workspace_id
-      and f.id = (select s.form_id from form_submissions s where s.workspace_id = l.workspace_id and s.id = l.submission_id)
+      and f.id = (
+        select s.form_id from form_submissions s
+        where s.workspace_id = l.workspace_id and s.id = l.submission_id and s.deleted_at is null
+      )
     where l.record_id = ${record.id}::uuid
       and ${nearBound(sql`l.created_at`, after)} and ${boundSql(sql`l.created_at`, id, rank, after)}
     order by l.created_at desc, (${id}) collate "C"

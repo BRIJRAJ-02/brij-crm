@@ -149,6 +149,15 @@ export const PublicForm = z.object({
   offersMeeting: z.boolean(),
   recaptchaSiteKey: z.string().optional(),
   /**
+   * The workspace's country (ISO 3166 alpha 2; forms fixes 2): the one it set, else the one its time zone is in.
+   * Country and Phone start at the visitor's own region when their browser names one (en-IN), else here; absent when
+   * neither says, so they start empty rather than at the United States.
+   */
+  country: z
+    .string()
+    .regex(/^[A-Z]{2}$/)
+    .optional(),
+  /**
    * The workspace's brand kit on this form (spec 0060, AC-4): the versions `brandStylesheetPath('forms', …)` and
    * `brandLogoPath('forms', …)` take. Absent when the form wears the product's own accent and no logo.
    */

@@ -722,7 +722,7 @@ export function useHostedForm({
           // Closed while they filled it in: everything they typed stays, with the closed line above Send and a
           // way to keep their words, rather than the whole form swapped for one sentence.
           setClosedMidFill(true);
-          setAlert(words.closed);
+          setAlert(form.closedMessage ?? words.closed);
           return;
         case 'offline':
           setAlert(words.offline);

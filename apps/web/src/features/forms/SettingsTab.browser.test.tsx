@@ -218,19 +218,21 @@ function Editor({ initial }: { readonly initial: FormView }) {
         members={MEMBERS}
         isReadOnly={false}
         settings={settings}
-        onRetarget={(objectId) => {
-          retargets.push(objectId);
+        onRetarget={(objectId, withDeal) => {
+          retargets.push(withDeal === true ? `${objectId ?? ''} with a deal` : objectId);
         }}
         isRetargeting={false}
         onStatusChange={(status) => {
           statuses.push(status);
         }}
         keepMonths={12}
-        onDraftChange={(change) => {
+        onSettingsChange={(settings, change) => {
+          sent.push(settings);
           const next = change(form.draft);
           deals.push(next.targets.deal?.objectId);
           copies.push(next.confirmation?.on);
           closings.push(next.closing);
+          filings.push(next.questions.map((question) => question.filedOn?.objectRole ?? 'kept'));
           setForm({ ...form, draft: next });
         }}
       />
@@ -245,6 +247,9 @@ const statuses: string[] = [];
 const deals: (string | undefined)[] = [];
 const copies: (boolean | undefined)[] = [];
 const closings: FormDocument['closing'][] = [];
+const filings: string[][] = [];
+/** The settings each change sent live (one save model, forms fixes 2). */
+const sent: unknown[] = [];
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -258,6 +263,8 @@ afterEach(() => {
   deals.length = 0;
   copies.length = 0;
   closings.length = 0;
+  filings.length = 0;
+  sent.length = 0;
 });
 
 async function show(
@@ -442,6 +449,34 @@ describe('Settings as plain rows (T21)', () => {
     expect(deals).toEqual([DEALS]);
   });
 
+  it('keeps an answer saved on the deal with the submission once Also create a deal is off (forms fixes 2)', async () => {
+    const budget = {
+      id: 'q-budget',
+      key: 'budget',
+      label: 'Budget',
+      answerType: 'number' as const,
+      required: false,
+      update: 'fill' as const,
+      filedOn: { objectRole: 'deal' as const, attributeId: '0199f0a0-0000-7000-8000-0000000000b1' },
+    };
+    const draft: FormDocument = {
+      ...DRAFT,
+      questions: [...DRAFT.questions, budget],
+      targets: { ...DRAFT.targets, deal: { objectId: DEALS } },
+    };
+    await show({ ...formView({}), draft }, []);
+    (page.getByRole('switch', { name: 'Also create a deal' }).element() as HTMLElement).click();
+    expect(deals).toEqual([undefined]);
+    expect(filings).toEqual([['main', 'kept']]);
+  });
+
+  it('moves a form saving to Deals to People with a deal in one press (forms fixes 2)', async () => {
+    const draft: FormDocument = { ...DRAFT, targets: { main: { objectId: DEALS } } };
+    await show({ ...formView({}), mainObjectId: DEALS, draft }, []);
+    await page.getByRole('button', { name: 'Save to People', exact: true }).click();
+    expect(retargets).toEqual([`${PEOPLE} with a deal`]);
+  });
+
   it('turns on Email them a copy, then shows its subject and message (forms fix b1)', async () => {
     await show(formView({}), []);
     expect(page.getByRole('textbox', { name: 'Subject' }).query()).toBeNull();
@@ -469,6 +504,32 @@ describe('Settings as plain rows (T21)', () => {
     await expect
       .element(page.getByRole('link', { name: 'For 12 months' }))
       .toHaveAttribute('href', '/w/acme/settings/general');
+  });
+
+  it('opens Spam › Review where something waits, and says so when nothing does (forms fixes 2)', async () => {
+    await show(formView({}), []);
+    expect(page.getByRole('link', { name: 'Review' }).query()).toBeNull();
+    await expect.element(page.getByText('Nothing caught')).toBeVisible();
+    shown?.unmount();
+    await show({ ...formView({}), spamCount: 3 }, []);
+    await expect.element(page.getByRole('link', { name: 'Review' })).toBeVisible();
+    expect(page.getByRole('link', { name: 'Review' }).element().getAttribute('href')).toMatch(/state=spam$/);
+    shown?.unmount();
+    await show({ ...formView({}), spamCount: 3, reviewCount: 1 }, []);
+    await expect.element(page.getByRole('link', { name: 'Review' })).toBeVisible();
+    expect(page.getByRole('link', { name: 'Review' }).element().getAttribute('href')).toMatch(/state=needs_review$/);
+  });
+
+  it('saves every row live as it changes, typed words once they are left (one save model, forms fixes 2)', async () => {
+    await show(formView({}), []);
+    expect(page.getByText('Goes live with Publish.').query()).toBeNull();
+    const message = page.getByRole('textbox', { name: 'Message when closed' });
+    await userEvent.click(message);
+    await userEvent.keyboard('Back soon');
+    expect(sent).toEqual([]);
+    await userEvent.keyboard('{Tab}');
+    expect(sent).toEqual([{ closedMessage: 'Back soon' }]);
+    await expect.element(message).toHaveValue('Back soon');
   });
 
   it('closes and opens the form from Taking answers', async () => {

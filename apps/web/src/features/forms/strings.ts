@@ -283,6 +283,7 @@ export const strings = {
   moreQuestions: (n: number) => (n === 1 ? '1 more question' : `${String(n)} more questions`),
   retargetDone: (to: string) => `Answers now save to ${to}.`,
   retargetOffDone: 'Answers now stay in Submissions.',
+  retargetDealDone: 'Each answer now saves a person, with a deal.',
   /** Email them a copy (forms fix b1): the visitor's own copy of what they sent. */
   copyRow: 'Email them a copy',
   copyHelp: 'Each person gets a copy of their answers at the email they gave. Replies come to the form’s owner.',
@@ -293,7 +294,7 @@ export const strings = {
   copyLineDefault: 'Thanks, we got it. We will come back to you soon.',
   /** Closes (forms fix b2): when the form stops taking answers by itself, and what it says then. */
   closesRow: 'Closes',
-  closesHelp: 'Stop taking answers on a day, or after enough have come in. Pause stops it now. Goes live with Publish.',
+  closesHelp: 'Stop taking answers on a day, or after enough have come in. Pause stops it now.',
   closesNever: 'Never',
   closesOnDate: 'On a date',
   closesAfterCount: 'After a number of answers',
@@ -301,7 +302,6 @@ export const strings = {
   closesPast: 'Pick today or a day to come.',
   closesCountError: (max: number) => `Give a whole number from 1 to ${max.toLocaleString('en')}.`,
   /** Under a setting that waits for Publish on a live form (forms review): said, not only in a hover tip. */
-  goesLive: 'Goes live with Publish.',
   closesCount: 'Number of answers',
   closedMessageRow: 'Message when closed',
   closedMessageDefault: 'This form isn’t taking answers right now.',
@@ -317,7 +317,12 @@ export const strings = {
   keptMonths: (months: number) => `For ${String(months)} months`,
   /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
   alsoDeal: 'Also create a deal',
-  alsoDealTip: 'Each submission also adds a deal, linked to the person and their company. Goes live with Publish.',
+  /** A form saving to Deals saves no person (forms fix a3): one press moves it to People, each answer still a deal. */
+  dealsNoPerson: 'No person saved',
+  dealsNoPersonTip:
+    'Saving to Deals keeps no person, so there is no one to email back. Save to People with a deal instead; answers saved on the deal stay there.',
+  dealsMove: 'Save to People',
+  alsoDealTip: 'Each submission also adds a deal, linked to the person and their company.',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
     `Changes here go live when you publish. Until then, submissions are still saved to ${objectName}.`,
@@ -361,10 +366,15 @@ export const strings = {
   spamTitle: 'Spam',
   spamSummary: 'On. Bots go to Spam, and doubtful sends wait in Needs review for you.',
   detailsTitle: 'Details',
+  spamNone: 'Nothing caught',
   spamReview: 'Review',
   settingsFailed: 'That didn’t save.',
 
   // Install tab
+  /** A form asking for a file where uploads are off (forms fixes 2). */
+  uploadsOffTitle: 'Files can’t be uploaded here yet',
+  uploadsOffText: 'Visitors can send the form, but not the file.',
+  publishedUploadsOff: 'Published. Files can’t be uploaded here yet, so visitors can’t attach one.',
   readOnlyTitle: 'You can view this form',
   /** In the bar, for a member who may only view a live form's answers (forms fix a10). */
   viewOnly: 'View only',
@@ -531,6 +541,8 @@ export const strings = {
   exportShown: 'What the table shows for this search, every answer as a column',
   exportPicked: (n: number) => `The ${count(n, 'picked submission', 'picked submissions')}, every answer as a column`,
   exportStarted: 'Preparing your CSV…',
+  /** A small export, saved at once (forms fixes 2). */
+  exportSaved: (fileName: string) => `Saved ${fileName}.`,
   exportReady: (file: string) => `${file} is ready.`,
   download: 'Download',
   addToCrm: 'Add to CRM',
@@ -611,14 +623,10 @@ export const strings = {
   retry: 'Retry',
   deleteSubmission: 'Delete',
   /** Names the submission by who sent it: "Delete the submission from Grace Hopper?". */
-  deleteSubmissionTitle: (who: string | undefined) =>
-    who === undefined ? 'Delete this submission?' : `Delete the submission from ${who}?`,
-  deleteSubmissionText: 'Its answers are gone for good; the people and records it made stay.',
-  deleteSubmissionAction: 'Delete submission',
-  /** Bulk Delete (asks first: a submission can't come back): "Delete 3 submissions?". */
-  deleteManyTitle: (n: number) => `Delete ${count(n, 'submission', 'submissions')}?`,
-  deleteManyText: 'Their answers are gone for good; the people and records they made stay.',
-  deleteManyAction: (n: number) => `Delete ${count(n, 'submission', 'submissions')}`,
+  /** Undo of a delete (forms fixes 2: deletes are soft, so Delete asks nothing first). */
+  restoredSome: (n: number, of: number) => `Restored ${String(n)} of ${String(of)}.`,
+  restoredMany: (n: number) =>
+    n === 1 ? 'Submission restored.' : `${count(n, 'submission', 'submissions')} restored.`,
   deletingMany: 'Deleting…',
   deletedMany: (n: number) => `${count(n, 'submission', 'submissions')} deleted.`,
   deletedSome: (done: number, of: number) => `Deleted ${String(done)} of ${String(of)}; the rest are still picked.`,
@@ -844,7 +852,8 @@ export const strings = {
   spamRow: 'Spam',
   linkHelp: 'Links with the old address keep working.',
   ownerHelpTip: 'Who owns the records this form makes. Records already made keep their owner.',
-  savingHelpTip: 'Each submission adds or updates a record here, matched by email. A change goes live with Publish.',
+  savingHelpTip:
+    'Each submission adds or updates a record here, matched by email. With edits waiting on the Form tab, a change goes live with them on Publish.',
   savingChangedToast: (where: string) => `Answers will save to ${where} once you publish.`,
   savingOffToast: 'Answers will stay in Submissions once you publish.',
   // Analytics (T22)

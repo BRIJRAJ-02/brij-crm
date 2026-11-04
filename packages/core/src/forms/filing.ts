@@ -144,10 +144,11 @@ async function seenBy(tx: WorkspaceTx, scope: EngineScope, objectId: string, ids
  * left join; nothing more under the open policy.
  */
 function scopeTest(scope: SyncScope, access: Access) {
+  // A deleted submission (forms fixes 2) is never filed, counted or named.
   const state =
     scope === 'unfiled'
-      ? sql`(s.state = 'failed' or (s.state = 'processed' and r.id is null))`
-      : sql`s.state in ('failed', 'processed')`;
+      ? sql`s.deleted_at is null and (s.state = 'failed' or (s.state = 'processed' and r.id is null))`
+      : sql`s.deleted_at is null and s.state in ('failed', 'processed')`;
   const visible = recordVisibleSql(access, 'rm');
   if (visible === undefined) return state;
   return sql`${state} and (s.main_record_id is null or exists (

@@ -152,6 +152,8 @@ export interface QuestionChange {
   readonly placeholder?: string;
   readonly required?: boolean;
   readonly filedOn?: string | null;
+  /** Which record `filedOn` is on: the main one (the default), or the deal a form makes beside the person. */
+  readonly filedRole?: 'main' | 'deal';
   /** True: keep the answer off the CRM (Not filed, chosen). False: let Save give it a field again. */
   readonly kept?: boolean;
   /** Show when (spec 0043): new conditions, or null to always show it. */
@@ -238,6 +240,7 @@ export function changeQuestion(
           : change.filedOn === undefined
             ? filedOn?.attributeId
             : change.filedOn;
+    const role = change.filedOn === undefined ? (filedOn?.objectRole ?? 'main') : (change.filedRole ?? 'main');
     // Kept off the CRM only while it is filed nowhere: filing it anywhere, or asking for a field again, ends that.
     const kept = filing === undefined && (change.kept ?? wasKept === true);
     return {
@@ -252,7 +255,7 @@ export function changeQuestion(
           ? {}
           : { placeholder: question.placeholder }),
       required: change.required ?? question.required,
-      ...(filing === undefined ? {} : { filedOn: { objectRole: 'main' as const, attributeId: filing } }),
+      ...(filing === undefined ? {} : { filedOn: { objectRole: role, attributeId: filing } }),
       ...(kept ? { kept: true as const } : {}),
       ...(showWhen === undefined ? {} : { showWhen }),
       ...(options === undefined ? {} : { options }),
@@ -353,11 +356,21 @@ export function filedLine(
   question: FormQuestion,
   objectName: string,
   attributes: readonly FormAttributeChoice[],
+  /** The deal's fields, for an answer saved on the deal: "Deal › Value". */
+  deal?: DealChoices,
 ): string {
   const id = question.filedOn?.attributeId;
   if (id === undefined) return strings.notFiled;
-  const attribute = attributes.find((each) => each.attributeId === id);
-  return attribute === undefined ? strings.goneAttribute : strings.filedLine(objectName, attribute.title);
+  const onDeal = question.filedOn?.objectRole === 'deal';
+  const attribute = (onDeal ? (deal?.items ?? []) : attributes).find((each) => each.attributeId === id);
+  return attribute === undefined
+    ? strings.goneAttribute
+    : strings.filedLine(onDeal ? strings.dealGroup : objectName, attribute.title);
+}
+
+/** The deal a form makes beside each person, and the fields an answer may be saved on there (forms fixes 2). */
+export interface DealChoices {
+  readonly items: readonly FormAttributeChoice[];
 }
 
 /**

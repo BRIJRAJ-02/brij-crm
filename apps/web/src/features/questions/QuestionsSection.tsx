@@ -61,6 +61,7 @@ import {
   SOURCE_ANSWER_TYPES,
   typeChange,
   planNewAttributes,
+  type DealChoices,
   moveQuestion,
   removeQuestion,
   restoreQuestion,
@@ -141,6 +142,11 @@ export interface QuestionsSectionProps {
   readonly attributes: readonly FormAttributeChoice[];
   /** The target object's name; absent while the form keeps its submissions only, when no answer is filed. */
   readonly objectName?: string;
+  /**
+   * The deal a form makes beside each person (Also create a deal, forms fixes 2): its fields join Where it goes under
+   * their own heading, so an answer can go on the deal itself (its Value, its Source). Absent: no deal is made.
+   */
+  readonly deal?: DealChoices;
   /**
    * Where it goes shows, off and at Not filed, with why: a booking page kept out of the CRM (spec 0057, AC-5708). Each
    * question keeps where it was filed, so turning the CRM back on puts it back.
@@ -493,6 +499,9 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     }
     const couldCreate = props.canCreate === true && !isReadOnly && question.answerType !== 'file';
     const fitting = fittingAttributes(attributes, question.answerType);
+    // The deal a form makes beside each person (forms fixes 2): its fields sit under Deal, the person's under the
+    // object's name; without one the list stays one group.
+    const dealFitting = props.deal === undefined ? [] : fittingAttributes(props.deal.items, question.answerType);
     const usedBy = new Map(
       questions
         .filter((each) => each.id !== question.id && each.filedOn !== undefined)
@@ -500,11 +509,15 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     );
     const title = planned.get(question.id) ?? creatable.get(question.id);
     const keep = props.keptWith === 'booking' ? strings.keepWithBooking : strings.keepWithAnswer;
-    const items: { id: string; label: string; description?: string; isDisabled?: boolean }[] = [
+    const items: { id: string; label: string; description?: string; isDisabled?: boolean; isDeal?: boolean }[] = [
       { id: NOT_FILED, label: keep },
-      ...fitting.map((attribute) => {
+      ...[
+        ...fitting.map((attribute) => ({ attribute, isDeal: false })),
+        ...dealFitting.map((attribute) => ({ attribute, isDeal: true })),
+      ].map(({ attribute, isDeal }) => {
         const holder = usedBy.get(attribute.attributeId);
         return {
+          ...(isDeal ? { isDeal } : {}),
           id: attribute.attributeId,
           label: attribute.title,
           ...(attribute.canWrite
@@ -526,11 +539,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     const value = question.filedOn?.attributeId ?? (question.kept !== true && couldCreate ? CREATE : NOT_FILED);
     const current =
       question.filedOn !== undefined
-        ? filedLine(question, objectName, attributes)
+        ? filedLine(question, objectName, attributes, props.deal)
         : value === CREATE
           ? (items.find((item) => item.id === CREATE)?.label ?? keep)
           : keep;
-    return { items, value, current };
+    return { items, value, current, dealIds: new Set(dealFitting.map((attribute) => attribute.attributeId)) };
   };
 
   const remove = (question: FormQuestion) => {
@@ -541,7 +554,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     const filed =
       question.filedOn === undefined || objectName === undefined || isFilingOff
         ? undefined
-        : filedLine(question, objectName, attributes);
+        : filedLine(question, objectName, attributes, props.deal);
     toasts.toast({
       tone: 'info',
       message: filed === undefined ? strings.questionDeleted(name) : strings.questionDeletedFiled(name, filed),
@@ -1135,7 +1148,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           <QuestionEditor
             question={question}
             questions={questions}
-            attributes={attributes}
+            // Its type change reads the deal's fields too, so an answer saved on the deal keeps its place (forms fixes 2).
+            attributes={[...attributes, ...(props.deal?.items ?? [])]}
             isLocked={isLocked(question)}
             isReadOnly={isReadOnly}
             refFor={refFor}
@@ -1177,7 +1191,14 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               );
             }}
             onType={(type) => {
-              onChange((before) => changeQuestion(before, id, typeChange(question, attributes, type), liveIds));
+              onChange((before) =>
+                changeQuestion(
+                  before,
+                  id,
+                  typeChange(question, [...attributes, ...(props.deal?.items ?? [])], type),
+                  liveIds,
+                ),
+              );
             }}
             onSubmit={() => {
               // Enter goes on to the next question, of the same type, under this one (Typeform's way).
@@ -1292,20 +1313,27 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                         onChange((before) => changeQuestion(before, id, { filedOn: null, kept: true }, liveIds));
                       else if (picked === CREATE)
                         onChange((before) => changeQuestion(before, id, { filedOn: null, kept: false }, liveIds));
-                      else onChange((before) => changeQuestion(before, id, { filedOn: picked }, liveIds));
+                      else {
+                        const filedRole = filing.dealIds.has(picked) ? 'deal' : 'main';
+                        onChange((before) => changeQuestion(before, id, { filedOn: picked, filedRole }, liveIds));
+                      }
                     }}
                   >
-                    {filing.items.map((item) => (
-                      <MenuItem
-                        key={item.id}
-                        id={item.id}
-                        isChecked={item.id === filing.value}
-                        isDisabled={item.isDisabled === true}
-                        {...(item.description === undefined ? {} : { description: item.description })}
-                      >
-                        {item.label}
-                      </MenuItem>
-                    ))}
+                    {filing.dealIds.size === 0
+                      ? filing.items.map((item) => filingItem(item, filing.value))
+                      : // With a deal, the person's fields under the object's name and the deal's under Deal (forms fixes 2).
+                        [
+                          <MenuSection key="main" label={objectName ?? strings.whereItGoes}>
+                            {filing.items
+                              .filter((item) => item.isDeal !== true)
+                              .map((item) => filingItem(item, filing.value))}
+                          </MenuSection>,
+                          <MenuSection key="deal" label={strings.dealGroup}>
+                            {filing.items
+                              .filter((item) => item.isDeal === true)
+                              .map((item) => filingItem(item, filing.value))}
+                          </MenuSection>,
+                        ]}
                   </Menu>
                 </SubmenuTrigger>
               )}
@@ -1383,6 +1411,24 @@ const RATING_COUNTS: readonly number[] = Array.from(
   { length: RATING_COUNT.max - RATING_COUNT.min + 1 },
   (_, at) => RATING_COUNT.min + at,
 );
+
+/** One place an answer can go, in a question's Where it goes menu. */
+function filingItem(
+  item: { readonly id: string; readonly label: string; readonly description?: string; readonly isDisabled?: boolean },
+  value: string,
+) {
+  return (
+    <MenuItem
+      key={item.id}
+      id={item.id}
+      isChecked={item.id === value}
+      isDisabled={item.isDisabled === true}
+      {...(item.description === undefined ? {} : { description: item.description })}
+    >
+      {item.label}
+    </MenuItem>
+  );
+}
 
 /** A lead header's stand in id: the questions before the first break, which have no break of their own yet. */
 const LEAD = '~lead';
