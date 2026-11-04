@@ -20,6 +20,7 @@ import {
   type BoardSettings,
   type GroupKind,
   type MemberSummary,
+  type NewAttribute,
 } from '@crm/data';
 import { strings } from './strings.ts';
 
@@ -117,4 +118,31 @@ function columnOptions(
   return [...members]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((member, position) => ({ id: member.id, label: member.name, hue: 'gray', position, isArchived: false }));
+}
+
+/** The stages Add Stage starts a board with: Attio's and the Deals template's own, open first, then won and lost. */
+export const STAGE_PRESET: readonly {
+  readonly label: string;
+  readonly hue: AttributeOption['hue'];
+  readonly outcome: 'open' | 'won' | 'lost';
+}[] = [
+  { label: 'Lead', hue: 'sky', outcome: 'open' },
+  { label: 'In progress', hue: 'yellow', outcome: 'open' },
+  { label: 'Won', hue: 'green', outcome: 'won' },
+  { label: 'Lost', hue: 'red', outcome: 'lost' },
+];
+
+/**
+ * The status field Add Stage makes in one click (the foolproof pass, 5 November 2026): "Stage" with the preset
+ * stages, or "Stage 2" and on when an earlier try found the name taken (`attempt` counts from 1). Ids come from
+ * `newId`, one per call, so each try is its own write.
+ */
+export function stageField(objectId: string, newId: () => string, attempt = 1): NewAttribute {
+  return {
+    id: newId(),
+    objectId,
+    title: attempt === 1 ? strings.stageTitle : `${strings.stageTitle} ${String(attempt)}`,
+    type: 'status',
+    options: STAGE_PRESET.map((stage) => ({ id: newId(), ...stage })),
+  };
 }

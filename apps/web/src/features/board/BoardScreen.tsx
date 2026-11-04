@@ -42,6 +42,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useMemberPicker } from '../records/members.ts';
 import { loadRowId, stepsAround, type PeekControl, type PeekLoadStep, type PeekSteps } from '../records/params.ts';
 import { RecordPeek } from '../records/RecordPeek.tsx';
+import { ObjectMenu } from '../views/ViewMenu.tsx';
 import { useBoardTotals } from '../workspace/calcs.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { NewRecordDialog } from '../workspace/NewRecordDialog.tsx';
@@ -51,7 +52,7 @@ import { unlinkFiled } from '../workspace/filed.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { useCollapsedColumns } from './collapsed.ts';
-import type { BoardOutcome, BoardPlan } from './plan.ts';
+import { stageField, type BoardOutcome, type BoardPlan } from './plan.ts';
 import { strings } from './strings.ts';
 
 /** The column id the Board gets for records with no value: never an option id (those are uuids). */
@@ -165,6 +166,44 @@ export function BoardScreen(props: BoardScreenProps) {
         },
       );
   };
+  // Add Stage (the foolproof pass, 5 November 2026): a status field with preset stages in one click, then the board
+  // groups by it. A name already taken (an archived Stage) tries "Stage 2" and on.
+  const [isAddingStage, setAddingStage] = useState(false);
+  const addStage = async () => {
+    if (isAddingStage) return;
+    setAddingStage(true);
+    try {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await data.attributes.create(slug, stageField(object.id, data.attributes.newId, attempt));
+          break;
+        } catch (error: unknown) {
+          if (!(isDataError(error) && error.code === 'SLUG_TAKEN') || attempt >= 5) throw error;
+        }
+      }
+      // Pending until the board is back, so the button never shows enabled beside "added".
+      await router.invalidate();
+      toasts.toast({ tone: 'success', message: strings.stageFieldAdded });
+    } catch (error: unknown) {
+      toasts.toast({
+        tone: 'danger',
+        message: strings.stageFieldFailed(isDataError(error) ? error.message : strings.tryAgain),
+      });
+    } finally {
+      setAddingStage(false);
+    }
+  };
+  // Show as table: the way on from every board that can't draw, for everyone (late trap #14).
+  const showAsTable = (isPrimary: boolean) => (
+    <Button
+      {...(isPrimary ? { variant: 'primary' as const } : {})}
+      icon="table"
+      isDisabled={layoutSwitch.isDisabled === true || restoringId !== undefined || isAddingStage}
+      onPress={() => layoutSwitch.onChange('table')}
+    >
+      {strings.showAsTable}
+    </Button>
+  );
   // What a move says to screen readers ("Moved Acme renewal to Won."), through the Toolbar's status.
   const [announced, setAnnounced] = useState<string | undefined>(undefined);
   // New <record> in the top bar, as on the table: the same dialog, so switching to the board never hides the
@@ -218,6 +257,8 @@ export function BoardScreen(props: BoardScreenProps) {
       page={{
         topBar: (
           <TopBar title={object.pluralName} icon={object.icon} hue={object.hue}>
+            {/* The object's own actions (Find duplicates, Open trash), as on its table. */}
+            <ObjectMenu slug={slug} object={object} />
             {object.access === 'write' && (
               <Button
                 variant="primary"
@@ -268,16 +309,18 @@ export function BoardScreen(props: BoardScreenProps) {
               <EmptyState
                 icon="kanban"
                 title={strings.nothingToGroupTitle(object.pluralName)}
-                // Only owners and admins change the schema (spec 0009, AC-136); others see the title alone.
-                {...(canChangeSchema
-                  ? {
-                      actions: (
-                        <Button icon="plus" onPress={() => setAdding(true)}>
-                          {strings.addAttribute}
-                        </Button>
-                      ),
-                    }
-                  : {})}
+                actions={
+                  <>
+                    {/* One click makes the board: a Stage field with its stages (Attio's board). Owners and admins
+                        only change the schema (spec 0009, AC-136); everyone else still has the table. */}
+                    {canChangeSchema && (
+                      <Button variant="primary" icon="plus" isPending={isAddingStage} onPress={() => void addStage()}>
+                        {isAddingStage ? strings.addingStageField : strings.addStageField}
+                      </Button>
+                    )}
+                    {showAsTable(!canChangeSchema)}
+                  </>
+                }
               />
             ) : outcome.kind === 'group-archived' ? (
               <EmptyState
@@ -298,15 +341,8 @@ export function BoardScreen(props: BoardScreenProps) {
                         {restoringId === outcome.id ? strings.restoringGroup : strings.restoreGroup(outcome.title)}
                       </Button>
                     )}
-                    <Button
-                      // Readers' one way out, so it leads for them.
-                      {...(canChangeSchema ? {} : { variant: 'primary' as const })}
-                      icon="table"
-                      isDisabled={layoutSwitch.isDisabled === true || restoringId !== undefined}
-                      onPress={() => layoutSwitch.onChange('table')}
-                    >
-                      {strings.showAsTable}
-                    </Button>
+                    {/* Readers' one way out, so it leads for them. */}
+                    {showAsTable(!canChangeSchema)}
                   </>
                 }
               >
@@ -314,7 +350,7 @@ export function BoardScreen(props: BoardScreenProps) {
                 {canChangeSchema ? undefined : strings.groupArchivedTextReader}
               </EmptyState>
             ) : (
-              <EmptyState icon="kanban" title={strings.tooManyTitle}>
+              <EmptyState icon="kanban" title={strings.tooManyTitle} actions={showAsTable(true)}>
                 {strings.tooManyText(outcome.title, outcome.count.toLocaleString())}
               </EmptyState>
             )}

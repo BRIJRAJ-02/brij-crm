@@ -15,7 +15,12 @@ export const strings = {
   board: 'Board',
   /** An object with nothing to group by (AC-493). */
   nothingToGroupTitle: (plural: string) => `${plural} have no field to group by`,
-  addAttribute: 'Add attribute',
+  /** One click: a status field named Stage, with Lead, In progress, Won and Lost (the foolproof pass). */
+  addStageField: 'Add Stage',
+  addingStageField: 'Adding Stage…',
+  stageTitle: 'Stage',
+  stageFieldAdded: 'Stage added.',
+  stageFieldFailed: (why: string) => `Couldn’t add Stage. ${why}`,
   /** Past 50 options (AC-494). */
   tooManyTitle: 'Boards show up to 50 columns',
   tooManyText: (title: string, count: string) => `${title} has ${count} options.`,

@@ -54,6 +54,7 @@ import { strings as importStrings } from '../imports/strings.ts';
 import { strings as attributeStrings } from '../settings/attribute-strings.ts';
 import { useBulkActions, useTableSelection } from './BulkActions.tsx';
 import type { ShownColumn, ShownLayout } from '../views/layout.ts';
+import { ObjectMenu } from '../views/ViewMenu.tsx';
 import { avatarAttribute } from './columns.ts';
 import { groupingGap, groupPlan, useGroupedRows } from './grouped.ts';
 import { useColumnCalcs } from './calcs.ts';
@@ -608,6 +609,8 @@ export function RecordsScreen({
                 }
               : {})}
           >
+            {/* The object's own actions (Find duplicates, Open trash), apart from the view's. */}
+            <ObjectMenu slug={slug} object={object} />
             {/* Only where the person may change records (spec 0009, AC-142); the server refuses anyone else. */}
             {object.access === 'write' && (
               <Button variant="primary" icon="plus" onPress={openCreate}>
