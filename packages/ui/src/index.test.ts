@@ -246,6 +246,7 @@ describe('@crm/ui', () => {
       'fieldTypeOf',
       'fileIconName',
       'firstDayOfWeek',
+      'focusInCard',
       'focusLater',
       'formatDate',
       'formatDay',
