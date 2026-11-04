@@ -577,10 +577,13 @@ export function useHostedForm({
     }
     // A file that didn't upload is never left behind in silence (forms fix b8): the first press says so, the next
     // sends the rest without it.
-    const missingFile = form.questions.some((question) => failedFiles.has(question.key) && shown.has(question.key));
+    // A required one is the answers' own check's to say: it can't be sent without.
+    const missingFile = form.questions.some(
+      (question) => !question.required && failedFiles.has(question.key) && shown.has(question.key),
+    );
     if (missingFile && !isWarnedNoFile) {
       setWarnedNoFile(true);
-      setAlert(words.sendWithoutFile);
+      setAlert(words.sendWithoutFile(form.buttonText));
       return;
     }
     const result = checkAll(form.questions);

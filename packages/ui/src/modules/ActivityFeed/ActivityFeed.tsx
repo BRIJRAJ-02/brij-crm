@@ -998,18 +998,10 @@ function SubmissionDetail({
 }) {
   const [isOpen, setOpen] = useState(false);
   const answers = entry.answers ?? [];
-  // The answers take the entry's width, as a note's card does; the two actions sit on one line under them.
+  // The actions first, so pressing Show answers never moves it out from under the pointer, and the answers it
+  // reveals come after it in reading order; they take the entry's width, as a note's card does.
   return (
     <>
-      {isOpen && answers.length > 0 && (
-        <span id={`${detailId}-answers`} className={styles.card}>
-          {answers.map((answer, index) => (
-            <span key={`${answer.label}-${String(index)}`} className={styles.excerpt}>
-              {strings.answerLine(answer.label, answer.text)}
-            </span>
-          ))}
-        </span>
-      )}
       <span id={detailId} className={styles.changesRow}>
         {answers.length > 0 && (
           <Button
@@ -1026,6 +1018,15 @@ function SubmissionDetail({
         )}
         {entry.href !== undefined && <Link href={entry.href}>{strings.openSubmission}</Link>}
       </span>
+      {isOpen && answers.length > 0 && (
+        <span id={`${detailId}-answers`} className={styles.card}>
+          {answers.map((answer, index) => (
+            <span key={`${answer.label}-${String(index)}`} className={styles.excerpt}>
+              {strings.answerLine(answer.label, answer.text)}
+            </span>
+          ))}
+        </span>
+      )}
     </>
   );
 }

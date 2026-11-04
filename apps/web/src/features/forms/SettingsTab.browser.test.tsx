@@ -415,14 +415,7 @@ describe('Settings as plain rows (T21)', () => {
     for (const group of ['Form', 'CRM', 'Emails', 'Answers']) {
       await expect.element(page.getByRole('heading', { name: group, exact: true })).toBeVisible();
     }
-    for (const row of [
-      'Name',
-      'Link',
-      'Save answers to',
-      'Owner',
-      'Email each submission to',
-      'Accepting submissions',
-    ]) {
+    for (const row of ['Name', 'Link', 'Save answers to', 'Owner', 'Email each submission to', 'Taking answers']) {
       await expect.element(page.getByText(row, { exact: true }).first()).toBeVisible();
     }
     await expect.element(page.getByRole('button', { name: 'Copy link' })).toBeVisible();
@@ -478,9 +471,9 @@ describe('Settings as plain rows (T21)', () => {
       .toHaveAttribute('href', '/w/acme/settings/general');
   });
 
-  it('closes and opens the form from Accepting submissions', async () => {
+  it('closes and opens the form from Taking answers', async () => {
     await show(formView({}), []);
-    (page.getByRole('switch', { name: 'Accepting submissions' }).element() as HTMLElement).click();
+    (page.getByRole('switch', { name: 'Taking answers' }).element() as HTMLElement).click();
     expect(statuses).toEqual(['paused']);
   });
 });

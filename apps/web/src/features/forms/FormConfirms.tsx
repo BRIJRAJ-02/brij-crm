@@ -231,7 +231,12 @@ export function RetargetFormDialog({ ask, onClose, onConfirm }: RetargetDialogPr
   const shown = ask ?? last;
   if (shown === undefined) return null;
   const isOff = shown.objectId === null;
-  const questions = strings.questionList(shown.filedLabels);
+  // Three named at most, then how many more: a long mapping never turns into a paragraph.
+  const named =
+    shown.filedLabels.length > 3
+      ? [...shown.filedLabels.slice(0, 2), strings.moreQuestions(shown.filedLabels.length - 2)]
+      : shown.filedLabels;
+  const questions = strings.questionList(named);
   return (
     <Modal
       title={isOff ? strings.retargetOffTitle : strings.retargetTitle(shown.nextName)}

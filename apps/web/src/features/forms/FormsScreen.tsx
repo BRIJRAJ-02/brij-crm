@@ -53,7 +53,10 @@ function factsOf(form: FormSummary, last: string | undefined): readonly string[]
   if (form.liveVersionNumber === undefined) return [];
   if (form.submissionCount === 0) return [strings.noSubmissionsYet];
   // How many, and when the last came (forms fix a9, Tally's and Typeform's lists); spam is counted in Submissions.
-  return [strings.submissionCount(form.submissionCount), ...(last === undefined ? [] : [strings.lastAnswer(last)])];
+  // Spam left out, as Submissions' All leaves it out (forms fix a8): the card and the list it opens agree.
+  const real = Math.max(form.submissionCount - form.spamCount, 0);
+  if (real === 0) return [strings.noSubmissionsYet];
+  return [strings.submissionCount(real), ...(last === undefined ? [] : [strings.lastAnswer(last)])];
 }
 
 /**

@@ -54,7 +54,7 @@ describe('a file that didn’t upload (forms fix b8)', () => {
     await userEvent.upload(input, new File(['cv'], 'cv.pdf', { type: 'application/pdf' }));
     await expect.element(page.getByText(/can’t take files right now/).first()).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Send' }));
-    await expect.element(page.getByText(/Press the button again/).first()).toBeVisible();
+    await expect.element(page.getByText(/Press Send again/).first()).toBeVisible();
     expect(sent).toHaveLength(0);
     await userEvent.click(page.getByRole('button', { name: 'Send' }));
     await expect.poll(() => sent.length).toBe(1);

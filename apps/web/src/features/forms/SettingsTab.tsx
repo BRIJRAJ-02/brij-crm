@@ -13,7 +13,7 @@ import {
   CONFIRMATION_SUBJECT_MAX,
   FORM_SLUG,
 } from '@crm/data/forms';
-import { closingKind, dayOfClosing, closingOnDay, type ClosingKind } from './closing.ts';
+import { closingKind, closingOnDay, dayIn, dayOfClosing, type ClosingKind } from './closing.ts';
 import { useCaptureList } from '@crm/data/react';
 import {
   Avatar,
@@ -27,6 +27,7 @@ import {
   SettingsSection,
   SettingsStack,
   Switch,
+  useFormatSettings,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
@@ -343,6 +344,9 @@ export function SettingsTab({
   const hasEmailQuestion = draft.questions.some((question) => question.answerType === 'email');
   const copyOn = draft.confirmation?.on === true;
   const closing = closingKind(draft.closing);
+  const { timeZone } = useFormatSettings();
+  const [closingError, setClosingError] = useState<string | undefined>(undefined);
+  const [countText, setCountText] = useState<string | undefined>(undefined);
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
   const ownerIsTold =
     isFiling &&
@@ -422,7 +426,12 @@ export function SettingsTab({
           </SettingsRow>
         )}
         {/* When it stops by itself (forms fix b2): never, on a day, or after a number of answers; and what it says. */}
-        <SettingsRow title={strings.closesRow} meta={tip(strings.closesRow, strings.closesHelp)} control="field">
+        <SettingsRow
+          title={strings.closesRow}
+          meta={tip(strings.closesRow, strings.closesHelp)}
+          control="field"
+          {...(isPublished ? { description: strings.goesLive } : {})}
+        >
           <Select
             label={strings.closesRow}
             isLabelHidden
@@ -442,7 +451,8 @@ export function SettingsTab({
                 if (kind === 'never') return rest;
                 return {
                   ...rest,
-                  closing: kind === 'date' ? { at: closingOnDay(nextWeek()) } : { after: DEFAULT_CLOSE_AFTER },
+                  closing:
+                    kind === 'date' ? { at: closingOnDay(nextWeek(), timeZone) } : { after: DEFAULT_CLOSE_AFTER },
                 };
               });
             }}
@@ -453,11 +463,18 @@ export function SettingsTab({
             <DatePicker
               label={strings.closesDay}
               isLabelHidden
-              value={dayOfClosing(draft.closing?.at)}
+              value={dayOfClosing(draft.closing?.at, timeZone)}
               isReadOnly={isReadOnly}
+              {...(closingError === undefined ? {} : { error: closingError })}
               onChange={(day) => {
                 if (day === null) return;
-                onDraftChange((before) => ({ ...before, closing: { at: closingOnDay(day) } }));
+                // A day already gone would close the form the moment it is published, without a word.
+                if (day < dayIn(Date.now(), timeZone)) {
+                  setClosingError(strings.closesPast);
+                  return;
+                }
+                setClosingError(undefined);
+                onDraftChange((before) => ({ ...before, closing: { at: closingOnDay(day, timeZone) } }));
               }}
             />
           </SettingsRow>
@@ -468,13 +485,19 @@ export function SettingsTab({
               label={strings.closesCount}
               isLabelHidden
               inputMode="numeric"
-              value={String(draft.closing?.after ?? DEFAULT_CLOSE_AFTER)}
+              value={countText ?? String(draft.closing?.after ?? DEFAULT_CLOSE_AFTER)}
               isReadOnly={isReadOnly}
+              {...(closingError === undefined ? {} : { error: closingError })}
+              // Typed freely (it can be emptied to type again), saved when a whole number from 1 to the limit.
               onChange={(text) => {
-                const n = Number.parseInt(text.replace(/\D/g, ''), 10);
-                if (!Number.isFinite(n)) return;
-                const after = Math.min(Math.max(n, 1), CLOSE_AFTER_MAX);
-                onDraftChange((before) => ({ ...before, closing: { after } }));
+                setCountText(text);
+                const n = /^\d+$/.test(text.trim()) ? Number.parseInt(text.trim(), 10) : Number.NaN;
+                if (!Number.isInteger(n) || n < 1 || n > CLOSE_AFTER_MAX) {
+                  setClosingError(strings.closesCountError(CLOSE_AFTER_MAX));
+                  return;
+                }
+                setClosingError(undefined);
+                onDraftChange((before) => ({ ...before, closing: { after: n } }));
               }}
             />
           </SettingsRow>
@@ -520,7 +543,11 @@ export function SettingsTab({
           />
         </SettingsRow>
         {offersDeal && (
-          <SettingsRow title={strings.alsoDeal} meta={tip(strings.alsoDeal, strings.alsoDealTip)}>
+          <SettingsRow
+            title={strings.alsoDeal}
+            meta={tip(strings.alsoDeal, strings.alsoDealTip)}
+            {...(isPublished ? { description: strings.goesLive } : {})}
+          >
             <Switch
               label={strings.alsoDeal}
               isLabelHidden
@@ -582,7 +609,13 @@ export function SettingsTab({
         {/* The visitor's own copy (spec 0063, AC-6318; forms fix b1): built on the server, never offered here before. */}
         <SettingsRow
           title={strings.copyRow}
-          meta={tip(strings.copyRow, hasEmailQuestion ? strings.copyHelp : strings.copyNeedsEmail)}
+          meta={tip(strings.copyRow, strings.copyHelp)}
+          // Its reason in view, not only on hover, when there is nowhere to send a copy.
+          {...(hasEmailQuestion
+            ? isPublished
+              ? { description: strings.goesLive }
+              : {}
+            : { description: strings.copyNeedsEmail })}
         >
           <Switch
             label={strings.copyRow}
@@ -620,6 +653,7 @@ export function SettingsTab({
                 value={draft.confirmation?.line ?? ''}
                 placeholder={strings.copyLineDefault}
                 maxLength={CONFIRMATION_LINE_MAX}
+                isWrapping
                 isReadOnly={isReadOnly}
                 onChange={(line) => {
                   onDraftChange((before) => ({ ...before, confirmation: { on: true, ...before.confirmation, line } }));
@@ -633,7 +667,7 @@ export function SettingsTab({
         {/* How long answers are kept is the workspace's (Settings › General); the form says it, and where to change it. */}
         {keepMonths !== undefined && (
           <SettingsRow title={strings.keptRow} meta={tip(strings.keptRow, strings.keptHelp)}>
-            <ButtonLink variant="ghost" href={generalSettingsHref(slug)}>
+            <ButtonLink variant="secondary" href={generalSettingsHref(slug)}>
               {keepMonths === null ? strings.keptForever : strings.keptMonths(keepMonths)}
             </ButtonLink>
           </SettingsRow>

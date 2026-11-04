@@ -34,8 +34,8 @@ import {
   LinkListToolbar,
   Separator,
   Select,
+  ShortcutTooltip,
   Table,
-  Tooltip,
   TruncatedText,
   type TableColumn,
 } from '@crm/ui';
@@ -166,7 +166,12 @@ export function SubmissionsTab({
       : { for: page, items: [], ...(page.nextCursor === undefined ? {} : { next: page.nextCursor }) };
   const rows = [...page.items, ...held.items];
   const [busy, setBusy] = useState<string | undefined>(undefined);
-  const [isConfirmingDelete, setConfirmingDelete] = useState(false);
+  // The submission Delete asks about, held as it opens: the panel moving underneath never changes what is deleted.
+  const [confirmingId, setConfirmingId] = useState<string | undefined>(undefined);
+  const isConfirmingDelete = confirmingId !== undefined;
+  const setConfirmingDelete = (isOpen: boolean) => {
+    setConfirmingId(isOpen ? open?.id : undefined);
+  };
   // A refused delete says why inside its confirm, which stays open (the owner's rule, 21 October 2026).
   const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined);
   // Adding many at once asks first (the confirms rule, 21 October 2026); one from the panel stays one click.
@@ -295,7 +300,8 @@ export function SubmissionsTab({
   const before = at > 0 ? shown[at - 1] : undefined;
   const after = at >= 0 ? shown[at + 1] : undefined;
   useEffect(() => {
-    if (open === undefined) return undefined;
+    // Never under a dialog: J would change the submission an open Delete acts on.
+    if (open === undefined || isConfirmingDelete || isDeletingMany || isAddingMany) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
       const target = event.target;
@@ -305,7 +311,8 @@ export function SubmissionsTab({
       ) {
         return;
       }
-      const next = event.key === 'j' ? after : event.key === 'k' ? before : undefined;
+      const key = event.key.toLowerCase();
+      const next = key === 'j' ? after : key === 'k' ? before : undefined;
       if (next === undefined) return;
       event.preventDefault();
       go(next.id);
@@ -546,8 +553,7 @@ export function SubmissionsTab({
           {/* All leaves spam out (forms fix a8): one quiet way to it, counted. */}
           {state === undefined && spamCount > 0 && (
             <Button
-              variant="ghost"
-              size="sm"
+              icon="circle-alert"
               onPress={() => {
                 go(undefined, 'spam');
               }}
@@ -743,7 +749,7 @@ export function SubmissionsTab({
             <>
               <StatusDot hue={stateHue(open, isFiling)}>{stateLabel(open, isFiling)}</StatusDot>
               {/* The one before and after in the list, without closing (forms fix a, Gmail's and Attio's K and J). */}
-              <Tooltip content={strings.previousSubmissionTip}>
+              <ShortcutTooltip content={strings.previousSubmission} kbd="K">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -754,8 +760,8 @@ export function SubmissionsTab({
                     if (before !== undefined) go(before.id);
                   }}
                 />
-              </Tooltip>
-              <Tooltip content={strings.nextSubmissionTip}>
+              </ShortcutTooltip>
+              <ShortcutTooltip content={strings.nextSubmission} kbd="J">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -766,7 +772,7 @@ export function SubmissionsTab({
                     if (after !== undefined) go(after.id);
                   }}
                 />
-              </Tooltip>
+              </ShortcutTooltip>
             </>
           }
           isStacked
@@ -875,7 +881,7 @@ export function SubmissionsTab({
               icon="trash"
               isPending={busy === 'delete'}
               onPress={() => {
-                if (open !== undefined) act('delete', open.id);
+                if (confirmingId !== undefined) act('delete', confirmingId);
               }}
             >
               {strings.deleteSubmissionAction}
@@ -981,7 +987,11 @@ function SubmissionDetail({
     return answer === undefined ? [] : [answer];
   });
   const source = cameFromOf(submission);
-  const filing = answerFiling(submission.answers, submission.crm, isFiling, submission.refused);
+  // A kept answer isn't on the record (forms fix a4): it counts as not saved until Use new writes it.
+  const filing = answerFiling(submission.answers, submission.crm, isFiling, [
+    ...submission.refused,
+    ...submission.kept.map((each) => ({ questionId: each.questionId })),
+  ]);
   const reasons = submission.crm.state === 'linked' ? notSavedReasons(submission.answers, submission.refused) : [];
   return (
     <>
@@ -1020,21 +1030,28 @@ function SubmissionDetail({
             items={keptAnswers.map((answer) => ({
               id: answer.questionId,
               term: answer.label,
-              description:
-                onUseNew === undefined ? (
-                  answerText(answer)
-                ) : (
-                  <Button
-                    size="sm"
-                    isPending={usingNew === answer.questionId}
-                    label={strings.useNewLabel(answer.label)}
-                    onPress={() => {
-                      onUseNew(answer.questionId);
-                    }}
-                  >
-                    {strings.useNew}
-                  </Button>
-                ),
+              // The new answer itself, then Use new: what would be written is always in view.
+              description: (
+                <>
+                  {answer.answerType === 'phone' ? (
+                    <PhoneAnswer answer={answer} text={answerText(answer)} surface="panel" />
+                  ) : (
+                    answerText(answer)
+                  )}{' '}
+                  {onUseNew !== undefined && (
+                    <Button
+                      size="sm"
+                      isPending={usingNew === answer.questionId}
+                      label={strings.useNewLabel(answer.label)}
+                      onPress={() => {
+                        onUseNew(answer.questionId);
+                      }}
+                    >
+                      {strings.useNew}
+                    </Button>
+                  )}
+                </>
+              ),
             }))}
           />
         </Callout>

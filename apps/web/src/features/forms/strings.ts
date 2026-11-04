@@ -248,6 +248,7 @@ export const strings = {
    */
   retargetText: (questions: string, from: string) =>
     `${questions} stop saving to ${from}. Switching back restores them.`,
+  moreQuestions: (n: number) => (n === 1 ? '1 more question' : `${String(n)} more questions`),
   retargetDone: (to: string) => `Answers now save to ${to}.`,
   retargetOffDone: 'Answers now stay in Submissions.',
   /** Email them a copy (forms fix b1): the visitor's own copy of what they sent. */
@@ -265,6 +266,10 @@ export const strings = {
   closesOnDate: 'On a date',
   closesAfterCount: 'After a number of answers',
   closesDay: 'Last day',
+  closesPast: 'Pick today or a day to come.',
+  closesCountError: (max: number) => `Give a whole number from 1 to ${max.toLocaleString('en')}.`,
+  /** Under a setting that waits for Publish on a live form (forms review): said, not only in a hover tip. */
+  goesLive: 'Goes live with Publish.',
   closesCount: 'Number of answers',
   closedMessageRow: 'Message when closed',
   closedMessageDefault: 'This form isn’t taking answers right now.',
@@ -585,8 +590,6 @@ export const strings = {
   /** The open submission's neighbours in the list (forms critique a). */
   previousSubmission: 'Previous submission',
   nextSubmission: 'Next submission',
-  previousSubmissionTip: 'Previous (K)',
-  nextSubmissionTip: 'Next (J)',
   /** A form that keeps answers only: the way to the CRM from a submission (forms fix a10). */
   turnOnCrm: 'Save answers to the CRM',
   /** All leaves spam out; this chip opens it (forms fix a8). */
@@ -774,7 +777,7 @@ export const strings = {
   saveAnswersTo: 'Save answers to',
   onlySubmissions: 'Only in Submissions',
   emailEach: 'Email each submission to',
-  acceptingRow: 'Accepting submissions',
+  acceptingRow: 'Taking answers',
   acceptingHelp: 'Turn off to close the form. Visitors see that it is closed.',
   spamRow: 'Spam',
   linkHelp: 'Links with the old address keep working.',
