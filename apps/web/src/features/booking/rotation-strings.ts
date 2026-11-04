@@ -189,8 +189,6 @@ export const strings = {
   teamLinkNone: 'Make a team page or the workspace link first.',
   addTeamLink: 'Add a team link',
   createTeamLink: 'Create team link',
-  // Copy handoff (31 Oct 2026): the switches are the explanation.
-  rosterNote: (on: number, all: number) => `${String(on)} of ${String(all)} on.`,
   everyoneSwitch: 'Everyone in the workspace, including people who join later',
   everyoneSwitchOn: (on: number) => `${String(on)} ${on === 1 ? 'person takes' : 'people take'} turns.`,
   switchOffRefused: (name: string) => `Switch ${name} off`,

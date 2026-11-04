@@ -403,7 +403,7 @@ export function RoleScreen({
 
   const people =
     holders.length === 0 ? (
-      <EmptyState icon="users" title={strings.nobody} />
+      <EmptyState title={strings.nobody} />
     ) : (
       <Table
         label={strings.peopleTab}

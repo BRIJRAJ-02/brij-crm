@@ -57,7 +57,7 @@ export function SystemStatusError() {
   const router = useRouter();
   return (
     <Card placement="page" title={strings.title} footer={<ThemeFooter />}>
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
+      <EmptyState layout="block" tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
         {strings.failedText}
       </EmptyState>
     </Card>
@@ -67,7 +67,12 @@ export function SystemStatusError() {
 export function NotFound() {
   return (
     <Card placement="page" title={strings.notFoundTitle} footer={<ThemeFooter />}>
-      <EmptyState icon="search" title={strings.notFoundText} actions={<Link href="/">{strings.home}</Link>}>
+      <EmptyState
+        layout="block"
+        icon="search"
+        title={strings.notFoundText}
+        actions={<Link href="/">{strings.home}</Link>}
+      >
         {strings.notFoundHint}
       </EmptyState>
     </Card>

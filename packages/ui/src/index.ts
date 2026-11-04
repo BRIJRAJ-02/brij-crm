@@ -644,6 +644,8 @@ export {
   type SettingsSectionProps,
   type SettingsStackProps,
   type SettingsNavEntry,
+  ViewOnlyTag,
+  type ViewOnlyTagProps,
 } from './modules/SettingsLayout/SettingsLayout.tsx';
 export { SignInForm, type SignInFormProps, type SignInStatus } from './modules/SignInForm/SignInForm.tsx';
 export { SortBuilder, type SortBuilderProps } from './modules/SortBuilder/SortBuilder.tsx';

@@ -1444,7 +1444,6 @@ function PageChoice({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockE
     body = (
       <EmptyState
         layout="row"
-        icon="calendar-clock"
         title={items.some((item) => item.kind === 'page') ? strings.noPages : strings.noPagesYet}
         actions={<ButtonLink href={linksHref(slug)}>{strings.noPagesAction}</ButtonLink>}
       />
@@ -1581,7 +1580,6 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
     body = (
       <EmptyState
         layout="row"
-        icon="clipboard-list"
         title={items.some((each) => each.kind === 'form') ? strings.noForms : strings.noFormsYet}
         actions={<ButtonLink href={formsHref(slug)}>{strings.noFormsAction}</ButtonLink>}
       />

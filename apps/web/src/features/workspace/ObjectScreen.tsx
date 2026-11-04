@@ -17,11 +17,11 @@ export function noObjectsPage(workspaceName: string, isGuest = false) {
   return {
     topBar: <TopBar title={workspaceName} />,
     body: isGuest ? (
-      <EmptyState icon="lock" title={strings.nothingSharedTitle}>
+      <EmptyState layout="block" icon="lock" title={strings.nothingSharedTitle}>
         {strings.nothingSharedText}
       </EmptyState>
     ) : (
-      <EmptyState title={strings.noObjects} />
+      <EmptyState layout="block" title={strings.noObjects} />
     ),
   };
 }
@@ -30,7 +30,9 @@ export function noObjectsPage(workspaceName: string, isGuest = false) {
 export function missingPage(title: string, text: string) {
   return {
     topBar: <TopBar title={title} />,
-    body: <EmptyState icon="search" title={text} actions={<Link href="/">{strings.openWorkspace}</Link>} />,
+    body: (
+      <EmptyState layout="block" icon="search" title={text} actions={<Link href="/">{strings.openWorkspace}</Link>} />
+    ),
   };
 }
 
@@ -38,7 +40,7 @@ export function missingPage(title: string, text: string) {
 export function pendingPage() {
   return {
     topBar: <TopBar title={strings.loadingTitle} isLoading />,
-    body: <EmptyState title={strings.loadingTitle} isLoading />,
+    body: <EmptyState layout="block" title={strings.loadingTitle} isLoading />,
   };
 }
 
@@ -79,6 +81,7 @@ export function viewNotFoundPage(object: ObjectSummary, slug: string, defaultNam
     topBar: <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />,
     body: (
       <EmptyState
+        layout="block"
         icon="search"
         title={viewStrings.notFoundText}
         actions={
@@ -103,7 +106,7 @@ export function failedPage(workspaceName: string | undefined, onRetry: () => voi
     // says "Couldn’t load this workspace" once, not twice.
     topBar: <TopBar title={workspaceName ?? strings.product} />,
     body: (
-      <EmptyState tone="error" title={title ?? strings.failedTitle} onRetry={onRetry}>
+      <EmptyState layout="block" tone="error" title={title ?? strings.failedTitle} onRetry={onRetry}>
         {isDataError(error) ? error.message : strings.failedText}
       </EmptyState>
     ),

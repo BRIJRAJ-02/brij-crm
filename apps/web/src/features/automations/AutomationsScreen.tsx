@@ -112,7 +112,7 @@ export function AutomationsScreen({ data, slug, held, objects, members }: Automa
   );
 
   const body = (() => {
-    if (state.status === 'loading') return <EmptyState title={strings.loadingLabel} isLoading />;
+    if (state.status === 'loading') return <EmptyState layout="block" title={strings.loadingLabel} isLoading />;
     if (state.status === 'error') {
       return (
         <EmptyState tone="error" title={strings.failedTitle} onRetry={() => held.reload()}>
@@ -125,6 +125,7 @@ export function AutomationsScreen({ data, slug, held, objects, members }: Automa
     if (state.automations.length === 0) {
       return (
         <EmptyState
+          layout="block"
           icon="zap"
           title={strings.empty.title}
           actions={STARTERS.map((id) => (
@@ -237,7 +238,7 @@ function RunsTable({
   readonly slug: string;
 }) {
   if (runs.length === 0) {
-    return <EmptyState icon="zap" title={strings.runs.empty.title} />;
+    return <EmptyState title={strings.runs.empty.title} />;
   }
   return (
     <Table

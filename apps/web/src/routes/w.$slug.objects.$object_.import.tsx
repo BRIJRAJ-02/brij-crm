@@ -56,6 +56,7 @@ function ImportRoute() {
           topBar: <TopBar title={importStrings.title(readOnly.pluralName)} icon={readOnly.icon} hue={readOnly.hue} />,
           body: (
             <EmptyState
+              layout="block"
               icon="lock"
               title={importStrings.noAccess(readOnly.pluralName)}
               actions={<Link href={objectHref(slug, readOnly)}>{importStrings.viewPlural(readOnly.pluralName)}</Link>}

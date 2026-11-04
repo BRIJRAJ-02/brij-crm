@@ -1,8 +1,9 @@
 import { isDataError } from '@crm/data';
 import { previewOf } from '@crm/data/forms';
-import { Callout, EmptyState, HostedFormPreview } from '@crm/ui';
+import { ButtonLink, Callout, EmptyState, HostedFormPreview } from '@crm/ui';
 import { createFileRoute } from '@tanstack/react-router';
 import { BrandedFormPreview } from '../features/forms/FormBrand.tsx';
+import { formsHref } from '../features/forms/paths.ts';
 import { strings } from '../features/forms/strings.ts';
 
 // A draft opened in a new tab to try (spec 0023, The editor: layout): the hosted page's own renderer, marked
@@ -34,7 +35,21 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId_/preview'
 function PreviewRoute() {
   const { form, brand } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  if (form === undefined) return <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>;
+  if (form === undefined)
+    return (
+      <EmptyState
+        layout="block"
+        title={strings.missingTitle}
+        // A dead end gets a way back.
+        actions={
+          <ButtonLink href={formsHref(slug)} variant="secondary">
+            {strings.backToForms}
+          </ButtonLink>
+        }
+      >
+        {strings.missingText}
+      </EmptyState>
+    );
   return (
     <main>
       <Callout placement="banner" tone="info">

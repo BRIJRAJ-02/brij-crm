@@ -14,7 +14,6 @@ import {
 } from '@crm/data';
 import {
   Button,
-  Callout,
   Card,
   CopyButton,
   Disclosure,
@@ -363,7 +362,6 @@ export function ConfigurationTab({ slug, object, configuration, attributes }: Co
 
   return (
     <SettingsStack>
-      {!canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
       <SettingsSection title={strings.lookSection}>
         <Card>
           <Form

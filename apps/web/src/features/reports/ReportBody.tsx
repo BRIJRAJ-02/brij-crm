@@ -84,9 +84,9 @@ export function ReportBody({
       />
       {figures !== undefined && figures.tooMany && <Callout tone="warning">{strings.tooMany}</Callout>}
       {figures !== undefined && figures.otherCurrencies.length > 0 && (
-        <Callout>{strings.othersLeftOut(figures.otherCurrencies)}</Callout>
+        <Callout tone="info">{strings.othersLeftOut(figures.otherCurrencies)}</Callout>
       )}
-      {figures !== undefined && figures.truncated && <Callout>{strings.truncated}</Callout>}
+      {figures !== undefined && figures.truncated && <Callout tone="info">{strings.truncated}</Callout>}
       {isPipeline && figures !== undefined && !figures.tooMany && (
         <Forecast
           figures={figures}

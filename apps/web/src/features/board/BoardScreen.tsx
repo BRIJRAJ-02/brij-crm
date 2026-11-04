@@ -244,12 +244,14 @@ export function BoardScreen(props: BoardScreenProps) {
             layout={layoutSwitch}
           >
             {live === 'paused' && (
-              <Callout placement="bar" isAnnounced>
+              <Callout tone="info" placement="bar" isAnnounced>
                 {workspaceStrings.livePaused}
               </Callout>
             )}
             {outcome.kind === 'board' && outcome.isStandIn && (
-              <Callout placement="bar">{strings.standIn(outcome.groupBy.title)}</Callout>
+              <Callout tone="info" placement="bar">
+                {strings.standIn(outcome.groupBy.title)}
+              </Callout>
             )}
             {viewActions}
           </ViewBar>
@@ -266,7 +268,7 @@ export function BoardScreen(props: BoardScreenProps) {
               />
             ) : outcome.kind === 'nothing-to-group' ? (
               <EmptyState
-                icon="kanban"
+                layout="fill"
                 title={strings.nothingToGroupTitle(object.pluralName)}
                 // Only owners and admins change the schema (spec 0009, AC-136); others see the title alone.
                 {...(canChangeSchema
@@ -281,7 +283,6 @@ export function BoardScreen(props: BoardScreenProps) {
               />
             ) : outcome.kind === 'group-archived' ? (
               <EmptyState
-                icon="archive"
                 title={strings.groupArchivedTitle(outcome.title)}
                 actions={
                   <>
@@ -314,7 +315,7 @@ export function BoardScreen(props: BoardScreenProps) {
                 {canChangeSchema ? undefined : strings.groupArchivedTextReader}
               </EmptyState>
             ) : (
-              <EmptyState icon="kanban" title={strings.tooManyTitle}>
+              <EmptyState title={strings.tooManyTitle}>
                 {strings.tooManyText(outcome.title, outcome.count.toLocaleString())}
               </EmptyState>
             )}

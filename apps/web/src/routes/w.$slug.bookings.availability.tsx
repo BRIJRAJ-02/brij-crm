@@ -109,7 +109,12 @@ function AvailabilityError({ error }: ErrorComponentProps) {
         topBar: <TopBar title={strings.availability} icon="clock" />,
         body: (
           <PageColumn>
-            <EmptyState tone="error" title={scheduleStrings.schedulesFailed} onRetry={() => void router.invalidate()}>
+            <EmptyState
+              layout="block"
+              tone="error"
+              title={scheduleStrings.schedulesFailed}
+              onRetry={() => void router.invalidate()}
+            >
               {isDataError(error) ? error.message : strings.failedText}
             </EmptyState>
           </PageColumn>

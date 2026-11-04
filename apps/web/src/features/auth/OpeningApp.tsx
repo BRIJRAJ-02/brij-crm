@@ -76,6 +76,7 @@ export function OpeningApp() {
     >
       {isSlow ? (
         <EmptyState
+          layout="block"
           title={strings.stillOpeningTitle}
           icon="clock"
           actions={
@@ -87,7 +88,7 @@ export function OpeningApp() {
           {strings.stillOpeningText}
         </EmptyState>
       ) : (
-        <EmptyState title={strings.openingTitle} isLoading />
+        <EmptyState layout="block" title={strings.openingTitle} isLoading />
       )}
     </AppShell>
   );

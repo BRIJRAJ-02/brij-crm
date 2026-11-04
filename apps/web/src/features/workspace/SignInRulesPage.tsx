@@ -79,6 +79,7 @@ function TwoFactorRequired({ data, toasts, workspaceName }: SignInRulesProps) {
   if (security.status === 'error') {
     return (
       <EmptyState
+        layout="block"
         tone="error"
         title={strings.twoFactorRequiredTitle(workspaceName)}
         onRetry={() => void data.account.security().reload()}
@@ -90,6 +91,7 @@ function TwoFactorRequired({ data, toasts, workspaceName }: SignInRulesProps) {
   return (
     <>
       <EmptyState
+        layout="block"
         icon="shield-check"
         title={strings.twoFactorRequiredTitle(workspaceName)}
         isLoading={!ready}
@@ -175,6 +177,7 @@ function SignInAgain({ data, workspaceName }: SignInRulesProps) {
 
   return (
     <EmptyState
+      layout="block"
       icon="log-out"
       title={strings.signInAgainTitle(workspaceName)}
       isLoading={security.status === 'loading'}

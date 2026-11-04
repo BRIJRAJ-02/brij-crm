@@ -297,6 +297,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
         isAloneEmpty ? (
           // Alone in the workspace: round robin needs teammates first.
           <EmptyState
+            layout="block"
             icon="users-round"
             title={strings.emptyAloneTitle}
             // The help sits once, beside the page's title.
@@ -322,7 +323,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
           </EmptyState>
         ) : (
           <EmptyState
-            icon="users-round"
+            layout="block"
             title={strings.emptyTitle}
             // No groups yet: New group is the page's one primary, here; the help sits once, beside the page's title.
             {...(canManage ? { actions: newButton } : {})}

@@ -130,7 +130,7 @@ export function TestTab({ data, slug, surfaces }: TestTabProps) {
       );
   };
 
-  if (surfaces.length === 0) return <EmptyState icon="flask-conical" title={strings.noSurfaces} />;
+  if (surfaces.length === 0) return <EmptyState title={strings.noSurfaces} />;
   return (
     <SettingsStack>
       <Card>
@@ -190,11 +190,7 @@ export function TestTab({ data, slug, surfaces }: TestTabProps) {
       </Card>
       {ready !== undefined && (
         <Card title={strings.result}>
-          {result === undefined ? (
-            <EmptyState icon="flask-conical" title={strings.emptyResult} />
-          ) : (
-            <Result result={result} />
-          )}
+          {result === undefined ? <EmptyState title={strings.emptyResult} /> : <Result result={result} />}
         </Card>
       )}
     </SettingsStack>

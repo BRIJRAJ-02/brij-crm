@@ -6,6 +6,7 @@ import type { AuditEntryView, AuditLog } from '@crm/data';
 import {
   Badge,
   Button,
+  Callout,
   EmptyState,
   formatDay,
   memoIntl,
@@ -101,13 +102,14 @@ export function WorkspaceChangesTab({ log }: WorkspaceChangesTabProps) {
         getRowId={(entry) => entry.id}
         renderCell={renderCell}
         isLoading={state.status === 'loading'}
-        emptyState={<EmptyState icon="clock" title={strings.emptyTitle} />}
+        emptyState={<EmptyState title={strings.emptyTitle} />}
       />
       {state.status === 'more-failed' && (
-        // The rows stay; only the next page failed. The one button below turns into Try again, so focus stays on it.
-        <EmptyState layout="row" tone="error" title={strings.failedMore}>
+        // The rows stay; only the next page failed. The one button below turns into Try again, so focus stays on it:
+        // a polite line, not an empty state (which brings its own Try again).
+        <Callout tone="danger" isPolite title={strings.failedMore}>
           {state.message}
-        </EmptyState>
+        </Callout>
       )}
       {state.hasMore && (
         <Button

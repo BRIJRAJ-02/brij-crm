@@ -1,7 +1,8 @@
-/* EmptyState: a 32px icon tile, a title, a line of text and the next step,
-   centred in its slot. The error tone's icon is danger. The row layout is one
-   quiet line at a list row's height, at the start. The fill layout grows to
-   its slot's height and centres the block in it. */
+/* EmptyState. The row (the default) is one quiet line at a list row's height, at the start, in the list's place:
+   the title in secondary text and the action after it, with no mark. The block is centred in its slot, for a
+   whole surface's first run: an illustration or a bare glyph, never a tile. The fill grows the block to its slot's
+   height. An error looks different from emptiness in every layout: its alert mark and its title in the danger
+   colour, with Try again. A lock shows its bare mark in tertiary. */
 @layer components {
   .root {
     display: flex;
@@ -13,29 +14,21 @@
     text-align: center;
   }
 
+  /* A bare mark, no tile: a glyph over a block's title, or beside a row's. */
   .icon {
-    display: grid;
-    place-content: center;
-    inline-size: var(--space-32);
-    block-size: var(--space-32);
-    margin-block-end: var(--space-4);
-    border: var(--border-width-hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
+    display: inline-flex;
+    flex: none;
+    margin-block-end: var(--space-2);
+    color: var(--text-tertiary);
   }
 
-  /* The illustration slot: a picture over the title in place of the icon tile, centred, at most size-column wide. */
+  /* The illustration slot: a picture over the title, centred, at most size-column wide. */
   .illustration {
     display: grid;
     place-content: center;
     max-inline-size: var(--size-column);
     margin-block-end: var(--space-8);
     color: var(--text-tertiary);
-  }
-
-  .root[data-tone='error'] .icon {
-    color: var(--danger);
   }
 
   .title {
@@ -52,7 +45,13 @@
     letter-spacing: var(--tracking-body);
   }
 
-  /* Loading: two skeleton lines where the title and text go, a line's measure wide. */
+  /* An error is not emptiness: its mark and its title in the danger colour (4.5:1 in both themes). */
+  .root[data-tone='error'] .icon,
+  .root[data-tone='error'] .title {
+    color: var(--danger);
+  }
+
+  /* Loading: skeleton lines where the title and text go, a line's measure wide. */
   .lines {
     display: flex;
     inline-size: min(var(--size-measure), 100%);
@@ -74,9 +73,11 @@
     min-block-size: 100%;
   }
 
-  /* A row: one quiet line at a list row's height, at the start, its icon bare. */
+  /* A row: one quiet line at a list row's height, at the start, its action straight after the words. It keeps its
+     own height in a slot taller than it (a grid cell, a panel), at the top where the first row would be. */
   .root[data-layout='row'] {
     flex-direction: row;
+    align-self: start;
     flex-wrap: wrap;
     gap: var(--space-8);
     align-items: center;
@@ -87,13 +88,7 @@
   }
 
   .root[data-layout='row'] .icon {
-    display: inline-flex;
-    inline-size: auto;
-    block-size: auto;
     margin: 0;
-    border: none;
-    background: transparent;
-    color: var(--text-tertiary);
   }
 
   .root[data-layout='row'] .title {
@@ -102,24 +97,33 @@
     letter-spacing: var(--tracking-body);
   }
 
+  .root[data-layout='row'][data-tone='error'] .title {
+    color: var(--danger);
+  }
+
   .root[data-layout='row'] .actions {
     justify-content: start;
     margin-block-start: 0;
   }
 
-  /* A row with a line of text: the text sits under the title, both beside the icon, rather than wrapping
-     into a block next to it (Home's cards). The icon stays level with the title. */
-  .root[data-layout='row']:has(> .text) {
+  /* A row with a line of text: the text sits under the title (and the actions under the text), rather than
+     wrapping into a block beside it. A mark, when there is one (an error, a lock), stays level with the title. */
+  .root[data-layout='row'][data-has-text] {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: var(--space-8);
+    grid-template-columns: minmax(0, 1fr);
     row-gap: var(--space-2);
+    align-content: start;
     align-items: center;
     padding-block: var(--space-6);
   }
 
-  /* In the grid (a row with text) the words and actions take the second column; a flex row ignores this. */
-  .root[data-layout='row'] :is(.title, .text, .actions) {
+  .root[data-layout='row'][data-has-text][data-has-mark] {
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-8);
+  }
+
+  /* In the grid with a mark, the words and actions take the second column; a flex row ignores this. */
+  .root[data-layout='row'][data-has-mark] :is(.title, .text, .actions) {
     grid-column: 2;
   }
 
@@ -129,11 +133,5 @@
     color: var(--text-tertiary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
-  }
-
-  @media (forced-colors: active) {
-    .icon {
-      border-color: CanvasText;
-    }
   }
 }

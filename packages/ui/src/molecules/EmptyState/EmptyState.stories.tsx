@@ -9,34 +9,73 @@ import { EmptyState } from './EmptyState.tsx';
 const meta = {
   title: 'Molecules/EmptyState',
   component: EmptyState,
-  args: { title: 'No deals yet', children: 'Deals you add or import show here.' },
+  args: { title: 'No deals yet' },
 } satisfies Meta<typeof EmptyState>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Nothing yet, with the next step. */
+/**
+ * The default: one quiet line in the list's place, with its one action after the words. No mark and no tile: the
+ * title says what is missing, the button what to do.
+ */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   args: {
+    title: 'No matches',
+    actions: (
+      <Button variant="ghost" size="sm">
+        Clear filters
+      </Button>
+    ),
+  },
+  play: async ({ canvas }) => {
+    const status = canvas.getByRole('status');
+    await expect(status).toHaveTextContent('No matches');
+    await expect(status).toHaveAttribute('data-layout', 'row');
+    // A row's height, starting where a row's words start, and no icon of any kind.
+    await expect(Math.round(status.getBoundingClientRect().height)).toBe(34);
+    await expect(status.querySelector('svg:not(button svg)')).toBeNull();
+  },
+};
+
+/** A row with no action: the words alone, at a list row's height. */
+export const Row: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { title: 'No open tasks.', icon: 'list-todo' },
+  play: async ({ canvas }) => {
+    const status = canvas.getByRole('status');
+    await expect(status).toHaveTextContent('No open tasks.');
+    await expect(Math.round(status.getBoundingClientRect().height)).toBe(34);
+    // A row never draws the glyph it was given.
+    await expect(status.querySelector('svg')).toBeNull();
+  },
+};
+
+/** A whole surface's first run: a centred block with a bare glyph (never a tile), one line and the next step. */
+export const FirstRun: Story = {
+  args: {
+    title: 'No deals yet',
+    icon: 'handshake',
+    layout: 'block',
     actions: (
       <>
         <Button variant="primary" icon="plus">
           Add deal
         </Button>
-        <Button icon="upload">Import</Button>
+        <Button>Import</Button>
       </>
     ),
   },
-};
-
-/** A row: one quiet line at a list row's height, for a list that sits above more content. */
-export const Row: Story = {
-  args: { title: 'No open tasks.', children: undefined, icon: 'list-todo', layout: 'row' },
   play: async ({ canvas }) => {
     const status = canvas.getByRole('status');
-    await expect(status).toHaveTextContent('No open tasks.');
-    await expect(Math.round(status.getBoundingClientRect().height)).toBe(34);
+    await expect(status).toHaveAttribute('data-layout', 'block');
+    const mark = status.firstElementChild;
+    await expect(mark).not.toBeNull();
+    if (mark === null) return;
+    // The glyph is bare: no edge and no fill behind it.
+    await expect(getComputedStyle(mark).borderTopStyle).toBe('none');
+    await expect(getComputedStyle(mark).backgroundColor).toBe('rgba(0, 0, 0, 0)');
   },
 };
 
@@ -45,7 +84,6 @@ export const RowWithText: Story = {
   args: {
     title: 'No meetings today',
     children: 'Meetings you host and your calendar’s events show here.',
-    icon: 'calendar',
     layout: 'row',
   },
   render: (args) => (
@@ -62,7 +100,7 @@ export const RowWithText: Story = {
   },
 };
 
-/** A row that failed, with text and Try again: both under the title. */
+/** A row that failed, with text and Try again: the alert mark beside the title, both in the danger colour. */
 export const RowErrorWithText: Story = {
   args: {
     title: 'Recent records didn’t load',
@@ -84,7 +122,7 @@ export const RowErrorWithText: Story = {
 /** Fill: centred in the whole height of its slot, for an empty view with the whole area. */
 export const Fill: Story = {
   parameters: { crm: { screenshot: false } },
-  args: { title: 'Nothing coming up', children: 'Bookings from your booking pages show up here.', layout: 'fill' },
+  args: { title: 'Nothing coming up', layout: 'fill' },
   render: (args) => (
     <Stage height="grid">
       <EmptyState {...args} />
@@ -96,34 +134,58 @@ export const Fill: Story = {
   },
 };
 
-/** A load that failed, with a retry. */
+/** A load that failed: not emptiness. Its alert mark and title in the danger colour, and Try again inline. */
 export const Failed: Story = {
   args: {
     tone: 'error',
     title: 'Couldn’t load deals',
-    children: 'Check your connection, then try again.',
     onRetry: fn(),
   },
   play: async ({ canvas, args, userEvent }) => {
-    await expect(canvas.getByRole('alert')).toHaveTextContent('Couldn’t load deals');
+    const alert = canvas.getByRole('alert');
+    await expect(alert).toHaveTextContent('Couldn’t load deals');
+    const title = canvas.getByText('Couldn’t load deals');
+    // The title takes the danger colour, so it never reads as "nothing here yet".
+    await expect(getComputedStyle(title).color).not.toBe(getComputedStyle(canvas.getByRole('button')).color);
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     await expect(args.onRetry).toHaveBeenCalled();
+  },
+};
+
+/** A whole surface that failed: the block, with its mark and Try again under the words. */
+export const FailedBlock: Story = {
+  args: { tone: 'error', title: 'Couldn’t load deals', layout: 'block', onRetry: fn() },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveAttribute('data-layout', 'block');
+    await expect(canvas.getByRole('button', { name: 'Try again' })).toBeVisible();
+  },
+};
+
+/** An error with no retry of its own still has Try again (it loads the page again), so it is never a dead end. */
+export const FailedWithoutRetry: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { tone: 'error', title: 'Couldn’t load deals' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Try again' })).toBeVisible();
   },
 };
 
 /** A view the viewer may not see. */
 export const Locked: Story = {
   args: { tone: 'locked', title: 'You can’t see this list', children: 'Ask a workspace admin for access.' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('status')).toHaveTextContent('You can’t see this list');
+  },
 };
 
-/** Still loading: the tile, and skeleton lines where the title and text go, so what follows lands in place. The title is read as the busy status. */
+/** Still loading: skeleton lines where the title and text go, so what follows lands in place. The title is read as the busy status. */
 export const Loading: Story = {
-  args: { isLoading: true, title: 'Loading' },
+  args: { isLoading: true, title: 'Loading', layout: 'block' },
   play: async ({ canvas }) => {
     const status = canvas.getByRole('status');
     await expect(status).toHaveAttribute('aria-busy', 'true');
     await expect(status).toHaveTextContent('Loading');
-    await expect(canvas.queryByText('Deals you add or import show here.')).toBeNull();
+    await expect(canvas.queryByText('No deals yet')).toBeNull();
   },
 };
 
@@ -134,6 +196,7 @@ export const Illustration: Story = {
     title: 'No booking pages yet',
     children: 'Make one and share the link.',
     illustration: <SpotIllustration kind="booking" />,
+    layout: 'block',
     actions: (
       <Button variant="primary" icon="plus">
         New booking page

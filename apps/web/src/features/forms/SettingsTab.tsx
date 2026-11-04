@@ -485,7 +485,10 @@ export function SettingsTab({
         {isBookingPending && usable.length === 0 && (
           <EmptyState
             layout="row"
-            {...(pages.status === 'error' ? { tone: 'error' as const } : { icon: 'link' as const })}
+            // Try again reads the pages again, never the whole editor.
+            {...(pages.status === 'error'
+              ? { tone: 'error' as const, onRetry: () => data.bookingPages.view(slug).reload() }
+              : {})}
             isLoading={pages.status === 'loading'}
             title={pages.status === 'error' ? strings.bookingPagesFailed : strings.noBookingPages}
             {...(pages.status === 'ready'

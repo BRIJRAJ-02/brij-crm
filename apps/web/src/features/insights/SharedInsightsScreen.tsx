@@ -20,7 +20,7 @@ export function SharedInsightsScreen({ shared }: { readonly shared: SharedInsigh
       />
       <PageColumn>
         {shared.numbers.totals.visits === 0 && (shared.numbers.previous?.visits ?? 0) === 0 ? (
-          <EmptyState icon="chart-line" title={strings.sharedEmptyTitle}>
+          <EmptyState layout="block" icon="chart-line" title={strings.sharedEmptyTitle}>
             {strings.sharedEmptyText}
           </EmptyState>
         ) : (
@@ -50,6 +50,7 @@ export function SharedInsightsError({ error }: { readonly error: DataError | und
   return (
     <PageColumn align="center">
       <EmptyState
+        layout="block"
         icon={gone ? 'unlink' : 'circle-alert'}
         title={gone ? strings.sharedGoneTitle : strings.sharedFailed}
         {...(gone ? {} : { tone: 'error' as const })}

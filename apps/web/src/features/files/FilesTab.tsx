@@ -40,7 +40,7 @@ export function LoadingFiles() {
 export function FilesTab({ slug, recordId, files, members, isReadOnly }: FilesTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const state = useRecordFiles(files);
-  if (state.status === 'unavailable') return <EmptyState icon="file" title={strings.unavailable} />;
+  if (state.status === 'unavailable') return <EmptyState title={strings.unavailable} />;
   if (state.status === 'error') {
     return (
       <EmptyState tone="error" title={strings.loadFailed} onRetry={files.retry}>
@@ -102,9 +102,7 @@ export function FilesTab({ slug, recordId, files, members, isReadOnly }: FilesTa
               })}
         />
       ))}
-      {state.files.length === 0 && state.sending.length === 0 && !canChange && (
-        <EmptyState icon="file" title={strings.noFiles} />
-      )}
+      {state.files.length === 0 && state.sending.length === 0 && !canChange && <EmptyState title={strings.noFiles} />}
       {state.files.map((file) => (
         <FileItem
           key={file.fileId}

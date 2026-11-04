@@ -51,6 +51,7 @@ export function ClaimLink({ data, slug, suggested }: ClaimLinkProps) {
   };
   return (
     <EmptyState
+      layout="block"
       illustration={<SpotIllustration kind="link-page" />}
       title={strings.noHandle}
       actions={

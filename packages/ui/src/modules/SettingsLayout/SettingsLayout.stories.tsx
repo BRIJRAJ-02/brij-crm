@@ -7,7 +7,6 @@ import { Meter } from '../../atoms/Meter/Meter.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
-import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
@@ -99,7 +98,7 @@ function SampleSettings({ page = 'objects', isLoading = false, width = 'auto' }:
         description="Shape the records your workspace keeps."
         isLoading={isLoading}
         {...(page === 'member'
-          ? {}
+          ? { viewOnly: 'Only owners and admins can change this.' }
           : {
               actions: (
                 <Button variant="primary" icon="plus">
@@ -113,7 +112,7 @@ function SampleSettings({ page = 'objects', isLoading = false, width = 'auto' }:
             Check your connection, then try again.
           </EmptyState>
         ) : page === 'member' ? (
-          <Callout>Only workspace owners and admins can change objects and attributes.</Callout>
+          <Meter label="Custom objects" value={3} maxValue={50} />
         ) : (
           <Meter label="Custom objects" value={3} maxValue={50} />
         )}
@@ -164,11 +163,17 @@ export const TitleFocus: Story = {
   },
 };
 
-/** A member reads the page: no actions, and a quiet note in the body. */
+/** A member reads the page: no actions, and a "View only" tag by the title whose lock says why. No callout. */
 export const ReadOnly: Story = {
   args: { page: 'member' },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('button', { name: 'New object' })).not.toBeInTheDocument();
+    await expect(canvas.getByText('View only')).toBeVisible();
+    await expect(canvas.queryByRole('note')).toBeNull();
+    // The lock is named by the reason and takes keyboard focus, where its tooltip says it too.
+    const lock = canvas.getByRole('button', { name: 'Only owners and admins can change this.' });
+    lock.focus();
+    await expect(lock).toHaveFocus();
   },
 };
 

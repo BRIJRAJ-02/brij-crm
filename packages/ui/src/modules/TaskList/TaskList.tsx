@@ -216,7 +216,6 @@ export function TaskList({
   const list = (
     <TaskListContent
       {...{ label, tasks, onToggle, hideRecord, isReadOnly, status, layout, maxRows }}
-      isFramed={toolbar !== undefined || footer !== undefined}
       {...(onAction === undefined ? {} : { onAction })}
       {...(onRetry === undefined ? {} : { onRetry })}
       {...(recordHref === undefined ? {} : { recordHref })}
@@ -284,11 +283,7 @@ function TaskListContent({
   emptyBody,
   emptyActions,
   maxRows = INLINE_TASKS,
-  isFramed = false,
-}: Omit<TaskListProps, 'toolbar' | 'footer' | 'onShowMore' | 'isLoadingMore'> & {
-  /** A toolbar or a footer sits with it: an empty list says so in a row, so what follows stays near. */
-  readonly isFramed?: boolean;
-}) {
+}: Omit<TaskListProps, 'toolbar' | 'footer' | 'onShowMore' | 'isLoadingMore'>) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   const onShown = useRangeReporter(tasks);
   const dueOf = useDueOf();
@@ -306,9 +301,7 @@ function TaskListContent({
     return (
       <EmptyState
         tone="error"
-        // In place (a card on Home) or framed, the failure takes one row, like the empty list would, with the
-        // warning icon every failed row shows.
-        {...(isInline || isFramed ? { layout: 'row' as const } : { icon: 'list-todo' as const })}
+        // One row in the list's place, like the empty list would, with the alert mark every failed row shows.
         title={strings.failed}
         {...(onRetry === undefined ? {} : { onRetry })}
       >
@@ -339,10 +332,8 @@ function TaskListContent({
   if (rows.length === 0) {
     return (
       <EmptyState
-        icon="list-todo"
         title={emptyTitle ?? strings.empty}
-        // A list drawn in place, or with a quick add above and more under it, says so in one row of its own size.
-        layout={isInline || isFramed ? 'row' : 'block'}
+        // A list says it has nothing in one row of its own size, in its place: never a centred block.
         {...(emptyActions === undefined ? {} : { actions: emptyActions })}
       >
         {emptyBody}

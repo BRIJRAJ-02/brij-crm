@@ -420,11 +420,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
               if (value === 'owner' || value === 'last_host' || value === 'none') setReturning(value);
             }}
           />
-          {isRoster ? (
-            <Callout tone="info">
-              {strings.rosterNote(members.filter((member) => member.isOn).length, members.length)}
-            </Callout>
-          ) : (
+          {isRoster ? null : (
             <Select
               label={strings.addMember}
               placeholder={left.length === 0 ? strings.noMembersLeft : strings.addMemberPlaceholder}

@@ -30,6 +30,7 @@ import {
   TabPanel,
   Tabs,
   TopBar,
+  ViewOnlyTag,
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -535,7 +536,13 @@ export function FormEditor(props: FormEditorProps) {
       title={form.name}
       icon="clipboard-list"
       crumbs={[{ id: 'forms', label: strings.forms, href: formsHref(slug) }]}
-      meta={<EditorStatus tone={status.tone} text={status.text} />}
+      meta={
+        <>
+          <EditorStatus tone={status.tone} text={status.text} />
+          {/* A reader sees the form as it is: one tag by the name, never a note over the editor. */}
+          {!canManage && <ViewOnlyTag reason={strings.readOnlyText} />}
+        </>
+      }
     >
       <EditorActions
         // A draft has no link yet: Copy link shows from the first publish, as the forms list shows it.
@@ -624,11 +631,6 @@ export function FormEditor(props: FormEditorProps) {
       {/* On every tab but Settings, which says it beside the choice: visitors quietly get the message (late trap #53). */}
       {current !== 'settings' && form.live?.after.kind === 'booking' && (
         <AfterPageNotice slug={slug} formId={form.id} live={form.live} />
-      )}
-      {!canManage && (
-        <Callout tone="info" title={strings.readOnlyTitle}>
-          {strings.readOnlyText}
-        </Callout>
       )}
       <RetargetFormDialog
         ask={retargetAsk}

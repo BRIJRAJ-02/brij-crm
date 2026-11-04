@@ -155,7 +155,6 @@ export function ShareDialog({ data, slug, pages, pageNames, range: initialRange,
                 { value: 'never', label: strings.expiryNever },
               ]}
             />
-            <Callout tone="info">{strings.shareRolling}</Callout>
             {refusal !== undefined && (
               <Callout tone="danger" isAnnounced>
                 {refusal}

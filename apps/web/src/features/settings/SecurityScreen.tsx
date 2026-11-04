@@ -253,7 +253,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
       >
         <Card>
           {state.items.length === 0 ? (
-            <EmptyState layout="row" icon="monitor" title={strings.noDevices} />
+            <EmptyState layout="row" title={strings.noDevices} />
           ) : (
             currentFirst(state.items).map(deviceRow)
           )}

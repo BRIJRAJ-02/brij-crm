@@ -15,6 +15,7 @@ import {
   Select,
   Tooltip,
   TopBar,
+  ViewOnlyTag,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
@@ -333,14 +334,15 @@ function AccessNotice({
   readonly me: string;
   readonly nameOf: (memberId: string) => string | undefined;
 }) {
-  let line: string | undefined;
-  if (owner !== undefined) {
-    line = canChange
-      ? scheduleStrings.toldAboutChanges(owner)
+  // Hours the reader may not change: one View only tag whose lock says why. A colleague's hours the reader can
+  // change need no line at all.
+  const reason = canChange
+    ? undefined
+    : owner === undefined
+      ? scheduleStrings.hoursSetByOthers
       : hoursHeldBack
         ? scheduleStrings.hoursHeldBack(owner)
         : scheduleStrings.seeOnly(owner);
-  } else if (!canChange) line = scheduleStrings.hoursSetByOthers;
   const changed = schedule.changedBy;
   const by =
     changed === undefined
@@ -348,17 +350,16 @@ function AccessNotice({
       : changed.memberId === me
         ? scheduleStrings.you
         : (nameOf(changed.memberId) ?? scheduleStrings.someone);
-  if (line === undefined && by === undefined) return null;
+  if (reason === undefined && by === undefined) return null;
   return (
-    <Callout tone="info">
-      {line}
-      {line !== undefined && by !== undefined && ' '}
+    <>
+      {reason !== undefined && <ViewOnlyTag reason={reason} />}
       {changed !== undefined && by !== undefined && (
-        <>
+        <Callout tone="info">
           {scheduleStrings.changedBy(by)}, <RelativeTime value={changed.at} />.
-        </>
+        </Callout>
       )}
-    </Callout>
+    </>
   );
 }
 

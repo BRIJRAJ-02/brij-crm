@@ -34,7 +34,6 @@ import {
   EmptyState,
   Field,
   InfoTip,
-  LockReason,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -736,7 +735,7 @@ export function MembersScreen({
         getRowId={(member) => member.id}
         renderCell={memberCell}
         isScrollable
-        emptyState={<EmptyState icon="search" title={strings.noMatches} />}
+        emptyState={<EmptyState title={strings.noMatches} />}
         {...(canManage
           ? {
               selected: ticked,
@@ -783,6 +782,7 @@ export function MembersScreen({
           more below it; nothing is below this one), with the way to fill it. */}
       {canInvite && search === '' && page.total === 1 && inviteRoles.length > 0 && (
         <EmptyState
+          layout="block"
           icon="users"
           title={strings.aloneTitle}
           actions={
@@ -801,14 +801,14 @@ export function MembersScreen({
     <SettingsPage
       title={strings.title}
       hasTabs={canInvite}
+      // Who changes this page: a "View only" tag by the title (the owner's less-text rule), never a box over the
+      // list. A guest changes nothing here, and the read only table says so already.
+      {...(!canInvite && !isGuest ? { viewOnly: sharedStrings.ownersAndAdminsOnly } : {})}
       // The page's one primary action, in the header's action place (the owner, 21 October 2026: no title block;
       // it moves to the settings header bar's action slot when that lands).
       // What each role can do sits before it, for everyone: choosing a role, or reading one's own, starts there.
       actions={
         <>
-          {/* Who changes this page, as a lock in the header (the owner's less-text rule), never a box over the list.
-              A guest changes nothing here, and the read only table says so already. */}
-          {!canInvite && !isGuest && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
           {hasGuide(roles.roles) && (
             <Button icon="shield-check" onPress={() => setGuideOpen(true)}>
               {strings.roleGuide}
@@ -861,7 +861,7 @@ export function MembersScreen({
                   renderCell={invitationCell}
                   // On a phone the table scrolls sideways in its own frame, as Members' does.
                   isScrollable
-                  emptyState={<EmptyState icon="mail" title={strings.noInvitations} />}
+                  emptyState={<EmptyState title={strings.noInvitations} />}
                 />
               </SettingsSection>
               {/* Set once, so last: the invite link, then the company email, a Card each, so each way reads apart. */}
@@ -1020,10 +1020,10 @@ export function MembersPending() {
     <SettingsPage
       title={strings.title}
       hasTabs={canInvite}
+      {...(canInvite ? {} : { viewOnly: sharedStrings.ownersAndAdminsOnly })}
       // The bar's actions hold their places while the page loads.
       actions={
         <>
-          {!canInvite && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
           <Button icon="shield-check" isDisabled>
             {strings.roleGuide}
           </Button>

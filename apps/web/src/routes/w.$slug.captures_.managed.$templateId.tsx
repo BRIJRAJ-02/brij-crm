@@ -91,6 +91,7 @@ function Missing({
         body: (
           <PageColumn>
             <EmptyState
+              layout="block"
               tone={onRetry === undefined ? 'empty' : 'error'}
               title={title}
               {...(onRetry === undefined ? {} : { onRetry })}

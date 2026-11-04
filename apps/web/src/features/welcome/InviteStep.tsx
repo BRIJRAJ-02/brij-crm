@@ -80,7 +80,11 @@ export function InviteStep({ data, slug, roles, onDone }: InviteStepProps) {
           </Button>
         }
       >
-        {notice !== undefined && <Callout isAnnounced>{notice}</Callout>}
+        {notice !== undefined && (
+          <Callout tone="info" isAnnounced>
+            {notice}
+          </Callout>
+        )}
         <InviteRows {...invite.rowsProps} />
       </Form>
     </>

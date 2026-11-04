@@ -7,7 +7,6 @@ import { isDataError, type ObjectSummary, type Usage } from '@crm/data';
 import {
   Badge,
   Button,
-  Callout,
   Disclosure,
   EmptyState,
   Icon,
@@ -227,12 +226,11 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
               </>
             ),
           }
-        : {})}
+        : { viewOnly: sharedStrings.ownersAndAdminsOnly })}
     >
       {canManage && meter !== undefined && (
         <Meter label={strings.customObjects} value={meter.used} maxValue={meter.limit} />
       )}
-      {!canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
       {canManage ? (
         <Table
           {...liveTable}

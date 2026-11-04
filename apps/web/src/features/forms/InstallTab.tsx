@@ -6,14 +6,12 @@
 import type { FormQuestion, FormView } from '@crm/data';
 import {
   Button,
-  Callout,
   Card,
   Code,
   DescriptionList,
   Disclosure,
   Field,
   InfoTip,
-  Link,
   SettingsStack,
   Switch,
   Table,
@@ -23,7 +21,6 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { RemoveSiteDialog, RotateSecretDialog } from './FormConfirms.tsx';
-import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet, ownFormHtml, type EmbedMode } from './snippets.ts';
 import { strings } from './strings.ts';
@@ -201,19 +198,6 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           copyLabel={strings.copyEmbed}
           value={embed}
         />
-        {/* Ask first, then book (the owner, 2 November 2026): the form already hands off to a booking page once it
-            is sent, and the embed carries that step with it, so nobody needs a second snippet. Said here because
-            the setting lives on another tab, where whoever is pasting the snippet will not see it. */}
-        {shown.after.kind === 'booking' ? (
-          <Callout tone="info">{strings.embedBooks}</Callout>
-        ) : (
-          <Callout
-            tone="info"
-            actions={<Link href={formHref(slug, form.id, 'settings')}>{strings.embedCouldBookLink}</Link>}
-          >
-            {strings.embedCouldBook}
-          </Callout>
-        )}
       </Card>
       {/* A quiet fold at the foot, its cards flush with the cards above it (one left edge, AC-1), spaced as they are. */}
       <Disclosure title={strings.advancedTitle} variant="quiet">

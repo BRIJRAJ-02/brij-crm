@@ -203,8 +203,6 @@ export const strings = {
   answersObjectBrokenAsk: 'No unique email field. Ask an admin to add one.',
   answersObjectAddField: 'Add an email field',
   tryAgain: 'Try again',
-  /** Book by chat (spec 0042) doesn't ask the page's questions yet (spec 0057 follow up). */
-  chatAsksNone: 'Visitors who book by chat skip these questions, since they’re all optional.',
   /** A required question turns Book by chat off: chat can't ask it. */
   chatOffRequired: 'Book by chat is off while a question must be answered: chat can’t ask it.',
   durations: 'Durations',
@@ -229,7 +227,6 @@ export const strings = {
   /** Why the Schedule picker waits: its hours have changes not saved yet. */
   saveHoursFirst: 'Save or discard the changes to these hours first.',
   followOwnerHint: 'This page books by its owner’s schedule.',
-  readOnlyTitle: 'You can view this page',
   readOnlyText: 'Only its owner or a workspace admin can change it.',
   timeZone: 'Time zone',
   timeZoneText: 'These hours follow this zone.',

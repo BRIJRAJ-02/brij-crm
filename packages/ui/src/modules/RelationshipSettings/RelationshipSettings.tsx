@@ -405,7 +405,7 @@ function RelationshipForm({
       // Focus is placed by the controls themselves (`choosable`): the Form's first field could be a hidden select.
       focusesFirstField={false}
     >
-      {readOnlyReason !== undefined && <Callout>{readOnlyReason}</Callout>}
+      {readOnlyReason !== undefined && <Callout tone="info">{readOnlyReason}</Callout>}
       {/* Fixed (edit, read only), the cards below name both objects: the read only Selects would say it twice. */}
       {!isFixed && objectSelect('from', fromId, from !== undefined)}
       {!isFixed && objectSelect('to', toId, to !== undefined)}

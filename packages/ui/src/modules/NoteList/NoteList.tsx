@@ -119,9 +119,7 @@ function NoteListContent({
   const fontsSettled = useFontsSettled();
 
   if (status === 'error') {
-    return (
-      <EmptyState tone="error" icon="notebook" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
-    );
+    return <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />;
   }
   if (status === 'no-access') {
     return (
@@ -146,7 +144,6 @@ function NoteListContent({
   if (rows.length === 0) {
     return (
       <EmptyState
-        icon="notebook"
         title={emptyTitle ?? strings.empty}
         {...(emptyActions === undefined ? {} : { actions: emptyActions })}
       >

@@ -186,6 +186,7 @@ function unavailablePage(slug: string, object: ObjectSummary) {
     topBar: objectTopBar(object),
     body: (
       <EmptyState
+        layout="block"
         icon="search"
         title={strings.recordUnavailable}
         actions={<Link href={objectHref(slug, object)}>{strings.backTo(object.pluralName)}</Link>}
@@ -796,7 +797,7 @@ function RecordScreen({
         page={{
           topBar: objectTopBar(object),
           body: (
-            <EmptyState tone="error" title={strings.loadFailed} onRetry={retry}>
+            <EmptyState layout="block" tone="error" title={strings.loadFailed} onRetry={retry}>
               {failure?.message ?? strings.loadFailedText}
             </EmptyState>
           ),
@@ -814,7 +815,7 @@ function RecordScreen({
   // In the same top bar as the loaded page, so focus on its title stays when the record arrives.
   const paused =
     live === 'paused' ? (
-      <Callout placement="bar" isAnnounced>
+      <Callout tone="info" placement="bar" isAnnounced>
         {workspaceStrings.livePaused}
       </Callout>
     ) : undefined;

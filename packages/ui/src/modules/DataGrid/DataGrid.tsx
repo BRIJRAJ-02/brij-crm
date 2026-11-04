@@ -1852,8 +1852,9 @@ export function DataGrid<Row>({
       <div className={styles.frame}>
         <div className={styles.state}>
           {status === 'error' && (
+            // One red line and Try again; a line under it only when the screen has the server's own words.
             <EmptyState tone="error" title={strings.failed} {...(retry === undefined ? {} : { onRetry: retry })}>
-              {errorText ?? strings.failedText}
+              {errorText}
             </EmptyState>
           )}
           {status === 'no-access' && (

@@ -504,10 +504,7 @@ export function ProfilePage({ handle, initial, onMoved, isBusiness }: ProfilePag
           }
         : {})}
       empty={
-        <EmptyState
-          title={isSearching ? strings.noMatchesTitle(searched) : strings.noLinksTitle}
-          icon={isSearching ? 'search' : 'link'}
-        >
+        <EmptyState title={isSearching ? strings.noMatchesTitle(searched) : strings.noLinksTitle}>
           {isSearching ? strings.noMatchesText : strings.noLinksText}
         </EmptyState>
       }

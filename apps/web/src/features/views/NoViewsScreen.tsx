@@ -32,6 +32,7 @@ export function NoViewsScreen({ slug, object, attributes }: NoViewsScreenProps) 
         body: (
           <>
             <EmptyState
+              layout="block"
               icon="layout-grid"
               title={strings.noViewsTitle}
               actions={

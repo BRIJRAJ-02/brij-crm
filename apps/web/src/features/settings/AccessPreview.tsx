@@ -133,6 +133,7 @@ export function useAccessPreview({ data, toasts, slug, objectId, teams, members 
     if (phase.kind === 'loading') {
       return (
         <Callout
+          tone="info"
           isAnnounced
           title={strings.previewLoading}
           actions={<Button onPress={exit}>{strings.previewExit}</Button>}
@@ -144,6 +145,7 @@ export function useAccessPreview({ data, toasts, slug, objectId, teams, members 
     const { preview } = phase;
     return (
       <Callout
+        tone="info"
         isAnnounced
         title={strings.previewTitle(preview.name)}
         actions={<Button onPress={exit}>{strings.previewExit}</Button>}

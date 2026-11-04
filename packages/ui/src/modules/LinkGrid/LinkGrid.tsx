@@ -109,7 +109,6 @@ export function LinkGrid({
     return (
       <div className={styles.message}>
         <EmptyState
-          icon="search"
           title={strings.noMatches(query.trim())}
           {...(onQueryChange === undefined
             ? {}

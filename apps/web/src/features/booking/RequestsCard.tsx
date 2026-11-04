@@ -85,7 +85,7 @@ export function RequestsCard({ data, slug, pageId, isReadOnly, isAlwaysShown }: 
       )}
       {loaded.status === 'ready' &&
         (loaded.requests.length === 0 ? (
-          <EmptyState layout="row" icon="inbox" title={strings.noRequests} />
+          <EmptyState layout="row" title={strings.noRequests} />
         ) : (
           <Table
             label={strings.requests}

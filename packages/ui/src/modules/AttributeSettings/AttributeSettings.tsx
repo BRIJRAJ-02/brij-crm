@@ -814,7 +814,7 @@ function AttributeForm({
       focusesFirstField={!isReadOnly}
     >
       {/* Said once, above the settings, rather than under each of them. */}
-      {readOnlyReason !== undefined && <Callout>{readOnlyReason}</Callout>}
+      {readOnlyReason !== undefined && <Callout tone="info">{readOnlyReason}</Callout>}
       <Field
         label={strings.name}
         name="title"
@@ -1028,7 +1028,7 @@ function AttributeForm({
                 {listError !== undefined && <Callout tone="danger">{listError}</Callout>}
               </>
             )}
-            {rulesNote !== undefined && <Callout>{rulesNote}</Callout>}
+            {rulesNote !== undefined && <Callout tone="info">{rulesNote}</Callout>}
           </>
         )}
       </Disclosure>
@@ -1137,7 +1137,7 @@ function DefaultSetting({
     return (
       <>
         {editorFor(strings.defaultValue)}
-        {note !== undefined && <Callout>{note}</Callout>}
+        {note !== undefined && <Callout tone="warning">{note}</Callout>}
       </>
     );
   }

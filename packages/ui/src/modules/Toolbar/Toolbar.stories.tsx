@@ -586,7 +586,11 @@ function ViewBarEnd({ layoutValue = 'table', isOpen = false, isLocked = false, i
       settings={{ onPress: fn(), isOpen, isDisabled }}
       layout={layout}
     >
-      {isLocked && <Callout placement="bar">Locked by Ada Lovelace</Callout>}
+      {isLocked && (
+        <Callout tone="info" placement="bar">
+          Locked by Ada Lovelace
+        </Callout>
+      )}
     </ViewBar>
   );
 }

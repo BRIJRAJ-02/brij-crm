@@ -162,6 +162,7 @@ export function LinkPageOverview({
       {isEmpty && (
         <Card>
           <EmptyState
+            layout="block"
             illustration={<SpotIllustration kind="link-page" />}
             title={strings.startTitle}
             actions={

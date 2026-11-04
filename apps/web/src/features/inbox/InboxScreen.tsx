@@ -270,11 +270,6 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
               onMark={mark}
               {...(emptyTitle === undefined ? {} : { emptyTitle })}
               {...(isFiltered
-                ? { emptyIcon: 'list-filter' as const }
-                : status === 'done'
-                  ? { emptyIcon: 'check' as const }
-                  : {})}
-              {...(isFiltered
                 ? {
                     emptyActions: (
                       <Button

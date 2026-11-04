@@ -235,6 +235,7 @@ describe('@crm/ui', () => {
       'Variable',
       'VerifyEmail',
       'ViewBar',
+      'ViewOnlyTag',
       'ViewSettings',
       'VisitorBar',
       'VisuallyHidden',

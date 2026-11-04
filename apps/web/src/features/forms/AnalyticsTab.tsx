@@ -183,9 +183,7 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
     return (
       <FieldGroup tone="heading" headingLevel={2} label={strings.analytics}>
         {period}
-        <EmptyState icon="chart-line" title={strings.analyticsEmpty}>
-          {strings.analyticsEmptyText}
-        </EmptyState>
+        <EmptyState title={strings.analyticsEmpty}>{strings.analyticsEmptyText}</EmptyState>
       </FieldGroup>
     );
   }
@@ -197,9 +195,7 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
       <FieldGroup tone="heading" headingLevel={2} label={strings.analytics}>
         {period}
         <Stats label={strings.analyticsSummary} items={headlineOf(analytics)} />
-        <EmptyState icon="chart-line" title={strings.analyticsNoneInRange}>
-          {strings.analyticsNoneInRangeText}
-        </EmptyState>
+        <EmptyState title={strings.analyticsNoneInRange}>{strings.analyticsNoneInRangeText}</EmptyState>
       </FieldGroup>
     );
   }

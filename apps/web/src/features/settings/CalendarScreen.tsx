@@ -61,7 +61,7 @@ import { SettingsPage } from './SettingsPage.tsx';
  * card, so the loading state stands in its place (the loading shape flow holds them together).
  */
 export function CalendarsLoading() {
-  return <EmptyState icon="calendar" title={strings.loading} isLoading />;
+  return <EmptyState layout="block" icon="calendar" title={strings.loading} isLoading />;
 }
 
 /** Props for the Calendar screen: what its route loaded through the data layer. */
@@ -216,7 +216,7 @@ function AccountCalendars({
         </Callout>
       )}
       {/* Only when no main calendar was listed: the main one is always in use. */}
-      {shown.length === 0 && <EmptyState layout="row" icon="calendar" title={strings.noneInUse} />}
+      {shown.length === 0 && <EmptyState layout="row" title={strings.noneInUse} />}
     </>
   );
 }
@@ -326,7 +326,7 @@ function AccountCard({
             {strings.calendarsFailed}
           </Callout>
         ) : calendars.length === 0 ? (
-          <EmptyState layout="row" icon="calendar" title={strings.noCalendars} />
+          <EmptyState layout="row" title={strings.noCalendars} />
         ) : (
           <AccountCalendars account={connection.accountEmail} calendars={calendars} actions={actions} />
         )}
@@ -525,14 +525,14 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
     );
   } else if (!state.enabled && state.connections.length === 0) {
     body = (
-      <EmptyState icon="calendar" title={strings.offTitle}>
+      <EmptyState layout="block" icon="calendar" title={strings.offTitle}>
         {strings.offText}
       </EmptyState>
     );
   } else if (state.connections.length === 0) {
     body = (
       // Nothing connected: each provider its own button, so the choice is the picture and no sentence says why.
-      <EmptyState icon="calendar" title={strings.emptyTitle} actions={providerButtons} />
+      <EmptyState layout="block" icon="calendar" title={strings.emptyTitle} actions={providerButtons} />
     );
   } else {
     const calendarsOf = (connectionId: string): readonly CalendarItem[] | 'loading' | 'error' =>

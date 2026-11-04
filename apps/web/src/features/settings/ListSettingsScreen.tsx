@@ -106,7 +106,7 @@ function GeneralTab({
 
   return (
     <SettingsStack>
-      {!canManage && <Callout>{lockSentence(list, members)}</Callout>}
+      {!canManage && <Callout tone="info">{lockSentence(list, members)}</Callout>}
       <SettingsSection title={listStrings.nameColumn}>
         <Card>
           <Field
@@ -224,7 +224,7 @@ export function ListSettingsScreen(props: ListSettingsScreenProps) {
               <Skeleton lines={4} />
             ) : (
               <SettingsStack>
-                {!list.canManage && <Callout>{lockSentence(list, members)}</Callout>}
+                {!list.canManage && <Callout tone="info">{lockSentence(list, members)}</Callout>}
                 <AttributesTab
                   slug={slug}
                   object={object}
