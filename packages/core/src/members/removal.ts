@@ -161,6 +161,12 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   meeting_attendees_member: 'history: they attended; the meeting stays, flagged when they organised it',
   form_versions_published_by: 'history: who published a form version',
   page_versions_published_by: 'history: who published a booking or link page version (spec 0068)',
+  business_pages_published_by: 'history: who last published the business page (spec 0066, B4)',
+  workspace_apps_installed_by: 'history: who installed a business app (spec 0065, H0)',
+  reservation_alerts_member:
+    'their own new reservation email choice: reservation emails go to active members only (spec 0066 B7)',
+  staff_member:
+    'a staff profile is the business’s own record (spec 0066, B0); its link to a member who left is history, changed by hand',
   forms_owner:
     'the form keeps working; its submissions get no owner while this one has left (owner_removed, spec 0023)',
   bookings_host: 'their bookings stay for admins to hand on (AC-815)',

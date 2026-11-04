@@ -142,6 +142,13 @@ test.describe('the Menu app from an empty workspace', () => {
         mimeType: 'image/jpeg',
         buffer: await photoFile(page),
       });
+      // The shared cropper opens on the chosen photo in the dish's shape (spec 0068, AC-6809): keep its middle.
+      const cropper = page.getByRole('dialog', { name: 'Crop photo' });
+      await expect(cropper).toBeVisible();
+      await shot(page, '09a-dish-crop');
+      await cropper.getByRole('button', { name: 'Use photo' }).click();
+      await expect(cropper).toBeHidden();
+      await expect(drawer.getByRole('button', { name: 'Adjust crop' })).toBeVisible();
       await drawer.getByLabel('Price', { exact: true }).fill('5.5');
       await drawer.getByRole('button', { name: 'Soya', exact: true }).first().click();
       await drawer.getByRole('button', { name: 'Vegan', exact: true }).click();

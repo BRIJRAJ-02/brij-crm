@@ -146,6 +146,12 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'publicBusinessBrand',
   'publicBusinessPhoto',
   'publishedBusinessHandle',
+  // The business's opaque edge cache tags (pure), the booking page's company lockup (read through the booking door's
+  // own entry), and the business page's menu (a MenuSource, run inside the page's own workspace transaction).
+  'businessCacheId',
+  'businessCacheTags',
+  'bookingCompanyOf',
+  'businessMenuOf',
   'periodDays',
   // The team change's audience: read inside the change's own transaction, after its door (spec 0031, AC-825).
   'membersAffectedByTeamChange',

@@ -26,7 +26,7 @@ import {
   setItemSoldOut,
   setMenuHidden,
 } from './menu.ts';
-import { enterMenuPage, readPublicMenu } from './public-menu.ts';
+import { businessMenuOf, enterMenuPage, readPublicMenu } from './public-menu.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -356,5 +356,36 @@ describe('limits and the gate', () => {
     const entry = await enterMenuPage({ db }, b.place.menuKey);
     expect(entry?.workspaceId).toBe(b.workspaceId);
     expect(await enterMenuPage({ db }, 'not-a-key')).toBeUndefined();
+  });
+});
+
+describe('the business page’s Menu section (spec 0066, AC-6642)', () => {
+  it('reads the published snapshot only, prices in the place’s locale, leaves sold out dishes out, and none while hidden', async () => {
+    const w = await menuWorkspace();
+    const { sectionId } = await dinner(w);
+    const soup = newId();
+    const bread = newId();
+    await saveItem(w.owner, { id: soup, sectionId, item: dish('Soup', 650, { description: 'Leek and potato' }) });
+    await saveItem(w.owner, { id: bread, sectionId, item: dish('Bread', 300) });
+    const read = () => db.withWorkspace(w.workspaceId, (tx) => businessMenuOf(tx, w.workspaceId, w.place.id));
+    // A draft is never shown.
+    expect(await read()).toBeUndefined();
+    await publishMenus(w.owner);
+    expect(await read()).toEqual({
+      sections: [
+        {
+          name: 'Mains',
+          items: [
+            { name: 'Soup', description: 'Leek and potato', price: '£6.50' },
+            { name: 'Bread', price: '£3.00' },
+          ],
+        },
+      ],
+      path: `/m/${w.place.menuKey}`,
+    });
+    await setItemSoldOut(w.owner, { itemId: bread, soldOut: true });
+    expect((await read())?.sections[0]?.items.map((item) => item.name)).toEqual(['Soup']);
+    await setMenuHidden(w.owner, { hidden: true });
+    expect(await read()).toBeUndefined();
   });
 });

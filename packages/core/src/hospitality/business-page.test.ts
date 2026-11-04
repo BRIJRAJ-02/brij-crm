@@ -24,7 +24,9 @@ import {
   saveBusinessPage,
   setPlaceSlug,
 } from './business-page.ts';
+import { addResources } from './floor.ts';
 import { createPlace, getBusiness, updatePlace } from './places.ts';
+import { getTableSetup, saveTableSetup } from '../visits/table-service.ts';
 import { bookingCompanyOf, enterBusinessPage, listSitemapBusinesses, publicBusinessPhoto } from './public-page.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -130,6 +132,10 @@ describe('the page editor (B4 lite)', () => {
     expect(view.problem).toMatchObject({ fix: 'handle' });
     expect(await refusalOf(publishBusinessPage(w.owner))).toBe('VALIDATION_FAILED');
     view = (await claimBusinessHandle(w.owner, { handle: `sn-${run}-pub` })).view;
+    // A new place keeps a restaurant's week from the start (spec 0065 H1); with its hours cleared, Publish says so.
+    expect(view.problem).toBeUndefined();
+    await updatePlace(w.owner, { placeId: w.placeId, hours: { weekly: {}, exceptions: [] } });
+    view = await getBusinessPage(w.owner);
     expect(view.problem).toEqual({
       message: 'Set Somewhere Nowhere’s opening hours first.',
       fix: 'hours',
@@ -163,6 +169,12 @@ describe('the page editor (B4 lite)', () => {
       city: 'Bengaluru',
       addressLine: '12 MG Road',
     });
+    // Once the table service takes reservations online, Reserve opens the place's reservation page (spec 0066 B7).
+    await addResources(w.owner, { placeId: w.placeId, kind: 'table', labels: ['T1'], minCapacity: 1, maxCapacity: 4 });
+    const setup = await getTableSetup(w.owner, { placeId: w.placeId });
+    await saveTableSetup(w.owner, { placeId: w.placeId, rules: { ...setup.rules, partyMax: 4, online: true } });
+    const open = await enterBusinessPage({ db }, `sn-${run}-pub`);
+    expect(open.page).toMatchObject({ reserve: 'open', reservePath: `/r/${setup.publicKey}` });
   });
 
   it('keeps the draft from guests until Publish, lists what changed, and discards back to what is live', async () => {

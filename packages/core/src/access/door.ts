@@ -1871,3 +1871,50 @@ export async function enterEmailLink(deps: { readonly db: Database }, link: Emai
     access: emailLinkAccess(found.member.id),
   });
 }
+
+// Table seating's public door (spec 0066 B7 lite; spec 0065 AC-6550, AC-6557): a reservation page's key (the place's
+// public key) names a place through `crm_table_place_by_key`, then the guest acts as that place's narrow `booking`
+// actor. Here beside the other doors, since scopes are minted only in this file (AC-138); `table-door.ts` re-exports it.
+/** A place's public key: 16 URL safe characters. */
+export const TABLE_KEY_PATTERN = /^[A-Za-z0-9_-]{16}$/;
+
+/** What the table door answers: the guest's scope at the place, and whether Table seating is installed now. */
+export interface TableEntry {
+  readonly scope: EngineScope;
+  readonly placeId: string;
+  readonly key: string;
+  /** False once Table seating is removed: a reservation already made still opens, new ones refuse. */
+  readonly installed: boolean;
+}
+
+/**
+ * The reservation page's entry: a malformed key never reaches the database, and an unknown key, a deleted workspace,
+ * one without business apps, or one without both standard objects is NOT_FOUND, all one answer.
+ */
+export async function enterTablePage(deps: { readonly db: Database }, key: string): Promise<TableEntry> {
+  const missing = () => refuse('NOT_FOUND', 'This page is no longer available.');
+  if (!TABLE_KEY_PATTERN.test(key)) throw missing();
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ workspace_id: string; place_id: string; installed: boolean }>(
+      sql`select workspace_id::text, place_id::text, installed from crm_table_place_by_key(${key})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw missing();
+  const standard = await deps.db.withWorkspace(row.workspace_id, (tx) =>
+    tx
+      .select({ id: objects.id, key: objects.standardKey })
+      .from(objects)
+      .where(and(inArray(objects.standardKey, ['people', 'companies']), isNull(objects.archivedAt))),
+  );
+  const people = standard.find((object) => object.key === 'people')?.id;
+  const companies = standard.find((object) => object.key === 'companies')?.id;
+  if (people === undefined || companies === undefined) throw missing();
+  const scope = mintScope({
+    db: deps.db,
+    workspaceId: row.workspace_id,
+    actor: { type: 'booking', id: row.place_id },
+    access: bookingAccess(row.place_id, [people, companies]),
+  });
+  return { scope, placeId: row.place_id, key, installed: row.installed };
+}

@@ -167,7 +167,9 @@ describe('the public booking host', () => {
       '/m/AbCdEfGhIjKlMnOp',
       '/r/AbCdEfGhIjKlMnOp',
     ]) {
-      expect(['/book.html', '/form.html', '/reserve.html', '/api/handle', '/api/menu']).toContain(destinationOf(pathname));
+      expect(['/book.html', '/form.html', '/reserve.html', '/api/handle', '/api/menu']).toContain(
+        destinationOf(pathname),
+      );
       expect(servedOnPublicHost(pathname), pathname).toBe(true);
     }
   });
