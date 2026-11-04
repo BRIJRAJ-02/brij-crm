@@ -66,11 +66,63 @@ export const strings = {
   // Book by chat (spec 0042).
   /** The chat's confirm card names the meeting as the confirmation does. */
   chatCardTitle: (title: string, host: string) => `${title} with ${host}`,
-  chatGreeting: (host: string, title: string, minutes: number) =>
-    `Booking your ${String(minutes)} min ${title} with ${host}. When suits you?`,
-  chatNoTimes: (host: string) => `${host} has nothing open right now. Check back soon.`,
+  /**
+   * The chat speaks as the host (owner, 4 Nov 2026: "that person is doing it", not an assistant): their first name on
+   * a personal page, the team's name on a team page, and the core agent's replies in the same voice.
+   */
+  chatGreeting: (who: { readonly label: string; readonly isTeam: boolean }, title: string, minutes: number) =>
+    `Hi, ${who.isTeam ? `it’s ${who.label}` : `I’m ${who.label}`}. When suits you for a ${String(minutes)} min ${title}?`,
+  chatNoTimes: (isTeam: boolean) => `${isTeam ? 'We’re' : 'I’m'} fully booked right now. Check back soon.`,
   chatSuggestions: ['Something later', 'Next week'] as readonly string[],
-  chatTooMany: 'That was a lot at once. Give it a few seconds and try again.',
+  /**
+   * What the prompt box asks after each reply (the owner, 4 Nov 2026: the words follow the conversation): the first
+   * question while times run over several days, the time once they're one day's, then each detail the chat waits on,
+   * then the read back's yes.
+   */
+  chatPrompts: {
+    when: 'When works for you?',
+    time: 'Which time?',
+    details: 'Your name and email',
+    name: 'Your name',
+    email: 'Your email',
+    phone: 'Your phone number',
+    confirm: 'Or say what to change',
+  },
+  // Chat parity (4 Nov 2026): what the page itself asks in the host's voice, short and plain.
+  /** The greeting's chip for the zone the times are in; it opens the rail's picker. */
+  chatZoneChip: (zone: string) => `${zone} · Change`,
+  chatZoneMoved: (zone: string) => `Times are in ${zone} now.`,
+  /** One of the page's own questions, as the host asks it: its label, a question. */
+  chatQuestion: (label: string, isFirst: boolean) => {
+    const asked = /[?.!:]$/u.test(label.trim()) ? label.trim() : `${label.trim()}?`;
+    return isFirst ? `One more thing. ${asked}` : asked;
+  },
+  chatMenu: {
+    ask: (isTeam: boolean) => `Anything else before ${isTeam ? 'we book' : 'I book'} it?`,
+    guest: 'Add a guest',
+    note: 'Add a note',
+    done: 'That’s all',
+    /** The box's words while a row of chips is the answer: never the opening question again. */
+    prompt: 'Tap one, or type here',
+  },
+  chatGuestAsk: 'Who else is joining? Their email, or a few.',
+  chatGuestPrompt: 'Guest’s email',
+  chatGuestWrong: 'That email doesn’t look right. Try again?',
+  chatGuestAdded: (count: number) => (count === 1 ? 'Added.' : `Added all ${String(count)}.`),
+  chatGuestCount: (count: number) => (count === 1 ? '1 guest' : `${String(count)} guests`),
+  chatNoteAsk: (isTeam: boolean) => `What should ${isTeam ? 'we' : 'I'} know before we talk?`,
+  chatNotePrompt: 'Your note',
+  chatNoted: 'Got it.',
+  chatAnswerWrong: (problem: string) => `Sorry. ${problem}`,
+  /** The chips a question's answer takes, and the line for a country the page can't place. */
+  chatAnswers: {
+    yes: 'Yes',
+    no: 'No',
+    agree: 'I agree',
+    noThanks: 'No thanks',
+    unknownCountry: 'Which country is that? Try its name, like India.',
+  },
+  chatTooMany: 'That was a lot at once. Try again in a few seconds.',
   chatTooLong: 'This chat is too long to go on. Start over to book.',
   chatBooked: 'Booked. Opening your booking.',
   chatRequested: 'Request sent. Opening your request.',

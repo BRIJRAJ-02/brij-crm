@@ -287,9 +287,9 @@ export async function getPublicBookingPage(
       location: publicLocation(page),
       hostTimeZone: page.availability.timeZone,
       windowDays: page.windowDays,
-      // The view the host chose, beside the rest of the facts, so the page's first paint is already that view.
-      // A page with a required question books through its form only: chat is off, so it never opens there.
-      defaultView: page.defaultView === 'chat' && chatIsOff(page.questions) ? 'month' : page.defaultView,
+      // The view the host chose, beside the rest of the facts, so the page's first paint is already that view. Book by
+      // chat asks a page's questions too now (4 Nov 2026), so a page with required ones opens in chat when set to.
+      defaultView: page.defaultView,
       ...(team === undefined ? {} : { team: await teamAvatars(tx, team) }),
       // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
       ...(path.startsWith('/b/') ? {} : { path }),
@@ -869,7 +869,7 @@ function checkDuration(page: PageRecord, duration: number): void {
  * The visitor's answers to the page's own questions (spec 0057, AC-5710), checked with forms' `checkAnswers` against
  * the questions as they are now: each in its canonical shape, by key, anything else dropped. A missing required answer
  * or a wrong value refuses the booking, each on its question as `answers.<key>`, and nothing is booked. A booking made
- * by chat (spec 0042) is asked no questions, so it keeps none and is never refused for them.
+ * by chat is checked the same way (4 Nov 2026); one that sends no answers on a page with none required keeps none.
  */
 /**
  * A booking page can't ask for a file (`BookingQuestions`' own check refuses the answer type), so the shared
@@ -894,10 +894,9 @@ function checkedAnswers(
   isChat: boolean,
   skip: readonly string[],
 ): Readonly<Record<string, string | boolean | PhoneAnswer>> {
-  if (isChat && chatIsOff(page.questions)) {
-    throw refuse('BOOKING_CLOSED', 'This page asks a few questions first. Pick a time on the calendar to book.');
-  }
-  if (page.questions.length === 0 || isChat) return {};
+  // Book by chat asks the page's questions too (4 Nov 2026, chat parity): its answers are checked as the form's are.
+  if (page.questions.length === 0) return {};
+  if (isChat && input.answers === undefined && !chatIsOff(page.questions)) return {};
   const asked = page.questions.filter((question) => !skip.includes(question.key));
   const checked = checkAnswers({ language: 'en', questions: asked }, input.answers ?? {});
   if (checked.ok) return withoutFiles(checked.answers);
@@ -922,11 +921,14 @@ export async function readPublicSlots(
   const now = deps.now?.() ?? new Date();
   const from = new Date(query.from);
   const to = new Date(query.to);
-  const { page, memberIds, team, shut } = await inWorkspace(entry.scope, async (tx) => {
+  const { page, memberIds, team, shut, duration } = await inWorkspace(entry.scope, async (tx) => {
     const live = await livePage(tx, entry);
-    checkDuration(live, query.duration);
+    // Left out, the page's first length: the one the page opens on (PublicSlotsQuery).
+    const length = query.duration ?? live.durations[0] ?? 0;
+    checkDuration(live, length);
     // Only through a form (AC-1388): without a hand off, no times.
-    if (await formOnlyShut(tx, live, link)) return { page: live, team: undefined, memberIds: [], shut: true };
+    if (await formOnlyShut(tx, live, link))
+      return { page: live, team: undefined, memberIds: [], shut: true, duration: length };
     const loaded = await loadTeam(tx, live);
     const handed =
       link === undefined || loaded?.kind !== 'round_robin'
@@ -939,6 +941,7 @@ export async function readPublicSlots(
       team: found,
       memberIds: found === undefined ? await membersOf(tx, live) : teamMemberIds(found),
       shut: false,
+      duration: length,
     };
   });
   if (shut) return { slots: [], calendar: 'ok' };
@@ -954,7 +957,7 @@ export async function readPublicSlots(
     const reads = await inWorkspace(entry.scope, (tx) =>
       readTeam(tx, page, team, busyByMember, { from, to, margin: BUSY_MARGIN_MS, now }),
     );
-    const found = teamSlots(page, team, reads, { duration: query.duration, from, to, now });
+    const found = teamSlots(page, team, reads, { duration, from, to, now });
     return {
       slots: found.slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
       calendar: found.blocked ? 'unreachable' : 'ok',
@@ -977,7 +980,7 @@ export async function readPublicSlots(
     limits: await limitChecks(tx, [host], from, to),
   }));
   const slots = pageSlots(page, {
-    duration: query.duration,
+    duration,
     from,
     to,
     now,

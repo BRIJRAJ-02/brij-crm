@@ -52,6 +52,18 @@ describe('membersBusy', () => {
     );
     expect(source.asked).toHaveLength(2);
   });
+
+  it('asks the same range for two reads a few minutes apart, so a cache in front of the reader can answer the second', async () => {
+    // A page's first read starts at "now" to the millisecond: two visits four minutes apart.
+    const to = new Date('2026-12-22T18:30:00.000Z');
+    const first = capped();
+    const second = capped();
+    await membersBusy(first.reader, 'w', ['m'], new Date('2026-11-04T08:01:02.345Z'), to);
+    await membersBusy(second.reader, 'w', ['m'], new Date('2026-11-04T08:05:59.999Z'), to);
+    expect(second.asked).toEqual(first.asked);
+    // Rounded outwards, never in: the asked range still covers the one wanted.
+    expect(first.asked[0]?.from).toBe('2026-11-04T08:00:00.000Z');
+  });
 });
 
 describe('busyWindows', () => {

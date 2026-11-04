@@ -1441,7 +1441,9 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       const entry = await enterBookingPage({ db }, key);
       // The booking limits and the form's bot checks apply only to a turn about to book.
       let bookRefused: Response | undefined;
+      const link = routedLink(entry, input.data.p);
       const turn = await chatTurn(entry, deps, input.data, [outboxHook()], {
+        ...(link === undefined ? {} : { link }),
         mayBook: () => {
           bookRefused = limited([
             [`booking:book:${address}`, BOOKING_LIMITS.booksPerAddress],

@@ -24,6 +24,7 @@ import { blockedTimes } from '../booking/blocks.ts';
 import type { BusyReader } from '../booking/calendar.ts';
 import type { BookedSpan, Span } from '../booking/engine.ts';
 import {
+  alignedBusyRange,
   memberBookings,
   membersOf,
   pageSlots,
@@ -272,8 +273,15 @@ export async function memberBusy(
   from: Date,
   to: Date,
 ): Promise<ReadonlyMap<string, MembersBusy>> {
+  // Whole quarter hours, as membersBusy reads, so the api's busy cache answers reads made minutes apart.
+  const range = alignedBusyRange(from, to);
   const readOne = async (memberId: string) => {
-    const answer = await read({ workspaceId, memberId, from: from.toISOString(), to: to.toISOString() });
+    const answer = await read({
+      workspaceId,
+      memberId,
+      from: range.from.toISOString(),
+      to: range.to.toISOString(),
+    });
     const busy: MembersBusy = {
       busy:
         answer.status === 'read'

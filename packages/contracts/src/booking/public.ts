@@ -263,7 +263,11 @@ export const PublicSlotsQuery = z
   .object({
     from: Timestamp,
     to: Timestamp,
-    duration: z.coerce.number().pipe(BookingDuration),
+    /**
+     * The meeting's length. Left out, the page's first (its default): what the page itself opens on, so the page can
+     * ask for its first times beside its facts rather than after them (4 Nov 2026).
+     */
+    duration: z.coerce.number().pipe(BookingDuration).optional(),
     tz: TimeZoneName,
     /** A form's signed hand off (spec 0043, AC-1609): the slots of the hosts its routing chose. */
     p: z.string().max(2_000).optional(),
@@ -483,6 +487,18 @@ export const PublicChatInput = z
     timeZone: TimeZoneName,
     hour12: z.boolean(),
     messages: z.array(PublicChatLine).min(1).max(CHAT_MESSAGES_MAX, { error: 'This chat is too long. Start again.' }),
+    /**
+     * What the chat collected beside the conversation (4 Nov 2026, chat parity): guests, a note and the page's own
+     * questions' answers, sent with each turn and booked with the yes, checked as the details step's are.
+     */
+    guests: z
+      .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))
+      .max(10, { error: 'Invite at most 10 guests.' })
+      .optional(),
+    note: z.string().trim().max(2000, { error: 'Keep the note to 2,000 characters.' }).optional(),
+    answers: z.record(z.string().max(40), z.unknown()).optional(),
+    /** A form's signed hand off (spec 0043): a team page then offers only the hosts its routing chose. */
+    p: z.string().max(4096).optional(),
     /** The fill ticket the page fetched (spec 0023), and when the page loaded: the bot checks a booking passes. */
     ticket: z.string().max(200).optional(),
     startedAt: z.number().int().nonnegative().optional(),
@@ -504,6 +520,13 @@ export const PublicChatReply = z.object({
   confirm: z.string().optional(),
   /** With `confirm`: what it would book, so the page can draw the read back as a card (when, who). */
   readBack: z.object({ start: Timestamp, name: z.string(), email: z.string() }).optional(),
+  /**
+   * Which details a held time still waits on (4 Nov 2026): both, the name, the email or a number to call. The page's
+   * prompt box asks for exactly that. Absent when nothing is held, or once the details are read back.
+   */
+  asks: z.enum(['details', 'name', 'email', 'phone']).optional(),
+  /** The visitor's name as the chat heard it (4 Nov 2026): the page draws their initials beside their lines. */
+  name: z.string().max(200).optional(),
   duration: BookingDuration,
   booked: PublicBooked.optional(),
 });

@@ -1,0 +1,44 @@
+/* Book by chat's loading shape: BookingChat's own geometry (its thread, the host's name, their face beside the
+   greeting's bubble, SlotList's offers in line with it, and the prompt box at the foot), drawn in skeletons, so
+   nothing moves when the chat arrives in its place. */
+@layer components {
+  /* The thread fills what the box leaves (BookingChat's own thread, twelve rows tall on its own); the times stand as
+     far under the bubble as a reply's do. */
+  .thread {
+    display: flex;
+    flex: 1 1 calc(var(--size-row) * 12);
+    flex-direction: column;
+    gap: var(--space-8);
+    padding-inline-end: var(--space-4);
+  }
+
+  /* In line with the bubbles, past the face: the name's line, then the times. */
+  .who,
+  .offers {
+    padding-inline-start: calc(var(--avatar-md) + var(--space-8));
+    font: var(--text-label);
+  }
+
+  /* The face beside the bubble, level with its foot; the times start as far below as a reply's offers do. */
+  .said {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-8);
+    padding-block-end: var(--space-12);
+  }
+
+  /* The greeting: two lines of body text (the page's own type) in the bubble's padding, as it reads on a phone; beside
+     the rail it may take one, the times then rising a line as they arrive (the booking page's CSS budget). */
+  .bubble {
+    inline-size: 80%;
+    block-size: calc(2lh + 2 * var(--space-8));
+  }
+
+  /* The prompt box's place: BookingChat's composer at its least height, and like it held to the window's foot on a
+     phone, clear of the home indicator and Safari's toolbar. */
+  .composer {
+    position: sticky;
+    inset-block-end: max(var(--space-12), env(safe-area-inset-bottom));
+    block-size: calc(var(--size-toolbar) + var(--space-24));
+  }
+}
