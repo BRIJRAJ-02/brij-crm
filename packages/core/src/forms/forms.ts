@@ -1180,6 +1180,150 @@ export async function publishForm(
   return result;
 }
 
+/**
+ * The settings a form's version holds that Settings changes (forms fixes 2, 6 November 2026, one save model): when it
+ * stops taking answers, what it says closed, the visitor's copy, and Also create a deal. Each present key is set
+ * (`null` clears it); an absent one stays as it was.
+ */
+export interface LiveSettings {
+  readonly closing?: FormDocument['closing'] | null;
+  readonly closedMessage?: string | null;
+  readonly confirmation?: FormDocument['confirmation'] | null;
+  /** On: each submission makes a deal on the standard Deals. Off: none, and answers saved on the deal stay kept. */
+  readonly deal?: boolean;
+}
+
+/** A document with `settings` applied over it. */
+function withSettings(document: FormDocument, settings: LiveSettings, dealsId: string | undefined): FormDocument {
+  const { closing, closedMessage, confirmation, ...rest } = document;
+  const pick = <T>(value: T | null | undefined, was: T | undefined): T | undefined =>
+    value === undefined ? was : value === null ? undefined : value;
+  const nextClosing = pick(settings.closing, closing);
+  const nextMessage = pick(settings.closedMessage === '' ? null : settings.closedMessage, closedMessage);
+  const nextCopy = pick(settings.confirmation, confirmation);
+  let next: FormDocument = {
+    ...rest,
+    ...(nextClosing === undefined ? {} : { closing: nextClosing }),
+    ...(nextMessage === undefined ? {} : { closedMessage: nextMessage }),
+    ...(nextCopy === undefined ? {} : { confirmation: nextCopy }),
+  };
+  if (settings.deal === true && dealsId !== undefined) {
+    next = { ...next, targets: { ...next.targets, deal: { objectId: dealsId } } };
+  } else if (settings.deal === false) {
+    const { deal: _deal, ...targets } = next.targets;
+    next = {
+      ...next,
+      targets,
+      // No deal, so nothing is saved on one: those answers stay with the submission.
+      questions: next.questions.map((question) => {
+        if (question.filedOn?.objectRole !== 'deal') return question;
+        const { filedOn: _filed, ...rest } = question;
+        return { ...rest, kept: true as const };
+      }),
+    };
+  }
+  return next;
+}
+
+/**
+ * Changes the settings a form's version holds, live at once (forms fixes 2: Settings has one save model, every row
+ * saving and applying as it changes, as Name, Owner and Email each submission already did). On a published form the
+ * live version is published again with the change and nothing else, so edits waiting on the Form tab stay waiting;
+ * the draft takes the change too, so Publish never undoes it. A form never published keeps it in its draft.
+ */
+export async function applyFormSettings(
+  scope: EngineScope,
+  input: { readonly formId: string; readonly expectedRevision: number; readonly settings: LiveSettings },
+  hooks: readonly AfterWrite[] = [],
+): Promise<FormView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const form = await visibleForm(tx, scope, input.formId, true);
+      if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
+      checkRevision(form, input.expectedRevision);
+      if (form.draftVersionId === null) throw new Error('A form always has a draft version.');
+      const dealsId = input.settings.deal === true ? await standardDeals(tx, scope) : undefined;
+      const parse = (document: FormDocument): FormDocument => {
+        const parsed = FormDocument.safeParse(document);
+        if (parsed.success) return parsed.data;
+        const [issue] = parsed.error.issues;
+        throw refuseOn(
+          'CONFIG_INVALID',
+          issue?.message ?? 'That setting can’t be saved.',
+          issue?.path.join('.') || 'settings',
+        );
+      };
+      const versions = await loadVersions(tx, [
+        form.draftVersionId,
+        ...(form.liveVersionId === null ? [] : [form.liveVersionId]),
+      ]);
+      const draft = versions.get(form.draftVersionId);
+      if (draft === undefined) throw new Error('The draft version went away.');
+      const live = form.liveVersionId === null ? undefined : versions.get(form.liveVersionId);
+      if (live === undefined) {
+        const next = parse(withSettings(draft.document, input.settings, dealsId));
+        if (input.settings.deal === true) await checkDealTarget(tx, scope, next);
+        await writeDraft(tx, scope, form, next);
+      } else {
+        const nextLive = parse(withSettings(live.document, input.settings, dealsId));
+        if (input.settings.deal === true) await checkDealTarget(tx, scope, nextLive);
+        const by = actorRow(scope.actor);
+        const [top] = await tx
+          .select({ number: max(formVersions.number) })
+          .from(formVersions)
+          .where(eq(formVersions.formId, form.id));
+        const number = (top?.number ?? 0) + 1;
+        const [published] = await tx
+          .insert(formVersions)
+          .values({
+            workspaceId: scope.workspaceId,
+            formId: form.id,
+            number,
+            document: nextLive,
+            ...audit(scope),
+            publishedAt: sql`now()`,
+            publishedByType: by.type,
+            publishedById: by.id,
+            publishedByMemberId: by.memberId,
+          })
+          .returning({ id: formVersions.id });
+        if (published === undefined) throw new Error('The version wasn’t written.');
+        const hadEdits = form.draftVersionId !== form.liveVersionId;
+        if (hadEdits) {
+          // The edits waiting on the Form tab take the change too, numbered after the version just published.
+          await tx
+            .update(formVersions)
+            .set({
+              number: number + 1,
+              document: parse(withSettings(draft.document, input.settings, dealsId)),
+              updatedAt: sql`now()`,
+              updatedByType: by.type,
+              updatedById: by.id,
+              updatedByMemberId: by.memberId,
+            })
+            .where(eq(formVersions.id, form.draftVersionId));
+        }
+        await touchForm(
+          tx,
+          scope,
+          form.id,
+          { liveVersionId: published.id, ...(hadEdits ? {} : { draftVersionId: published.id }) },
+          true,
+        );
+        // Closes after fewer answers than it has: closed now.
+        if (input.settings.closing !== undefined) await pauseIfFull(tx, form.id, nextLive);
+      }
+      const saved = await loadForm(tx, form.id);
+      if (saved === undefined) throw new Error('The form went away under its change.');
+      return viewOf(tx, scope, saved);
+    },
+    hooks,
+  );
+  return result;
+}
+
 /** The settings that apply at once. */
 export interface FormSettingsInput {
   readonly formId: string;

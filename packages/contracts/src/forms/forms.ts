@@ -9,7 +9,8 @@ import { AttributeType, Timestamp } from '../values/attribute-values.ts';
 import { RecordRefDisplay } from '../values/options.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 import { SubmissionContext } from './context.ts';
-import { FormDocument } from './document.ts';
+import { CLOSED_MESSAGE_MAX } from './confirmation.ts';
+import { FormConfirmation, FormDocument } from './document.ts';
 import { PublicForm } from './public.ts';
 import { FormAnalytics, FormAnalyticsInput } from './visits.ts';
 import { FormTemplateSummary, OfferedFormTemplateId } from './templates.ts';
@@ -138,6 +139,24 @@ export const SaveFormDraftInput = WorkspaceScoped.extend({
   expectedRevision: z.number().int().min(1),
   mutationId: Uuid,
 });
+/**
+ * The settings a form's version holds, changed from Settings and live at once (forms fixes 2, one save model): when it
+ * closes, what it says closed, the visitor's copy, Also create a deal. A present key is set, `null` clears it.
+ */
+export const ApplyFormSettingsInput = WorkspaceScoped.extend({
+  formId: Uuid,
+  expectedRevision: z.number().int().min(1),
+  settings: z.strictObject({
+    closing: FormDocument.shape.closing.unwrap().nullable().optional(),
+    closedMessage: z.string().max(CLOSED_MESSAGE_MAX).nullable().optional(),
+    confirmation: FormConfirmation.nullable().optional(),
+    deal: z.boolean().optional(),
+  }),
+  mutationId: Uuid,
+});
+/** Settings changed live. */
+export type ApplyFormSettingsInput = z.infer<typeof ApplyFormSettingsInput>;
+
 /** Saves the draft. */
 export type SaveFormDraftInput = z.infer<typeof SaveFormDraftInput>;
 
@@ -605,6 +624,7 @@ export const formsContract = {
   /** Makes a draft from one template (AC-6323); needs `forms.manage`, as every other form write does. */
   createFromTemplate: oc.input(CreateFromTemplateInput).output(FormView),
   saveDraft: oc.input(SaveFormDraftInput).output(FormView),
+  applySettings: oc.input(ApplyFormSettingsInput).output(FormView),
   publish: oc.input(PublishFormInput).output(FormView),
   updateSettings: oc.input(UpdateFormSettingsInput).output(FormView),
   rotateSecret: oc.input(RotateFormSecretInput).output(FormView),

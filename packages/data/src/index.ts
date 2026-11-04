@@ -93,6 +93,7 @@ import type {
   OfferedFormTemplateId,
   PublishFormInput,
   SaveFormDraftInput,
+  ApplyFormSettingsInput,
   InvitationView,
   InvitePeek,
   InviteResult,
@@ -242,6 +243,8 @@ export {
   type DuplicatePairsState,
 } from './duplicates/store.ts';
 export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contracts';
+/** The settings Settings changes live on a form (forms fixes 2). */
+export type LiveSettingsChange = ApplyFormSettingsInput['settings'];
 // Insights (spec 0067).
 export type {
   InsightBucket,
@@ -7679,6 +7682,23 @@ export function createDataLayer({
           send: () =>
             call((options) =>
               api.forms.saveDraft({ workspace, formId, document, expectedRevision, mutationId: mintId() }, options),
+            ),
+          land: landForm(formId),
+        }),
+      /**
+       * Changes the settings a form's version holds, live at once (forms fixes 2, one save model): Closes, the closed
+       * message, the visitor's copy, Also create a deal. Edits waiting on the Form tab stay waiting.
+       */
+      applySettings: (
+        workspace: string,
+        formId: string,
+        settings: ApplyFormSettingsInput['settings'],
+        expectedRevision: number,
+      ) =>
+        formLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.forms.applySettings({ workspace, formId, settings, expectedRevision, mutationId: mintId() }, options),
             ),
           land: landForm(formId),
         }),

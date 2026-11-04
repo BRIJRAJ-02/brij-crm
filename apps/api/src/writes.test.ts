@@ -2626,6 +2626,17 @@ Object.assign(WRITES, {
     });
     return [];
   },
+  'forms.applySettings': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    await m.client.forms.applySettings({
+      workspace: m.slug,
+      formId: form.id,
+      expectedRevision: form.revision,
+      settings: { closedMessage: 'Closed for now.' },
+      mutationId,
+    });
+    return [];
+  },
   'forms.publish': async (m: Member) => {
     await formOn(m, true);
     return [];
@@ -3370,6 +3381,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'options.archive': 2,
   'options.restore': 3,
   'forms.saveDraft': 2,
+  'forms.applySettings': 2,
   'forms.publish': 2,
   'forms.setStatus': 3,
   'forms.updateSettings': 2,

@@ -8,6 +8,7 @@ import {
   type FormDocument,
   type FormTargetChoices,
   type FormView,
+  type LiveSettingsChange,
   type MemberSummary,
   type ObjectSummary,
   type SubmissionPage,
@@ -251,6 +252,36 @@ export function FormEditor(props: FormEditorProps) {
   const apply = (view: FormView) => {
     setForm(view);
     saved.current = { document: view.draft, revision: view.revision };
+  };
+
+  /**
+   * A setting Settings changes that the version holds (forms fixes 2, one save model): shown at once, then live at
+   * once on the server, edits waiting on the Form tab left waiting. The saved copy takes the change too, so the
+   * draft's own save never sends it as an edit.
+   */
+  const applySettings = (settings: LiveSettingsChange, change: (before: FormDocument) => FormDocument) => {
+    const shownBefore = latest.current;
+    const next = change(latest.current);
+    setDraft(next);
+    latest.current = next;
+    saved.current = { ...saved.current, document: change(saved.current.document) };
+    flush()
+      .then((revision) => data.forms.applySettings(slug, form.id, settings, revision))
+      .then((view) => {
+        apply(view);
+        setDraft(view.draft);
+        latest.current = view.draft;
+      })
+      .catch((error: unknown) => {
+        if (isDataError(error) && error.code === 'FORM_CHANGED') {
+          setConflict(true);
+          return;
+        }
+        setDraft(shownBefore);
+        latest.current = shownBefore;
+        toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
+        loadTheirs();
+      });
   };
 
   const loadTheirs = () => {
@@ -588,10 +619,27 @@ export function FormEditor(props: FormEditorProps) {
     };
     // Where it saved before, for Undo (forms fix a2): the server remembered the mapping, so going back restores it.
     const before = draft.targets.main?.objectId ?? null;
+    // One save model (forms fixes 2): a live form with nothing else waiting takes the change live at once, as every
+    // other setting does; with edits waiting on the Form tab, it goes live with them on Publish.
+    const goesLiveNow = isPublished && !form.hasUnpublished && sameDocument(latest.current, saved.current.document);
     flush()
       .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision, withDeal || undefined))
-      .then(async (view) => {
+      .then(async (moved) => {
         const choices = await data.forms.attributes(slug, form.id);
+        const filed = objectId === null ? moved.draft : fileByLabel(moved.draft, choices.items);
+        const view = !goesLiveNow
+          ? moved
+          : await (
+              sameDocument(filed, moved.draft)
+                ? Promise.resolve(moved.revision)
+                : data.forms.saveDraft(slug, form.id, filed, moved.revision).then((saved) => saved.revision)
+            )
+              .then((revision) => data.forms.publish(slug, form.id, { expectedRevision: revision }))
+              .catch((error: unknown) => {
+                // Refused live (a field the object insists on): it waits in the draft, and the refusal says why.
+                toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
+                return data.forms.get(slug, form.id);
+              });
         apply(view);
         const next = objectId === null ? view.draft : fileByLabel(view.draft, choices.items);
         setDraft(next);
@@ -812,9 +860,7 @@ export function FormEditor(props: FormEditorProps) {
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
             onStatusChange={setStatus}
-            onDraftChange={(change) => {
-              setDraft(change);
-            }}
+            onSettingsChange={applySettings}
             {...(props.keepMonths === undefined ? {} : { keepMonths: props.keepMonths })}
           />
         );

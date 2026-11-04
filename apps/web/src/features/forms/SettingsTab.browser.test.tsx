@@ -226,7 +226,8 @@ function Editor({ initial }: { readonly initial: FormView }) {
           statuses.push(status);
         }}
         keepMonths={12}
-        onDraftChange={(change) => {
+        onSettingsChange={(settings, change) => {
+          sent.push(settings);
           const next = change(form.draft);
           deals.push(next.targets.deal?.objectId);
           copies.push(next.confirmation?.on);
@@ -247,6 +248,8 @@ const deals: (string | undefined)[] = [];
 const copies: (boolean | undefined)[] = [];
 const closings: FormDocument['closing'][] = [];
 const filings: string[][] = [];
+/** The settings each change sent live (one save model, forms fixes 2). */
+const sent: unknown[] = [];
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -261,6 +264,7 @@ afterEach(() => {
   copies.length = 0;
   closings.length = 0;
   filings.length = 0;
+  sent.length = 0;
 });
 
 async function show(
@@ -514,6 +518,18 @@ describe('Settings as plain rows (T21)', () => {
     await show({ ...formView({}), spamCount: 3, reviewCount: 1 }, []);
     await expect.element(page.getByRole('link', { name: 'Review' })).toBeVisible();
     expect(page.getByRole('link', { name: 'Review' }).element().getAttribute('href')).toMatch(/state=needs_review$/);
+  });
+
+  it('saves every row live as it changes, typed words once they are left (one save model, forms fixes 2)', async () => {
+    await show(formView({}), []);
+    expect(page.getByText('Goes live with Publish.').query()).toBeNull();
+    const message = page.getByRole('textbox', { name: 'Message when closed' });
+    await userEvent.click(message);
+    await userEvent.keyboard('Back soon');
+    expect(sent).toEqual([]);
+    await userEvent.keyboard('{Tab}');
+    expect(sent).toEqual([{ closedMessage: 'Back soon' }]);
+    await expect.element(message).toHaveValue('Back soon');
   });
 
   it('closes and opens the form from Taking answers', async () => {

@@ -759,6 +759,8 @@ export {
   publishForm,
   rotateFormSecret,
   saveFormDraft,
+  applyFormSettings,
+  type LiveSettings,
   setFormStatus,
   setFormTarget,
   SLUG_TAKEN_MESSAGE,

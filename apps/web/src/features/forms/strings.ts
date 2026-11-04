@@ -262,7 +262,7 @@ export const strings = {
   copyLineDefault: 'Thanks, we got it. We will come back to you soon.',
   /** Closes (forms fix b2): when the form stops taking answers by itself, and what it says then. */
   closesRow: 'Closes',
-  closesHelp: 'Stop taking answers on a day, or after enough have come in. Pause stops it now. Goes live with Publish.',
+  closesHelp: 'Stop taking answers on a day, or after enough have come in. Pause stops it now.',
   closesNever: 'Never',
   closesOnDate: 'On a date',
   closesAfterCount: 'After a number of answers',
@@ -270,7 +270,6 @@ export const strings = {
   closesPast: 'Pick today or a day to come.',
   closesCountError: (max: number) => `Give a whole number from 1 to ${max.toLocaleString('en')}.`,
   /** Under a setting that waits for Publish on a live form (forms review): said, not only in a hover tip. */
-  goesLive: 'Goes live with Publish.',
   closesCount: 'Number of answers',
   closedMessageRow: 'Message when closed',
   closedMessageDefault: 'This form isn’t taking answers right now.',
@@ -291,7 +290,7 @@ export const strings = {
   dealsNoPersonTip:
     'Saving to Deals keeps no person, so there is no one to email back. Save to People with a deal instead; answers saved on the deal stay there.',
   dealsMove: 'Save people',
-  alsoDealTip: 'Each submission also adds a deal, linked to the person and their company. Goes live with Publish.',
+  alsoDealTip: 'Each submission also adds a deal, linked to the person and their company.',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
     `Changes here go live when you publish. Until then, submissions are still saved to ${objectName}.`,
@@ -784,7 +783,8 @@ export const strings = {
   spamRow: 'Spam',
   linkHelp: 'Links with the old address keep working.',
   ownerHelpTip: 'Who owns the records this form makes. Records already made keep their owner.',
-  savingHelpTip: 'Each submission adds or updates a record here, matched by email. A change goes live with Publish.',
+  savingHelpTip:
+    'Each submission adds or updates a record here, matched by email. With edits waiting on the Form tab, a change goes live with them on Publish.',
   savingChangedToast: (where: string) => `Answers will save to ${where} once you publish.`,
   savingOffToast: 'Answers will stay in Submissions once you publish.',
   // Analytics (T22)

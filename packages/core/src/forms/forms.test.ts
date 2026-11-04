@@ -33,6 +33,7 @@ import {
   deleteForm,
   duplicateForm,
   formAttributes,
+  applyFormSettings,
   FORM_FULL,
   getForm,
   isSlugAvailable,
@@ -555,6 +556,38 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect((await getPublicForm(visitor.scope, { formId: visitor.formId })).country).toBe('IN');
     await w.query(sql`update workspaces set country = 'GB' where id = ${w.scope.workspaceId}`);
     expect((await getPublicForm(visitor.scope, { formId: visitor.formId })).country).toBe('GB');
+  });
+
+  it('applies a setting live at once, leaving edits on the Form tab waiting (forms fixes 2, one save model)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    // No edits waiting: the change is live, and nothing is left to publish.
+    const first = await applyFormSettings(w.scope, {
+      formId: live.id,
+      expectedRevision: live.revision,
+      settings: { closedMessage: 'Back in spring.' },
+    });
+    expect(first.live?.closedMessage).toBe('Back in spring.');
+    expect(first.hasUnpublished).toBe(false);
+    // An edit waiting: the setting goes live alone, and the edit still waits, holding the setting too.
+    const edited = await saveFormDraft(w.scope, {
+      formId: live.id,
+      document: { ...first.draft, headline: 'A new headline' },
+      expectedRevision: first.revision,
+    });
+    const second = await applyFormSettings(w.scope, {
+      formId: live.id,
+      expectedRevision: edited.revision,
+      settings: { closing: { after: 50 }, closedMessage: null },
+    });
+    expect(second.live?.closing).toEqual({ after: 50 });
+    expect(second.live?.closedMessage).toBeUndefined();
+    expect(second.live?.headline).not.toBe('A new headline');
+    expect(second.hasUnpublished).toBe(true);
+    expect(second.draft).toMatchObject({ headline: 'A new headline', closing: { after: 50 } });
+    // Publishing the edit keeps the setting.
+    const published = await publishForm(w.scope, { formId: live.id, expectedRevision: second.revision });
+    expect(published.live).toMatchObject({ headline: 'A new headline', closing: { after: 50 } });
   });
 
   it('pauses and resumes, archives and restores, duplicates and deletes a form', async () => {

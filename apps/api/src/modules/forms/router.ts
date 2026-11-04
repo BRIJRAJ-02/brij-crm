@@ -13,6 +13,8 @@ import {
   publishForm,
   rotateFormSecret,
   saveFormDraft,
+  applyFormSettings,
+  type LiveSettings,
   setFormStatus,
   setFormTarget,
   updateFormSettings,
@@ -22,6 +24,7 @@ import {
 import { withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
+import type { ApplyFormSettingsInput } from '@crm/contracts';
 
 // Forms (spec 0023), inside a workspace: the door has let in an active member, and `context.scope` is theirs. Reads
 // answer the forms on objects the member can see; every change needs forms.manage, checked in the service, and goes
@@ -81,6 +84,16 @@ export const formsRouter = member.forms.router({
         { formId: input.formId, document: input.document, expectedRevision: input.expectedRevision },
         hooks,
         { publicOrigins: context.publicOrigins },
+      ),
+    ),
+  ),
+  // Settings a version holds, live at once (forms fixes 2).
+  applySettings: member.forms.applySettings.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      applyFormSettings(
+        context.scope,
+        { formId: input.formId, expectedRevision: input.expectedRevision, settings: liveSettings(input.settings) },
+        hooks,
       ),
     ),
   ),
@@ -161,3 +174,13 @@ export const formsRouter = member.forms.router({
     ),
   ),
 });
+
+/** The settings as the service takes them: a key the call left out stays out, so it isn't read as a change. */
+function liveSettings(settings: ApplyFormSettingsInput['settings']): LiveSettings {
+  return {
+    ...(settings.closing === undefined ? {} : { closing: settings.closing }),
+    ...(settings.closedMessage === undefined ? {} : { closedMessage: settings.closedMessage }),
+    ...(settings.confirmation === undefined ? {} : { confirmation: settings.confirmation }),
+    ...(settings.deal === undefined ? {} : { deal: settings.deal }),
+  };
+}
