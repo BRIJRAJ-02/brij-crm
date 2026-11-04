@@ -157,6 +157,13 @@ export function step(before: ChatState, text: string, context: ChatContext): Cha
   if (email !== undefined) state = { ...state, email, intent: 'details' };
   const introduced = readIntroducedName(text);
   if (introduced !== undefined) state = { ...state, name: introduced, intent: 'details' };
+  // A name beside the email on one line ("Leo Park, leo@x.io", "leo@x.io Leo"; critic B-10), held time or not: what
+  // is left once the email is out, if it is only a name. The name checks still hold (no web address, no control
+  // characters), and a line with a time in it is never a name.
+  if (email !== undefined && introduced === undefined && state.name === undefined) {
+    const named = readBareName(text);
+    if (named !== undefined) state = { ...state, name: named };
+  }
   if (needsPhone && (state.held !== undefined || email !== undefined)) {
     const phone = readPhone(text);
     if (phone !== undefined) state = { ...state, phone, intent: 'details' };

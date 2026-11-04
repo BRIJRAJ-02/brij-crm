@@ -139,6 +139,26 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     expect(words(["I'm Ada, ada@example.com", 'tomorrow at 3pm']).state.intent).not.toBe('book');
   });
 
+  it('reads a name and an email from one line, in either order (bookings critic B-10)', () => {
+    for (const line of ['Leo Park, leo@x.io', 'leo@x.io Leo Park', 'Leo Park leo@x.io', 'leo@x.io, Leo Park']) {
+      const { state } = words(['tomorrow at 3pm', line]);
+      expect(state.name, line).toBe('Leo Park');
+      expect(state.email, line).toBe('leo@x.io');
+      expect(state.readBack, line).toBe(true);
+    }
+    // With no time held yet too: the details ride along, and the times come next.
+    const early = words(['Leo Park, leo@x.io']).state;
+    expect(early).toMatchObject({ name: 'Leo Park', email: 'leo@x.io' });
+    const single = words(['tomorrow at 3pm', 'leo@x.io Leo']).state;
+    expect(single).toMatchObject({ name: 'Leo', email: 'leo@x.io' });
+  });
+
+  it('never takes a web address or control characters for a name, on one line with an email either', () => {
+    expect(words(['tomorrow at 3pm', 'www.spam.example, leo@x.io']).state.name).toBeUndefined();
+    expect(words(['tomorrow at 3pm', 'Leo\u0007Park leo@x.io']).state.name).toBeUndefined();
+    expect(words(['tomorrow at 3pm', 'Leo\u0007Park leo@x.io']).state.email).toBe('leo@x.io');
+  });
+
   it('asks for a phone number on a phone page', () => {
     const turn = words(['tomorrow at 3pm', "I'm Ada, ada@example.com"], { needsPhone: true });
     expect(turn.text).toBe('Thanks, Ada. What number should I call?');
