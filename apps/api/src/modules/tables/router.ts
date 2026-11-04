@@ -12,7 +12,7 @@ import { forgetAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
-// Table seating's staff side (spec 0066 B7 lite): a place's setup (rules, checklist, Publish), its Service list for
+// Table seating's staff side (spec 0066 B7 lite): a place's setup (its table rules and checklist, and Publish), its Service list for
 // one day, and the status moves a host makes. Inside a workspace, behind the member door; core checks the permission
 // (`hospitality.manage` for the setup, Run service for the day and the moves, which reach table reservations only)
 // before anything is read, then the Table seating gate. A walk in seats a party now (Run service), and a member turns
