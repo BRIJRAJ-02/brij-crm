@@ -13,19 +13,19 @@ const TEMPLATES: readonly FormTemplateSummary[] = [
   {
     id: 'blank',
     name: 'Blank form',
-    purpose: 'Name, email and phone, to change as you like.',
+    purpose: 'Name, email and phone.',
     preview: { layout: 'classic', rows: ['field', 'field', 'field'] },
   },
   {
     id: 'feedback',
     name: 'Feedback',
-    purpose: 'A rating and one open question, so you hear why as well as how much.',
+    purpose: 'A rating, and why.',
     preview: { layout: 'classic', rows: ['field', 'rating', 'long'] },
   },
   {
     id: 'booking_intake',
     name: 'Booking intake',
-    purpose: 'Ask what the meeting is about, then send them to your calendar.',
+    purpose: 'A few questions, then your calendar.',
     preview: { layout: 'classic', rows: ['field', 'field', 'long'] },
   },
   {
@@ -95,16 +95,17 @@ describe('the gallery (AC-6323)', () => {
     // The purpose is on the tile, read as the tile's description and visible as text: not hidden in a tooltip.
     await expect
       .element(page.getByRole('button', { name: 'Feedback' }))
-      .toHaveAccessibleDescription('A rating and one open question, so you hear why as well as how much.');
-    await expect.element(page.getByText('Name, email and phone, to change as you like.')).toBeVisible();
+      .toHaveAccessibleDescription('A rating, and why.');
+    await expect.element(page.getByText('Name, email and phone.')).toBeVisible();
     // The tiles are in the template order, Blank first (AC-6323), inside the one group the gallery draws.
     const group = document.querySelector('[role="group"]');
     const names = [...(group?.querySelectorAll('[data-tile]') ?? [])].map(
       (tile) => tile.querySelector('[data-tile] > span')?.textContent,
     );
     expect(names.length).toBe(TEMPLATES.length);
-    // Each tile keeps its preview, so the shapes are on the tile beside the words.
-    expect(group?.querySelectorAll('[data-tile][data-tall]').length).toBe(TEMPLATES.length);
+    // No thumbnails (T4): each tile is a small mark beside its name and line, a list to scan.
+    expect(group?.querySelectorAll('[data-tile][data-tall]').length).toBe(0);
+    expect(group?.querySelectorAll('[data-tile][data-described]').length).toBe(TEMPLATES.length);
   });
 
   it('makes a draft from the tile that was pressed and hands it back', async () => {

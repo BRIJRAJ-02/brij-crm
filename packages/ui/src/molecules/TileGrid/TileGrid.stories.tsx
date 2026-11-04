@@ -370,6 +370,44 @@ export const ChoiceDescribed: Story = {
   },
 };
 
+/**
+ * `tileWidth="wide"`: a long run of choices read by name, laid out as a list to scan (the form template picker). Each
+ * tile is a column wide at least, its mark beside its name and its line.
+ */
+export const ChoiceWide: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        mode="action"
+        label="Start a form"
+        showsDescription
+        tileWidth="wide"
+        onAction={fn()}
+        tiles={[
+          { id: 'blank', name: 'Blank form', icon: 'plus', description: 'Name, email and phone.' },
+          { id: 'contact', name: 'Contact us', icon: 'mail', description: 'Name, email and a message.' },
+          { id: 'nps', name: 'Recommendation score (NPS)', icon: 'chart-bar', description: '0 to 10, and why.' },
+          { id: 'job', name: 'Job application', icon: 'briefcase', description: 'Role, CV and portfolio.' },
+          { id: 'support', name: 'Support request', icon: 'headset', description: 'What broke, and how urgent.' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const group = canvas.getByRole('group', { name: 'Start a form' });
+    await expect(within(group).getByRole('button', { name: 'Blank form' })).toHaveAccessibleDescription(
+      'Name, email and phone.',
+    );
+    // The line sits beside the mark, under the name: the mark's column holds nothing else.
+    const tile = within(group).getByRole('button', { name: 'Job application' });
+    const name = within(tile).getByText('Job application').getBoundingClientRect();
+    const line = within(tile).getByText('Role, CV and portfolio.').getBoundingClientRect();
+    await expect(Math.round(line.left)).toBe(Math.round(name.left));
+    await expect(line.top).toBeGreaterThan(name.top);
+  },
+};
+
 /** Action mode: each tile starts something at once (Add block). A description reaches screen readers and a tooltip. */
 export const ChoiceAction: Story = {
   parameters: { crm: { screenshot: false } },

@@ -1,6 +1,6 @@
 // Brief
 // Purpose: New form opens a gallery of ready forms (spec 0063, AC-6323), so nobody starts from an empty page they then have to understand.
-// Main task: see what each template makes, press one, and land in its editor with the questions already filed into the CRM.
+// Main task: scan the names, press one, and land in its editor with the questions already filed into the CRM.
 // Leaves out: editing the template (that is the builder), making templates of your own.
 import {
   isDataError,
@@ -9,7 +9,7 @@ import {
   type FormView,
   type OfferedFormTemplateId,
 } from '@crm/data';
-import { Button, Callout, EmptyState, FormLayoutThumbnail, Modal, TileGrid, type ChoiceTile } from '@crm/ui';
+import { Button, Callout, EmptyState, Modal, TileGrid, type ChoiceTile, type IconName } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -25,12 +25,31 @@ interface Read {
   readonly phase: Exclude<Phase, { readonly kind: 'loading' }>;
 }
 
-/** One template as a tile: its preview, its name, and the one line that says what it is for (AC-6323). */
+/**
+ * Each template's mark: a small Lucide icon beside its name, as Tally's and Typeform's template lists draw them. The
+ * grey wireframe thumbnails all looked the same (the owner's team, 4 November 2026: "Dont need thumbnails here").
+ */
+const TEMPLATE_ICONS: Readonly<Record<OfferedFormTemplateId, IconName>> = {
+  blank: 'plus',
+  contact_us: 'mail',
+  demo_request: 'presentation',
+  event_signup: 'ticket',
+  feedback: 'message-square',
+  nps: 'chart-bar',
+  job_application: 'briefcase',
+  booking_intake: 'calendar-check',
+  newsletter: 'newspaper',
+  support_request: 'headset',
+  customer_onboarding: 'rocket',
+  lead_qualification: 'target',
+};
+
+/** One template as a compact tile: its mark, its name, and the one short line that says what it is for (AC-6323). */
 function tileOf(template: FormTemplateSummary): ChoiceTile {
   return {
     id: template.id,
     name: template.name,
-    thumbnail: <FormLayoutThumbnail layout={template.preview.layout} rows={template.preview.rows} />,
+    icon: TEMPLATE_ICONS[template.id],
     description: template.purpose,
   };
 }
@@ -195,9 +214,9 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
           variant="choice"
           mode="action"
           label={strings.galleryTitle}
-          // Each tile owes the person both a preview of the form it makes and the line saying what it is for.
+          // A mark beside the name and its one short line: a list to scan, not pictures to compare.
           showsDescription
-          keepsPicture
+          tileWidth="wide"
           tiles={phase.items.map((template) =>
             // While one is being made, the pressed tile stays on and the other nine turn off, so the one still
             // lit is the one being made. Turning the pressed one off too threw a keyboard's focus to the

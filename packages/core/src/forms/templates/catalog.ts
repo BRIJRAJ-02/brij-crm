@@ -162,7 +162,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     name: 'Blank form',
     // The same name `createForm` gives an unnamed form: the blank tile makes exactly what New form used to.
     formName: 'Untitled form',
-    purpose: 'Name, email and phone, to change as you like.',
+    purpose: 'Name, email and phone.',
     preview: ['field', 'field', 'field'],
     layout: 'classic',
     headline: 'Fill this in and we will come back to you',
@@ -173,7 +173,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   contact_us: {
     id: 'contact_us',
     name: 'Contact us',
-    purpose: 'Name, email, company and a message.',
+    purpose: 'Name, email and a message.',
     preview: ['field', 'field', 'long'],
     layout: 'classic',
     headline: 'Talk to us',
@@ -184,7 +184,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   demo_request: {
     id: 'demo_request',
     name: 'Demo request',
-    purpose: 'Qualify a demo before you give it: role, company and what they want to see.',
+    purpose: 'Role, company and what to show.',
     preview: ['field', 'field', 'long'],
     layout: 'classic',
     headline: 'Book a demo',
@@ -200,7 +200,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   event_signup: {
     id: 'event_signup',
     name: 'Event signup',
-    purpose: 'Who is coming, on which day, and which sessions.',
+    purpose: 'Who’s coming, and which sessions.',
     preview: ['field', 'field', 'date'],
     layout: 'classic',
     headline: 'Save your seat',
@@ -236,7 +236,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   feedback: {
     id: 'feedback',
     name: 'Feedback',
-    purpose: 'A rating and one open question, so you hear why as well as how much.',
+    purpose: 'A rating, and why.',
     preview: ['field', 'rating', 'long'],
     layout: 'classic',
     headline: 'How did we do?',
@@ -257,7 +257,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   nps: {
     id: 'nps',
     name: 'Recommendation score (NPS)',
-    purpose: '0 to 10, and room to say why.',
+    purpose: '0 to 10, and why.',
     preview: ['field', 'scale', 'long'],
     layout: 'classic',
     headline: 'One question, if you have a moment',
@@ -279,7 +279,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   job_application: {
     id: 'job_application',
     name: 'Job application',
-    purpose: 'One role, a CV and a link to their work.',
+    purpose: 'Role, CV and portfolio.',
     preview: ['field', 'choices', 'upload'],
     layout: 'classic',
     headline: 'Apply to join us',
@@ -325,7 +325,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   newsletter: {
     id: 'newsletter',
     name: 'Newsletter',
-    purpose: 'Two fields and nothing else, for a footer or a sidebar.',
+    purpose: 'Email and consent.',
     preview: ['field', 'field'],
     layout: 'classic',
     headline: 'Get the monthly note',
@@ -347,7 +347,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   support_request: {
     id: 'support_request',
     name: 'Support request',
-    purpose: 'What broke, how urgent it is, and a screenshot to go with it.',
+    purpose: 'What broke, and how urgent.',
     preview: ['field', 'long', 'choices'],
     layout: 'classic',
     headline: 'Tell us what went wrong',
@@ -376,7 +376,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   customer_onboarding: {
     id: 'customer_onboarding',
     name: 'Customer onboarding',
-    purpose: 'Asked a step at a time, so a long form still gets finished.',
+    purpose: 'Details, a step at a time.',
     preview: ['field', 'field', 'field'],
     layout: 'steps',
     headline: 'Welcome aboard',
@@ -412,7 +412,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   lead_qualification: {
     id: 'lead_qualification',
     name: 'Lead qualification',
-    purpose: 'Budget, timeline and team size, scored so the best leads stand out.',
+    purpose: 'Budget, timeline and team size.',
     preview: ['field', 'choices', 'choices'],
     layout: 'classic',
     headline: 'Tell us about your team',
@@ -456,7 +456,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   booking_intake: {
     id: 'booking_intake',
     name: 'Booking intake',
-    purpose: 'Ask what the meeting is about, then send them to your calendar.',
+    purpose: 'A few questions, then your calendar.',
     preview: ['field', 'field', 'long'],
     layout: 'classic',
     headline: 'Before we meet',

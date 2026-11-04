@@ -43,9 +43,7 @@ test.describe('the form template gallery', () => {
     const tiles = gallery.getByRole('group', { name: 'Start a form' }).getByRole('button');
     await expect(tiles).toHaveCount(12);
     await expect(tiles.first()).toHaveAccessibleName('Blank form');
-    await expect(
-      gallery.getByText('A rating and one open question, so you hear why as well as how much.'),
-    ).toBeVisible();
+    await expect(gallery.getByText('A rating, and why.')).toBeVisible();
     // Both templates slice 5 held back are offered now: Lead qualification scores, Booking intake goes on to a page.
     await expect(gallery.getByRole('button', { name: 'Lead qualification' })).toHaveCount(1);
     await expect(gallery.getByRole('button', { name: 'Booking intake' })).toHaveCount(1);
