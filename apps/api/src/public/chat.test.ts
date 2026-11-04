@@ -76,7 +76,13 @@ type Reply = {
 function turn(
   publicKey: string,
   lines: readonly Line[],
-  init: { conversationId?: string; ip?: string; origin?: string; body?: unknown } = {},
+  init: {
+    conversationId?: string;
+    ip?: string;
+    origin?: string;
+    body?: unknown;
+    extra?: Record<string, unknown>;
+  } = {},
 ) {
   return app.request(`/api/public/booking/${publicKey}/chat`, {
     method: 'POST',
@@ -95,18 +101,24 @@ function turn(
         hour12: true,
         messages: lines,
         startedAt: NOW.getTime() - 60_000,
+        ...init.extra,
       },
     ),
   });
 }
 
 /** Plays the visitor's lines in order, the way the page does, keeping the assistant's replies in the thread. */
-async function chat(publicKey: string, said: readonly string[], conversationId = newId()) {
+async function chat(
+  publicKey: string,
+  said: readonly string[],
+  conversationId = newId(),
+  extra: Record<string, unknown> = {},
+) {
   let lines: Line[] = [];
   let reply: Reply | undefined;
   for (const text of said) {
     lines = [...lines, { role: 'visitor', text }];
-    const answer = await turn(publicKey, lines, { conversationId });
+    const answer = await turn(publicKey, lines, { conversationId, extra });
     expect(answer.status).toBe(200);
     reply = (await answer.json()) as Reply;
     lines = [...lines, { role: 'assistant', text: reply.text }];
@@ -125,6 +137,24 @@ async function pageOf(m: Awaited<ReturnType<typeof memberWithWorkspace>>) {
 }
 
 describe('booking by chat (AC-1513 to AC-1522)', () => {
+  it('books the guests and the note the chat collected beside the conversation (chat parity, 4 Nov 2026)', async () => {
+    const m = await memberWithWorkspace(app);
+    const page = await pageOf(m);
+    const said = ['monday at 9am', "I'm Grace Hopper, grace@navy.example", 'Yes, book it'];
+    const extra = { guests: ['ada@example.com'], note: 'About the compiler' };
+    const done = await chat(page.publicKey, said, newId(), extra);
+    expect(done.reply.text).toBe(
+      'You’re booked. See you tomorrow at 9:00 AM. Details are on their way to grace@navy.example.',
+    );
+    const token = done.reply.booked?.manageToken ?? '';
+    const guestPage = await app.request(`/api/public/booking/manage/${token}`, {
+      headers: { [EDGE_HEADER]: TEST_EDGE_SECRET, 'x-forwarded-for': newIp() },
+    });
+    const booking = (await guestPage.json()) as { guests: string[]; note?: string };
+    expect(booking.guests).toEqual(['ada@example.com']);
+    expect(booking.note).toBe('About the compiler');
+  });
+
   it('books by typing through the booking service, and a retried turn answers the same booking', async () => {
     const m = await memberWithWorkspace(app);
     const page = await pageOf(m);

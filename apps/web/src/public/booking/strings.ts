@@ -88,6 +88,40 @@ export const strings = {
     phone: 'Your phone number',
     confirm: 'Or say what to change',
   },
+  // Chat parity (4 Nov 2026): what the page itself asks in the host's voice, short and plain.
+  /** The greeting's chip for the zone the times are in; it opens the rail's picker. */
+  chatZoneChip: (zone: string) => `${zone} · Change`,
+  chatZoneMoved: (zone: string) => `Times are in ${zone} now.`,
+  /** One of the page's own questions, as the host asks it: its label, a question. */
+  chatQuestion: (label: string, isFirst: boolean) => {
+    const asked = /[?.!:]$/u.test(label.trim()) ? label.trim() : `${label.trim()}?`;
+    return isFirst ? `One more thing. ${asked}` : asked;
+  },
+  chatMenu: {
+    ask: (isTeam: boolean) => `Anything else before ${isTeam ? 'we book' : 'I book'} it?`,
+    guest: 'Add a guest',
+    note: 'Add a note',
+    done: 'That’s all',
+    /** The box's words while a row of chips is the answer: never the opening question again. */
+    prompt: 'Tap one, or type here',
+  },
+  chatGuestAsk: 'Who else is joining? Their email, or a few.',
+  chatGuestPrompt: 'Guest’s email',
+  chatGuestWrong: 'That email doesn’t look right. Try again?',
+  chatGuestAdded: (count: number) => (count === 1 ? 'Added.' : `Added all ${String(count)}.`),
+  chatGuestCount: (count: number) => (count === 1 ? '1 guest' : `${String(count)} guests`),
+  chatNoteAsk: (isTeam: boolean) => `What should ${isTeam ? 'we' : 'I'} know before we talk?`,
+  chatNotePrompt: 'Your note',
+  chatNoted: 'Got it.',
+  chatAnswerWrong: (problem: string) => `Sorry. ${problem}`,
+  /** The chips a question's answer takes, and the line for a country the page can't place. */
+  chatAnswers: {
+    yes: 'Yes',
+    no: 'No',
+    agree: 'I agree',
+    noThanks: 'No thanks',
+    unknownCountry: 'Which country is that? Try its name, like India.',
+  },
   chatTooMany: 'That was a lot at once. Try again in a few seconds.',
   chatTooLong: 'This chat is too long to go on. Start over to book.',
   chatBooked: 'Booked. Opening your booking.',

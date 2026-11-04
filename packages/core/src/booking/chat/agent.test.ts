@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import { answer, greeting, offerWords, replay, settledLength, type ChatContext, type ChatPage } from './agent.ts';
+import { doneLine } from './turn.ts';
 
 const zone = 'Europe/London';
 // Wednesday 21 October 2026, 10:00 in London.
@@ -182,5 +183,26 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     const turn = words(['tomorrow'], { slots: [] });
     expect(turn.state.intent).toBe('exhausted');
     expect(turn.offers).toEqual([]);
+  });
+});
+
+describe('the chat’s last line (owner, 4 Nov 2026)', () => {
+  const booked = (hostName: string, pending?: true) => ({ booking: { hostName }, ...(pending ? { pending } : {}) });
+  it('names the host a team or round robin page picked, and only there', () => {
+    expect(doneLine(booked('Asha Rao'), true, 'tomorrow at 9:00 AM', 'grace@example.com')).toBe(
+      'You’re booked with Asha. See you tomorrow at 9:00 AM. Details are on their way to grace@example.com.',
+    );
+    expect(doneLine(booked('Asha Rao and Ben Ode'), true, 'tomorrow at 9:00 AM', undefined)).toBe(
+      'You’re booked with Asha Rao and Ben Ode. See you tomorrow at 9:00 AM. The details are in your email.',
+    );
+    expect(doneLine(booked('Ada Lovelace'), false, 'tomorrow at 9:00 AM', undefined)).toBe(
+      'You’re booked. See you tomorrow at 9:00 AM. The details are in your email.',
+    );
+  });
+
+  it('says a request was sent on a page that confirms each booking first', () => {
+    expect(doneLine(booked('Ada Lovelace', true), false, 'tomorrow at 9:00 AM', undefined)).toBe(
+      'Request sent for tomorrow at 9:00 AM. I’ll confirm shortly. The details are in your email.',
+    );
   });
 });

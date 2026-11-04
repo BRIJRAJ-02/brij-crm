@@ -4,6 +4,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
+import { ChoiceChips } from '../../molecules/ChoiceChips/ChoiceChips.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { SlotList, type Slot } from '../SlotList/SlotList.tsx';
 import styles from './BookingChat.module.css';
@@ -37,6 +38,15 @@ export interface BookingChatLine {
   readonly prompt?: string;
   /** What the prompt box takes after this reply, for the phone's keyboard and autofill: an email, a number, a name. */
   readonly answer?: 'email' | 'tel' | 'name';
+  /**
+   * One choice the visitor makes with a tap, shown picked (the meeting's length on a page with several): the page's
+   * own ChoiceChips, under the line while it is the last reply.
+   */
+  readonly choice?: {
+    readonly label: string;
+    readonly options: readonly { readonly id: string; readonly label: string }[];
+    readonly selected: string;
+  };
 }
 
 /** The host the chat speaks as: their name and picture (the rail's face), and the name shown over their messages. */
@@ -87,6 +97,8 @@ export interface BookingChatProps {
   readonly onSend: (text: string) => void;
   /** The visitor pressed an offered time. */
   readonly onPickTime: (id: string) => void;
+  /** The visitor picked another option of a line's `choice`. */
+  readonly onChoose?: (id: string) => void;
   /** The chat is over (it booked, or the page closed): the field and buttons are done. */
   readonly isDone?: boolean;
   /** What a screen reader hears when it ends ("Booked. Opening your booking."). */
@@ -159,6 +171,7 @@ export function BookingChat({
   error,
   onSend,
   onPickTime,
+  onChoose,
   isDone = false,
   doneNote,
   maxLength = 500,
@@ -252,6 +265,21 @@ export function BookingChat({
                 <span className={styles.face}>{isRunEnd && faceOf(line.role, host, visitorName)}</span>
                 <p className={styles.bubble}>{line.role === 'assistant' ? <Written text={line.text} /> : line.text}</p>
               </div>
+              {isLive && line.choice !== undefined && (
+                <div className={styles.offers}>
+                  <ChoiceChips
+                    label={line.choice.label}
+                    isLabelHidden
+                    isSingle
+                    choices={line.choice.options}
+                    selected={[line.choice.selected]}
+                    onChange={(picked) => {
+                      const next = picked[0];
+                      if (next !== undefined && next !== line.choice?.selected) onChoose?.(next);
+                    }}
+                  />
+                </div>
+              )}
               {(isLive || answered?.line === line.id) &&
                 line.days?.map((group) => (
                   <div key={group.day} className={styles.offers}>

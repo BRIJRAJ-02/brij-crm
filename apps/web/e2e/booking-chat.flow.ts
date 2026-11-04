@@ -51,11 +51,22 @@ test('a visitor books by chat and the host sees the conversation (spec 0042)', a
   await firstDay.getByRole('button').first().click();
   await expect(log).toContainText('it is. What’s your name and email?');
 
-  const field = chat.getByRole('textbox', { name: 'Message' });
+  // The box is named by the question it answers.
+  const field = chat.getByRole('textbox', { name: 'Your name and email' });
   await expect(field).toBeFocused();
   await field.fill('I’m Grace Hopper, grace@navy.example');
   await field.press('Enter');
+  // Chat parity (4 Nov 2026): before the read back, one row of optional things, a guest among them.
+  await expect(log).toContainText('Anything else before I book it?');
+  await chat.getByRole('button', { name: 'Add a guest' }).click();
+  await expect(log).toContainText('Who else is joining?');
+  const guest = chat.getByRole('textbox', { name: 'Guest’s email' });
+  await guest.fill('ada@navy.example');
+  await guest.press('Enter');
+  await expect(log).toContainText('Added. Anything else before I book it?');
+  await chat.getByRole('button', { name: 'That’s all' }).click();
   await expect(log).toContainText('for Grace Hopper (grace@navy.example). Shall I book it?');
+  await expect(log).toContainText('1 guest');
   // The bot checks hold back a booking sent within 2 s of opening the page (MIN_FILL_MS); a person reads first.
   const reading = 2_500 - (Date.now() - opened);
   if (reading > 0) await chat.waitForTimeout(reading);

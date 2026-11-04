@@ -264,3 +264,59 @@ export const Done: Story = {
     await expect(canvas.queryByRole('button', { name: 'Something later' })).toBeNull();
   },
 };
+
+/** Chat parity (4 Nov 2026): a page with several lengths shows them as chips under the greeting, picked to its default. */
+export const Lengths: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <BookingChat
+        {...args}
+        lines={[
+          {
+            ...greeting(),
+            choice: {
+              label: 'Meeting length',
+              options: [
+                { id: '15', label: '15 min' },
+                { id: '30', label: '30 min' },
+                { id: '60', label: '60 min' },
+              ],
+              selected: '30',
+            },
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  args: { onChoose: fn() },
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('radio', { name: '60 min' }));
+    await expect(args.onChoose).toHaveBeenCalledWith('60');
+  },
+};
+
+/** Once the time, name and email are in, the page's own "anything else" row: a guest, a note, an optional question. */
+export const Extras: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <BookingChat
+        {...args}
+        lines={[
+          greeting(),
+          { id: 'v1', role: 'visitor', text: 'Fri at 9:30, Grace Hopper, grace@example.com' },
+          {
+            id: 'p1',
+            role: 'assistant',
+            text: 'Anything else before I book it?',
+            suggestions: ['Add a guest', 'Add a note', 'Your role', 'That’s all'],
+          },
+        ]}
+        visitorName="Grace Hopper"
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add a guest' }));
+    await expect(args.onSend).toHaveBeenCalledWith('Add a guest');
+  },
+};

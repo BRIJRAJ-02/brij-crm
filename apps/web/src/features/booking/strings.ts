@@ -203,10 +203,8 @@ export const strings = {
   answersObjectBrokenAsk: 'No unique email field. Ask an admin to add one.',
   answersObjectAddField: 'Add an email field',
   tryAgain: 'Try again',
-  /** Book by chat (spec 0042) doesn't ask the page's questions yet (spec 0057 follow up). */
-  chatAsksNone: 'Visitors who book by chat skip these questions, since they’re all optional.',
-  /** A required question turns Book by chat off: chat can't ask it. */
-  chatOffRequired: 'Book by chat is off while a question must be answered: chat can’t ask it.',
+  /** Book by chat asks the page's questions too (4 Nov 2026): required ones in turn, optional ones as a choice. */
+  chatAsks: 'Book by chat asks these too: required ones in turn, optional ones if the visitor taps them.',
   durations: 'Durations',
   location: 'Location',
   locations: { video: 'Video', address: 'In person', phone: 'Phone', custom: 'Somewhere else' },
