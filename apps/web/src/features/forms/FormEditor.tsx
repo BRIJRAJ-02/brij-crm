@@ -145,6 +145,9 @@ const SAVE_AFTER_MS = 1_000;
 /** The editor: the TopBar (name, Preview, Publish, menu), then the status line, tabs and the tab. */
 export function FormEditor(props: FormEditorProps) {
   const { slug, members, objects, tab } = props;
+  // The live dialog says where answers go by the object's plural ("Answers go to People"), as the sidebar names it.
+  const pluralOf = (target: FormTargetChoices) =>
+    objects.find((object) => object.id === target.objectId)?.pluralName ?? target.objectName ?? '';
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const router = useRouter();
@@ -448,7 +451,7 @@ export function FormEditor(props: FormEditorProps) {
     // The first publish says it in its live dialog, with Change; a later one in a toast with Undo.
     if (!isPublished) {
       setLiveFiling({
-        objectName: target.objectName ?? '',
+        objectName: pluralOf(target),
         made: made.flatMap((each) => plans.find((plan) => plan.questionId === each.questionId)?.title ?? []),
       });
       return { document: next, choices };
@@ -593,7 +596,7 @@ export function FormEditor(props: FormEditorProps) {
         // The first time, the Ready dialog says it is live and hands over the link.
         if (!wasPublished) {
           if (target.objectName !== undefined && view.live?.targets.main !== undefined) {
-            const objectName = target.objectName;
+            const objectName = pluralOf(target);
             setLiveFiling((before) => before ?? { objectName, made: [] });
           } else setLiveFiling(undefined);
           setJustLive(view);

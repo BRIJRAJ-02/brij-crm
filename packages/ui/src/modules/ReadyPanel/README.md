@@ -39,7 +39,7 @@ New. Nothing in the library showed a finished thing with its link: LinkCard show
 - Motion: the panel eases in on opacity and a `space-8` rise, and the mark pops on opacity and scale, from the modal's duration and curve. Under reduced motion both appear at once, with no fade (spec 0058, AC-2).
 - The caller passes the address it already has; the panel makes no request.
 
-- `variant="pill"` draws the link as one read only pill, fully rounded, the host and path muted and the page's own name strong, with Copy and a quiet Open beside it, a real link to `openHref` in a new tab; no label over it (the group is named "Link") and no QR band, because the caller shows its own row of ways to share under it, the QR among them (a form's live dialog and Share tab, T44, 5 November 2026). With neither `title` nor `message` the panel draws no head at all, so a dialog whose title already says "<Form> is live" says it once. Why a variant: the same link row, Copy and address cutting; only the label, the QR band and Share give way.
+- `variant="share"` is one narrow centred column (at most `size-page-card`), as share dialogs are drawn (Calendly's, Tally's): the QR code first, centred; the address (the host muted, the page's own name strong) with Copy link beside it, both `size-control` tall with one radius; then one row of equal buttons, Email (a `mailto:` titled `shareTitle`), WhatsApp, More (the device's share sheet, only where there is one) and QR code, a menu of Download PNG and Download SVG that hands `onDownloadQr` the code's own SVG and is busy while it runs; then `onward`, one row with a chevron to somewhere else ("Put it on your site"), a routed link that also runs its `onPress` (closing the dialog it sits in). Under 480px of its own width the buttons go two to a row, so no word is cut. A form's live dialog and its Share tab both draw it, so the link is shared one way in both places (the owner, 5 November 2026: the earlier pill floated its buttons beside the code with a hole under them, at three sizes). With neither `title` nor `message` the panel draws no head, so a dialog whose title already says "<Form> is live" says it once. Why a variant: the same link row, Copy and address cutting; the order, the button row and the onward row are what change, and a column of its own in the app would have drawn buttons the library already has.
 
 ## States
 
@@ -47,7 +47,7 @@ Always ready: it only appears once the thing exists, so it has no loading or err
 
 ## Keyboard
 
-Tab goes Copy, then Share, then the caller's buttons. The address is selectable text (a click selects all of it) and is not a tab stop.
+Tab goes Copy, then Share, then the caller's buttons. With `share`: Copy link, Email, WhatsApp, More, QR code (Enter or the arrows open its menu), then the onward row. The address is selectable text (a click selects all of it) and is not a tab stop.
 
 ## Differences from the artifact
 
