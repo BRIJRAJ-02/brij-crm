@@ -128,8 +128,8 @@ describe('the member zone', () => {
   });
 
   it('names times on the zone’s clock', () => {
-    expect(timeRange(startsAt, endsAt, 'en-GB', ZONE)).toBe('5:00 – 6:00');
-    expect(timeRange(startsAt, endsAt, 'en-GB', 'UTC')).toBe('23:30 – 0:30');
+    expect(timeRange(startsAt, endsAt, 'en-GB', ZONE)).toBe('05:00 – 06:00');
+    expect(timeRange(startsAt, endsAt, 'en-GB', 'UTC')).toBe('23:30 – 00:30');
   });
 
   it('turns a day and minute back into the instant, the inverse of the grid', () => {

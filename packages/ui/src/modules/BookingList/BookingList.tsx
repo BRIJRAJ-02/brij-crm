@@ -182,17 +182,20 @@ export function BookingList({
                             />
                           </span>
                         )}
-                        <Button
-                          variant="ghost"
-                          aria-describedby={`${rowId}-when ${rowId}-source`}
-                          {...(openId === undefined ? {} : { isExpanded: isOpen })}
-                          onPress={(event) => {
-                            const element = event.target instanceof HTMLElement ? event.target.closest('li') : null;
-                            if (element !== null) onOpen(row.id, element);
-                          }}
-                        >
-                          {row.chip === undefined ? row.title : row.chip.name}
-                        </Button>
+                        <span className={styles.name}>
+                          <Button
+                            variant="ghost"
+                            isFullWidth
+                            aria-describedby={`${rowId}-when ${rowId}-source`}
+                            {...(openId === undefined ? {} : { isExpanded: isOpen })}
+                            onPress={(event) => {
+                              const element = event.target instanceof HTMLElement ? event.target.closest('li') : null;
+                              if (element !== null) onOpen(row.id, element);
+                            }}
+                          >
+                            {row.chip === undefined ? row.title : row.chip.name}
+                          </Button>
+                        </span>
                         {row.join !== undefined && (
                           <span className={styles.join}>
                             <Icon name="video" size="sm" />

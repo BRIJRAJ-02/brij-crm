@@ -435,9 +435,12 @@ function MoveDialog({
       new Date(`${key}T12:00:00Z`),
     );
   const timeName = (start: string) =>
-    new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', hour12, timeZone: zone }).format(
-      new Date(start),
-    );
+    new Intl.DateTimeFormat(locale, {
+      hour: hour12 ? 'numeric' : '2-digit',
+      minute: '2-digit',
+      hour12,
+      timeZone: zone,
+    }).format(new Date(start));
   const minutes = Math.round((Date.parse(booking.endsAt) - Date.parse(booking.startsAt)) / 60_000);
   // The guest's own clock under each time (B-05), when it reads differently from the member's: a move is never
   // made blind to their night. A zone this browser doesn't know shows nothing.
@@ -447,7 +450,7 @@ function MoveDialog({
     if (theirZone === '' || theirZone === zone) return undefined;
     try {
       const theirs = new Intl.DateTimeFormat(locale, {
-        hour: 'numeric',
+        hour: hour12 ? 'numeric' : '2-digit',
         minute: '2-digit',
         hour12,
         timeZone: theirZone,

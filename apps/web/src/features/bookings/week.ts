@@ -188,10 +188,12 @@ export function piecesOf(sourceId: string, startsAt: string, endsAt: string, wee
 
 /** "9:30 – 10:00 AM" in the locale, on the clock of `zone`. */
 export function timeRange(startsAt: string, endsAt: string, locale: string, zone: string): string {
-  const clock = memoIntl(
-    `bookings-time|${locale}|${zone}`,
-    () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: zone }),
-  );
+  // A 24 hour clock writes its hours with two digits ("04:30", as the public page does, C13), so a list of times
+  // lines up and never reads "4:30" beside "10:00" as if it were the afternoon.
+  const clock = memoIntl(`bookings-time|${locale}|${zone}`, () => {
+    const hour12 = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hour12 ?? false;
+    return new Intl.DateTimeFormat(locale, { hour: hour12 ? 'numeric' : '2-digit', minute: '2-digit', timeZone: zone });
+  });
   return `${clock.format(new Date(startsAt))} – ${clock.format(new Date(endsAt))}`;
 }
 

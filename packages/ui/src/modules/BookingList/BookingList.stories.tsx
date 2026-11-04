@@ -309,7 +309,7 @@ export const Columns: Story = {
   },
 };
 
-/** Columns in a narrow list: the page column goes and the actions take their own line. */
+/** Columns in a phone's list: the time and status, then who on a line of their own; the page column and quick changes go. */
 export const ColumnsNarrow: Story = {
   render: (args) => (
     <Stage width="phone">

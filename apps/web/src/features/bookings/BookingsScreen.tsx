@@ -204,6 +204,13 @@ function whenOf(startsAt: string, endsAt: string, locale: string, zone: string):
   return `${day} · ${timeRange(startsAt, endsAt, locale, zone)}`;
 }
 
+/** Hours as the language's clock writes them: two digits on a 24 hour clock ("04:30", C13), else as they come. */
+function hourOf(locale: string): 'numeric' | '2-digit' {
+  return (new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hour12 ?? false)
+    ? 'numeric'
+    : '2-digit';
+}
+
 /** When a booking was made, on the member's clock: "2 Nov, 14:03". */
 function bookedWhenOf(createdAt: string, locale: string, zone: string): string {
   return memoIntl(
@@ -212,7 +219,7 @@ function bookedWhenOf(createdAt: string, locale: string, zone: string): string {
       new Intl.DateTimeFormat(locale, {
         day: 'numeric',
         month: 'short',
-        hour: 'numeric',
+        hour: hourOf(locale),
         minute: '2-digit',
         timeZone: zone,
       }),
@@ -229,7 +236,7 @@ function theirTimeOf(booking: BookingListItem, locale: string, zone: string): st
   const clockIn = (each: string) =>
     memoIntl(
       `bookings-their-time|${locale}|${each}`,
-      () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: each }),
+      () => new Intl.DateTimeFormat(locale, { hour: hourOf(locale), minute: '2-digit', timeZone: each }),
     );
   const at = new Date(booking.startsAt);
   let time: string;

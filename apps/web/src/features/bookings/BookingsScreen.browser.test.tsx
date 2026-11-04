@@ -801,12 +801,12 @@ describe('the member zone', () => {
 
   it('draws a block on the member’s day and hour, from their Preferences zone', async () => {
     await renderWeek([late], [], 'Asia/Kolkata');
-    await expect.poll(() => columnsOf(/^Blocked, 5:00/)).toEqual(['Wednesday']);
+    await expect.poll(() => columnsOf(/^Blocked, 05:00/)).toEqual(['Wednesday']);
     // The hour axis says which zone its hours are in, in full for screen readers and on hover.
     const corner = document.querySelector('[title="Times in Kolkata time (GMT+5:30)"]');
     expect(corner?.textContent).toContain('GMT+5:30');
-    await openCard(/^Blocked, 5:00/);
-    expect(card()?.textContent).toMatch(/Wednesday \d+ \w+ · 5:00\s*–\s*6:00/);
+    await openCard(/^Blocked, 05:00/);
+    expect(card()?.textContent).toMatch(/Wednesday \d+ \w+ · 05:00\s*–\s*06:00/);
   });
 
   it('draws the same block from Tuesday night when the member’s zone is UTC', async () => {

@@ -308,7 +308,7 @@ export const strings = {
   theirTime: (time: string, place: string) => `Their time: ${time} ${place}`,
   /** The guest's own page for the booking: copied in place, never shown (it carries their key). */
   guestLinkRow: 'Guest link',
-  guestLinkDetail: 'Where they move or cancel it. Share it only with them.',
+  guestLinkDetail: 'Where they move or cancel.',
   // Add meeting link (B-07): a video call no calendar made a link for.
   addMeetingLink: 'Add meeting link',
   changeMeetingLink: 'Change link',
