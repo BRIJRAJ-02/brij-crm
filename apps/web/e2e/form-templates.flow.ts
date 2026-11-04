@@ -103,7 +103,11 @@ test.describe('the form template gallery', () => {
     // The words are edited on the preview (T21: press the headline, as Tally), saving themselves to the draft;
     // nothing has a Save, and Publish is the one primary. Below the widest screens the preview is a sheet.
     await page.goto(formUrl);
-    if ((await page.getByRole('button', { name: 'Edit the headline' }).count()) === 0) {
+    // The phone shows beside the questions on a laptop; below that it is behind Show preview.
+    await expect(
+      page.getByRole('button', { name: 'Edit the headline' }).or(page.getByRole('button', { name: 'Show preview' })),
+    ).toBeVisible({ timeout: 30_000 });
+    if (!(await page.getByRole('button', { name: 'Edit the headline' }).isVisible())) {
       await page.getByRole('button', { name: 'Show preview' }).click();
     }
     await page.getByRole('button', { name: 'Edit the headline' }).click();

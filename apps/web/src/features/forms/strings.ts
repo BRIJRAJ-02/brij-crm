@@ -83,7 +83,7 @@ export const strings = {
   /** The Form tab's one title: the headline visitors read, and the line under it. */
   formTitle: 'Title',
   formTitlePlaceholder: 'Untitled form',
-  formLine: 'Line under the headline',
+  formLine: 'Line under the title',
   formLinePlaceholder: 'Add a line under it (optional)',
   previewOpen: 'Preview',
   previewNotLive: 'Preview, not live. Answers are checked here, and nothing is sent.',

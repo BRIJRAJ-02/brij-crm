@@ -48,7 +48,9 @@ test.describe('the booking journey', () => {
     await page.getByRole('button', { name: 'More for What do you want to cover?' }).click();
     await page.getByRole('menuitem', { name: /^Save answer to/ }).click();
     await page.getByRole('menuitem', { name: /^New field on/ }).click();
-    await page.getByRole('switch', { name: 'Required' }).click();
+    // A switch's input sits under its drawn track: focus it and press Space, as a keyboard does.
+    await page.getByRole('switch', { name: 'Required' }).focus();
+    await page.keyboard.press('Space');
     await page.getByRole('button', { name: /^Save/ }).click();
     await expect(page.getByText('Added 1 field to Person.')).toBeVisible();
     // Saved means saved: the bar leaves once the question is filed (late trap #58).

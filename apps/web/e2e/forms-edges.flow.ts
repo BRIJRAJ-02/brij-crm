@@ -71,7 +71,9 @@ test.describe('the form journey’s edges', () => {
     await page.getByRole('button', { name: 'Add a question', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
-    await page.getByRole('switch', { name: 'Required' }).last().click();
+    // A switch's input sits under its drawn track: focus it and press Space, as a keyboard does.
+    await page.getByRole('switch', { name: 'Required' }).last().focus();
+    await page.keyboard.press('Space');
     // A live form publishes its changes in one press, no dialog.
     await page
       .getByRole('button', { name: /^Publish/ })
@@ -191,7 +193,9 @@ test.describe('the form journey’s edges', () => {
     await page.getByRole('button', { name: 'Add a question', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Short text' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
-    await page.getByRole('switch', { name: 'Required' }).last().click();
+    // A switch's input sits under its drawn track: focus it and press Space, as a keyboard does.
+    await page.getByRole('switch', { name: 'Required' }).last().focus();
+    await page.keyboard.press('Space');
     await page
       .getByRole('button', { name: /^Publish/ })
       .first()

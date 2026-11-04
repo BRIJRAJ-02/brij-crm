@@ -89,7 +89,11 @@ test.describe('the form journey', () => {
     // A change saves to the draft by itself; Discard changes (⋯, asks first) puts it back to what is live. The
     // button's words are edited on the preview (T21), pressing the button.
     await page.goto(formUrl);
-    if ((await page.getByRole('button', { name: 'Edit the button' }).count()) === 0) {
+    // The phone shows beside the questions on a laptop; below that it is behind Show preview.
+    await expect(
+      page.getByRole('button', { name: 'Edit the button' }).or(page.getByRole('button', { name: 'Show preview' })),
+    ).toBeVisible({ timeout: 30_000 });
+    if (!(await page.getByRole('button', { name: 'Edit the button' }).isVisible())) {
       await page.getByRole('button', { name: 'Show preview' }).click();
     }
     await page.getByRole('button', { name: 'Edit the button' }).click();
@@ -109,7 +113,11 @@ test.describe('the form journey', () => {
     await page.reload();
     await expect(page.getByText('Live', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     // The button's words are what is live again.
-    if ((await page.getByRole('button', { name: 'Edit the button' }).count()) === 0) {
+    // The phone shows beside the questions on a laptop; below that it is behind Show preview.
+    await expect(
+      page.getByRole('button', { name: 'Edit the button' }).or(page.getByRole('button', { name: 'Show preview' })),
+    ).toBeVisible({ timeout: 30_000 });
+    if (!(await page.getByRole('button', { name: 'Edit the button' }).isVisible())) {
       await page.getByRole('button', { name: 'Show preview' }).click();
     }
     await page.getByRole('button', { name: 'Edit the button' }).click();
