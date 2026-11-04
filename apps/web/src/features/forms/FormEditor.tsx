@@ -28,6 +28,7 @@ import {
   ButtonLink,
   Callout,
   EditorStatus,
+  EmptyState,
   Field,
   focusLater,
   HostedFormPreview,
@@ -93,6 +94,8 @@ export interface FormEditorProps {
   readonly objects: readonly ObjectSummary[];
   readonly tab: FormTab;
   readonly submissions: SubmissionPage | undefined;
+  /** Why the Submissions tab's page didn't load (forms fix a6): said in the tab, with Try again, the form still here. */
+  readonly submissionsFailed?: string;
   readonly state: SubmissionState | undefined;
   readonly openSubmission: SubmissionView | undefined;
   /** On the Form tab, the question to open and bring into view. */
@@ -790,6 +793,19 @@ export function FormEditor(props: FormEditorProps) {
         // Only a live form has analytics, and the tab is offered only once it is published (see the tab list).
         return <AnalyticsTab data={data} slug={slug} form={form} />;
       case 'submissions':
+        if (props.submissionsFailed !== undefined) {
+          return (
+            <EmptyState
+              tone="error"
+              title={strings.submissionsFailedTitle}
+              onRetry={() => {
+                void router.invalidate();
+              }}
+            >
+              {props.submissionsFailed}
+            </EmptyState>
+          );
+        }
         return props.submissions === undefined ? null : (
           <SubmissionsTab
             slug={slug}
