@@ -7,6 +7,7 @@
 import type { DataLayer, FormTemplateSummary, FormView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
+import '@crm/ui/styles.css';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { TemplateGallery } from './TemplateGallery.tsx';
 
@@ -211,5 +212,25 @@ describe('the gallery (AC-6323)', () => {
     await userEvent.click(page.getByRole('button', { name: 'Cancel' }).element());
     expect(run.closedCount()).toBe(1);
     expect(run.asked).toEqual([]);
+  });
+
+  it('draws the list beside the picked template’s preview, and the list alone on a phone, in both themes', async () => {
+    for (const width of [1280, 390] as const) {
+      for (const theme of ['light', 'dark'] as const) {
+        await page.viewport(width, width === 390 ? 844 : 900);
+        document.documentElement.dataset.theme = theme;
+        await open();
+        await userEvent.keyboard('{ArrowDown}');
+        await expect.element(page.getByRole('button', { name: 'Use Feedback' })).toBeVisible();
+        // The preview is beside the list only where the window holds both.
+        if (width === 1280) await expect.element(page.getByText('How did we do?')).toBeVisible();
+        await new Promise((resolve) => globalThis.setTimeout(resolve, 500));
+        await page.screenshot({ path: `.vitest/shots/gallery-${String(width)}-${theme}.png` });
+        shown?.unmount();
+        shown = undefined;
+      }
+    }
+    delete document.documentElement.dataset.theme;
+    await page.viewport(1280, 900);
   });
 });

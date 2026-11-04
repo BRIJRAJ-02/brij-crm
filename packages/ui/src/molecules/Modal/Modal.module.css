@@ -186,6 +186,18 @@
     contain: size;
   }
 
+  /* A window with a side pane takes the window's height (less space-32 above and below), so the preview in the
+     pane is drawn at a readable size however short the body's list is. */
+  @media (width >= 1024px) {
+    .root[data-aside] {
+      block-size: calc(100dvh - 2 * var(--space-32));
+    }
+
+    .root[data-aside] > .dialog {
+      block-size: 100%;
+    }
+  }
+
   /* Too narrow for both (a window under bp-page-compact): the body alone. The pane only previews what the body
      picks. A media query, as the window's own width decides the dialog's, and container conditions take only the
      small breakpoints. */

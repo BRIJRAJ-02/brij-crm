@@ -226,6 +226,7 @@ export function Modal({
         className={styles.root}
         data-variant={variant}
         data-wide={isWide && variant === 'window' ? '' : undefined}
+        data-aside={variant === 'window' && aside !== undefined ? '' : undefined}
         data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
       >
         <Dialog
