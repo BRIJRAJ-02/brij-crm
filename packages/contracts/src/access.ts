@@ -18,7 +18,15 @@ export const Role = z.enum(ROLES);
 export type Role = z.infer<typeof Role>;
 
 /** Where a permission sits on the role screens (spec 0037, the catalog). */
-export const PERMISSION_GROUPS = ['Workspace', 'People', 'Data', 'Scheduling', 'Integrations', 'Owner only'] as const;
+export const PERMISSION_GROUPS = [
+  'Workspace',
+  'People',
+  'Data',
+  'Scheduling',
+  'Hospitality',
+  'Integrations',
+  'Owner only',
+] as const;
 /** One of the catalog's groups. */
 export type PermissionGroup = (typeof PERMISSION_GROUPS)[number];
 
@@ -265,6 +273,22 @@ export const PERMISSIONS = {
     group: 'Scheduling',
     grant: 'admin',
   },
+  // The Hospitality suite (spec 0065, AC-6511): setting the apps up, and running the floor. Members hold neither
+  // until given a role that has them; the first install seeds a "Floor staff" custom role with Run service.
+  'hospitality.manage': {
+    message: 'Your role can’t set up the Hospitality apps.',
+    label: 'Manage hospitality',
+    description: 'Set up the business, its places, tables, menus, reservation rules and QR codes.',
+    group: 'Hospitality',
+    grant: 'any',
+  },
+  'hospitality.service': {
+    message: 'Your role can’t run service.',
+    label: 'Run service',
+    description: 'See today’s book, seat guests and walk ins, and mark dishes sold out.',
+    group: 'Hospitality',
+    grant: 'any',
+  },
 } as const satisfies Record<string, PermissionEntry>;
 
 /** Every permission's name, in catalog order. */
@@ -322,6 +346,9 @@ export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   'schedule.manage.team',
   // Spec 0048: list definitions stay with people; a key reads and writes entries through `data.*`.
   'lists.manage',
+  // Spec 0065, AC-6511: the Hospitality apps stay with people for now (API keys later).
+  'hospitality.manage',
+  'hospitality.service',
 ];
 
 /** The data level a key holds on every object, as a scope. A key with neither reads and writes no data. */

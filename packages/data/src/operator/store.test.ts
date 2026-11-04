@@ -43,6 +43,7 @@ function fakeApi(overrides: Partial<OperatorApi> = {}): OperatorApi & { readonly
     pages: never,
     page: never,
     site: never,
+    setEarlyAccess: never,
     ...overrides,
   };
 }

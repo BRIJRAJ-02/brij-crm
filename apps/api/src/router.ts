@@ -30,6 +30,7 @@ import { navRouter } from './modules/nav/router.ts';
 import { joinRequestsRouter, joinRouter } from './modules/join/router.ts';
 import { profileRouter } from './modules/profile/router.ts';
 import { brandRouter } from './modules/brand/router.ts';
+import { hospitalityRouter } from './modules/hospitality/router.ts';
 import { deletedWorkspaceRouter } from './modules/workspace/deleted.ts';
 import { workspaceRouter } from './modules/workspace/router.ts';
 import { rolesRouter } from './modules/roles/router.ts';
@@ -86,6 +87,7 @@ export const router = base.router({
   deletedWorkspace: deletedWorkspaceRouter,
   profile: profileRouter,
   brand: brandRouter,
+  hospitality: hospitalityRouter,
   access: accessRouter,
   accessRules: accessRulesRouter,
   teams: teamsRouter,

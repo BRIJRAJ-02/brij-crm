@@ -42,6 +42,9 @@ export interface OperatorEventInput {
   readonly requestId: string;
   /** The users list's search, when there was one (at most 100 characters). */
   readonly q?: string;
+  /** A write's state before and after it (spec 0065, AC-6502), small objects; reads have none. */
+  readonly before?: Readonly<Record<string, unknown>>;
+  readonly after?: Readonly<Record<string, unknown>>;
 }
 
 /** The people side of Overview. */
@@ -210,9 +213,11 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
 
     async logOperatorEvent(event) {
       await db.execute(sql`
-        insert into auth.operator_event (user_id, action, target, period, request_id, q)
+        insert into auth.operator_event (user_id, action, target, period, request_id, q, before, after)
         values (${event.userId}, ${event.action}, ${event.target ?? null}, ${event.period ?? null}, ${event.requestId},
-          ${event.q === undefined || event.q === '' ? null : event.q.slice(0, 100)})
+          ${event.q === undefined || event.q === '' ? null : event.q.slice(0, 100)},
+          ${event.before === undefined ? null : JSON.stringify(event.before)}::jsonb,
+          ${event.after === undefined ? null : JSON.stringify(event.after)}::jsonb)
       `);
     },
 

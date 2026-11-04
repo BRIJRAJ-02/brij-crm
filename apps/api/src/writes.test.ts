@@ -121,6 +121,13 @@ const READS: ReadonlySet<string> = new Set([
   'operator.pages',
   'operator.page',
   'operator.site',
+  // The console's one write (spec 0065, AC-6502): a workspace's early access through crm_operator's definer; it
+  // changes no record and stores no outbox row, and its before and after go to the console's own log.
+  'operator.setEarlyAccess',
+  // The Hospitality setup's reads (spec 0065, H0).
+  'hospitality.apps',
+  'hospitality.business',
+  'hospitality.resources',
   // The roles every role picker offers (spec 0037, AC-1439), and the Roles page's reads (job J9).
   'roles.list',
   'roles.overview',
@@ -3193,6 +3200,20 @@ Object.assign(WRITES, {
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  // The Hospitality setup (spec 0065): Table seating installed first (and tables added, an area made, or a table
+  // archived before the case's own write).
+  'hospitality.remove': 2,
+  'hospitality.saveBusiness': 2,
+  'hospitality.createPlace': 2,
+  'hospitality.updatePlace': 2,
+  'hospitality.saveArea': 2,
+  'hospitality.deleteArea': 3,
+  'hospitality.addResources': 2,
+  'hospitality.updateResource': 3,
+  'hospitality.moveResource': 3,
+  'hospitality.archiveResource': 3,
+  'hospitality.restoreResource': 4,
+  'hospitality.deleteResource': 3,
   // Webhooks (spec 0064): the endpoint made first (and a test event before a resend).
   'webhooks.update': 2,
   'webhooks.rotateSecret': 2,
@@ -3476,6 +3497,153 @@ Object.assign(WRITES, {
       { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
       { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
     ];
+  },
+});
+
+/** Opens early access and installs Table seating with its business card (one write), answering the first place. */
+async function hospitalityOf(m: Member): Promise<{ readonly placeId: string }> {
+  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
+  await m.client.hospitality.install({
+    workspace: m.slug,
+    app: 'table_seating',
+    business: {
+      name: 'Somewhere',
+      kind: 'restaurant',
+      place: { country: 'GB', timeZone: 'Europe/London' },
+      currency: 'GBP',
+    },
+    mutationId: newId(),
+  });
+  const business = await m.client.hospitality.business({ workspace: m.slug });
+  const place = business.places[0];
+  if (place === undefined) throw new Error('No place.');
+  return { placeId: place.id };
+}
+
+/** Two tables at a place (one write), answering their ids. */
+async function tablesAt(m: Member, placeId: string): Promise<readonly [string, string]> {
+  const floor = await m.client.hospitality.addResources({
+    workspace: m.slug,
+    placeId,
+    kind: 'table',
+    labels: ['T1', 'T2'],
+    minCapacity: 2,
+    maxCapacity: 4,
+    mutationId: newId(),
+  });
+  const [one, two] = floor.resources;
+  if (one === undefined || two === undefined) throw new Error('No tables.');
+  return [one.id, two.id];
+}
+
+// The Hospitality setup (spec 0065, H0): installing or removing an app stores one `nav` row naming every active
+// member (their sidebars follow); the setup writes change no record and store none. Each case installs first.
+Object.assign(WRITES, {
+  'hospitality.install': async (m: Member, mutationId: string) => {
+    await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
+    await m.client.hospitality.install({
+      workspace: m.slug,
+      app: 'menu',
+      business: { name: 'Cafe', kind: 'cafe', place: { country: 'GB', timeZone: 'UTC' }, currency: 'GBP' },
+      mutationId,
+    });
+    return [{ kind: 'nav', mutation_id: mutationId }];
+  },
+  'hospitality.remove': async (m: Member, mutationId: string) => {
+    await hospitalityOf(m);
+    await m.client.hospitality.remove({ workspace: m.slug, app: 'table_seating', mutationId });
+    return [{ kind: 'nav' }, { kind: 'nav', mutation_id: mutationId }];
+  },
+  'hospitality.saveBusiness': async (m: Member, mutationId: string) => {
+    await hospitalityOf(m);
+    await m.client.hospitality.saveBusiness({
+      workspace: m.slug,
+      profile: { name: 'Somewhere Nowhere', kind: 'bar' },
+      mutationId,
+    });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.createPlace': async (m: Member, mutationId: string) => {
+    await hospitalityOf(m);
+    await m.client.hospitality.createPlace({
+      workspace: m.slug,
+      id: newId(),
+      place: { name: 'Soho', country: 'GB', timeZone: 'Europe/London' },
+      mutationId,
+    });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.updatePlace': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    await m.client.hospitality.updatePlace({
+      workspace: m.slug,
+      placeId,
+      hours: { weekly: { fri: [{ from: '18:00', to: '02:00' }] }, exceptions: [] },
+      mutationId,
+    });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.saveArea': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    await m.client.hospitality.saveArea({ workspace: m.slug, placeId, name: 'Terrace', mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.deleteArea': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const floor = await m.client.hospitality.saveArea({ workspace: m.slug, placeId, name: 'Bar', mutationId: newId() });
+    const areaId = floor.areas[0]?.id ?? newId();
+    await m.client.hospitality.deleteArea({ workspace: m.slug, placeId, areaId, mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.addResources': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    await m.client.hospitality.addResources({
+      workspace: m.slug,
+      placeId,
+      kind: 'table',
+      labels: ['T1'],
+      minCapacity: 1,
+      maxCapacity: 2,
+      mutationId,
+    });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.updateResource': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const [one, two] = await tablesAt(m, placeId);
+    await m.client.hospitality.updateResource({
+      workspace: m.slug,
+      placeId,
+      resourceId: one,
+      joins: [two],
+      mutationId,
+    });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.moveResource': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const [, two] = await tablesAt(m, placeId);
+    await m.client.hospitality.moveResource({ workspace: m.slug, placeId, resourceId: two, toIndex: 0, mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.archiveResource': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const [one] = await tablesAt(m, placeId);
+    await m.client.hospitality.archiveResource({ workspace: m.slug, placeId, resourceId: one, mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.restoreResource': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const [one] = await tablesAt(m, placeId);
+    await m.client.hospitality.archiveResource({ workspace: m.slug, placeId, resourceId: one, mutationId: newId() });
+    await m.client.hospitality.restoreResource({ workspace: m.slug, placeId, resourceId: one, mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.deleteResource': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const [one] = await tablesAt(m, placeId);
+    await m.client.hospitality.deleteResource({ workspace: m.slug, placeId, resourceId: one, mutationId });
+    return [{ kind: 'nav' }];
   },
 });
 

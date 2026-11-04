@@ -16,8 +16,14 @@ export const SIGN_IN_CODES = ['INVALID_OTP', 'OTP_EXPIRED', 'TOO_MANY_ATTEMPTS']
 /** One of the sign in codes beyond the API's own. */
 export type SignInCode = (typeof SIGN_IN_CODES)[number];
 
+/**
+ * A code only the layer itself answers, never the server: `NOT_READY`, a change asked of a copy still loading or
+ * failed (spec 0065's held copies), so nothing is sent.
+ */
+export type LayerCode = 'NOT_READY';
+
 /** Every code a data layer failure can carry. */
-export type DataErrorCode = ErrorCode | SignInCode;
+export type DataErrorCode = ErrorCode | SignInCode | LayerCode;
 
 /** The details a refusal carries: every engine refusal (one per attribute or field), or the input problems found. */
 export interface DataErrorDetails {

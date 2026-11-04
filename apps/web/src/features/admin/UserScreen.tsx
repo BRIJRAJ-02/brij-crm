@@ -13,19 +13,22 @@ import {
 import { useOperator } from '@crm/data/react';
 import {
   Badge,
+  Button,
   Card,
   DescriptionList,
   EmptyState,
   Link,
+  Modal,
   RelativeTime,
   SettingsSection,
   Stats,
+  Switch,
   Table,
   useFormatSettings,
   type TableColumn,
 } from '@crm/ui';
-import { useParams } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { useParams, useRouteContext } from '@tanstack/react-router';
+import { useMemo, useState } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { AdminFailed, useAdminRetry, DayChart, PeriodSwitch, useIsOperator } from './AdminParts.tsx';
 import { formatters, plainStat, roleLabel } from './figures.ts';
@@ -47,6 +50,12 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'pages', label: strings.columns.pages, align: 'end' },
 ];
 
+/** With the early access switch (spec 0065, AC-6502): one more column, the Hospitality apps on or off. */
+const COLUMNS_WITH_ACCESS: readonly TableColumn[] = [
+  ...COLUMNS,
+  { id: 'hospitality', label: strings.columns.hospitality, size: 'fit' },
+];
+
 /** One user's page for a period, its read held in the data layer. */
 export function UserScreen({
   data,
@@ -61,6 +70,8 @@ export function UserScreen({
   const state = useOperator(held);
   const retry = useAdminRetry(held.retry);
   const isOperator = useIsOperator();
+  const { toasts } = useRouteContext({ from: '__root__' });
+  const [turningOff, setTurningOff] = useState<{ readonly id: string; readonly name: string } | undefined>(undefined);
   if (state.status === 'error') {
     // No such account: its own page for a super admin, and Settings' "nothing here" for anyone else.
     if (isDataError(state.error) && (state.error.code === 'NOT_FOUND' || state.error.code === 'INPUT_INVALID')) {
@@ -68,16 +79,68 @@ export function UserScreen({
     }
     return <AdminFailed title={strings.users} error={state.error} data={data} onRetry={retry} />;
   }
-  return <UserBody period={period} detail={state.status === 'ready' ? state.value : undefined} />;
+  const switchTo = (workspace: { readonly id: string; readonly name: string }, on: boolean) => {
+    void data.operator.setEarlyAccess(workspace.id, 'business_apps', on).then((refused) => {
+      toasts.toast(
+        refused === undefined
+          ? {
+              tone: 'success',
+              message: on ? strings.hospitalityOn(workspace.name) : strings.hospitalityOffDone(workspace.name),
+            }
+          : { tone: 'danger', message: refused.message },
+      );
+    });
+  };
+  return (
+    <>
+      <UserBody
+        period={period}
+        detail={state.status === 'ready' ? state.value : undefined}
+        onEarlyAccess={(workspaceId, on, name) => {
+          // Turning it on is harmless; turning it off takes the apps out of a customer's sidebar, so it asks first.
+          if (on) switchTo({ id: workspaceId, name }, true);
+          else setTurningOff({ id: workspaceId, name });
+        }}
+      />
+      <Modal
+        isOpen={turningOff !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setTurningOff(undefined);
+        }}
+        title={strings.hospitalityOffTitle(turningOff?.name ?? '')}
+        variant="confirm"
+        tone="danger"
+        actions={
+          <>
+            <Button slot="close">{strings.cancel}</Button>
+            <Button
+              variant="danger-solid"
+              onPress={() => {
+                if (turningOff !== undefined) switchTo(turningOff, false);
+                setTurningOff(undefined);
+              }}
+            >
+              {strings.hospitalityOff}
+            </Button>
+          </>
+        }
+      >
+        {strings.hospitalityOffText(turningOff?.name ?? '')}
+      </Modal>
+    </>
+  );
 }
 
 /** A user's page: their facts, activity and workspaces, or their loading shapes while `detail` is undefined. */
 export function UserBody({
   period,
   detail,
+  onEarlyAccess,
 }: {
   readonly period: OperatorPeriod;
   readonly detail: OperatorUserDetail | undefined;
+  /** Turns a workspace's Hospitality apps on or off (spec 0065, AC-6502); absent, no switch is shown. */
+  readonly onEarlyAccess?: (workspaceId: string, on: boolean, name: string) => void;
 }) {
   const { locale } = useFormatSettings();
   const format = formatters(locale);
@@ -105,6 +168,15 @@ export function UserBody({
         return format.count(workspace.bookingsHosted);
       case 'pages':
         return format.count(workspace.pagesOwned);
+      case 'hospitality':
+        return (
+          <Switch
+            label={strings.hospitalityFor(workspace.name)}
+            isLabelHidden
+            isSelected={workspace.earlyAccess.includes('business_apps')}
+            onChange={(on) => onEarlyAccess?.(workspace.workspaceId, on, workspace.name)}
+          />
+        );
       default:
         return null;
     }
@@ -189,7 +261,7 @@ export function UserBody({
       <SettingsSection title={strings.workspacesSection}>
         <Table
           label={strings.workspacesTable}
-          columns={COLUMNS}
+          columns={onEarlyAccess === undefined ? COLUMNS : COLUMNS_WITH_ACCESS}
           rows={detail?.workspaces ?? []}
           getRowId={(workspace) => workspace.workspaceId}
           renderCell={cell}

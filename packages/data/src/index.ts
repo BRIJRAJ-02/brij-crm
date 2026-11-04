@@ -360,6 +360,30 @@ import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
+import type { HospitalityStore } from './hospitality/store.ts';
+export type { HospitalityHeld, HospitalityHeldState, HospitalityStore, ResourceChange } from './hospitality/store.ts';
+// The Hospitality suite's setup (spec 0065, H0): the shapes Settings › Apps and Business show.
+export type {
+  AppsView,
+  AppState,
+  Area,
+  BusinessKind,
+  BusinessProfile,
+  BusinessProfileFields,
+  BusinessView,
+  Resource,
+  EarlyAccessFlag,
+  FirstBusiness,
+  HospitalityApp,
+  HoursException,
+  HoursRange,
+  Place,
+  PlaceFields,
+  PlaceFloor,
+  PlaceHours,
+  ResourceKind,
+  WeekDay,
+} from '@crm/contracts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
 export { BRAND_QUICK_PICKS } from './brand/picks.ts';
 export type {
@@ -1562,6 +1586,7 @@ export function createDataLayer({
     page: (workspaceId, pageId, period) =>
       call((options) => api.operator.page({ workspaceId, pageId, period }, options)),
     site: (period) => call((options) => api.operator.site({ period }, options)),
+    setEarlyAccess: (input) => call((options) => api.operator.setEarlyAccess(input, options)),
   });
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
@@ -1699,6 +1724,9 @@ export function createDataLayer({
       made.clear();
     });
     void brand?.then((made) => {
+      made.clear();
+    });
+    void hospitality?.then((made) => {
       made.clear();
     });
     socialLinks?.clear();
@@ -2849,6 +2877,8 @@ export function createDataLayer({
   // Settings › Brand and the link page's Design panel (spec 0060): the workspace's kit and a page's own colour and
   // photos, loaded with the first screen that asks, never in the first load.
   let brand: Promise<BrandStore> | undefined;
+  // Settings › Apps and Business (spec 0065): the Hospitality setup, loaded with the first screen that asks.
+  let hospitality: Promise<HospitalityStore> | undefined;
   /** An image to or from one of our own upload routes, for the workspace `x-crm-workspace` names (spec 0060). */
   const sendImage = async (
     path: string,
@@ -6014,6 +6044,26 @@ export function createDataLayer({
             onLogo: (workspace, version) => {
               logoStamp += 1;
               setLogo(workspace, version ?? null);
+            },
+          }),
+        )),
+    },
+    /**
+     * The Hospitality suite's setup (spec 0065, H0): the Apps page, the business with its places and hours, and each
+     * place's floor. The store loads on first use; installing or removing an app reads the sidebar again, so its
+     * Hospitality section follows.
+     */
+    hospitality: {
+      load: (): Promise<HospitalityStore> =>
+        (hospitality ??= import('./hospitality/store.ts').then(({ openHospitality }) =>
+          openHospitality({
+            api: api.hospitality,
+            call,
+            mintId,
+            onAppsChanged: (workspace) => {
+              void loadNav()
+                .then((store) => store.reload(workspace))
+                .catch(() => undefined);
             },
           }),
         )),

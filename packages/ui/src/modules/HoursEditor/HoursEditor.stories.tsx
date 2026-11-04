@@ -337,3 +337,33 @@ export const SingleDayErrorAndDisabled: Story = {
     await expect(switches[1]).toBeDisabled();
   },
 };
+
+/**
+ * Late hours (spec 0065, `pastMidnightUntil`): a bar's Friday runs from 6:00 PM to 2:00 AM the next morning, stored as
+ * `26:00` and read with "next day"; read only, the same words.
+ */
+export const PastMidnight: Story = {
+  // Its rows are Week's rows; only the list of ends and the read only words differ, which the play checks. Its
+  // screenshot baseline is owed by the next run of `pnpm test:visual --update` in the pinned image.
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Opening hours',
+    pastMidnightUntil: '06:00',
+    rows: [
+      { id: 'thu', label: 'Thursday', ranges: [['17:00', '23:00']] },
+      { id: 'fri', label: 'Friday', ranges: [['18:00', '26:00']] },
+    ],
+    onChange: fn(),
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <HoursEditor {...args} />
+      <HoursEditor {...args} label="Opening hours, read only" isReadOnly />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/^6:00\s?PM to 2:00\s?AM next day$/i)).toBeInTheDocument();
+    // The editor's Friday end shows the time alone, which fits its field; its list says "next day" beside it.
+    await expect(canvas.getAllByText(/^2:00\s?AM$/i).length).toBeGreaterThanOrEqual(1);
+  },
+};

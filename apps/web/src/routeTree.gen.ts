@@ -27,8 +27,12 @@ import { Route as WSlugHomeRouteImport } from './routes/w.$slug.home.tsx'
 import { Route as WSlugInboxRouteImport } from './routes/w.$slug.inbox.tsx'
 import { Route as WSlugInsightsRouteImport } from './routes/w.$slug.insights.tsx'
 import { Route as WSlugLinkPageRouteImport } from './routes/w.$slug.link-page.tsx'
+import { Route as WSlugMenusRouteImport } from './routes/w.$slug.menus.tsx'
 import { Route as WSlugNotesRouteImport } from './routes/w.$slug.notes.tsx'
+import { Route as WSlugQrRouteImport } from './routes/w.$slug.qr.tsx'
 import { Route as WSlugReportsRouteImport } from './routes/w.$slug.reports.tsx'
+import { Route as WSlugReservationsRouteImport } from './routes/w.$slug.reservations.tsx'
+import { Route as WSlugServiceRouteImport } from './routes/w.$slug.service.tsx'
 import { Route as WSlugSettingsRouteImport } from './routes/w.$slug.settings.tsx'
 import { Route as WSlugTasksRouteImport } from './routes/w.$slug.tasks.tsx'
 import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
@@ -47,6 +51,7 @@ import { Route as WSlugFormsSplatRouteImport } from './routes/w.$slug.forms.$.ts
 import { Route as WSlugListsListRouteImport } from './routes/w.$slug.lists.$list.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
+import { Route as WSlugSettingsAppsRouteImport } from './routes/w.$slug.settings.apps.tsx'
 import { Route as WSlugSettingsAutomationsRouteImport } from './routes/w.$slug.settings.automations.tsx'
 import { Route as WSlugSettingsBrandRouteImport } from './routes/w.$slug.settings.brand.tsx'
 import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
@@ -79,6 +84,7 @@ import { Route as WSlugSettingsAdminIndexRouteImport } from './routes/w.$slug.se
 import { Route as WSlugSettingsAdminWebsiteRouteImport } from './routes/w.$slug.settings.admin.website.tsx'
 import { Route as WSlugSettingsBookingPagesIndexRouteImport } from './routes/w.$slug.settings.booking-pages.index.tsx'
 import { Route as WSlugSettingsBookingPagesPageIdRouteImport } from './routes/w.$slug.settings.booking-pages.$pageId.tsx'
+import { Route as WSlugSettingsBusinessIndexRouteImport } from './routes/w.$slug.settings.business.index.tsx'
 import { Route as WSlugSettingsFormsIndexRouteImport } from './routes/w.$slug.settings.forms.index.tsx'
 import { Route as WSlugSettingsFormsFormIdRouteImport } from './routes/w.$slug.settings.forms.$formId.tsx'
 import { Route as WSlugSettingsHistoryIndexRouteImport } from './routes/w.$slug.settings.history.index.tsx'
@@ -101,6 +107,7 @@ import { Route as WSlugObjectsObjectViewsViewIdRouteImport } from './routes/w.$s
 import { Route as WSlugSettingsAdminBookingPagesIndexRouteImport } from './routes/w.$slug.settings.admin.booking-pages.index.tsx'
 import { Route as WSlugSettingsAdminUsersIndexRouteImport } from './routes/w.$slug.settings.admin.users.index.tsx'
 import { Route as WSlugSettingsAdminUsersUserIdRouteImport } from './routes/w.$slug.settings.admin.users.$userId.tsx'
+import { Route as WSlugSettingsBusinessPlacesPlaceIdRouteImport } from './routes/w.$slug.settings.business.places.$placeId.tsx'
 import { Route as WSlugSettingsListsListIndexRouteImport } from './routes/w.$slug.settings.lists.$list.index.tsx'
 import { Route as WSlugSettingsListsListTabRouteImport } from './routes/w.$slug.settings.lists.$list.$tab.tsx'
 import { Route as WSlugSettingsObjectsObjectIndexRouteImport } from './routes/w.$slug.settings.objects.$object.index.tsx'
@@ -197,14 +204,34 @@ const WSlugLinkPageRoute = WSlugLinkPageRouteImport.update({
   path: '/link-page',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugMenusRoute = WSlugMenusRouteImport.update({
+  id: '/menus',
+  path: '/menus',
+  getParentRoute: () => WSlugRoute,
+} as any)
 const WSlugNotesRoute = WSlugNotesRouteImport.update({
   id: '/notes',
   path: '/notes',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugQrRoute = WSlugQrRouteImport.update({
+  id: '/qr',
+  path: '/qr',
+  getParentRoute: () => WSlugRoute,
+} as any)
 const WSlugReportsRoute = WSlugReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugReservationsRoute = WSlugReservationsRouteImport.update({
+  id: '/reservations',
+  path: '/reservations',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugServiceRoute = WSlugServiceRouteImport.update({
+  id: '/service',
+  path: '/service',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugSettingsRoute = WSlugSettingsRouteImport.update({
@@ -296,6 +323,11 @@ const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
 const WSlugSettingsIndexRoute = WSlugSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => WSlugSettingsRoute,
+} as any)
+const WSlugSettingsAppsRoute = WSlugSettingsAppsRouteImport.update({
+  id: '/apps',
+  path: '/apps',
   getParentRoute: () => WSlugSettingsRoute,
 } as any)
 const WSlugSettingsAutomationsRoute =
@@ -476,6 +508,12 @@ const WSlugSettingsBookingPagesPageIdRoute =
     path: '/booking-pages/$pageId',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsBusinessIndexRoute =
+  WSlugSettingsBusinessIndexRouteImport.update({
+    id: '/business/',
+    path: '/business/',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsFormsIndexRoute = WSlugSettingsFormsIndexRouteImport.update({
   id: '/forms/',
   path: '/forms/',
@@ -605,6 +643,12 @@ const WSlugSettingsAdminUsersUserIdRoute =
     path: '/admin/users/$userId',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsBusinessPlacesPlaceIdRoute =
+  WSlugSettingsBusinessPlacesPlaceIdRouteImport.update({
+    id: '/business/places/$placeId',
+    path: '/business/places/$placeId',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsListsListIndexRoute =
   WSlugSettingsListsListIndexRouteImport.update({
     id: '/lists/$list/',
@@ -654,8 +698,12 @@ export interface FileRoutesByFullPath {
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/insights': typeof WSlugInsightsRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
+  '/w/$slug/menus': typeof WSlugMenusRoute
   '/w/$slug/notes': typeof WSlugNotesRoute
+  '/w/$slug/qr': typeof WSlugQrRoute
   '/w/$slug/reports': typeof WSlugReportsRoute
+  '/w/$slug/reservations': typeof WSlugReservationsRoute
+  '/w/$slug/service': typeof WSlugServiceRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -672,6 +720,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/apps': typeof WSlugSettingsAppsRoute
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
@@ -714,6 +763,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/account/': typeof WSlugSettingsAccountIndexRoute
   '/w/$slug/settings/admin/': typeof WSlugSettingsAdminIndexRoute
   '/w/$slug/settings/booking-pages/': typeof WSlugSettingsBookingPagesIndexRoute
+  '/w/$slug/settings/business/': typeof WSlugSettingsBusinessIndexRoute
   '/w/$slug/settings/forms/': typeof WSlugSettingsFormsIndexRoute
   '/w/$slug/settings/history/': typeof WSlugSettingsHistoryIndexRoute
   '/w/$slug/settings/lists/': typeof WSlugSettingsListsIndexRoute
@@ -726,6 +776,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/objects/$object/imports/$importId': typeof WSlugObjectsObjectImportsImportIdRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
   '/w/$slug/settings/admin/users/$userId': typeof WSlugSettingsAdminUsersUserIdRoute
+  '/w/$slug/settings/business/places/$placeId': typeof WSlugSettingsBusinessPlacesPlaceIdRoute
   '/w/$slug/settings/lists/$list/$tab': typeof WSlugSettingsListsListTabRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
   '/w/$slug/objects/$object/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute
@@ -750,8 +801,12 @@ export interface FileRoutesByTo {
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/insights': typeof WSlugInsightsRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
+  '/w/$slug/menus': typeof WSlugMenusRoute
   '/w/$slug/notes': typeof WSlugNotesRoute
+  '/w/$slug/qr': typeof WSlugQrRoute
   '/w/$slug/reports': typeof WSlugReportsRoute
+  '/w/$slug/reservations': typeof WSlugReservationsRoute
+  '/w/$slug/service': typeof WSlugServiceRoute
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
@@ -767,6 +822,7 @@ export interface FileRoutesByTo {
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/apps': typeof WSlugSettingsAppsRoute
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
@@ -809,6 +865,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/account': typeof WSlugSettingsAccountIndexRoute
   '/w/$slug/settings/admin': typeof WSlugSettingsAdminIndexRoute
   '/w/$slug/settings/booking-pages': typeof WSlugSettingsBookingPagesIndexRoute
+  '/w/$slug/settings/business': typeof WSlugSettingsBusinessIndexRoute
   '/w/$slug/settings/forms': typeof WSlugSettingsFormsIndexRoute
   '/w/$slug/settings/history': typeof WSlugSettingsHistoryIndexRoute
   '/w/$slug/settings/lists': typeof WSlugSettingsListsIndexRoute
@@ -821,6 +878,7 @@ export interface FileRoutesByTo {
   '/w/$slug/objects/$object/imports/$importId': typeof WSlugObjectsObjectImportsImportIdRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
   '/w/$slug/settings/admin/users/$userId': typeof WSlugSettingsAdminUsersUserIdRoute
+  '/w/$slug/settings/business/places/$placeId': typeof WSlugSettingsBusinessPlacesPlaceIdRoute
   '/w/$slug/settings/lists/$list/$tab': typeof WSlugSettingsListsListTabRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
   '/w/$slug/objects/$object/$recordId': typeof WSlugObjectsObjectRecordIdIndexRoute
@@ -849,8 +907,12 @@ export interface FileRoutesById {
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/insights': typeof WSlugInsightsRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
+  '/w/$slug/menus': typeof WSlugMenusRoute
   '/w/$slug/notes': typeof WSlugNotesRoute
+  '/w/$slug/qr': typeof WSlugQrRoute
   '/w/$slug/reports': typeof WSlugReportsRoute
+  '/w/$slug/reservations': typeof WSlugReservationsRoute
+  '/w/$slug/service': typeof WSlugServiceRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -867,6 +929,7 @@ export interface FileRoutesById {
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/apps': typeof WSlugSettingsAppsRoute
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
@@ -909,6 +972,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/account/': typeof WSlugSettingsAccountIndexRoute
   '/w/$slug/settings/admin/': typeof WSlugSettingsAdminIndexRoute
   '/w/$slug/settings/booking-pages/': typeof WSlugSettingsBookingPagesIndexRoute
+  '/w/$slug/settings/business/': typeof WSlugSettingsBusinessIndexRoute
   '/w/$slug/settings/forms/': typeof WSlugSettingsFormsIndexRoute
   '/w/$slug/settings/history/': typeof WSlugSettingsHistoryIndexRoute
   '/w/$slug/settings/lists/': typeof WSlugSettingsListsIndexRoute
@@ -921,6 +985,7 @@ export interface FileRoutesById {
   '/w/$slug/objects/$object_/imports/$importId': typeof WSlugObjectsObjectImportsImportIdRoute
   '/w/$slug/objects/$object_/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
   '/w/$slug/settings/admin/users/$userId': typeof WSlugSettingsAdminUsersUserIdRoute
+  '/w/$slug/settings/business/places/$placeId': typeof WSlugSettingsBusinessPlacesPlaceIdRoute
   '/w/$slug/settings/lists/$list/$tab': typeof WSlugSettingsListsListTabRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
   '/w/$slug/objects/$object_/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute
@@ -950,8 +1015,12 @@ export interface FileRouteTypes {
     | '/w/$slug/inbox'
     | '/w/$slug/insights'
     | '/w/$slug/link-page'
+    | '/w/$slug/menus'
     | '/w/$slug/notes'
+    | '/w/$slug/qr'
     | '/w/$slug/reports'
+    | '/w/$slug/reservations'
+    | '/w/$slug/service'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -968,6 +1037,7 @@ export interface FileRouteTypes {
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/apps'
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
@@ -1010,6 +1080,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/'
     | '/w/$slug/settings/admin/'
     | '/w/$slug/settings/booking-pages/'
+    | '/w/$slug/settings/business/'
     | '/w/$slug/settings/forms/'
     | '/w/$slug/settings/history/'
     | '/w/$slug/settings/lists/'
@@ -1022,6 +1093,7 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object/imports/$importId'
     | '/w/$slug/objects/$object/views/$viewId'
     | '/w/$slug/settings/admin/users/$userId'
+    | '/w/$slug/settings/business/places/$placeId'
     | '/w/$slug/settings/lists/$list/$tab'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object/$recordId/'
@@ -1046,8 +1118,12 @@ export interface FileRouteTypes {
     | '/w/$slug/inbox'
     | '/w/$slug/insights'
     | '/w/$slug/link-page'
+    | '/w/$slug/menus'
     | '/w/$slug/notes'
+    | '/w/$slug/qr'
     | '/w/$slug/reports'
+    | '/w/$slug/reservations'
+    | '/w/$slug/service'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
     | '/w/$slug'
@@ -1063,6 +1139,7 @@ export interface FileRouteTypes {
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/apps'
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
@@ -1105,6 +1182,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account'
     | '/w/$slug/settings/admin'
     | '/w/$slug/settings/booking-pages'
+    | '/w/$slug/settings/business'
     | '/w/$slug/settings/forms'
     | '/w/$slug/settings/history'
     | '/w/$slug/settings/lists'
@@ -1117,6 +1195,7 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object/imports/$importId'
     | '/w/$slug/objects/$object/views/$viewId'
     | '/w/$slug/settings/admin/users/$userId'
+    | '/w/$slug/settings/business/places/$placeId'
     | '/w/$slug/settings/lists/$list/$tab'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object/$recordId'
@@ -1144,8 +1223,12 @@ export interface FileRouteTypes {
     | '/w/$slug/inbox'
     | '/w/$slug/insights'
     | '/w/$slug/link-page'
+    | '/w/$slug/menus'
     | '/w/$slug/notes'
+    | '/w/$slug/qr'
     | '/w/$slug/reports'
+    | '/w/$slug/reservations'
+    | '/w/$slug/service'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -1162,6 +1245,7 @@ export interface FileRouteTypes {
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/apps'
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
@@ -1204,6 +1288,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/'
     | '/w/$slug/settings/admin/'
     | '/w/$slug/settings/booking-pages/'
+    | '/w/$slug/settings/business/'
     | '/w/$slug/settings/forms/'
     | '/w/$slug/settings/history/'
     | '/w/$slug/settings/lists/'
@@ -1216,6 +1301,7 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object_/imports/$importId'
     | '/w/$slug/objects/$object_/views/$viewId'
     | '/w/$slug/settings/admin/users/$userId'
+    | '/w/$slug/settings/business/places/$placeId'
     | '/w/$slug/settings/lists/$list/$tab'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object_/$recordId/'
@@ -1368,6 +1454,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugLinkPageRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/menus': {
+      id: '/w/$slug/menus'
+      path: '/menus'
+      fullPath: '/w/$slug/menus'
+      preLoaderRoute: typeof WSlugMenusRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/notes': {
       id: '/w/$slug/notes'
       path: '/notes'
@@ -1375,11 +1468,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugNotesRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/qr': {
+      id: '/w/$slug/qr'
+      path: '/qr'
+      fullPath: '/w/$slug/qr'
+      preLoaderRoute: typeof WSlugQrRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/reports': {
       id: '/w/$slug/reports'
       path: '/reports'
       fullPath: '/w/$slug/reports'
       preLoaderRoute: typeof WSlugReportsRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/reservations': {
+      id: '/w/$slug/reservations'
+      path: '/reservations'
+      fullPath: '/w/$slug/reservations'
+      preLoaderRoute: typeof WSlugReservationsRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/service': {
+      id: '/w/$slug/service'
+      path: '/service'
+      fullPath: '/w/$slug/service'
+      preLoaderRoute: typeof WSlugServiceRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/settings': {
@@ -1506,6 +1620,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/w/$slug/settings/'
       preLoaderRoute: typeof WSlugSettingsIndexRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/apps': {
+      id: '/w/$slug/settings/apps'
+      path: '/apps'
+      fullPath: '/w/$slug/settings/apps'
+      preLoaderRoute: typeof WSlugSettingsAppsRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
     '/w/$slug/settings/automations': {
@@ -1732,6 +1853,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsBookingPagesPageIdRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/business/': {
+      id: '/w/$slug/settings/business/'
+      path: '/business'
+      fullPath: '/w/$slug/settings/business/'
+      preLoaderRoute: typeof WSlugSettingsBusinessIndexRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/forms/': {
       id: '/w/$slug/settings/forms/'
       path: '/forms'
@@ -1886,6 +2014,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsAdminUsersUserIdRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/business/places/$placeId': {
+      id: '/w/$slug/settings/business/places/$placeId'
+      path: '/business/places/$placeId'
+      fullPath: '/w/$slug/settings/business/places/$placeId'
+      preLoaderRoute: typeof WSlugSettingsBusinessPlacesPlaceIdRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/lists/$list/': {
       id: '/w/$slug/settings/lists/$list/'
       path: '/lists/$list'
@@ -1967,6 +2102,7 @@ const WSlugCapturesRouteWithChildren = WSlugCapturesRoute._addFileChildren(
 )
 
 interface WSlugSettingsRouteChildren {
+  WSlugSettingsAppsRoute: typeof WSlugSettingsAppsRoute
   WSlugSettingsAutomationsRoute: typeof WSlugSettingsAutomationsRoute
   WSlugSettingsBrandRoute: typeof WSlugSettingsBrandRoute
   WSlugSettingsCalendarRoute: typeof WSlugSettingsCalendarRoute
@@ -1998,12 +2134,14 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsAccountIndexRoute: typeof WSlugSettingsAccountIndexRoute
   WSlugSettingsAdminIndexRoute: typeof WSlugSettingsAdminIndexRoute
   WSlugSettingsBookingPagesIndexRoute: typeof WSlugSettingsBookingPagesIndexRoute
+  WSlugSettingsBusinessIndexRoute: typeof WSlugSettingsBusinessIndexRoute
   WSlugSettingsFormsIndexRoute: typeof WSlugSettingsFormsIndexRoute
   WSlugSettingsHistoryIndexRoute: typeof WSlugSettingsHistoryIndexRoute
   WSlugSettingsListsIndexRoute: typeof WSlugSettingsListsIndexRoute
   WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
   WSlugSettingsRolesIndexRoute: typeof WSlugSettingsRolesIndexRoute
   WSlugSettingsAdminUsersUserIdRoute: typeof WSlugSettingsAdminUsersUserIdRoute
+  WSlugSettingsBusinessPlacesPlaceIdRoute: typeof WSlugSettingsBusinessPlacesPlaceIdRoute
   WSlugSettingsListsListTabRoute: typeof WSlugSettingsListsListTabRoute
   WSlugSettingsObjectsObjectTabRoute: typeof WSlugSettingsObjectsObjectTabRoute
   WSlugSettingsAdminBookingPagesIndexRoute: typeof WSlugSettingsAdminBookingPagesIndexRoute
@@ -2014,6 +2152,7 @@ interface WSlugSettingsRouteChildren {
 }
 
 const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
+  WSlugSettingsAppsRoute: WSlugSettingsAppsRoute,
   WSlugSettingsAutomationsRoute: WSlugSettingsAutomationsRoute,
   WSlugSettingsBrandRoute: WSlugSettingsBrandRoute,
   WSlugSettingsCalendarRoute: WSlugSettingsCalendarRoute,
@@ -2047,12 +2186,15 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsAccountIndexRoute: WSlugSettingsAccountIndexRoute,
   WSlugSettingsAdminIndexRoute: WSlugSettingsAdminIndexRoute,
   WSlugSettingsBookingPagesIndexRoute: WSlugSettingsBookingPagesIndexRoute,
+  WSlugSettingsBusinessIndexRoute: WSlugSettingsBusinessIndexRoute,
   WSlugSettingsFormsIndexRoute: WSlugSettingsFormsIndexRoute,
   WSlugSettingsHistoryIndexRoute: WSlugSettingsHistoryIndexRoute,
   WSlugSettingsListsIndexRoute: WSlugSettingsListsIndexRoute,
   WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,
   WSlugSettingsRolesIndexRoute: WSlugSettingsRolesIndexRoute,
   WSlugSettingsAdminUsersUserIdRoute: WSlugSettingsAdminUsersUserIdRoute,
+  WSlugSettingsBusinessPlacesPlaceIdRoute:
+    WSlugSettingsBusinessPlacesPlaceIdRoute,
   WSlugSettingsListsListTabRoute: WSlugSettingsListsListTabRoute,
   WSlugSettingsObjectsObjectTabRoute: WSlugSettingsObjectsObjectTabRoute,
   WSlugSettingsAdminBookingPagesIndexRoute:
@@ -2075,8 +2217,12 @@ interface WSlugRouteChildren {
   WSlugInboxRoute: typeof WSlugInboxRoute
   WSlugInsightsRoute: typeof WSlugInsightsRoute
   WSlugLinkPageRoute: typeof WSlugLinkPageRoute
+  WSlugMenusRoute: typeof WSlugMenusRoute
   WSlugNotesRoute: typeof WSlugNotesRoute
+  WSlugQrRoute: typeof WSlugQrRoute
   WSlugReportsRoute: typeof WSlugReportsRoute
+  WSlugReservationsRoute: typeof WSlugReservationsRoute
+  WSlugServiceRoute: typeof WSlugServiceRoute
   WSlugSettingsRoute: typeof WSlugSettingsRouteWithChildren
   WSlugTasksRoute: typeof WSlugTasksRoute
   WSlugTrashRoute: typeof WSlugTrashRoute
@@ -2109,8 +2255,12 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugInboxRoute: WSlugInboxRoute,
   WSlugInsightsRoute: WSlugInsightsRoute,
   WSlugLinkPageRoute: WSlugLinkPageRoute,
+  WSlugMenusRoute: WSlugMenusRoute,
   WSlugNotesRoute: WSlugNotesRoute,
+  WSlugQrRoute: WSlugQrRoute,
   WSlugReportsRoute: WSlugReportsRoute,
+  WSlugReservationsRoute: WSlugReservationsRoute,
+  WSlugServiceRoute: WSlugServiceRoute,
   WSlugSettingsRoute: WSlugSettingsRouteWithChildren,
   WSlugTasksRoute: WSlugTasksRoute,
   WSlugTrashRoute: WSlugTrashRoute,

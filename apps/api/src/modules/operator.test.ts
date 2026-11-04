@@ -8,6 +8,7 @@ import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { newEmail, rpcClient, signIn, signInApp, testConnections, turnOnTwoFactor } from '../../test/sign-in.ts';
+import { memberWithWorkspace } from '../../test/workspace.ts';
 import { totpCode } from '../auth/two-factor.ts';
 import { APP_URL, TEST_EDGE_SECRET } from '../testing.ts';
 import { EDGE_HEADER } from '../edge.ts';
@@ -66,6 +67,7 @@ describe('the operator gate (AC-1617 to AC-1620)', () => {
       () => client.operator.pages({ period: '30d' }),
       () => client.operator.page({ workspaceId: id, pageId: id, period: '30d' }),
       () => client.operator.site({ period: '30d' }),
+      () => client.operator.setEarlyAccess({ workspaceId: id, flag: 'business_apps', on: true }),
     ]) {
       expect((await failure(call)).code).toBe('NOT_FOUND');
     }
@@ -164,6 +166,39 @@ describe('the reads (AC-1629 to AC-1632)', () => {
     ).toBe('NOT_FOUND');
     const site = await client.operator.site({ period: '90d' });
     expect(site.days).toHaveLength(90);
+  });
+});
+
+describe('the one write: early access (spec 0065, AC-6502)', () => {
+  it('opens the Hospitality apps for a workspace, logs the before and after, and its members then see them', async () => {
+    const m = await memberWithWorkspace(app);
+    expect((await m.client.hospitality.apps({ workspace: m.slug })).available).toBe(false);
+    const client = rpcClient(app, await asOperator());
+    expect(
+      await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'business_apps', on: true }),
+    ).toEqual({ workspaceId: m.workspace.id, before: [], after: ['business_apps'] });
+    expect((await m.client.hospitality.apps({ workspace: m.slug })).available).toBe(true);
+    const logged = await testQuery<{ action: string; target: string; before: unknown; after: unknown }>(
+      identityUrl,
+      `select action, target, before, after from auth.operator_event where target = $1 order by at, id`,
+      [m.workspace.id],
+    );
+    expect(logged).toEqual([
+      { action: 'operator.setEarlyAccess', target: m.workspace.id, before: null, after: null },
+      {
+        action: 'operator.earlyAccessChanged',
+        target: m.workspace.id,
+        before: { earlyAccess: [] },
+        after: { earlyAccess: ['business_apps'] },
+      },
+    ]);
+    expect(
+      (
+        await failure(() =>
+          client.operator.setEarlyAccess({ workspaceId: randomUUID(), flag: 'business_apps', on: true }),
+        )
+      ).code,
+    ).toBe('NOT_FOUND');
   });
 });
 

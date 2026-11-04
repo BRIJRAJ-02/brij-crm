@@ -19,6 +19,7 @@ const state = (over: Partial<NavState> = {}): NavState => ({
   favourites: [],
   top: [],
   scheduling: ['bookings', 'captures'],
+  hospitality: [],
   ...over,
 });
 

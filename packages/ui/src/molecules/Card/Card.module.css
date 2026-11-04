@@ -104,6 +104,12 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* A card with no body (an app's card: a title, a line and a footer): the header keeps its air below, so the line
+     never touches the footer's hairline or the card's edge. */
+  .head:not(:has(~ .body)) {
+    padding-block-end: var(--space-12);
+  }
+
   .body {
     padding: var(--space-16);
     font: var(--text-body);

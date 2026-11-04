@@ -67,12 +67,13 @@ export type { SidebarPage } from './sidebar.ts';
  */
 const DEFAULT_NAV: NavState = {
   items: [],
-  sections: { order: ['favourites', 'records', 'lists', 'scheduling'], folded: [] },
+  sections: { order: ['favourites', 'records', 'lists', 'scheduling', 'hospitality'], folded: [] },
   rail: false,
   version: 0,
   favourites: [],
   top: ['tasks', 'notes'],
   scheduling: ['bookings', 'captures'],
+  hospitality: [],
 };
 
 /** Nothing read, ever: one snapshot, so React sees no change. */

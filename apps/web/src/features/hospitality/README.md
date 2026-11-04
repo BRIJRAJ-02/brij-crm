@@ -1,0 +1,16 @@
+# Hospitality
+
+The Hospitality suite's screens (spec 0065). H0 holds the setup the apps share; each app's own screens arrive with
+its slice (Menu H1, Menu QR H2, Table seating H3 and H4).
+
+| Screen                   | Brief                                                                                                                                                                                                                                                                                                                 |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AppsScreen.tsx`         | Settings › Apps (AC-6501 to AC-6506): one card per app, Install (the business card the first time, Menu with Menu QR in one step) or Installed with Remove, which asks first. Nothing about the apps shows until Timefix opens early access.                                                                          |
+| `BusinessCardDialog.tsx` | The first install's one short card: name, kind, the first place's address, time zone and currency, prefilled from the workspace.                                                                                                                                                                                      |
+| `BusinessScreen.tsx`     | Settings › Business (AC-6507, AC-6508): the profile, saved with Save, then the places as rows (name, address, today's hours, tables), each opening its page.                                                                                                                                                          |
+| `PlaceSections.tsx`      | The top of a place's page: its week of hours (the library HoursEditor with `pastMidnightUntil`, saved as each changes with a quiet Saving… then Saved; hours that don't hold together stay as typed with why), special days (removal with Undo), and details (Save in the card's footer).                             |
+| `FloorScreen.tsx`        | One place's page (AC-6508, AC-6509): PlaceSections, then its resources, named for the kind it mostly books (tables, rooms, chairs: Add tables with a Kind select "T1 to T10" with the run as the To field's hint, drag to reorder, an Online switch per row, select several for Area, Online, Offline or Archive, Edit, Archive with Undo, Delete asking first; a lock says why at 300) and its areas. |
+| `ComingScreen.tsx`       | Menus, QR codes, Reservations and Service until their apps arrive: shown only while the app is installed, else not found.                                                                                                                                                                                             |
+
+Data comes only from `data.hospitality` (`packages/data/src/hospitality/store.ts`): every write shows at once where
+it can and goes back with the server's reason when refused.
