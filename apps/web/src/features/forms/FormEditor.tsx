@@ -264,26 +264,38 @@ export function FormEditor(props: FormEditorProps) {
    */
   const applySettings = (settings: LiveSettingsChange, change: (before: FormDocument) => FormDocument) => {
     const shownBefore = latest.current;
+    const savedBefore = saved.current;
     const next = change(latest.current);
     setDraft(next);
     latest.current = next;
     saved.current = { ...saved.current, document: change(saved.current.document) };
-    flush()
-      .then((revision) => data.forms.applySettings(slug, form.id, settings, revision))
-      .then((view) => {
-        apply(view);
+    // One after another, as the draft's saves are: each goes on from the revision the one before answered, so two
+    // quick changes never read as someone else's (the review's false conflict).
+    const sending = flush().then(async (revision) => {
+      const view = await data.forms.applySettings(slug, form.id, settings, revision);
+      apply(view);
+      // Words typed while it was out stay: the server's draft replaces the shown one only when nothing changed since.
+      if (latest.current === next) {
         setDraft(view.draft);
         latest.current = view.draft;
-      })
+      }
+      return view.revision;
+    });
+    inFlight.current = sending;
+    sending
       .catch((error: unknown) => {
         if (isDataError(error) && error.code === 'FORM_CHANGED') {
           setConflict(true);
           return;
         }
+        saved.current = savedBefore;
         setDraft(shownBefore);
         latest.current = shownBefore;
         toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
         loadTheirs();
+      })
+      .finally(() => {
+        if (inFlight.current === sending) inFlight.current = undefined;
       });
   };
 
@@ -669,12 +681,17 @@ export function FormEditor(props: FormEditorProps) {
         const toName = objects.find((object) => object.id === objectId)?.pluralName ?? strings.thisObject;
         toasts.toast({
           tone: 'success',
+          // With edits waiting on the Form tab, the change waits with them: the toast says so (review).
           message:
-            objectId === null
-              ? strings.retargetOffDone
-              : withDeal
-                ? strings.retargetDealDone
-                : strings.retargetDone(toName),
+            isPublished && !goesLiveNow
+              ? objectId === null
+                ? strings.savingOffToast
+                : strings.savingChangedToast(toName)
+              : objectId === null
+                ? strings.retargetOffDone
+                : withDeal
+                  ? strings.retargetDealDone
+                  : strings.retargetDone(toName),
           action: {
             label: strings.undo,
             onAction: () => {

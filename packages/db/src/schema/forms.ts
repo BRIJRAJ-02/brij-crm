@@ -299,6 +299,11 @@ export const formSubmissions = pgTable(
     index('form_submissions_open')
       .on(t.workspaceId, t.state)
       .where(sql`${t.state} <> 'processed'`),
+    // A form's live submissions by state, from the index alone: the forms list's counts (this month, spam, Needs
+    // review, every one) leave the deleted out without reading their rows.
+    index('form_submissions_live')
+      .on(t.workspaceId, t.formId, t.state, t.receivedAt)
+      .where(sql`${t.deletedAt} is null`),
     // The deleted ones, oldest first: the daily cleanup's walk to remove them for good.
     index('form_submissions_deleted')
       .on(t.workspaceId, t.deletedAt, t.id)

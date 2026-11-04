@@ -471,7 +471,12 @@ export function NavItem(props: NavItemProps) {
   const platform = useKeyboardPlatform();
   // The keycap is hidden from the name, so the shortcut is stated as aria-keyshortcuts ("Meta+,", "Control+," off a
   // Mac). React Aria's Link and Button don't pass the attribute through, so it goes on the element through `render`.
-  const shortcut = kbd === undefined ? undefined : keyShortcuts([kbd], platform);
+  // An item with a grip or More says Right reaches them (forms fixes 2: they are out of the tab order).
+  const reorders = useContext(ReorderContext);
+  const hasActions = !isCollapsed && (props.menu !== undefined || (reorders && props.id !== undefined));
+  const ownShortcut = kbd === undefined ? undefined : keyShortcuts([kbd], platform);
+  const shortcut =
+    hasActions && ownShortcut !== undefined ? `${ownShortcut} ArrowRight` : hasActions ? 'ArrowRight' : ownShortcut;
   const linkShortcut =
     shortcut === undefined
       ? {}

@@ -343,8 +343,38 @@
       min-inline-size: 0;
     }
 
+    /* The header keeps its row for screen readers and the arrow keys, its labels clipped out of sight; a select all
+       checkbox, when there is one, stays in view as the list's first line. */
     .root[data-phone='rows'] .header {
-      display: none;
+      display: block;
+      border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    }
+
+    .root[data-phone='rows'] .column[data-handle] {
+      display: flex;
+      align-items: center;
+      block-size: var(--size-row);
+      border-block-end: none;
+    }
+
+    .root[data-phone='rows'] .column:not([data-handle]),
+    .root[data-phone='rows'] .cell[data-phone='hidden'] {
+      position: absolute;
+      inline-size: var(--border-width-hairline);
+      block-size: var(--border-width-hairline);
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .root[data-phone='rows'] .header:not(:has(.column[data-handle])) {
+      position: absolute;
+      inline-size: var(--border-width-hairline);
+      block-size: var(--border-width-hairline);
+      overflow: hidden;
+      clip-path: inset(50%);
     }
 
     .root[data-phone='rows'] .body {
@@ -382,10 +412,6 @@
       color: var(--text);
       font: var(--text-body);
       letter-spacing: var(--tracking-body);
-    }
-
-    .root[data-phone='rows'] .cell[data-phone='hidden'] {
-      display: none;
     }
 
     .root[data-phone='rows'] .cell[data-handle] {

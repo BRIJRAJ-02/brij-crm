@@ -409,18 +409,26 @@ export function SubmissionsTab({
 
   /** Undo: puts deleted submissions back, and reopens the one that was open. */
   const undoDelete = (ids: readonly string[], reopen: boolean) => {
-    Promise.all(ids.map((id) => data.submissions.restore(slug, id))).then(
-      () => {
-        toasts.toast({ tone: 'success', message: strings.restoredMany(ids.length) });
+    void Promise.allSettled(ids.map((id) => data.submissions.restore(slug, id))).then((results) => {
+      const back = results.filter((result) => result.status === 'fulfilled').length;
+      const failed = results.find((result) => result.status === 'rejected');
+      if (failed === undefined) {
+        toasts.toast({ tone: 'success', message: strings.restoredMany(back) });
         const [only] = ids;
-        if (reopen && only !== undefined) go(only);
-        else void router.invalidate();
-      },
-      (error: unknown) => {
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
-        void router.invalidate();
-      },
-    );
+        if (reopen && only !== undefined) {
+          go(only);
+          return;
+        }
+      } else {
+        // Some came back, some didn't: said as such, with the first reason.
+        const reason = isDataError(failed.reason) ? failed.reason.message : strings.failedText;
+        toasts.toast({
+          tone: 'danger',
+          message: back === 0 ? reason : `${strings.restoredSome(back, ids.length)} ${reason}`,
+        });
+      }
+      void router.invalidate();
+    });
   };
 
   /**
@@ -1122,10 +1130,10 @@ function SubmissionDetail({
 function saveText(text: string, fileName: string): void {
   const href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
   downloadFile(href, fileName);
-  // After the click has handed the file to the browser.
+  // A while after the click has handed the file over: revoked at once, Safari and Firefox can drop the download.
   setTimeout(() => {
     URL.revokeObjectURL(href);
-  }, 0);
+  }, 1_000);
 }
 
 function downloadFile(href: string, fileName: string): void {

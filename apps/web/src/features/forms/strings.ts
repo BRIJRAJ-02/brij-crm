@@ -306,10 +306,10 @@ export const strings = {
   /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
   alsoDeal: 'Also create a deal',
   /** A form saving to Deals saves no person (forms fix a3): one press moves it to People, each answer still a deal. */
-  dealsNoPerson: 'Save the person too',
+  dealsNoPerson: 'No person saved',
   dealsNoPersonTip:
     'Saving to Deals keeps no person, so there is no one to email back. Save to People with a deal instead; answers saved on the deal stay there.',
-  dealsMove: 'Save people',
+  dealsMove: 'Save to People',
   alsoDealTip: 'Each submission also adds a deal, linked to the person and their company.',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
@@ -361,7 +361,7 @@ export const strings = {
   // Install tab
   /** A form asking for a file where uploads are off (forms fixes 2). */
   uploadsOffTitle: 'Files can’t be uploaded here yet',
-  uploadsOffText: 'Visitors can send the form, but not the file. Ask an admin to turn on file storage.',
+  uploadsOffText: 'Visitors can send the form, but not the file.',
   publishedUploadsOff: 'Published. Files can’t be uploaded here yet, so visitors can’t attach one.',
   readOnlyTitle: 'You can view this form',
   /** In the bar, for a member who may only view a live form's answers (forms fix a10). */
@@ -614,6 +614,7 @@ export const strings = {
   deleteSubmission: 'Delete',
   /** Names the submission by who sent it: "Delete the submission from Grace Hopper?". */
   /** Undo of a delete (forms fixes 2: deletes are soft, so Delete asks nothing first). */
+  restoredSome: (n: number, of: number) => `Restored ${String(n)} of ${String(of)}.`,
   restoredMany: (n: number) =>
     n === 1 ? 'Submission restored.' : `${count(n, 'submission', 'submissions')} restored.`,
   deletingMany: 'Deleting…',

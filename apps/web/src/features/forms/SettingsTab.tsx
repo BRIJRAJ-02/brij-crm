@@ -39,7 +39,7 @@ import {
   useFormatSettings,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { generalSettingsHref } from '../settings/nav.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
@@ -399,7 +399,23 @@ export function SettingsTab({
     setCountText(undefined);
     if (n === draft.closing?.after) return;
     onSettingsChange({ closing: { after: n } }, (before) => ({ ...before, closing: { after: n } }));
-  };
+  }; // Words still held when Settings closes (a shortcut, Back) are saved as if left, so nothing typed is lost.
+  const leaveAll = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    leaveAll.current = () => {
+      leaveText('closedMessage');
+      leaveText('subject');
+      leaveText('line');
+      leaveCount();
+    };
+  });
+  useEffect(
+    () => () => {
+      leaveAll.current();
+    },
+    [],
+  );
+
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
   const ownerIsTold =
     isFiling &&

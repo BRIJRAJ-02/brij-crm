@@ -831,7 +831,7 @@ export async function undoUseNewAnswer(
         attribute === undefined
           ? null
           : (heldValues(indexHeld(await currentItems(tx, [recordId], [attribute.id])), recordId)(attribute) ?? null);
-      if (JSON.stringify(now) !== JSON.stringify(used.after ?? null)) throw refuse('FORM_STATE', CHANGED_SINCE);
+      if (stableJson(now) !== stableJson(used.after ?? null)) throw refuse('FORM_STATE', CHANGED_SINCE);
       const written = await context.perRecord((inner) =>
         updateRecord(inner, { recordId, values: { [used.attributeId ?? '']: { value: used.before } } }),
       );
@@ -861,11 +861,26 @@ const UsedNew = z.object({
   after: z.unknown(),
 });
 
+/** A value as text with its keys in order: what jsonb kept (its own key order) compares equal to what is read now. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, each]) => each !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([key, each]) => `${JSON.stringify(key)}:${stableJson(each)}`).join(',')}}`;
+  }
+  return value === undefined ? 'null' : JSON.stringify(value);
+}
+
 /** What Undo on Use new says when the field has changed since. */
 export const CHANGED_SINCE = 'That field has changed since, so Undo would lose the newer value. Edit it on the record.';
 
 /** How long a deleted submission can be put back before the daily cleanup removes it for good. */
 export const DELETED_SUBMISSIONS_KEPT_DAYS = 30;
+
+/** Why a submission still being filed can't be deleted yet. */
+export const STILL_FILING = 'This submission is still being added. Try again in a moment.';
 
 /** What Undo on a submission that is no longer in the bin says. */
 export const NOT_DELETED = 'That submission is no longer deleted, or it was removed for good.';
@@ -886,6 +901,9 @@ export async function deleteSubmission(
     async (context) => {
       const { tx } = context;
       const row = await lockedSubmission(tx, scope, input.submissionId);
+      // One still being filed waits for its filing (state review): deleted then put back, its job would have passed
+      // it by, and it would stay Received for good.
+      if (row.state === 'received' || row.state === 'processing') throw refuse('FORM_STATE', STILL_FILING);
       // Its notifications go with it: the inboxes showing one hear of it.
       await withdrawSubmissionNotices(context, sql`n.submission_id = ${row.id}`);
       await tx

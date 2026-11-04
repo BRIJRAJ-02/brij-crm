@@ -44,8 +44,8 @@ import { routeHostIds } from '../routing/hosts.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import {
   isClosedByRule,
-  isFull,
-  pauseIfFull,
+  answersHeld,
+  pauseFull,
   loadForm,
   loadVersions,
   logicFormOf,
@@ -583,10 +583,10 @@ export async function submitForm(
       const form = caps ? publicRow(await loadForm(tx, input.formId, true)) : unlocked;
       // Its own closing rule, against the live version (forms fix b2). The idempotent replay below answers a send
       // that landed before it closed, so a retried send still gets its answer.
-      const isClosed =
-        form.status !== 'live' ||
-        isClosedByRule(current.document) ||
-        (caps && (await isFull(tx, form.id, current.document)));
+      // Counted once, under the lock: the same count says whether this send takes the last place (review).
+      const cap = current.document.closing?.after;
+      const held = cap === undefined ? 0 : await answersHeld(tx, form.id, cap);
+      const isClosed = form.status !== 'live' || isClosedByRule(current.document) || (cap !== undefined && held >= cap);
       if (isClosed && !(await isReplay())) {
         throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
       }
@@ -734,7 +734,7 @@ export async function submitForm(
       await attachUploads(tx, { submissionId: row.id, ids: claimedIds });
       // The send that takes the last place pauses the form, in this same write (forms fixes 2): a page view then
       // reads the paused form and counts nothing. Spam takes no place.
-      if (caps && state !== 'spam') await pauseIfFull(tx, form.id, current.document);
+      if (cap !== undefined && state !== 'spam' && held + 1 >= cap) await pauseFull(tx, form.id);
       if (state === 'received') {
         // The form is sent, so nothing stays saved for later (AC-6319), and today's visit is a completion
         // (AC-6320). Both ride in this transaction: a submission that doesn't commit changes neither. A spam or

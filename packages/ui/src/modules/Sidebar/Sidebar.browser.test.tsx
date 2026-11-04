@@ -167,6 +167,8 @@ describe('the sidebar’s tab stops', () => {
     expect(['Companies', 'People', 'Deals'].map((name) => grip(name).tabIndex)).toEqual([-1, -1, -1]);
     const people = document.querySelector<HTMLElement>('a[href="/people"]');
     if (people === null) throw new Error('No People item.');
+    // It says Right reaches them, since they are out of the tab order.
+    expect(people.getAttribute('aria-keyshortcuts')).toBe('ArrowRight');
     people.focus();
     const press = (key: string) => {
       document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));

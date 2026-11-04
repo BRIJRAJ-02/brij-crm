@@ -196,15 +196,17 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
       await show(undefined);
       const row = page.getByRole('row').filter({ hasText: 'Ada Lovelace' });
       await expect.element(row).toBeVisible();
-      // No header row on a phone, and the table fits its frame.
-      const header = document.querySelector('thead');
-      expect(header === null ? 'none' : getComputedStyle(header).display).toBe('none');
+      // The header's labels are clipped out of sight but still read, select all stays in view, and the table fits.
+      const person = page.getByRole('columnheader', { name: 'Person' }).element().getBoundingClientRect();
+      expect(person.width).toBeLessThanOrEqual(1);
+      const selectAll = document.querySelector('thead [data-handle]')?.getBoundingClientRect();
+      expect(selectAll?.width ?? 0).toBeGreaterThan(1);
       const frame = document.querySelector('[data-phone="rows"]')?.parentElement;
       expect(frame === null || frame === undefined ? 0 : frame.scrollWidth - frame.clientWidth).toBeLessThanOrEqual(0);
       // The person on the first line, when under it.
-      const person = row.getByRole('rowheader').element().getBoundingClientRect();
+      const name = row.getByRole('rowheader').element().getBoundingClientRect();
       const when = row.getByRole('gridcell').nth(2).element().getBoundingClientRect();
-      expect(when.top).toBeGreaterThanOrEqual(person.bottom - 1);
+      expect(when.top).toBeGreaterThanOrEqual(name.bottom - 1);
     } finally {
       await page.viewport(1280, 900);
     }

@@ -569,6 +569,9 @@ export function formsExport(): KindDefinition<FormsExportParams> {
 /** The most submissions an export downloads at once, with no job (forms fixes 2). More go through `forms.export`. */
 export const EXPORT_NOW_MAX = 1_000;
 
+/** The most bytes a small export answers with: under a function's 4.5 MB response, with room for its envelope. */
+export const EXPORT_NOW_BYTES_MAX = 3 * 1024 * 1024;
+
 /** A small export, written in the request: the file's name and its CSV. */
 export interface ExportNow {
   readonly fileName: string;
@@ -588,6 +591,15 @@ export async function exportSubmissionsNow(
   memberIdOf(scope);
   return inWorkspace(scope, async (tx) => {
     const form = await readableForm(tx, scope, input.formId);
+    const where = and(
+      eq(formSubmissions.formId, form.id),
+      isNull(formSubmissions.deletedAt),
+      selectionTest(input.select),
+    );
+    // Counted first (ids only), so a large form is sent to the job without reading its rows (review).
+    const counted = await tx.execute<{ n: number }>(sql`
+      select count(*)::int as n from (select 1 from ${formSubmissions} where ${where} limit ${EXPORT_NOW_MAX + 1}) found`);
+    if ((counted.rows[0]?.n ?? 0) > EXPORT_NOW_MAX) throw refuse('JOB_TOO_LARGE', EXPORT_NOW_TOO_LARGE);
     const rows: Row[] = await tx
       .select(COLUMNS)
       .from(formSubmissions)
@@ -598,11 +610,11 @@ export async function exportSubmissionsNow(
     const columns = await columnsOf(tx, scope, form.id);
     const shown = await visibleRows(tx, scope, rows);
     const lines = await linesOf(tx, scope, form, columns, shown);
+    const csv = CSV_BOM + headerOf(columns) + lines.join('');
+    // One answer the size of a function's response is a file for the job, which writes it in parts.
+    if (Buffer.byteLength(csv) > EXPORT_NOW_BYTES_MAX) throw refuse('JOB_TOO_LARGE', EXPORT_NOW_TOO_LARGE);
     const day = await tx.execute<{ day: string }>(sql`select to_char(now() at time zone 'UTC', 'YYYY-MM-DD') as day`);
-    return {
-      fileName: fileNameFor(form.name, day.rows[0]?.day ?? 'today'),
-      csv: CSV_BOM + headerOf(columns) + lines.join(''),
-    };
+    return { fileName: fileNameFor(form.name, day.rows[0]?.day ?? 'today'), csv };
   });
 }
 

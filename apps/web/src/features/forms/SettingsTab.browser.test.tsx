@@ -473,7 +473,7 @@ describe('Settings as plain rows (T21)', () => {
   it('moves a form saving to Deals to People with a deal in one press (forms fixes 2)', async () => {
     const draft: FormDocument = { ...DRAFT, targets: { main: { objectId: DEALS } } };
     await show({ ...formView({}), mainObjectId: DEALS, draft }, []);
-    await page.getByRole('button', { name: 'Save people', exact: true }).click();
+    await page.getByRole('button', { name: 'Save to People', exact: true }).click();
     expect(retargets).toEqual([`${PEOPLE} with a deal`]);
   });
 

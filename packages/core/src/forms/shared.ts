@@ -462,13 +462,26 @@ export function isClosedByRule(document: FormDocument, now = new Date()): boolea
 export async function isFull(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
   const after = document.closing?.after;
   if (after === undefined) return false;
+  return (await answersHeld(tx, formId, after)) >= after;
+}
+
+/** How many answers a form holds (spam and deleted ones left out), counted up to `upTo`. */
+export async function answersHeld(tx: WorkspaceTx, formId: string, upTo: number): Promise<number> {
   const counted = await tx.execute<{ n: number }>(sql`
     select count(*)::int as n from (
       select 1 from form_submissions
-      where form_id = ${formId}::uuid and state <> 'spam' and deleted_at is null limit ${after}
+      where form_id = ${formId}::uuid and state <> 'spam' and deleted_at is null limit ${upTo}
     ) kept
   `);
-  return (counted.rows[0]?.n ?? 0) >= after;
+  return counted.rows[0]?.n ?? 0;
+}
+
+/** Pauses a live form now (it has reached its number of answers), as Pause does. */
+export async function pauseFull(tx: WorkspaceTx, formId: string): Promise<void> {
+  await tx
+    .update(forms)
+    .set({ status: 'paused', updatedAt: sql`now()` })
+    .where(and(eq(forms.id, formId), eq(forms.status, 'live')));
 }
 
 /**
@@ -478,9 +491,6 @@ export async function isFull(tx: WorkspaceTx, formId: string, document: FormDocu
  */
 export async function pauseIfFull(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
   if (!(await isFull(tx, formId, document))) return false;
-  await tx
-    .update(forms)
-    .set({ status: 'paused', updatedAt: sql`now()` })
-    .where(and(eq(forms.id, formId), eq(forms.status, 'live')));
+  await pauseFull(tx, formId);
   return true;
 }
