@@ -94,8 +94,10 @@
     }
   }
 
+  /* The window's height, or the room a PreviewPage leaves under its bar (`--preview-page-block-size`), so the foot
+     ("Powered by") ends at the window's foot rather than below it. */
   .root[data-mode='page'] {
-    min-block-size: 100dvb;
+    min-block-size: var(--preview-page-block-size, 100dvb);
     padding-block: var(--space-32) var(--space-24);
   }
 

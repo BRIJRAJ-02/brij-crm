@@ -234,6 +234,32 @@
     box-shadow: var(--shadow-focus);
   }
 
+  /* PreviewPage: the bar and the banner, then the page in exactly the height they leave, so a page that fills its
+     window ends at the window's foot. The body is a size container: a page drawn in it reads its height as
+     `--preview-page-block-size` (the hosted form's page mode does), rather than the whole window's. */
+  .page {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    block-size: 100dvb;
+    background: var(--surface);
+  }
+
+  .pageBody {
+    --preview-page-block-size: 100cqb;
+
+    overflow: auto;
+    container-type: size;
+  }
+
+  /* The phone on the stage the editors draw it on, centred, the page in it as tall as its content. */
+  .pageBody[data-device='phone'] {
+    --preview-page-block-size: auto;
+
+    display: flex;
+    justify-content: center;
+    background: var(--surface-subtle);
+  }
+
   /* PreviewFrame: the page fills the phone's screen, and a wheel over it scrolls the page (the frame is inert). */
   .viewport {
     outline: none;

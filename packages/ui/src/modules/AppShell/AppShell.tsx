@@ -1,7 +1,18 @@
 // The frame every screen inside the app sits in (spec 0003, the app shell):
 // the sidebar, then the main column of the three bars over the view, with an
 // optional side panel. Below bp-page-compact the sidebar folds to its rail.
-import { createContext, useId, useSyncExternalStore, type ReactElement, type ReactNode, type Ref } from 'react';
+import {
+  createContext,
+  useCallback,
+  useId,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from 'react';
+import { PanelPushContext, type PanelWidth } from '../../molecules/Panel/Panel.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { breakpointToken } from '../../lib/token-values.ts';
 import styles from './AppShell.module.css';
@@ -74,28 +85,44 @@ export function AppShellSlot({ ref }: AppShellSlotProps) {
 export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, panel, viewKey }: AppShellProps) {
   const mainId = useId();
   const isCompact = useSyncExternalStore(subscribe, isCompactNow, () => false);
+  // The panels open that asked for room (Panel's `pushesPage`), widest first: the main column narrows by the widest.
+  const [pushes, setPushes] = useState<readonly PanelWidth[]>([]);
+  const push = useCallback((width: PanelWidth) => {
+    setPushes((before) => [...before, width]);
+    return () => {
+      setPushes((before) => {
+        const at = before.indexOf(width);
+        return at === -1 ? before : [...before.slice(0, at), ...before.slice(at + 1)];
+      });
+    };
+  }, []);
+  const pushed = isCompact || pushes.length === 0 ? undefined : pushes.includes('lg') ? 'lg' : 'md';
+  // One object while the width class holds, so a panel opening (AppShell's state) doesn't re-render every reader.
+  const shell = useMemo(() => ({ isCompact }), [isCompact]);
   return (
-    <AppShellContext value={{ isCompact }}>
-      <div className={styles.root}>
-        <VisuallyHidden isFocusable>
-          <a className={styles.skip} href={`#${mainId}`}>
-            {strings.skipToContent}
-          </a>
-        </VisuallyHidden>
-        <div className={styles.sidebar}>{sidebar}</div>
-        <main id={mainId} className={styles.main} tabIndex={-1}>
-          {topBar}
-          {viewBar}
-          {toolbar}
-          {banner}
-          <div className={styles.content}>
-            <div key={viewKey} className={styles.view}>
-              {children}
+    <AppShellContext value={shell}>
+      <PanelPushContext value={push}>
+        <div className={styles.root}>
+          <VisuallyHidden isFocusable>
+            <a className={styles.skip} href={`#${mainId}`}>
+              {strings.skipToContent}
+            </a>
+          </VisuallyHidden>
+          <div className={styles.sidebar}>{sidebar}</div>
+          <main id={mainId} className={styles.main} tabIndex={-1} data-pushed={pushed}>
+            {topBar}
+            {viewBar}
+            {toolbar}
+            {banner}
+            <div className={styles.content}>
+              <div key={viewKey} className={styles.view}>
+                {children}
+              </div>
+              {panel !== undefined && <aside className={styles.panel}>{panel}</aside>}
             </div>
-            {panel !== undefined && <aside className={styles.panel}>{panel}</aside>}
-          </div>
-        </main>
-      </div>
+          </main>
+        </div>
+      </PanelPushContext>
     </AppShellContext>
   );
 }

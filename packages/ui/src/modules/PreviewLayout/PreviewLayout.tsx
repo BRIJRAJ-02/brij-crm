@@ -488,6 +488,36 @@ export function PhonePreview({ children }: PhonePreviewProps) {
   return <PhoneColumn place="bare">{children}</PhoneColumn>;
 }
 
+/** Props for PreviewPage. */
+export interface PreviewPageProps {
+  /** The bar across the top: the way back to the editor and the Desktop or Phone switch (a SectionBar). */
+  readonly bar: ReactNode;
+  /** One line under the bar saying it is a preview (a banner Callout). */
+  readonly banner?: ReactNode;
+  /** `phone` draws the page in the editors' phone, centred; `desktop` (the default) at the window's width. */
+  readonly device?: 'desktop' | 'phone';
+  /** The page previewed. */
+  readonly children: ReactNode;
+}
+
+/**
+ * A draft opened in a tab of its own to try (a form's Preview; lane 3c): the bar and the banner at the top, then the
+ * page in exactly the height left (`100dvb` less the bar), so a page that fills its window (a hosted form's foot,
+ * "Powered by") ends at the window's foot instead of under it. With `device="phone"` the page sits in the editors'
+ * phone, centred on the stage.
+ */
+export function PreviewPage({ bar, banner, device = 'desktop', children }: PreviewPageProps) {
+  return (
+    <div className={styles.page}>
+      {bar}
+      {banner}
+      <div className={styles.pageBody} data-device={device}>
+        {device === 'phone' ? <PhonePreview>{children}</PhonePreview> : children}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Every Captures editor's body under its TopBar (the booking page editor, the
  * form editor): any notices, then the body at the page gutter in the first
