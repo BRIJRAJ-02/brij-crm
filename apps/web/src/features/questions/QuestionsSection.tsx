@@ -1526,7 +1526,6 @@ function QuestionHead({ question, isReadOnly, isJustAdded, problem, onLabel, onS
         // A consent's label is its exact wording, shown beside the tick box (spec 0023, AC-1053).
         label={isConsent ? strings.consentWording : strings.question}
         isLabelHidden
-        size="lg"
         isWrapping
         placeholder={
           isConsent
@@ -1601,7 +1600,9 @@ function QuestionEditor({
         <Field
           ref={descriptionRef}
           label={strings.description}
-          size="sm"
+          isLabelHidden
+          // Its name inside the box, every field in the card one size (the owner, 5 November 2026).
+          prefix={strings.description}
           isWrapping
           placeholder={strings.descriptionPlaceholder}
           value={question.description}
@@ -1663,7 +1664,8 @@ function QuestionEditor({
       {!NO_PLACEHOLDER_TYPES.includes(question.answerType) && (
         <Field
           label={strings.placeholder}
-          size="sm"
+          isLabelHidden
+          prefix={strings.placeholder}
           placeholder={strings.placeholderInline}
           value={question.placeholder ?? ''}
           maxLength={80}

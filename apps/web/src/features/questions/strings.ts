@@ -66,7 +66,7 @@ export const strings = {
     presets: 'Ready-made',
   },
   /** The placeholder, edited in place under the question, quiet. */
-  placeholderInline: 'Placeholder text (optional)',
+  placeholderInline: 'Optional',
   /** An open question's one ⋯. */
   questionActions: (name: string) => `More for ${name}`,
   keepWithAnswer: 'Keep with the answer',

@@ -212,8 +212,13 @@
     flex: none;
   }
 
+  /* The head spans the canvas, its controls at the end, so they stay put when the frame changes width (Phone or
+     Desktop: the owner, 5 November 2026, "shifts"). */
   .preview[data-surface='canvas'] .head {
+    align-self: stretch;
     justify-content: flex-end;
+    inline-size: auto;
+    min-inline-size: 0;
   }
 
   /* PhonePreview size="pane": a pane given to the preview alone, so the phone takes its whole height. */
