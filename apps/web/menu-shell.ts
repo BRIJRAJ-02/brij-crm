@@ -163,7 +163,7 @@ export async function menuShellFor(pathname: string, deps: MenuShellDeps): Promi
       body: withMenu(deps.shell, { key, menu, readAt: now() }),
       status: 200,
       outcome: 'menu',
-      tags: [...menuCacheTags(menu.placeId), ...menuWorkspaceTags(menu.workspaceId)],
+      tags: [...menuCacheTags(menu.placeId), ...menuWorkspaceTags(menu.cacheId)],
     };
   } catch {
     return { body: deps.shell, status: 200, outcome: 'missed' };

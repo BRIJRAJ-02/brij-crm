@@ -19,7 +19,7 @@ export const samplePhotoHref = (photoId: string) => {
 export function sampleMenu(): PublicMenu {
   return {
     placeId: id(900),
-    workspaceId: id(901),
+    cacheId: '0123456789abcdef0123456789abcdef',
     version: 3,
     business: { name: 'Somewhere Nowhere', description: 'Small plates and natural wine in Soho.' },
     place: {

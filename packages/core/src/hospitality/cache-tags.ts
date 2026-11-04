@@ -4,6 +4,7 @@
 // the first 128 bits of SHA-256 over a fixed label and the workspace's id. Stable, so every writer purges the same tag
 // the reader filed, and one way, so the tag says nothing about which workspace it is. Place ids are already public.
 import { createHash } from 'node:crypto';
+import { menuWorkspaceTags } from '@crm/contracts';
 import { isUuid } from '../engine/ids.ts';
 
 /** The opaque id standing for a workspace's business in its public cache tags: 32 hex digits. */
@@ -20,4 +21,13 @@ export function businessCacheTags(workspaceId: string, placeIds: readonly string
     ...(isUuid(workspaceId) ? [`business:${businessCacheId(workspaceId)}`] : []),
     ...[...new Set(placeIds)].filter((id) => isUuid(id)).map((id) => `place:${id}`),
   ];
+}
+
+/**
+ * The edge cache tag every guest menu answer of a workspace carries: `menu-ws:<opaque id>`, the same opaque id as the
+ * business's, so the menu's JSON and HTML never show the workspace's id. The reader files under it and every purge
+ * (deleting the workspace, the operator closing its business apps) forgets it through this one function.
+ */
+export function menuWorkspaceCacheTags(workspaceId: string): readonly string[] {
+  return isUuid(workspaceId) ? menuWorkspaceTags(businessCacheId(workspaceId)) : [];
 }

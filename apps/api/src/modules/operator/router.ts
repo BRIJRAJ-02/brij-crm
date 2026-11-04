@@ -1,5 +1,6 @@
-import { menuWorkspaceTags } from '@crm/contracts';
 import {
+  businessCacheTags,
+  menuWorkspaceCacheTags,
   operatorOverview,
   operatorPage,
   operatorPages,
@@ -9,6 +10,7 @@ import {
   setEarlyAccess,
   type OperatorDeps,
 } from '@crm/core';
+import { forgetAfterCommit } from '../../edge-cache.ts';
 import { errorFields, log } from '../../log.ts';
 import { captureFault } from '../../monitoring/sentry.ts';
 import { operator, type RequestContext } from '../../orpc.ts';
@@ -35,8 +37,12 @@ export const operatorRouter = operator.operator.router({
   // made, its before and after join the log as a row of their own.
   setEarlyAccess: operator.operator.setEarlyAccess.handler(async ({ context, input }) => {
     const change = await setEarlyAccess({ db: context.db }, input);
-    // Closing a workspace's business apps takes its guest menus off the edge at once (spec 0065, H1).
-    if (!input.on) await context.edgeCache.forget(menuWorkspaceTags(input.workspaceId));
+    // Closing a workspace's business apps takes its guest menus (spec 0065, H1) and its business page, with the
+    // page's photos (spec 0066), off the edge at once. The switch has committed, so a failed purge never refuses it.
+    if (!input.on) {
+      await forgetAfterCommit(context.edgeCache, menuWorkspaceCacheTags(input.workspaceId));
+      await forgetAfterCommit(context.edgeCache, businessCacheTags(input.workspaceId));
+    }
     const event = {
       userId: context.user.id,
       action: 'operator.earlyAccessChanged',

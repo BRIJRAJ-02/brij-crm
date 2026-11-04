@@ -1,6 +1,6 @@
-import { menuWorkspaceTags } from '@crm/contracts';
 import {
   businessCacheTags,
+  menuWorkspaceCacheTags,
   countSubmissionsBeyond,
   deleteWorkspace,
   getWorkspaceSettings,
@@ -133,7 +133,7 @@ export const workspaceRouter = member.workspace.router({
     );
     await followInDirectory('delete', () => context.directory.setWorkspaceDeleted(context.scope.workspaceId, true));
     // Its guest menus leave the edge at once (spec 0065, H1; the security review).
-    await context.edgeCache.forget(menuWorkspaceTags(context.scope.workspaceId));
+    await forgetAfterCommit(context.edgeCache, menuWorkspaceCacheTags(context.scope.workspaceId));
     // Its business page answers 404 now: the edge's copies go too (spec 0066, AC-6816).
     await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     // Each member is told (AC-823), after the commit and without holding up the answer; on Vercel the instance stays

@@ -150,6 +150,7 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // own entry), and the business page's menu (a MenuSource, run inside the page's own workspace transaction).
   'businessCacheId',
   'businessCacheTags',
+  'menuWorkspaceCacheTags',
   'bookingCompanyOf',
   'businessMenuOf',
   'periodDays',

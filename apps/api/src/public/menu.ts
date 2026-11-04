@@ -11,8 +11,15 @@
 // Routes); the browser always asks again (max-age 0), so a guest on the page sees Sold out on the next read. 60 reads a
 // minute per address, as the booking pages' reads; the `/m/<key>` render's reads count per guest and per key
 // (`MENU_LIMITS`).
-import { brandCacheTags, menuCacheTags, menuWorkspaceTags, MENU_KEY_PATTERN, type MenuPhotoSize } from '@crm/contracts';
-import { enterMenuPage, menuLookStylesheet, readMenuPhoto, readPublicMenu, type MenuEntry } from '@crm/core/public';
+import { brandCacheTags, menuCacheTags, MENU_KEY_PATTERN, type MenuPhotoSize } from '@crm/contracts';
+import {
+  enterMenuPage,
+  menuLookStylesheet,
+  menuWorkspaceCacheTags,
+  readMenuPhoto,
+  readPublicMenu,
+  type MenuEntry,
+} from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { loadStoredImage } from '../brand-logo.ts';
@@ -101,7 +108,7 @@ export function mountPublicMenu(app: Hono<{ Variables: Variables }>, deps: Publi
   const tag = (entry: MenuEntry) =>
     deps.edgeCache?.tag([
       ...menuCacheTags(entry.placeId),
-      ...menuWorkspaceTags(entry.workspaceId),
+      ...menuWorkspaceCacheTags(entry.workspaceId),
       ...brandCacheTags(entry.workspaceId),
     ]);
 

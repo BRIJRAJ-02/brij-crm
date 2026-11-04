@@ -162,5 +162,5 @@ export {
 
 /** The business pages search engines may list (spec 0066, AC-6644), for sitemap-handles.xml. */
 export { bookingCompanyOf, listSitemapBusinesses } from './hospitality/public-page.ts';
-/** The business's edge cache tags (spec 0066): an opaque id, never the workspace's id. */
-export { businessCacheTags } from './hospitality/cache-tags.ts';
+/** The business's and its guest menus' edge cache tags (spec 0066): an opaque id, never the workspace's id. */
+export { businessCacheTags, menuWorkspaceCacheTags } from './hospitality/cache-tags.ts';

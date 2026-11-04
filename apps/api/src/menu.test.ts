@@ -3,7 +3,7 @@
 // (Rules settled: Routes), and a photo goes up at two widths, Manage hospitality only, cleaned, and is served only as
 // the live snapshot names it (AC-6527). Real sessions, real Postgres, an in memory store.
 import { menuCacheTags, type MenuDraft, type PublicMenu } from '@crm/contracts';
-import { newId } from '@crm/core';
+import { menuWorkspaceCacheTags, newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -137,7 +137,7 @@ describe('the guest menu read (AC-6528, AC-6531)', () => {
     expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
     tagged.length = 0;
     const read = await send(`/api/public/menu/${place.menuKey}`);
-    expect(tagged.flat()).toContain(`menu-ws:${m.workspace.id}`);
+    expect(tagged.flat()).toContain(menuWorkspaceCacheTags(m.workspace.id)[0]);
     expect(read.status).toBe(200);
     expect(read.headers.get('cache-control')).toBe('public, max-age=0, s-maxage=86400');
     expect(tagged.flat()).toContain(`menu:${place.id}`);
@@ -145,8 +145,10 @@ describe('the guest menu read (AC-6528, AC-6531)', () => {
     expect(menu.menu.items[itemId]?.name).toBe('Soup');
     expect(menu.place.timeZone).toBe('Europe/London');
     expect(menu.soldOut).toEqual([]);
-    // Nothing of the draft or a member: no counts, no member ids.
+    // Nothing of the draft or a member: no counts, no member ids. Nor the workspace's id: its cache tag is opaque.
     expect(JSON.stringify(menu)).not.toMatch(/changes|memberId|published_by/);
+    expect(JSON.stringify(menu)).not.toContain(m.workspace.id);
+    expect(tagged.flat().filter((tag) => tag.startsWith('menu-ws:'))).toEqual([`menu-ws:${menu.cacheId}`]);
   });
 
   it('purges on Sold out and shows it live; a profile change and removing Menu purge too, and the page goes', async () => {
@@ -167,7 +169,7 @@ describe('the guest menu read (AC-6528, AC-6531)', () => {
     await m.client.hospitality.remove({ workspace: m.slug, app: 'menu', mutationId: newId() });
     expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
     // Every answer carries the workspace's own tag too, which a deleted workspace or closed early access forgets.
-    expect(tagged.flat()).toContain(`menu-ws:${m.workspace.id}`);
+    expect(tagged.flat()).toContain(menuWorkspaceCacheTags(m.workspace.id)[0]);
     const gone = await send(`/api/public/menu/${place.menuKey}`);
     expect(gone.status).toBe(404);
     expect(gone.headers.get('cache-control')).toBe('no-store');
@@ -340,6 +342,6 @@ describe('the workspace’s own menu tag (security review)', () => {
     const { m } = await menuWorkspace();
     forgotten.length = 0;
     await m.client.workspace.delete({ workspace: m.slug, confirmName: m.workspace.name, mutationId: newId() });
-    expect(forgotten).toContainEqual([`menu-ws:${m.workspace.id}`]);
+    expect(forgotten).toContainEqual([...menuWorkspaceCacheTags(m.workspace.id)]);
   });
 });

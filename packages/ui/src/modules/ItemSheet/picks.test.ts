@@ -15,7 +15,7 @@ const OAT = id(22);
 function menuWith(sizes: readonly { id: string; name: string; priceMinor: number }[], options = [OAT]): PublicMenu {
   return {
     placeId: id(90),
-    workspaceId: id(91),
+    cacheId: '0123456789abcdef0123456789abcdef',
     version: 2,
     business: { name: 'Somewhere' },
     place: { name: 'Soho', timeZone: 'Europe/London', locale: 'en-GB', hours: { weekly: {}, exceptions: [] } },

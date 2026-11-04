@@ -22,6 +22,7 @@ import {
 import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { readMenuBrandIn, type PageBrand } from '../brand/public.ts';
+import { businessCacheId } from './cache-tags.ts';
 import { soldOutIds } from './menu-rows.ts';
 
 const { businessProfiles, menuDrafts, menuPhotos, menuVersions, places } = schema;
@@ -114,7 +115,7 @@ export async function readPublicMenu(
     const snapshot = hidden ? { currency: parsed.data.currency, menus: [], items: {}, groups: {} } : parsed.data;
     const menu: PublicMenu = {
       placeId: entry.placeId,
-      workspaceId: entry.workspaceId,
+      cacheId: businessCacheId(entry.workspaceId),
       version: latest.version,
       business: {
         name: business?.name ?? place.name,

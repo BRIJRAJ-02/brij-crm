@@ -334,10 +334,12 @@ export function menuCacheTags(...placeIds: readonly string[]): readonly string[]
 
 /**
  * The edge cache tag every guest menu answer of a workspace carries (security review, 4 Nov 2026): deleting the
- * workspace or the operator closing its business apps forgets every place's copies at once.
+ * workspace or the operator closing its business apps forgets every place's copies at once. It takes the business's
+ * opaque cache id (`businessCacheId` in `@crm/core`), never the workspace's id, which the menu's JSON and HTML would
+ * otherwise show to anybody. Anything not such an id is left out.
  */
-export function menuWorkspaceTags(workspaceId: string): readonly string[] {
-  return /^[0-9a-f-]{36}$/.test(workspaceId) ? [`menu-ws:${workspaceId}`] : [];
+export function menuWorkspaceTags(cacheId: string): readonly string[] {
+  return /^[0-9a-f]{32}$/.test(cacheId) ? [`menu-ws:${cacheId}`] : [];
 }
 
 /** The guest menu's address on our origin. */

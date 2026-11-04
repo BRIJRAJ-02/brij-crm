@@ -35,7 +35,7 @@ const h = member.hospitality;
  * or an app installed or removed changes what `/m/<key>` answers, so its copies go once the write committed.
  */
 async function forgetMenus(context: RequestContext & { readonly scope: Parameters<typeof menuPlaceIds>[0] }) {
-  await context.edgeCache.forget(menuCacheTags(...(await menuPlaceIds(context.scope))));
+  await forgetAfterCommit(context.edgeCache, menuCacheTags(...(await menuPlaceIds(context.scope))));
 }
 
 export const hospitalityRouter = h.router({
@@ -90,7 +90,7 @@ export const hospitalityRouter = h.router({
         ...(input.hours === undefined ? {} : { hours: input.hours }),
       }),
     );
-    await context.edgeCache.forget(menuCacheTags(saved.id));
+    await forgetAfterCommit(context.edgeCache, menuCacheTags(saved.id));
     // A place's address and hours show on the business page live (spec 0066, B4): its edge copies go.
     await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, [input.placeId]));
     return saved;

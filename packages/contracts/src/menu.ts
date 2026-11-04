@@ -447,9 +447,12 @@ export type PublicMenuPlace = z.infer<typeof PublicMenuPlace>;
  * now, and the header. No member, guest or draft data, and nothing of another place.
  */
 export const PublicMenu = z.object({
-  /** The place and workspace it is, so the HTML shell files its answer under the same cache tags. */
+  /**
+   * The place it is, and its workspace's opaque cache id (32 hex digits, never the workspace's id), so the HTML shell
+   * files its answer under the same cache tags.
+   */
   placeId: Uuid,
-  workspaceId: Uuid,
+  cacheId: z.string().regex(/^[0-9a-f]{32}$/),
   version: z.number().int(),
   business: z.object({
     name: z.string(),

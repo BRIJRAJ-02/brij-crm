@@ -128,7 +128,7 @@ export const menuRouter = m.router({
     const { draft, placeIds } = await commitWrite(context, { mutationId: input.mutationId }, () =>
       setItemSoldOut(context.scope, { itemId: input.itemId, soldOut: input.soldOut }),
     );
-    await context.edgeCache.forget(menuCacheTags(...placeIds));
+    await forgetAfterCommit(context.edgeCache, menuCacheTags(...placeIds));
     // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
     await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
     return draft;
@@ -137,7 +137,7 @@ export const menuRouter = m.router({
     const { draft, placeIds } = await commitWrite(context, { mutationId: input.mutationId }, () =>
       setMenuHidden(context.scope, { hidden: input.hidden }),
     );
-    await context.edgeCache.forget(menuCacheTags(...placeIds));
+    await forgetAfterCommit(context.edgeCache, menuCacheTags(...placeIds));
     // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
     await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
     return draft;
@@ -146,7 +146,7 @@ export const menuRouter = m.router({
     const { draft, placeIds, removedPaths } = await commitWrite(context, { mutationId: input.mutationId }, () =>
       publishMenus(context.scope),
     );
-    await context.edgeCache.forget(menuCacheTags(...placeIds));
+    await forgetAfterCommit(context.edgeCache, menuCacheTags(...placeIds));
     // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
     await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
     await removeFiles(context, removedPaths);

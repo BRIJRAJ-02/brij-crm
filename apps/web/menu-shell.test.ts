@@ -10,7 +10,7 @@ const ITEM = '0199f0a0-0000-7000-8000-000000000001';
 
 const MENU: PublicMenu = {
   placeId: '0199f0a0-0000-7000-8000-0000000000aa',
-  workspaceId: '0199f0a0-0000-7000-8000-0000000000bb',
+  cacheId: '0123456789abcdef0123456789abcdef',
   version: 1,
   business: { name: 'Somewhere <Nowhere>' },
   place: {
@@ -72,7 +72,7 @@ describe('the guest menu shell', () => {
     expect(answer).toMatchObject({
       status: 200,
       outcome: 'menu',
-      tags: ['menu:0199f0a0-0000-7000-8000-0000000000aa', 'menu-ws:0199f0a0-0000-7000-8000-0000000000bb'],
+      tags: ['menu:0199f0a0-0000-7000-8000-0000000000aa', 'menu-ws:0123456789abcdef0123456789abcdef'],
     });
     expect(answer.body).toContain('<h1>Somewhere &lt;Nowhere&gt;</h1>');
     expect(answer.body).toContain('£11.50');
