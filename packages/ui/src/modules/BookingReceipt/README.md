@@ -41,3 +41,10 @@ when its guest comes back, with one line saying the host will confirm it. Its ma
 struck through. It has no Join or Add to calendar yet, because no calendar event exists until the host confirms, but
 it keeps its changes, so the guest can still cancel it. `declined` reads "This request was declined", with a red mark
 and the way to book another time.
+
+## Bookings fix pass (5 November 2026)
+
+- `placement="card"`: the booking page's last step, drawn inside its own BookingFrame card right after Confirm (critic C1), with no ground, no card of its own and no foot, as a `section` with an `h2` under the frame's `h1`. `placement="page"` (the default) is the guest's own page, as before.
+- "Tomorrow morning" (`relative`) reads quietly in the secondary text colour, not the link colour it isn't (critic A26).
+- The pace comes from the `duration-public-*` tokens.
+- `heading` replaces the state's own heading where the page knows more: a long ended booking's link reads "This booking ended" (B-13), with its time and title and no guest details, which the API no longer sends.

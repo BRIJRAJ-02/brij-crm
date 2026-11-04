@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { DialogTrigger } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
@@ -62,6 +62,17 @@ export interface BookingReceiptProps {
    * booking page's own foot.
    */
   readonly brand?: { readonly href: string; readonly label: string; readonly logo?: ProductLogo };
+  /**
+   * `page` (the default): the guest's own page, `/b/<key>/manage`, with its ground and foot. `card`: the booking
+   * page's last step, drawn inside its BookingFrame card right after Confirm (critic C1, 4 November 2026), so booking
+   * never swaps the page for another: no ground, no card of its own and no foot, which the frame already has.
+   */
+  readonly placement?: 'page' | 'card';
+  /**
+   * The heading in place of the state's own, for a state the page knows more about: a long ended booking's link
+   * ("This booking ended", B-13), whose guest details are no longer kept.
+   */
+  readonly heading?: string;
 }
 
 /**
@@ -88,8 +99,15 @@ export function BookingReceipt({
   changes,
   notice,
   brand,
+  placement = 'page',
+  heading: headingText,
 }: BookingReceiptProps) {
+  const isInCard = placement === 'card';
   const heading = useRef<HTMLHeadingElement>(null);
+  const titleId = useId();
+  // In the booking page's card the frame is the page's `main` and its `h1`: the receipt is a section under it.
+  const Root = isInCard ? 'section' : 'main';
+  const Heading = isInCard ? 'h2' : 'h1';
   // The heading takes focus as the page arrives, and again when the booking's state changes (cancelled from here).
   useEffect(() => heading.current?.focus(), [state]);
   const isLive = state === 'confirmed';
@@ -110,7 +128,12 @@ export function BookingReceipt({
               ? strings.welcome
               : strings.confirmed;
   return (
-    <main className={styles.root} data-welcome={(isLive && isWelcome) || undefined}>
+    <Root
+      className={styles.root}
+      data-placement={placement}
+      data-welcome={(isLive && isWelcome) || undefined}
+      {...(isInCard ? { 'aria-labelledby': titleId } : {})}
+    >
       <div className={styles.column}>
         <header className={styles.head}>
           <span className={styles.avatar}>
@@ -127,9 +150,9 @@ export function BookingReceipt({
               />
             </span>
           </span>
-          <h1 ref={heading} tabIndex={-1} className={styles.title}>
-            {title}
-          </h1>
+          <Heading ref={heading} id={titleId} tabIndex={-1} className={styles.title}>
+            {headingText ?? title}
+          </Heading>
           {/* One warm line, right after booking only: the page is a confirmation, not a form (AC-21). */}
           {isLive && isWelcome && <p className={styles.lead}>{strings.welcomeLine(hostName)}</p>}
           {state === 'requested' && <p className={styles.lead}>{strings.requestedLine(hostName)}</p>}
@@ -198,19 +221,22 @@ export function BookingReceipt({
             </p>
           )}
         </article>
-        {/* Every public page ends the same way (spec 0058, AC-26): "Powered by Timefix", quiet and centred. */}
-        <BookingFoot
-          page={isWelcome ? 'booking_confirmation' : 'booking_manage'}
-          {...(brand === undefined
-            ? {}
-            : {
-                href: brand.href,
-                newTabLabel: brand.label,
-                ...(brand.logo === undefined ? {} : { logo: brand.logo }),
-              })}
-        />
+        {/* Every public page ends the same way (spec 0058, AC-26): "Powered by Timefix", quiet and centred. In the
+            booking page's card the frame's own foot says it. */}
+        {!isInCard && (
+          <BookingFoot
+            page={isWelcome ? 'booking_confirmation' : 'booking_manage'}
+            {...(brand === undefined
+              ? {}
+              : {
+                  href: brand.href,
+                  newTabLabel: brand.label,
+                  ...(brand.logo === undefined ? {} : { logo: brand.logo }),
+                })}
+          />
+        )}
       </div>
-    </main>
+    </Root>
   );
 }
 

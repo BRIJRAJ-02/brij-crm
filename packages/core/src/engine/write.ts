@@ -213,6 +213,11 @@ export interface Change {
    */
   readonly forms: readonly string[];
   /**
+   * Bookings the write made, moved, cancelled or answered (B-17), by id: one `bookings` outbox row naming nothing, so
+   * an owner's open Bookings screen reads again without leaving the page.
+   */
+  readonly bookings: readonly string[];
+  /**
    * The background job whose batch made this write (spec 0022, milestone 3):
    * the outbox stores it in `outbox.job_id`, never published, and its
    * `records` rows carry `fromJob`.
@@ -378,6 +383,7 @@ const LIST_KEYS = [
   'timeOff',
   'automations',
   'forms',
+  'bookings',
   'nav',
   'comments',
   'notifications',
@@ -398,6 +404,15 @@ const LIST_KEYS = [
  * step takes a `CappedChange`, so handing it the full change is a type error.
  */
 export type AfterWrite = (change: Change, tx: WorkspaceTx) => Promise<void>;
+
+/**
+ * A change naming only `part`, for a write that runs outside `runWrite` (a booking's move or cancel, B-17) but still
+ * owes its event: handed to the outbox hook at the end of its own transaction, after its last other write.
+ */
+export function changeOf(scope: Pick<EngineScope, 'workspaceId' | 'actor'>, part: Partial<ChangeLists>): Change {
+  const lists = Object.fromEntries(LIST_KEYS.map((key) => [key, part[key] ?? []])) as unknown as ChangeLists;
+  return { ...lists, kind: 'write', workspaceId: scope.workspaceId, actor: scope.actor };
+}
 
 /** A hook's step that takes the change already capped: the outbox's (spec 0005). */
 export type CappedStep = (change: CappedChange, tx: WorkspaceTx) => Promise<void>;
@@ -515,6 +530,7 @@ export async function runWrite<T>(
           timeOff: [] as string[],
           automations: [] as string[],
           forms: [] as string[],
+          bookings: [] as string[],
           nav: [] as string[],
           comments: [] as CommentChange[],
           notifications: [] as string[],
@@ -562,6 +578,7 @@ export async function runWrite<T>(
             append(collected.timeOff, part.timeOff);
             append(collected.automations, part.automations);
             append(collected.forms, part.forms);
+            append(collected.bookings, part.bookings);
             append(collected.nav, part.nav);
             append(collected.comments, part.comments);
             append(collected.notifications, part.notifications);
@@ -623,6 +640,7 @@ export async function runWrite<T>(
           timeOff: [...new Set(collected.timeOff)],
           automations: [...new Set(collected.automations)],
           forms: [...new Set(collected.forms)],
+          bookings: [...new Set(collected.bookings)],
           ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
           nav: [...new Set(collected.nav)],
           comments: [...collected.comments],

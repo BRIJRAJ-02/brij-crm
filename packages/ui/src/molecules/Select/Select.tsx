@@ -184,6 +184,11 @@ export interface SelectProps {
   /** Opens it on first render: a grid cell's edit, stories and previews. */
   readonly defaultOpen?: boolean;
   readonly onOpenChange?: (isOpen: boolean) => void;
+  /**
+   * A band at the open list's foot for one setting that belongs with the choice (a booking page's 12h or 24h clock
+   * under its time zones, as Calendly keeps it: critic A24). Searchable lists only, under the list.
+   */
+  readonly popoverFoot?: ReactNode;
 }
 
 /** The event React Aria's search sends its list to mark the first match (`FOCUS_EVENT` in react-aria's autocomplete). */
@@ -322,6 +327,7 @@ export function SelectBase({
   triggerRef,
   onCreate,
   defaultSearch,
+  popoverFoot,
 }: SelectProps) {
   const { contains, startsWith } = useFilter({ sensitivity: 'base' });
   // In a popover the popover's edge frames the trigger, so its focus is the accent edge alone.
@@ -632,6 +638,7 @@ export function SelectBase({
                 </div>
                 {list}
               </Autocomplete>
+              {popoverFoot !== undefined && <div className={styles.popoverFoot}>{popoverFoot}</div>}
             </div>
           </FocusScope>
         ) : (

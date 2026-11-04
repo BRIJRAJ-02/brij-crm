@@ -6,32 +6,23 @@
        eases to this scale while held. Set here, not in tokens.css (generated from the artifact, where it stays 1 for
        the app), because this module only ever mounts on the public pages. */
     --scale-press: 0.97;
-    /* The booking page's calmer pace, here too (the owner, 2 November 2026): the motion tokens run about half as long
-       again, and a changed Button label (Guests (2), Adding) resolves in. Literals until the artifact carries them. */
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-hover: 180ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-press: 220ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-exit: 200ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-popover: 280ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-move: 340ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-modal: 380ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --label-swap: 260ms;
+    /* The booking page's calmer pace, here too (the owner, 2 November 2026): the public pages' `duration-public-*`
+       tokens stand in for the library's, and a changed Button label (Guests (2), Adding) resolves in. */
+    --duration-hover: var(--duration-public-hover);
+    --duration-press: var(--duration-public-press);
+    --duration-exit: var(--duration-public-exit);
+    --duration-popover: var(--duration-public-popover);
+    --duration-move: var(--duration-public-move);
+    --duration-modal: var(--duration-public-modal);
+    --label-swap: var(--duration-public-move);
     /* The blur the heading rises out of (transitions.dev's texts reveal, 3px), a literal because the token set has no
        blur yet: the artifact owes a motion blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
     --reveal-blur: 3px;
-    /* transitions.dev's timings (the owner, 2 November 2026): a text reveal and the success check 500ms, a panel
-       opening 400ms. Literals until the artifact carries them as tokens. */
-    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --reveal-duration: 600ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --panel-duration: 480ms;
+    /* transitions.dev's timings (the owner, 2 November 2026): a text reveal, the success check and a panel opening
+       at the public reveal (under 500ms). */
+    --reveal-duration: var(--duration-public-reveal);
+    --panel-duration: var(--duration-public-reveal);
 
     box-sizing: border-box;
     display: flex;
@@ -191,6 +182,26 @@
     color: var(--on-accent);
   }
 
+  /* Drawn inside the booking page's own card, as its last step (critic C1): no page around it, no card of its own
+     and no foot, since the frame has its own. */
+  .root[data-placement='card'] {
+    min-block-size: 0;
+    padding: var(--space-24) 0 0;
+    background: none;
+  }
+
+  .root[data-placement='card'] .column {
+    max-inline-size: none;
+  }
+
+  .root[data-placement='card'] .card {
+    border: none;
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
   .chipWeekday,
   /* Right after booking, the page arrives as one moment rather than all at once (the owner, 2 November 2026: magical
      moments, as a new workspace opens in Twenty): the host's picture lands, the tick pops on it and sends its rings
@@ -274,9 +285,10 @@
     color: var(--text-secondary);
   }
 
+  /* How soon, quietly: in the link colour it read as a link it isn't (critic A26). */
   .relative {
     margin: 0;
-    color: var(--link);
+    color: var(--text-secondary);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
   }

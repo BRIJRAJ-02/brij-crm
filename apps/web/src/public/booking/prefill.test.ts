@@ -51,6 +51,18 @@ describe('a form’s hand off on the booking page', () => {
     expect(takeHandoff(new URL(`https://app.test/b/${KEY}`), KEY, storage)).toEqual({});
   });
 
+  it('takes the token from the fragment, where no request log sees it, keeping the rest of the fragment', () => {
+    const storage = memory();
+    expect(takeHandoff(new URL(`https://app.test/b/${KEY}?utm_source=news#p=fb1.abc.def&o=x`), KEY, storage)).toEqual({
+      handoff: 'fb1.abc.def',
+      tidied: `/b/${KEY}?utm_source=news#o=x`,
+    });
+    expect(takeHandoff(new URL(`https://app.test/b/${KEY}#p=fb1.abc.def`), KEY, memory())).toEqual({
+      handoff: 'fb1.abc.def',
+      tidied: `/b/${KEY}`,
+    });
+  });
+
   it('drops an empty or oversized token from the address and keeps nothing', () => {
     const storage = memory();
     expect(takeHandoff(new URL(`https://app.test/b/${KEY}?p=`), KEY, storage)).toEqual({ tidied: `/b/${KEY}` });

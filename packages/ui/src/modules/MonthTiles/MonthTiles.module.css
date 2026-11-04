@@ -1,14 +1,18 @@
 /* A booking page's month: square tiles that fill their columns with one even
    gap. Open days are tinted in the accent with bold link coloured numbers, so
    bookable reads as an action (Calendly's); closed days are quiet text, the
-   chosen day is the accent, today is ringed, and a day holding a Best time
-   carries a dot. */
+   chosen day is the accent, today carries a small dot under its number (a ring
+   read as focus or a choice: critics C10, A25), and a day holding a Best time
+   carries a dot in its corner. */
 @layer components {
   .root {
     /* The blur a month resolves out of as it slides in (transitions.dev's page slide, 3px), a literal because the
        token set has no blur yet: the artifact owes a motion blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
     --slide-blur: 3px;
+
+    /* The tallest a day's tile grows: twice a row, about the tile a laptop's month already draws. */
+    --month-tile-max: calc(var(--size-row) * 2);
 
     display: flex;
     flex-direction: column;
@@ -71,7 +75,7 @@
     text-transform: uppercase;
   }
 
-  /* Six weeks, every row a tile's height, a row of blanks too: every month is one height. */
+  /* The weeks the month needs (critic B-21), every row a tile's height. */
   .grid {
     grid-auto-rows: 1fr;
     animation: month-fade var(--duration-modal) var(--ease-out) both;
@@ -93,6 +97,7 @@
     display: grid;
     place-items: center;
     aspect-ratio: 1;
+    max-block-size: var(--month-tile-max);
     color: var(--border-strong);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -109,6 +114,9 @@
     place-items: center;
     inline-size: 100%;
     aspect-ratio: 1;
+    /* Square while a column is narrow; a wide frame (a site's embed, a tablet) caps the height, so the month never
+       towers over the times (critic B-11). */
+    max-block-size: var(--month-tile-max);
     padding: 0;
     border: none;
     border-radius: var(--radius-md);
@@ -132,10 +140,18 @@
     cursor: default;
   }
 
-  /* Today: the calendars' one today mark, a hairline accent ring (open or closed alike). */
-  .day[data-today] {
-    outline: var(--border-width-hairline) solid var(--accent-line);
-    outline-offset: calc(-1 * var(--border-width-hairline));
+  /* Today: a small dot under its number in the day's own colour (open or closed alike), so the ring stays focus's
+     alone (critics C10, A25: Cal.com's today mark). */
+  .day[data-today]::before {
+    position: absolute;
+    inset-block-end: var(--space-6);
+    inset-inline-start: 50%;
+    inline-size: var(--space-4);
+    block-size: var(--space-4);
+    border-radius: var(--radius-full);
+    background: currentcolor;
+    content: '';
+    translate: -50% 0;
   }
 
   /* A day's place while the times load: the month reads, and the tiles wait

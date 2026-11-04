@@ -19,6 +19,13 @@ export interface BookingFact {
   readonly id: string;
   readonly icon: IconName;
   readonly children: ReactNode;
+  /**
+   * A quiet second part after it, in the time zone picker's own format ("London time" then "GMT · 18:00"), so a fact
+   * reads the same on every step (critic C4); or a quiet line of its own (`isQuiet`).
+   */
+  readonly aside?: string;
+  /** The whole line is quiet: a rule the page states plainly ("Can't be booked within 4 hours"). */
+  readonly isQuiet?: boolean;
 }
 
 /** Who is booked, as the rail heads it. */
@@ -41,8 +48,11 @@ export interface BookingTeam {
   readonly label: string;
 }
 
-/** A fact's identity: its id, and its words when it is words, so a fact that says something new is a new line. */
-const factKey = (fact: BookingFact) => (typeof fact.children === 'string' ? `${fact.id}:${fact.children}` : fact.id);
+/**
+ * A fact's identity is its id alone (critic C4, 4 November 2026): keyed by its words too, the zone's line, which
+ * carries the ticking clock, was drawn anew and blurred in every minute. A fact that changes its words keeps its line.
+ */
+const factKey = (fact: BookingFact) => fact.id;
 
 /** The most faces a team page's rail shows before "+N". */
 const TEAM_FACES = 4;
@@ -70,6 +80,11 @@ export interface BookingFrameProps {
   readonly aside?: ReactNode;
   /** A band across the card's foot: the Book bar. */
   readonly footer?: ReactNode;
+  /**
+   * While nothing is chosen yet, what the band says in Book's place ("Pick a time"): a quiet line on a wide page,
+   * and no band at all on a phone, where Book arrives as a bar held to the window's foot once a time is picked.
+   */
+  readonly footerWaiting?: string;
   /**
    * Another view of the times (List, Book by chat), drawn over the month: the panes and the footer stay underneath,
    * hidden and inert, and the cover takes exactly their box. So every view is the month view's size, and switching
@@ -154,6 +169,7 @@ export function BookingFrame({
   children,
   aside,
   footer,
+  footerWaiting,
   cover,
   coverFooter,
   coverPlace = 'body',
@@ -186,6 +202,15 @@ export function BookingFrame({
   const isCovered = cover !== undefined;
   const isCardCovered = isCovered && coverPlace === 'card';
   const claim = claimHref === undefined ? {} : { claimHref };
+  // The card's foot band: Book, or while nothing is chosen the quiet line in its place (`footerWaiting`).
+  const footBand = (content: ReactNode) =>
+    footerWaiting === undefined ? (
+      <div className={styles.footer}>{content}</div>
+    ) : (
+      <div className={styles.footer} data-waiting="">
+        <p className={styles.footerHint}>{footerWaiting}</p>
+      </div>
+    );
   return (
     <main
       className={styles.root}
@@ -275,12 +300,16 @@ export function BookingFrame({
                     <li
                       key={factKey(fact)}
                       className={styles.fact}
+                      data-quiet={fact.isQuiet === true || undefined}
                       {...(firstFacts.has(factKey(fact)) ? {} : { 'data-reveal': true })}
                     >
                       <span className={styles.factIcon}>
                         <Icon name={fact.icon} size="sm" tone="muted" />
                       </span>
-                      <span className={styles.factBody}>{fact.children}</span>
+                      <span className={styles.factBody}>
+                        {fact.children}
+                        {fact.aside !== undefined && <span className={styles.factAside}>{fact.aside}</span>}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -292,7 +321,6 @@ export function BookingFrame({
               )}
             </div>
           )}
-          <BookingFoot placement="rail" logo={logo} {...claim} />
         </aside>
         <div className={styles.main}>
           {banner}
@@ -302,8 +330,6 @@ export function BookingFrame({
             {...(isCardCovered ? {} : { 'aria-label': heading ?? title ?? strings.loading })}
             data-instant={shown.isInstant || undefined}
             data-place={isCardCovered ? 'card' : undefined}
-            // In a site's embed the card follows its step rather than holding the month's height (`isEmbedded`).
-            data-embedded={(isEmbedded && isCardCovered) || undefined}
             aria-busy={isLoading || undefined}
           >
             {(heading !== undefined || toolbar !== undefined) && (
@@ -338,18 +364,20 @@ export function BookingFrame({
                   <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
                   {aside !== undefined && <div className={styles.aside}>{aside}</div>}
                 </div>
-                {footer !== undefined && <div className={styles.footer}>{footer}</div>}
+                {footer !== undefined && footBand(footer)}
               </div>
               {isCovered && (
                 <div key={view} className={styles.cover}>
                   <div className={styles.coverBody}>{cover}</div>
-                  {coverFooter !== undefined && <div className={styles.footer}>{coverFooter}</div>}
+                  {coverFooter !== undefined && footBand(coverFooter)}
                 </div>
               )}
             </div>
           </section>
-          <BookingFoot placement="page" logo={logo} {...claim} />
         </div>
+        {/* After the card in the reading order (critic C7): drawn at the rail's foot on a wide page, under the card on
+            a phone. */}
+        <BookingFoot placement="rail" logo={logo} {...claim} />
       </div>
     </main>
   );
@@ -603,6 +631,10 @@ export interface BookingMessageProps {
   readonly isLoading?: boolean;
   /** Which public page shows the message, for the wordmark link's tags: the booking page (the default), a profile, or the guest's page. */
   readonly page?: PoweredByPage;
+  /** Whose page it is, when that is known (a paused page, critic B-09): their face over the message. */
+  readonly host?: { readonly name: string; readonly image?: string };
+  /** Somewhere to go instead: the host's link page ("See Ada's page"). */
+  readonly action?: { readonly href: string; readonly label: string };
 }
 
 /**
@@ -616,6 +648,8 @@ export function BookingMessage({
   onRetry,
   isLoading = false,
   page = 'booking_page',
+  host,
+  action,
 }: BookingMessageProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -638,10 +672,25 @@ export function BookingMessage({
             </>
           ) : (
             <>
+              {host !== undefined && (
+                <Avatar
+                  name={host.name}
+                  size="xl"
+                  isDecorative
+                  {...(host.image === undefined ? {} : { src: host.image })}
+                />
+              )}
               <h1 ref={heading} tabIndex={-1} className={styles.messageTitle}>
                 {title}
               </h1>
               {children !== undefined && <p className={styles.description}>{children}</p>}
+              {action !== undefined && (
+                <div>
+                  <ButtonLink href={action.href} iconRight="arrow-right">
+                    {action.label}
+                  </ButtonLink>
+                </div>
+              )}
               {onRetry !== undefined && (
                 <div>
                   <Button icon="refresh-cw" onPress={onRetry}>

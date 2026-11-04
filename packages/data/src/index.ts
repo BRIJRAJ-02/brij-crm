@@ -181,6 +181,7 @@ import { createPreview, type PreviewSource } from './computed/preview.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import type * as DayEdits from './bookings/team-day.ts';
+import { followBookings } from './bookings/live.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import {
   createBookingsStore,
@@ -2356,6 +2357,28 @@ export function createDataLayer({
       100 + Math.round(random() * 300),
     );
   });
+  // A booking made, moved, cancelled or answered (B-17), on a public page, in chat or by a member in another tab:
+  // Bookings' held reads read again in place, once for a burst (`bookings/live.ts`).
+  followBookings(router, (workspace) => {
+    refreshBookings(workspace);
+  });
+  /**
+   * A member's booking write under a mutation id this tab knows (B-17): its `bookings` echo (and, for a booking made
+   * here, its person's `records` echo, `echoes`) is skipped, since each such write reads every held Bookings view
+   * again on its answer.
+   */
+  const bookingWrite = async <T>(echoes: number, send: (mutationId: string) => Promise<T>): Promise<T> => {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    try {
+      const answer = await send(mutationId);
+      mutations.answered(mutationId, echoes);
+      return answer;
+    } catch (error) {
+      mutations.forget(mutationId);
+      throw error;
+    }
+  };
   // An automation, or a run's outcome, changed (parity #53): the held list and log read again, once for a burst.
   router.on('automations', (workspace) => {
     automationsLoaded?.changed(workspace);
@@ -2454,6 +2477,8 @@ export function createDataLayer({
       layer.reload(workspace);
     });
     schedules.changed(workspace);
+    // Bookings hear of changes by their own event now (B-17): a reset reads what Bookings holds again.
+    refreshBookings(workspace);
     accessLoaded?.teamWeek.changed(workspace);
     accessLoaded?.timeOff.changed(workspace);
     automationsLoaded?.changed(workspace);
@@ -4368,16 +4393,25 @@ export function createDataLayer({
       requests: (workspace: string, pageId: string): Promise<BookingRequestView[]> =>
         call((options) => api.bookingFlow.requests({ workspace, pageId }, options)),
       confirm: (workspace: string, bookingId: string): Promise<boolean> =>
-        call((options) => api.bookingFlow.confirm({ workspace, bookingId, mutationId: mintId() }, options)).then(
-          (answer) => answer.confirmed,
-        ),
+        bookingWrite(1, (mutationId) =>
+          call((options) => api.bookingFlow.confirm({ workspace, bookingId, mutationId }, options)),
+        ).then((answer) => {
+          // Its own echo is skipped, so this tab's held Bookings views read the answer now.
+          refreshBookings(workspace);
+          return answer.confirmed;
+        }),
       decline: (workspace: string, bookingId: string, reason?: string): Promise<boolean> =>
-        call((options) =>
-          api.bookingFlow.decline(
-            { workspace, bookingId, ...(reason === undefined ? {} : { reason }), mutationId: mintId() },
-            options,
+        bookingWrite(1, (mutationId) =>
+          call((options) =>
+            api.bookingFlow.decline(
+              { workspace, bookingId, ...(reason === undefined ? {} : { reason }), mutationId },
+              options,
+            ),
           ),
-        ).then((answer) => answer.declined),
+        ).then((answer) => {
+          refreshBookings(workspace);
+          return answer.declined;
+        }),
     },
     bookingPages: {
       /** A new page's id: mint it once per New page, and send the same one again on a retry. */
@@ -5139,8 +5173,9 @@ export function createDataLayer({
         workspace: string,
         input: Omit<BookAsHostInput, 'workspace' | 'mutationId'>,
       ): Promise<{ bookingId: string; notInCrm?: string }> => {
-        const booked = await call((options) =>
-          api.bookings.bookAsHost({ ...input, workspace, mutationId: mintId() }, options),
+        // Two echoes: the person it filed (`records`) and the `bookings` row.
+        const booked = await bookingWrite(2, (mutationId) =>
+          call((options) => api.bookings.bookAsHost({ ...input, workspace, mutationId }, options)),
         );
         reloadBookings(workspace);
         return booked;
@@ -5194,10 +5229,9 @@ export function createDataLayer({
           ...(reason === '' ? {} : { cancelReason: reason }),
         }));
         try {
-          await call((options) =>
-            api.bookings.cancel(
-              { workspace, bookingId, ...(reason === '' ? {} : { reason }), mutationId: mintId() },
-              options,
+          await bookingWrite(1, (mutationId) =>
+            call((options) =>
+              api.bookings.cancel({ workspace, bookingId, ...(reason === '' ? {} : { reason }), mutationId }, options),
             ),
           );
         } catch (error) {
@@ -5227,10 +5261,12 @@ export function createDataLayer({
           };
         });
         try {
-          await call((options) =>
-            api.bookings.move(
-              { workspace, bookingId, start, ...(minutes === undefined ? {} : { minutes }), mutationId: mintId() },
-              options,
+          await bookingWrite(1, (mutationId) =>
+            call((options) =>
+              api.bookings.move(
+                { workspace, bookingId, start, ...(minutes === undefined ? {} : { minutes }), mutationId },
+                options,
+              ),
             ),
           );
         } catch (error) {

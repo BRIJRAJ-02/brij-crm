@@ -189,21 +189,18 @@ describe('a next times chip’s time (spec 0061, AC-6110)', () => {
     fakeApi('month', [new Date(Date.parse(start) + 3_600_000).toISOString()]);
     openAt(`?at=${encodeURIComponent(start)}&len=30`);
     show();
-    await loaded();
-    await loaded();
-    expect(host?.textContent).toContain('That time was just taken. Here are the others.');
+    // The reads go through a few more promises since the slots read waits on the link hash: wait for the line.
+    await vi.waitFor(() => expect(host?.textContent).toContain('That time was just taken. Here are the others.'));
     expect(host?.textContent).not.toContain('Your name');
   });
 
-  it('says so for a time no read can cover, rather than waiting in silence', async () => {
+  it('says a time already gone by has passed, rather than waiting in silence (critic B-08)', async () => {
     const start = tomorrow();
     fakeApi('month', [start]);
     // Yesterday: before the first read's window, so no answer could ever hold it.
     openAt(`?at=${encodeURIComponent(new Date(Date.now() - 86_400_000).toISOString())}&len=30`);
     show();
-    await loaded();
-    await loaded();
-    expect(host?.textContent).toContain('That time was just taken. Here are the others.');
+    await vi.waitFor(() => expect(host?.textContent).toContain('That time has passed. Here are the next ones.'));
   });
 
   it('opens as it always did for an address whose at is no instant', async () => {
@@ -368,7 +365,8 @@ describe('Book by chat does what the details step does (chat parity, 4 Nov 2026)
     };
     await type('tomorrow at 9, Grace Hopper, grace@example.com');
     // The required question, in the host's voice, answered with a chip.
-    await vi.waitFor(() => expect(host?.textContent).toContain('One more thing. Budget?'));
+    // The first turn waits out the fill ticket's settle time (TICKET_SETTLE_MS, B-04).
+    await vi.waitFor(() => expect(host?.textContent).toContain('One more thing. Budget?'), { timeout: 5_000 });
     await press('Under 5k');
     // Then one row for the optional things.
     await vi.waitFor(() => expect(host?.textContent).toContain('Anything else before I book it?'));
@@ -378,7 +376,7 @@ describe('Book by chat does what the details step does (chat parity, 4 Nov 2026)
     await vi.waitFor(() => expect(host?.textContent).toContain('Added. Anything else before I book it?'));
     await press('That’s all');
     await press('Yes, book it');
-    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    await vi.waitFor(() => expect(sent).toHaveLength(2), { timeout: 5_000 });
     // The page's own lines never reach the server's replay: only what the visitor said to the chat.
     expect(sent[1]?.messages).toEqual([
       { role: 'visitor', text: 'tomorrow at 9, Grace Hopper, grace@example.com' },

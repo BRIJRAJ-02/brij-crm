@@ -65,6 +65,45 @@ export const Welcome: Story = {
   },
 };
 
+/**
+ * The booking page's last step (critic C1): drawn inside the page's own card right after Confirm, a section under the
+ * frame's heading, with no ground, card or foot of its own.
+ */
+export const InTheBookingCard: Story = {
+  args: { placement: 'card' },
+  render: (args) => (
+    <Stage width="narrow">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByRole('heading', { level: 2, name: 'You’re booked' })).toHaveFocus();
+    await expect(canvasElement.querySelector('main')).toBeNull();
+    await expect(timefixLinkTags(canvasElement)).toEqual([]);
+  },
+};
+
+/** A long ended booking's link (B-13): its own heading, the time and title, and no guest details, which aren't kept. */
+export const Ended: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    state: 'past',
+    isWelcome: false,
+    heading: 'This booking ended',
+    facts: [],
+    again: { label: 'Book again', href: '/b/abc' },
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'This booking ended' })).toHaveFocus();
+    await expect(canvas.queryByText('Who')).toBeNull();
+  },
+};
+
 /** Cancelled: the time struck through, and a way to book again. */
 export const Cancelled: Story = {
   args: {

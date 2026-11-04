@@ -1,7 +1,8 @@
 /* The times of one day: a heading with the clock switch, then outlined time
-   buttons. The picked one fills. In a column the
-   list scrolls inside its pane with a fade at the foot; in a grid it runs two
-   to four across as room allows. */
+   buttons. The picked one fills. In a column held to its pane's height (a wide
+   page's month) the list scrolls inside it, with the fade its pane hands down
+   (`--slot-list-mask`); anywhere else it grows with the page. In a grid it runs
+   two to four across as room allows. */
 @layer components {
   .root {
     /* The soft blur words resolve out of when they change in place (transitions.dev's text swap soft, 2px). A literal
@@ -37,6 +38,10 @@
     color: var(--text);
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
+  }
+
+  .headingWords {
+    display: inline-block;
     animation: slot-swap var(--duration-move) var(--ease-in-out) both;
   }
 
@@ -75,7 +80,7 @@
     min-block-size: 0;
     padding-block-end: var(--space-16);
     overflow-y: auto;
-    mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-24)), transparent);
+    mask-image: var(--slot-list-mask, none);
   }
 
   /* A grid takes the rest of its view (the List view over the month), its rows from the top. */
@@ -104,11 +109,12 @@
     }
   }
 
+  /* A new day's times come in together with a short stagger, the whole list in under 300ms (critic C8). */
   .item {
     display: flex;
     gap: var(--space-8);
-    animation: slot-in var(--duration-popover) var(--ease-out) both;
-    animation-delay: calc(var(--slot-index, 0) * var(--duration-hover) / 6);
+    animation: slot-in var(--duration-hover) var(--ease-out) both;
+    animation-delay: calc(var(--slot-index, 0) * var(--duration-hover) / 15);
   }
 
   /* A time's place while the times load: a time's own height, and no entrance,
@@ -141,8 +147,15 @@
     transition:
       border-color var(--duration-hover) var(--ease-hover),
       background-color var(--duration-hover) var(--ease-hover),
-      flex-grow var(--duration-move) var(--ease-out),
       scale var(--duration-press) var(--ease-out);
+  }
+
+  /* Under a finger every time is at least 44 tall, the size Apple and Material ask for (QA B-16). */
+  @media (pointer: coarse) {
+    .slot,
+    .item[data-loading] {
+      min-block-size: calc(var(--size-row) + var(--space-8) + var(--space-2));
+    }
   }
 
   /* A press eases the time down to --scale-press: 1 in the app, 0.97 where the public booking page sets it. */
@@ -244,7 +257,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .item,
-    .heading,
+    .headingWords,
     .time {
       animation-name: slot-fade;
     }
@@ -254,12 +267,11 @@
     }
   }
 
-  /* Times resolve out of their placeholders with a little blur, as content settles out of a skeleton. */
+  /* Times fade up into place, a short rise and no blur: a whole day of blurred buttons cost a phone frames. */
   @keyframes slot-in {
     from {
       opacity: 0;
       translate: 0 var(--space-4);
-      filter: blur(var(--swap-blur));
     }
   }
 

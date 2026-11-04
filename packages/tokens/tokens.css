@@ -321,6 +321,14 @@
     --duration-exit: 120ms;
     --duration-spin: 600ms;
     --duration-pulse: 1400ms;
+    --duration-public-hover: 180ms;
+    --duration-public-press: 220ms;
+    --duration-public-popover: 280ms;
+    --duration-public-move: 300ms;
+    --duration-public-modal: 340ms;
+    --duration-public-exit: 180ms;
+    --duration-public-slide: 320ms;
+    --duration-public-reveal: 440ms;
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
     --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
@@ -342,6 +350,7 @@
     --border-width-hairline: 1px;
     --border-width-thick: 2px;
     --bp-page-compact: 1024px;
+    --bp-page-frame: 700px;
     --bp-container-sm: 320px;
     --bp-container-md: 480px;
     --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;

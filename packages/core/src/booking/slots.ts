@@ -32,6 +32,18 @@ import { computeSlots, type BookedSpan, type DateOverride, type Span, type Weekl
 const { bookingHosts, bookingPageMembers, bookingPages, bookings } = schema;
 
 /** A page as the services read it: its row, the settings parsed, and the hours it books by. */
+/**
+ * The notice a page's times keep, in minutes: its own minimum notice, none on a private page (spec 0027, AC-707), and
+ * never under an hour on a page that confirms each booking first (spec 0062, AC-6203: a request needs time to be
+ * answered before it starts). The slots read and the public page's facts say the same number.
+ */
+export function noticeMinutesOf(
+  page: Pick<PageRecord, 'requiresConfirmation' | 'isPrivate' | 'minNoticeMinutes'>,
+): number {
+  const own = page.isPrivate ? 0 : page.minNoticeMinutes;
+  return page.requiresConfirmation ? Math.max(60, own) : own;
+}
+
 export interface PageRecord extends BookingPageSettings {
   /**
    * The hours the page books by (spec 0035, AC-965): its schedule's, else its
@@ -451,13 +463,7 @@ export function pageSlots(
     now: input.now,
     from: input.from,
     to: input.to,
-    // A page that confirms each booking first offers nothing sooner than an hour (spec 0062, AC-6203): a request
-    // needs time to be answered before it starts.
-    minNoticeMinutes: page.requiresConfirmation
-      ? Math.max(60, page.isPrivate ? 0 : page.minNoticeMinutes)
-      : page.isPrivate
-        ? 0
-        : page.minNoticeMinutes,
+    minNoticeMinutes: noticeMinutesOf(page),
     windowDays: page.windowDays,
     ...(page.dailyLimit === null ? {} : { dailyLimit: page.dailyLimit }),
     ...(input.stepMinutes !== undefined

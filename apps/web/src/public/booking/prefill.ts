@@ -1,5 +1,5 @@
 // The prefill seam (spec 0025 AC-642 and AC-671, spec 0023 AC-1058): a form
-// hands the visitor to this page with a signed token (`?p=<token>`) holding
+// hands the visitor to this page with a signed token (`#p=<token>`) holding
 // only the submission id and the page id. The page never reads a name or an
 // email from the address: it asks the API, which reads them from the stored
 // submission only for a token it signed for this page and not yet expired, so
@@ -47,10 +47,16 @@ export function takeHandoff(
   publicKey: string,
   storage: HandoffStorage | undefined,
 ): { readonly handoff?: string; readonly tidied?: string } {
-  const given = address.searchParams.get('p');
+  // In the fragment (`#p=`, 4 Nov 2026), which no server or request log ever sees; an address made before that
+  // carries it in the query (`?p=`), read for as long as such a token lives.
+  const fragment = new URLSearchParams(address.hash.replace(/^#/, ''));
+  const given = fragment.get('p') ?? address.searchParams.get('p');
   if (given !== null) {
     const next = new URL(address.href);
     next.searchParams.delete('p');
+    fragment.delete('p');
+    const rest = fragment.toString();
+    next.hash = rest === '' ? '' : rest;
     const tidied = `${next.pathname}${next.search}${next.hash}`;
     const token = tokenOf(given);
     if (token === undefined) return { tidied };

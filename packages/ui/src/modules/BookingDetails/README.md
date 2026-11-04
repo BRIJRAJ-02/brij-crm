@@ -40,3 +40,10 @@ Not in the artifact.
 Booked: a `done` outcome may carry `next`. Confirm then reads Booked with a tick for one `--duration-move` before `next` runs (the page opens the receipt there), so the visitor sees the booking land (the owner, 1 November 2026). Without `next`, the page has already moved on.
 
 The chips are GuestChips (2 November 2026), shared with the manage page's guests.
+
+## Bookings fix pass (5 November 2026)
+
+- The note's label says it is optional in its own words, "Anything the host should know? (optional)" (critics C14, A11), with no hint under it.
+- The fields stop at a form's width (`size-dialog-form`), and the step's card hugs them (BookingFrame).
+- One foot band with Book's (critic C6): Back is a secondary button at Confirm's `lg` size, and Confirm takes the rest of the band, over a hairline.
+- Field outlines are unchanged: critic A12 (the quiet field border faint on a dark card) is the owner's call on the `field-border` token (owner exception, 20 Oct), raised rather than overridden here.

@@ -20,7 +20,8 @@ import {
 } from '@crm/ui/public-booking/chat';
 import { useState } from 'react';
 import { strings } from './strings.ts';
-import { dayKey, dayLabels, longDate, offerWords, rangeLabel, timeLabel, zoneName } from './time.ts';
+import { dayKey, dayLabels, offerWords, rangeLabel, timeLabel, zoneName } from './time.ts';
+import type { TicketKeeper } from './ticket.ts';
 
 /** The most visitor lines one chat sends (the API's cap). */
 const MAX_LINES = 40;
@@ -28,6 +29,9 @@ const MAX_LINES = 40;
 const MAX_TEXT = 500;
 /** How many times the greeting offers. */
 const GREETING_TIMES = 6;
+/** The visitor's daytime, in their own hours: when the greeting's times come from first. */
+const DAY_STARTS = 8;
+const DAY_ENDS = 20;
 
 /**
  * A line as the panel keeps it: as shown, as sent (a time button's words), and the visitor's name the chat had heard.
@@ -68,7 +72,10 @@ function hostOf(page: PublicBookingPage) {
   return {
     name: page.hostName,
     ...(isTeam || page.hostImage === undefined ? {} : { image: page.hostImage }),
-    label: isTeam ? page.hostName : (page.hostName.trim().split(/\s+/u)[0] ?? page.hostName),
+    // Named as what it is (critic B-10): "Ada's booking assistant", over the conversation's first line.
+    label: strings.chatAssistant(isTeam ? page.hostName : (page.hostName.trim().split(/\s+/u)[0] ?? page.hostName)),
+    // The greeting still speaks as the host ("I'm Ada").
+    first: isTeam ? page.hostName : (page.hostName.trim().split(/\s+/u)[0] ?? page.hostName),
     isTeam,
   };
 }
@@ -98,6 +105,8 @@ export interface ChatPanelProps {
   readonly onMemory: (memory: ChatMemory) => void;
   /** When the page loaded, for the bot checks a booking passes. */
   readonly startedAt: number;
+  /** The page's fill ticket (B-04): the turn that books carries it, as the details form's booking does. */
+  readonly tickets: TicketKeeper;
   /** The chat settled on another length: the rail follows. */
   readonly onDuration: (minutes: number) => void;
   readonly onBooked: (manageToken: string) => void;
@@ -154,10 +163,19 @@ function fresh(props: ChatPanelProps): ChatMemory {
  */
 function greetingOf(props: ChatPanelProps): Line {
   const { page, starts, zone, locale, hour12, duration } = props;
-  const offered = starts.slice(0, GREETING_TIMES);
+  // The visitor's daytime first (critic B-10: the greeting offered 3 AM): times between 8 and 8 where they are,
+  // else the soonest. When few of the host's times fall in it, the greeting says so.
+  const daytime = starts.filter((start) => isDaytime(start, zone));
+  const offered = (daytime.length > 0 ? daytime : starts).slice(0, GREETING_TIMES);
   const host = hostOf(page);
+  const greeting = strings.chatGreeting({ label: host.first, isTeam: host.isTeam }, page.title, duration);
+  const isOffHours = starts.length > 0 && daytime.length < Math.min(3, starts.length);
   const text =
-    offered.length === 0 ? strings.chatNoTimes(host.isTeam) : strings.chatGreeting(host, page.title, duration);
+    offered.length === 0
+      ? strings.chatNoTimes(host.first)
+      : isOffHours
+        ? `${greeting} ${strings.chatOffHours(host.first)}`
+        : greeting;
   return {
     id: 'greeting',
     role: 'assistant',
@@ -182,6 +200,14 @@ function greetingOf(props: ChatPanelProps): Line {
   };
 }
 
+/** Whether a time falls in the visitor's daytime, 8 in the morning to 8 at night where they are. */
+function isDaytime(start: string, zone: string): boolean {
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', hourCycle: 'h23' }).format(new Date(start)),
+  );
+  return hour >= DAY_STARTS && hour < DAY_ENDS;
+}
+
 /** A line the page says itself, in the host's voice: never sent to the server. */
 function hostLine(id: string, text: string, more: Partial<BookingChatLine> = {}): Line {
   return { id, role: 'assistant', text, sent: text, local: true, ...more };
@@ -197,6 +223,7 @@ export function ChatPanel(props: ChatPanelProps) {
     hour12,
     duration,
     startedAt,
+    tickets,
     memory,
     onMemory,
     onDuration,
@@ -218,8 +245,6 @@ export function ChatPanel(props: ChatPanelProps) {
   const extras = chat.extras ?? NO_EXTRAS;
   const host = hostOf(page);
   const questions = page.questions ?? [];
-  // The visitor's name as the chat last heard it: their initials beside their lines from then on.
-  const visitorName = lines.findLast((line) => line.heard !== undefined)?.heard;
   const hasSaid = lines.some((line) => line.role === 'visitor');
 
   // Before the visitor says anything, the greeting follows the page as it is drawn: its length, zone, clock and times.
@@ -284,9 +309,18 @@ export function ChatPanel(props: ChatPanelProps) {
             {
               ...held,
               id: `r${String(thread.length)}`,
-              ...(held.card === undefined || state.guests.length === 0
+              // The guests and the note fold into the card (critic B-10), so Yes is said to all of it at once.
+              ...(held.card === undefined || (state.guests.length === 0 && state.note === '')
                 ? {}
-                : { card: { ...held.card, who: `${held.card.who} · ${strings.chatGuestCount(state.guests.length)}` } }),
+                : {
+                    card: {
+                      ...held.card,
+                      more: [
+                        ...(state.guests.length === 0 ? [] : [strings.chatGuestCount(state.guests.length)]),
+                        ...(state.note === '' ? [] : [strings.chatCardNote(state.note)]),
+                      ].join(' · '),
+                    },
+                  }),
             },
           ];
     const { held: _held, ask: _ask, ...rest } = state;
@@ -413,19 +447,23 @@ export function ChatPanel(props: ChatPanelProps) {
     }
     setWaiting(true);
     setError(undefined);
-    client
-      .chat(page.publicKey, {
-        conversationId,
-        duration,
-        timeZone: zone,
-        hour12,
-        messages: said,
-        startedAt,
-        ...(state.guests.length === 0 ? {} : { guests: [...state.guests] }),
-        ...(state.note === '' ? {} : { note: state.note }),
-        ...(Object.keys(state.answers).length === 0 ? {} : { answers: { ...state.answers } }),
-        ...(handoff === undefined ? {} : { p: handoff }),
-      })
+    tickets
+      .peek()
+      .then((filled) =>
+        client.chat(page.publicKey, {
+          conversationId,
+          duration,
+          timeZone: zone,
+          hour12,
+          messages: said,
+          startedAt,
+          ...(state.guests.length === 0 ? {} : { guests: [...state.guests] }),
+          ...(state.note === '' ? {} : { note: state.note }),
+          ...(Object.keys(state.answers).length === 0 ? {} : { answers: { ...state.answers } }),
+          ...(handoff === undefined ? {} : { p: handoff }),
+          ...(filled === undefined ? {} : { ticket: filled }),
+        }),
+      )
       .then(
         (reply) => {
           setWaiting(false);
@@ -465,7 +503,8 @@ export function ChatPanel(props: ChatPanelProps) {
                       day: tile.day ?? '',
                       month: tile.month ?? '',
                       title: strings.chatCardTitle(page.title, page.hostName),
-                      when: `${longDate(start, zone, locale)} · ${rangeLabel(start, end, zone, locale, hour12)}`,
+                      // The one date format the page uses everywhere (critic B-10): "Thu 5 Nov, 10:30–11:00".
+                      when: `${dayLabels(dayKey(Date.parse(start), zone), locale).short}, ${rangeLabel(start, end, zone, locale, hour12)}`,
                       who: `${name} · ${email}`,
                     },
                   };
@@ -576,7 +615,6 @@ export function ChatPanel(props: ChatPanelProps) {
     <BookingChat
       lines={shown}
       host={host}
-      {...(visitorName === undefined ? {} : { visitorName })}
       isWaiting={isWaiting}
       isDone={ended !== undefined}
       {...(ended === 'booked'
