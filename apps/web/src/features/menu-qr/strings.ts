@@ -37,7 +37,7 @@ export const strings = {
   openMenus: 'Open Menus',
   noPlace: 'Add your place first',
   addPlace: 'Add your place',
-  failed: 'The QR codes didn’t load',
+  failed: 'Tables didn’t load',
   // One table's code.
   codeTitle: (name: string) => `QR code for ${name}`,
   codeLabel: (name: string) => `QR code for ${name}`,

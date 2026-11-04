@@ -18,6 +18,7 @@ import {
   ChoiceChips,
   CopyButton,
   EmptyState,
+  focusLater,
   Menu,
   MenuItem,
   MenuTrigger,
@@ -145,13 +146,19 @@ function PlaceCodes({
   const held = hospitality.qrCodes(slug, place.id);
   const state = useHospitality(held);
   useEffect(() => held.retain(), [held]);
-  const floorState = useHospitality(hospitality.floor(slug, place.id));
+  // The place's floor (seats, areas, and Add, Edit and Delete), read while the page is open.
+  const floorHeld = hospitality.floor(slug, place.id);
+  const floorState = useHospitality(floorHeld);
+  useEffect(() => floorHeld.retain(), [floorHeld]);
   const floor = floorState.status === 'ready' ? floorState.value : undefined;
   const [shown, setShown] = useState<string | undefined>();
   const [editing, setEditing] = useState<
     { readonly kind: 'add' } | { readonly kind: 'edit' | 'delete'; readonly table: Resource } | undefined
   >();
   const [area, setArea] = useState<string>('all');
+  // The table a Delete asks about, kept while its dialog closes, so the title never reads "Delete ?".
+  const [lastDeleting, setLastDeleting] = useState<Resource | undefined>();
+  if (editing?.kind === 'delete' && editing.table !== lastDeleting) setLastDeleting(editing.table);
   const isNarrow = useIsNarrow();
   const [renewing, setRenewing] = useState<TableQr | undefined>();
   const [zipping, setZipping] = useState<'png' | 'svg' | undefined>();
@@ -272,7 +279,7 @@ function PlaceCodes({
               onOpenChange={(isOpen) => {
                 if (!isOpen) setEditing(undefined);
               }}
-              title={strings.deleteTitle(editing?.kind === 'delete' ? tableDisplayName(editing.table.label) : '')}
+              title={strings.deleteTitle(lastDeleting === undefined ? '' : tableDisplayName(lastDeleting.label))}
               variant="confirm"
               tone="danger"
               actions={
@@ -291,6 +298,8 @@ function PlaceCodes({
                         );
                       });
                       setEditing(undefined);
+                      // The row's ⋯ goes with the row: focus moves to the page's heading.
+                      focusLater(() => document.querySelector<HTMLElement>('h1'));
                     }}
                   >
                     {strings.delete}
@@ -560,8 +569,14 @@ function TablesByArea({
 }) {
   const isNarrow = useIsNarrow();
   const resources = useMemo(() => new Map(floor?.resources.map((each) => [each.id, each]) ?? []), [floor]);
-  const areaOf = (table: TableQr) => resources.get(table.id)?.areaId ?? NO_AREA;
-  const areaNames = new Map(floor?.areas.map((each) => [each.id, each.name]) ?? []);
+  // By the floor's area once it has come; until then by the area name the codes carry.
+  const areaOf = (table: TableQr) =>
+    floor === undefined ? (table.areaName ?? NO_AREA) : (resources.get(table.id)?.areaId ?? NO_AREA);
+  const areaNames = new Map(
+    floor === undefined
+      ? tables.flatMap((table) => (table.areaName === undefined ? [] : [[table.areaName, table.areaName] as const]))
+      : floor.areas.map((each) => [each.id, each.name] as const),
+  );
   const groups = [...new Set(tables.map(areaOf))]
     .map((id) => ({
       id,
@@ -584,7 +599,9 @@ function TablesByArea({
       </EmptyState>
     );
   }
-  const shown = area === 'all' ? groups : groups.filter((group) => group.id === area);
+  // An area that has gone (its last table deleted) shows them all again.
+  const chosen = groups.some((group) => group.id === area) ? area : 'all';
+  const shown = chosen === 'all' ? groups : groups.filter((group) => group.id === chosen);
   return (
     <>
       {groups.length < 2 ? null : (
@@ -602,7 +619,7 @@ function TablesByArea({
                   : strings.areaCount(group.name, group.tables.length),
             })),
           ]}
-          selected={[area]}
+          selected={[chosen]}
           // Choosing the chosen area again shows them all (checklabs').
           onChange={(next) => onArea(next[0] ?? 'all')}
         />
@@ -620,7 +637,7 @@ function TablesByArea({
               if (column === 'table') return tableDisplayName(table.label);
               if (column === 'seats')
                 return resource === undefined ? '' : strings.seatsRange(resource.minCapacity, resource.maxCapacity);
-              if (column === 'code') return <Code>{table.code.slice(0, 6).toUpperCase()}</Code>;
+              if (column === 'code') return <Code>{table.code.slice(0, 6)}</Code>;
               if (column === 'scans') return String(table.scans);
               const name = tableDisplayName(table.label);
               return (
@@ -647,7 +664,7 @@ function TablesByArea({
                           {strings.edit}
                         </MenuItem>
                       )}
-                      <MenuItem id="renew" icon="refresh-cw">
+                      <MenuItem id="renew" icon="refresh-cw" isDanger>
                         {strings.newCode}
                       </MenuItem>
                       {resource === undefined ? null : (
