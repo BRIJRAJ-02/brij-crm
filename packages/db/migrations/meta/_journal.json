@@ -1233,6 +1233,27 @@
       "when": 1795520100000,
       "tag": "0175_hospitality_menu",
       "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "7",
+      "when": 1795520200000,
+      "tag": "0176_visits_engine",
+      "breakpoints": true
+    },
+    {
+      "idx": 177,
+      "version": "7",
+      "when": 1795520300000,
+      "tag": "0177_table_service_door",
+      "breakpoints": true
+    },
+    {
+      "idx": 178,
+      "version": "7",
+      "when": 1795520400000,
+      "tag": "0178_reservation_alerts",
+      "breakpoints": true
     }
   ]
 }

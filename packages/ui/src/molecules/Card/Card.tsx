@@ -57,6 +57,13 @@ export type CardProps = CardBase &
         /** Its heading. */
         readonly title?: string;
         readonly size?: never;
+        /**
+         * Makes the whole card one press target that opens something (a Service floor's table tile opens that table,
+         * spec 0066 B7): the title becomes a button whose hit area covers the card, so the card is one tab stop named
+         * by its title, with the card's ring on focus and a hover line. Buttons in `actions` stay their
+         * own targets above it; give a pressable card no other controls. Needs `title`.
+         */
+        readonly onPress?: () => void;
       }
     | {
         readonly placement: 'page';
@@ -64,6 +71,7 @@ export type CardProps = CardBase &
         readonly title: string;
         /** How wide the page card is: `md` (the default) or `sm`. */
         readonly size?: CardPageSize;
+        readonly onPress?: never;
       }
   );
 
@@ -80,6 +88,7 @@ export function Card({
   placement = 'inline',
   size,
   isBusy = false,
+  onPress,
 }: CardProps) {
   const level = useContext(CardTitleLevel);
   const Root = placement === 'page' ? 'main' : 'section';
@@ -97,8 +106,14 @@ export function Card({
                 <Title className={styles.title} tabIndex={-1}>
                   {title}
                 </Title>
-              ) : (
+              ) : onPress === undefined ? (
                 <Title className={styles.title}>{title}</Title>
+              ) : (
+                <Title className={styles.title}>
+                  <button type="button" className={styles.press} onClick={onPress}>
+                    {title}
+                  </button>
+                </Title>
               ))}
             {description !== undefined && <span className={styles.description}>{description}</span>}
           </span>
@@ -130,6 +145,7 @@ export function Card({
       data-tone={tone}
       data-placement={placement}
       data-size={placement === 'page' ? (size ?? 'md') : undefined}
+      data-pressable={onPress === undefined ? undefined : ''}
       aria-busy={isBusy || undefined}
     >
       {content}

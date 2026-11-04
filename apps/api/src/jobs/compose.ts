@@ -26,6 +26,7 @@ import { APP_RULES } from '../rules.ts';
 import { runAutomationTask } from './automation.ts';
 import { runPageRollup } from './page-rollup.ts';
 import { runBookingMail } from './booking-mail.ts';
+import { runVisitMail } from './visit-mail.ts';
 import { runEmail, type EmailRun, type EmailTry } from './email.ts';
 import { runnerTasks } from './graphile.ts';
 import { runNotificationEmail } from './notification-email.ts';
@@ -75,6 +76,7 @@ export interface JobTasks {
   readonly calendar: ((input: CalendarSyncInput) => Promise<CalendarSyncOutcome>) | undefined;
   /** One queued booking email; without APP_URL or a transport it is logged and dropped. */
   readonly bookingMail: (payload: unknown) => Promise<void>;
+  readonly visitMail: (payload: unknown) => Promise<void>;
   /** One queued email (`crm_email`); absent without APP_URL, so its rows wait for a worker that can send. */
   readonly email: ((payload: unknown, attempt: EmailTry) => Promise<EmailRun>) | undefined;
   /** One notification email a member, entered as that member; without a transport it is logged and dropped. */
@@ -194,6 +196,9 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
           hooks: backgroundHooks(),
           isFreeDomain: createFreeDomains(),
         });
+  // A reservation's guest emails (spec 0066 B7 lite): the same links, the same mailer.
+  const visitMail = (payload: unknown) =>
+    runVisitMail({ systemScope: (workspaceId) => systemScope(db, workspaceId), mailer, links, log }, payload);
   const bookingMail = (payload: unknown) =>
     runBookingMail(
       {
@@ -298,6 +303,7 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
     calendar,
     webhookDeliver,
     bookingMail,
+    visitMail,
     email,
     notificationEmail,
     schedulingNotice,

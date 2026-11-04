@@ -47,6 +47,8 @@ const APP_NAMES: Readonly<Record<HospitalityApp, string>> = {
   menu: 'Menu',
   menu_qr: 'Menu QR',
   table_seating: 'Table seating',
+  appointments: 'Appointments',
+  events: 'Events',
 };
 
 /** The Apps page as this reader sees it, inside the caller's transaction. */

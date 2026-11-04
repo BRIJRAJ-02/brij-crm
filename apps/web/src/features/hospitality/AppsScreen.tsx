@@ -137,6 +137,7 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
                     <Button
                       variant="ghost"
                       isPending={busy === app}
+                      label={strings.removeNamed(strings.appNames[app])}
                       onPress={() =>
                         setAsking({
                           kind: 'remove',
@@ -150,7 +151,13 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
                   )
                 ) : (
                   view.canManage && (
-                    <Button variant="primary" icon="plus" isPending={busy === app} onPress={() => install(app)}>
+                    <Button
+                      variant="primary"
+                      icon="plus"
+                      isPending={busy === app}
+                      label={strings.installNamed(strings.appNames[app])}
+                      onPress={() => install(app)}
+                    >
                       {busy === app ? strings.installing : strings.install}
                     </Button>
                   )

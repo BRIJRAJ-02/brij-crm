@@ -27,6 +27,15 @@
     align-items: stretch;
   }
 
+  /* Dense: small tiles, as many as fit at a narrow table column, closer together (a Service floor's tables, spec 0066
+     B7): two across on a phone, six or more on a wide page. */
+  .root[data-columns='dense'] {
+    --tile-gap: var(--space-8);
+
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--size-column-narrow), 100%), 1fr));
+    align-items: stretch;
+  }
+
   /* Entering (first run's Done): each tile fades in and rises a step, the next a press later. Only translate and
      opacity move, so layout never shifts, and the tiles take input from the first frame. */
   .root[data-entering] > * {

@@ -49,6 +49,23 @@ export {
   menuVersions,
 } from './menu.ts';
 export {
+  appointmentHolds,
+  appointmentItems,
+  appointments,
+  reservationAlerts,
+  serviceCategories,
+  servicePlaces,
+  serviceResources,
+  services,
+  serviceStaff,
+  serviceVariants,
+  serviceVariantStaff,
+  staff,
+  staffBlocks,
+  staffPlaces,
+  staffTimeOff,
+} from './visits.ts';
+export {
   attendeeMatch,
   attendeeResponse,
   calendarAccessRole,

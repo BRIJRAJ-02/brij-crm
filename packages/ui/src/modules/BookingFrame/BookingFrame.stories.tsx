@@ -233,6 +233,17 @@ export const WithRole: Story = {
   },
 };
 
+/** A restaurant whose one place carries its name (spec 0066 B7): the name shows once, as the h1. */
+export const SameNameHost: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { host: { name: 'Somewhere' }, title: 'Somewhere' },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Somewhere' })).toBeInTheDocument();
+    await expect(canvas.getAllByText('Somewhere', { exact: true })).toHaveLength(1);
+  },
+};
+
 /**
  * List over the month (25 October 2026): the month stays underneath, hidden and inert, and sets the card's size, so
  * switching views moves nothing; the views crossfade.
@@ -435,6 +446,30 @@ export const Failed: Story = {
     await expect(canvas.getByRole('heading', { name: 'This page didn’t load' })).toHaveFocus();
     // A message on the booking page keeps the page's tags, with the wordmark alone.
     await expect(timefixLinkTags(canvasElement)).toEqual([timefixTags('booking_page', 'footer_logo')]);
+  },
+};
+
+/** A reservation's manage link that opens nothing (spec 0066 B7): Try again, and a way on to find it by code. */
+export const FailedWithLink: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingMessage
+        title="Your reservation"
+        onRetry={fn()}
+        link={{ label: 'Find your reservation', href: '/r/somewhere/manage' }}
+        page="booking_manage"
+      >
+        This link doesn’t open a reservation.
+      </BookingMessage>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: 'Find your reservation' })).toHaveAttribute(
+      'href',
+      '/r/somewhere/manage',
+    );
   },
 };
 

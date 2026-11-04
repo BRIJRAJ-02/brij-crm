@@ -97,6 +97,8 @@ describe('apps behind early access (AC-6501, AC-6502)', () => {
       ['menu', false],
       ['menu_qr', false],
       ['table_seating', false],
+      ['appointments', false],
+      ['events', false],
     ]);
   });
 

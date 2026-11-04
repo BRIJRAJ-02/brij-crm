@@ -303,6 +303,21 @@ export const ACCESS_TABLE = {
   menuPlaceIds: { anyMember: true },
   readMenuPhotoFile: { permission: 'hospitality.service' },
   requireMenuEditor: { permission: 'hospitality.manage' },
+  // The visit engine (spec 0066, B0): the desk's offered times and booking, everyone's calendar's permission. B2 adds a
+  // guest's entry in front of the same services.
+  visitTimes: { permission: 'services.calendar' },
+  bookVisit: { permission: 'services.calendar' },
+  // Linking a staff profile to a member, refused while their visits and meetings overlap.
+  linkStaffMember: { permission: 'services.manage' },
+  // Table seating on the engine (spec 0066 B7 lite): setup is Manage hospitality's, the Service list Run service's.
+  getTableSetup: { permission: 'hospitality.manage' },
+  saveTableSetup: { permission: 'hospitality.manage' },
+  listServiceDay: { permission: 'hospitality.service' },
+  setVisitStatus: { permission: 'hospitality.service' },
+  // The reader's own new reservation emails, and walk ins seated now: whoever runs the floor.
+  setReservationAlert: { permission: 'hospitality.service' },
+  freeTables: { permission: 'hospitality.service' },
+  seatWalkIn: { permission: 'hospitality.service' },
   readBrandLogo: { anyMember: true },
   saveWorkspaceBrand: { permission: 'workspace.manage' },
   requireBrandEditor: { permission: 'workspace.manage' },

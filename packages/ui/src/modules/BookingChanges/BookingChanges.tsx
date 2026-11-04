@@ -21,8 +21,29 @@ export type CancelOutcome = { readonly kind: 'done' } | { readonly kind: 'failed
 /** Which change is open under the row (Cancel asks in a dialog instead). */
 type Mode = 'idle' | 'move' | 'guests';
 
+/**
+ * The words a page may put in place of the built in ones: a table reservation (spec 0066 B7) says "Change time" and
+ * "Cancel reservation", and asks "Cancel your table for 4 at Somewhere?". Anything left out keeps the built in copy.
+ */
+export interface BookingChangesLabels {
+  /** Move's button ("Move to another time"). */
+  readonly move?: string;
+  /** The picker's heading ("Pick a new time"). */
+  readonly pickNewTime?: string;
+  /** The row's cancel and the confirm's cancel ("Cancel booking"). */
+  readonly cancel?: string;
+  /** The confirm's dismiss ("Keep booking"). */
+  readonly keep?: string;
+  /** The confirm's question, whole ("Cancel Intro call with Ada Lovelace?"). */
+  readonly cancelTitle?: string;
+  /** The confirm's one sentence ("Ada will be told, and it comes off both calendars."). */
+  readonly cancelText?: string;
+}
+
 /** Props for BookingChanges. */
 export interface BookingChangesProps {
+  /** The page's own words for move and cancel (see BookingChangesLabels). */
+  readonly labels?: BookingChangesLabels;
   /** The booking's name ("Intro call"): the cancel confirm asks about it by name. */
   readonly title: string;
   readonly hostName: string;
@@ -46,7 +67,10 @@ export interface BookingChangesProps {
   readonly lockedNote?: string;
   /** Opens this change first: the guest arrived from that link in their email. */
   readonly startsWith?: 'move' | 'cancel';
-  /** The most guests a booking takes. */
+  /**
+   * The most guests a booking takes. `0` leaves the guests change out: a table reservation (spec 0066 B7) changes its
+   * party size in Move instead.
+   */
   readonly maxGuests?: number;
   /** Invites one more person by email. */
   readonly onInvite: (email: string) => Promise<GuestsOutcome>;
@@ -71,6 +95,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * house's ask first pattern), the cancel with an optional reason.
  */
 export function BookingChanges({
+  labels,
   title,
   hostName,
   guests,
@@ -112,16 +137,18 @@ export function BookingChanges({
         <div className={styles.actions}>
           {canMove && (
             <Button icon="calendar-clock" isExpanded={mode === 'move'} controls={panelId} onPress={toggle('move')}>
-              {strings.move}
+              {labels?.move ?? strings.move}
             </Button>
           )}
-          <Button icon="user-plus" isExpanded={mode === 'guests'} controls={panelId} onPress={toggle('guests')}>
-            {guests.length > 0 ? strings.guestsCount(guests.length) : strings.addGuests}
-          </Button>
+          {maxGuests > 0 && (
+            <Button icon="user-plus" isExpanded={mode === 'guests'} controls={panelId} onPress={toggle('guests')}>
+              {guests.length > 0 ? strings.guestsCount(guests.length) : strings.addGuests}
+            </Button>
+          )}
           {canCancel && (
             <span className={styles.end}>
               <Button ref={cancelButton} variant="danger" icon="circle-x" onPress={() => setCancelOpen(true)}>
-                {strings.cancelBooking}
+                {labels?.cancel ?? strings.cancelBooking}
               </Button>
             </span>
           )}
@@ -142,7 +169,7 @@ export function BookingChanges({
           {mode === 'move' && (
             <>
               <h3 id={panelTitleId} className={styles.title}>
-                {strings.pickNewTime}
+                {labels?.pickNewTime ?? strings.pickNewTime}
               </h3>
               {move}
               {moveNote !== undefined && <p className={styles.note}>{moveNote}</p>}
@@ -160,6 +187,7 @@ export function BookingChanges({
         </div>
       )}
       <CancelDialog
+        labels={labels}
         title={title}
         hostName={hostName}
         isOpen={isCancelOpen}
@@ -368,12 +396,14 @@ function RemoveDialog({
  * Cancel booking. Busy until the server answers; a done cancel redraws the receipt, a refusal shows here.
  */
 function CancelDialog({
+  labels,
   title,
   hostName,
   isOpen,
   onCancel,
   onKeep,
 }: {
+  readonly labels: BookingChangesLabels | undefined;
   readonly title: string;
   readonly hostName: string;
   readonly isOpen: boolean;
@@ -397,7 +427,7 @@ function CancelDialog({
   };
   return (
     <Modal
-      title={strings.cancelTitle(title, hostName)}
+      title={labels?.cancelTitle ?? strings.cancelTitle(title, hostName)}
       tone="danger"
       isOpen={isOpen}
       isBusy={isBusy}
@@ -407,10 +437,10 @@ function CancelDialog({
       actions={
         <>
           <Button slot="close" isDisabled={isBusy}>
-            {strings.keep}
+            {labels?.keep ?? strings.keep}
           </Button>
           <Button variant="danger-solid" icon="circle-x" isPending={isBusy} onPress={cancel}>
-            {isBusy ? strings.cancelling : strings.confirmCancel}
+            {isBusy ? strings.cancelling : (labels?.cancel ?? strings.confirmCancel)}
           </Button>
         </>
       }
@@ -420,7 +450,7 @@ function CancelDialog({
           {error}
         </Callout>
       )}
-      <p>{strings.cancelText(hostName)}</p>
+      <p>{labels?.cancelText ?? strings.cancelText(hostName)}</p>
       <Field
         label={strings.reason}
         hint={strings.reasonHint(hostName)}

@@ -14,12 +14,12 @@ import {
   Modal,
   Select,
   currencyOfCountry,
-  useFormatSettings,
   type FormRefusal,
 } from '@crm/ui';
 import { useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
+import { firstBusinessGuess } from './first-business.ts';
 import { strings } from './strings.ts';
 
 /** Props for the business card. */
@@ -72,16 +72,6 @@ export function BusinessCardDialog({ isOpen, onOpenChange, workspace, onInstall 
   );
 }
 
-/** The region of a language tag (en-GB is GB), or undefined. */
-function regionOf(locale: string): string | undefined {
-  try {
-    const region = new Intl.Locale(locale).maximize().region;
-    return region !== undefined && /^[A-Z]{2}$/.test(region) ? region : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** The card's form, mounted afresh with each opening, so it starts from the workspace as it stands. */
 function CardForm({
   formId,
@@ -100,15 +90,18 @@ function CardForm({
   const [kind, setKind] = useState<BusinessKind>('restaurant');
   const [addressLine, setAddressLine] = useState('');
   const [city, setCity] = useState('');
-  // Sensible defaults so a first install works without reading anything (spec 0068, foolproof): the workspace's own,
-  // else the person's time zone, and the country and currency their language's region suggests.
-  const settings = useFormatSettings();
-  const [country, setCountryValue] = useState<string | null>(
-    workspace?.country ?? settings.country ?? regionOf(settings.locale) ?? null,
+  // Sensible defaults so a first install works without reading anything (spec 0068, foolproof; walk of 4 Nov 2026):
+  // the workspace's own settings first, else the browser's region, that region's currency and its zone.
+  const [guess] = useState(() =>
+    firstBusinessGuess(workspace, {
+      language: globalThis.navigator.languages[0],
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }),
   );
-  const [timeZone, setTimeZone] = useState(workspace?.timeZone ?? settings.timeZone);
+  const [country, setCountryValue] = useState<string | null>(guess.country);
+  const [timeZone, setTimeZone] = useState(guess.timeZone);
   const [currency, setCurrency] = useState<string | null>(
-    workspace?.currency ?? settings.currency ?? currencyOfCountry(country ?? undefined) ?? null,
+    guess.currency ?? currencyOfCountry(guess.country ?? undefined) ?? null,
   );
   // The currency follows the country until the person picks one themselves.
   const [currencyPicked, setCurrencyPicked] = useState(false);

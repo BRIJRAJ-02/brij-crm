@@ -216,6 +216,33 @@ function Picker({ onChange }: { readonly onChange?: (id: string) => void }) {
   );
 }
 
+/** Dense: a Service floor's small table tiles, many across, each one press target. */
+export const Dense: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <TileGrid columns="dense">
+        {['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((table) => (
+          <Card
+            key={table}
+            title={table}
+            description="2 to 4 seats"
+            footer={null}
+            footerNote="Nothing booked later"
+            onPress={fn()}
+          />
+        ))}
+      </TileGrid>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const first = canvas.getByRole('button', { name: 'T1' }).getBoundingClientRect();
+    const second = canvas.getByRole('button', { name: 'T2' }).getBoundingClientRect();
+    // Side by side, not stacked.
+    await expect(Math.abs(first.top - second.top)).toBeLessThan(2);
+  },
+};
+
 /** First run's Done: two tiles that ease in, one a moment after the other (spec 0058, AC-21). */
 export const Entering: Story = {
   args: { fill: 'fill', isEntering: true },

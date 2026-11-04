@@ -26,8 +26,8 @@
     min-block-size: var(--size-control);
   }
 
-  /* Without a heading the clock switch still sits at the row's end. */
-  .head > :only-child {
+  /* Without a heading the clock switch still sits at the row's end (a heading alone stays at the start). */
+  .head > :only-child:not(.heading) {
     margin-inline-start: auto;
   }
 
@@ -82,6 +82,12 @@
   .root[data-layout='grid'] {
     container-type: inline-size;
     flex: 1;
+  }
+
+  /* Grids in a run (a restaurant's Lunch and Dinner, spec 0066 B7) keep their own height and stack; the pane around
+     them scrolls, so one group never draws over the next. */
+  .root[data-layout='grid']:not(:only-child) {
+    flex: none;
   }
 
   /* Under the page breakpoint the times run under the month, two across at least. */

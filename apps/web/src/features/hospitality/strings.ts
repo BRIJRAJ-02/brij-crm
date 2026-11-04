@@ -26,18 +26,32 @@ export const strings = {
   appsTitle: 'Apps',
   businessTitle: 'Business',
   // Apps
-  appNames: { menu: 'Menu', menu_qr: 'Menu QR', table_seating: 'Table seating' } satisfies Record<
-    HospitalityApp,
-    string
-  >,
+  appNames: {
+    menu: 'Menu',
+    menu_qr: 'Menu QR',
+    table_seating: 'Table seating',
+    appointments: 'Appointments',
+    events: 'Events',
+  } satisfies Record<HospitalityApp, string>,
   appPurposes: {
     menu: 'One menu, edited once, live everywhere.',
     menu_qr: 'A code on every table that opens the menu.',
     table_seating: 'Online reservations and the host stand.',
+    appointments: 'Services, staff and online booking.',
+    events: 'Events and classes with registration.',
   } satisfies Record<HospitalityApp, string>,
-  appIcons: { menu: 'utensils', menu_qr: 'qr-code', table_seating: 'calendar-check' } as const,
+  appIcons: {
+    menu: 'utensils',
+    menu_qr: 'qr-code',
+    table_seating: 'calendar-check',
+    appointments: 'calendar-clock',
+    events: 'calendar-days',
+  } as const,
   hospitalityGroup: 'Hospitality',
   install: 'Install',
+  // Each card's button names its app, so five Installs read apart to a screen reader (walk, 4 Nov 2026).
+  installNamed: (app: string) => `Install ${app}`,
+  removeNamed: (app: string) => `Remove ${app}`,
   installing: 'Installing',
   installed: 'Installed',
   remove: 'Remove',
@@ -51,6 +65,8 @@ export const strings = {
     menu: 'Menu stops showing to guests. Your menus are kept.',
     menu_qr: 'Codes stop opening the menu. Your codes are kept.',
     table_seating: 'New reservations stop. Booked guests keep theirs.',
+    appointments: 'New bookings stop. Booked clients keep theirs.',
+    events: 'New registrations stop. Registered guests keep their places.',
   } satisfies Record<HospitalityApp, string>,
   removeBoth: 'Remove both',
   removeBothText: 'Menu QR opens the menu, so it goes too. Everything is kept.',

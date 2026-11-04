@@ -130,6 +130,9 @@ const READS: ReadonlySet<string> = new Set([
   'hospitality.resources',
   // The Menu app's draft (spec 0065, H1).
   'menu.draft',
+  // Table seating's reads (spec 0066 B7 lite).
+  'tables.setup',
+  'tables.day',
   // The roles every role picker offers (spec 0037, AC-1439), and the Roles page's reads (job J9).
   'roles.list',
   'roles.overview',
@@ -3232,6 +3235,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'hospitality.archiveResource': 3,
   'hospitality.restoreResource': 4,
   'hospitality.deleteResource': 3,
+  // Table seating (spec 0066 B7 lite): installed first (and the setup saved before a status move).
+  'tables.saveSetup': 2,
+  'tables.setStatus': 3,
   // Webhooks (spec 0064): the endpoint made first (and a test event before a resend).
   'webhooks.update': 2,
   'webhooks.rotateSecret': 2,
@@ -3830,6 +3836,46 @@ Object.assign(WRITES, {
     await m.client.menu.publish({ workspace: m.slug, mutationId: newId() });
     await m.client.menu.discard({ workspace: m.slug, mutationId });
     return [{ kind: 'nav' }];
+  },
+});
+
+// Table seating (spec 0066 B7 lite): saving the setup changes no record and stores no row of its own; a status move
+// stores one `visits` row naming the place, so every open Service list and floor reads its day again.
+Object.assign(WRITES, {
+  'tables.saveSetup': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const setup = await m.client.tables.setup({ workspace: m.slug, placeId });
+    await m.client.tables.saveSetup({ workspace: m.slug, placeId, rules: setup.rules, mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'tables.setStatus': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const setup = await m.client.tables.setup({ workspace: m.slug, placeId });
+    const saved = await m.client.tables.saveSetup({
+      workspace: m.slug,
+      placeId,
+      rules: setup.rules,
+      mutationId: newId(),
+    });
+    const appointmentId = newId();
+    await testQuery(
+      ownerUrl,
+      `insert into appointments (workspace_id, id, place_id, client_name, party_size, starts_at, ends_at, source,
+         lookup_code, idempotency_key, currency)
+       values ($1, $2, $3, 'Grace', 2, now() + interval '1 day', now() + interval '1 day 90 minutes', 'desk',
+         'ABCDEFGH', $4, 'GBP')`,
+      [m.workspace.id, appointmentId, placeId, newId()],
+    );
+    await testQuery(
+      ownerUrl,
+      `insert into appointment_items (workspace_id, appointment_id, service_id, variant_id, service_name, variant_name,
+         starts_at, ends_at, price_type, position)
+       select $1, $2, s.id, v.id, 'Table', 'Table', now() + interval '1 day', now() + interval '1 day 90 minutes', 'free', 0
+       from services s join service_variants v on v.service_id = s.id where s.id = $3`,
+      [m.workspace.id, appointmentId, saved.serviceId],
+    );
+    await m.client.tables.setStatus({ workspace: m.slug, appointmentId, status: 'arrived', mutationId });
+    return [{ kind: 'nav' }, { kind: 'visits', item_ids: [placeId], mutation_id: mutationId }];
   },
 });
 

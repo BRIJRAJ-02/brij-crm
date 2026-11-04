@@ -260,9 +260,20 @@ export function BookingFrame({
                   size="lg"
                 />
               )}
-              <div className={styles.names} data-team={host.team === undefined ? undefined : ''}>
+              <div
+                className={styles.names}
+                data-team={host.team === undefined ? undefined : ''}
+                data-alone={
+                  host.team === undefined && host.name.trim().toLowerCase() === title.trim().toLowerCase()
+                    ? ''
+                    : undefined
+                }
+              >
                 {/* A team page's title already names the workspace ("Intro call with Acme"). */}
-                {host.team === undefined && <p className={styles.host}>{host.name}</p>}
+                {/* A place named as its business (a restaurant's one place) says its name once, as the h1. */}
+                {host.team === undefined && host.name.trim().toLowerCase() !== title.trim().toLowerCase() && (
+                  <p className={styles.host}>{host.name}</p>
+                )}
                 {host.team === undefined && host.role !== undefined && host.role !== '' && (
                   <p className={styles.hostRole}>{host.role}</p>
                 )}
@@ -597,6 +608,11 @@ export interface BookingMessageProps {
   readonly children?: string;
   /** Shows Try again. */
   readonly onRetry?: () => void;
+  /**
+   * A way on beside Try again: the reservation page's manage link that opens nothing offers "Find your reservation"
+   * (spec 0066 B7), so a bad link is never a dead end.
+   */
+  readonly link?: { readonly label: string; readonly href: string };
   /** While the page's facts load: a skeleton in the card. */
   readonly isLoading?: boolean;
   /** Which public page shows the message, for the wordmark link's tags: the booking page (the default), a profile, or the guest's page. */
@@ -612,6 +628,7 @@ export function BookingMessage({
   title,
   children,
   onRetry,
+  link,
   isLoading = false,
   page = 'booking_page',
 }: BookingMessageProps) {
@@ -640,11 +657,18 @@ export function BookingMessage({
                 {title}
               </h1>
               {children !== undefined && <p className={styles.description}>{children}</p>}
-              {onRetry !== undefined && (
-                <div>
-                  <Button icon="refresh-cw" onPress={onRetry}>
-                    {strings.retry}
-                  </Button>
+              {(onRetry !== undefined || link !== undefined) && (
+                <div className={styles.messageActions}>
+                  {onRetry !== undefined && (
+                    <Button icon="refresh-cw" onPress={onRetry}>
+                      {strings.retry}
+                    </Button>
+                  )}
+                  {link !== undefined && (
+                    <ButtonLink href={link.href} variant="ghost" icon="search">
+                      {link.label}
+                    </ButtonLink>
+                  )}
                 </div>
               )}
             </>

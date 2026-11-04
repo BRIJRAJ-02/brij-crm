@@ -144,3 +144,18 @@ export {
   type MenuEntry,
   type PublicMenuRead,
 } from './hospitality/public-menu.ts';
+
+// Table seating's guest page (spec 0066 B7 lite): the door by a place's public key, and the guest's reads and writes.
+export { enterTablePage, TABLE_KEY_PATTERN, type TableEntry } from './access/table-door.ts';
+export {
+  guestCancel,
+  guestChange,
+  guestIcs,
+  guestReserve,
+  guestTimes,
+  guestVisit,
+  readTablePage,
+  UPCOMING_PER_EMAIL,
+  type GuestKey,
+  type GuestReserved,
+} from './visits/public.ts';

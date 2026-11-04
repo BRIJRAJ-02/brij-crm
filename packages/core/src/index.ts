@@ -969,6 +969,46 @@ export {
 } from './hospitality/menu.ts';
 /** A place's hours read at an instant (spec 0065, AC-6508): pure, on the place's own wall clock. */
 export { openAt, nextOpening, rangesOn, type OpenNow } from './hospitality/hours.ts';
+// The visit engine (spec 0066, B0): the pure planner, the offered times and booking a visit, with the slot cache.
+export {
+  planVisit,
+  earliestStart,
+  type PlanInput,
+  type PlanResult,
+  type PlannedStart,
+  type PlannerItem,
+  type PlannerResource,
+  type PlannerStaff,
+} from './visits/planner.ts';
+export {
+  bookVisit,
+  visitTimes,
+  createSlotCache,
+  isVisitTaken,
+  VISIT_TAKEN_MESSAGE,
+  type BookedVisit,
+  type OfferedVisit,
+  type SlotCache,
+  type VisitBookInput,
+  type VisitDeps,
+} from './visits/book.ts';
+export { linkStaffMember, type LinkOverlap } from './visits/staff-link.ts';
+export {
+  getTableSetup,
+  saveTableSetup,
+  listServiceDay,
+  setReservationAlert,
+  setVisitStatus,
+  setupSteps,
+  tableRulesProblem,
+  TABLE_DEFAULTS,
+  type DayVisit,
+  type ServiceDay,
+  type SetupStep,
+  type TableRules,
+  type TableSetup,
+} from './visits/table-service.ts';
+export { freeTables, seatWalkIn, WALK_IN_TAKEN, type FreeTable, type FreeTables } from './visits/walk-in.ts';
 /** The operator console's one write (spec 0065, AC-6502): a workspace's early access flag, behind the operator gate. */
 export { setEarlyAccess } from './operator/early-access.ts';
 // The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.

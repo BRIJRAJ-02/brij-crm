@@ -180,8 +180,10 @@
     overflow-wrap: anywhere;
   }
 
-  /* A team page has no host line: its title ("Intro call with Acme") takes the host line's weight. */
-  .names[data-team] > .title {
+  /* A team page has no host line: its title ("Intro call with Acme") takes the host line's weight; so does a title
+     that is the host's own name (a restaurant's one place), shown once. */
+  .names[data-team] > .title,
+  .names[data-alone] > .title {
     color: var(--text);
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
@@ -428,6 +430,8 @@
     block-size: calc(var(--size-row) * 8);
     padding-block-start: 0;
     contain: size;
+    /* Times in groups (a restaurant's Lunch and Dinner, spec 0066 B7) scroll here together, never out of the card. */
+    overflow-y: auto;
   }
 
   .footer {
@@ -525,6 +529,13 @@
     margin: 0;
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
+  }
+
+  /* Try again and a way on (Find your reservation), side by side, wrapping on a phone. */
+  .messageActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
   }
 
   .messageTitle:focus,

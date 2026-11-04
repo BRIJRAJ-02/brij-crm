@@ -57,6 +57,7 @@ import { profileContract } from './profile.ts';
 import { brandContract } from './workspace-brand.ts';
 import { hospitalityContract } from './hospitality.ts';
 import { menuContract } from './menu.ts';
+import { tablesContract } from './tables.ts';
 import { schedulingContract } from './scheduling.ts';
 
 export * from './access.ts';
@@ -135,6 +136,8 @@ export * from './workspace-brand.ts';
 export * from './brand-colour.ts';
 export * from './hospitality.ts';
 export * from './menu.ts';
+export * from './visits-model.ts';
+export * from './tables.ts';
 
 /**
  * The one contract the web app, the API and the worker share. Each feature
@@ -162,6 +165,8 @@ export const contract = {
   hospitality: hospitalityContract,
   // The Menu app (spec 0065, H1): menus, sections, items, option groups, Publish and Sold out.
   menu: menuContract,
+  // Table seating (spec 0066 B7 lite): the setup, the Service list and status moves.
+  tables: tablesContract,
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.
   workspaceSecurity: workspaceSecurityContract,
   objects: objectsContract,

@@ -25,6 +25,9 @@ export { Callout } from '../molecules/Callout/Callout.tsx';
 /** A profile with no links, or none that match (22 Oct 2026). */
 export { EmptyState } from '../molecules/EmptyState/EmptyState.tsx';
 export { SegmentedControl } from '../molecules/SegmentedControl/SegmentedControl.tsx';
+/** A reservation's party size (spec 0066 B7): one pick from a short row. */
+export { ChoiceChips } from '../molecules/ChoiceChips/ChoiceChips.tsx';
+export { Field } from '../molecules/Field/Field.tsx';
 /** A person's social links (booking socials, 25 Oct 2026): the rail and the profile draw them, a link page too. */
 export { SocialLinks, type SocialLinkItem } from '../molecules/SocialLinks/SocialLinks.tsx';
 // The time zone's Select loads on demand (React Aria's list code and its styles, 25 Oct 2026): until then a stand
@@ -33,6 +36,7 @@ export { DeferredSelect, type DeferredSelectItem } from '../molecules/Select/Def
 export type { SelectItem } from '../molecules/Select/Select.tsx';
 export {
   BookingDetails,
+  type BookingDetailsLabels,
   type BookingDetailsOutcome,
   type BookingDetailsValues,
 } from '../modules/BookingDetails/BookingDetails.tsx';
@@ -51,7 +55,12 @@ export {
   type PageBrand,
 } from '../modules/BookingFrame/BookingFrame.tsx';
 export { BookingReceipt, type BookingReceiptState } from '../modules/BookingReceipt/BookingReceipt.tsx';
-export { BookingChanges, type CancelOutcome, type GuestsOutcome } from '../modules/BookingChanges/BookingChanges.tsx';
+export {
+  BookingChanges,
+  type BookingChangesLabels,
+  type CancelOutcome,
+  type GuestsOutcome,
+} from '../modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
 /** A profile's booking links (22 Oct 2026): the rows Captures › Links draws, the whole row opening the page. */
 export { LinkList, LinkListToolbar, type LinkRow } from '../modules/LinkList/LinkList.tsx';

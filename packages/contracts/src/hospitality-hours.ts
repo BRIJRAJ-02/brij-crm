@@ -80,6 +80,11 @@ export function wallToInstant(date: string, minutes: number, zone: string): Date
 
 const SIX_HOURS = 6 * 3_600_000;
 
+/** The date (`YYYY-MM-DD`) `instant` falls on, on the zone's wall clock (spec 0066: a place's day of a visit). */
+export function placeDateOf(instant: number, zone: string): string {
+  return wallOf(instant, zone).date;
+}
+
 /** The day of the week of a `YYYY-MM-DD` date. */
 export function weekDayOf(date: string): WeekDay {
   const day = new Date(`${date}T00:00:00Z`).getUTCDay();

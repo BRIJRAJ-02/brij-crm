@@ -42,3 +42,5 @@ Tab reaches each time; Enter or Space picks. The clock switch is a SegmentedCont
 Not in the artifact.
 
 Every time keeps one height (a row and a step, about 40px) whatever the count: the list's rows size to their buttons and sit at the top, so a day with one or two times never stretches them to fill the pane (the owner, 22 October 2026; story TwoSlots).
+
+Several grids in one pane (a restaurant's Lunch and Dinner, spec 0066 B7) each keep their own height and stack, and the pane scrolls them together (BookingFrame's times pane does). A heading with no clock switch beside it sits at the row's start.

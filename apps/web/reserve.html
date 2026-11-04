@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- A place's reservation page, /r/<key>, and its manage page, /r/<key>/manage (spec 0066 B7 lite). -->
+<html lang="en" data-public-page="booking">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <!-- A phone's browser bar in the page's colour: the surface token, light and dark. -->
+    <meta name="theme-color" content="#fdfdff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#18191c" media="(prefers-color-scheme: dark)" />
+    <!-- Before anything paints: a saved Light or Dark choice. -->
+    <script src="/theme-boot.js"></script>
+    <title>Reserve a table · Timefix</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/brand/timefix-mark.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div id="root" data-app-root></div>
+    <script type="module" src="/src/public/reserve/main.tsx"></script>
+  </body>
+</html>

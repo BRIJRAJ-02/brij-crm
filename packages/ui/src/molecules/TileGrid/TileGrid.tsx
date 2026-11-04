@@ -18,9 +18,10 @@ export interface CardTileGridProps {
   readonly fill?: 'fit' | 'fill';
   /**
    * `auto` (the default) fits as many columns as the width holds. `two` holds at most two, each at least the
-   * panel's width: two on a wide page, one on a phone or a narrow window (Home's sections).
+   * panel's width: two on a wide page, one on a phone or a narrow window (Home's sections). `dense` packs small
+   * tiles (a narrow table column each), closer together and one height per row: a Service floor's tables.
    */
-  readonly columns?: 'auto' | 'two';
+  readonly columns?: 'auto' | 'two' | 'dense';
   /**
    * Eases each tile in when the grid mounts: a fade and a short rise, one tile a moment after the other, for a
    * moment worth marking (first run's Done, spec 0058 AC-21). Transform and opacity only, a fade alone under reduced
@@ -47,7 +48,7 @@ export function TileGrid(props: TileGridProps) {
     <div
       className={styles.root}
       data-fill={fill === 'fill' ? fill : undefined}
-      data-columns={columns === 'two' ? columns : undefined}
+      data-columns={columns === 'auto' ? undefined : columns}
       data-entering={isEntering || undefined}
     >
       {children}

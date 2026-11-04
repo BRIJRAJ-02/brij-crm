@@ -23,7 +23,7 @@ export const PERMISSION_GROUPS = [
   'People',
   'Data',
   'Scheduling',
-  'Hospitality',
+  'Business',
   'Integrations',
   'Owner only',
 ] as const;
@@ -279,14 +279,30 @@ export const PERMISSIONS = {
     message: 'Your role can’t set up the Hospitality apps.',
     label: 'Manage hospitality',
     description: 'Set up the business, its places, tables, menus, reservation rules and QR codes.',
-    group: 'Hospitality',
+    group: 'Business',
     grant: 'any',
   },
   'hospitality.service': {
     message: 'Your role can’t run service.',
     label: 'Run service',
     description: 'See today’s book, seat guests and walk ins, and mark dishes sold out.',
-    group: 'Hospitality',
+    group: 'Business',
+    grant: 'any',
+  },
+  // Business booking (spec 0066, B0): the services catalogue, staff, shifts and resources, and everyone's calendar.
+  // Members hold neither until given a role that has them; a linked staff member acts on their own column without one.
+  'services.manage': {
+    message: 'Your role can’t set up services and staff.',
+    label: 'Manage services',
+    description: 'Set up services, prices, staff, shifts, resources and the business page.',
+    group: 'Business',
+    grant: 'any',
+  },
+  'services.calendar': {
+    message: 'Your role can’t see everyone’s calendar.',
+    label: 'Run the calendar',
+    description: 'See everyone’s appointments, book, move and change their status.',
+    group: 'Business',
     grant: 'any',
   },
 } as const satisfies Record<string, PermissionEntry>;
@@ -349,6 +365,9 @@ export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   // Spec 0065, AC-6511: the Hospitality apps stay with people for now (API keys later).
   'hospitality.manage',
   'hospitality.service',
+  // Spec 0066: business booking stays with people for now too.
+  'services.manage',
+  'services.calendar',
 ];
 
 /** The data level a key holds on every object, as a scope. A key with neither reads and writes no data. */
