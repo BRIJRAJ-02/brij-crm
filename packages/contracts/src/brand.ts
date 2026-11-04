@@ -52,6 +52,8 @@ export const POWERED_BY_PAGES = [
   'form',
   // The guest menu (spec 0065, H1).
   'menu',
+  /** A business's page at `/<company-handle>` (spec 0066, B4). */
+  'business_page',
 ] as const;
 /** A public page a Timefix link sits on (`utm_medium`). */
 export type PoweredByPage = (typeof POWERED_BY_PAGES)[number];

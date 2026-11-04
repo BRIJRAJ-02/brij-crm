@@ -109,6 +109,12 @@ export const PublicBookingPage = z.object({
   linkUsed: z.literal(true).optional(),
   /** A page that books only through one-time links, opened without one (AC-6204): "This page books by invitation". */
   invitationOnly: z.literal(true).optional(),
+  /**
+   * The company page its workspace's logo links to (spec 0066, AC-6646): the business page's path on the public host
+   * (`/<company-handle>`) and the business's name, while that page is published and live, as a link page's lockup
+   * links it. Absent otherwise: the logo then links nowhere, as before.
+   */
+  company: z.object({ name: z.string(), path: z.string().regex(/^\/[a-z0-9]+(?:-[a-z0-9]+)*$/) }).optional(),
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;

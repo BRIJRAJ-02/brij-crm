@@ -29,7 +29,8 @@ import { useNavigate } from '@tanstack/react-router';
 import { useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
-import { appsSettingsHref, placeTablesHref } from '../settings/nav.ts';
+import { appsSettingsHref, businessPageHref, placeTablesHref } from '../settings/nav.ts';
+import { pageStrings } from './business-page-strings.ts';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { clockLabel, todayRanges } from './hours-rows.ts';
 import { strings } from './strings.ts';
@@ -98,6 +99,16 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
         </Button>
       }
     >
+      {/* The public page (spec 0066, B4 lite): its own screen, one step from here. */}
+      <SettingsSection title={pageStrings.title}>
+        <Card>
+          <SettingsRow title={pageStrings.title} description={pageStrings.cardText}>
+            <ButtonLink href={businessPageHref(slug)} iconRight="arrow-right">
+              {pageStrings.open}
+            </ButtonLink>
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
       <SettingsSection title={strings.profile}>
         {view === undefined ? (
           <Card isBusy>

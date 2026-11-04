@@ -35,6 +35,8 @@ import { uuidList } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
+import { syncBusinessListing } from '../hospitality/business-page.ts';
+import { installedRows } from '../hospitality/gate.ts';
 
 const { members, workspaces } = schema;
 
@@ -337,6 +339,9 @@ export async function deleteWorkspace(
           and exists (select 1 from calendar_calendars k
             where k.workspace_id = c.workspace_id and k.connection_id = c.id and k.channel ->> 'id' is not null)
       `);
+      // Its business page answers 404 from now on, so search engines stop being told about it (spec 0066, AC-6644);
+      // the caller deletes its edge copies once this commits. A restore lists it again.
+      await syncBusinessListing(tx, scope.workspaceId, false);
       await writeAudit(
         tx,
         scope.workspaceId,
@@ -433,6 +438,9 @@ export async function restoreWorkspace(
           update calendar_connections set status = 'failed' where id = any(${uuidList(failing.rows.map((each) => each.id))})
         `);
       }
+      // A published business page with an app still on is listed for search engines again (spec 0066, AC-6644).
+      const apps = await installedRows(tx, scope.workspaceId);
+      await syncBusinessListing(tx, scope.workspaceId, apps.size > 0);
       await writeAudit(
         tx,
         scope.workspaceId,

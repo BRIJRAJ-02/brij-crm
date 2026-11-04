@@ -58,7 +58,9 @@ const IMAGE_VERSION = /^[0-9a-f]{12}$/;
  * page's facts name one. Decoration beside the host's name, so it reads as nothing. The accent needs nothing here:
  * the page's brand stylesheet sets it.
  */
-export function railBrand(page: Pick<PublicBookingPage, 'publicKey' | 'brand'>): { readonly brand?: PageBrand } {
+export function railBrand(page: Pick<PublicBookingPage, 'publicKey' | 'brand' | 'company'>): {
+  readonly brand?: PageBrand;
+} {
   const version = page.brand?.logo;
   // The workspace's template (spec 0068, AC-6804), which the frame wears whether or not there is a logo.
   const template = page.brand?.template;
@@ -66,7 +68,13 @@ export function railBrand(page: Pick<PublicBookingPage, 'publicKey' | 'brand'>):
   if (version === undefined || !PAGE_KEY.test(page.publicKey) || !IMAGE_VERSION.test(version)) {
     return template === undefined ? {} : { brand: withTemplate };
   }
+  const src = `/api/public/booking/${page.publicKey}/logo?v=${version}`;
+  // While the company page is published (spec 0066, AC-6646) the logo links it, and then says whose page it opens.
+  const company = page.company;
   return {
-    brand: { logo: { src: `/api/public/booking/${page.publicKey}/logo?v=${version}`, alt: '' }, ...withTemplate },
+    brand:
+      company === undefined
+        ? { logo: { src, alt: '' }, ...withTemplate }
+        : { logo: { src, alt: company.name }, href: company.path, ...withTemplate },
   };
 }

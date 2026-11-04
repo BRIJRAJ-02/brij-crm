@@ -277,6 +277,12 @@ export {
  * A screen hands it in so LinkList itself never loads dnd-kit: the public profile draws LinkList too.
  */
 export { LinkListRowOrder } from './modules/LinkList/RowOrder.tsx';
+/** The business page's gallery (spec 0066, B4 lite), which Settings › Business › Page previews as guests see it. */
+export {
+  BusinessGallery,
+  type BusinessGalleryProps,
+  type BusinessPhotoItem,
+} from './modules/BusinessPage/BusinessGallery.tsx';
 /** A person's link page (spec 0051): the public page at `/<handle>`, and the editor's phone preview of it. */
 export {
   LinkPage,

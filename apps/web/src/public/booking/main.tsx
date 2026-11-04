@@ -18,7 +18,7 @@ import { createHandleClient, isDataError } from '@crm/data/booking';
 import { BookingMessage, BookingProfile, BookingProvider, createToasts } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { freshProfile, readBoot } from './boot.ts';
+import { freshBusiness, freshProfile, readBoot } from './boot.ts';
 import { BookingPage, LoadingBooking } from './BookingPage.tsx';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
 import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
@@ -30,6 +30,10 @@ import { guardPreloadErrors, hasFilledField, preloadStrings, sessionStore } from
 const ManagePage = lazy(() => import('./ManagePage.tsx').then((module) => ({ default: module.ManagePage })));
 // A profile loads on its own too: a visitor booking never downloads the list.
 const ProfilePage = lazy(() => import('./ProfilePage.tsx').then((module) => ({ default: module.ProfilePage })));
+// A business's page (spec 0066, B4) loads on its own too: a person's page never downloads it.
+const BusinessPublicPage = lazy(() =>
+  import('./BusinessPublicPage.tsx').then((module) => ({ default: module.BusinessPublicPage })),
+);
 
 const root = document.getElementById('root');
 if (root === null) throw new Error('The booking page has no #root.');
@@ -201,6 +205,42 @@ function renderBooking(publicKey: string) {
   );
 }
 
+/**
+ * A business's page at `/<handle>` or `/<handle>/<slug>` (spec 0066, B4), from the shell's copy when there is one.
+ * Its loading shape is the page's own, so the read landing fills the page in rather than replacing it.
+ */
+function renderBusiness(handle: string, slug?: string, initial?: Parameters<typeof BusinessPublicPage>[0]['initial']) {
+  view.render(
+    <StrictMode>
+      <BookingProvider locale={locale} timeZone={timeZone} toasts={toasts}>
+        <Suspense fallback={null}>
+          <BusinessPublicPage
+            handle={handle}
+            {...(slug === undefined ? {} : { slug })}
+            {...(initial === undefined ? {} : { initial })}
+            onMoved={showAddress}
+          />
+        </Suspense>
+      </BookingProvider>
+    </StrictMode>,
+  );
+}
+
+/**
+ * Whether a handle (and slug) names a business, asked once a person's page or booking page wasn't there: a shell that
+ * missed, or a local run with no shell, finds a business this way. True once the business page took over.
+ */
+async function tryBusiness(handle: string, slug?: string): Promise<boolean> {
+  const { createBusinessClient } = await import('@crm/data/business-page');
+  try {
+    const page = await createBusinessClient({ origin: globalThis.location.origin }).page(handle, slug);
+    renderBusiness(handle, slug, page);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** A whole page message, in the provider, with the tab saying the same (QA Q76). */
 function renderMessage(title: string, text: string) {
   document.title = tabTitle(title);
@@ -213,8 +253,13 @@ function renderMessage(title: string, text: string) {
   );
 }
 
+// The shell's business page, when the handle names a business (spec 0066, B4).
+const initialBusiness = freshBusiness(boot, Date.now());
+
 if (path !== null) {
   renderBooking(decodeURIComponent(path[1] ?? ''));
+} else if (handled !== undefined && boot?.kind === 'business') {
+  renderBusiness(handled.handle, handled.kind === 'page' ? handled.slug : undefined, initialBusiness);
 } else if (handled?.kind === 'profile') {
   view.render(
     <StrictMode>
@@ -225,6 +270,7 @@ if (path !== null) {
             handle={handled.handle}
             {...(initialProfile === undefined ? {} : { initial: initialProfile })}
             onMoved={(current) => showAddress(`/${current}`)}
+            isBusiness={() => tryBusiness(handled.handle)}
           />
         </Suspense>
       </BookingProvider>
@@ -256,7 +302,10 @@ if (path !== null) {
         },
         (error: unknown) => {
           if (isDataError(error) && error.code === 'NOT_FOUND') {
-            renderMessage(strings.notFoundTitle, strings.notFoundText);
+            // No booking page here: maybe a business's place (spec 0066, B4).
+            void tryBusiness(page.handle, page.slug).then((taken) => {
+              if (!taken) renderMessage(strings.notFoundTitle, strings.notFoundText);
+            });
             return;
           }
           document.title = tabTitle(strings.failedTitle);

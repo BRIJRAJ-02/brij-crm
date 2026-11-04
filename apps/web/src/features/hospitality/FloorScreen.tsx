@@ -373,7 +373,8 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
         <>
           <AddTablesDialog
             startKind={kind}
-            key={editing?.kind === 'add' ? 'open' : 'closed'}
+            // Each dialog's key names it, so the two siblings never share one (React warned "closed" twice).
+            key={editing?.kind === 'add' ? 'add:open' : 'add:closed'}
             isOpen={editing?.kind === 'add'}
             onOpenChange={(open) => {
               if (!open) setEditing(undefined);
@@ -394,7 +395,7 @@ export function FloorScreen({ store, slug, place, toasts }: FloorScreenProps) {
             }}
           />
           <AreaDialog
-            key={editing?.kind === 'area' ? (editing.area?.id ?? 'new') : 'closed'}
+            key={editing?.kind === 'area' ? `area:${editing.area?.id ?? 'new'}` : 'area:closed'}
             isOpen={editing?.kind === 'area'}
             area={editing?.kind === 'area' ? editing.area : undefined}
             onOpenChange={(open) => {

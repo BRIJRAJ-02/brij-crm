@@ -68,6 +68,8 @@ import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry
 import { mountPublicBooking } from './public/booking.ts';
 import { mountPublicTables } from './public/tables.ts';
 import { mountBrandCss } from './public/brand-css.ts';
+import { mountPublicBusiness } from './public/business.ts';
+import { mountBusinessPagePhotos } from './business-page-photos.ts';
 import { mountLook } from './public/look.ts';
 import { mountPublicMenu } from './public/menu.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
@@ -707,6 +709,8 @@ export function createApp({
     edgeCache,
     rendered: edge.rendered,
   });
+  // The business page (spec 0066, B4 lite): the published page, its pictures and its brand, by the business handle.
+  mountPublicBusiness(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountPublicBooking(app, {
     db,
     handoffKey: formsHandoffKey,
@@ -820,6 +824,8 @@ export function createApp({
   mountMenuPhotos(app, imageRoutes);
   // A link page's pictures and its Insights download (spec 0061), the same way.
   mountLinkPagePictures(app, imageRoutes);
+  // The business page's gallery pictures (spec 0066, B4 lite), the same way.
+  mountBusinessPagePhotos(app, imageRoutes);
   // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
   mountLogos(app, { auth, logos: logoFetch, limiter: createMemoryLimiter() });
 

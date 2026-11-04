@@ -321,10 +321,22 @@ export const publicHandles = auth.table(
     createdAt: createdAt(),
     /** When it was let go (its person's account deleted, or room made at the cap): set with a null `userId` only. */
     releasedAt: timestamptz('released_at'),
+    /**
+     * `member` (a person's link page) or `business` (a workspace's business page, spec 0066 B4, migration 0175): a
+     * business handle names no person, is never released, and belongs to its workspace.
+     */
+    ownerKind: text('owner_kind').notNull().default('member'),
   },
   (t) => [
     primaryKey({ name: 'public_handles_pkey', columns: [t.handle] }),
-    check('public_handles_released', sql`(${t.userId} is null) = (${t.releasedAt} is not null)`),
+    check('public_handles_owner_kind', sql`${t.ownerKind} in ('member', 'business')`),
+    check(
+      'public_handles_released',
+      sql`(${t.ownerKind} = 'member' and (${t.userId} is null) = (${t.releasedAt} is not null)) or (${t.ownerKind} = 'business' and ${t.userId} is null and ${t.releasedAt} is null)`,
+    ),
+    index('public_handles_business')
+      .on(t.workspaceId)
+      .where(sql`${t.ownerKind} = 'business'`),
     index('public_handles_released')
       .on(t.releasedAt)
       .where(sql`${t.releasedAt} is not null`),

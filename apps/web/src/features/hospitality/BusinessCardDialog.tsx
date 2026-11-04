@@ -20,6 +20,7 @@ import { useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
 import { firstBusinessGuess } from './first-business.ts';
+import { browserTimeZone } from './starting-zone.ts';
 import { strings } from './strings.ts';
 
 /** Props for the business card. */
@@ -95,7 +96,7 @@ function CardForm({
   const [guess] = useState(() =>
     firstBusinessGuess(workspace, {
       language: globalThis.navigator.languages[0],
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timeZone: browserTimeZone(),
     }),
   );
   const [country, setCountryValue] = useState<string | null>(guess.country);

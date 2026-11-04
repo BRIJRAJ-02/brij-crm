@@ -45,6 +45,21 @@ export const InNewTab: Story = {
 };
 
 /** A `javascript:` URL is refused and renders as text (AC-14). */
+/** On its own line, with its mark and the strong weight (a public page's Directions), in a new tab, said so. */
+export const WithIcon: Story = {
+  args: {
+    href: 'https://www.google.com/maps/dir/?api=1&destination=Somewhere',
+    children: 'Directions',
+    icon: 'map-pin',
+    weight: 'strong',
+    opensInNewTab: true,
+  },
+  play: async ({ canvas }) => {
+    const link = canvas.getByRole('link', { name: 'Directions (opens in a new tab)' });
+    await expect(link).toHaveAttribute('target', '_blank');
+  },
+};
+
 export const Refused: Story = {
   args: { href: 'javascript:alert(1)', children: 'Click me' },
   play: async ({ canvas }) => {

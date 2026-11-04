@@ -141,7 +141,7 @@ export interface PublicClientOptions {
  */
 export function publicCaller(
   options: PublicClientOptions,
-  area: 'booking' | 'handles' | 'profiles' | 'menu' = 'booking',
+  area: 'booking' | 'handles' | 'profiles' | 'menu' | 'business' = 'booking',
 ) {
   const send = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const now = options.now ?? Date.now;

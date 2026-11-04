@@ -25,6 +25,18 @@
     outline-offset: var(--border-width-hairline);
   }
 
+  /* A link on its own line with its mark (Directions, a phone): the icon before the words, in the link's colour. */
+  .root[data-icon] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .root[data-weight='strong'] {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
   .text {
     color: inherit;
   }

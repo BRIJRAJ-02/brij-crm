@@ -1,5 +1,6 @@
-// A place's opening hours read at an instant (spec 0065, AC-6508). The pure helpers live in `@crm/contracts/menu`
-// since H1, so the guest menu page reads "open now" and "serving from 18:00" with the same rules the server does.
+// A place's opening hours, read at an instant (spec 0065, AC-6508). The pure helpers live in `@crm/contracts`
+// (`hospitality-hours.ts`, also re-exported by `@crm/contracts/menu`) since the guest menu and the public business
+// page read them in the browser too (spec 0065 H1, spec 0066 B4).
 export {
   addDays,
   nextOpening,
@@ -9,4 +10,4 @@ export {
   wallToInstant,
   weekDayOf,
   type OpenNow,
-} from '@crm/contracts/menu';
+} from '@crm/contracts/hospitality-hours';

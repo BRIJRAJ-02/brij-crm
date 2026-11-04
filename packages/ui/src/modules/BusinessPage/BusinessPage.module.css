@@ -1,0 +1,379 @@
+/* The business page (spec 0066, B4 lite, after Fresha's venue page): one column on a phone, the gallery edge to edge
+   and a bar at the screen's foot carrying Reserve; from a laptop up a centred page, the gallery in large corners and a
+   panel that stays beside the sections as they scroll. The header's words rise in once, a line at a time; the section
+   tabs stick under the top with an indicator that slides between them. */
+@layer components {
+  .root {
+    min-block-size: 100dvb;
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .frame {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    margin-inline: auto;
+    padding-block-end: calc(var(--size-bar) * 2);
+    max-inline-size: calc(var(--size-panel) + var(--size-column-max) + var(--space-32) * 3);
+  }
+
+  /* The header: the name, its kind and whether it is open, its one line, and where it is. */
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    padding-inline: var(--space-16);
+  }
+
+  .head > * {
+    animation: rise var(--duration-modal) var(--ease-out) both;
+  }
+
+  .head > :nth-child(2) {
+    animation-delay: calc(var(--duration-press) * 0.25);
+  }
+
+  .head > :nth-child(3) {
+    animation-delay: calc(var(--duration-press) * 0.5);
+  }
+
+  .head > :nth-child(4),
+  .head > :nth-child(5) {
+    animation-delay: calc(var(--duration-press) * 0.75);
+  }
+
+  /* The name and, for a business with several places, the place on its own line under it. */
+  .titles {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .name {
+    margin: 0;
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-note-title);
+    text-wrap: balance;
+  }
+
+  .placeName {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    color: var(--text-secondary);
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-12);
+    margin: 0;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
+  }
+
+  .open {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
+  }
+
+  .description {
+    margin: 0;
+    max-inline-size: var(--size-column-max);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
+  }
+
+  .where {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+    margin: 0;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
+  }
+
+  /* The section tabs: stuck under the top, on the page's own ground, sideways on a phone. */
+  .tabs {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--z-sticky);
+    background: var(--surface);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .tabTrack {
+    position: relative;
+    padding-inline: var(--space-16);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tabList {
+    display: flex;
+    gap: var(--space-20);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    block-size: var(--size-bar);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  .tab[aria-current] {
+    color: var(--text);
+  }
+
+  .tab:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus-inset);
+    border-radius: var(--radius-sm);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tab:hover {
+      color: var(--text);
+    }
+  }
+
+  .indicator {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-start: 0;
+    inline-size: 0;
+    block-size: var(--border-width-thick);
+    border-radius: var(--radius-full);
+    background: var(--text);
+    opacity: 0;
+    transition-duration: var(--duration-move);
+    transition-property: translate, width;
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  .indicator[data-shown] {
+    opacity: 1;
+  }
+
+  /* The sections and, from a laptop up, the panel beside them. */
+  .body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-32);
+    padding-inline: var(--space-16);
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-32);
+    min-inline-size: 0;
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    scroll-margin-block-start: calc(var(--size-bar) + var(--space-16));
+  }
+
+  .heading {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .subheading {
+    margin: 0;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    color: var(--text-secondary);
+  }
+
+  .about {
+    margin: 0;
+    max-inline-size: var(--size-column-max);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: pre-line;
+  }
+
+  .amenities {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--size-measure), 1fr));
+    gap: var(--space-8) var(--space-16);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .amenity {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .places {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .panel {
+    display: none;
+  }
+
+  .panelCard {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-20);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .panelName {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  /* Directions under the panel's action: a quiet link, centred under the button. */
+  .panelLink {
+    margin: 0;
+    text-align: center;
+  }
+
+  /* A phone's bar at the foot of the screen: the name and whether it is open, and Reserve. */
+  .bar {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    z-index: var(--z-sticky);
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-12) var(--space-16) calc(var(--space-12) + env(safe-area-inset-bottom));
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-lg);
+    animation: lift var(--duration-modal) var(--ease-drawer) both;
+  }
+
+  .barText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .barName {
+    overflow: hidden;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .barText .detail {
+    display: none;
+  }
+
+  .barAction {
+    flex: none;
+  }
+
+  /* A laptop and up: the page in its own margins. */
+  @media (width >= 1024px) {
+    .frame {
+      gap: var(--space-24);
+      padding: var(--space-24) var(--space-32) var(--space-32);
+    }
+
+    .head,
+    .tabTrack,
+    .body {
+      padding-inline: 0;
+    }
+  }
+
+  /* A laptop and up: the panel beside the sections, stuck under the tabs, and no bar. */
+  @media (width >= 1024px) {
+    .body[data-panel] {
+      grid-template-columns: minmax(0, 1fr) var(--size-panel);
+    }
+
+    .panel {
+      display: block;
+    }
+
+    .panelCard {
+      position: sticky;
+      inset-block-start: calc(var(--size-bar) + var(--space-24));
+    }
+
+    .bar {
+      display: none;
+    }
+
+    .frame {
+      padding-block-end: var(--space-32);
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
+  @keyframes lift {
+    from {
+      translate: 0 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .head > *,
+    .bar {
+      animation: none;
+    }
+
+    .indicator {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .indicator {
+      background: Highlight;
+    }
+  }
+}

@@ -126,6 +126,14 @@ export async function readMenuBrandIn(tx: WorkspaceTx, workspaceId: string): Pro
   return pageBrandOf(accentsOf(undefined, brand), brand);
 }
 
+/**
+ * A business page's brand (spec 0066, AC-6643): its workspace's accent and logo, in the caller's transaction, which
+ * the business handle's own entry opened in that workspace. The same read as a guest menu's.
+ */
+export async function businessBrandOf(tx: WorkspaceTx, workspaceId: string): Promise<PageBrand> {
+  return readMenuBrandIn(tx, workspaceId);
+}
+
 /** One photo of a link page: where the store keeps it, its checked type, and the version its path carries. */
 export interface LookImage {
   readonly path: string;

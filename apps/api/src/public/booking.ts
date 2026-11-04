@@ -61,6 +61,7 @@ import {
 } from '@crm/contracts';
 import {
   BEST_CLEAR_MS,
+  bookingCompanyOf,
   isProviderError,
   outboxHook,
   overlay,
@@ -1136,7 +1137,9 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       const entry = await enterBookingPage({ db }, key);
       // A form's hand off (spec 0037, AC-1388): a page that books only through a form opens only with one. The facts
       // and the brand they wear (spec 0060, AC-4) side by side; a brand that won't read is none.
-      const [facts, brand] = await Promise.all([
+      // Its logo links the company page while one is published and live (spec 0066, AC-6646), as a link page's
+      // lockup does; a company that won't read is none.
+      const [facts, brand, company] = await Promise.all([
         getPublicBookingPage(
           entry,
           services.pictures,
@@ -1146,8 +1149,16 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
           oneOffHashOf(c.req.query('o')),
         ),
         bookingBrandAnswer(entry),
+        bookingCompanyOf(entry).catch((error: unknown) => {
+          log.warn('booking.company.unread', errorFields(error));
+          return undefined;
+        }),
       ]);
-      return ok(brand === undefined ? facts : { ...facts, brand });
+      return ok({
+        ...facts,
+        ...(brand === undefined ? {} : { brand }),
+        ...(company === undefined ? {} : { company }),
+      });
     } catch (error) {
       return refusalAnswer(error);
     }

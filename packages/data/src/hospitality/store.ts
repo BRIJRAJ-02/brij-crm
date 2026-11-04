@@ -134,7 +134,8 @@ const valueOf = <Value>(state: HospitalityHeldState<Value>, fallback: Value): Va
 
 /**
  * One held copy of `Value`, read with `load`, with a change laid over it while it is on its way (changes go out in
- * order; a refusal puts back what was there). Table seating's store holds its setup and days the same way.
+ * order; a refusal puts back what was there). Table seating's store and the business page's store (spec 0066, B4)
+ * hold theirs the same way.
  */
 export function holder<Value>(load: () => Promise<Value>, now: () => number) {
   let state: HospitalityHeldState<Value> = { status: 'loading' };

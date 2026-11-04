@@ -4,6 +4,7 @@
 // public bundle carries no Zod), and anything missing or malformed reads as no block at all, which is the page as
 // it always loaded.
 import type { PublicProfile } from '@crm/data/booking';
+import type { PublicBusinessPage } from '@crm/data/business-page';
 
 /** The shell's boot block's id, as `handle-shell.ts` writes it (`BOOT_ID`). */
 export const BOOT_ID = 'crm-boot';
@@ -11,6 +12,8 @@ export const BOOT_ID = 'crm-boot';
 /** What the shell handed over: a profile, or a booking page's key and its current address. */
 export type Boot =
   | { readonly kind: 'profile'; readonly profile: PublicProfile; readonly readAt: number }
+  /** A business's published page (spec 0066, B4): the handle named no person. */
+  | { readonly kind: 'business'; readonly page: PublicBusinessPage; readonly readAt: number }
   | { readonly kind: 'page'; readonly publicKey: string; readonly handle: string; readonly slug: string };
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -32,6 +35,13 @@ export function bootOf(json: string | null | undefined): Boot | undefined {
     return isText(value.publicKey) && isText(value.handle) && isText(value.slug)
       ? { kind: 'page', publicKey: value.publicKey, handle: value.handle, slug: value.slug }
       : undefined;
+  }
+  if (value.kind === 'business' && isRecord(value.page) && typeof value.readAt === 'number') {
+    const page = value.page;
+    // The fields the page draws from before its own read lands.
+    if (!isText(page.handle) || !isText(page.name) || !isText(page.kind) || !isText(page.placeId)) return undefined;
+    if (!Array.isArray(page.places) || !Array.isArray(page.gallery) || !Array.isArray(page.amenities)) return undefined;
+    return { kind: 'business', page: page as unknown as PublicBusinessPage, readAt: value.readAt };
   }
   if (value.kind === 'profile' && isRecord(value.profile) && typeof value.readAt === 'number') {
     const profile = value.profile;
@@ -63,4 +73,11 @@ export function freshProfile(boot: Boot | undefined, now: number): PublicProfile
 /** This document's boot block, when its shell wrote one. */
 export function readBoot(document: Pick<Document, 'getElementById'>): Boot | undefined {
   return bootOf(document.getElementById(BOOT_ID)?.textContent);
+}
+
+/** The shell's business page, when it is recent enough to draw at `now` (the same window as a profile's). */
+export function freshBusiness(boot: Boot | undefined, now: number): PublicBusinessPage | undefined {
+  if (boot?.kind !== 'business') return undefined;
+  const age = now - boot.readAt;
+  return age >= -BOOT_PROFILE_FRESH_MS && age <= BOOT_PROFILE_FRESH_MS ? boot.page : undefined;
 }

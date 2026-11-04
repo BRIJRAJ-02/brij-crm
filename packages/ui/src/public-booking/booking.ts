@@ -73,6 +73,28 @@ export {
   type LinkPageTimes,
   type PageLook,
 } from '../modules/LinkPage/LinkPage.tsx';
+/**
+ * The business page at `/<company-handle>` (spec 0066, B4 lite) and its block parts: the gallery, the menu, the hours,
+ * the location and Reserve a table.
+ */
+export {
+  BusinessGallery,
+  BusinessHours,
+  BusinessLocation,
+  BusinessMenu,
+  BusinessPage,
+  BusinessReserve,
+  type BusinessGalleryProps,
+  type BusinessHoursProps,
+  type BusinessLocationProps,
+  type BusinessMenuProps,
+  type BusinessMenuSection,
+  type BusinessPagePlace,
+  type BusinessPageProps,
+  type BusinessPhotoItem,
+  type BusinessReserveProps,
+  type BusinessReserveState,
+} from '../modules/BusinessPage/BusinessPage.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';

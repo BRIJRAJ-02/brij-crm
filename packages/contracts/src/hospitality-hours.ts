@@ -1,5 +1,5 @@
-// A place's opening hours, read at an instant (spec 0065, AC-6508; Rules settled: Hours). Pure: a range belongs to the
-// date it starts on (Friday 18:00 to 02:00 is Friday's), an exception on a date replaces only the ranges starting
+// A place's opening hours, read at an instant (spec 0065, AC-6508; Rules settled: Hours). Moved here from core so the
+// public business page reads them in the browser too (spec 0066, B4). Pure: a range belongs to the date it starts on (Friday 18:00 to 02:00 is Friday's), an exception on a date replaces only the ranges starting
 // that date, and every comparison is made on the place's own wall clock, so a clock change never moves an opening
 // time. A wall time a clock change skips reads forward (02:30 on the spring change opens at 03:00), one it repeats
 // reads as its first, as calendars do.

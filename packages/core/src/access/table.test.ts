@@ -134,6 +134,18 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'openAt',
   'nextOpening',
   'rangesOn',
+  // The business page (spec 0066, B4 lite): pure paths, and the public reads, whose only key is the business handle
+  // (crm_business_handle_owner), each reading one workspace's published page under its row level security; and the
+  // link page lockup's read, in the caller's workspace transaction.
+  'businessPhotoFolder',
+  'businessPhotoPath',
+  'businessPhotoSrc',
+  'enterBusinessPage',
+  'listSitemapBusinesses',
+  'NO_MENUS',
+  'publicBusinessBrand',
+  'publicBusinessPhoto',
+  'publishedBusinessHandle',
   'periodDays',
   // The team change's audience: read inside the change's own transaction, after its door (spec 0031, AC-825).
   'membersAffectedByTeamChange',

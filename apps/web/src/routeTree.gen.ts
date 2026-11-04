@@ -85,6 +85,7 @@ import { Route as WSlugSettingsAdminWebsiteRouteImport } from './routes/w.$slug.
 import { Route as WSlugSettingsBookingPagesIndexRouteImport } from './routes/w.$slug.settings.booking-pages.index.tsx'
 import { Route as WSlugSettingsBookingPagesPageIdRouteImport } from './routes/w.$slug.settings.booking-pages.$pageId.tsx'
 import { Route as WSlugSettingsBusinessIndexRouteImport } from './routes/w.$slug.settings.business.index.tsx'
+import { Route as WSlugSettingsBusinessPageRouteImport } from './routes/w.$slug.settings.business.page.tsx'
 import { Route as WSlugSettingsFormsIndexRouteImport } from './routes/w.$slug.settings.forms.index.tsx'
 import { Route as WSlugSettingsFormsFormIdRouteImport } from './routes/w.$slug.settings.forms.$formId.tsx'
 import { Route as WSlugSettingsHistoryIndexRouteImport } from './routes/w.$slug.settings.history.index.tsx'
@@ -514,6 +515,12 @@ const WSlugSettingsBusinessIndexRoute =
     path: '/business/',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsBusinessPageRoute =
+  WSlugSettingsBusinessPageRouteImport.update({
+    id: '/business/page',
+    path: '/business/page',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsFormsIndexRoute = WSlugSettingsFormsIndexRouteImport.update({
   id: '/forms/',
   path: '/forms/',
@@ -751,6 +758,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
   '/w/$slug/settings/admin/website': typeof WSlugSettingsAdminWebsiteRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
+  '/w/$slug/settings/business/page': typeof WSlugSettingsBusinessPageRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/history/changes': typeof WSlugSettingsHistoryChangesRoute
   '/w/$slug/settings/history/sign-ins': typeof WSlugSettingsHistorySignInsRoute
@@ -853,6 +861,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
   '/w/$slug/settings/admin/website': typeof WSlugSettingsAdminWebsiteRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
+  '/w/$slug/settings/business/page': typeof WSlugSettingsBusinessPageRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/history/changes': typeof WSlugSettingsHistoryChangesRoute
   '/w/$slug/settings/history/sign-ins': typeof WSlugSettingsHistorySignInsRoute
@@ -960,6 +969,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
   '/w/$slug/settings/admin/website': typeof WSlugSettingsAdminWebsiteRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
+  '/w/$slug/settings/business/page': typeof WSlugSettingsBusinessPageRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/history/changes': typeof WSlugSettingsHistoryChangesRoute
   '/w/$slug/settings/history/sign-ins': typeof WSlugSettingsHistorySignInsRoute
@@ -1068,6 +1078,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/sign-in'
     | '/w/$slug/settings/admin/website'
     | '/w/$slug/settings/booking-pages/$pageId'
+    | '/w/$slug/settings/business/page'
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/history/changes'
     | '/w/$slug/settings/history/sign-ins'
@@ -1170,6 +1181,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/sign-in'
     | '/w/$slug/settings/admin/website'
     | '/w/$slug/settings/booking-pages/$pageId'
+    | '/w/$slug/settings/business/page'
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/history/changes'
     | '/w/$slug/settings/history/sign-ins'
@@ -1276,6 +1288,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/sign-in'
     | '/w/$slug/settings/admin/website'
     | '/w/$slug/settings/booking-pages/$pageId'
+    | '/w/$slug/settings/business/page'
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/history/changes'
     | '/w/$slug/settings/history/sign-ins'
@@ -1860,6 +1873,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsBusinessIndexRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/business/page': {
+      id: '/w/$slug/settings/business/page'
+      path: '/business/page'
+      fullPath: '/w/$slug/settings/business/page'
+      preLoaderRoute: typeof WSlugSettingsBusinessPageRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/forms/': {
       id: '/w/$slug/settings/forms/'
       path: '/forms'
@@ -2124,6 +2144,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsAccountSignInRoute: typeof WSlugSettingsAccountSignInRoute
   WSlugSettingsAdminWebsiteRoute: typeof WSlugSettingsAdminWebsiteRoute
   WSlugSettingsBookingPagesPageIdRoute: typeof WSlugSettingsBookingPagesPageIdRoute
+  WSlugSettingsBusinessPageRoute: typeof WSlugSettingsBusinessPageRoute
   WSlugSettingsFormsFormIdRoute: typeof WSlugSettingsFormsFormIdRoute
   WSlugSettingsHistoryChangesRoute: typeof WSlugSettingsHistoryChangesRoute
   WSlugSettingsHistorySignInsRoute: typeof WSlugSettingsHistorySignInsRoute
@@ -2175,6 +2196,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsAccountSignInRoute: WSlugSettingsAccountSignInRoute,
   WSlugSettingsAdminWebsiteRoute: WSlugSettingsAdminWebsiteRoute,
   WSlugSettingsBookingPagesPageIdRoute: WSlugSettingsBookingPagesPageIdRoute,
+  WSlugSettingsBusinessPageRoute: WSlugSettingsBusinessPageRoute,
   WSlugSettingsFormsFormIdRoute: WSlugSettingsFormsFormIdRoute,
   WSlugSettingsHistoryChangesRoute: WSlugSettingsHistoryChangesRoute,
   WSlugSettingsHistorySignInsRoute: WSlugSettingsHistorySignInsRoute,

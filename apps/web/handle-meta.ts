@@ -30,8 +30,8 @@ export const CARD_WIDTH = 1200;
 /** The share card's height. */
 export const CARD_HEIGHT = 630;
 
-/** What the meta block describes: a person's page, or one of their booking pages. */
-export type MetaKind = 'profile' | 'website';
+/** What the meta block describes: a person's page, or one of their booking pages, or a business (`business.business`). */
+export type MetaKind = 'profile' | 'website' | 'business.business';
 
 /** Everything the block is written from. Every string here may have come from the person, so none is trusted. */
 export interface MetaSource {
@@ -48,6 +48,11 @@ export interface MetaSource {
   readonly canonical: string;
   /** The share card's address on our own origin, left out while there is none to show. */
   readonly card?: string;
+  /**
+   * The card's own size, when it isn't the drawn card's 1200 × 630: a business page's card is its first photo
+   * (spec 0066, AC-6644), whatever its shape.
+   */
+  readonly cardSize?: { readonly width: number; readonly height: number };
   /** `profile` for `/<handle>`, `website` for `/<handle>/<slug>` (AC-5502). */
   readonly kind: MetaKind;
   /** Whether search engines may show the page (AC-5506). Following links is allowed either way. */
@@ -109,8 +114,8 @@ export function metaTags(source: MetaSource): string {
     tag('property', 'og:description', description),
     tag('property', 'og:url', source.canonical),
     tag('property', 'og:image', card),
-    card === undefined ? '' : tag('property', 'og:image:width', String(CARD_WIDTH)),
-    card === undefined ? '' : tag('property', 'og:image:height', String(CARD_HEIGHT)),
+    card === undefined ? '' : tag('property', 'og:image:width', String(source.cardSize?.width ?? CARD_WIDTH)),
+    card === undefined ? '' : tag('property', 'og:image:height', String(source.cardSize?.height ?? CARD_HEIGHT)),
     card === undefined ? '' : tag('property', 'og:image:alt', title),
     tag('name', 'twitter:card', card === undefined ? 'summary' : 'summary_large_image'),
   ].join('');
