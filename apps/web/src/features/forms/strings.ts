@@ -31,7 +31,9 @@ export const strings = {
   // The template gallery (spec 0063, AC-6323; 5 November 2026: pick one, see it beside the list, then use it).
   galleryTitle: 'Start a form',
   /** The gallery's one primary, naming the template it makes. */
-  galleryUse: (name: string) => `Use ${name}`,
+  galleryStart: 'Start',
+  /** The Start button's full name, so a screen reader hears which form it makes. */
+  galleryStartWith: (name: string) => `Start ${name}`,
   /** Said in the title bar, and announced politely, while a template is being turned into a draft. */
   galleryMakingOne: (name: string) => `Making your ${name}…`,
   /** What the blank template is called in that line, when the tiles never loaded and only Blank is reachable. */

@@ -127,7 +127,7 @@ describe('the gallery (AC-6323)', () => {
     expect(document.querySelectorAll('[role="radiogroup"] [data-tile]').length).toBe(TEMPLATES.length);
     expect(document.querySelectorAll('[role="radiogroup"] [data-tile][data-tall]').length).toBe(0);
     expect(document.querySelectorAll('[role="radiogroup"] [data-tile][data-described]').length).toBe(TEMPLATES.length);
-    await expect.element(page.getByRole('button', { name: 'Use Blank form' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Start Blank form' })).toBeVisible();
   });
 
   it('puts Blank form first on its own, then the templates under a Templates line, with no pictures', async () => {
@@ -137,7 +137,7 @@ describe('the gallery (AC-6323)', () => {
     // No form is drawn on a tile: Blank's own empty form and the samples' words are gone.
     expect(document.body.textContent).not.toContain('How did we do?');
     await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
-    await expect.element(page.getByRole('button', { name: 'Use Feedback' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Start Feedback' })).toBeVisible();
   });
 
   it('makes a draft from the picked template on Use and hands it back', async () => {
@@ -145,7 +145,7 @@ describe('the gallery (AC-6323)', () => {
     await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
     // Picking alone makes nothing.
     expect(run.asked).toEqual([]);
-    await userEvent.click(page.getByRole('button', { name: 'Use Feedback' }).element());
+    await userEvent.click(page.getByRole('button', { name: 'Start Feedback' }).element());
     await expect.poll(() => run.made.map((form) => form.id)).toEqual([MADE.id]);
     expect(run.asked).toEqual([{ templateId: 'feedback' }]);
   });
@@ -173,7 +173,7 @@ describe('the gallery (AC-6323)', () => {
         }),
     });
     await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
-    await userEvent.click(page.getByRole('button', { name: 'Use Feedback' }).element());
+    await userEvent.click(page.getByRole('button', { name: 'Start Feedback' }).element());
     // The status names the template, so the person knows which one is being made, and it is announced politely.
     await expect.element(page.getByText('Making your Feedback…')).toBeVisible();
     await expect.element(page.getByRole('radio', { name: 'Feedback' })).toBeEnabled();
@@ -216,7 +216,7 @@ describe('the gallery (AC-6323)', () => {
   it('lets Cancel out of a create that never settles', async () => {
     // A request that hangs must not be a modal only a page reload escapes.
     const run = await open({ create: () => new Promise<FormView>(() => undefined) });
-    await userEvent.click(page.getByRole('button', { name: 'Use Blank form' }).element());
+    await userEvent.click(page.getByRole('button', { name: 'Start Blank form' }).element());
     await expect.element(page.getByText('Making your Blank form…')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Cancel' }).element());
     expect(run.closedCount()).toBe(1);
@@ -237,7 +237,7 @@ describe('the gallery (AC-6323)', () => {
         document.documentElement.dataset.theme = theme;
         await open();
         await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
-        await expect.element(page.getByRole('button', { name: 'Use Feedback' })).toBeVisible();
+        await expect.element(page.getByRole('button', { name: 'Start Feedback' })).toBeVisible();
         await new Promise((resolve) => globalThis.setTimeout(resolve, 500));
         await page.screenshot({ path: `.vitest/shots/gallery-${String(width)}-${theme}.png` });
         shown?.unmount();

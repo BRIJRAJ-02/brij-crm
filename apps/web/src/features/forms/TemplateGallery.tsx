@@ -69,7 +69,7 @@ export interface TemplateGalleryProps {
 /**
  * The gallery: a wide window listing the templates, Blank form first and
  * picked as it opens, with a big preview of the picked one beside the list
- * (the form as a visitor sees it), and Use <name> to make it. The tiles are
+ * (the form as a visitor sees it), and Start to make it. The tiles are
  * read through the data layer when it opens, and the id is minted once per
  * Use, so a retry makes one form. While one is being made, its tile stays on
  * while the others turn off, so a second Use can't make a second form and a
@@ -195,13 +195,15 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
           {chosen !== undefined && (
             <Button
               variant="primary"
+              // "Start", the window's one way on (the owner, 5 November 2026); named with the template for a screen reader.
+              label={strings.galleryStartWith(chosen.name)}
               isPending={making === chosen.id}
               isDisabled={isBusy && making !== chosen.id}
               onPress={() => {
                 start(chosen.id);
               }}
             >
-              {strings.galleryUse(chosen.name)}
+              {strings.galleryStart}
             </Button>
           )}
         </>
@@ -236,7 +238,7 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
       {phase.kind === 'ready' && phase.items.length > 0 && (
         <>
           {/* Blank form first, on its own, then the ready ones under a "Templates" line (the owner, 5 November 2026:
-              "simple tiles", no pictures). Two grids share one choice, so Use <name> uses whichever was picked last. */}
+              "simple tiles", no pictures). Two grids share one choice, so Start uses whichever was picked last. */}
           {[items.filter((each) => each.id === 'blank'), items.filter((each) => each.id !== 'blank')].map(
             (group, at) =>
               group.length === 0 ? null : (
@@ -262,7 +264,7 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
                       const next = items.find((each) => each.id === id);
                       if (next !== undefined) setPicked(next.id);
                     }}
-                    // Enter on a template, or a double click, uses it, as Use <name> does (forms fixes 3).
+                    // Enter on a template, or a double click, uses it, as Start does (forms fixes 3).
                     onConfirm={(id) => {
                       const next = items.find((each) => each.id === id);
                       if (next === undefined) return;
