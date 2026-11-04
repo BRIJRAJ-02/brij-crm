@@ -198,18 +198,25 @@ export function ReadyPanel({
           <div className={styles.main}>
             {linkRow}
             <div className={styles.ways} role="group" aria-label={strings.sendLink}>
+              {/* The link row's height, so the card's controls are one size (the owner: "same size and shape"). */}
               <ButtonLink
                 icon="mail"
+                size="lg"
                 href={`mailto:?subject=${encodeURIComponent(shareTitle ?? title ?? link)}&body=${encodeURIComponent(link)}`}
                 isExternal
               >
                 {strings.email}
               </ButtonLink>
-              <ButtonLink icon="message-square" href={`https://wa.me/?text=${encodeURIComponent(link)}`} isExternal>
+              <ButtonLink
+                icon="message-square"
+                size="lg"
+                href={`https://wa.me/?text=${encodeURIComponent(link)}`}
+                isExternal
+              >
                 {strings.whatsapp}
               </ButtonLink>
               {canShare && (
-                <Button icon="share" onPress={share}>
+                <Button icon="share" size="lg" onPress={share}>
                   {strings.more}
                 </Button>
               )}
