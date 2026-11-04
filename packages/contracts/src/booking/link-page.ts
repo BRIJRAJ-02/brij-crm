@@ -375,6 +375,33 @@ export const ProfileTimesBlock = z.object({
 /** A next times block. */
 export type ProfileTimesBlock = z.infer<typeof ProfileTimesBlock>;
 
+/**
+ * A place's guest menu (spec 0065, AC-6528): the place by its id, in the page's own workspace, and an optional label
+ * for the row ("Our menu" when absent). Shown while Menu is installed and the menu is published and live; its row
+ * names the first few dishes of the published menu.
+ */
+export const ProfileMenuBlock = z.object({
+  kind: z.literal('menu'),
+  placeId: Uuid,
+  label: oneLine(1, PROFILE_TITLE_MAX.place, 'Give the row a label.', 'Keep the label to 60 characters.').optional(),
+  ...windowFields,
+});
+/** A menu block. */
+export type ProfileMenuBlock = z.infer<typeof ProfileMenuBlock>;
+
+/**
+ * A place's reservation page (spec 0065, AC-6528): the place by its id and an optional label ("Reserve a table" when
+ * absent). Shown only while Table seating is installed and the place takes reservations online.
+ */
+export const ProfileReserveBlock = z.object({
+  kind: z.literal('reserve'),
+  placeId: Uuid,
+  label: oneLine(1, PROFILE_TITLE_MAX.place, 'Give the row a label.', 'Keep the label to 60 characters.').optional(),
+  ...windowFields,
+});
+/** A reserve block. */
+export type ProfileReserveBlock = z.infer<typeof ProfileReserveBlock>;
+
 /** One line at the very top of the page, with an optional link (AC-6112). At most one live. */
 export const ProfileBannerBlock = z.object({
   kind: z.literal('banner'),
@@ -402,6 +429,8 @@ export const ProfileBlock = z
     ProfileGalleryBlock,
     ProfileTimesBlock,
     ProfileBannerBlock,
+    ProfileMenuBlock,
+    ProfileReserveBlock,
   ])
   .superRefine((block, ctx) => {
     // The one rule that reads both ends of a window (AC-6111): the end after the start.
@@ -450,6 +479,31 @@ export const ProfileFormFacts = z.object({
 /** What the editor knows of a form block's form. */
 export type ProfileFormFacts = z.infer<typeof ProfileFormFacts>;
 
+/**
+ * What the editor knows of a Menu or Reserve block's place (spec 0065, AC-6528): its name, and whether a visitor sees
+ * the block now. `paused` says why in `reason`: the app isn't installed, the menu isn't published or is hidden, or the
+ * place doesn't take reservations online. A place that is gone has no facts at all.
+ */
+export const ProfilePlaceFacts = z.object({
+  name: z.string(),
+  status: z.enum(['live', 'paused']),
+  reason: z.enum(['app', 'unpublished', 'hidden', 'offline']).optional(),
+  /** The page the block opens on our own origin (`/m/<key>` or `/r/<key>`), for the editor's preview and link. */
+  path: z.string(),
+});
+/** What the editor knows of a Menu or Reserve block's place. */
+export type ProfilePlaceFacts = z.infer<typeof ProfilePlaceFacts>;
+
+/** A place the person may place a Menu or Reserve block for (spec 0065, AC-6528), from their own workspace. */
+export const ProfilePlaceChoice = z.object({
+  placeId: Uuid,
+  /** Facts for each kind: Menu's and Reserve's, each with why it would be paused. */
+  menu: ProfilePlaceFacts.optional(),
+  reserve: ProfilePlaceFacts.optional(),
+});
+/** A place the person may place. */
+export type ProfilePlaceChoice = z.infer<typeof ProfilePlaceChoice>;
+
 /** What every stored block carries besides its fields. */
 const Stored = {
   id: Uuid,
@@ -497,6 +551,8 @@ export const ProfileItem = z.discriminatedUnion('kind', [
   ProfileGalleryBlock.extend(Stored),
   ProfileTimesBlock.extend({ ...Stored, page: ProfilePageFacts.optional() }),
   ProfileBannerBlock.extend({ ...Stored, url: z.string().optional() }),
+  ProfileMenuBlock.extend({ ...Stored, place: ProfilePlaceFacts.optional() }),
+  ProfileReserveBlock.extend({ ...Stored, place: ProfilePlaceFacts.optional() }),
 ]);
 /** One block as the editor reads it. */
 export type ProfileItem = z.infer<typeof ProfileItem>;
@@ -711,6 +767,19 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
   }),
   /** One line at the very top of the page (AC-6112), with an optional link. */
   z.object({ kind: z.literal('banner'), id: Uuid, text: z.string().min(1), url: z.string().optional() }),
+  /**
+   * A place's guest menu (spec 0065, AC-6528): the row's words, the menu's address on our own origin (`/m/<key>`),
+   * and its first few dishes from the published menu, each with its price in the place's locale. No place id.
+   */
+  z.object({
+    kind: z.literal('menu'),
+    id: Uuid,
+    title: z.string().min(1),
+    path: z.string().min(1),
+    dishes: z.array(z.object({ name: z.string(), price: z.string().optional() })),
+  }),
+  /** A place's reservation page (spec 0065, AC-6528): the row's words and its address (`/r/<key>`). */
+  z.object({ kind: z.literal('reserve'), id: Uuid, title: z.string().min(1), path: z.string().min(1) }),
 ]);
 /** One block as a visitor reads it. */
 export type PublicProfileItem = z.infer<typeof PublicProfileItem>;

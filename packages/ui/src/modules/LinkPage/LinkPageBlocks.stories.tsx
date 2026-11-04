@@ -803,3 +803,32 @@ export const Holds: Story = {
     await picturesDrawn(canvasElement);
   },
 };
+
+/**
+ * A place's menu and its reservation page (spec 0065, AC-6528): rows on our own origin, the menu's with its first
+ * dishes and their prices under the title.
+ */
+export const MenuAndReserve: Story = {
+  args: {
+    blocks: [
+      {
+        kind: 'menu',
+        id: 'menu',
+        title: 'Our menu',
+        href: '/m/AbCdEfGhIjKlMnOp',
+        dishes: [
+          { name: 'Soup', price: '£6.50' },
+          { name: 'Risotto', price: '£14.50' },
+          { name: 'Tart', price: '£7.00' },
+        ],
+      },
+      { kind: 'reserve', id: 'reserve', title: 'Reserve a table', href: '/r/AbCdEfGhIjKlMnOp' },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('link', { name: /Our menu.*Soup £6\.50 · Risotto £14\.50 · Tart £7\.00/ }),
+    ).toHaveAttribute('href', '/m/AbCdEfGhIjKlMnOp');
+    await expect(canvas.getByRole('link', { name: /Reserve a table/ })).toHaveAttribute('href', '/r/AbCdEfGhIjKlMnOp');
+  },
+};

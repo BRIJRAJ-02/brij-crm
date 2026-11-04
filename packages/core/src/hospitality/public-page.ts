@@ -189,7 +189,11 @@ export async function enterBusinessPage(
 }
 
 /** The place's reservation page's path while its table service takes reservations online, else undefined. */
-async function reservePathOf(tx: WorkspaceTx, workspaceId: string, placeId: string): Promise<string | undefined> {
+export async function reservePathOf(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  placeId: string,
+): Promise<string | undefined> {
   const service = await readTableService(tx, placeId);
   if (service?.rules.online !== true) return undefined;
   const [place] = await tx

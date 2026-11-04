@@ -45,6 +45,10 @@ It sits in a raised card like the rows beside it, because on this page anything 
 
 A `form` block is a row like a booking page's, with the owner's own words and a quiet chevron, that opens `/f/:key` in the same tab (spec 0052, AC-5215). It is our own origin, so it is an ordinary navigation: no `target`, no `rel`, no frame and no script from anywhere else. Its press is counted exactly as any other row's is.
 
+## A place's menu and reservations
+
+A `menu` block and a `reserve` block (spec 0065, AC-6528) are rows like a form's, on our own origin, opened in the same tab: the menu's row opens `/m/<key>` and lists its first few dishes with their prices in the line under its title ("Soup £6.50 · Risotto £14.50"), and the reserve row opens `/r/<key>`. Their tiles take the marks those pages carry (`utensils`, `calendar-check`). Variants of the row, not new components: the same row, tile and chevron, with their own words. Whether either shows at all is the server's: a hidden menu, a removed app or a place not taking reservations online leaves the block out of the answer.
+
 ## The owner's look
 
 `theme` is ten names (spec 0054, widened by spec 0060): `ground`, `hue`, `mode`, `shape`, `fill`, `font`, `gradient`, `pattern`, `header` and `avatar`. They become data attributes on this module's root, and this module's stylesheet has one block per value, each setting the page's own custom properties from token variables. Nothing is styled inline, no CSS is made at run time and no value is ever passed in, so a thousand pages are still one stylesheet and one contrast test.

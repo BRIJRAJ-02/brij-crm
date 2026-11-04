@@ -7,6 +7,8 @@ import { strings } from './strings.ts';
 
 /** Props for KindPicker. */
 export interface KindPickerProps {
+  /** The kinds to offer, in order: `ADDABLE`, less those this workspace can't place (Menu, Reserve). */
+  readonly kinds?: readonly AddableKind[];
   /** The kind the Add modal shows the fields of. */
   readonly value: AddableKind;
   /** Why a kind can't take one more (the limit's sentence), or undefined while it has room. */
@@ -21,13 +23,13 @@ export interface KindPickerProps {
  * frame (BlockEditorFrame) keeps focus on the tiles while arrows swap the fields under them, and moves on to the
  * fields only once a kind is picked with Enter, Space or a click (AC-4).
  */
-export function KindPicker({ value, fullReason, onChange }: KindPickerProps) {
+export function KindPicker({ kinds = ADDABLE, value, fullReason, onChange }: KindPickerProps) {
   return (
     <TileGrid
       variant="choice"
       label={strings.addWhat}
       value={value}
-      tiles={ADDABLE.map((kind) => {
+      tiles={kinds.map((kind) => {
         const entry = BLOCK_KINDS[kind];
         const full = fullReason(kind);
         return {
@@ -40,7 +42,7 @@ export function KindPicker({ value, fullReason, onChange }: KindPickerProps) {
         };
       })}
       onChange={(chosen) => {
-        const kind = ADDABLE.find((each) => each === chosen);
+        const kind = kinds.find((each) => each === chosen);
         if (kind !== undefined) onChange(kind);
       }}
     />

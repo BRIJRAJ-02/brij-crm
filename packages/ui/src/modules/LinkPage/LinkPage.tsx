@@ -219,6 +219,24 @@ export type LinkPageBlock =
       readonly href?: string;
     }
   | {
+      /**
+       * A place's guest menu (spec 0065, AC-6528): a row that opens it on our own origin (`/m/<key>`), with its first
+       * few dishes and their prices under the title.
+       */
+      readonly kind: 'menu';
+      readonly id: string;
+      readonly title: string;
+      readonly href: string;
+      readonly dishes: readonly { readonly name: string; readonly price?: string }[];
+    }
+  | {
+      /** A place's reservation page (spec 0065, AC-6528): a row that opens it on our own origin (`/r/<key>`). */
+      readonly kind: 'reserve';
+      readonly id: string;
+      readonly title: string;
+      readonly href: string;
+    }
+  | {
       readonly kind: 'contact';
       readonly id: string;
       /** The card's full name. */
@@ -627,6 +645,14 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
       </span>
     );
   }
+  // A place's menu and its reservation page (spec 0065, AC-6528) take the marks their own pages carry.
+  if (block.kind === 'menu' || block.kind === 'reserve') {
+    return (
+      <span className={styles.tile} data-tile="page">
+        <Icon name={block.kind === 'menu' ? 'utensils' : 'calendar-check'} />
+      </span>
+    );
+  }
   if (isMarked(block)) {
     return (
       <span className={styles.tile} data-tile="icon">
@@ -924,6 +950,16 @@ const RENDERERS: {
       </a>
     );
   },
+  menu: (block, onPress) => (
+    <PlaceRow
+      block={block}
+      line={block.dishes
+        .map((dish) => (dish.price === undefined ? dish.name : strings.dishPrice(dish.name, dish.price)))
+        .join(' · ')}
+      onPress={onPress}
+    />
+  ),
+  reserve: (block, onPress) => <PlaceRow block={block} onPress={onPress} />,
   page: (block, onPress) => {
     const target = samePath(block.href);
     const body = (
@@ -977,6 +1013,40 @@ const RENDERERS: {
   },
 };
 
+/** A place's menu or reservation page as a row on our own origin, with an optional line under its title. */
+function PlaceRow({
+  block,
+  line,
+  onPress,
+}: {
+  readonly block: Extract<LinkPageBlock, { kind: 'menu' | 'reserve' }>;
+  readonly line?: string;
+  readonly onPress: (() => void) | undefined;
+}) {
+  const target = samePath(block.href);
+  const body = (
+    <>
+      <LinkPageTile block={block} />
+      <BlockText title={block.title} {...(line === undefined || line === '' ? {} : { line })} />
+    </>
+  );
+  if (target === undefined) {
+    return (
+      <span className={styles.block} data-inert="">
+        {body}
+      </span>
+    );
+  }
+  return (
+    <a className={styles.block} href={target} onClick={onPress}>
+      {body}
+      <span className={styles.end}>
+        <Icon name="chevron-right" size="sm" />
+      </span>
+    </a>
+  );
+}
+
 /** One block in its row. */
 function BlockRow({
   block,
@@ -994,13 +1064,17 @@ function BlockRow({
           ? RENDERERS.form(block, press)
           : block.kind === 'page'
             ? RENDERERS.page(block, press)
-            : RENDERERS.contact(block, press)}
+            : block.kind === 'menu'
+              ? RENDERERS.menu(block, press)
+              : block.kind === 'reserve'
+                ? RENDERERS.reserve(block, press)
+                : RENDERERS.contact(block, press)}
     </li>
   );
 }
 
-/** A block a row draws: a link, a form, a booking page, or a second contact card. */
-type RowBlock = Extract<LinkPageBlock, { kind: 'link' | 'form' | 'page' | 'contact' }>;
+/** A block a row draws: a link, a form, a booking page, a place's menu or reservations, or a second contact card. */
+type RowBlock = Extract<LinkPageBlock, { kind: 'link' | 'form' | 'page' | 'menu' | 'reserve' | 'contact' }>;
 
 /** A block a grid page draws as a sized tile (spec 0061, AC-6103): `PROFILE_SIZED_KINDS` in the contracts. */
 type TileBlock = Extract<LinkPageBlock, { kind: 'link' | 'page' | 'media' | 'image' | 'gallery' }>;
@@ -1015,7 +1089,14 @@ type ApartBlock = Extract<
 >;
 
 function isRowBlock(block: LinkPageBlock): block is RowBlock {
-  return block.kind === 'link' || block.kind === 'form' || block.kind === 'page' || block.kind === 'contact';
+  return (
+    block.kind === 'link' ||
+    block.kind === 'form' ||
+    block.kind === 'page' ||
+    block.kind === 'menu' ||
+    block.kind === 'reserve' ||
+    block.kind === 'contact'
+  );
 }
 
 function isTileBlock(block: LinkPageBlock): block is TileBlock {

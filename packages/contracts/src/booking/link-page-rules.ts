@@ -20,6 +20,9 @@ export const PROFILE_BLOCK_KINDS = [
   'gallery',
   'times',
   'banner',
+  // Spec 0065 (AC-6528): a place's guest menu with its first dishes, and its reservation page.
+  'menu',
+  'reserve',
 ] as const;
 /** One of the kinds this build draws. */
 export type ProfileBlockKind = (typeof PROFILE_BLOCK_KINDS)[number];
@@ -45,6 +48,8 @@ export const PROFILE_LIMITS = {
   gallery: 3,
   times: 3,
   banner: 1,
+  menu: 3,
+  reserve: 3,
   featured: 3,
 } as const;
 
@@ -82,6 +87,10 @@ export function profileLimitSentence(kind: ProfileBlockKind | 'items' | 'feature
       return 'A link page shows one banner at a time.';
     case 'featured':
       return most(PROFILE_LIMITS.featured, 'featured links');
+    case 'menu':
+      return most(PROFILE_LIMITS.menu, 'menu blocks');
+    case 'reserve':
+      return most(PROFILE_LIMITS.reserve, 'reservation blocks');
     case 'page':
       return most(PROFILE_LIMITS.page, 'booking pages');
   }
@@ -423,7 +432,10 @@ export function profileLinkProblem(reason: 'empty' | 'too_long' | 'invalid'): st
 }
 
 /** The longest title each kind takes, and a link's note. */
-export const PROFILE_TITLE_MAX = { link: 60, heading: 40, text: 60, faq: 60, form: 60 } as const;
+export const PROFILE_TITLE_MAX = { link: 60, heading: 40, text: 60, faq: 60, form: 60, place: 60 } as const;
+
+/** How many of a menu's dishes its link page block shows under its row (spec 0065, AC-6528). */
+export const PROFILE_MENU_DISHES = 3;
 
 /** The longest piece of writing a text block holds, and how many line breaks it may have (spec 0052, AC-5205). */
 export const PROFILE_TEXT_MAX = 1_000;

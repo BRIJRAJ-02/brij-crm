@@ -162,6 +162,10 @@ function shownItem(
     const form = facts !== undefined && 'form' in facts ? facts.form : undefined;
     return { ...block, id, ...(form === undefined ? {} : { form }), updatedAt };
   }
+  if (block.kind === 'menu' || block.kind === 'reserve') {
+    const place = facts !== undefined && 'place' in facts ? facts.place : undefined;
+    return { ...block, id, ...(place === undefined ? {} : { place }), updatedAt };
+  }
   if (block.kind === 'media') {
     // The server parses the link into its service and id and reads the title and poster once; until it answers,
     // the row names the service from the address and keeps what the saved block had.
@@ -845,15 +849,37 @@ function Blocks({
   // isn't, so the picker never opens on a choice that can't be taken. Every kind full disables the button.
   // Email signup makes a form block, so what it needs room for is a form (`blockKindOf`), not a kind of its own.
   // Why a kind can't be added now: its limit's sentence, or, for Social icons, that there are no links to show yet.
+  // Menu and Reserve (spec 0065, AC-6528) are offered only where they can be placed: while Menu or Table seating is
+  // installed in this workspace, read once as the screen opens. Elsewhere the Add modal never mentions them.
+  const [placeKinds, setPlaceKinds] = useState<ReadonlySet<AddableKind>>(() => new Set());
+  useEffect(() => {
+    let isCurrent = true;
+    linkPage.placeChoices(slug).then(
+      (found) => {
+        if (!isCurrent) return;
+        setPlaceKinds(
+          new Set<AddableKind>([
+            ...(found.some((choice) => choice.menu !== undefined) ? (['menu'] as const) : []),
+            ...(found.some((choice) => choice.reserve !== undefined) ? (['reserve'] as const) : []),
+          ]),
+        );
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [linkPage, slug]);
+  const addable = ADDABLE.filter((kind) => (kind !== 'menu' && kind !== 'reserve') || placeKinds.has(kind));
   const offReason = (kind: AddableKind) =>
     linkPage.limit(items, blockKindOf(kind)) ??
     (kind === 'socials' && shownSocials.length === 0 ? reachStrings.socialsNone : undefined);
   const roomFor = (kind: AddableKind) => offReason(kind) === undefined;
   const openAdd = (kind: AddableKind) => {
-    const open = roomFor(kind) ? kind : ADDABLE.find(roomFor);
+    const open = roomFor(kind) ? kind : addable.find(roomFor);
     if (open !== undefined) setEditing({ kind: open, id: linkPage.newId() });
   };
-  const isFull = !ADDABLE.some(roomFor);
+  const isFull = !addable.some(roomFor);
   const addButtons = (
     <>
       {/* Bringing a page across (spec 0055, AC-5524). Secondary, as Button's README puts Import with the view
@@ -881,12 +907,13 @@ function Blocks({
   );
   // A full kind's tile is off and can't take focus, so why it is full is said in the footer's line too, where a
   // keyboard reaches it; with nothing full the line says where the block lands.
-  const fullReasons = [...new Set(ADDABLE.flatMap((kind) => linkPage.limit(items, blockKindOf(kind)) ?? []))];
+  const fullReasons = [...new Set(addable.flatMap((kind) => linkPage.limit(items, blockKindOf(kind)) ?? []))];
   const addHint = fullReasons.length === 0 ? strings.addHint : fullReasons.join(' ');
   // The kinds as a grid of icons with a short name each (spec 0058, AC-9), only while adding.
   const kindPicker =
     editing === undefined || editing.item !== undefined ? undefined : (
       <KindPicker
+        kinds={addable}
         value={editing.kind}
         fullReason={offReason}
         // The id is minted once and kept as the kind changes, so the save that follows is still the one add.

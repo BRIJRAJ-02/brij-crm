@@ -39,6 +39,7 @@ import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
 import { requirePermission } from './check.ts';
 import { workspaceRules } from './stored-rules.ts';
+import { publicPlaceBlocks, type PublicPlaceBlock } from '../profile/place-blocks.ts';
 import { countPageVisit, finishPageVisit, type VisitOrigin } from '../insights/visits.ts';
 import { checkScope, mintFormBeside, mintPageBeside, mintScope, rescope, type EngineScope } from './mint.ts';
 import { inWorkspace } from './run.ts';
@@ -1428,6 +1429,8 @@ export async function enterLinkPage(
   readonly identity: Pick<PublicProfile, 'role' | 'brand' | 'footLine'>;
   /** This is the owner's own Preview of their draft (spec 0068): never a view, never the published page. */
   readonly isDraft: boolean;
+  /** The Menu and Reserve blocks a visitor sees now, by block id (spec 0065, AC-6528); the rest are left out. */
+  readonly placeBlocks: ReadonlyMap<string, PublicPlaceBlock>;
 }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
   const reached = await shownOwner(deps.db, handle, {
@@ -1480,11 +1483,13 @@ export async function enterLinkPage(
     owner,
     rows.flatMap((row) => imageIdsOf(row.data)),
   );
-  // Read in the owner's own workspace, under its row level security: their job title and its name are its own.
-  const identity = await deps.db.withWorkspace(owner.workspaceId, (tx) =>
-    publicIdentityOf(tx, owner, isDraft ? 'draft' : 'published'),
-  );
-  return { owner, rows: found.rows, pages, forms, skipped, pictures, identity, isDraft };
+  // Read in the owner's own workspace, under its row level security: their job title and its name are its own, and
+  // so are the places a Menu or Reserve block names (spec 0065, AC-6528), read only from what was published.
+  const [identity, placeBlocks] = await deps.db.withWorkspace(owner.workspaceId, async (tx) => [
+    await publicIdentityOf(tx, owner, isDraft ? 'draft' : 'published'),
+    await publicPlaceBlocks(tx, owner.workspaceId, rows),
+  ]);
+  return { owner, rows: found.rows, pages, forms, skipped, pictures, identity, isDraft, placeBlocks };
 }
 
 /**

@@ -11,6 +11,7 @@ import type {
   ProfileItem,
   ProfilePageChoice,
   ProfileFormFacts,
+  ProfilePlaceFacts,
   ProfilePageFacts,
 } from '@crm/data';
 import type { Hue, IconName, LinkPageBlock, LinkPageMark, SocialLinkItem } from '@crm/ui';
@@ -33,6 +34,8 @@ import {
   MediaEditor,
   SocialsEditor,
   TimesChooser,
+  MenuChooser,
+  ReserveChooser,
 } from './editors-reach.tsx';
 import { reachStrings } from './reach-strings.ts';
 import { strings } from './strings.ts';
@@ -88,7 +91,8 @@ export interface AfterSave {
 }
 
 /** What a chooser knows of what was picked, for the row it shows at once. */
-export type ChosenFacts = { readonly page: ProfilePageFacts } | { readonly form: ProfileFormFacts };
+export type ChosenFacts =
+  { readonly page: ProfilePageFacts } | { readonly form: ProfileFormFacts } | { readonly place: ProfilePlaceFacts };
 
 /** How a block's row reads in the editor's list. */
 export interface BlockRowWords {
@@ -234,6 +238,23 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     Editor: TimesChooser,
     isEditable: true,
   },
+  // Spec 0065 (AC-6528): a place's menu and its reservation page, offered only while their apps are installed.
+  menu: {
+    label: reachStrings.addMenu,
+    description: reachStrings.addMenuText,
+    icon: 'utensils',
+    hue: 'orange',
+    Editor: MenuChooser,
+    isEditable: true,
+  },
+  reserve: {
+    label: reachStrings.addReserve,
+    description: reachStrings.addReserveText,
+    icon: 'calendar-check',
+    hue: 'green',
+    Editor: ReserveChooser,
+    isEditable: true,
+  },
   banner: {
     label: reachStrings.addBanner,
     description: reachStrings.addBannerText,
@@ -269,6 +290,8 @@ export const ADDABLE: readonly AddableKind[] = [
   'faq',
   'testimonial',
   'contact',
+  'menu',
+  'reserve',
   'banner',
   'heading',
 ];
@@ -333,6 +356,15 @@ export function rowWords(item: ProfileItem): BlockRowWords {
       : { title: item.label, address: line };
   }
   if (item.kind === 'contact') return { title: item.fullName, address: contactWords(item, true) };
+  if (item.kind === 'menu' || item.kind === 'reserve') {
+    const title = item.label ?? (item.kind === 'menu' ? reachStrings.menuTitle : reachStrings.reserveTitle);
+    if (item.place === undefined) return { title, address: reachStrings.placeGone, isOff: true };
+    const what =
+      item.kind === 'menu' ? reachStrings.menuRow(item.place.name) : reachStrings.reserveRow(item.place.name);
+    return item.place.status === 'live'
+      ? { title, address: what }
+      : { title, address: `${reachStrings.placeOff(item.place.reason)} · ${what}`, isOff: true };
+  }
   if (item.page === undefined) {
     // Unavailable leads the line, as Paused does, so a phone keeps the row on one line.
     return {
@@ -469,6 +501,14 @@ export function previewBlock(
     // A form a visitor can't open now is left out of the phone, as a paused booking page is.
     if (item.form === undefined || item.form.status !== 'live') return undefined;
     return { kind: 'form', id: item.id, title: item.label, href: `/f/${item.form.key}` };
+  }
+  if (item.kind === 'menu' || item.kind === 'reserve') {
+    // As a visitor would see it now: a paused one (the app removed, the menu hidden, reservations off) is left out.
+    if (item.place?.status !== 'live') return undefined;
+    const title = item.label ?? (item.kind === 'menu' ? reachStrings.menuTitle : reachStrings.reserveTitle);
+    return item.kind === 'menu'
+      ? { kind: 'menu', id: item.id, title, href: item.place.path, dishes: [] }
+      : { kind: 'reserve', id: item.id, title, href: item.place.path };
   }
   if (item.kind === 'faq') {
     return {

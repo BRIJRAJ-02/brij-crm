@@ -62,6 +62,7 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
     walletLink: () => wait('walletLink'),
     show: () => wait('show'),
     formChoices: () => wait('formChoices'),
+    placeChoices: () => wait('placeChoices'),
     saveTheme: ({ theme }) => Promise.resolve(theme),
     setIndexable: ({ indexable }) => Promise.resolve({ indexable }),
     importLinks: ({ id, url }) =>

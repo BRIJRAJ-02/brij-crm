@@ -17,6 +17,7 @@
 //    their email, in a savepoint, so a record refusal never loses the booking.
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
+import type { PublicPlaceBlock } from '../profile/place-blocks.ts';
 import { handoffAnswers, handoffSubmission, handoffVisitor } from '../forms/public.ts';
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -453,6 +454,10 @@ function matches(item: PublicProfileItem, words: string): boolean {
         return [item.caption ?? ''];
       case 'banner':
         return [item.text];
+      case 'menu':
+        return [item.title, ...item.dishes.map((dish) => dish.name)];
+      case 'reserve':
+        return [item.title];
       case 'gallery':
       case 'socials':
         return [];
@@ -496,7 +501,12 @@ function publicItemOf(
   pages: ReadonlyMap<string, PageRow>,
   forms: ReadonlyMap<string, string>,
   handle: string,
-  extras: { readonly pictures: PictureSizes; readonly hasSocials: boolean } = {
+  extras: {
+    readonly pictures: PictureSizes;
+    readonly hasSocials: boolean;
+    /** The Menu and Reserve blocks a visitor sees now (spec 0065, AC-6528), read in the page's own workspace. */
+    readonly placeBlocks?: ReadonlyMap<string, PublicPlaceBlock>;
+  } = {
     pictures: new Map(),
     hasSocials: false,
   },
@@ -645,6 +655,11 @@ function publicItemOf(
     if (text === undefined) return undefined;
     const url = addressOf(data.url);
     candidate = { kind: 'banner', id: row.id, text, ...(url === undefined ? {} : { url }) };
+  } else if (row.kind === 'menu' || row.kind === 'reserve') {
+    // A place's menu or reservation page (spec 0065, AC-6528): only as the page's own workspace read it just now.
+    const shown = extras.placeBlocks?.get(row.id);
+    if (shown?.kind !== row.kind) return undefined;
+    candidate = shown;
   } else if (row.kind === 'contact') {
     // The card's whole rule first, as its vCard reads it, so the page never offers a card that answers 404. Then its
     // name and the line under it only: the email, phone and the rest are in the vCard (AC-5114).
@@ -707,6 +722,8 @@ export async function readLinkPage(
     readonly pictures?: PictureSizes;
     /** Who the page belongs to, as its owner chose to show it (3 Nov 2026). */
     readonly identity?: Pick<PublicProfile, 'role' | 'brand' | 'footLine'>;
+    /** The Menu and Reserve blocks a visitor sees now (spec 0065, AC-6528). */
+    readonly placeBlocks?: ReadonlyMap<string, PublicPlaceBlock>;
   },
   query: { readonly search?: string } = {},
 ): Promise<PublicProfile> {
@@ -784,6 +801,7 @@ export async function readLinkPage(
     const item = publicItemOf(row, pages, formKeys, found.owner.handle, {
       pictures: found.pictures ?? new Map(),
       hasSocials: found.owner.socials.length > 0,
+      ...(found.placeBlocks === undefined ? {} : { placeBlocks: found.placeBlocks }),
     });
     if (item === undefined) return [];
     if (words !== '' && (item.kind === 'heading' || !matches(item, words))) return [];

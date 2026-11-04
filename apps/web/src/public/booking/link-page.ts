@@ -164,6 +164,11 @@ export function blocksOf(
         return [
           { kind: 'banner', id: item.id, text: item.text, ...(item.url === undefined ? {} : { href: item.url }) },
         ];
+      // A place's guest menu with its first dishes, and its reservation page (spec 0065, AC-6528): our own paths.
+      case 'menu':
+        return [{ kind: 'menu', id: item.id, title: item.title, href: item.path, dishes: item.dishes }];
+      case 'reserve':
+        return [{ kind: 'reserve', id: item.id, title: item.title, href: item.path }];
       case 'contact': {
         const line = [item.jobTitle, item.company].filter((part) => part !== undefined && part !== '').join(' · ');
         return [
