@@ -998,8 +998,9 @@ function SubmissionDetail({
 }) {
   const [isOpen, setOpen] = useState(false);
   const answers = entry.answers ?? [];
+  // The answers take the entry's width, as a note's card does; the two actions sit on one line under them.
   return (
-    <span id={detailId} className={styles.changes}>
+    <>
       {isOpen && answers.length > 0 && (
         <span id={`${detailId}-answers`} className={styles.card}>
           {answers.map((answer, index) => (
@@ -1009,7 +1010,7 @@ function SubmissionDetail({
           ))}
         </span>
       )}
-      <span className={styles.changesRow}>
+      <span id={detailId} className={styles.changesRow}>
         {answers.length > 0 && (
           <Button
             variant="ghost"
@@ -1025,7 +1026,7 @@ function SubmissionDetail({
         )}
         {entry.href !== undefined && <Link href={entry.href}>{strings.openSubmission}</Link>}
       </span>
-    </span>
+    </>
   );
 }
 

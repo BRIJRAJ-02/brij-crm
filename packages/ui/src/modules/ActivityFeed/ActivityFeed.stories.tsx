@@ -546,7 +546,7 @@ export const FromAForm: Story = {
     await expect(submission).toHaveAccessibleName(/Contact us submission created this record/);
     await expect(canvas.queryByText(/A demo for our team/)).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: 'Show 2 answers' }));
-    await expect(canvas.getByText('What can we help with?: A demo for our team of twelve')).toBeVisible();
+    await expect(canvas.getByText('What can we help with? A demo for our team of twelve')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Hide answers' })).toHaveAttribute('aria-expanded', 'true');
     await expect(canvas.getByRole('link', { name: 'Open submission' })).toHaveAttribute(
       'href',

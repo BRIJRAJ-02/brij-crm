@@ -76,7 +76,8 @@ export const strings = {
   /** A meeting's video link. */
   joinVideo: 'Join video call',
   /** One of a booked meeting's answers (spec 0057): "Budget: Under 5k". */
-  answerLine: (label: string, text: string) => `${label}: ${text}`,
+  answerLine: (label: string, text: string) =>
+    /[?:!.]$/.test(label.trim()) ? `${label} ${text}` : `${label}: ${text}`,
   /** Past the first three: "2 more answers on the booking". */
   moreAnswers: (count: number) =>
     count === 1 ? '1 more answer on the booking' : `${String(count)} more answers on the booking`,
