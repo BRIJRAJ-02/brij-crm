@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
+import type { Hue } from '../../hue.ts';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { SharedTooltipContext, TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import styles from './PersonLine.module.css';
@@ -40,6 +41,10 @@ export interface PersonLineProps {
    * exists for): one line where it fits, two on a phone. Off, it stays one line and truncates, as a column head must.
    */
   readonly isMetaWrapped?: boolean;
+  /** Their picture on our origin in place of the initials (a staff profile's photo, spec 0066 B1). */
+  readonly picture?: string;
+  /** Their tile's hue when there is no picture (a staff member's own colour); else one from their id. */
+  readonly hue?: Hue;
 }
 
 /**
@@ -57,6 +62,8 @@ export function PersonLine({
   isDecorative = false,
   hint,
   isMetaWrapped = false,
+  picture,
+  hue,
 }: PersonLineProps) {
   const [first, ...rest] = meta;
   const who = (
@@ -87,7 +94,14 @@ export function PersonLine({
       {...(isDecorative ? { 'aria-hidden': true } : {})}
     >
       <span className={styles.picture}>
-        <Avatar name={name} id={id} size={size} isDecorative />
+        <Avatar
+          name={name}
+          id={id}
+          size={size}
+          isDecorative
+          {...(picture === undefined ? {} : { src: picture })}
+          {...(hue === undefined ? {} : { hue })}
+        />
       </span>
       {hint === undefined ? (
         who

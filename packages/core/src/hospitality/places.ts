@@ -13,6 +13,7 @@ import {
   type Place,
   type PlaceFields,
   type PlaceHours,
+  type PlaceHoursShape,
   type SocialLinks,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
@@ -80,6 +81,7 @@ export async function insertPlace(
   id: string,
   fields: PlaceFields,
   by: string,
+  hours: PlaceHoursShape = RESTAURANT_HOURS,
 ): Promise<void> {
   checkZone(fields.timeZone);
   await lockKey(tx, `places:${scope.workspaceId}`);
@@ -97,7 +99,7 @@ export async function insertPlace(
     workspaceId: scope.workspaceId,
     id,
     ...placeColumns(fields),
-    hours: RESTAURANT_HOURS,
+    hours,
     publicKey: newKey(),
     menuKey: newKey(),
     position,

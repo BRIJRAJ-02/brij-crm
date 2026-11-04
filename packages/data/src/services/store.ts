@@ -209,6 +209,8 @@ export function openServices(given: {
   };
 
   return {
+    /** A new id for a service, a category or a profile a screen is about to make (a retry makes one). */
+    newId: (): string => mintId(),
     /** Settings › Services: the catalogue, the places, staff and resources a service may name, and the checklist. */
     catalogue: (workspace: string): HospitalityHeld<CatalogueView> => catalogueOf(workspace).held,
     /** Adds a category (`id` new) or renames one. */

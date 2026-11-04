@@ -6,8 +6,11 @@
 // transaction, and seeds the "Floor staff" custom role (Run service only, read data access).
 import {
   APP_NEEDS,
+  APPOINTMENT_HOURS,
+  APPOINTMENT_KINDS,
   appsNeeding,
   HOSPITALITY_APPS,
+  RESTAURANT_HOURS,
   type AppsView,
   type FirstBusiness,
   type HospitalityApp,
@@ -200,7 +203,9 @@ export async function installApp(
           createdByMemberId: by,
           updatedByMemberId: by,
         });
-        await insertPlace(tx, scope, newId(), { name: input.business.name, ...input.business.place }, by);
+        // A salon or a clinic opens on a working week, a restaurant on lunch and dinner (Foolproof).
+        const firstHours = APPOINTMENT_KINDS.includes(input.business.kind) ? APPOINTMENT_HOURS : RESTAURANT_HOURS;
+        await insertPlace(tx, scope, newId(), { name: input.business.name, ...input.business.place }, by, firstHours);
         // The card's currency becomes the workspace's only while it has none: an existing default is never moved.
         const changed = await tx
           .update(workspaces)

@@ -36,6 +36,7 @@ export const pageStrings = {
   fixFirst: 'Before you publish',
   fixInBusiness: 'Open Business',
   fixPlace: 'Open place',
+  fixIt: 'Fix it',
   /** Photos. */
   photos: 'Photos',
   photosText: 'Up to 20. The first one leads the page and shows when the link is shared.',
