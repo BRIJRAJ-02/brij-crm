@@ -18,6 +18,7 @@ import { applyTheme, axeViolations, resetTheme, THEMES, type Theme } from '../..
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { AppsScreen } from './AppsScreen.tsx';
 import { BusinessScreen } from './BusinessScreen.tsx';
+import { QrScreen } from '../menu-qr/QrScreen.tsx';
 import { FloorScreen } from './FloorScreen.tsx';
 
 const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
@@ -137,6 +138,21 @@ function storeOf() {
     apps: () => apps.held,
     business: () => business.held,
     floor: () => floor.held,
+    // Each live table's code, as the QR codes answer reads (spec 0065, H2).
+    qrCodes: () =>
+      heldOf({
+        placeId: PLACE,
+        placeName: 'Soho',
+        menuKey: 'AbCdEfGhIjKlMnOp',
+        menuState: 'live' as const,
+        tables: FLOOR.resources.map((each, index) => ({
+          id: each.id,
+          label: each.label,
+          code: `C0DE${String(index)}abcdefghijklmnopq`,
+          scans: index * 3,
+        })),
+      }).held,
+    regenerateTableCode: done,
     install: (_slug: string, app: string, options: { withNeeded?: boolean } = {}) => {
       calls.push(`install:${app}:${String(options.withNeeded === true)}`);
       apps.set((view) => ({
@@ -378,4 +394,31 @@ describe.skipIf(SHOT_DIR === undefined || SHOT_DIR === '')('the pictures with so
       });
     }
   }
+});
+
+describe('Tables, after checklabs’ Tables page', () => {
+  it('groups the tables by area under the area pills, each with its seats, code and scans', async () => {
+    for (const theme of THEMES) {
+      for (const width of [1280, 390]) {
+        await page.viewport(width, 1100);
+        shown?.unmount();
+        const { store } = storeOf();
+        shown = await renderInApp(() => <QrScreen slug="acme" hospitality={store} look={{}} toasts={toasts} />, {
+          data: {},
+          pattern: '/w/$slug/qr',
+          at: '/w/acme/qr',
+        });
+        applyTheme(theme);
+        await expect.element(page.getByRole('heading', { name: 'Tables', level: 1 })).toBeInTheDocument();
+        await expect.element(page.getByRole('radio', { name: 'All (6)' })).toBeInTheDocument();
+        await expect.element(page.getByRole('heading', { name: 'Terrace' })).toBeInTheDocument();
+        await expect.element(page.getByRole('heading', { name: 'No area' })).toBeInTheDocument();
+        expect(await axeViolations()).toEqual([]);
+        await shoot('tables', theme, width);
+      }
+    }
+    // An area pill shows that area alone.
+    await userEvent.click(page.getByRole('radio', { name: 'Terrace (2)' }));
+    await expect.element(page.getByRole('heading', { name: 'No area' })).not.toBeInTheDocument();
+  });
 });

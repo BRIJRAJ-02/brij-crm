@@ -53,7 +53,7 @@ export const strings = {
   // The Hospitality section and its pages (spec 0065, AC-6510).
   hospitality: 'Business',
   menus: 'Menus',
-  qrCodes: 'QR codes',
+  qrCodes: 'Tables',
   reservations: 'Reservations',
   service: 'Service',
   /** The foot's way to the shortcut list (AC-930: it opens the keyboard shortcuts until a help centre exists). */
