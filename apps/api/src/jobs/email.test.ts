@@ -166,9 +166,42 @@ describe('the email task', () => {
     );
     const mailer = fakeMailer();
     await runEmail(depsWith(mailer), { workspaceId: w.workspaceId, emailId }, FIRST);
-    expect(mailer.sent[0]).toMatchObject({ to: 'asha@northwind.example', replyTo: 'ada@example.com' });
+    // Sent as the workspace, not the product (forms fix b3), and never naming the form's internal name.
+    expect(mailer.sent[0]).toMatchObject({
+      to: 'asha@northwind.example',
+      replyTo: 'ada@example.com',
+      fromName: 'Acme',
+    });
+    expect(mailer.sent[0]?.text).not.toContain('Contact us');
     expect(mailer.sent[0]?.headers).toBeUndefined();
     expect(mailer.sent[0]?.text).not.toContain('Email preferences');
+  });
+
+  it('lets a member reply to the visitor from a new submission’s notice (forms fix b4)', async () => {
+    const w = await world();
+    const emailId = idOf(
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        queueFormSubmissionNotice(tx, {
+          submissionId: newId(),
+          memberId: w.memberId,
+          params: {
+            formName: 'Contact us',
+            submitter: { name: 'Grace', email: 'grace@navy.example' },
+            answers: [{ label: 'Your name', value: 'Grace' }],
+            submittedAt: '2026-10-21T13:05:00.000Z',
+            submissionPath: '/w/acme/captures/forms/x',
+          },
+        }),
+      ),
+    );
+    const mailer = fakeMailer();
+    await runEmail(depsWith(mailer), { workspaceId: w.workspaceId, emailId }, FIRST);
+    expect(mailer.sent[0]).toMatchObject({ to: 'ada@example.com', replyTo: 'grace@navy.example' });
+    // A member's own notice is from the product as before.
+    expect(mailer.sent[0]?.fromName).toBeUndefined();
+    expect(mailer.sent[0]?.text).toContain('Reply to this email to answer Grace.');
+    // The sender is in the answers already: no From row repeating them.
+    expect(mailer.sent[0]?.text).not.toContain('From:');
   });
 
   it('answers retry for a failed send, and records the email failed on its last try', async () => {

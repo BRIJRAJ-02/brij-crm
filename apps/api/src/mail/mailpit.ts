@@ -1,6 +1,6 @@
 // Mail on a laptop: Mailpit (docker-compose.yml) catches every email, and its
 // HTTP API both takes a message (`POST /api/v1/send`) and lets tests read it.
-import type { Mailer } from './mailer.ts';
+import { senderName, type Mailer } from './mailer.ts';
 
 /** Where Mailpit listens, who the mail is from, and (for tests) the fetch to use. */
 export interface MailpitOptions {
@@ -29,7 +29,10 @@ export function createMailpitMailer(options: MailpitOptions): Mailer {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          From: { Email: sender.email, Name: sender.name ?? '' },
+          From: {
+            Email: sender.email,
+            Name: (message.fromName === undefined ? undefined : senderName(message.fromName)) ?? sender.name ?? '',
+          },
           To: [{ Email: message.to }],
           Subject: message.subject,
           HTML: message.html,

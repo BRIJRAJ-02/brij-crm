@@ -2,13 +2,30 @@
 // read back, and the worker's paced sends. The templates are packages/emails'
 // own tests.
 import { describe, expect, it } from 'vitest';
-import { createMailer, mailRefused, pacedMailer, refusalOf, type Mailer, type MailMessage } from './mailer.ts';
+import {
+  createMailer,
+  fromWithName,
+  mailRefused,
+  pacedMailer,
+  refusalOf,
+  senderName,
+  type Mailer,
+  type MailMessage,
+} from './mailer.ts';
 import { createMailpitMailer, parseSender } from './mailpit.ts';
 
 describe('the mail transport', () => {
   it('splits a sender into its name and address', () => {
     expect(parseSender('CRM <sign-in@crm.localhost>')).toEqual({ name: 'CRM', email: 'sign-in@crm.localhost' });
     expect(parseSender('onboarding@resend.dev')).toEqual({ name: undefined, email: 'onboarding@resend.dev' });
+  });
+
+  it('sends as a workspace’s name with the configured address, never letting a name forge the header (b3)', () => {
+    expect(fromWithName('Timefix <hello@timefix.com>', 'Preview Café')).toBe('"Preview Café" <hello@timefix.com>');
+    expect(fromWithName('hello@timefix.com', 'Acme')).toBe('"Acme" <hello@timefix.com>');
+    expect(fromWithName('Timefix <hello@timefix.com>', undefined)).toBe('Timefix <hello@timefix.com>');
+    expect(senderName('Evil" <x@y.z>\r\nBcc: a@b.c')).toBe('Evil x@y.z Bcc: a@b.c');
+    expect(senderName('  \n ')).toBeUndefined();
   });
 
   it("posts to Mailpit's send API, and throws when it refuses", async () => {

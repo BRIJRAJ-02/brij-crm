@@ -244,6 +244,14 @@ export const strings = {
     `${questions} stop saving to ${from}. Switching back restores them.`,
   retargetDone: (to: string) => `Answers now save to ${to}.`,
   retargetOffDone: 'Answers now stay in Submissions.',
+  /** Email them a copy (forms fix b1): the visitor's own copy of what they sent. */
+  copyRow: 'Email them a copy',
+  copyHelp: 'Each person gets a copy of their answers at the email they gave. Replies come to the form’s owner.',
+  copyNeedsEmail: 'Add an email question first, so there is somewhere to send it.',
+  copySubject: 'Subject',
+  copySubjectDefault: 'We got your message',
+  copyLine: 'Message',
+  copyLineDefault: 'Thanks, we got it. We will come back to you soon.',
   /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
   alsoDeal: 'Also create a deal',
   alsoDealTip: 'Each submission also adds a deal, linked to the person and their company. Goes live with Publish.',

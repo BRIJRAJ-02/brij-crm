@@ -225,8 +225,11 @@ function Editor({ initial }: { readonly initial: FormView }) {
         onStatusChange={(status) => {
           statuses.push(status);
         }}
-        onDealChange={(dealObjectId) => {
-          deals.push(dealObjectId);
+        onDraftChange={(change) => {
+          const next = change(form.draft);
+          deals.push(next.targets.deal?.objectId);
+          copies.push(next.confirmation?.on);
+          setForm({ ...form, draft: next });
         }}
       />
     </>
@@ -238,6 +241,7 @@ let shown: InApp | undefined;
 const retargets: (string | null)[] = [];
 const statuses: string[] = [];
 const deals: (string | undefined)[] = [];
+const copies: (boolean | undefined)[] = [];
 
 beforeAll(async () => {
   await page.viewport(1280, 900);
@@ -249,6 +253,7 @@ afterEach(() => {
   retargets.length = 0;
   statuses.length = 0;
   deals.length = 0;
+  copies.length = 0;
 });
 
 async function show(
@@ -434,6 +439,17 @@ describe('Settings as plain rows (T21)', () => {
     await expect.element(deal).not.toBeChecked();
     (deal.element() as HTMLElement).click();
     expect(deals).toEqual([DEALS]);
+  });
+
+  it('turns on Email them a copy, then shows its subject and message (forms fix b1)', async () => {
+    await show(formView({}), []);
+    expect(page.getByRole('textbox', { name: 'Subject' }).query()).toBeNull();
+    (page.getByRole('switch', { name: 'Email them a copy' }).element() as HTMLElement).click();
+    expect(copies).toEqual([true]);
+    await expect
+      .element(page.getByRole('textbox', { name: 'Subject' }))
+      .toHaveAttribute('placeholder', 'We got your message');
+    await expect.element(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
   });
 
   it('closes and opens the form from Accepting submissions', async () => {

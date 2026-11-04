@@ -6,7 +6,7 @@
 // no transaction is open while the mail service answers. System only
 // (`@crm/core/system`).
 import { sql } from 'drizzle-orm';
-import { EMAIL_KIND_TOPICS, QueuedEmailKind, type EmailTopic } from '@crm/contracts/emails';
+import { EMAIL_KIND_TOPICS, EmailAddress, QueuedEmailKind, type EmailTopic } from '@crm/contracts/emails';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 
@@ -21,6 +21,11 @@ export interface EmailToSend {
   readonly params: unknown;
   readonly to: string;
   readonly replyTo?: string;
+  /**
+   * The name it is sent as, in place of the product's: the workspace's, for an email to someone outside it (a
+   * visitor's copy of their form, forms fix b3), so it reads as from the business they wrote to.
+   */
+  readonly fromName?: string;
   /** The member reader, for the preferences link; none for an address reader. */
   readonly memberId?: string;
   /** Its topic, when its reader can turn it off. */
@@ -65,6 +70,26 @@ interface EmailRow extends Record<string, unknown> {
   readonly stale: boolean;
 }
 
+/** The kinds that go to someone outside the workspace about it: sent as the workspace, not the product. */
+const GUEST_KINDS: ReadonlySet<QueuedEmailKind> = new Set(['form_confirmation', 'form_resume']);
+
+/**
+ * Where a reply goes: the member the email names (a visitor's copy replies to the form's owner); for a new
+ * submission's notice, the visitor who sent it, as they typed their address (forms fix b4: "Reply" in the inbox
+ * answers them, as Tally's and Typeform's notices do). Undefined leaves replies with the sender.
+ */
+function replyAddress(kind: QueuedEmailKind, row: EmailRow): string | undefined {
+  if (row.reply_active === true && row.reply_email !== null) return row.reply_email;
+  if (kind !== 'form_submission') return undefined;
+  const params = row.params;
+  const submitter =
+    typeof params === 'object' && params !== null ? (params as { readonly submitter?: unknown }).submitter : undefined;
+  const email =
+    typeof submitter === 'object' && submitter !== null ? (submitter as { readonly email?: unknown }).email : undefined;
+  const parsed = EmailAddress.safeParse(email);
+  return parsed.success ? parsed.data : undefined;
+}
+
 /** Reads one queued email and everything drawing it needs, in the scope's workspace. */
 export async function loadEmail(scope: EngineScope, emailId: string): Promise<LoadedEmail> {
   return inWorkspace(scope, async (tx) => {
@@ -105,6 +130,7 @@ export async function loadEmail(scope: EngineScope, emailId: string): Promise<Lo
       to = row.to_address ?? undefined;
     }
     if (to === undefined) return { kind: 'skip', reason: 'recipient_gone' };
+    const replyTo = replyAddress(kind.data, row);
     return {
       kind: 'send',
       email: {
@@ -112,7 +138,8 @@ export async function loadEmail(scope: EngineScope, emailId: string): Promise<Lo
         kind: kind.data,
         params: row.params,
         to,
-        ...(row.reply_active === true && row.reply_email !== null ? { replyTo: row.reply_email } : {}),
+        ...(replyTo === undefined ? {} : { replyTo }),
+        ...(GUEST_KINDS.has(kind.data) ? { fromName: row.workspace_name } : {}),
         ...(row.to_member_id === null ? {} : { memberId: row.to_member_id }),
         ...(topic === undefined ? {} : { topic }),
         workspaceName: row.workspace_name,

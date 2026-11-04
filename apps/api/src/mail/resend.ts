@@ -1,6 +1,6 @@
 // Mail in deployed environments: Resend. The only module that imports its SDK.
 import { Resend } from 'resend';
-import { mailRefused, type Mailer } from './mailer.ts';
+import { fromWithName, mailRefused, type Mailer } from './mailer.ts';
 
 /**
  * Resend's codes for a message it will refuse however often it is sent: a
@@ -31,7 +31,7 @@ export function createResendMailer(options: ResendOptions): Mailer {
     async send(message) {
       const { error } = await resend.emails.send(
         {
-          from: options.from,
+          from: fromWithName(options.from, message.fromName),
           to: [message.to],
           subject: message.subject,
           html: message.html,

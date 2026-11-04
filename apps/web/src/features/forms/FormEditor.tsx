@@ -779,14 +779,8 @@ export function FormEditor(props: FormEditorProps) {
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
             onStatusChange={setStatus}
-            onDealChange={(dealObjectId) => {
-              setDraft((before) => {
-                const { deal: _deal, ...rest } = before.targets;
-                return {
-                  ...before,
-                  targets: dealObjectId === undefined ? rest : { ...rest, deal: { objectId: dealObjectId } },
-                };
-              });
+            onDraftChange={(change) => {
+              setDraft(change);
             }}
           />
         );

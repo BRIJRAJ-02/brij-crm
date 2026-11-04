@@ -6,7 +6,7 @@
 // Leaves out: everything a visitor meets (the words, what happens after they send, the look), on the Form tab beside
 // the preview; each question's filing (set on the question).
 import type { FormDocument, FormTargetChoices, FormView, MemberSummary, ObjectSummary } from '@crm/data';
-import { FORM_SLUG } from '@crm/data/forms';
+import { CONFIRMATION_LINE_MAX, CONFIRMATION_SUBJECT_MAX, FORM_SLUG } from '@crm/data/forms';
 import { useCaptureList } from '@crm/data/react';
 import { Avatar, ButtonLink, CopyButton, Field, InfoTip, Select, SettingsRow, SettingsStack, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -201,8 +201,11 @@ export interface SettingsTabProps {
   readonly isRetargeting: boolean;
   /** Opens or closes the form (Pause, Resume): what the header's menu does too, as a setting. */
   readonly onStatusChange: (status: 'live' | 'paused') => void;
-  /** Also create a deal (forms fix a3): the Deals object to make one on, or undefined to make none. Saved as the draft. */
-  readonly onDealChange: (dealObjectId: string | undefined) => void;
+  /**
+   * A change to the draft from a setting that goes live with Publish (forms fix a3 Also create a deal, b1 Email them
+   * a copy): saved as the draft, as the Form tab's edits are.
+   */
+  readonly onDraftChange: (change: (before: FormDocument) => FormDocument) => void;
 }
 
 /** The answers saved nowhere but the form's Submissions: Save answers to's first choice. */
@@ -227,7 +230,7 @@ export function SettingsTab({
   onRetarget,
   isRetargeting,
   onStatusChange,
-  onDealChange,
+  onDraftChange,
 }: SettingsTabProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const rotations = useCaptureList(data.rotations.view(slug));
@@ -305,6 +308,8 @@ export function SettingsTab({
         ? strings.groupHidden
         : strings.ownerHelpTip;
   const isPublished = form.liveVersionNumber !== undefined;
+  const hasEmailQuestion = draft.questions.some((question) => question.answerType === 'email');
+  const copyOn = draft.confirmation?.on === true;
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
   const ownerIsTold =
     isFiling &&
@@ -399,7 +404,10 @@ export function SettingsTab({
             isSelected={draft.targets.deal !== undefined}
             isReadOnly={isReadOnly}
             onChange={(isOn) => {
-              onDealChange(isOn ? deals.id : undefined);
+              onDraftChange((before) => {
+                const { deal: _deal, ...rest } = before.targets;
+                return { ...before, targets: isOn ? { ...rest, deal: { objectId: deals.id } } : rest };
+              });
             }}
           />
         </SettingsRow>
@@ -446,6 +454,52 @@ export function SettingsTab({
           }}
         />
       </SettingsRow>
+      {/* The visitor's own copy (spec 0063, AC-6318; forms fix b1): built on the server, never offered here before. */}
+      <SettingsRow
+        title={strings.copyRow}
+        meta={tip(strings.copyRow, hasEmailQuestion ? strings.copyHelp : strings.copyNeedsEmail)}
+      >
+        <Switch
+          label={strings.copyRow}
+          isLabelHidden
+          isSelected={copyOn}
+          isReadOnly={isReadOnly}
+          isDisabled={!hasEmailQuestion && !copyOn}
+          onChange={(isOn) => {
+            onDraftChange((before) => ({ ...before, confirmation: { ...before.confirmation, on: isOn } }));
+          }}
+        />
+      </SettingsRow>
+      {copyOn && (
+        <>
+          <SettingsRow title={strings.copySubject} control="field">
+            <Field
+              label={strings.copySubject}
+              isLabelHidden
+              value={draft.confirmation?.subject ?? ''}
+              placeholder={strings.copySubjectDefault}
+              maxLength={CONFIRMATION_SUBJECT_MAX}
+              isReadOnly={isReadOnly}
+              onChange={(subject) => {
+                onDraftChange((before) => ({ ...before, confirmation: { on: true, ...before.confirmation, subject } }));
+              }}
+            />
+          </SettingsRow>
+          <SettingsRow title={strings.copyLine} control="field">
+            <Field
+              label={strings.copyLine}
+              isLabelHidden
+              value={draft.confirmation?.line ?? ''}
+              placeholder={strings.copyLineDefault}
+              maxLength={CONFIRMATION_LINE_MAX}
+              isReadOnly={isReadOnly}
+              onChange={(line) => {
+                onDraftChange((before) => ({ ...before, confirmation: { on: true, ...before.confirmation, line } }));
+              }}
+            />
+          </SettingsRow>
+        </>
+      )}
       {isPublished && (
         <SettingsRow title={strings.acceptingRow} meta={tip(strings.acceptingRow, strings.acceptingHelp)}>
           <Switch

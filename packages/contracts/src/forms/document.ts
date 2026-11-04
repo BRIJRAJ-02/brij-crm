@@ -21,6 +21,7 @@ import { FORM_ENDINGS_MAX, FORM_LAYOUTS, FORM_LOOK_THEMES, FORM_STEP_TITLE_MAX, 
 import { POINTS_LIMIT, SCORED_TYPES } from './score.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
+import { CONFIRMATION_LINE_MAX, CONFIRMATION_SUBJECT_MAX } from './confirmation.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 
 /** A question's id inside its document: stable across versions, never shown. */
@@ -296,10 +297,7 @@ export const FormSpam = z.strictObject({
 /** The bot checks' settings. */
 export type FormSpam = z.infer<typeof FormSpam>;
 
-/** How long a confirmation's own subject and line may be. */
-export const CONFIRMATION_SUBJECT_MAX = 120;
-/** How long a confirmation's own line may be. */
-export const CONFIRMATION_LINE_MAX = 500;
+export { CONFIRMATION_LINE_MAX, CONFIRMATION_SUBJECT_MAX } from './confirmation.ts';
 
 /**
  * The visitor's confirmation email (spec 0063, AC-6318): off by default. When

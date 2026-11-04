@@ -112,7 +112,10 @@ export type FormSubmissionEmail = z.infer<typeof FormSubmissionEmail>;
  * answers the form shows in confirmations (never hidden questions).
  */
 export const FormConfirmationEmail = z.strictObject({
+  /** The form's internal name: kept for the record, never shown to the visitor (forms fix b3). */
   formName: Line,
+  /** The headline the visitor saw on the form, which the email names it by. */
+  headline: Line.optional(),
   /** The form's own subject line; "We got your message" when unset. */
   subject: Line.optional(),
   /** The form's own message, or its thank you text. */

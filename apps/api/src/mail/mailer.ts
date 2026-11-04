@@ -22,6 +22,11 @@ export interface MailMessage {
   /** Where a reply goes, when not the sender (a form's owner). */
   readonly replyTo?: string;
   /**
+   * The name the sender shows as, in place of the configured one, keeping its address (forms fix b3: a visitor's
+   * copy reads as from the workspace, not "Timefix"). One line with no quotes or angle brackets (`senderName`).
+   */
+  readonly fromName?: string;
+  /**
    * Headers of its own: only `List-Unsubscribe` and `List-Unsubscribe-Post`
    * (RFC 8058's one click), which an optional email carries.
    */
@@ -95,4 +100,25 @@ export function createMailer(env: Pick<ApiEnv, 'RESEND_API_KEY' | 'MAIL_FROM' | 
   if (env.RESEND_API_KEY !== undefined) return createResendMailer({ apiKey: env.RESEND_API_KEY, from: env.MAIL_FROM });
   if (env.MAILPIT_URL !== undefined) return createMailpitMailer({ url: env.MAILPIT_URL, from: env.MAIL_FROM });
   throw new Error('No mail transport: set RESEND_API_KEY, or MAILPIT_URL locally.');
+}
+
+/**
+ * A display name safe in a From header: one line, with no quotes, angle brackets, backslashes or control
+ * characters, at most 64 characters; undefined when nothing is left.
+ */
+export function senderName(name: string): string | undefined {
+  const clean = name
+    .replace(/[\p{Cc}\u2028\u2029"<>\\]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean === '' ? undefined : clean.slice(0, 64).trim();
+}
+
+/** The From header with `name` in place of the configured sender's name, keeping its address. */
+export function fromWithName(from: string, name: string | undefined): string {
+  const safe = name === undefined ? undefined : senderName(name);
+  if (safe === undefined) return from;
+  const named = /<([^<>]+)>\s*$/.exec(from.trim());
+  const address = named?.[1] ?? from.trim();
+  return `"${safe}" <${address}>`;
 }
