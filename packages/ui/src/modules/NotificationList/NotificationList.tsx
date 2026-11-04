@@ -84,6 +84,10 @@ export interface NotificationListProps {
   readonly onRetry?: () => void;
   /** What an empty list says, in place of "You’re all caught up.". */
   readonly emptyTitle?: string;
+  /**
+   * @deprecated The empty list is one quiet row with no mark (5 November 2026), so this draws nothing. Kept only
+   * until the Inbox stops passing it.
+   */
   readonly emptyIcon?: 'inbox' | 'check' | 'list-filter';
   /** Under the empty title: Clear filters. */
   readonly emptyActions?: ReactNode;
@@ -117,7 +121,6 @@ export function NotificationList({
   status = 'ready',
   onRetry,
   emptyTitle,
-  emptyIcon = 'inbox',
   emptyActions,
 }: NotificationListProps) {
   const showSkeleton = useDelayedLoading(status === 'loading');
@@ -128,9 +131,7 @@ export function NotificationList({
   const nameOf = (memberId: string) => names.get(memberId) ?? formerMember;
 
   if (status === 'error') {
-    return (
-      <EmptyState tone="error" icon="inbox" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
-    );
+    return <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />;
   }
   if (status === 'no-access') return <EmptyState tone="locked" title={strings.noAccess} />;
   if (status === 'loading') {
@@ -149,7 +150,6 @@ export function NotificationList({
   if (rows.length === 0) {
     return (
       <EmptyState
-        icon={emptyIcon}
         title={emptyTitle ?? strings.empty}
         {...(emptyActions === undefined ? {} : { actions: emptyActions })}
       />

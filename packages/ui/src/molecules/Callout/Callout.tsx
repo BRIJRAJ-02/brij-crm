@@ -3,7 +3,10 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import styles from './Callout.module.css';
 
-/** `info` to explain, `success` to confirm in place, `warning` before a risky step, `danger` for what failed. */
+/**
+ * `info` for a passing state, quiet and never a permanent explanation; `success` to confirm a result in place;
+ * `warning` when someone must act or is about to take a risk; `danger` for what failed.
+ */
 export type CalloutTone = 'info' | 'success' | 'warning' | 'danger';
 
 /**
@@ -17,7 +20,11 @@ export type CalloutPlacement = 'inline' | 'banner' | 'bar';
 
 /** Props for Callout. */
 export interface CalloutProps {
-  readonly tone?: CalloutTone;
+  /**
+   * Required: every caller decides what the message is. `info` draws a plain grey line (no fill, no edge) for a
+   * state that comes and goes; colour and a box are kept for `warning` and `danger`, which ask for action.
+   */
+  readonly tone: CalloutTone;
   readonly placement?: CalloutPlacement;
   /**
    * Said politely by screen readers when it appears (a state that changed
@@ -49,11 +56,12 @@ const TONE_ICONS: Readonly<Record<CalloutTone, IconName>> = {
 /**
  * A message that stays in the page beside what it is about: an import that
  * skipped rows, a key shown once, a plan near its limit. Not a toast: it
- * stays until what it describes changes. A danger callout is announced, and
- * so is one marked `isAnnounced`.
+ * stays until what it describes changes. Never a permanent explanation of how
+ * a screen works. A danger callout is announced, and so is one marked
+ * `isAnnounced`.
  */
 export function Callout({
-  tone = 'info',
+  tone,
   placement = 'inline',
   isAnnounced = false,
   isPolite = false,

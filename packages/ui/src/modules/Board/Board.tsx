@@ -126,9 +126,7 @@ export function Board({
   // A press that ends a drag never opens the card it dropped.
   const isMovingRef = useRef(false);
   if (status === 'error') {
-    return (
-      <EmptyState tone="error" icon="kanban" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
-    );
+    return <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />;
   }
   if (status === 'no-access') {
     return (
@@ -152,11 +150,7 @@ export function Board({
     );
   }
   if (columns.length === 0 && addColumn === undefined) {
-    return (
-      <EmptyState icon="kanban" title={strings.noColumns}>
-        {strings.noColumnsBody}
-      </EmptyState>
-    );
+    return <EmptyState title={strings.noColumns}>{strings.noColumnsBody}</EmptyState>;
   }
   // An archived option shows only while it still has cards. Other empty columns follow the
   // setting, and show while a card is moving, so there is always somewhere to drop it.

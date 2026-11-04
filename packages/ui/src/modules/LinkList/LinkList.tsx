@@ -350,7 +350,6 @@ export function LinkList({
       {toolbar}
       {shown.length === 0 ? (
         <EmptyState
-          icon="search"
           title={strings.noMatches(query.trim())}
           actions={
             <Button

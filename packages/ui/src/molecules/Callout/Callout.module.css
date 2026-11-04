@@ -1,7 +1,6 @@
-/* Callout: a bordered message in its tone's tag colours (info blue, success
-   green, warning yellow, danger red), with an icon, an optional bold title
-   and the next step; as a banner, full width under a view's bars. The tag
-   colours hold 4.5:1 for the text in both themes. */
+/* Callout: a message with an icon, an optional bold title and the next step. Info is a plain grey line with no
+   fill or edge (a passing state, never a box); success, warning and danger are bordered in their tag colours
+   (green, yellow, red), which hold 4.5:1 for the text in both themes. As a banner, full width under a view's bars. */
 @layer components {
   .root {
     display: flex;
@@ -66,10 +65,18 @@
     }
   }
 
+  /* Info: quiet. Grey words beside a tertiary icon, no fill and no edge, in line with the content around it. */
   .root[data-tone='info'] {
-    border-color: var(--tag-blue-border);
-    background: var(--tag-blue-bg);
-    color: var(--tag-blue-text);
+    padding-inline: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  /* An info banner keeps its inset and a neutral hairline below, so the view's edge still reads. */
+  .root[data-tone='info'][data-placement='banner'] {
+    padding-inline: var(--space-16);
+    border-block-end-color: var(--border-subtle);
   }
 
   .root[data-tone='success'] {
@@ -88,6 +95,14 @@
     border-color: var(--tag-red-border);
     background: var(--tag-red-bg);
     color: var(--tag-red-text);
+  }
+
+  /* In a bar, whatever the tone: no fill or edge, only its colour on the icon and words (the tone rules above
+     would otherwise win, coming later at the same weight). */
+  .root[data-tone][data-placement='bar'] {
+    padding-inline: var(--space-4);
+    border-color: transparent;
+    background: transparent;
   }
 
   .icon {
@@ -111,6 +126,15 @@
   .title {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* Info's icon is tertiary and its title the body's colour, under the secondary words. */
+  .root[data-tone='info'] .icon {
+    color: var(--text-tertiary);
+  }
+
+  .root[data-tone='info'] .title {
+    color: var(--text);
   }
 
   .actions {

@@ -194,7 +194,6 @@ export function ComputedSettings({
     return (
       <EmptyState
         title={strings.noRelationships(computed.pluralName)}
-        icon="link"
         {...(computed.onNewRelationship === undefined
           ? {}
           : {

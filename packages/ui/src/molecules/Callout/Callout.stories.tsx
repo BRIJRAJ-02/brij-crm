@@ -7,20 +7,21 @@ import { Callout } from './Callout.tsx';
 const meta = {
   title: 'Molecules/Callout',
   component: Callout,
-  args: { children: 'People are matched on email address. Rows without one are added as new people.' },
+  args: { tone: 'info', children: 'Showing the first 12.' },
 } satisfies Meta<typeof Callout>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The four tones. */
+/**
+ * The four tones. Info is a quiet grey line for a passing state (no fill, no edge); success confirms a result;
+ * warning and danger are boxed in their colour because someone must act.
+ */
 export const Tones: Story = {
   parameters: { crm: { preview: true } },
   render: () => (
     <Stage direction="column">
-      <Callout title="How matching works">
-        People are matched on email address. Rows without one are added as new people.
-      </Callout>
+      <Callout tone="info">Showing the first 12. Narrow the filter to see the rest.</Callout>
       <Callout tone="success" title="Import finished">
         2,394 people imported, 6 updated.
       </Callout>
@@ -34,6 +35,13 @@ export const Tones: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent('The sync stopped');
+    // Info draws no box: its background and edge are clear, so it reads as a line of text, not a banner.
+    const info = canvas.getByText(/Showing the first 12/).closest<HTMLElement>('[data-tone]');
+    await expect(info).not.toBeNull();
+    if (info === null) return;
+    const style = getComputedStyle(info);
+    await expect(style.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    await expect(style.borderTopColor).toBe('rgba(0, 0, 0, 0)');
   },
 };
 
@@ -41,7 +49,7 @@ export const Tones: Story = {
 export const InABar: Story = {
   render: () => (
     <Stage>
-      <Callout placement="bar" isAnnounced>
+      <Callout tone="info" placement="bar" isAnnounced>
         Live updates paused
       </Callout>
     </Stage>
@@ -64,6 +72,8 @@ export const InABarNarrow: Story = {
   play: async ({ canvas }) => {
     const note = canvas.getByRole('alert');
     await expect(note).toHaveTextContent('Wait for one to finish.');
+    // In a bar no tone draws a fill, so it never reads as a button beside the bar's buttons.
+    await expect(getComputedStyle(note).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     const text = note.querySelector<HTMLElement>('[class*="text"]');
     await expect(text).not.toBeNull();
     if (text === null) return;
@@ -81,11 +91,16 @@ export const InABarNarrow: Story = {
 export const Banner: Story = {
   render: () => (
     <Stage direction="column">
-      <Callout placement="banner" isAnnounced>
+      <Callout tone="info" placement="banner" isAnnounced>
         Live updates are paused. Changes others make show here once the connection is back.
       </Callout>
-      <Callout placement="banner" tone="warning" title="This view is read only">
-        An admin limited who can edit People.
+      <Callout
+        placement="banner"
+        tone="warning"
+        title="This view uses an archived field"
+        actions={<Button>Restore it</Button>}
+      >
+        Stage is archived, so the board can’t group by it.
       </Callout>
     </Stage>
   ),
