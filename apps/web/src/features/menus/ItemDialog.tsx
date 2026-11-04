@@ -5,7 +5,7 @@
 // Leaves out: where the dish sits (the section's own Add dishes and Take out), and Sold out (a switch on its row).
 import type { ItemAllergen, ItemFields, MenuDraft, MenuItem, MenuStore } from '@crm/data';
 import { DIET_MARKS, EU_ALLERGENS, MENU_LIMITS, minorToDecimal, parsePrice } from '@crm/data/menu';
-import { Button, Callout, ChoiceChips, Field, FileDrop, Form, Switch, type Toasts } from '@crm/ui';
+import { Button, Callout, ChoiceChips, Field, FileDrop, Form, Switch, usePhotoCrop, type Toasts } from '@crm/ui';
 import { useEffect, useId, useRef, useState } from 'react';
 import { DrawerForm } from './drawer.tsx';
 import { draftPhotoHref, prepareMenuPhoto } from './photo.ts';
@@ -66,7 +66,11 @@ export function ItemDialog({
   const [problems, setProblems] = useState<Readonly<Record<string, string>>>({});
   const [isSaving, setSaving] = useState(false);
   // A chosen photo waits for Save (a new dish's for the dish itself), so Cancel or Discard leaves the dish as it was.
-  const [pendingPhoto, setPendingPhoto] = useState<File>();
+  // It is cropped when chosen (spec 0068, AC-6809) and held drawn at both widths; the file it came from is kept, so
+  // Adjust crop starts again from the whole photo.
+  const [pendingPhoto, setPendingPhoto] = useState<{ readonly large: Blob; readonly small: Blob }>();
+  const [pendingOriginal, setPendingOriginal] = useState<File>();
+  const cropping = usePhotoCrop();
   // Its preview is a local object URL, let go when another photo replaces it or the drawer closes.
   const [pendingSrc, setPendingSrc] = useState<string>();
   const pendingSrcRef = useRef<string | undefined>(undefined);
@@ -145,27 +149,40 @@ export function ItemDialog({
     onClose();
   };
 
-  /** Draws the photo again at both widths and sends it for the dish `id`, which must exist by now. */
-  const upload = async (file: File) => {
-    try {
-      const photo = await prepareMenuPhoto(file);
-      const refused = await store.uploadPhoto(slug, id, photo);
-      if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
-    } catch {
-      toasts.toast({ tone: 'danger', message: strings.photoFailed });
-    }
+  /** Sends the cropped photo, already at both widths, for the dish `id`, which must exist by now. */
+  const upload = async (photo: { readonly large: Blob; readonly small: Blob }) => {
+    const refused = await store.uploadPhoto(slug, id, photo);
+    if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
   };
 
-  // Every dish keeps a chosen photo until Save (walk, 4 Nov 2026; UX review should-fix 8).
+  /** Opens the cropper on `source` in the dish's shape, then holds the part kept, drawn at both widths, for Save. */
+  const cropPhoto = async (source: File | string) => {
+    const crop = await cropping.crop(source, 'dish');
+    if (crop === undefined) return;
+    const photo = await prepareMenuPhoto(source, crop).catch(() => undefined);
+    if (photo === undefined) {
+      toasts.toast({ tone: 'danger', message: strings.photoFailed });
+      return;
+    }
+    if (pendingSrcRef.current !== undefined) URL.revokeObjectURL(pendingSrcRef.current);
+    const src = URL.createObjectURL(photo.small);
+    pendingSrcRef.current = src;
+    setPendingSrc(src);
+    setPendingPhoto(photo);
+    if (typeof source !== 'string') setPendingOriginal(source);
+  };
+
+  // Every dish keeps a chosen photo until Save (walk, 4 Nov 2026; UX review should-fix 8), cropped first.
   const choosePhoto = (files: readonly File[]) => {
     const file = files[0];
     if (file === undefined) return;
-    if (pendingSrcRef.current !== undefined) URL.revokeObjectURL(pendingSrcRef.current);
-    const src = URL.createObjectURL(file);
-    pendingSrcRef.current = src;
-    setPendingSrc(src);
-    setPendingPhoto(file);
+    void cropPhoto(file);
   };
+
+  // Adjust crop: the chosen file again, else the dish's saved photo at its large width (our own origin).
+  const adjustSource =
+    pendingOriginal ??
+    (live?.photo === undefined ? undefined : draftPhotoHref(slug, live.photo.id, 'large', live.photo.version));
 
   const photoField = (
     <FileDrop
@@ -175,6 +192,13 @@ export function ItemDialog({
       maxSize={MENU_LIMITS.photoMaxBytes}
       onFiles={choosePhoto}
       isReadOnly={isReadOnly}
+      {...(isReadOnly || adjustSource === undefined
+        ? {}
+        : {
+            onAdjust: () => {
+              void cropPhoto(adjustSource);
+            },
+          })}
       {...(pendingSrc !== undefined
         ? { preview: { src: pendingSrc, alt: '' } }
         : live?.photo === undefined
@@ -351,6 +375,7 @@ export function ItemDialog({
         />
         <Switch label={strings.featured} isSelected={featured} onChange={setFeatured} isReadOnly={isReadOnly} />
       </Form>
+      {cropping.cropper}
     </DrawerForm>
   );
 }

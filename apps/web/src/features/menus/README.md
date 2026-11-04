@@ -28,7 +28,8 @@ in the address (`?menu=&tab=&at=&preview=off`).
   place's hours), tax included and service added (the foot note follows them until the owner writes their own), and
   Delete.
 - **SectionDrawer**: a section's name, line, layout and serving times (narrower than the menu's).
-- **ItemDialog**: one dish in a drawer, in checklabs' order: name, photo (held until Save, so Cancel undoes it), price
+- **ItemDialog**: one dish in a drawer, in checklabs' order: name, photo (cropped as it is chosen in the shared cropper, shape `dish`, with Adjust crop on a photo
+  already there; held until Save, so Cancel undoes it), price
   (the first size takes it; each size's price shows its currency), calories, description, sizes, option groups, allergens, dietary marks, Popular.
 - **PublishDialog**: Review and publish: each check with Fix (hours, a dish on a menu, every dish priced, every menu
   shown somewhere, the last also refused by the server); with every check passed, a success line naming what goes live

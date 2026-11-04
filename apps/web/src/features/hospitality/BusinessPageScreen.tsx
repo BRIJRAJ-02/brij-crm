@@ -39,6 +39,7 @@ import {
   Skeleton,
   Switch,
   useFormatSettings,
+  usePhotoCrop,
   type Toasts,
 } from '@crm/ui';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -457,6 +458,7 @@ function PhotosSection({
   readonly onChange: (edit: (draft: BusinessPageContent) => BusinessPageContent) => Promise<void>;
 }) {
   const [sending, setSending] = useState(0);
+  const cropping = usePhotoCrop();
   const photos = view.draft.gallery;
   const room = PHOTOS_MAX - photos.length;
   /** Changes the gallery as it stands when the change goes out. */
@@ -491,7 +493,10 @@ function PhotosSection({
     const added: BusinessPhoto[] = [];
     for (const file of picked) {
       try {
-        const prepared = await pickGalleryPhoto(file).catch(() => undefined);
+        // Each photo is cropped as it is added (spec 0068, AC-6809); Cancel leaves that one out.
+        const crop = await cropping.crop(file, 'free');
+        if (crop === undefined) continue;
+        const prepared = await pickGalleryPhoto(file, crop).catch(() => undefined);
         if (prepared === undefined) {
           toasts.toast({ tone: 'danger', message: words.photoUnreadable });
           continue;
@@ -504,6 +509,33 @@ function PhotosSection({
       }
     }
     if (added.length > 0) changeGallery((gallery) => [...gallery, ...added].slice(0, PHOTOS_MAX));
+  };
+  /** Crops a photo already in the gallery again: a new picture in its place, its description kept. */
+  const recrop = async (photo: BusinessPhoto) => {
+    const source = store.photoSrc(slug, photo.id);
+    const crop = await cropping.crop(source, 'free');
+    if (crop === undefined) return;
+    setSending((was) => was + 1);
+    try {
+      const prepared = await pickGalleryPhoto(source, crop).catch(() => undefined);
+      if (prepared === undefined) {
+        toasts.toast({ tone: 'danger', message: words.photoUnreadable });
+        return;
+      }
+      const uploaded = await store.uploadPhoto(slug, prepared);
+      if (!uploaded.ok) {
+        toasts.toast({ tone: 'danger', message: uploaded.error.message || words.photoFailed });
+        return;
+      }
+      const { alt } = photo;
+      changeGallery((gallery) =>
+        gallery.map((each) =>
+          each.id === photo.id ? { ...uploaded.photo, ...(alt === undefined ? {} : { alt }) } : each,
+        ),
+      );
+    } finally {
+      setSending((was) => was - 1);
+    }
   };
   const move = (id: string, by: -1 | 1) => {
     changeGallery((gallery) => {
@@ -535,6 +567,7 @@ function PhotosSection({
           isDisabled={room <= 0}
           onFiles={(files) => void add(files)}
         />
+        {cropping.cropper}
         {room <= 0 && <Callout tone="info">{words.photosFull}</Callout>}
         {photos.map((photo, at) => (
           <PhotoRow
@@ -554,6 +587,8 @@ function PhotosSection({
               )
             }
             onMove={(by) => move(photo.id, by)}
+            onAdjust={() => void recrop(photo)}
+            isSending={sending > 0}
             onRemove={() => remove(photo, at)}
           />
         ))}
@@ -574,6 +609,8 @@ function PhotoRow({
   texts,
   onAlt,
   onMove,
+  onAdjust,
+  isSending,
   onRemove,
 }: {
   readonly photo: BusinessPhoto;
@@ -583,6 +620,9 @@ function PhotoRow({
   readonly texts: DraftTexts;
   readonly onAlt: (alt: string) => void;
   readonly onMove: (by: -1 | 1) => void;
+  /** Crops the photo again. */
+  readonly onAdjust: () => void;
+  readonly isSending: boolean;
   readonly onRemove: () => void;
 }) {
   const alt = useDraftText(photo.alt ?? '', onAlt, texts);
@@ -620,6 +660,13 @@ function PhotoRow({
               label={words.moveDown(at + 1)}
               isDisabled={at >= count - 1}
               onPress={() => onMove(1)}
+            />
+            <Button
+              variant="ghost"
+              icon="pencil"
+              label={words.adjustPhoto(at + 1)}
+              isDisabled={isSending}
+              onPress={onAdjust}
             />
             <Button variant="ghost" icon="trash" label={words.removePhoto(at + 1)} onPress={onRemove} />
           </>

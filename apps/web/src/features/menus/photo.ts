@@ -1,8 +1,9 @@
-// A dish's photo drawn again in the browser (spec 0065, AC-6527), the logo pipeline's first step: whatever was chosen
-// (a phone's HEIC aside, which browsers can't read) is drawn onto a canvas at 1200 and 400 pixels wide as WebP, or JPEG
-// where the browser can't write WebP (older Safari). Drawing again leaves a photo's location and camera behind; the
-// server checks the bytes and strips metadata once more.
+// A dish's photo drawn again in the browser (spec 0065, AC-6527): first the part the person kept in the cropper
+// (`PhotoCrop`, shape `dish`; spec 0068, AC-6809) through the library's `preparePhoto(file, 'dish', crop)`, then that
+// drawn at 1200 and 400 pixels wide as WebP, or JPEG where the browser can't write WebP (older Safari). Drawing again
+// leaves a photo's location and camera behind; the server checks the bytes and strips metadata once more.
 import { MENU_PHOTO_WIDTHS } from '@crm/data/menu';
+import { preparePhoto, type PhotoRect } from '@crm/ui/photo';
 
 /** Draws `bitmap` at most `width` wide, keeping its shape, as WebP (or JPEG). */
 async function drawAt(bitmap: ImageBitmap, width: number): Promise<Blob> {
@@ -24,9 +25,16 @@ async function drawAt(bitmap: ImageBitmap, width: number): Promise<Blob> {
   return jpeg;
 }
 
-/** The photo at both widths, ready to send; rejects when the browser can't read it. */
-export async function prepareMenuPhoto(file: Blob): Promise<{ readonly large: Blob; readonly small: Blob }> {
-  const bitmap = await createImageBitmap(file);
+/**
+ * The part `crop` names of `source` (a picked file, or a photo already on our own origin), at both widths, ready to
+ * send; no crop keeps the dish's own 4:3 middle. Rejects when the browser can't read it.
+ */
+export async function prepareMenuPhoto(
+  source: Blob | string,
+  crop?: PhotoRect,
+): Promise<{ readonly large: Blob; readonly small: Blob }> {
+  const kept = await preparePhoto(source, 'dish', crop);
+  const bitmap = await createImageBitmap(kept.blob);
   try {
     return {
       large: await drawAt(bitmap, MENU_PHOTO_WIDTHS.large),

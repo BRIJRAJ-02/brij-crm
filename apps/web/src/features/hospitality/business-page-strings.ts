@@ -54,6 +54,7 @@ export const pageStrings = {
   undo: 'Undo',
   moveUp: (place: number) => `Move photo ${String(place)} earlier`,
   moveDown: (place: number) => `Move photo ${String(place)} later`,
+  adjustPhoto: (place: number) => `Adjust crop of photo ${String(place)}`,
   removePhoto: (place: number) => `Remove photo ${String(place)}`,
   howItLooks: 'How it looks',
   /** About. */
