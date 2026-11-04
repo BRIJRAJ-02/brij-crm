@@ -225,6 +225,7 @@ function Editor({ initial }: { readonly initial: FormView }) {
         onStatusChange={(status) => {
           statuses.push(status);
         }}
+        keepMonths={12}
         onDraftChange={(change) => {
           const next = change(form.draft);
           deals.push(next.targets.deal?.objectId);
@@ -464,6 +465,13 @@ describe('Settings as plain rows (T21)', () => {
     expect(closings).toEqual([{ after: 100 }]);
     await expect.element(page.getByRole('textbox', { name: 'Number of answers' })).toHaveValue('100');
     await expect.element(page.getByRole('textbox', { name: 'Message when closed' })).toBeVisible();
+  });
+
+  it('says how long answers are kept, linking to where it is set (critique b S2)', async () => {
+    await show(formView({}), []);
+    await expect
+      .element(page.getByRole('link', { name: 'For 12 months' }))
+      .toHaveAttribute('href', '/w/acme/settings/general');
   });
 
   it('closes and opens the form from Accepting submissions', async () => {

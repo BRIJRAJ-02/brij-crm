@@ -29,6 +29,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import { generalSettingsHref } from '../settings/nav.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
@@ -224,6 +225,8 @@ export interface SettingsTabProps {
    * a copy): saved as the draft, as the Form tab's edits are.
    */
   readonly onDraftChange: (change: (before: FormDocument) => FormDocument) => void;
+  /** How many months the workspace keeps answers (null: kept); absent, the row isn't shown (critique b S2). */
+  readonly keepMonths?: number | null;
 }
 
 /** What Closes › After a number of answers starts at. */
@@ -258,6 +261,7 @@ export function SettingsTab({
   isRetargeting,
   onStatusChange,
   onDraftChange,
+  keepMonths,
 }: SettingsTabProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const rotations = useCaptureList(data.rotations.view(slug));
@@ -615,6 +619,14 @@ export function SettingsTab({
           }}
         />
       </SettingsRow>
+      {/* How long answers are kept is the workspace's (Settings › General); the form says it, and where to change it. */}
+      {keepMonths !== undefined && (
+        <SettingsRow title={strings.keptRow} meta={tip(strings.keptRow, strings.keptHelp)}>
+          <ButtonLink variant="ghost" href={generalSettingsHref(slug)}>
+            {keepMonths === null ? strings.keptForever : strings.keptMonths(keepMonths)}
+          </ButtonLink>
+        </SettingsRow>
+      )}
       {isPublished && (
         <SettingsRow title={strings.spamRow} meta={tip(strings.spamRow, strings.spamSummary)}>
           <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">

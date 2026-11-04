@@ -268,6 +268,11 @@ export const strings = {
   closesCount: 'Number of answers',
   closedMessageRow: 'Message when closed',
   closedMessageDefault: 'This form isn’t taking answers right now.',
+  /** How long the workspace keeps answers (critique b S2): said here, changed in Settings › General. */
+  keptRow: 'Answers kept',
+  keptHelp: 'How long every form’s answers are kept is set for the whole workspace, in Settings › General.',
+  keptForever: 'Until deleted',
+  keptMonths: (months: number) => `For ${String(months)} months`,
   /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
   alsoDeal: 'Also create a deal',
   alsoDealTip: 'Each submission also adds a deal, linked to the person and their company. Goes live with Publish.',

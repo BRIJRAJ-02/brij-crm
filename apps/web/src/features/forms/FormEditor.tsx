@@ -95,6 +95,8 @@ export interface FormEditorProps {
   readonly objects: readonly ObjectSummary[];
   readonly tab: FormTab;
   readonly submissions: SubmissionPage | undefined;
+  /** How many months the workspace keeps answers; null keeps them; absent when it couldn't be read (critique b S2). */
+  readonly keepMonths?: number | null;
   /** Why the Submissions tab's page didn't load (forms fix a6): said in the tab, with Try again, the form still here. */
   readonly submissionsFailed?: string;
   readonly state: SubmissionState | undefined;
@@ -801,6 +803,7 @@ export function FormEditor(props: FormEditorProps) {
             onDraftChange={(change) => {
               setDraft(change);
             }}
+            {...(props.keepMonths === undefined ? {} : { keepMonths: props.keepMonths })}
           />
         );
       case 'install':

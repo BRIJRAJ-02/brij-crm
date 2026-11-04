@@ -48,7 +48,7 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
     try {
       const onSubmissions = deps.tab === 'submissions';
       // Every read at once: one round trip, not the form first and then its submissions.
-      const [form, target, members, objects, submissions, openSubmission, brand] = await Promise.all([
+      const [form, target, members, objects, submissions, openSubmission, brand, workspace] = await Promise.all([
         context.data.forms.get(params.slug, params.formId),
         context.data.forms.attributes(params.slug, params.formId),
         context.data.members.list(params.slug),
@@ -74,6 +74,8 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
             return store;
           })
           .catch(() => undefined),
+        // How long the workspace keeps answers, said on Settings (forms critique b, S2); a failed read says nothing.
+        context.data.workspace.get(params.slug).catch(() => undefined),
       ]);
       const failed = submissions !== undefined && 'failed' in submissions ? submissions.failed : undefined;
       return {
@@ -86,6 +88,7 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
           ...(failed === undefined ? {} : { submissionsFailed: failed }),
           openSubmission,
           brand,
+          ...(workspace === undefined ? {} : { keepMonths: workspace.keepSubmissionsMonths ?? null }),
         },
       };
     } catch (error) {
@@ -182,6 +185,7 @@ function FormRoute() {
       openSubmission={page.openSubmission}
       {...(page.submissionsFailed === undefined ? {} : { submissionsFailed: page.submissionsFailed })}
       {...(page.brand === undefined ? {} : { brand: page.brand })}
+      {...('keepMonths' in page ? { keepMonths: page.keepMonths } : {})}
       {...(search.question === undefined ? {} : { question: search.question })}
     />
   );
