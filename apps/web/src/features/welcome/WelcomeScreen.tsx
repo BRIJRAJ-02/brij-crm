@@ -1,6 +1,6 @@
 // Brief
 // Purpose: first run (spec 0036): a new person says who they are, names their workspace and may connect a calendar,
-// or (spec 0031) someone with a workspace makes another, starting at Your workspace,
+// or (spec 0031) someone with a workspace makes another: Your workspace alone, then it opens (no setup again),
 // watching the workspace take shape beside each step.
 // Main task: Your name, Your workspace (Create workspace), Your link, Your booking page, Connect your calendar
 // and Invite your team, into the workspace. Your link and Your booking page can't be skipped (the owner, 27
@@ -243,7 +243,7 @@ export function WelcomeScreen({
     if (step !== 'calendar' && step !== DONE) focusPage(document, '/welcome');
   }, [step]);
 
-  // Another workspace skips what is known about the person, so its count is its own ("Step 1 of 2").
+  // Another workspace is one step, so it shows no count at all.
   // What was already done when first run opened, held still: the list, and so "Step N of M", must not shrink
   // under the person as they do the very steps it counts.
   const [done] = useState(() => ({ booking: bookingPages.length > 0 }));
@@ -258,15 +258,13 @@ export function WelcomeScreen({
   // The step this one was reached from by Continue: Back then goes back through the browser's history, so the
   // browser's own back button and ours agree.
   const cameFrom = useRef<WelcomeStep | undefined>(undefined);
-  // Another workspace keeps its own count (and its way back) through the steps after the workspace.
-  const another = leaveTo === undefined ? {} : { another: true as const };
   const goTo = (next: WelcomeStep) => {
     cameFrom.current = step;
     // The workspace stays in the address: every step after it needs it, and a move that dropped it would leave
     // the route with nothing to show and send the person to their workspace instead (27 October 2026).
     void navigate({
       to: '/welcome',
-      search: { step: next, ...(workspace === undefined ? {} : { workspace: workspace.slug }), ...another },
+      search: { step: next, ...(workspace === undefined ? {} : { workspace: workspace.slug }) },
     });
   };
   const goBack = () => {
@@ -296,11 +294,16 @@ export function WelcomeScreen({
     data.workspaces.create({ id, name: name.trim(), slug, memberName: memberNameSent, timeZone }).then(
       async ({ workspace: made }) => {
         clearDraft(storage);
+        // Another workspace is one step (foolproof audit, 5 November 2026): it opens at once, as Linear's does.
+        if (leaveTo !== undefined) {
+          void navigate({ to: '/w/$slug', params: { slug: made.slug }, replace: true });
+          return;
+        }
         // The first step after the workspace loads with it before it shows, so the card goes straight there.
         const firstAfter = steps.find(needsWorkspace) ?? 'invite';
         const nextStepHref = {
           to: '/welcome',
-          search: { step: firstAfter, workspace: made.slug, ...another },
+          search: { step: firstAfter, workspace: made.slug },
         } as const;
         await router.preloadRoute(nextStepHref).catch(() => undefined);
         void navigate({ ...nextStepHref, replace: true });
@@ -510,8 +513,7 @@ export function WelcomeScreen({
         }
         account={user.email}
         footer={
-          // Back leaves for the workspace the person came from, only until the new one exists: after that, the
-          // steps' own Skip for now opens the new one.
+          // Back leaves for the workspace the person came from; another workspace opens as soon as it is made.
           leaveTo === undefined || workspace !== undefined ? (
             <Button
               variant="link"

@@ -22,6 +22,8 @@ export interface InviteScreenProps {
   readonly invitation: InvitePeek | undefined;
   /** Who is signed in, if anyone. */
   readonly user: SignedInUser | undefined;
+  /** The signed in person has a workspace already: a link that opens nothing then offers it. */
+  readonly hasWorkspace?: boolean;
 }
 
 /**
@@ -36,7 +38,7 @@ type Standing =
   | { readonly kind: 'refused'; readonly message: string };
 
 /** The invitation page: AuthLayout, the invitation, and the one action that fits who is here. */
-export function InviteScreen({ data, token, invitation, user }: InviteScreenProps) {
+export function InviteScreen({ data, token, invitation, user, hasWorkspace = false }: InviteScreenProps) {
   const navigate = useNavigate();
   const [standing, setStanding] = useState<Standing>({ kind: 'ready' });
   // Signing in with another address signs this one out first, so it asks first (the owner's rule of 21 October 2026).
@@ -51,8 +53,16 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
     user === undefined ? '' : memberNameFor('', user.name, user.email),
   );
 
-  // Expired, revoked, used and unknown links all read the same (AC-805), before or after a try.
+  // Expired, revoked, used and unknown links all read the same (AC-805), before or after a try. The line says to
+  // ask for a new one; the one button is the way on that fits who is here (foolproof audit, 5 November 2026):
+  // their workspaces, else making one, else signing in (which finds their workspaces).
   if (invitation === undefined || standing.kind === 'invalid') {
+    const wayOn =
+      user === undefined
+        ? { href: signInHref('/'), label: strings.signIn }
+        : hasWorkspace
+          ? { href: '/', label: strings.goHome }
+          : { href: '/welcome', label: strings.createWorkspace };
     return (
       <AuthLayout
         productName={strings.product}
@@ -61,8 +71,8 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
         description={strings.invalidText}
         {...signInFrame()}
       >
-        <ButtonLink variant="primary" size="lg" isFullWidth="center" href="/">
-          {strings.goHome}
+        <ButtonLink variant="primary" size="lg" isFullWidth="center" href={wayOn.href}>
+          {wayOn.label}
         </ButtonLink>
       </AuthLayout>
     );

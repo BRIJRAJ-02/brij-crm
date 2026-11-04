@@ -79,8 +79,12 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
   );
 
   const byObject = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
-  const pages = useMemo(() => pageCommands(slug, objects, permissions, lists), [slug, objects, permissions, lists]);
   const isGuest = loaded?.access?.role === 'guest';
+  // The sidebar's destinations, a guest's without scheduling or the link page, as their sidebar.
+  const pages = useMemo(
+    () => pageCommands(slug, objects, permissions, lists, isGuest),
+    [slug, objects, permissions, lists, isGuest],
+  );
   const settings = useMemo(() => settingsCommands(slug, permissions, isGuest), [slug, permissions, isGuest]);
   // The page the menu opened over: its object and view get their own actions (Import, Export this view).
   const params: { readonly object?: string; readonly viewId?: string } = useParams({ strict: false });

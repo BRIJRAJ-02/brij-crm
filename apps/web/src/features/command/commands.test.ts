@@ -41,22 +41,54 @@ const OBJECTS = [
 ];
 
 describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
-  it('goes Home, to each object in the workspace’s order, then Tasks, Scheduling’s pages, Reports, Trash and Settings', () => {
+  it('mirrors the sidebar: Home, Insights, each object, Bookings and its tabs, the member’s own pages, then Reports, Trash and Settings', () => {
     expect(pageCommands('acme', OBJECTS).map((command) => command.name)).toEqual([
       'Home',
+      'Insights',
       'Companies',
       'People',
       'Deals',
-      'Tasks',
       'Bookings',
       'Availability',
       'Calendars',
       'Booking pages',
       'Forms',
+      'Link page',
+      'Inbox',
+      'Tasks',
+      'Notes',
       'Reports',
       'Open trash',
       'Settings',
     ]);
+  });
+
+  it('goes where the sidebar’s own pages go', () => {
+    const href = (id: string) => {
+      const run = pageCommands('acme', OBJECTS).find((command) => command.id === id)?.run;
+      return run?.kind === 'go' ? run.href : undefined;
+    };
+    expect(href('page:insights')).toBe('/w/acme/insights');
+    expect(href('page:link-page')).toBe('/w/acme/link-page');
+    expect(href('page:inbox')).toBe('/w/acme/inbox');
+    expect(href('page:notes')).toBe('/w/acme/notes');
+  });
+
+  // A guest's sidebar has no scheduling and no link page (spec 0031, slice 9), so neither has their menu.
+  it('leaves out scheduling and the link page for a guest, as their sidebar does', () => {
+    const names = pageCommands('acme', OBJECTS, ['booking.manage'], [], true).map((command) => command.name);
+    for (const gone of [
+      'Bookings',
+      'Availability',
+      'Calendars',
+      'Round robin',
+      'Booking pages',
+      'Forms',
+      'Link page',
+    ]) {
+      expect(names).not.toContain(gone);
+    }
+    expect(names).toEqual(expect.arrayContaining(['Home', 'Insights', 'Inbox', 'Tasks', 'Notes']));
   });
 
   // Round robin is for someone who makes booking pages, as its own page is: hidden means absent (25 October 2026).

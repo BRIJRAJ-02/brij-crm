@@ -30,6 +30,9 @@ export const strings = {
   addToListTerms: ['list', 'pipeline'],
   /** Pages. */
   home: 'Home',
+  insights: 'Insights',
+  linkPage: 'Link page',
+  inbox: 'Inbox',
   myTasks: 'Tasks',
   bookings: 'Bookings',
   availability: 'Availability',
@@ -45,6 +48,10 @@ export const strings = {
   settingsPage: (page: string) => `Settings › ${page}`,
   /** Other words each page answers to (AC-1082). */
   tasksTerms: ['todo', 'to do', 'assigned'],
+  insightsTerms: ['analytics', 'views', 'clicks', 'visits', 'stats'],
+  linkPageTerms: ['profile', 'bio', 'links', 'handle'],
+  inboxTerms: ['notifications', 'mentions', 'replies'],
+  notesTerms: ['notebook', 'docs', 'writing'],
   bookingsTerms: ['calendar', 'meetings', 'schedule'],
   homeTerms: ['dashboard', 'today', 'start'],
   availabilityTerms: ['hours', 'schedules', 'working hours'],

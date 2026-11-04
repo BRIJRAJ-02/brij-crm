@@ -16,7 +16,18 @@ import { importHref } from '../imports/paths.ts';
 import { listHref } from '../lists/paths.ts';
 import { recordHref } from '../records/details.ts';
 import { reportsHref } from '../reports/search.ts';
-import { bookingsHref, homeHref, navObjects, objectHref, tasksHref, trashHref } from '../workspace/objects.ts';
+import { insightsHref } from '../insights/search.ts';
+import {
+  bookingsHref,
+  homeHref,
+  inboxHref,
+  linkPageHref,
+  navObjects,
+  notesHref,
+  objectHref,
+  tasksHref,
+  trashHref,
+} from '../workspace/objects.ts';
 import { strings } from './strings.ts';
 
 /** What choosing a command does: go somewhere, open an object's new record dialog, or set the theme. */
@@ -50,19 +61,82 @@ export interface Command {
 export type CommandMode = 'commands' | 'search';
 
 /**
- * The pages (AC-1075): Home, each live object's page in the workspace's order,
- * then Tasks and Scheduling's pages as the sidebar has them (spec 0034:
- * Bookings, Availability, Booking pages, Forms), Trash and Settings.
+ * The pages (AC-1075), mirroring the sidebar's destinations in its order (foolproof audit, 5 November 2026): Home and
+ * Insights, each live object's page in the workspace's order and each list, Bookings with its tabs (Availability,
+ * Calendars, Round robin, Booking pages, Forms), then the member's own pages (Link page, Inbox, Tasks, Notes), and
+ * Reports, Trash and Settings. A guest's sidebar has no scheduling and no link page, so neither has theirs.
  */
 export function pageCommands(
   slug: string,
   objects: readonly ObjectSummary[],
   permissions?: readonly Permission[],
   lists: readonly ListView[] = [],
+  isGuest = false,
 ): readonly Command[] {
   const plural = new Map(objects.map((object) => [object.id, object.pluralName]));
+  // Scheduling (spec 0031, slice 9: guests can't take bookings), as the sidebar's Scheduling section.
+  const scheduling: readonly Command[] = isGuest
+    ? []
+    : [
+        {
+          id: 'page:bookings',
+          name: strings.bookings,
+          icon: 'calendar-days',
+          terms: strings.bookingsTerms,
+          run: go(bookingsHref(slug)),
+        },
+        {
+          id: 'page:availability',
+          name: strings.availability,
+          icon: 'clock',
+          terms: strings.availabilityTerms,
+          run: go(availabilityHref(slug)),
+        },
+        // Calendars and Round robin came up out of Settings into Bookings (25 October 2026), so the menu finds them
+        // where it finds Availability rather than under Settings, where they no longer are.
+        {
+          id: 'page:calendars',
+          name: strings.calendars,
+          icon: 'calendar',
+          terms: strings.calendarsTerms,
+          run: go(calendarsHref(slug)),
+        },
+        // Only for someone who makes booking pages: hidden means absent, and the page itself says nothing either.
+        ...(permissions?.includes('booking.manage') === true
+          ? [
+              {
+                id: 'page:round-robin',
+                name: strings.roundRobin,
+                icon: 'users-round',
+                terms: strings.roundRobinTerms,
+                run: go(roundRobinHref(slug)),
+              } satisfies Command,
+            ]
+          : []),
+        {
+          id: 'page:booking-pages',
+          name: strings.bookingPages,
+          icon: 'link',
+          terms: strings.bookingPagesTerms,
+          run: go(linksHref(slug)),
+        },
+        {
+          id: 'page:forms',
+          name: strings.forms,
+          icon: 'clipboard-list',
+          terms: strings.formsTerms,
+          run: go(formsHref(slug)),
+        },
+      ];
   return [
     { id: 'page:home', name: strings.home, icon: 'house', terms: strings.homeTerms, run: go(homeHref(slug)) },
+    {
+      id: 'page:insights',
+      name: strings.insights,
+      icon: 'chart-line',
+      terms: strings.insightsTerms,
+      run: go(insightsHref(slug)),
+    },
     ...navObjects(objects).map((object): Command => ({
       id: `page:object:${object.id}`,
       name: object.pluralName,
@@ -81,6 +155,20 @@ export function pageCommands(
         run: go(listHref(slug, list)),
         kind: strings.listKind(plural.get(list.objectId) ?? ''),
       })),
+    ...scheduling,
+    // The member's own pages, as the sidebar has them after the sections.
+    ...(isGuest
+      ? []
+      : [
+          {
+            id: 'page:link-page',
+            name: strings.linkPage,
+            icon: 'id-card',
+            terms: strings.linkPageTerms,
+            run: go(linkPageHref(slug)),
+          } satisfies Command,
+        ]),
+    { id: 'page:inbox', name: strings.inbox, icon: 'inbox', terms: strings.inboxTerms, run: go(inboxHref(slug)) },
     {
       id: 'page:tasks',
       name: strings.myTasks,
@@ -88,55 +176,7 @@ export function pageCommands(
       terms: strings.tasksTerms,
       run: go(tasksHref(slug)),
     },
-    {
-      id: 'page:bookings',
-      name: strings.bookings,
-      icon: 'calendar-days',
-      terms: strings.bookingsTerms,
-      run: go(bookingsHref(slug)),
-    },
-    {
-      id: 'page:availability',
-      name: strings.availability,
-      icon: 'clock',
-      terms: strings.availabilityTerms,
-      run: go(availabilityHref(slug)),
-    },
-    // Calendars and Round robin came up out of Settings into Bookings (25 October 2026), so the menu finds them
-    // where it finds Availability rather than under Settings, where they no longer are.
-    {
-      id: 'page:calendars',
-      name: strings.calendars,
-      icon: 'calendar',
-      terms: strings.calendarsTerms,
-      run: go(calendarsHref(slug)),
-    },
-    // Only for someone who makes booking pages: hidden means absent, and the page itself says nothing either.
-    ...(permissions?.includes('booking.manage') === true
-      ? [
-          {
-            id: 'page:round-robin',
-            name: strings.roundRobin,
-            icon: 'users-round',
-            terms: strings.roundRobinTerms,
-            run: go(roundRobinHref(slug)),
-          } satisfies Command,
-        ]
-      : []),
-    {
-      id: 'page:booking-pages',
-      name: strings.bookingPages,
-      icon: 'link',
-      terms: strings.bookingPagesTerms,
-      run: go(linksHref(slug)),
-    },
-    {
-      id: 'page:forms',
-      name: strings.forms,
-      icon: 'clipboard-list',
-      terms: strings.formsTerms,
-      run: go(formsHref(slug)),
-    },
+    { id: 'page:notes', name: strings.notes, icon: 'notebook', terms: strings.notesTerms, run: go(notesHref(slug)) },
     {
       id: 'page:reports',
       name: strings.reports,

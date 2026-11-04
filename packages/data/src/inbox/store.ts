@@ -28,6 +28,12 @@ import type { Notice } from '../notice.ts';
 /** How long a burst of events waits before the held lists read again. */
 export const INBOX_REREAD_MS = 250;
 
+/**
+ * The most notifications one mark sends: the contract's `NOTIFICATION_MARK_MAX`, held here so the lazy inbox chunk
+ * never pulls the contracts' root (and Zod) in; `store.test.ts` holds the two together.
+ */
+export const INBOX_MARK_BATCH = 100;
+
 /** How long a list nobody shows keeps its rows before it lets go. */
 const UNUSED_MS = 30_000;
 
@@ -142,6 +148,17 @@ export interface InboxMark {
   readonly done?: boolean;
 }
 
+/**
+ * What a bulk mark did: the refusal, if any (already put back), and the
+ * notifications it changed as they were before, which `restore` puts back
+ * (Undo). Only the ones this tab had loaded are known; the server's own
+ * count of the rest isn't undoable.
+ */
+export interface InboxMarked {
+  readonly error?: DataError;
+  readonly before: readonly NotificationView[];
+}
+
 /** The inbox's store. */
 export interface InboxStore {
   readonly list: (workspace: string, filter: InboxFilter) => InboxList;
@@ -153,7 +170,12 @@ export interface InboxStore {
     status: NotificationStatus,
     kind?: NotificationKind,
     done?: boolean,
-  ) => Promise<DataError | undefined>;
+  ) => Promise<InboxMarked>;
+  /**
+   * Puts notifications back exactly as they were (read or not, done or not): a mark's Undo. Shows at once, like
+   * any mark; answers the first refusal, if any (already put back, with a toast).
+   */
+  readonly restore: (workspace: string, before: readonly NotificationView[]) => Promise<DataError | undefined>;
   readonly settings: (workspace: string) => InboxSettings;
   /** Saves some switches at once; answers the refusal, if any (already put back, with a toast). */
   readonly setSettings: (workspace: string, change: NotificationSettingsChange) => Promise<DataError | undefined>;
@@ -502,7 +524,7 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
     return held;
   };
 
-  return {
+  const store: InboxStore = {
     list: (workspace, filter) => listOf(workspace, filter).list,
 
     async mark(workspace, ids, mark) {
@@ -545,7 +567,7 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
 
     async markAllRead(workspace, status, kind, done = false) {
       // The Done tab is done already.
-      if (done && status === 'done') return undefined;
+      if (done && status === 'done') return { before: [] };
       const at = new Date().toISOString();
       const touched = new Map<string, NotificationView>();
       for (const held of listsOf(workspace)) {
@@ -576,7 +598,7 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
         deps.mutations.answered(mutationId, answer.changed > 0 ? 1 : 0);
         reread(workspace);
         deps.unread.refresh(workspace);
-        return undefined;
+        return { before: [...touched.values()] };
       } catch (failed) {
         deps.mutations.forget(mutationId);
         const error = toDataError(failed);
@@ -585,8 +607,28 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
         reread(workspace);
         deps.unread.refresh(workspace);
         deps.notify({ tone: 'danger', message: `${INBOX_WORDS.markFailed} ${error.message}` });
-        return error;
+        return { error, before: [] };
       }
+    },
+
+    async restore(workspace, before) {
+      // One mark per state to go back to (read or not, done or not), at most the server's batch each.
+      const groups = new Map<string, { readonly mark: InboxMark; readonly ids: string[] }>();
+      for (const item of before) {
+        const mark = { read: item.readAt !== undefined, done: item.doneAt !== undefined };
+        const key = `${String(mark.read)} ${String(mark.done)}`;
+        const group = groups.get(key) ?? { mark, ids: [] };
+        group.ids.push(item.id);
+        groups.set(key, group);
+      }
+      const marks: Promise<DataError | undefined>[] = [];
+      for (const { mark, ids } of groups.values()) {
+        for (let start = 0; start < ids.length; start += INBOX_MARK_BATCH) {
+          marks.push(store.mark(workspace, ids.slice(start, start + INBOX_MARK_BATCH), mark));
+        }
+      }
+      const refusals = await Promise.all(marks);
+      return refusals.find((refusal) => refusal !== undefined);
     },
 
     settings: (workspace) => settingsOf(workspace).source,
@@ -650,4 +692,5 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
       settings = new Map();
     },
   };
+  return store;
 }

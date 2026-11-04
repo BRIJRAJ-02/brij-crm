@@ -17,7 +17,8 @@ export const Route = createFileRoute('/invite/$token')({
       }),
       context.data.me.get(),
     ]);
-    return { invitation, user: me?.user };
+    // Whether they have a workspace to go to: an invitation that opens nothing offers it, else making one.
+    return { invitation, user: me?.user, hasWorkspace: (me?.workspaces.length ?? 0) > 0 };
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -29,10 +30,10 @@ export const Route = createFileRoute('/invite/$token')({
 });
 
 function InviteRoute() {
-  const { invitation, user } = Route.useLoaderData();
+  const { invitation, user, hasWorkspace } = Route.useLoaderData();
   const { token } = Route.useParams();
   const { data } = Route.useRouteContext();
-  return <InviteScreen data={data} token={token} invitation={invitation} user={user} />;
+  return <InviteScreen data={data} token={token} invitation={invitation} user={user} hasWorkspace={hasWorkspace} />;
 }
 
 /** The look up failed: the server's words when it gave any (too many lookups), with a retry. */

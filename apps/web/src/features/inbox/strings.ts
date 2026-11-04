@@ -17,8 +17,12 @@ export const strings = {
   /** A submission's form whose name didn't come with it. */
   someForm: 'A form',
   unreadOnly: 'Unread only',
-  markAllRead: 'Mark all as read',
   markAllDone: 'Mark all done',
+  /** The toasts a move between Inbox and Done raises, each with Undo. */
+  markedDone: 'Marked done',
+  movedToInbox: 'Moved to inbox',
+  markedAllDone: 'Inbox cleared',
+  undo: 'Undo',
   /** The list's name: "Inbox", or "Inbox, Mentions" under a kind. */
   listLabel: (tab: string, kind: string | undefined) => (kind === undefined ? tab : `${tab}, ${kind}`),
   emptyDone: 'Nothing done yet.',
