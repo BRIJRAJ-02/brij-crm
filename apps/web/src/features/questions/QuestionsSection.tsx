@@ -1526,6 +1526,8 @@ function QuestionHead({ question, isReadOnly, isJustAdded, problem, onLabel, onS
         // A consent's label is its exact wording, shown beside the tick box (spec 0023, AC-1053).
         label={isConsent ? strings.consentWording : strings.question}
         isLabelHidden
+        // Its name inside the box, as the Placeholder's is under it (the owner, 5 November 2026).
+        prefix={isConsent ? strings.consentWording : strings.question}
         isWrapping
         placeholder={
           isConsent
