@@ -33,6 +33,7 @@ import {
   SettingsStack,
   focusLater,
   HostedFormPreview,
+  type HostedFormPreviewProps,
   PreviewLayout,
   type PreviewTextChange,
   TabPanel,
@@ -291,6 +292,22 @@ export function FormEditor(props: FormEditorProps) {
   const preview = useMemo(() => previewOf(draft, { key: form.publicKey }), [draft, form.publicKey]);
   // The question or divider last opened: Steps and One at a time preview the step it is in (spec 0063).
   const [previewRow, setPreviewRow] = useState<string | undefined>(undefined);
+  // The thank-you message being edited in After they send (T47): the preview shows it in the form's place until a
+  // question or a step is opened again.
+  const [editedEnding, setEditedEnding] = useState<'default' | { readonly endingId: string } | undefined>(undefined);
+  const openRow = (row: string | undefined) => {
+    setPreviewRow(row);
+    setEditedEnding(undefined);
+  };
+  const previewEnding: HostedFormPreviewProps['ending'] =
+    editedEnding === undefined
+      ? undefined
+      : editedEnding === 'default'
+        ? {}
+        : (() => {
+            const ending = draft.endings?.find((each) => each.id === editedEnding.endingId);
+            return ending === undefined ? undefined : { heading: ending.heading, line: ending.line };
+          })();
   // The edited question's or divider's step, shown even when its Show when hides it from a visitor who has answered
   // nothing yet: its conditions (the step's, and its questions') are lifted in the preview only.
   const shownPreview = useMemo(() => {
@@ -887,7 +904,7 @@ export function FormEditor(props: FormEditorProps) {
               startsWithQuestion={!isPublished}
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               {...(questionStats === undefined ? {} : { stats: questionStats })}
-              onOpened={setPreviewRow}
+              onOpened={openRow}
               // The Logic map's door (T41): how many rules the form has, and how many need a look.
               {...(draft.questions.length === 0
                 ? {}
@@ -1029,6 +1046,7 @@ export function FormEditor(props: FormEditorProps) {
               newId={() => data.forms.newId()}
               onDraftChange={setDraft}
               showGaps={showGaps}
+              onEditEnding={setEditedEnding}
               stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
               {...(props.question === AFTER_ROW ? { focusRow: AFTER_ROW } : {})}
               {...(shown?.endingId === undefined
@@ -1057,12 +1075,14 @@ export function FormEditor(props: FormEditorProps) {
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
                   {...(canManage ? { onTextChange: changeText } : {})}
+                  {...(previewEnding === undefined ? {} : { ending: previewEnding })}
                 />
               ) : (
                 <HostedFormPreview
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
                   {...(canManage ? { onTextChange: changeText } : {})}
+                  {...(previewEnding === undefined ? {} : { ending: previewEnding })}
                 />
               ),
             // Design (5 November 2026): one button holding the look, over the preview it changes.

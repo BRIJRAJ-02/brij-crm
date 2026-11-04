@@ -77,6 +77,11 @@ export interface AfterSendSectionProps {
   readonly showGaps: boolean;
   /** A step's row on the Form tab, for Edit the rule on a thank-you message only a step sends people to. */
   readonly stepHref?: (stepId: string) => string;
+  /**
+   * A thank-you message's words took focus (T47, 5 November 2026): the preview shows that message in the form's
+   * place while it is edited, `default` for what everyone else sees, else the ending's id.
+   */
+  readonly onEditEnding?: (which: 'default' | { readonly endingId: string }) => void;
 }
 
 /** The facts a rule here may read: every question, and the score once a question gives points. */
@@ -439,6 +444,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
             onChange={(next) => {
               changeEnding(ending.id, next);
             }}
+            onFocus={() => props.onEditEnding?.({ endingId: ending.id })}
           />
         )}
         {then.kind === 'redirect' && (
@@ -544,6 +550,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
           onChange={(next) => {
             changeEnding(ending.id, next);
           }}
+          onFocus={() => props.onEditEnding?.({ endingId: ending.id })}
         />
       </Card>
     );
@@ -591,6 +598,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
           isReadOnly={isReadOnly}
           showGaps={showGaps}
           onDraftChange={onDraftChange}
+          onEditThanks={() => props.onEditEnding?.('default')}
         />
       </Card>
       {/* The score (Typeform's): only once a question gives points, as one row. */}
@@ -670,6 +678,8 @@ interface AfterDefaultProps {
   readonly isReadOnly: boolean;
   readonly showGaps: boolean;
   readonly onDraftChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
+  /** The thank you's words took focus: the preview shows it. */
+  readonly onEditThanks?: (() => void) | undefined;
 }
 
 /** What everyone else gets (AC-570, AC-1055): the thank you page, a booking page, or a link. */
@@ -691,6 +701,7 @@ function AfterDefault({
   isReadOnly,
   showGaps,
   onDraftChange,
+  onEditThanks,
 }: AfterDefaultProps) {
   const seesAllPages = useCan('booking.admin');
   const after = draft.after;
@@ -915,6 +926,7 @@ function AfterDefault({
           value={after.message}
           maxLength={2_000}
           isReadOnly={isReadOnly}
+          {...(onEditThanks === undefined ? {} : { onFocus: onEditThanks })}
           onChange={(message) => {
             onDraftChange((before) => ({ ...before, after: { kind: 'message', message } }));
           }}
@@ -934,10 +946,21 @@ interface EndingFieldsProps {
   readonly isJustAdded: boolean;
   readonly showGaps: boolean;
   readonly onChange: (change: Partial<FormEnding>) => void;
+  /** Its words took focus: the preview shows it. */
+  readonly onFocus?: (() => void) | undefined;
 }
 
 /** An ending (AC-6315): its heading and line, each with Insert an answer, then an optional button. */
-function EndingFields({ ending, draft, pages, isReadOnly, isJustAdded, showGaps, onChange }: EndingFieldsProps) {
+function EndingFields({
+  ending,
+  draft,
+  pages,
+  isReadOnly,
+  isJustAdded,
+  showGaps,
+  onChange,
+  onFocus,
+}: EndingFieldsProps) {
   const headingRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const lineRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   // A new ending's heading takes focus as it opens, so its words are typed at once.
@@ -961,6 +984,7 @@ function EndingFields({ ending, draft, pages, isReadOnly, isJustAdded, showGaps,
         value={ending.heading}
         maxLength={120}
         isReadOnly={isReadOnly}
+        {...(onFocus === undefined ? {} : { onFocus })}
         {...(isReadOnly
           ? {}
           : {
@@ -986,6 +1010,7 @@ function EndingFields({ ending, draft, pages, isReadOnly, isJustAdded, showGaps,
         maxLength={2_000}
         isMultiline
         isReadOnly={isReadOnly}
+        {...(onFocus === undefined ? {} : { onFocus })}
         {...(isReadOnly
           ? {}
           : {

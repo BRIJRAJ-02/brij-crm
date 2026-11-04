@@ -98,6 +98,10 @@ export const strings = {
   lowLabelPlaceholder: 'Not likely',
   highLabel: 'High end',
   highLabelPlaceholder: 'Very likely',
+  /** A rating's number of stars. */
+  ratingCount: 'Stars',
+  ratingLowPlaceholder: 'Poor',
+  ratingHighPlaceholder: 'Excellent',
   picks: 'Picks',
   leastPicks: 'Least picks',
   mostPicks: 'Most picks',

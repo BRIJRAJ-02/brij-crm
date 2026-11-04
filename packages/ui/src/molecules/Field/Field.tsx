@@ -64,6 +64,8 @@ export interface FieldProps {
   readonly defaultValue?: string;
   readonly onChange?: (value: string) => void;
   readonly onBlur?: () => void;
+  /** Focus arriving in the field: the form builder shows a thank-you message in its preview while it is edited. */
+  readonly onFocus?: () => void;
   /** Enter in a single line field (a cell commits on it). */
   readonly onSubmit?: () => void;
   /** Esc (a cell or a popover cancels on it). */
@@ -199,6 +201,7 @@ export function Field({
   defaultValue,
   onChange,
   onBlur,
+  onFocus,
   onSubmit,
   onEscape,
   placeholder,
@@ -365,6 +368,7 @@ export function Field({
               : onChange,
           })}
       {...(onBlur === undefined ? {} : { onBlur })}
+      {...(onFocus === undefined ? {} : { onFocus })}
       {...(onSubmit === undefined && onEscape === undefined && !isWrapping
         ? {}
         : {

@@ -31,6 +31,7 @@ export {
   SCORED_TYPES,
   scoreOf,
   STEP_JUMPS_MAX,
+  RATING_COUNT,
   stepsOfBreaks,
   type FormLayout,
   FORM_SLUG,

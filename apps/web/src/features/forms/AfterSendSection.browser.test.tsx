@@ -72,6 +72,8 @@ const page_ = (status: 'live' | 'paused'): BookingPageView =>
 
 let shown: InApp | undefined;
 let latest: FormDocument = DRAFT;
+/** Each thank-you message whose words took focus, in order: what the editor's preview then shows. */
+let edited: ('default' | { readonly endingId: string })[] = [];
 let ids = 0;
 
 beforeAll(async () => {
@@ -99,6 +101,9 @@ function Section({ initial, toasts }: { readonly initial: FormDocument; readonly
       newId={() => `r${String((ids += 1))}`}
       onDraftChange={setDraft}
       showGaps={false}
+      onEditEnding={(which) => {
+        edited.push(which);
+      }}
     />
   );
 }
@@ -116,6 +121,17 @@ async function show(initial: FormDocument, pages: readonly BookingPageView[] = [
 }
 
 describe('After they send (T39)', () => {
+  it('says which thank-you message is being edited, so the preview shows it (T47)', async () => {
+    edited = [];
+    await show(DRAFT);
+    await userEvent.click(page.getByRole('textbox', { name: 'Thank-you message' }));
+    await expect.poll(() => edited).toEqual(['default']);
+    await userEvent.click(page.getByRole('button', { name: 'Send some people somewhere else' }));
+    await expect.poll(() => latest.endings?.length).toBe(1);
+    await userEvent.click(page.getByRole('textbox', { name: 'Heading' }));
+    await expect.poll(() => edited.at(-1)).toEqual({ endingId: 'ending_1' });
+  });
+
   it('reads as one sentence, the thank you words edited under it, and never says ending', async () => {
     await show(DRAFT);
     await expect.element(page.getByRole('heading', { name: 'After they send' })).toBeVisible();

@@ -12,6 +12,7 @@ import {
   FORM_STEP_TITLE_MAX,
   NO_PLACEHOLDER_TYPES,
   QUESTION_PRESETS,
+  RATING_COUNT,
   SCORED_TYPES,
   STEP_JUMPS_MAX,
   type FormEnding,
@@ -1361,6 +1362,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   );
 }
 
+/** A rating's star counts, as its picker lists them (3 to 10, spec 0063). */
+const RATING_COUNTS: readonly number[] = Array.from(
+  { length: RATING_COUNT.max - RATING_COUNT.min + 1 },
+  (_, at) => RATING_COUNT.min + at,
+);
+
 /** A lead header's stand in id: the questions before the first break, which have no break of their own yet. */
 const LEAD = '~lead';
 
@@ -1786,6 +1793,46 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
           <Field
             label={strings.highLabel}
             placeholder={strings.highLabelPlaceholder}
+            value={options.highLabel ?? ''}
+            maxLength={40}
+            isReadOnly={isReadOnly}
+            onChange={(highLabel) => {
+              onChange({ options: { highLabel } });
+            }}
+          />
+        </>
+      );
+    case 'rating':
+      // A rating's stars and the words at its ends (critique 9), set as Scale's are: one row, then the two words.
+      return (
+        <>
+          <SettingsRow title={strings.ratingCount}>
+            <Select
+              label={strings.ratingCount}
+              isLabelHidden
+              size="sm"
+              items={RATING_COUNTS.map((count) => ({ id: String(count), label: String(count) }))}
+              value={String(options.count ?? RATING_COUNT.default)}
+              isReadOnly={isReadOnly}
+              onChange={(id) => {
+                const count = RATING_COUNTS.find((each) => String(each) === id);
+                if (count !== undefined) onChange({ options: { count } });
+              }}
+            />
+          </SettingsRow>
+          <Field
+            label={strings.lowLabel}
+            placeholder={strings.ratingLowPlaceholder}
+            value={options.lowLabel ?? ''}
+            maxLength={40}
+            isReadOnly={isReadOnly}
+            onChange={(lowLabel) => {
+              onChange({ options: { lowLabel } });
+            }}
+          />
+          <Field
+            label={strings.highLabel}
+            placeholder={strings.ratingHighPlaceholder}
             value={options.highLabel ?? ''}
             maxLength={40}
             isReadOnly={isReadOnly}

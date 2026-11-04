@@ -11,6 +11,7 @@ import {
   Popover,
   SegmentedControl,
   SettingsRow,
+  type HostedFormPreviewProps,
   type PageBrand,
   type PreviewTextChange,
 } from '@crm/ui';
@@ -159,13 +160,15 @@ export interface BrandedFormPreviewProps {
   readonly mode?: 'preview' | 'page';
   /** The headline and the button, edited where they are (T21). */
   readonly onTextChange?: (change: PreviewTextChange) => void;
+  /** The thank-you message being edited, drawn in the form's place (HostedFormPreview's `ending`). */
+  readonly ending?: HostedFormPreviewProps['ending'];
 }
 
 /**
  * The preview wearing the workspace's kit. While the kit loads, or where the workspace has none, it draws the
  * product's own accent, which is what the hosted page draws too, so the two never disagree.
  */
-export function BrandedFormPreview({ brand, slug, form, step, mode, onTextChange }: BrandedFormPreviewProps) {
+export function BrandedFormPreview({ brand, slug, form, step, mode, onTextChange, ending }: BrandedFormPreviewProps) {
   const kit = useKit(brand, slug);
   const colours = brand.colours(kit?.accent, kit?.accentDark);
   const logoSrc = kit?.logo === undefined ? undefined : brand.logoSrc(slug, kit.logo.version);
@@ -180,6 +183,7 @@ export function BrandedFormPreview({ brand, slug, form, step, mode, onTextChange
       {...(step === undefined ? {} : { step })}
       {...(mode === undefined ? {} : { mode })}
       {...(onTextChange === undefined ? {} : { onTextChange })}
+      {...(ending === undefined ? {} : { ending })}
     />
   );
 }

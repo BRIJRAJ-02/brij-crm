@@ -164,4 +164,18 @@ describe('the question card (T40)', () => {
     // On to the next card.
     expect(document.activeElement?.closest('[role="row"]')?.textContent).toContain('Anything else?');
   });
+
+  it('sets a Rating’s stars and the words at its ends, as a Scale’s are (critique 9)', async () => {
+    await show();
+    await userEvent.click(page.getByRole('button', { name: /^Your name/ }));
+    await userEvent.click(page.getByRole('button', { name: 'Add a question' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Rating' }));
+    await userEvent.click(page.getByRole('button', { name: /Stars/ }));
+    await userEvent.click(page.getByRole('option', { name: '7' }));
+    await userEvent.fill(page.getByRole('textbox', { name: 'Low end' }), 'Poor');
+    await userEvent.fill(page.getByRole('textbox', { name: 'High end' }), 'Superb');
+    await expect
+      .poll(() => latest.find((each) => each.answerType === 'rating')?.options)
+      .toEqual({ count: 7, lowLabel: 'Poor', highLabel: 'Superb' });
+  });
 });
