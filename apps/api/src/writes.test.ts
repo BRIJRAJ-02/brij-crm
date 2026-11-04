@@ -133,6 +133,8 @@ const READS: ReadonlySet<string> = new Set([
   // Table seating's reads (spec 0066 B7 lite).
   'tables.setup',
   'tables.day',
+  // A walk in's free tables now (spec 0066 B7 lite).
+  'tables.freeTables',
   // The business page's editor (spec 0066, B4 lite).
   'businessPage.page',
   // The roles every role picker offers (spec 0037, AC-1439), and the Roles page's reads (job J9).
@@ -3240,6 +3242,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   // Table seating (spec 0066 B7 lite): installed first (and the setup saved before a status move).
   'tables.saveSetup': 2,
   'tables.setStatus': 3,
+  // The reader's own reservation emails after the install; a walk in after its tables and the setup.
+  'tables.setNotify': 2,
+  'tables.walkIn': 4,
   // The business page (spec 0066): installed first (and its address and hours before a publish).
   'businessPage.claimHandle': 2,
   'businessPage.save': 2,
@@ -3883,6 +3888,19 @@ Object.assign(WRITES, {
       [m.workspace.id, appointmentId, saved.serviceId],
     );
     await m.client.tables.setStatus({ workspace: m.slug, appointmentId, status: 'arrived', mutationId });
+    return [{ kind: 'nav' }, { kind: 'visits', item_ids: [placeId], mutation_id: mutationId }];
+  },
+  'tables.setNotify': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    await m.client.tables.setNotify({ workspace: m.slug, placeId, on: false, mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'tables.walkIn': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const [one] = await tablesAt(m, placeId);
+    const setup = await m.client.tables.setup({ workspace: m.slug, placeId });
+    await m.client.tables.saveSetup({ workspace: m.slug, placeId, rules: setup.rules, mutationId: newId() });
+    await m.client.tables.walkIn({ workspace: m.slug, placeId, party: 2, resourceIds: [one], mutationId });
     return [{ kind: 'nav' }, { kind: 'visits', item_ids: [placeId], mutation_id: mutationId }];
   },
 });
