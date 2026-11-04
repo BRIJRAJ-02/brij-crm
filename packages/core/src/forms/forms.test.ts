@@ -805,11 +805,34 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(record?.values[w.attribute('people.phone_numbers')]).toEqual([{ number: '+447700900123', country: 'GB' }]);
     expect(record?.values[w.attribute('people.owner')]).toEqual({ type: 'member', id: w.ownerId });
     const activity = await getActivity(w.scope, { recordId });
-    expect(activity.entries.find((entry) => entry.kind === 'submission')).toMatchObject({
+    const entry = activity.entries.find((each) => each.kind === 'submission');
+    expect(entry).toMatchObject({
       title: 'Contact us',
       action: 'created',
       actor: { type: 'form', id: live.id },
+      formId: live.id,
     });
+    // The answers ride on the entry as words (forms fix a1), so the record page shows what was sent.
+    expect(entry?.answers).toContainEqual({ label: expect.any(String) as string, text: 'Engines' });
+    expect(entry?.answers?.some((answer) => answer.text === 'ada@example.com')).toBe(true);
+    // One submission is one entry: the record's own creation entry is folded into it, not logged twice.
+    expect(activity.entries.filter((each) => each.kind === 'created')).toEqual([]);
+    expect(entry?.answers?.some((answer) => answer.text === 'Engineer')).toBe(true);
+    // An answer filed on a field hidden from the reader is absent from the entry, as from the submission itself.
+    const hidesTitle: AccessRules = {
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'attribute', objectId: w.people, attributeId: w.attribute('people.job_title') },
+          level: 'hidden',
+        },
+      ],
+      records: [],
+    };
+    const member = rescope(w.scope, { role: 'member', rules: hidesTitle });
+    const seen = (await getActivity(member, { recordId })).entries.find((each) => each.kind === 'submission');
+    expect(seen?.answers?.some((answer) => answer.text === 'Engineer')).toBe(false);
+    expect(seen?.answers?.some((answer) => answer.text === 'Engines')).toBe(true);
     await processNow(w, submission.id);
     expect(await w.query(sql`select 1 from form_submission_records`)).toHaveLength(1);
   });

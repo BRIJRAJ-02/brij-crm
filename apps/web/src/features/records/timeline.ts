@@ -10,6 +10,15 @@ import { recordHref } from './details.ts';
 /** A task's dialog over the page (spec 0019): the page's address with `?task=<id>`; a note's `?note=`, a thread's `?thread=`. */
 export type TaskLink = (itemId: string, kind?: 'task' | 'note' | 'thread' | 'log') => string;
 
+/** A submission's panel on its form's Submissions tab (forms fix a1): Open submission on the timeline. */
+export type SubmissionLink = (formId: string, submissionId: string) => string;
+
+/** The submission panel's address in a workspace. */
+export function submissionLinks(slug: string): SubmissionLink {
+  return (formId, submissionId) =>
+    `/w/${encodeURIComponent(slug)}/captures/forms/${encodeURIComponent(formId)}?tab=submissions&submission=${encodeURIComponent(submissionId)}`;
+}
+
 /** A record's page from its object's id, or undefined when the object isn't one the person can open. */
 export type RecordLink = (objectId: string, recordId: string) => string | undefined;
 
@@ -23,7 +32,18 @@ export function recordLinks(slug: string, objects: readonly ObjectSummary[]): Re
 }
 
 /** A link entry with each named record's page, a task entry with its dialog's, a meeting's people with theirs. */
-export function withLinks(entry: ActivityEntryShape, link: RecordLink, taskLink?: TaskLink): ActivityEntryShape {
+export function withLinks(
+  entry: ActivityEntryShape,
+  link: RecordLink,
+  taskLink?: TaskLink,
+  submissionLink?: SubmissionLink,
+): ActivityEntryShape {
+  // A submission (forms fix a1): Open submission, only for a reader the server gave its answers to (they may open it).
+  if (entry.kind === 'submission') {
+    return submissionLink === undefined || entry.formId === undefined || entry.answers === undefined
+      ? entry
+      : { ...entry, href: submissionLink(entry.formId, entry.itemId) };
+  }
   if (entry.kind === 'task') return taskLink === undefined ? entry : { ...entry, href: taskLink(entry.itemId) };
   // A thread (spec 0038): its place on the Comments tab.
   if (entry.kind === 'comment') {
@@ -75,6 +95,7 @@ export function linkedSource(
   link: RecordLink,
   cache: WeakMap<object, ActivityEntryShape>,
   taskLink?: TaskLink,
+  submissionLink?: SubmissionLink,
 ): EntrySource {
   return {
     ...source,
@@ -88,13 +109,14 @@ export function linkedSource(
           entry.kind !== 'call' &&
           entry.kind !== 'logged_meeting' &&
           entry.kind !== 'comment' &&
-          entry.kind !== 'meeting')
+          entry.kind !== 'meeting' &&
+          entry.kind !== 'submission')
       ) {
         return entry;
       }
       const held = cache.get(entry);
       if (held !== undefined) return held;
-      const made = withLinks(entry, link, taskLink);
+      const made = withLinks(entry, link, taskLink, submissionLink);
       cache.set(entry, made);
       return made;
     },

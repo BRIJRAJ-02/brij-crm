@@ -56,3 +56,7 @@ The artifact's record page shows a short static timeline; this one is virtualise
 ## A booked meeting's answers (spec 0057)
 
 A meeting entry may carry `answers`, label then words: the visitor's answers to the booking page's own questions, those the reader may see. The entry shows the first three as excerpt lines and says how many more are on the booking; the words are text, never markup. A private meeting the reader doesn't hold (`detailsHidden`) never carries them (the server leaves them out). Story: `MeetingWithAnswers`.
+
+## A submission's answers (forms fix a1, 5 November 2026)
+
+A `submission` entry reads "<form> submission created this record" (or "updated this record", "came in", "linked this record"), one entry per submission: the server folds the record's own creation entry into it when a submission made the record, so one answer is never logged twice. It may carry `answers` (label then words, those the reader may see; given only when the reader may open the submission) and an `href`. Under its line sit a ghost "Show N answers" disclosure, which unfolds the answers in a card, and "Open submission". Why folded: a record with many submissions keeps one line each until someone asks. Story: `FromAForm`.

@@ -513,7 +513,10 @@ export const LeaveByKeyboard: Story = {
   },
 };
 
-/** A record a form made (spec 0023): the form is the actor, named, on its creation and on the submission. */
+/**
+ * A record a form made (spec 0023, forms fix a1): one entry for the submission, its answers folded under Show answers
+ * and Open submission beside it; the record's own creation is not logged a second time.
+ */
 export const FromAForm: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => {
@@ -525,9 +528,12 @@ export const FromAForm: Story = {
         actor: form,
         kind: 'submission',
         action: 'created',
-        href: '#submission',
+        answers: [
+          { label: 'Email', text: 'ada@example.com' },
+          { label: 'What can we help with?', text: 'A demo for our team of twelve' },
+        ],
+        href: '/w/acme/captures/forms/f1?tab=submissions&submission=s1',
       },
-      { id: 'created', at: '2026-10-08T12:00:00.000Z', actor: form, kind: 'created' },
     ];
     return (
       <Stage height="page">
@@ -535,10 +541,17 @@ export const FromAForm: Story = {
       </Stage>
     );
   },
-  play: async ({ canvas }) => {
-    const [submission, created] = canvas.getAllByRole('article');
-    await expect(submission).toHaveAccessibleName(/Contact us created this record from a submission/);
-    await expect(created).toHaveAccessibleName(/Contact us created this record/);
+  play: async ({ canvas, userEvent }) => {
+    const [submission] = canvas.getAllByRole('article');
+    await expect(submission).toHaveAccessibleName(/Contact us submission created this record/);
+    await expect(canvas.queryByText(/A demo for our team/)).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Show 2 answers' }));
+    await expect(canvas.getByText('What can we help with?: A demo for our team of twelve')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Hide answers' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByRole('link', { name: 'Open submission' })).toHaveAttribute(
+      'href',
+      '/w/acme/captures/forms/f1?tab=submissions&submission=s1',
+    );
   },
 };
 

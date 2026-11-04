@@ -6,7 +6,7 @@ import type { ActivityFeed } from '@crm/data';
 import { Button, Card } from '@crm/ui';
 import { ActivityTab } from './ActivityTab.tsx';
 import { strings } from './strings.ts';
-import type { RecordLink, TaskLink } from './timeline.ts';
+import type { RecordLink, SubmissionLink, TaskLink } from './timeline.ts';
 
 /** Props for the Overview tab. */
 export interface OverviewTabProps {
@@ -16,6 +16,8 @@ export interface OverviewTabProps {
   readonly link: RecordLink;
   /** A task entry's dialog over the page (spec 0019). */
   readonly taskHref?: TaskLink;
+  /** A submission entry's Open submission (forms fix a1). */
+  readonly submissionHref?: SubmissionLink;
   /** Opens the Activity tab, as choosing the tab does (the address is replaced, focus moves to the tab). */
   readonly onViewAll: () => void;
 }
@@ -25,7 +27,7 @@ export interface OverviewTabProps {
  * place (never empty: the creation is always there), with "View all"
  * opening the Activity tab.
  */
-export function OverviewTab({ recent, link, taskHref, onViewAll }: OverviewTabProps) {
+export function OverviewTab({ recent, link, taskHref, submissionHref, onViewAll }: OverviewTabProps) {
   return (
     <Card
       title={strings.recentActivity}
@@ -39,6 +41,7 @@ export function OverviewTab({ recent, link, taskHref, onViewAll }: OverviewTabPr
         feed={recent}
         link={link}
         {...(taskHref === undefined ? {} : { taskHref })}
+        {...(submissionHref === undefined ? {} : { submissionHref })}
         label={strings.recentActivity}
         layout="inline"
       />

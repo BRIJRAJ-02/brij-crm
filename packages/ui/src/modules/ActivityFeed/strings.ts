@@ -42,10 +42,10 @@ export const strings = {
     meeting: 'had a meeting',
     /** A form's submission (spec 0023), the form being the actor. */
     submission: {
-      created: 'created this record from a submission',
-      updated: 'updated this record from a submission',
-      matched: 'received a submission for this record',
-      linked: 'linked this record from a submission',
+      created: 'submission created this record',
+      updated: 'submission updated this record',
+      matched: 'submission came in',
+      linked: 'submission linked this record',
     },
     added: 'added',
     removed: 'removed',
@@ -80,6 +80,10 @@ export const strings = {
   /** Past the first three: "2 more answers on the booking". */
   moreAnswers: (count: number) =>
     count === 1 ? '1 more answer on the booking' : `${String(count)} more answers on the booking`,
+  /** A submission's entry (forms fix a1): its answers, folded until asked for, and the submission itself. */
+  showAnswers: (count: number) => (count === 1 ? 'Show answer' : `Show ${String(count)} answers`),
+  hideAnswers: 'Hide answers',
+  openSubmission: 'Open submission',
   /** An attendee the CRM doesn't know (spec 0024, AC-609). */
   addPerson: 'Add as person',
   addingPerson: 'Adding',

@@ -37,7 +37,7 @@ import { meetingSource } from '../calendar/activity.ts';
 import { noteSource } from '../notes/activity.ts';
 import { taskSource } from '../tasks/activity.ts';
 import { commentSource } from '../comments/activity.ts';
-import { submissionSource } from '../forms/activity.ts';
+import { madeBySubmission, submissionSource } from '../forms/activity.ts';
 
 /** What a cursor the server can't read answers, on the `cursor` field. */
 export const ACTIVITY_CURSOR_MESSAGE = 'That activity cursor is not valid here. Start again from the top.';
@@ -126,12 +126,17 @@ export function isPastBound(
   return entry.id > after.id;
 }
 
-/** The creation entry (`created`, rank 9): the record's own row, exactly one, the oldest. */
-const creationSource: ActivitySource = ({ record, after }) => {
+/**
+ * The creation entry (`created`, rank 9): the record's own row, exactly one, the oldest. A record a form submission
+ * made has none: the submission's own entry says it created the record, and the two read as one answer logged
+ * twice (forms fix a1, 5 November 2026).
+ */
+const creationSource: ActivitySource = async ({ tx, record, after }) => {
   const id = `created:${record.id}`;
   const parts = { at: record.createdAt, rank: ACTIVITY_RANKS.created, id };
-  if (!isPastBound(parts, after)) return Promise.resolve({ entries: [] });
-  return Promise.resolve({
+  if (!isPastBound(parts, after)) return { entries: [] };
+  if (record.createdBy?.type !== 'member' && (await madeBySubmission(tx, record.id))) return { entries: [] };
+  return {
     entries: [
       {
         id,
@@ -141,7 +146,7 @@ const creationSource: ActivitySource = ({ record, after }) => {
         kind: 'created',
       },
     ],
-  });
+  };
 };
 
 /**
