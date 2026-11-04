@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
+import { Field } from '../../molecules/Field/Field.tsx';
+import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { expect, fn, waitFor } from 'storybook/test';
 import { hoverFresh, hoverUntilHovered, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -285,6 +286,73 @@ export const FullWidth: Story = {
     await expect(submit).toHaveAttribute('data-full-width', 'center');
     await expect(getComputedStyle(submit).justifyContent).toBe('center');
     await expect(submit.getBoundingClientRect().width).toBe(quick.getBoundingClientRect().width);
+  },
+};
+
+function FieldStack({ isDisabled = false }: { readonly isDisabled?: boolean }) {
+  return (
+    <Stage width="narrow-fill">
+      <MenuTrigger>
+        <Button
+          variant="field"
+          fieldName="Type"
+          icon="type"
+          {...(isDisabled ? {} : { iconRight: 'chevrons-up-down' as const })}
+          label="Short text, answer type"
+          isDisabled={isDisabled}
+        >
+          Short text
+        </Button>
+        <Menu label="Answer type">
+          <MenuItem id="short">Short text</MenuItem>
+          <MenuItem id="long">Long text</MenuItem>
+        </Menu>
+      </MenuTrigger>
+      <Field label="Question" isLabelHidden prefix="Question" prefixWidth="label" defaultValue="Company" />
+      <Field label="Placeholder" isLabelHidden prefix="Placeholder" prefixWidth="label" defaultValue="Acme" />
+    </Stage>
+  );
+}
+
+/**
+ * The field variant: a picker drawn as a Field's box among Fields (a form question's answer type), its `fieldName`
+ * inside at the width and with the divider of a Field's `prefixWidth="label"` name, so its value starts on their line.
+ * The whole box opens its menu, and wears a Field's accent edge while it is open.
+ */
+export const FieldVariant: Story = {
+  render: () => <FieldStack />,
+  play: async ({ canvas, userEvent }) => {
+    const type = canvas.getByRole('button', { name: 'Short text, answer type' });
+    const words = canvas.getByRole('textbox', { name: 'Question' });
+    const typeBox = type.getBoundingClientRect();
+    const wordsBox = words.parentElement?.getBoundingClientRect();
+    await expect(typeBox.left).toBe(wordsBox?.left);
+    await expect(typeBox.width).toBe(wordsBox?.width);
+    await expect(typeBox.height).toBe(wordsBox?.height);
+    await expect(type.querySelector('svg')?.getBoundingClientRect().left).toBe(words.getBoundingClientRect().left);
+    await userEvent.click(type);
+    await expect(type).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.keyboard('{Escape}');
+    await expect(type).toHaveFocus();
+  },
+};
+
+/** The field variant focused from the keyboard: a Field's accent edge and halo. */
+export const FieldFocused: Story = {
+  render: () => <FieldStack />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Short text, answer type' })).toHaveFocus();
+  },
+};
+
+/** The field variant disabled (a question whose type can't change): drawn as a read only Field, filled, no edge. */
+export const FieldDisabled: Story = {
+  render: () => <FieldStack isDisabled />,
+  play: async ({ canvas }) => {
+    const type = canvas.getByRole('button', { name: 'Short text, answer type' });
+    await expect(type).toBeDisabled();
+    await expect(getComputedStyle(type).opacity).toBe('1');
   },
 };
 

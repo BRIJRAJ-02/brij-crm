@@ -204,11 +204,14 @@
     min-inline-size: var(--size-column-min);
   }
 
-  /* A name inside the box: one width for every field in the stack, so their values line up. */
+  /* A name inside the box: one width for every field in the stack, so their values line up, closed by a hairline
+     divider with the box's gap on either side (the owner, 5 November 2026). Button's field variant draws the same. */
   .root[data-prefix-width='label'] .prefix[data-text] {
     flex: none;
     align-self: center;
     inline-size: var(--size-column-min);
+    padding-inline-end: var(--space-6);
+    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
   .lock {
