@@ -131,11 +131,10 @@ async function openBuilder() {
 describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
   it('shows the rule it has, offers only the targets below it, says where everyone else goes, in both themes', async () => {
     await openBuilder();
-    // A step with logic shows it under its header, always (T20).
-    // The rule it has, in Typeform's words: its conditions, then Jump to, then where everyone else goes.
-    await expect.element(page.getByText('Logic', { exact: true })).toBeVisible();
-    await expect.element(page.getByText('Otherwise, go to Step 3 · Your team')).toBeVisible();
-    const target = page.getByRole('button', { name: /Jump to$/ });
+    // A step with logic shows it, always (T20), as sentences (T41): "If … → …", then a visible Otherwise.
+    await expect.element(page.getByText('After this step', { exact: true })).toBeVisible();
+    await expect.element(page.getByText('Otherwise → Step 3 · Your team')).toBeVisible();
+    const target = page.getByRole('button', { name: /Jump to, Jump 1$/ });
     await userEvent.click(target);
     // Only forward: the step below it and the form's ending, never itself or the step above.
     expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent)).toEqual([
@@ -150,9 +149,8 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
 
   it('Add logic is one click to a rule that changes something: the step’s choice question, past the next step', async () => {
     await openBuilder();
-    // Add logic is in the step header's menu (T20).
-    await userEvent.click(page.getByRole('button', { name: 'Step 2 · Your budget options' }));
-    await userEvent.click(page.getByRole('menuitem', { name: 'Add logic' }));
+    // Once a step has a rule, + Add a rule sits under its rules (the menu doesn't repeat it).
+    await userEvent.click(page.getByRole('button', { name: 'Add a rule' }));
     // A second rule, ready filled: Budget is Under $1k. It never jumps to the next step, where everyone goes anyway
     // (a rule that did nothing): with Step 3 next, it goes to the form's ending.
     await expect.poll(() => document.querySelectorAll('[aria-label="Remove jump 2"]').length).toBe(1);

@@ -39,7 +39,7 @@ import { strings as questionStrings } from '../questions/strings.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { afterPageProblem } from './after-page.ts';
 import { isRedirectAddress, mintEndingId } from './draft.ts';
-import { readyRule } from './logic.ts';
+import { logicProblems, problemsAt, problemWords, readyRule } from './logic.ts';
 import { strings } from './strings.ts';
 
 /** The default line's id, for a link to it (the Flow's Edit, `?question=after`). */
@@ -98,6 +98,8 @@ export function AfterSendSection(props: AfterSendSectionProps) {
   const endingRuled = new Set(rules.flatMap((rule) => (rule.then.kind === 'ending' ? [rule.then.endingId] : [])));
   const loose = endings.filter((ending) => !endingRuled.has(ending.id));
   const ready = readyRule(draft.questions, facts);
+  // What is wrong with each rule (T41): a value no answer fits, a question gone, an earlier rule winning.
+  const issues = logicProblems(draft);
   const isRulesFull = rules.length >= ROUTING_RULES_MAX;
   const isEndingsFull = endings.length >= FORM_ENDINGS_MAX;
   const addRef = useRef<HTMLButtonElement>(null);
@@ -375,6 +377,11 @@ export function AfterSendSection(props: AfterSendSectionProps) {
     return (
       <Card key={rule.id}>
         {ending !== undefined && problem?.endingId === ending.id && <Callout tone="danger">{problem.message}</Callout>}
+        {problemsAt(issues, { kind: 'rule', ruleId: rule.id }).map((issue) => (
+          <Callout key={issue.kind} tone="warning">
+            {problemWords(issue)}
+          </Callout>
+        ))}
         <SettingsStack variant="nested">
           <ConditionLines
             value={rule.when}

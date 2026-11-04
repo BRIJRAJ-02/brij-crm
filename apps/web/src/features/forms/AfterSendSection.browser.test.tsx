@@ -165,6 +165,22 @@ describe('After they send (T39)', () => {
     await expect.poll(() => latest.routing.rules.length).toBe(1);
   });
 
+  it('says on the card when a rule can never match, and when an earlier rule wins (T41)', async () => {
+    const when = (value: string) => ({ join: 'all' as const, rules: [{ key: 'budget', op: 'is' as const, value }] });
+    await show({
+      ...DRAFT,
+      routing: {
+        rules: [
+          { id: 'a', when: when('Under $1k'), then: { kind: 'redirect', url: 'https://a.example' } },
+          { id: 'b', when: when('Under $1k'), then: { kind: 'redirect', url: 'https://b.example' } },
+          { id: 'c', when: when('Over $1m'), then: { kind: 'redirect', url: 'https://c.example' } },
+        ],
+      },
+    });
+    await expect.element(page.getByText(/Rule 1 catches these people first/)).toBeVisible();
+    await expect.element(page.getByText(/This can never match/)).toBeVisible();
+  });
+
   it('shows the score line once a question gives points, with where to save it', async () => {
     await show({
       ...DRAFT,

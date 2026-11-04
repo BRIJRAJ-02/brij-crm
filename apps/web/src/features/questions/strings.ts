@@ -140,7 +140,16 @@ export const strings = {
   // Logic, in the words Tally and Typeform use (T5, T15, 4 November 2026): one way to say "show this only if", one
   // way to say "after this, jump to".
   /** The quiet heading over a step's jumps. */
-  logic: 'Logic',
+  logic: 'After this step',
+  /** A rule's arrow, between its conditions and where it sends people. */
+  thenArrow: '→',
+  pickWhere: 'Pick where',
+  /** The Otherwise lines (T41): where everyone else goes, always said. */
+  otherwiseLine: (where: string) => `Otherwise → ${where}`,
+  otherwiseSkipQuestion: 'Otherwise → this question is skipped',
+  otherwiseSkipStep: 'Otherwise → this step is skipped',
+  /** One more rule under a step's rules. */
+  addRule: 'Add a rule',
   /** One click: a ready rule, If <first question> is <first option>, jump to <next step>. */
   addLogic: 'Add logic',
   /** One click: a ready condition, on the first earlier question. */

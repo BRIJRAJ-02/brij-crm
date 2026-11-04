@@ -76,7 +76,7 @@ export const strings = {
   clearShowWhen: 'Always show it',
   noEarlier: 'Add an earlier question first.',
   readsLater: 'A condition uses a later question. Pick another, or remove it.',
-  shownWhen: (line: string) => `Shows when ${line}`,
+  shownWhen: (line: string) => `Shown if ${line}`,
 
   // Rules
   routing: 'Routing',

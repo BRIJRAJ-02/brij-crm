@@ -71,6 +71,7 @@ import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { ReadyDialog } from './PublishDialog.tsx';
 import { AFTER_ROW, AfterSendSection } from './AfterSendSection.tsx';
+import { dropQuestionLogic, followChoices, logicProblems, logicUses, problemsAt, problemWords } from './logic.ts';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
 import { splitIntoSteps } from '../questions/steps.ts';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
@@ -259,6 +260,8 @@ export function FormEditor(props: FormEditorProps) {
   }
 
   const isPublished = form.liveVersionNumber !== undefined;
+  // What is wrong with the logic (T41), said where each rule is and counted on the Logic button.
+  const logicIssues = useMemo(() => logicProblems(draft), [draft]);
   // One title (critique c, blocker 2): a draft whose headline nobody wrote yet takes the form's name, once, so a
   // template's form reads "Lead qualification", not the stock headline.
   if (!isPublished && canManage && form.name !== strings.untitledForm && draft.headline === DEFAULT_HEADLINE) {
@@ -892,7 +895,79 @@ export function FormEditor(props: FormEditorProps) {
               }}
               questions={draft.questions}
               onChange={(update) => {
-                setDraft((before) => withQuestions(before, update(before.questions)));
+                // Rules follow their choices (T41): a renamed choice is renamed in them, a removed one leaves them,
+                // said once with Undo when a rule went with it.
+                const snapshot = draft;
+                const dropped = followChoices(
+                  snapshot.questions,
+                  withQuestions(snapshot, update(snapshot.questions)),
+                ).dropped;
+                setDraft(
+                  (before) => followChoices(before.questions, withQuestions(before, update(before.questions))).document,
+                );
+                if (dropped > 0) {
+                  toasts.toast({
+                    tone: 'info',
+                    message: strings.choiceRulesDropped(dropped),
+                    action: {
+                      label: strings.undo,
+                      onAction: () => {
+                        setDraft(snapshot);
+                      },
+                    },
+                  });
+                }
+              }}
+              logicWarnings={(place) => problemsAt(logicIssues, place).map(problemWords)}
+              onRemoveUsed={(question, index) => {
+                const uses = logicUses(draft, question.key);
+                if (uses === 0) return false;
+                const snapshot = draft;
+                setDraft(
+                  (before) =>
+                    dropQuestionLogic(
+                      withQuestions(
+                        before,
+                        before.questions.filter((each) => each.id !== question.id),
+                      ),
+                      question.key,
+                    ).document,
+                );
+                toasts.toast({
+                  tone: 'info',
+                  message: strings.deletedWithRules(
+                    question.label === '' ? questionStrings.untitledQuestion : question.label,
+                    uses,
+                  ),
+                  action: {
+                    label: strings.undo,
+                    onAction: () => {
+                      setDraft((before) =>
+                        before.questions.some((each) => each.id === question.id)
+                          ? before
+                          : {
+                              ...before,
+                              questions: [
+                                ...before.questions.slice(0, index),
+                                question,
+                                ...before.questions.slice(index),
+                              ],
+                              steps: snapshot.steps,
+                              routing: snapshot.routing,
+                              ...(snapshot.endings === undefined ? {} : { endings: snapshot.endings }),
+                            },
+                      );
+                      // Show only if on the other questions comes back with the question.
+                      setDraft((before) => ({
+                        ...before,
+                        questions: before.questions.map(
+                          (each) => snapshot.questions.find((was) => was.id === each.id) ?? each,
+                        ),
+                      }));
+                    },
+                  },
+                });
+                return true;
               }}
               max={FORM_QUESTIONS_MAX}
               holder={questionStrings.formHolder}

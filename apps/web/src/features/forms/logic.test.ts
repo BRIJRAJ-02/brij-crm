@@ -2,7 +2,15 @@
 import type { FormDocument, FormQuestion } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import { questionFacts } from '../routing/facts.ts';
-import { dropQuestionLogic, followChoices, logicUses, readyRule, ruleQuestion } from './logic.ts';
+import {
+  dropQuestionLogic,
+  followChoices,
+  logicCount,
+  logicProblems,
+  logicUses,
+  readyRule,
+  ruleQuestion,
+} from './logic.ts';
 
 const q = (id: string, answerType: FormQuestion['answerType'], label: string, choices?: string[]): FormQuestion => ({
   id,
@@ -127,5 +135,99 @@ describe('rules follow their choices (T41)', () => {
     const { document, dropped } = dropQuestionLogic(before, 'budget');
     expect(dropped).toBe(3);
     expect(document.routing.rules).toEqual([]);
+  });
+});
+
+const is = (key: string, value: string | string[], op: 'is' | 'is_any_of' = 'is') => ({
+  join: 'all' as const,
+  rules: [{ key, op, value }],
+});
+const to = (url: string) => ({ kind: 'redirect' as const, url });
+
+describe('finding what is wrong with the logic (T41)', () => {
+  it('says a rule whose value is none of the choices never matches, and one reading a gone question', () => {
+    const problems = logicProblems(
+      doc([BUDGET], {
+        routing: {
+          rules: [
+            { id: 'a', when: is('budget', 'Under $2k'), then: to('https://a.example') },
+            { id: 'b', when: is('gone', 'x'), then: to('https://b.example') },
+          ],
+        },
+      }),
+    );
+    expect(problems).toEqual([
+      { kind: 'never', place: { kind: 'rule', ruleId: 'a' } },
+      { kind: 'gone', place: { kind: 'rule', ruleId: 'b' } },
+    ]);
+  });
+
+  it('says one question asked to be two things at once never matches, but a multi select may be', () => {
+    const two = { join: 'all' as const, rules: [...is('budget', '$5k').rules, ...is('budget', '$10k+').rules] };
+    expect(
+      logicProblems(doc([BUDGET], { routing: { rules: [{ id: 'a', when: two, then: to('https://a.example') }] } })),
+    ).toEqual([{ kind: 'never', place: { kind: 'rule', ruleId: 'a' } }]);
+    const multi = { ...BUDGET, answerType: 'multi_select' as const };
+    expect(
+      logicProblems(doc([multi], { routing: { rules: [{ id: 'a', when: two, then: to('https://a.example') }] } })),
+    ).toEqual([]);
+  });
+
+  it('shows the conflict: the same answers twice, the first wins, and a rule after one that always matches', () => {
+    const required = { ...NOTES, required: true };
+    const problems = logicProblems(
+      doc([BUDGET, required], {
+        routing: {
+          rules: [
+            { id: 'a', when: is('budget', '$5k'), then: to('https://a.example') },
+            { id: 'b', when: is('budget', '$5k'), then: to('https://b.example') },
+            {
+              id: 'c',
+              when: { join: 'all', rules: [{ key: 'notes', op: 'is_answered' }] },
+              then: to('https://c.example'),
+            },
+            { id: 'd', when: is('budget', '$10k+'), then: to('https://d.example') },
+          ],
+        },
+      }),
+    );
+    expect(problems).toEqual([
+      { kind: 'shadowed', place: { kind: 'rule', ruleId: 'b' }, winner: 1 },
+      { kind: 'shadowed', place: { kind: 'rule', ruleId: 'd' }, winner: 3 },
+    ]);
+  });
+
+  it('finds an unreachable step, a jump back up the form, and a required question some never see', () => {
+    const required = { ...NOTES, required: true, showWhen: is('budget', '$5k') };
+    const team = q('team', 'short_text', 'Team');
+    const problems = logicProblems(
+      doc([BUDGET, team, required], {
+        layout: 'steps',
+        steps: [
+          {
+            id: 's1',
+            startsAt: 'budget',
+            jumps: [{ when: is('budget', ['Under $1k', '$5k', '$10k+'], 'is_any_of'), to: { step: 's3' } }],
+          },
+          { id: 's2', startsAt: 'team', jumps: [{ when: is('budget', '$5k'), to: { step: 's1' } }] },
+          { id: 's3', startsAt: 'notes' },
+        ],
+      }),
+    );
+    expect(problems).toEqual(
+      expect.arrayContaining([
+        { kind: 'hiddenRequired', place: { kind: 'question', questionId: 'notes' } },
+        { kind: 'unreachable', place: { kind: 'step', stepId: 's2' } },
+        { kind: 'backward', place: { kind: 'jump', stepId: 's2', index: 0 } },
+      ]),
+    );
+  });
+
+  it('finds nothing in a form whose logic is sound, and counts every rule', () => {
+    const sound = doc([BUDGET, { ...NOTES, showWhen: is('budget', '$5k') }], {
+      routing: { rules: [{ id: 'a', when: is('budget', 'Under $1k'), then: to('https://a.example') }] },
+    });
+    expect(logicProblems(sound)).toEqual([]);
+    expect(logicCount(sound)).toBe(2);
   });
 });

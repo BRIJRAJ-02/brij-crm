@@ -692,6 +692,17 @@ export const strings = {
   countdownInLine: 'at once',
   countdownAfterInLine: (seconds: number) => `after ${String(seconds)} seconds`,
   ifWord: 'If',
+  /** A used question deleted with the rules that read it (T41), one Undo for both. */
+  deletedWithRules: (label: string, count: number) =>
+    `Deleted “${label}” and the ${count === 1 ? 'rule' : `${String(count)} rules`} that read it.`,
+  /** A choice removed that rules named (T41). */
+  choiceRulesDropped: (count: number) =>
+    count === 1
+      ? 'A rule named that choice, so it went too.'
+      : `${String(count)} rules named that choice, so they went too.`,
+  /** The Logic count in the Questions header (T41): every rule, and how many need a look. */
+  logicButton: (count: number) => `Logic · ${String(count)}`,
+  logicButtonWarn: (count: number, warnings: number) => `Logic · ${String(count)}, ${String(warnings)} to check`,
   /** A thank-you message only a step's jump reaches: said, with where its rule is changed. */
   sentByStep: (step: string) => `${step} sends people here`,
   nothingSendsHere: 'Nothing sends people here yet',
