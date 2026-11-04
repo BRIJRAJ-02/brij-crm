@@ -21,6 +21,7 @@ import {
 import { useState } from 'react';
 import { strings } from './strings.ts';
 import { dayKey, dayLabels, offerWords, rangeLabel, timeLabel, zoneName } from './time.ts';
+import type { TicketKeeper } from './ticket.ts';
 
 /** The most visitor lines one chat sends (the API's cap). */
 const MAX_LINES = 40;
@@ -104,6 +105,8 @@ export interface ChatPanelProps {
   readonly onMemory: (memory: ChatMemory) => void;
   /** When the page loaded, for the bot checks a booking passes. */
   readonly startedAt: number;
+  /** The page's fill ticket (B-04): the turn that books carries it, as the details form's booking does. */
+  readonly tickets: TicketKeeper;
   /** The chat settled on another length: the rail follows. */
   readonly onDuration: (minutes: number) => void;
   readonly onBooked: (manageToken: string) => void;
@@ -220,6 +223,7 @@ export function ChatPanel(props: ChatPanelProps) {
     hour12,
     duration,
     startedAt,
+    tickets,
     memory,
     onMemory,
     onDuration,
@@ -443,19 +447,23 @@ export function ChatPanel(props: ChatPanelProps) {
     }
     setWaiting(true);
     setError(undefined);
-    client
-      .chat(page.publicKey, {
-        conversationId,
-        duration,
-        timeZone: zone,
-        hour12,
-        messages: said,
-        startedAt,
-        ...(state.guests.length === 0 ? {} : { guests: [...state.guests] }),
-        ...(state.note === '' ? {} : { note: state.note }),
-        ...(Object.keys(state.answers).length === 0 ? {} : { answers: { ...state.answers } }),
-        ...(handoff === undefined ? {} : { p: handoff }),
-      })
+    tickets
+      .peek()
+      .then((filled) =>
+        client.chat(page.publicKey, {
+          conversationId,
+          duration,
+          timeZone: zone,
+          hour12,
+          messages: said,
+          startedAt,
+          ...(state.guests.length === 0 ? {} : { guests: [...state.guests] }),
+          ...(state.note === '' ? {} : { note: state.note }),
+          ...(Object.keys(state.answers).length === 0 ? {} : { answers: { ...state.answers } }),
+          ...(handoff === undefined ? {} : { p: handoff }),
+          ...(filled === undefined ? {} : { ticket: filled }),
+        }),
+      )
       .then(
         (reply) => {
           setWaiting(false);

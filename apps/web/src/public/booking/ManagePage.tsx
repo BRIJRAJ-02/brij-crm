@@ -62,7 +62,7 @@ export interface ManagePageProps {
 type Loaded =
   | { readonly state: 'loading' }
   | { readonly state: 'ready'; readonly booking: PublicManagedBooking }
-  | { readonly state: 'gone' | 'failed' };
+  | { readonly state: 'gone' | 'failed' | 'busy' };
 
 /** How far ahead Move looks: three weeks, as the timefix guest page does. */
 const MOVE_DAYS = 21;
@@ -139,14 +139,30 @@ export function ManagePage({
     if (initial !== undefined && attempt === 0) return;
     client.managed(token).then(
       (booking) => setLoaded({ state: 'ready', booking }),
-      (error: unknown) => setLoaded({ state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' }),
+      (error: unknown) =>
+        setLoaded({
+          state: !isDataError(error)
+            ? 'failed'
+            : error.code === 'NOT_FOUND'
+              ? 'gone'
+              : // Too many reads from this address for a moment (B-18): busy, not broken.
+                error.code === 'RATE_LIMITED'
+                ? 'busy'
+                : 'failed',
+        }),
     );
   }, [client, token, attempt, initial]);
   const titleOf = (state: Loaded): string | undefined => {
     if (state.state !== 'ready') {
       if (state.state === 'loading') return undefined;
-      return state.state === 'gone' ? strings.linkGone : strings.failedTitle;
+      return state.state === 'gone'
+        ? strings.linkGone
+        : state.state === 'busy'
+          ? strings.busyTitle
+          : strings.failedTitle;
     }
+    // A long ended booking's link (B-13): only its time and title are answered, so it says it ended, calmly.
+    if (state.booking.aged === true) return strings.titles.ended;
     if (state.booking.state === 'cancelled') return strings.titles.cancelled;
     if (state.booking.state === 'past') return strings.titles.past;
     return isWelcome && notice === undefined ? strings.titles.welcome : strings.titles.confirmed;
@@ -161,9 +177,9 @@ export function ManagePage({
   if (loaded.state !== 'ready') {
     return (
       <BookingMessage
-        title={loaded.state === 'gone' ? strings.linkGone : strings.failedTitle}
+        title={title ?? strings.failedTitle}
         page={brandPage}
-        {...(loaded.state === 'failed'
+        {...(loaded.state !== 'gone'
           ? {
               onRetry: () => {
                 setLoaded({ state: 'loading' });
@@ -172,7 +188,11 @@ export function ManagePage({
             }
           : {})}
       >
-        {loaded.state === 'failed' ? strings.failedText : strings.linkGoneText}
+        {loaded.state === 'gone'
+          ? strings.linkGoneText
+          : loaded.state === 'busy'
+            ? strings.busyText
+            : strings.failedText}
       </BookingMessage>
     );
   }
@@ -256,6 +276,7 @@ export function ManagePage({
       key={`${booking.start}|${booking.state}`}
       placement={placement}
       state={booking.state}
+      {...(booking.aged === true ? { heading: strings.titles.ended } : {})}
       isWelcome={isWelcome && notice === undefined}
       hostName={booking.hostName}
       date={{ weekday: parts.weekday ?? '', day: parts.day ?? '', month: parts.month ?? '' }}
@@ -264,17 +285,22 @@ export function ManagePage({
       relative={relativeLabel(booking.start, now(), zone, locale)}
       // The summary leads (spec 0058, AC-19): what, when and who, from the booking already loaded.
       summary={{ what: booking.title, who: strings.withHost(booking.hostName) }}
-      facts={[
-        { term: strings.who, ...who },
-        ...(booking.guests.length === 0
+      // An aged link's guest details come back blank (B-13): no Who, guests, note or reason, never empty rows.
+      facts={
+        booking.aged === true
           ? []
-          : [{ term: changeStrings.guestsTerm, description: booking.guests.join(', ') }]),
-        ...(booking.videoUrl === undefined ? [{ term: strings.where, description: whereOf(booking) }] : []),
-        ...(booking.note === undefined ? [] : [{ term: strings.yourNote, description: booking.note }]),
-        ...(booking.cancelReason === undefined
-          ? []
-          : [{ term: changeStrings.reason, description: booking.cancelReason }]),
-      ]}
+          : [
+              { term: strings.who, ...who },
+              ...(booking.guests.length === 0
+                ? []
+                : [{ term: changeStrings.guestsTerm, description: booking.guests.join(', ') }]),
+              ...(booking.videoUrl === undefined ? [{ term: strings.where, description: whereOf(booking) }] : []),
+              ...(booking.note === undefined ? [] : [{ term: strings.yourNote, description: booking.note }]),
+              ...(booking.cancelReason === undefined
+                ? []
+                : [{ term: changeStrings.reason, description: booking.cancelReason }]),
+            ]
+      }
       {...(booking.videoUrl === undefined ? {} : { joinUrl: booking.videoUrl })}
       brand={{
         href: poweredByHref(brandPage, booking.workspaceSlug),

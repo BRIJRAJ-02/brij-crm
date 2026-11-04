@@ -237,7 +237,8 @@ async function bookingNext(
   if (page === undefined) return undefined;
   const token = sign?.({ submissionId, bookingPageId });
   // The page's own address: `/<handle>/<slug>` once its owner has a handle, else `/b/<key>`.
-  const url = `${await pagePath(tx, page)}${token === undefined ? '' : `?p=${encodeURIComponent(token)}`}`;
+  // The token rides in the fragment (security review, 4 Nov 2026): no server, edge or request log keeps it.
+  const url = `${await pagePath(tx, page)}${token === undefined ? '' : `#p=${encodeURIComponent(token)}`}`;
   return { kind: 'booking', url, countdownSeconds, text };
 }
 

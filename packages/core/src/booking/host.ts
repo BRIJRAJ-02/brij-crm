@@ -222,6 +222,8 @@ export async function bookAsHost(
           .returning({ id: bookings.id });
         if (row === undefined) throw new Error('The booking was not stored.');
         bookingId = row.id;
+        // Every other tab's Bookings reads again (B-17); this tab skips its own echo by the write's mutation id.
+        context.record({ bookings: [row.id] });
         if (host !== actor) {
           await writeAudit(tx, scope.workspaceId, scope.actor, {
             action: 'booking.changed_for',

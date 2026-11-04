@@ -47,3 +47,4 @@ and the way to book another time.
 - `placement="card"`: the booking page's last step, drawn inside its own BookingFrame card right after Confirm (critic C1), with no ground, no card of its own and no foot, as a `section` with an `h2` under the frame's `h1`. `placement="page"` (the default) is the guest's own page, as before.
 - "Tomorrow morning" (`relative`) reads quietly in the secondary text colour, not the link colour it isn't (critic A26).
 - The pace comes from the `duration-public-*` tokens.
+- `heading` replaces the state's own heading where the page knows more: a long ended booking's link reads "This booking ended" (B-13), with its time and title and no guest details, which the API no longer sends.

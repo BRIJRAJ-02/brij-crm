@@ -19,7 +19,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createApp } from '../app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
-import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts';
+import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices, withBookingTicket } from '../testing.ts';
 import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace, refusalsOf } from '../../test/workspace.ts';
 import { createMemoryLimiter } from './limits.ts';
@@ -62,17 +62,18 @@ afterAll(async () => {
 });
 
 /** An anonymous visitor's request to `/api/public/<path>`, through the edge, from a fresh address. */
-function visit(path: string, body?: unknown) {
+function visit(path: string, body?: unknown, headers: Record<string, string> = {}) {
   return app.request(`/api/public/${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: {
+      ...headers,
       [EDGE_HEADER]: TEST_EDGE_SECRET,
       [ORIGIN_HEADER]: APP_URL,
       origin: APP_URL,
       'x-forwarded-for': newIp(),
       'content-type': 'application/json',
     },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...(body === undefined ? {} : { body: JSON.stringify(withBookingTicket(path, body)) }),
   });
 }
 
@@ -327,7 +328,8 @@ describe('a team page’s routing rules and an anonymous visitor (spec 0043, spe
       }),
     )) as { readonly next: { readonly kind: string; readonly url?: string } };
     expect(sent.next.kind).toBe('booking');
-    const token = new URL(sent.next.url ?? '', APP_URL).searchParams.get('p') ?? '';
+    // The hand off rides in the address's fragment, which no request log keeps (security review, 4 Nov 2026).
+    const token = new URLSearchParams(new URL(sent.next.url ?? '', APP_URL).hash.slice(1)).get('p') ?? '';
     // The hand off is signed, not secret: it holds the submission, the page and its expiry, nothing of the rule.
     const [, payload = ''] = token.split('.');
     expect(Object.keys(JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as object).sort()).toEqual([
@@ -335,14 +337,18 @@ describe('a team page’s routing rules and an anonymous visitor (spec 0043, spe
       'e',
       's',
     ]);
-    const p = encodeURIComponent(token);
+    // The page's reads send it in a header, never their own address.
+    const handoff = { 'x-crm-handoff': token };
     // Handed off, the page offers only the host the form's rule chose: Kim's afternoon.
     const routed = slotsOf(
-      await answered('handed off slots', visit(`booking/${page.publicKey}/slots?${ONE_DAY}&duration=30&tz=UTC&p=${p}`)),
+      await answered(
+        'handed off slots',
+        visit(`booking/${page.publicKey}/slots?${ONE_DAY}&duration=30&tz=UTC`, undefined, handoff),
+      ),
     );
     expect(routed.length).toBeGreaterThan(0);
     expect(routed.every((slot) => slot.start >= at('13:00'))).toBe(true);
-    expect(await answered('prefill', visit(`booking/${page.publicKey}/prefill?p=${p}`))).toEqual({
+    expect(await answered('prefill', visit(`booking/${page.publicKey}/prefill`, undefined, handoff))).toEqual({
       name: 'Lin Visitor',
       email: 'lin@visitor.example',
     });

@@ -68,6 +68,11 @@ export interface BookingReceiptProps {
    * never swaps the page for another: no ground, no card of its own and no foot, which the frame already has.
    */
   readonly placement?: 'page' | 'card';
+  /**
+   * The heading in place of the state's own, for a state the page knows more about: a long ended booking's link
+   * ("This booking ended", B-13), whose guest details are no longer kept.
+   */
+  readonly heading?: string;
 }
 
 /**
@@ -95,6 +100,7 @@ export function BookingReceipt({
   notice,
   brand,
   placement = 'page',
+  heading: headingText,
 }: BookingReceiptProps) {
   const isInCard = placement === 'card';
   const heading = useRef<HTMLHeadingElement>(null);
@@ -145,7 +151,7 @@ export function BookingReceipt({
             </span>
           </span>
           <Heading ref={heading} id={titleId} tabIndex={-1} className={styles.title}>
-            {title}
+            {headingText ?? title}
           </Heading>
           {/* One warm line, right after booking only: the page is a confirmation, not a form (AC-21). */}
           {isLive && isWelcome && <p className={styles.lead}>{strings.welcomeLine(hostName)}</p>}

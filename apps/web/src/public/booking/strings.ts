@@ -175,6 +175,9 @@ export const strings = {
   notFoundText: 'There’s nothing at this address.',
   failedTitle: 'Couldn’t reach this page',
   failedText: 'Check your connection, then try again.',
+  /** Refused 429 (B-18): too many reads from this address for a moment, not a broken page. */
+  busyTitle: 'Busy, try again in a moment',
+  busyText: 'Lots of people are opening this page right now.',
   retry: 'Try again',
   // The visitor's calendar (spec 0028).
   showAllTimes: 'Show all times',
@@ -219,6 +222,8 @@ export const strings = {
     confirmed: 'Your booking',
     cancelled: 'This booking was cancelled',
     past: 'This booking has passed',
+    /** A long ended booking's link (B-13): its details are no longer kept. */
+    ended: 'This booking ended',
   },
   marks: { confirmed: 'Confirmed', cancelled: 'Cancelled', past: 'Finished' },
   who: 'Who',

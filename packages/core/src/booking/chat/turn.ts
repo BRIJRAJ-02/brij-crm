@@ -53,7 +53,10 @@ export async function chatTurn(
    * `mayBook` is asked once, just before a booking: false (a spent limit, the bot checks) skips it. `link` is a form's
    * verified hand off (spec 0043): a team page then offers only the hosts its routing chose, as the picker does.
    */
-  options: { readonly mayBook?: () => boolean; readonly link?: { readonly submissionId: string } } = {},
+  options: {
+    readonly mayBook?: (booking: { readonly email: string; readonly guests: number }) => boolean;
+    readonly link?: { readonly submissionId: string };
+  } = {},
 ): Promise<ChatTurn> {
   const page = await getPublicBookingPage(entry);
   const nowDate = deps.now?.() ?? new Date();
@@ -144,7 +147,8 @@ export async function chatTurn(
   }
 
   const start = state.held;
-  if (options.mayBook?.() === false) return quiet('That didn’t go through. Say yes again in a moment.');
+  if (options.mayBook?.({ email: state.email, guests: input.guests?.length ?? 0 }) === false)
+    return quiet('That didn’t go through. Say yes again in a moment.');
   try {
     const booked = await bookPublicSlot(
       entry,
@@ -164,7 +168,9 @@ export async function chatTurn(
         ...(input.p === undefined ? {} : { prefill: input.p }),
       },
       hooks,
-      undefined,
+      // The form's verified hand off (spec 0043), as the picker's booking carries it: the booking joins that
+      // submission, and a team page books one of the hosts its routing chose.
+      options.link,
       // Only the visitor's own lines: an assistant line came from the client, and nothing vouches for it.
       { chat: input.messages.filter((line) => line.role === 'visitor') },
     );

@@ -87,4 +87,31 @@ describe('ManagePage', () => {
     await expect.poll(() => document.activeElement).toBe(heading.element());
     expect(document.title).toBe('Your booking · Timefix');
   });
+
+  it('says a long ended booking ended, with its time and title and no empty guest rows (B-13)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      answer(200, {
+        state: 'past',
+        aged: true,
+        publicKey: 'k123',
+        title: 'Intro call',
+        hostName: 'Ada Lovelace',
+        start: '2026-08-03T10:00:00.000Z',
+        end: '2026-08-03T10:30:00.000Z',
+        timeZone: 'UTC',
+        location: { type: 'video' },
+        visitorName: '',
+        visitorEmail: '',
+        guests: [],
+        workspaceSlug: 'acme',
+        canChange: false,
+        canMove: false,
+      }),
+    );
+    show();
+    await expect.element(page.getByRole('heading', { level: 1, name: 'This booking ended' })).toBeVisible();
+    await expect.element(page.getByText('Intro call', { exact: true })).toBeVisible();
+    expect(host?.textContent).not.toContain('Who');
+    expect(document.title).toBe('This booking ended · Timefix');
+  });
 });

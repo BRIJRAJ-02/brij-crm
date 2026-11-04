@@ -1,9 +1,10 @@
 // Bookings (spec 0025, AC-646): one held list per workspace and tab
 // (upcoming, past or cancelled), and one held calendar read per workspace and
 // range (the week view: its bookings and the reader's own calendar events),
-// read while a screen retains them. Bookings are settings, not CRM data, so
-// no change event says one arrived yet (a `bookings` event kind is the
-// follow-up): while held, each is kept current by `fresh.ts`, read again
+// read while a screen retains them. A `bookings` change event (B-17, a
+// booking made, moved, cancelled or answered anywhere) reads the held ones
+// again in place (`live.ts`, `refreshHeld`). Besides it, while held, each is
+// kept current by `fresh.ts`, read again
 // whenever the window comes back into focus or the tab becomes visible, and
 // every minute while the page shows and live updates are paused or off, so a
 // booking made on a public page, or a meeting a calendar sync brought, shows

@@ -83,6 +83,27 @@ export const InTheBookingCard: Story = {
   },
 };
 
+/** A long ended booking's link (B-13): its own heading, the time and title, and no guest details, which aren't kept. */
+export const Ended: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    state: 'past',
+    isWelcome: false,
+    heading: 'This booking ended',
+    facts: [],
+    again: { label: 'Book again', href: '/b/abc' },
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'This booking ended' })).toHaveFocus();
+    await expect(canvas.queryByText('Who')).toBeNull();
+  },
+};
+
 /** Cancelled: the time struck through, and a way to book again. */
 export const Cancelled: Story = {
   args: {
