@@ -26,6 +26,11 @@
     font: var(--text-label);
   }
 
+  /* A failed save is news to act on: the secondary colour, which holds its contrast on any card. */
+  .line[data-failed] {
+    color: var(--text-secondary);
+  }
+
   .saved {
     display: inline-flex;
     gap: var(--space-4);

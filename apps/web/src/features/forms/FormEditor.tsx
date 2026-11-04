@@ -816,6 +816,7 @@ export function FormEditor(props: FormEditorProps) {
                         { ...before, layout },
                         splitIntoSteps({ questions: before.questions, steps: before.steps }, () => data.forms.newId(), {
                           details: questionStrings.yourDetails,
+                          rest: questionStrings.aboutYou,
                         }),
                       )
                     : { ...before, layout },

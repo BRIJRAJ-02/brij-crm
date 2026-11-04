@@ -601,6 +601,7 @@ function AfterDefault({
       <SegmentedControl
         label={strings.afterEveryone}
         size="compact"
+        isFitted
         segments={[
           { value: 'message', label: strings.afterKindThanks },
           { value: 'booking', label: strings.afterKindBooking },
@@ -791,6 +792,7 @@ function RouteFields({ rule, usable, pageList, isReadOnly, showGaps, onChange }:
           label={strings.afterEveryone}
           isLabelVisible={false}
           size="compact"
+          isFitted
           segments={[
             { value: 'book', label: strings.afterKindBooking },
             { value: 'redirect', label: strings.afterKindLink },
@@ -925,6 +927,7 @@ function EndingFields({ ending, draft, pages, isReadOnly, isJustAdded, showGaps,
       <SegmentedControl
         label={strings.endingButton}
         size="compact"
+        isFitted
         segments={[
           { value: 'none', label: strings.endingButtonNone },
           { value: 'url', label: strings.endingButtonUrl },

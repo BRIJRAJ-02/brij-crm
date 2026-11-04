@@ -162,6 +162,16 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  @media (hover: hover) and (pointer: fine) {
+    .stepToggle {
+      transition: background-color var(--duration-hover) var(--ease-hover);
+    }
+
+    .stepToggle:hover {
+      background: var(--surface-hover);
+    }
+  }
+
   .stepName {
     flex: none;
     color: var(--text);
@@ -231,9 +241,14 @@
     content: '';
   }
 
-  .gap:hover,
   .gap:focus-within {
     opacity: 1;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .gap:hover {
+      opacity: 1;
+    }
   }
 
   /* Touch has no hover: the caller offers the same action in an open card's footer, so the gap stays out of the way. */
@@ -464,7 +479,8 @@
 
   @media (forced-colors: active) {
     .row[data-focus-visible],
-    .toggle[data-focus-visible] {
+    .toggle[data-focus-visible],
+    .stepToggle[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
     }
 

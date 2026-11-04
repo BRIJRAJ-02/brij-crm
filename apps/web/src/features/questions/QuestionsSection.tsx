@@ -491,7 +491,10 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     const facts = questionFacts(readable);
     const jumps = step?.jumps ?? [];
     // The lead header has no break yet, so every break is below it: no step's id matches, and all are offered.
-    const choices = jumpChoices(flow, breaks.endings ?? [], isLead ? '' : stepId);
+    // A ready rule never jumps to where everyone goes anyway (the next step): that would be a rule that does
+    // nothing (UX review). It takes the step after, or an ending, or makes an ending to go to.
+    const offered = jumpChoices(flow, breaks.endings ?? [], isLead ? '' : stepId);
+    const choices = offered.slice(offered[0]?.id.startsWith('step:') === true ? 1 : 0);
     if (facts.length === 0 || jumps.length >= STEP_JUMPS_MAX) return undefined;
     if (choices.length === 0 && breaks.onAddEnding === undefined) return undefined;
     return () => {

@@ -219,7 +219,11 @@ export function isContactQuestion(question: Pick<FormQuestion, 'answerType' | 'l
  * page has a header to rename. A form with no breaks of its own is split after its contact details (a leading run of
  * name, email and phone, titled "Your details"), else in the middle; a form of one question stays one step.
  */
-export function splitIntoSteps(flow: Flow, newId: () => string, words: { readonly details: string }): Flow {
+export function splitIntoSteps(
+  flow: Flow,
+  newId: () => string,
+  words: { readonly details: string; readonly rest: string },
+): Flow {
   const first = flow.questions[0];
   if (first === undefined) return flow;
   const resolved = stepsOfBreaks(flow.questions, flow.steps);
@@ -236,7 +240,9 @@ export function splitIntoSteps(flow: Flow, newId: () => string, words: { readonl
   const second = flow.questions[cut];
   const steps: FormStep[] = [
     { id: newId(), startsAt: first.id, ...(contactRun > 0 && second !== undefined ? { title: words.details } : {}) },
-    ...(second === undefined ? [] : [{ id: newId(), startsAt: second.id }]),
+    ...(second === undefined
+      ? []
+      : [{ id: newId(), startsAt: second.id, ...(contactRun > 0 ? { title: words.rest } : {}) }]),
     // Breaks at the end (with nothing under them yet) are kept where they were.
     ...flow.steps.filter((step) => step.startsAt === undefined),
   ];

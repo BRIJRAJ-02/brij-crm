@@ -519,7 +519,7 @@ export function PreviewLayout({
           {hasPreview && (
             <div className={styles.bar}>
               <Button icon="smartphone" onPress={() => setOpen(true)}>
-                {strings.preview}
+                {strings.showPreview}
               </Button>
             </div>
           )}

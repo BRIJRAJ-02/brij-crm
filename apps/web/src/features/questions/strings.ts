@@ -87,6 +87,8 @@ export const strings = {
   startStepHere: 'Start a new step here',
   /** The first page's title when Steps splits a form after its contact details. */
   yourDetails: 'Your details',
+  /** The second page's title when the first is the contact details. */
+  aboutYou: 'About you',
   /** A step header's ⋯ menu. */
   stepMenu: (name: string) => `${name} options`,
   renameStep: 'Rename',

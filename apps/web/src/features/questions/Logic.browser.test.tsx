@@ -148,17 +148,18 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
     await userEvent.keyboard('{Escape}');
   });
 
-  it('Add logic is one click to a working rule: the step’s choice question, its first option, the next place', async () => {
+  it('Add logic is one click to a rule that changes something: the step’s choice question, past the next step', async () => {
     await openBuilder();
     // Add logic is in the step header's menu (T20).
     await userEvent.click(page.getByRole('button', { name: 'Step 2 · Your budget options' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Add logic' }));
-    // A second rule, ready filled: Budget is Under $1k, Jump to Step 3. Nothing to fill in before it works.
+    // A second rule, ready filled: Budget is Under $1k. It never jumps to the next step, where everyone goes anyway
+    // (a rule that did nothing): with Step 3 next, it goes to the form's ending.
     await expect.poll(() => document.querySelectorAll('[aria-label="Remove jump 2"]').length).toBe(1);
-    const pickers = [...document.querySelectorAll('button')].filter((each) =>
-      each.textContent.includes('Step 3 · Your team'),
+    const targets = [...document.querySelectorAll('button')].filter((each) =>
+      each.textContent.includes('Ending: Thanks, we are not a fit'),
     );
-    expect(pickers.length).toBeGreaterThan(0);
+    expect(targets.length).toBe(2);
   });
 
   it('Show only if… is one click to a ready condition, and Always show takes it away', async () => {

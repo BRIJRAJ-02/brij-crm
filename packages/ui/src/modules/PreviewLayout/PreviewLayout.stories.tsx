@@ -181,7 +181,7 @@ export const Narrow: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('complementary', { name: 'Preview' })).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: 'Preview' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Show preview' }));
     const sheet = within(document.body).getByRole('dialog', { name: 'Preview' });
     await expect(
       within(sheet).getByRole('heading', { name: 'Fill this in and we will come back to you' }),

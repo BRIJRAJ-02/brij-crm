@@ -1,6 +1,7 @@
 import type { PublicForm } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, waitFor } from 'storybook/test';
+import { useState } from 'react';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
 import { FormLayoutThumbnail } from './FormLayoutThumbnail.tsx';
@@ -210,5 +211,38 @@ export const TemplateTiles: Story = {
       'A rating and one open question, so you hear why as well as how much.',
     );
     await expect(canvas.getByText('0 to 10, and room to say why.')).toBeVisible();
+  },
+};
+
+/** The headline and the button edited where they are (T21, as Tally does): press either to type its words. */
+function EditableSample() {
+  const [form, setForm] = useState(CONTACT);
+  return (
+    <Stage width="narrow-fill">
+      <HostedFormPreview
+        form={form}
+        onTextChange={(change) => {
+          setForm((before) => ({ ...before, ...change }));
+        }}
+      />
+    </Stage>
+  );
+}
+
+/** Pressing the headline opens its words by it; typing changes the preview, and Escape closes it. */
+export const EditableText: Story = {
+  args: { form: CONTACT },
+  parameters: { crm: { screenshot: false } },
+  render: () => <EditableSample />,
+  play: async ({ canvas }) => {
+    await userEvent.click(await canvas.findByRole('button', { name: 'Edit the headline' }));
+    const headline = within(document.body).getByRole('textbox', { name: 'Headline' });
+    await userEvent.clear(headline);
+    await userEvent.type(headline, 'Talk to us');
+    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Talk to us' })).toBeInTheDocument());
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(await canvas.findByRole('button', { name: 'Edit the button' }));
+    await expect(within(document.body).getByRole('textbox', { name: 'Button text' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
   },
 };

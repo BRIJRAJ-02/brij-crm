@@ -52,27 +52,17 @@ function takesEnter(question: PublicQuestion | undefined): boolean {
 const ADVANCE_PAUSE_MS = 400;
 
 /**
- * Whether a key press asks for the step before (T23): the up arrow on a one line field or a button (never in a
- * list, a choice group or a long answer, which use the arrows themselves), or Shift+Tab from the step's first
- * control, where the browser would otherwise leave the form.
+ * Whether a key press asks for the step before (T23): the up arrow in a one line text field, Typeform's way. Never
+ * from a button, a list, a choice group or a long answer, which use the arrows themselves, and never Tab, which
+ * keeps moving focus as it always does.
  */
 function backByKey(event: KeyboardEvent<HTMLFormElement>): boolean {
   const target = event.target;
-  if (!(target instanceof HTMLElement)) return false;
-  if (event.key === 'ArrowUp' && !event.altKey && !event.metaKey && !event.shiftKey) {
-    const isLine = target instanceof HTMLInputElement && !['radio', 'checkbox', 'range'].includes(target.type);
-    const inList = target.closest('[role="radiogroup"], [role="listbox"], [role="combobox"], [role="grid"]') !== null;
-    return (
-      (isLine || target instanceof HTMLButtonElement) && !inList && target.getAttribute('aria-expanded') !== 'true'
-    );
-  }
-  if (event.key === 'Tab' && event.shiftKey) {
-    const first = event.currentTarget.querySelector<HTMLElement>(
-      'input:not([type="hidden"]), textarea, select, button, [tabindex="0"]',
-    );
-    return first === target;
-  }
-  return false;
+  if (event.key !== 'ArrowUp' || event.altKey || event.metaKey || event.shiftKey) return false;
+  if (!(target instanceof HTMLInputElement)) return false;
+  const isLine = ['text', 'email', 'tel', 'url', 'number', 'search'].includes(target.type);
+  const inList = target.closest('[role="listbox"], [role="combobox"], [role="grid"]') !== null;
+  return isLine && !inList && target.getAttribute('aria-expanded') !== 'true';
 }
 
 /**
@@ -112,7 +102,7 @@ function leaveFrom(form: HTMLFormElement | null, way: 'forward' | 'back'): void 
     ghost.remove();
   };
   // Whichever comes first: the exit finishing, or its own length passing (a paused animation never strands it).
-  globalThis.setTimeout(remove, duration + 50);
+  globalThis.setTimeout(remove, duration * 2);
   ghost
     .animate(
       prefersStill()
@@ -267,7 +257,8 @@ export function HostedFormSteps({
       () => {
         formRef.current?.requestSubmit();
       },
-      prefersStill() ? 0 : ADVANCE_PAUSE_MS,
+      // The beat is time to see the pick land and change it, not motion: it stays under reduced motion too.
+      ADVANCE_PAUSE_MS,
     );
     return () => {
       window.clearTimeout(timer);
@@ -361,8 +352,7 @@ export function HostedFormSteps({
             byPointer.current = false;
           }}
           onKeyDown={(event) => {
-            // Back by key (T23, Typeform): the up arrow from a one line field or a button, and Shift+Tab from the
-            // step's first control, go to the step before. Lists, choices and long answers keep their own arrows.
+            // Back by key (T23, Typeform): the up arrow from a one line text field goes to the step before.
             if (index > 0 && !preview && backByKey(event)) {
               event.preventDefault();
               go(index - 1);

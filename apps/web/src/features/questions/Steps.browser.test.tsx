@@ -70,7 +70,9 @@ function Builder({
           setLayout(next);
           // As the editor does: Steps splits the form into pages at once.
           if (next === 'steps') {
-            setFlow((before) => splitIntoSteps(before, () => `new${String((ids += 1))}`, { details: 'Your details' }));
+            setFlow((before) =>
+              splitIntoSteps(before, () => `new${String((ids += 1))}`, { details: 'Your details', rest: 'About you' }),
+            );
           }
         }}
       />

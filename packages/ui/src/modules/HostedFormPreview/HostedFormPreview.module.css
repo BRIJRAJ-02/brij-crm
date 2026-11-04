@@ -52,4 +52,10 @@
       border-color: var(--accent-line);
     }
   }
+
+  @media (forced-colors: active) {
+    .spot[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
 }

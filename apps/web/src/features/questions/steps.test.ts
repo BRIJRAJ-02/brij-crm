@@ -113,7 +113,7 @@ describe('Steps as pages (T20, 5 November 2026)', () => {
     answerType,
     label,
   });
-  const words = { details: 'Your details' };
+  const words = { details: 'Your details', rest: 'About you' };
 
   it('splits after the contact details, titled, and gives the first page a header', () => {
     const questions = [
@@ -126,7 +126,7 @@ describe('Steps as pages (T20, 5 November 2026)', () => {
     const split = splitIntoSteps({ questions, steps: [] }, ids(), words);
     expect(order(split)).toEqual(['|n1', 'name', 'email', 'phone', '|n2', 'role', 'cv']);
     expect(split.steps[0]).toEqual({ id: 'n1', startsAt: 'name', title: 'Your details' });
-    expect(split.steps[1]).toEqual({ id: 'n2', startsAt: 'role' });
+    expect(split.steps[1]).toEqual({ id: 'n2', startsAt: 'role', title: 'About you' });
   });
 
   it('splits in the middle when nothing is contact detail, and leaves one question as one page', () => {

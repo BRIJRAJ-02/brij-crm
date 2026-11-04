@@ -570,7 +570,7 @@ export const strings = {
   endingHeading: 'Heading',
   endingHeadingPlaceholder: 'Thanks, we are not a fit',
   endingLine: 'Line under it',
-  endingLinePlaceholder: 'We only take projects over $5k.',
+  endingLinePlaceholder: 'Optional',
   endingButton: 'Button',
   endingButtonNone: 'No button',
   endingButtonUrl: 'Link',
