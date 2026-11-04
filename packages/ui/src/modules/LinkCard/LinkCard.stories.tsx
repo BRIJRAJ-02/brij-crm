@@ -41,7 +41,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A live booking page: its colour edge, the facts, the link, the switch, Copy link, Open and the menu. */
+/** A live booking page: its colour dot, the facts, the link, the switch, Copy link, Open and the menu. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvas, args }) => {
@@ -98,13 +98,12 @@ export const NotPublished: Story = {
   },
 };
 
-/** A form taking submissions: its colour from its id, its counts, and its switch's hint on hover. */
+/** A form taking submissions: no colour dot, its counts, and its switch's hint on hover. */
 export const Form: Story = {
   args: {
     title: 'Contact us',
     href: '/w/acme/captures/forms/contact',
     hue: undefined,
-    colourKey: '01a15d53-7271-7fec-919b-2575bf34beea',
     facts: ['12 submissions', '2 spam'],
     address: '/f/contact-us',
     copyValue: 'https://example.com/f/contact-us',
@@ -117,6 +116,8 @@ export const Form: Story = {
   },
   play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByText('12 submissions · 2 spam')).toBeInTheDocument();
+    // A form has no colour of its own, so no dot (T3, 4 November 2026).
+    await expect(canvasElement.querySelector('article span[aria-hidden="true"]:first-child')).toBeNull();
     // The tooltip waits out its open delay; a busy runner can miss the first hover, so it hovers again until shown.
     const toggle = canvas.getByRole('switch', { name: 'Accepting submissions on Contact us' });
     await waitFor(

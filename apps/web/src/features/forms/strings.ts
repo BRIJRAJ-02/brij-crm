@@ -46,7 +46,6 @@ export const strings = {
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
   noSubmissionsYet: 'No submissions yet',
-  publishToShare: 'Publish it to start taking submissions',
   /** A draft card's one action: back into its builder to finish it and publish. */
   editDraft: 'Edit',
   /** Its accessible name: which draft it opens, the visible word first. */
