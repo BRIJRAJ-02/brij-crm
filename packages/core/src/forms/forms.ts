@@ -843,6 +843,32 @@ function checkDraft(form: FormRow, document: FormDocument): void {
 /** Saves `document` as the draft, starting the next version when the draft is the live one. */
 async function writeDraft(tx: WorkspaceTx, scope: EngineScope, form: FormRow, document: FormDocument): Promise<void> {
   const by = actorRow(scope.actor);
+  // A draft saved back to exactly what is live (Discard changes, or edits undone by hand) is the live version again,
+  // so the form has nothing to publish and reads Live, not edited. Compared as jsonb, so key order doesn't count.
+  if (form.liveVersionId !== null) {
+    const [same] = await tx
+      .select({ id: formVersions.id })
+      .from(formVersions)
+      .where(
+        and(
+          eq(formVersions.id, form.liveVersionId),
+          sql`${formVersions.document} = ${JSON.stringify(document)}::jsonb`,
+        ),
+      );
+    if (same !== undefined) {
+      if (form.draftVersionId !== form.liveVersionId) {
+        await touchForm(tx, scope, form.id, { draftVersionId: form.liveVersionId }, true);
+        // The edited draft goes: a form holds one unpublished version at most, and nothing points at a draft (only a
+        // published version has submissions, partials or visits).
+        if (form.draftVersionId !== null) {
+          await tx
+            .delete(formVersions)
+            .where(and(eq(formVersions.id, form.draftVersionId), isNull(formVersions.publishedAt)));
+        }
+      }
+      return;
+    }
+  }
   let draftVersionId = form.draftVersionId;
   if (draftVersionId === null || draftVersionId === form.liveVersionId) {
     const [top] = await tx

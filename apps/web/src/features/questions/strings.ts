@@ -31,40 +31,39 @@ export const strings = {
   choices: 'Choices',
   placeholder: 'Placeholder',
   placeholderHint: 'Shown until they type',
-  whereItGoes: 'Where it goes',
+  whereItGoes: 'Save answer to',
   /** Where it goes' InfoTip on a question. */
   whereItGoesHelp: 'The record field this answer fills in.',
   whereItGoesExample: 'Point a Job title question at Job title, and each person who answers gets it on their record.',
-  notFiled: 'Not filed, kept with the submission',
-  notFiledShort: 'Not filed',
+  notFiled: 'Kept with the submission only',
+  notFiledShort: 'Not saved',
   willCreate: (title: string, objectName: string) => `Creates “${title}” on ${objectName}`,
   willCreateShort: (title: string) => `Creates “${title}”`,
   /** The Create choice before the question has words to name its field by. */
   willCreateUnnamed: (objectName: string) => `Creates a field on ${objectName} from this question`,
-  cantCreate: 'You can’t add attributes, so this stays with the submission.',
+  cantCreate: 'You can’t add fields, so this stays with the submission.',
   /** Save couldn't make some planned attributes: those questions stay unfiled. */
   notCreated: (titles: readonly string[], objectName: string, keptWith: 'booking' | 'submission' = 'booking') =>
     titles.length === 1
       ? `Couldn’t add “${titles[0] ?? ''}” to ${objectName}, so its answers stay with the ${keptWith}.`
-      : `Couldn’t add ${String(titles.length)} attributes to ${objectName}, so their answers stay with the ${keptWith}.`,
-  undoFailed: 'Couldn’t undo that. The questions are still filed.',
+      : `Couldn’t add ${String(titles.length)} fields to ${objectName}, so their answers stay with the ${keptWith}.`,
+  undoFailed: 'Couldn’t undo that. The answers still save to those fields.',
   createdAttributes: (count: number, objectName: string) =>
-    count === 1 ? `Added 1 attribute to ${objectName}.` : `Added ${String(count)} attributes to ${objectName}.`,
+    count === 1 ? `Added 1 field to ${objectName}.` : `Added ${String(count)} fields to ${objectName}.`,
   takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,
   cantWrite: 'You can’t write to this',
   mustAnswer: 'Visitors must answer',
   // Spec 0067: its answers show beside Insights' sources.
-  sourceQuestion: 'Show in Insights as how they heard (one a form)',
+  sourceQuestion: 'Use as “How did you hear about us” in Insights',
   duplicateQuestion: 'Duplicate',
   deleteQuestion: 'Delete',
   questionDeleted: (label: string) => `Deleted “${label}”.`,
   questionDeletedFiled: (label: string, filed: string) => `Deleted “${label}”. Its answers went to ${filed}.`,
   undo: 'Undo',
   filedLine: (objectName: string, title: string) => `${objectName} › ${title}`,
-  goneAttribute: 'An attribute that no longer exists',
+  goneAttribute: 'A field that no longer exists',
   // The new answer types' options (spec 0063)
   dateRange: 'Days offered',
-  dateRangeHint: 'Leave either empty for no limit.',
   earliest: 'Earliest day',
   latest: 'Latest day',
   scaleRange: 'From and to',
@@ -75,7 +74,6 @@ export const strings = {
   highLabel: 'High end',
   highLabelPlaceholder: 'Very likely',
   picks: 'Picks',
-  picksHint: 'The least and the most a visitor may pick.',
   leastPicks: 'Least picks',
   mostPicks: 'Most picks',
   anyPicks: 'Any',
@@ -92,13 +90,29 @@ export const strings = {
   },
   stepHolds: (count: number) =>
     count === 0 ? 'No questions yet' : count === 1 ? '1 question' : `${String(count)} questions`,
-  /** On a divider outside the Steps layout: it is kept, and only Steps draws it. */
-  stepsOnly: 'Shows with Steps',
-  /** Add a step's line in the menu outside the Steps layout. */
-  stepsOnlyMenu: 'Visitors see it with Steps',
+  /** On a divider outside the Steps layout: it is kept, and only Steps draws it (One at a time and Classic ignore it). */
+  stepsOnly: 'Only used with the Steps layout',
   separator: ' · ',
   stepTitle: 'Step title',
   stepTitlePlaceholder: 'About your company',
+  // Logic, in the words Tally and Typeform use (T5, T15, 4 November 2026): one way to say "show this only if", one
+  // way to say "after this, jump to".
+  /** The quiet heading over a step's jumps. */
+  logic: 'Logic',
+  /** One click: a ready rule, If <first question> is <first option>, jump to <next step>. */
+  addLogic: 'Add logic',
+  /** One click: a ready condition, on the first earlier question. */
+  showOnlyIf: 'Show only if…',
+  /** The heading over a Show when's conditions. */
+  showOnlyIfTitle: 'Show only if',
+  /** Takes the Show when away. */
+  alwaysShow: 'Always show',
+  /** Where a step goes when no jump matched (or when it has none): the next step, or the end of the form. */
+  otherwiseGoTo: (where: string) => `Otherwise, go to ${where}`,
+  /** The end of the form as a place to go: the thank you. */
+  theEnd: 'the thank you page',
+  /** A new ending Add logic made, when there was nowhere further down to jump to. */
+  newEndingHeading: 'Thanks for your answers',
   stepShowWhenHint: 'Show this step only when earlier answers match. Its answers are not kept when it is skipped.',
   stepNoEarlier: 'Add a question before this step to show it by an answer.',
   stepReadsLater: 'A condition reads a question that is no longer before this step. Pick another, or remove it.',
@@ -139,10 +153,10 @@ export const strings = {
   no: 'No',
   /** Marks a booking's answers the person record didn't take (spec 0057, AC-5712). */
   notSavedMark: 'Not saved',
-  notFiledBooking: 'Not filed, kept with the booking',
+  notFiledBooking: 'Kept with the booking only',
   whereItGoesHelpBooking: 'The booker’s field this answer fills in.',
-  cantCreateBooking: 'You can’t add attributes, so this stays with the booking.',
-  offCrm: 'Turn on Add to the CRM to file answers on the person.',
+  cantCreateBooking: 'You can’t add fields, so this stays with the booking.',
+  offCrm: 'Turn on Add to the CRM to save answers on the person.',
 
   // Jumps and points (spec 0063, AC-6313, AC-6316, AC-6325)
   jumps: 'Jumps',
@@ -150,26 +164,24 @@ export const strings = {
   addJump: 'Add a jump',
   removeJump: (place: number) => `Remove jump ${String(place)}`,
   jumpsNowhere: 'Add a step below this one, or an ending in Settings, to jump to.',
-  jumpTo: 'Then',
+  jumpTo: 'Jump to',
   /** One jump among a step's, in the order they are tried. */
   jumpNumber: (place: number) => `Jump ${String(place)}`,
+  /** A step as a jump's target, after "Jump to": "Step 3", or "Step 3 · Your team". */
   jumpToStep: (place: number, title: string | undefined) =>
-    title === undefined || title.trim() === ''
-      ? `Go to step ${String(place)}`
-      : `Go to step ${String(place)}, ${title}`,
+    title === undefined || title.trim() === '' ? `Step ${String(place)}` : `Step ${String(place)} · ${title.trim()}`,
+  /** An ending as a jump's target: its heading, or its place while it has none. */
   jumpToEnding: (place: number, heading: string) =>
-    heading.trim() === '' ? `End with ending ${String(place)}` : `End with “${heading.trim()}”`,
+    heading.trim() === '' ? `Ending ${String(place)}` : `Ending: ${heading.trim()}`,
   jumpGone: 'This jump no longer points to a step below this one. Choose where it goes.',
   jumpsFull: (most: number) => `A step holds ${String(most)} jumps.`,
   jumpsNoAnswers: 'This step has no answers to jump on yet.',
   points: 'Points',
-  pointsHint: 'What each answer adds to the form’s score.',
   pointsNoChoices: 'Add a choice to score it.',
   pointsFor: (choice: string) => `Points for ${choice}`,
   pointsYes: 'Points for Yes',
   pointsNo: 'Points for No',
   pointsOff: 'No points',
   pointsValue: 'The answer itself',
-  pointsValueHint: 'A scale of 0 to 10 scores 0 to 10, with nothing to key in.',
   pointsScale: 'What it scores',
 } as const;

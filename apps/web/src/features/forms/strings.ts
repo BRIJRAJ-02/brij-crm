@@ -46,7 +46,6 @@ export const strings = {
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
   noSubmissionsYet: 'No submissions yet',
-  publishToShare: 'Publish it to start taking submissions',
   /** A draft card's one action: back into its builder to finish it and publish. */
   editDraft: 'Edit',
   /** Its accessible name: which draft it opens, the visible word first. */
@@ -84,12 +83,16 @@ export const strings = {
   previewOpen: 'Preview',
   previewNotLive: 'Preview, not live. Answers are checked here, and nothing is sent.',
   publish: 'Publish',
-  publishChanges: 'Publish changes',
+  /** The ⋯ menu's way back to the live form, and its confirm (it loses work, so it asks first). */
+  discardChanges: 'Discard changes',
+  discardTitle: 'Discard your changes?',
+  discardText: 'The form goes back to what is live now. Your edits since the last publish are lost.',
+  discarded: 'Changes discarded.',
   publishing: 'Publishing',
   moreActions: 'More actions',
   pause: 'Pause',
   resume: 'Resume',
-  statusLive: (version: number) => `Live · v${String(version)}`,
+  statusLive: 'Live',
   statusChanged: 'Live · edited',
   statusDraft: 'Draft',
   statusPaused: 'Paused',
@@ -99,7 +102,7 @@ export const strings = {
   tabInstall: 'Install',
   tabSubmissions: 'Submissions',
   tabAnalytics: 'Analytics',
-  published: (version: number) => `Published version ${String(version)}.`,
+  published: 'Published.',
   madeUnique: (field: string, objectName: string) => `${field} is now unique on ${objectName}: one record per email.`,
   viewField: 'View field',
   /** The first publish's one line on the match (spec 0058, AC-13), said before Publish makes it so. */
@@ -127,19 +130,14 @@ export const strings = {
   // Layout (spec 0063)
   layoutTitle: 'Layout',
   layoutClassic: 'Classic',
-  layoutClassicHint: 'Every question on one page.',
   layoutSteps: 'Steps',
-  layoutStepsHint: 'Questions in groups, with Back and Continue.',
   layoutOneAtATime: 'One at a time',
-  layoutOneAtATimeHint: 'One question per screen. Enter goes on.',
-  /** Under the tiles when Steps has no divider yet. */
-  layoutAddStep: 'Add a step under Questions to split the form.',
   colour: 'Colour',
-  light: 'Light form',
-  dark: 'Dark form',
+  light: 'Light',
+  dark: 'Dark',
   corners: 'Corners',
-  rounded: 'Rounded corners',
-  square: 'Square corners',
+  rounded: 'Rounded',
+  square: 'Square',
   /** The look's third axis (spec 0063, AC-6327): the workspace's brand kit, or the product's own colours. */
   theme: 'Colours',
   themeBrand: 'Brand colours',
@@ -180,7 +178,7 @@ export const strings = {
 
   // Settings tab
   nameRequired: 'Give the form a name.',
-  addressChanged: 'Address changed. Old links still open the form.',
+  addressChanged: 'Link changed. Old links still open the form.',
   headline: 'Headline',
   headlineDefault: 'Fill this in and we will come back to you',
   subheadingOptional: 'Subheading',
@@ -382,7 +380,7 @@ export const strings = {
   noneIn: {
     received: 'Nothing waiting.',
     processing: 'Nothing in progress.',
-    processed: 'Nothing filed yet.',
+    processed: 'Nothing added yet.',
     spam: 'No spam. Anything that looks like it lands here.',
     held: 'Nothing held.',
     needs_review: 'Nothing needs a look.',
@@ -450,14 +448,14 @@ export const strings = {
   addManyText: (n: number, max: number) =>
     n > max
       ? `Adds ${String(max)} now, the way the form files. Run it again for the rest.`
-      : 'Each is added the way the form files now.',
+      : 'Each is added the way the form saves now.',
   addDone: (done: number, refused: number) =>
     refused === 0
       ? `${count(done, 'submission', 'submissions')} added to the CRM.`
       : `${count(done, 'submission', 'submissions')} added, ${String(refused)} failed.`,
-  jobFailed: (label: string) => `${label} didn’t finish. Background jobs in Settings says why.`,
+  jobFailed: (label: string) => `${label} didn’t finish. See why in Settings › Background jobs.`,
   syncOld: 'Sync earlier submissions',
-  syncOldText: 'File earlier submissions the way the form files now',
+  syncOldText: 'Save earlier submissions the way the form saves now',
   syncStarted: 'Syncing earlier submissions. You can keep working.',
   syncDone: (done: number, refused: number) =>
     refused === 0
@@ -465,14 +463,14 @@ export const strings = {
       : `${count(done, 'submission', 'submissions')} synced; ${String(refused)} couldn’t be.`,
   // Sync earlier submissions (spec 0058, AC-14): one line, the scope, the counts, one button
   syncTitle: 'Sync earlier submissions?',
-  syncTextPublished: 'File earlier submissions the new way too.',
-  syncTextMenu: 'File earlier submissions the way the form files now.',
+  syncTextPublished: 'Save earlier submissions the new way too.',
+  syncTextMenu: 'Save earlier submissions the way the form saves now.',
   syncTextConnected: 'Add earlier submissions to the CRM too.',
   syncNothing: 'Nothing to sync',
   syncNothingText: 'Every earlier submission already follows the form.',
   syncFailuresText: 'Any that can’t be synced stay as they are.',
   syncScope: 'Which submissions',
-  syncUnfiled: 'Only unfiled',
+  syncUnfiled: 'Only unsaved',
   syncAll: 'All',
   /** The count preview's name for screen readers. */
   syncPreview: 'What syncing would do',
@@ -523,6 +521,13 @@ export const strings = {
     who === undefined ? 'Delete this submission?' : `Delete the submission from ${who}?`,
   deleteSubmissionText: 'Its answers are gone for good; the people and records it made stay.',
   deleteSubmissionAction: 'Delete submission',
+  /** Bulk Delete (asks first: a submission can't come back): "Delete 3 submissions?". */
+  deleteManyTitle: (n: number) => `Delete ${count(n, 'submission', 'submissions')}?`,
+  deleteManyText: 'Their answers are gone for good; the people and records they made stay.',
+  deleteManyAction: (n: number) => `Delete ${count(n, 'submission', 'submissions')}`,
+  deletingMany: 'Deleting…',
+  deletedMany: (n: number) => `${count(n, 'submission', 'submissions')} deleted.`,
+  deletedSome: (done: number, of: number) => `Deleted ${String(done)} of ${String(of)}; the rest are still picked.`,
   /** Marks the answers not saved on the record, when some were. */
   notSavedMark: 'Not saved',
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
@@ -572,27 +577,34 @@ export const strings = {
   endingRemoved: 'Ending removed.',
   recallHint: 'Write {{key}} to show an earlier answer, or {{score}} for the score.',
   scoreTitle: 'Score',
-  scoreLine: 'Points on the answers add up to a score you can jump on, show, and file.',
-  scoreFiledOn: 'File the score on',
+  scoreLine: 'Points on the answers add up to a score you can jump on, show, and save.',
+  scoreFiledOn: 'Save the score to',
   scoreFiledNowhere: 'Keep it off the CRM',
-  scoreNoNumbers: 'This object has no number field to file a score on.',
+  scoreNoNumbers: 'This object has no number field to save a score to.',
   flowOpen: 'Flow',
-  flowTitle: 'The flow',
-  flowLine: 'The steps a visitor walks, their jumps, and where each one ends.',
+  flowTitle: 'Flow',
   flowStep: (place: number, title: string | undefined) =>
     title === undefined || title.trim() === '' ? `Step ${String(place)}` : `Step ${String(place)} · ${title}`,
-  flowQuestions: (count: number) => (count === 1 ? '1 question' : `${String(count)} questions`),
+  /** A jump as a line: "If Budget is Under $1k". */
   flowJump: (condition: string) => `If ${condition}`,
-  flowToStep: (name: string) => `go to ${name}`,
-  flowToEnding: (name: string) => `end with ${name}`,
+  /** Where it goes, after its If: "Jump to Step 3", "Jump to Ending: Not a fit". */
+  flowJumpTo: (where: string) => `Jump to ${where}`,
+  /** A step that only shows for some answers. */
+  flowShownIf: 'Shown only if',
+  /** Where a step goes after its jumps: everyone the jumps above didn't send elsewhere. */
   flowNext: 'Otherwise',
+  /** Where a step with no jumps goes. */
+  flowThen: 'Then',
+  /** The next step, as a place to go. */
+  flowGoTo: (name: string) => `Go to ${name}`,
   flowEndings: 'Endings',
-  flowClassic: 'Classic shows every question on one page, so it has no steps to jump between.',
-  flowEmptyTitle: 'No steps yet',
-  flowEmpty: 'Add a question, and a step to split the form, to see the flow.',
-  flowThanks: 'The thank you',
-  flowNoLine: 'No line',
+  flowClassic: 'Steps and logic jumps work with the Steps layout.',
+  flowEmptyTitle: 'No questions yet',
+  flowEmpty: 'Add a question to see the flow.',
+  /** The form's own end, after the last step. */
+  flowThanks: 'Thank you page',
   flowEdit: 'Edit',
+  flowAddStep: 'Add a step',
   flowClose: 'Close',
   // Analytics (spec 0063, AC-6321, AC-6322). Short on purpose (spec 0058, AC-3).
   analytics: 'Analytics',

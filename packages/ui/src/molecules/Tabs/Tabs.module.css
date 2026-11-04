@@ -10,6 +10,20 @@
     min-block-size: 0;
   }
 
+  /* Under a page's second bar, which stays at the top of the view, what sticks in a panel sticks below it: the
+     bar's height reaches the panel's sticky parts (a form's Questions header) as --sticky-top. */
+  .root:has(> .bar[data-variant='bar']) {
+    --sticky-top: calc(var(--size-bar) + var(--border-width-hairline));
+    --sticky-top-gap: calc(var(--size-bar) + var(--border-width-hairline) + var(--space-16));
+  }
+
+  /* A page layout's panel (PreviewLayout: a form's or a booking page's editor) is as tall as what it holds, and the
+     tabs with it, so the bar stays stuck at the top of the view however far the page scrolls. Held to the view's
+     height, the panel overflowed the tabs' box and the bar left with it after a screen or so (T15). */
+  .root:has(> .panel[data-variant='fill']) {
+    flex: 1 0 auto;
+  }
+
   /* The tab list and, at its far end, the chosen tab's tools, on one hairline. When both don't fit
      (a phone), the tools wrap to a row of their own under the tabs, so the tabs never get squeezed. */
   .bar {
@@ -301,6 +315,7 @@
   /* A page layout inside (PreviewLayout): a flex column, so it can grow to the view's foot and put its footer there. */
   .panel[data-variant='fill'] {
     display: flex;
+    flex: 1 0 auto;
     flex-direction: column;
   }
 

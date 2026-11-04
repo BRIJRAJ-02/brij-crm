@@ -207,7 +207,7 @@ function RulesCardBody({
           <SettingsRow
             key={rule.id}
             title={strings.ruleTitle(index, rule.name)}
-            description={`${strings.when} ${conditionsLine(rule.when, readable)}. ${routeLine(rule)}.`}
+            description={whenLine(conditionsLine(rule.when, readable), routeLine(rule))}
           >
             {!isReadOnly && (
               <MenuTrigger>
@@ -421,4 +421,12 @@ function RuleReport({ data, slug, surface, rules }: RuleReportProps) {
       )}
     </SettingsSection>
   );
+}
+
+/**
+ * A rule's one line: "When <conditions>. <route>.", or, while no condition is complete yet, that it isn't finished,
+ * never the route alone, which would read as sending everyone.
+ */
+function whenLine(conditions: string | undefined, route: string): string {
+  return conditions === undefined ? strings.ruleUnfinished : `${strings.when} ${conditions}. ${route}.`;
 }

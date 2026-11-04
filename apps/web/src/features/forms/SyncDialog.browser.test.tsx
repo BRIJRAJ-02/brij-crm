@@ -1,4 +1,4 @@
-// Sync earlier submissions in Chromium (spec 0058, AC-14): Only unfiled is chosen on open, the preview is one line of
+// Sync earlier submissions in Chromium (spec 0058, AC-14): Only unsaved is chosen on open, the preview is one line of
 // counts, and there is one button, which names how many it syncs and starts that scope.
 import type { DataLayer, SyncPreview, SyncScope } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -60,10 +60,10 @@ async function open(previews: Readonly<Record<SyncScope, SyncPreview>> = PREVIEW
 }
 
 describe('Sync earlier submissions (AC-14)', () => {
-  it('opens on Only unfiled, shows its counts, and has one button naming how many it syncs', async () => {
+  it('opens on Only unsaved, shows its counts, and has one button naming how many it syncs', async () => {
     const started = await open();
     const dialog = page.getByRole('dialog', { name: 'Sync earlier submissions?' });
-    await expect.element(dialog.getByRole('radio', { name: 'Only unfiled' })).toBeChecked();
+    await expect.element(dialog.getByRole('radio', { name: 'Only unsaved' })).toBeChecked();
     const counts = dialog.getByRole('group', { name: 'What syncing would do' });
     // One count line; a count of none says nothing.
     await expect.element(counts).toHaveTextContent('9 new records and 3 records updated.');

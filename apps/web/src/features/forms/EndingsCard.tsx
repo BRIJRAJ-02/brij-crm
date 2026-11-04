@@ -6,6 +6,7 @@ import type { BookingPageView, FormDocument, FormTargetChoices } from '@crm/data
 import { FORM_ENDINGS_MAX, type FormEnding } from '@crm/data/forms';
 import { Button, Card, Field, focusLater, SegmentedControl, Select, SettingsSection, type Toasts } from '@crm/ui';
 import { useRef } from 'react';
+import { mintEndingId } from './draft.ts';
 import { strings } from './strings.ts';
 import { strings as questionStrings } from '../questions/strings.ts';
 
@@ -19,15 +20,6 @@ export interface EndingsCardProps {
   /** Removing an ending offers Undo here, since it takes its words with it and leaves every jump to it pointing nowhere. */
   readonly toasts: Toasts;
   readonly onDraftChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
-}
-
-/** A new ending's id: short, stable, and never one the draft already holds. */
-function mintEndingId(endings: readonly FormEnding[]): string {
-  for (let place = 1; place <= FORM_ENDINGS_MAX + 1; place += 1) {
-    const id = `ending_${String(place)}`;
-    if (!endings.some((ending) => ending.id === id)) return id;
-  }
-  return `ending_${String(Date.now())}`;
 }
 
 /** Which button an ending carries, as the control names it. */

@@ -9,7 +9,7 @@ New on 20 October 2026. The owner turned down the one line rows Captures had dra
 Card was the closest component, but it doesn't fit, and a variant would bend it out of shape:
 
 - Card's title is plain text. Here the title is the card's one link, stretched over the whole card.
-- Card has no colour edge.
+- Card has no colour mark.
 - Card's footer is end aligned. Here Copy link sits at the start and the actions at the end.
 
 LinkCard takes Card's look (hairline border-subtle, radius-lg, surface-raised, shadow-xs) so the two read as one family.
@@ -20,9 +20,15 @@ On 21 October 2026 the owner asked for the form card to "look better". Three thi
 - A form's edge was grey, which read as switched off next to the coloured booking pages. A form now takes a stable colour from its id, as a booking page does.
 - A form never published showed a disabled switch and the address it would get. It now shows neither: its badge and its one fact say what to do.
 
+On 4 November 2026 the owner's team said the cards "look like AI". The thick colour stripe on the start side was the tell. It is gone:
+
+- A link with a colour (a booking page) shows it as a small dot before its title; a form has none.
+- The public link moved into the footer, at its start, beside Copy link: one line fewer, and the link sits where it is copied from.
+- The padding is even on both sides now that no stripe needs room.
+
 References (Mobbin, 20 October 2026):
 
-- Calendly's event types gave the colour edge on the start side, the title over its facts, and a real "Copy link" button beside a quiet open icon and the ··· menu.
+- Calendly's event types gave the title over its facts, and a real "Copy link" button beside a quiet open icon and the ··· menu.
 - Calendly's turned off cards, greyed rather than badged, gave the quiet off state.
 - Cal.com's and SavvyCal's link lists gave the switch at the top end.
 
@@ -57,17 +63,17 @@ References (Mobbin, 20 October 2026):
 - **`href`:** the editor. The title is the card's one link, and its `::after` covers the card, so a press on the card's body opens it.
   - The switch sits in a 32px box above that link, and the footer and the address sit above it too. So a press that just misses a control does nothing, rather than opening the editor ("too close, and will be missed").
   - Left out, or while `isPending`, the card is not a link.
-- **`hue` or `colourKey`:** the colour edge on the start side, `dot-<hue>`.
-  - `colourKey` (a booking page's or a form's id) picks a stable hue for a link with no colour of its own, leaving out grey and red. Neither has a colour field yet.
-  - Left out (both), the edge is the neutral `dot-gray`.
-  - The edge never says a state: an off card keeps its colour.
+- **`hue` or `colourKey`:** a small `dot-<hue>` dot before the title.
+  - `colourKey` (a booking page's id) picks a stable hue for a link with no colour of its own, leaving out grey and red.
+  - Left out (both), no dot (a form).
+  - The dot never says a state: an off card keeps its colour.
 - **`titleLevel`:** 2 on a page whose h1 is the TopBar (LinkGrid passes it), 3 inside a section (the default).
 - **`facts`:** one line of muted text under the title, joined with " · " ("30 min · One on one"; "12 submissions · 2 spam"; "No submissions yet").
-- **`address`:** the public link as a path, muted, truncated to one line ("/b/k3x9", "/f/contact-us"). It can be selected, and Copy link selects it when the clipboard refuses. Leave it out while there is no link (a form never published).
+- **`address`:** the public link as a path, muted, at the footer's start, truncated first when the card is narrow ("/b/k3x9", "/f/contact-us"). It can be selected, and Copy link selects it when the clipboard refuses. Leave it out while there is no link (a form never published).
 - **`badge`:** a grey Badge beside the title, for a state the switch can't say ("Not published", "Private", "Copying…"). Never "Off".
 - **`isOff`:** the card reads quieter, its title in text-secondary. No badge: the switch says it.
 - **`toggle`:** the Switch at the top end, its label hidden (read by screen readers). `hint` says what it does now in a tooltip on hover ("Taking bookings", "Accepting submissions"); `isDisabled` with `disabledReason` puts the reason there instead. Leave it out when there is nothing to switch yet (a form never published), rather than a disabled switch.
-- **`copyValue`:** a labelled secondary "Copy link" button at the start of the footer. Leave it out when there is nothing to copy (a form not published yet), rather than showing a disabled button whose reason can't be reached.
+- **`copyValue`:** a labelled secondary "Copy link" button in the footer, after the link. Leave it out when there is nothing to copy (a form not published yet), rather than showing a disabled button whose reason can't be reached.
 - **`actions`:** Open and the ··· menu, ghost icon Buttons at `size="lg"`, at the footer's end. Leave Open out when the link is off.
 - **The footer group:** the whole footer is a group named for the card ("Actions for Intro call"), so each card's "Copy link" is told apart. It sits on the card's own surface, with no band.
 - **Footer size:** every footer control is drawn at 30px (Button `lg`) and pressed at 32px, and they sit at least space-8 apart.

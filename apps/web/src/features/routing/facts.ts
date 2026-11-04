@@ -10,6 +10,7 @@ import {
   hiddenFactKey,
   KNOWN_FACT,
   KNOWN_VALUES,
+  NUMBER_OPS,
   summarizeShowWhen,
   VALUELESS_OPS,
   type Condition,
@@ -31,6 +32,10 @@ export interface Fact {
   readonly options?: readonly { readonly id: string; readonly label: string }[];
   /** The heading it sits under in the picker, after the facts with none: the visit's hidden fields. */
   readonly group?: string;
+  /** A rating's or a scale's lowest and highest answers, so a ready rule can name a real number on it. */
+  readonly range?: { readonly from: number; readonly to: number };
+  /** A question every visitor must answer: "is answered" on it is always true, so a ready rule never picks it so. */
+  readonly isRequired?: boolean;
 }
 
 /** The comparisons each kind offers, in the order the Select lists them. */
@@ -70,42 +75,95 @@ export function valueFor(op: ConditionOp, value: Condition['value']): Condition[
   return typeof value === 'string' || value === undefined ? value : value[0];
 }
 
+/**
+ * A ready rule for one click (Add logic, Show only if…; the owner, 4 November 2026: "everything complex at a single
+ * click"): one condition on the question it most likely reads, complete the moment it appears, so a summary never
+ * reads "If How likely … is" with nothing after it. It reads the first question with options among `prefer` (a
+ * step's own questions), else a number among them, else the last question with options, else a step's first
+ * question, else the last one there is. A choice takes its first option; a rating or a scale "is less than" a
+ * number in its lower part (on 0 to 10, less than 7: the 0 to 6 detractors); anything else "is answered", which
+ * needs no value.
+ */
+export function readyConditions(facts: readonly Fact[], prefer: ReadonlySet<string> = new Set()): ShowWhen {
+  const hasOptions = (fact: Fact) => (fact.options?.length ?? 0) > 0;
+  const preferred = facts.filter((fact) => prefer.has(fact.key));
+  // A choice is the likeliest thing to branch on; then a number (a score, a rating); then any question at all.
+  // An optional question before a required one: "is answered" on a required question is always true.
+  const isOptional = (each: Fact) => each.isRequired !== true;
+  const fact =
+    preferred.find(hasOptions) ??
+    preferred.find((each) => each.kind === 'number') ??
+    facts.findLast(hasOptions) ??
+    preferred.find(isOptional) ??
+    facts.findLast(isOptional) ??
+    preferred[0] ??
+    facts.at(-1);
+  return { join: 'all', rules: [{ key: fact?.key ?? '', ...readyCompare(fact) }] };
+}
+
+/** The comparison and value a ready rule takes on `fact` (see `readyConditions`). */
+function readyCompare(fact: Fact | undefined): { readonly op: ConditionOp; readonly value?: string | string[] } {
+  const first = fact?.options?.[0];
+  if (first !== undefined) return { op: opsFor(fact)[0] ?? 'is', value: first.id };
+  const range = fact?.range;
+  if (range !== undefined && range.to > range.from) {
+    // The bottom part of the range, about two thirds of the way up: 7 on 0 to 10, 4 on 1 to 5.
+    return { op: 'less_than', value: String(range.from + Math.ceil((range.to - range.from) * 0.65)) };
+  }
+  // A required question is always answered, so the rule waits for a value to be typed rather than never filtering.
+  return fact?.isRequired === true ? { op: 'is' } : { op: 'is_answered' };
+}
+
 /** The facts a form's questions give: every question but a file one, in order. */
 export function questionFacts(questions: readonly FormQuestion[]): readonly Fact[] {
-  return questions.flatMap((question): Fact[] => {
-    const label = question.label.trim() === '' ? question.key : question.label.trim();
-    switch (question.answerType) {
-      // A file, an address, a date and time, a signature and a ranking have nothing a condition compares (spec 0063).
-      case 'file':
-      case 'address':
-      case 'datetime':
-      case 'signature':
-      case 'ranking':
-        return [];
-      case 'choice':
-      case 'dropdown':
-      case 'multi_select':
-        return [
-          {
-            key: question.key,
-            label,
-            kind: 'choice',
-            options: (question.choices ?? [])
-              .filter((choice) => choice.trim() !== '')
-              .map((choice) => ({ id: choice, label: choice })),
-          },
-        ];
-      case 'yes_no':
-      case 'checkbox':
-        return [{ key: question.key, label, kind: 'yes_no', options: yesNo() }];
-      case 'number':
-      case 'rating':
-      case 'scale':
-        return [{ key: question.key, label, kind: 'number' }];
-      default:
-        return [{ key: question.key, label, kind: 'text' }];
-    }
-  });
+  return questions.flatMap((question) =>
+    factsOfQuestion(question).map((fact) => (question.required ? { ...fact, isRequired: true } : fact)),
+  );
+}
+
+/** One question's fact (none for a type a condition can't compare). */
+function factsOfQuestion(question: FormQuestion): Fact[] {
+  const label = question.label.trim() === '' ? question.key : question.label.trim();
+  switch (question.answerType) {
+    // A file, an address, a date and time, a signature and a ranking have nothing a condition compares (spec 0063).
+    case 'file':
+    case 'address':
+    case 'datetime':
+    case 'signature':
+    case 'ranking':
+      return [];
+    case 'choice':
+    case 'dropdown':
+    case 'multi_select':
+      return [
+        {
+          key: question.key,
+          label,
+          kind: 'choice',
+          options: (question.choices ?? [])
+            .filter((choice) => choice.trim() !== '')
+            .map((choice) => ({ id: choice, label: choice })),
+        },
+      ];
+    case 'yes_no':
+    case 'checkbox':
+      return [{ key: question.key, label, kind: 'yes_no', options: yesNo() }];
+    case 'number':
+      return [{ key: question.key, label, kind: 'number' }];
+    case 'rating':
+      return [{ key: question.key, label, kind: 'number', range: { from: 1, to: 5 } }];
+    case 'scale':
+      return [
+        {
+          key: question.key,
+          label,
+          kind: 'number',
+          range: { from: question.options?.from ?? 0, to: question.options?.to ?? 10 },
+        },
+      ];
+    default:
+      return [{ key: question.key, label, kind: 'text' }];
+  }
 }
 
 /** Yes and No, as a yes or no answer compares. */
@@ -184,11 +242,17 @@ export function hiddenFieldFacts(surface: 'form' | 'page'): readonly Fact[] {
   }));
 }
 
-/** One line for a set of conditions, naming each fact and a choice's option by name. */
-export function conditionsLine(showWhen: ShowWhen, facts: readonly Fact[]): string {
+/**
+ * One line for a set of conditions, naming each fact and a choice's option by name. A condition still being written
+ * (no question, or no value where its comparison needs one) is left out, so a line never ends on a bare "is"; with
+ * none complete there is no line at all (undefined), and the caller shows nothing.
+ */
+export function conditionsLine(showWhen: ShowWhen, facts: readonly Fact[]): string | undefined {
   const factOf = (key: string) => facts.find((fact) => fact.key === key);
+  const rules = showWhen.rules.filter((condition) => isComplete({ join: showWhen.join, rules: [condition] }));
+  if (rules.length === 0) return undefined;
   return summarizeShowWhen(
-    showWhen,
+    { ...showWhen, rules },
     (key) => factOf(key)?.label ?? strings.removedQuestion,
     (key, value) => factOf(key)?.options?.find((option) => option.id === value)?.label ?? value,
   );
@@ -201,6 +265,24 @@ export function isComplete(showWhen: ShowWhen): boolean {
       condition.key !== '' &&
       (isValueless(condition.op) ||
         (typeof condition.value === 'string' ? condition.value.trim() !== '' : (condition.value?.length ?? 0) > 0)),
+  );
+}
+
+/**
+ * Whether conditions can be saved as they stand: every one complete (`isComplete`), and a number comparison's value a
+ * number. Anything less is a rule still being written, which the builder keeps as a local draft rather than sending
+ * a save the server refuses ("Give a value to compare with.").
+ */
+export function isSavable(showWhen: ShowWhen): boolean {
+  return (
+    isComplete(showWhen) &&
+    showWhen.rules.every(
+      (condition) =>
+        !NUMBER_OPS.includes(condition.op) ||
+        (typeof condition.value === 'string' &&
+          condition.value.trim() !== '' &&
+          Number.isFinite(Number(condition.value.replaceAll(',', '')))),
+    )
   );
 }
 

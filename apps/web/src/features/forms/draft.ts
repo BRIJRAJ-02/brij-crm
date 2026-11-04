@@ -4,10 +4,18 @@
 // list's own rules live in the shared editor (`features/questions/questions.ts`,
 // spec 0057, which a booking page uses too); these wrap them over a form.
 import type { FormAttributeChoice, FormDocument, FormQuestion, FormTargetChoices, FormView } from '@crm/data';
-import { FORM_SLUG, type PublishAttribute, type QuestionPreset, slugFromName } from '@crm/data/forms';
+import {
+  FORM_ENDINGS_MAX,
+  FORM_SLUG,
+  type FormEnding,
+  type PublishAttribute,
+  type QuestionPreset,
+  slugFromName,
+} from '@crm/data/forms';
 import * as list from '../questions/questions.ts';
 import { keepBreaks, renameStepKeys, type Flow } from '../questions/steps.ts';
 import type { PlannedAttribute, QuestionChange } from '../questions/questions.ts';
+import { isSavable } from '../routing/facts.ts';
 import { strings } from './strings.ts';
 
 /** A new question at the end: Short text, no label yet ("Untitled question"), not filed, optional. */
@@ -156,7 +164,7 @@ export function statusOf(
   // A draft saved since the last publish (a routing rule added and taken away, say) still has Publish changes beside
   // it, so the status says edited too rather than the live version alone (Q67).
   if (isChanged || form.hasUnpublished) return { tone: 'changed', text: strings.statusChanged };
-  return { tone: 'live', text: strings.statusLive(form.liveVersionNumber) };
+  return { tone: 'live', text: strings.statusLive };
 }
 
 /** Whether two documents say the same thing (key order aside). */
@@ -216,12 +224,56 @@ export function draftGap(document: FormDocument): DraftGap | undefined {
 /**
  * The draft as it can be saved: a field still being typed (a partial web address, empty button words) keeps what
  * the server holds, so every other change still saves, and the half typed field never comes back as a failed save.
+ * A rule still being written is the same (T15, 4 November 2026: picking a question and a comparison saved a rule
+ * with no value, and the toast said "Your last change didn't save"): a Show when that is not complete keeps the
+ * server's, and a jump whose conditions are not complete is left out of the save, until it has its value.
  */
 export function savableDraft(document: FormDocument, saved: FormDocument): FormDocument {
   const after =
     document.after.kind === 'redirect' && !isRedirectAddress(document.after.url) ? saved.after : document.after;
   const buttonText = document.buttonText.trim() === '' ? saved.buttonText : document.buttonText;
-  return after === document.after && buttonText === document.buttonText ? document : { ...document, after, buttonText };
+  const questions = savableQuestions(document.questions, saved.questions);
+  const steps = savableSteps(document.steps, saved.steps);
+  return after === document.after &&
+    buttonText === document.buttonText &&
+    questions === document.questions &&
+    steps === document.steps
+    ? document
+    : { ...document, after, buttonText, questions, steps };
+}
+
+/** The questions with each unfinished Show when back at the server's (or none): the same list when all are done. */
+function savableQuestions(
+  questions: FormDocument['questions'],
+  saved: FormDocument['questions'],
+): FormDocument['questions'] {
+  if (questions.every((question) => question.showWhen === undefined || isSavable(question.showWhen))) return questions;
+  return questions.map((question) => {
+    if (question.showWhen === undefined || isSavable(question.showWhen)) return question;
+    const kept = saved.find((each) => each.id === question.id)?.showWhen;
+    const { showWhen: _draft, ...rest } = question;
+    return kept === undefined ? rest : { ...rest, showWhen: kept };
+  });
+}
+
+/** The steps with an unfinished Show when back at the server's, and unfinished jumps left out. */
+function savableSteps(steps: FormDocument['steps'], saved: FormDocument['steps']): FormDocument['steps'] {
+  const isDone = (step: FormDocument['steps'][number]) =>
+    (step.showWhen === undefined || isSavable(step.showWhen)) &&
+    (step.jumps ?? []).every((jump) => isSavable(jump.when));
+  if (steps.every(isDone)) return steps;
+  return steps.map((step) => {
+    if (isDone(step)) return step;
+    const { showWhen, jumps, ...rest } = step;
+    const kept =
+      showWhen === undefined || isSavable(showWhen) ? showWhen : saved.find((each) => each.id === step.id)?.showWhen;
+    const done = (jumps ?? []).filter((jump) => isSavable(jump.when));
+    return {
+      ...rest,
+      ...(kept === undefined ? {} : { showWhen: kept }),
+      ...(done.length === 0 ? {} : { jumps: done }),
+    };
+  });
 }
 
 /**
@@ -232,4 +284,49 @@ export function publishStart(name: string, publicKey: string): { readonly name: 
   const named = name === strings.untitledForm ? '' : name;
   const suggested = named.trim() === '' ? '' : slugFromName(named);
   return { name: named, address: FORM_SLUG.test(suggested) ? suggested : publicKey };
+}
+
+/**
+ * What a first publish goes live with, with nothing asked (the owner, 5 November 2026: one click, like Tally): every
+ * answer matched to a field by its label (`fileByLabel`, what the old dialog prefilled), the form's own name ("Untitled
+ * form" stays until it is renamed), and a link made from the name, or the form's own key when the name gives none.
+ * The caller checks the link is free and falls back to the key; anything else is changed later in Settings.
+ */
+export function firstPublish(
+  document: FormDocument,
+  form: { readonly name: string; readonly publicKey: string },
+  attributes: readonly FormAttributeChoice[],
+): { readonly document: FormDocument; readonly name: string; readonly address: string } {
+  const start = publishStart(form.name, form.publicKey);
+  return {
+    document: fileByLabel(document, attributes),
+    name: start.name === '' ? form.name : start.name,
+    address: start.address,
+  };
+}
+
+/** Whether Discard changes is offered: a published form whose draft differs from what is live. */
+export function canDiscard(form: Pick<FormView, 'liveVersionNumber' | 'hasUnpublished'>, isChanged: boolean): boolean {
+  return form.liveVersionNumber !== undefined && (isChanged || form.hasUnpublished);
+}
+
+/** A new ending's id: short, stable, and never one the draft already holds. */
+export function mintEndingId(endings: readonly FormEnding[]): string {
+  for (let place = 1; place <= FORM_ENDINGS_MAX + 1; place += 1) {
+    const id = `ending_${String(place)}`;
+    if (!endings.some((ending) => ending.id === id)) return id;
+  }
+  return `ending_${String(Date.now())}`;
+}
+
+/** The most words of an ending's line the Flow shows before it trails off. */
+const FIRST_WORDS = 12;
+
+/** A line's first words, ending in "…" when there are more; empty for an empty line. */
+export function firstWords(line: string): string {
+  const words = line
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== '');
+  return words.length <= FIRST_WORDS ? words.join(' ') : `${words.slice(0, FIRST_WORDS).join(' ')}…`;
 }

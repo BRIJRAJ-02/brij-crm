@@ -128,27 +128,46 @@ async function openBuilder() {
   return shown;
 }
 
-describe('a step’s Jumps row (AC-6313, AC-6325)', () => {
-  it('shows the jump it has, offers only the targets below it, and draws in both themes', async () => {
+describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
+  it('shows the rule it has, offers only the targets below it, says where everyone else goes, in both themes', async () => {
     await openBuilder();
     await userEvent.click(page.getByRole('button', { name: /^Step 2 · Your budget/ }));
-    // The jump it has: its conditions, then where it goes.
-    await expect.element(page.getByText('Jumps')).toBeVisible();
-    await expect.element(page.getByText('Jump 1')).toBeVisible();
-    const target = page.getByRole('button', { name: /Then$/ });
+    // The rule it has, in Typeform's words: its conditions, then Jump to, then where everyone else goes.
+    await expect.element(page.getByText('Logic', { exact: true })).toBeVisible();
+    await expect.element(page.getByText('Otherwise, go to Step 3 · Your team')).toBeVisible();
+    const target = page.getByRole('button', { name: /Jump to$/ });
     await userEvent.click(target);
     // Only forward: the step below it and the form's ending, never itself or the step above.
-    await expect.element(page.getByRole('option', { name: 'Go to step 3, Your team' })).toBeVisible();
-    await expect.element(page.getByRole('option', { name: 'End with “Thanks, we are not a fit”' })).toBeVisible();
-    // Never itself or the step above it: the only step offered is the one below.
     expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent)).toEqual([
-      'Go to step 3, Your team',
-      'End with “Thanks, we are not a fit”',
+      'Step 3 · Your team',
+      'Ending: Thanks, we are not a fit',
     ]);
     await page.screenshot({ path: '.vitest/shots/s5-jumps-light.png' });
     await wear('dark');
     await page.screenshot({ path: '.vitest/shots/s5-jumps-dark.png' });
     await userEvent.keyboard('{Escape}');
+  });
+
+  it('Add logic is one click to a working rule: the step’s choice question, its first option, the next place', async () => {
+    await openBuilder();
+    await userEvent.click(page.getByRole('button', { name: /^Step 2 · Your budget/ }));
+    await userEvent.click(page.getByRole('button', { name: 'Add logic' }));
+    // A second rule, ready filled: Budget is Under $1k, Jump to Step 3. Nothing to fill in before it works.
+    await expect.poll(() => document.querySelectorAll('[aria-label="Remove jump 2"]').length).toBe(1);
+    const pickers = [...document.querySelectorAll('button')].filter((each) =>
+      each.textContent.includes('Step 3 · Your team'),
+    );
+    expect(pickers.length).toBeGreaterThan(0);
+  });
+
+  it('Show only if… is one click to a ready condition, and Always show takes it away', async () => {
+    await openBuilder();
+    await userEvent.click(page.getByRole('button', { name: /^Step 3 · Your team/ }));
+    await userEvent.click(page.getByRole('button', { name: 'Show only if…' }));
+    await expect.element(page.getByText('Show only if', { exact: true })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Always show' }));
+    await expect.element(page.getByText('Show only if', { exact: true })).not.toBeInTheDocument();
+    await expect.element(page.getByRole('button', { name: 'Show only if…' })).toHaveFocus();
   });
 
   it('shows a number for each choice of a scored question, in both themes', async () => {
@@ -179,15 +198,18 @@ describe('the Flow view (AC-6325)', () => {
       ),
       { data: {}, pattern: '/w/$slug/captures/forms/$formId', at: '/w/acme/captures/forms/form-1', toasts },
     );
-    await expect.element(page.getByRole('heading', { name: 'The flow' })).toBeVisible();
+    await expect.element(page.getByRole('heading', { name: 'Flow' })).toBeVisible();
     await expect.element(page.getByText('Step 1').first()).toBeVisible();
     await expect.element(page.getByText('Step 2 · Your budget').first()).toBeVisible();
     // The fall through says where it goes, by name, never an empty value.
     await expect.element(page.getByText('Step 3 · Your team').first()).toBeVisible();
-    // The jump as one line, in words, and the ending it goes to.
+    // The jump as one line, in words, and the ending it goes to; then where everyone else goes.
     await expect.element(page.getByText('If Budget is Under $1k')).toBeVisible();
-    await expect.element(page.getByText('End with “Thanks, we are not a fit”')).toBeVisible();
+    await expect.element(page.getByText('Jump to Ending: Thanks, we are not a fit')).toBeVisible();
+    await expect.element(page.getByText('Otherwise')).toBeVisible();
+    // Every end is listed: the form's own thank you page first, then its endings.
     await expect.element(page.getByText('Endings')).toBeVisible();
+    await expect.element(page.getByText('Thank you page').first()).toBeVisible();
     await page.screenshot({ path: '.vitest/shots/s5-flow-light.png' });
     await wear('dark');
     await page.screenshot({ path: '.vitest/shots/s5-flow-dark.png' });

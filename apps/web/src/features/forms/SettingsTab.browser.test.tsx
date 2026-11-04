@@ -1,7 +1,8 @@
 // A form's owner in Chromium (spec 0029 milestone 3, AC-755; spec 0023 AC-567, AC-1050): Settings › Details' Owner
 // lists Nobody, the teammates and, under Round robin, the groups the reader can see with how many are switched on.
-// Choosing a group says who gets each new record and saves the group alone (never a teammate beside it) from the
-// SaveBar; a group with nobody switched on, and one the reader can't list, each say so in the one line under it.
+// Choosing a group says who gets each new record and saves the group alone (never a teammate beside it) as it is
+// picked, with no Save (one save model, 5 November 2026); a group with nobody switched on, and one the reader can't
+// list, each say so in the one line under it. The name and link save as they are left, and say what is wrong only then.
 import type {
   BookingPageView,
   DataLayer,
@@ -171,22 +172,24 @@ function fakeData(groups: readonly RotationView[], bookingPages: readonly Bookin
       hostedUrl: (key: string) => `https://app.example.com/f/${key}`,
       updateSettings: (_slug: string, _formId: string, settings: Record<string, unknown>) => {
         saves.push(settings);
-        return Promise.resolve(
-          formView(
+        return Promise.resolve({
+          ...formView(
             {
               ...(typeof settings.ownerMemberId === 'string' ? { ownerMemberId: settings.ownerMemberId } : {}),
               ...(typeof settings.ownerRotationId === 'string' ? { ownerRotationId: settings.ownerRotationId } : {}),
             },
             Array.isArray(settings.notifyMemberIds) ? (settings.notifyMemberIds as string[]) : [],
           ),
-        );
+          ...(typeof settings.name === 'string' ? { name: settings.name } : {}),
+          ...(typeof settings.slug === 'string' ? { publicKey: settings.slug } : {}),
+        });
       },
     },
   } as unknown as DataLayer;
   return { data, saves };
 }
 
-/** The Settings tab with its SaveBar, as the form editor holds them. */
+/** The Settings tab and its settings, as the form editor holds them (no SaveBar: each field saves itself). */
 function Editor({ initial }: { readonly initial: FormView }) {
   const [form, setForm] = useState(initial);
   const settings = useFormSettings({ slug: 'acme', form, onFormChange: setForm });
@@ -206,7 +209,6 @@ function Editor({ initial }: { readonly initial: FormView }) {
         isRetargeting={false}
         showGaps={false}
       />
-      {settings.footer}
     </>
   );
 }
@@ -261,8 +263,9 @@ describe('the owner of a form’s new records', () => {
 
     await expect.element(owner).toHaveTextContent('Sales team');
     await expect.element(page.getByText('Each new record goes to the next teammate in Sales team.')).toBeVisible();
-    await page.getByRole('button', { name: 'Save' }).click();
+    // Saved as it is picked: there is no Save button to find.
     await expect.poll(() => fake.saves).toEqual([{ ownerMemberId: null, ownerRotationId: SALES }]);
+    expect(page.getByRole('button', { name: 'Save' }).query()).toBeNull();
     await expect.element(owner).toHaveTextContent('Sales team');
 
     // A group with nobody switched on says new records get no owner; Nobody saves both cleared.
@@ -276,7 +279,6 @@ describe('the owner of a form’s new records', () => {
       .toBeVisible();
     await owner.click();
     await page.getByRole('listbox').getByRole('option', { name: 'Nobody', exact: true }).click();
-    await page.getByRole('button', { name: 'Save' }).click();
     await expect.poll(() => fake.saves.at(-1)).toEqual({ ownerMemberId: null, ownerRotationId: null });
   });
 
@@ -306,6 +308,38 @@ describe('the owner of a form’s new records', () => {
   });
 });
 
+describe('the name and the link save as they are left (one save model)', () => {
+  it('says nothing while the name is typed, says an empty one is missing once left, and saves a real one on leaving', async () => {
+    const fake = await show(formView({}), []);
+    const name = page.getByRole('textbox', { name: 'Name', exact: true });
+    await userEvent.clear(name);
+    // Emptied but not left: no error yet, and nothing sent.
+    expect(page.getByText('Give the form a name.').query()).toBeNull();
+    await userEvent.tab();
+    await expect.element(page.getByText('Give the form a name.')).toBeVisible();
+    expect(fake.saves).toEqual([]);
+    // Typing again clears it; leaving saves it, trimmed, with no Save button.
+    await userEvent.fill(name, ' Talk to us ');
+    expect(page.getByText('Give the form a name.').query()).toBeNull();
+    await userEvent.tab();
+    await expect.poll(() => fake.saves).toEqual([{ name: 'Talk to us' }]);
+    await expect.element(name).toHaveValue('Talk to us');
+  });
+
+  it('checks the link on leaving: one that can’t be a link says so and is not sent, a good one saves', async () => {
+    const fake = await show(formView({}), []);
+    const link = page.getByRole('textbox', { name: /^Link/ });
+    await userEvent.fill(link, 'a');
+    expect(page.getByText(/The link needs 2 to 40/).query()).toBeNull();
+    await userEvent.tab();
+    await expect.element(page.getByText(/The link needs 2 to 40/)).toBeVisible();
+    expect(fake.saves).toEqual([]);
+    await userEvent.fill(link, 'talk-to-us');
+    await userEvent.tab();
+    await expect.poll(() => fake.saves).toEqual([{ slug: 'talk-to-us' }]);
+  });
+});
+
 describe('who is emailed each new submission (AC-568, AC-1047)', () => {
   it('lists the people the form tells, saves a change alone, and says the owner is told too', async () => {
     const fake = await show(formView({ ownerMemberId: ADA }, [ADA]), []);
@@ -321,7 +355,6 @@ describe('who is emailed each new submission (AC-568, AC-1047)', () => {
     await notify.click();
     await page.getByRole('listbox').getByRole('option', { name: /Bea/ }).click();
     await userEvent.keyboard('{Escape}');
-    await page.getByRole('button', { name: 'Save' }).click();
     await expect.poll(() => fake.saves).toEqual([{ notifyMemberIds: [ADA, BEA] }]);
   });
 

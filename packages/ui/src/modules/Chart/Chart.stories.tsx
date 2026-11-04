@@ -86,6 +86,45 @@ export const Line: Story = {
   },
 };
 
+/** Daily points from 7 August: a long range's axis, as Insights and a form's Analytics draw it. */
+const dayFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+const ninetyDays: readonly ChartPoint[] = Array.from({ length: 89 }, (_, at) => {
+  const day = dayFormat.format(new Date(Date.UTC(2026, 7, 7 + at)));
+  const value = (at * 37) % 23;
+  return { id: day, label: day, axisLabel: day, value, valueText: String(value) };
+});
+
+/**
+ * A long range (T7, 4 November 2026: "numbers are overlapping"): 89 days, its x labels thinned to the room there is
+ * from their measured widths, so no two ever touch, on a wide page or a phone.
+ */
+export const LongRange: Story = {
+  args: {
+    kind: 'line',
+    label: 'Views a day',
+    pointLabel: 'Day',
+    valueLabel: 'Views',
+    points: ninetyDays,
+    formatTick: String,
+  },
+  // Its baselines are owed: they are shot only in the pinned image (`pnpm test:visual --update`), never borrowed.
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <Chart {...args} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const labels = [...canvasElement.querySelectorAll('svg text[text-anchor="middle"]')]
+      .map((each) => each.getBoundingClientRect())
+      .sort((a, b) => a.left - b.left);
+    await expect(labels.length).toBeGreaterThan(1);
+    for (let at = 1; at < labels.length; at += 1) {
+      await expect((labels[at]?.left ?? 0) - (labels[at - 1]?.right ?? 0)).toBeGreaterThan(0);
+    }
+  },
+};
+
 /**
  * Two series on one axis (Insights, spec 0067): visits and finishes a week, each pair side by side with a surface gap,
  * a legend naming both, and the table with a column each. Never a second axis.

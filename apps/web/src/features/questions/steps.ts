@@ -57,9 +57,23 @@ export function moveItem(flow: Flow, id: string, index: number): Flow {
   return fromItems(flow, [...rest.slice(0, to), moving, ...rest.slice(to)]);
 }
 
-/** A new break at the end, with no title yet: the questions added after it make its step. */
+/**
+ * A new break, placed so the step it makes already holds questions (the owner, 4 November 2026: one click, "already
+ * named and placed"): it splits the last step in two, starting at the middle of that step's questions, so a form of
+ * four questions becomes two steps of two. With fewer than two questions in the last step there is nothing to split,
+ * and the break goes at the end, where the questions added after it make its step. It has no title yet: the list
+ * names it by its place ("Step 2").
+ */
 export function addStep(flow: Flow, id: string): Flow {
-  return { ...flow, steps: [...flow.steps, { id }] };
+  const items = itemsOf(flow);
+  const lastBreak = items.findLastIndex((item) => item.kind === 'step');
+  const tail = items.slice(lastBreak + 1).filter((item) => item.kind === 'question');
+  if (lastBreak === items.length - 1 || tail.length < 2) return { ...flow, steps: [...flow.steps, { id }] };
+  const startsAt = tail[Math.ceil(tail.length / 2)]?.id;
+  if (startsAt === undefined) return { ...flow, steps: [...flow.steps, { id }] };
+  const next = { ...flow, steps: [...flow.steps, { id, startsAt }] };
+  // In the order the list shows them, so the steps array never disagrees with where each break sits.
+  return fromItems(next, itemsOf(next));
 }
 
 /** The flow without the break `id`, so its questions join the step above, and what Undo needs to put it back. */

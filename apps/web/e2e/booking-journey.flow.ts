@@ -43,11 +43,11 @@ test.describe('the booking journey', () => {
     await page.getByRole('button', { name: 'Add a question' }).click();
     await page.getByLabel('Question', { exact: true }).fill('What do you want to cover?');
     // A new question is kept with the booking until the host says otherwise (B3); here they file it on People.
-    await page.getByRole('button', { name: 'Not filed, kept with the booking Where it goes' }).click();
+    await page.getByRole('button', { name: 'Kept with the booking only Save answer to' }).click();
     await page.getByRole('option', { name: /^Creates/ }).click();
     await page.getByText('Visitors must answer').click();
     await page.getByRole('button', { name: /^Save/ }).click();
-    await expect(page.getByText('Added 1 attribute to Person.')).toBeVisible();
+    await expect(page.getByText('Added 1 field to Person.')).toBeVisible();
     // Saved means saved: the bar leaves once the question is filed (late trap #58).
     await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 10_000 });
     const address = await page.getByRole('link', { name: 'View page' }).getAttribute('href');

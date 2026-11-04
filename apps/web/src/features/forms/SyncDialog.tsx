@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Sync earlier submissions: apply the form's current filing to earlier submissions, after a filing change goes
 // live or from the editor's More menu (spec 0058, AC-14).
-// Main task: read the one count line (new records, updates, already matching, can't be synced), keep Only unfiled or pick All, and
+// Main task: read the one count line (new records, updates, already matching, can't be synced), keep Only unsaved or pick All, and
 // press the one button; it runs as a background job with progress and a summary toast.
 // Leaves out: choosing single submissions (Add to CRM does that), and undoing a sync.
 import { isDataError, type SyncPreview, type SyncScope } from '@crm/data';
@@ -31,10 +31,10 @@ type PreviewState =
   | { readonly status: 'ready'; readonly scope: SyncScope; readonly preview: SyncPreview }
   | { readonly status: 'error'; readonly scope: SyncScope; readonly message: string };
 
-/** "Sync earlier submissions?": one line, Only unfiled or All, the counts, then Not now or "Sync 42 submissions". */
+/** "Sync earlier submissions?": one line, Only unsaved or All, the counts, then Not now or "Sync 42 submissions". */
 export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }: SyncDialogProps) {
   const { data } = useRouteContext({ from: '__root__' });
-  // Only unfiled first: it never touches a record already made (the safer default, as HubSpot's resync offers).
+  // Only unsaved first: it never touches a record already made (the safer default, as HubSpot's resync offers).
   const [scope, setScope] = useState<SyncScope>('unfiled');
   const [state, setState] = useState<PreviewState>({ status: 'loading', scope: 'unfiled' });
   // One job id per opening, so a retried Start never starts a second sync.

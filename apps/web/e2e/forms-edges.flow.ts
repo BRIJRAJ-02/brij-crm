@@ -75,7 +75,7 @@ test.describe('the form journey’s edges', () => {
       .getByRole('button', { name: /^Publish/ })
       .first()
       .click();
-    await expect(page.getByText(/Live · v2/).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Published.')).toBeVisible({ timeout: 30_000 });
 
     const visitor = await visitorOn(browser, page, form);
     await visitor.getByLabel(/Your name/).fill('Ada Lovelace');
@@ -161,9 +161,10 @@ test.describe('the form journey’s edges', () => {
     const { slug, form } = await withForm(page, 'moved');
     const moved = `talk-${form.id.slice(-8)}`;
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=settings`);
+    // The link saves itself as the field is left: there is no Save (one save model, 5 November 2026).
     await page.getByLabel('Link', { exact: true }).fill(moved);
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeHidden({ timeout: 15_000 });
+    await page.getByLabel('Link', { exact: true }).press('Tab');
+    await expect(page.getByText('Link changed. Old links still open the form.')).toBeVisible({ timeout: 15_000 });
 
     // A link pasted before the change still opens the form, and the page moves to the new address.
     const visitor = await visitorOn(browser, page, form);
@@ -172,7 +173,7 @@ test.describe('the form journey’s edges', () => {
     await visitor.context().close();
   });
 
-  test('a form published again while a visitor fills it in redraws in place, their answers kept', async ({
+  test('a form published again while a visitor fills it in takes their send as the version they saw (AC-6302)', async ({
     page,
     browser,
   }) => {
@@ -182,7 +183,7 @@ test.describe('the form journey’s edges', () => {
     await visitor.getByLabel(/Your name/).fill('Ada Lovelace');
     await visitor.getByLabel(/Work email/).fill(`ada-${form.id.slice(-6)}@example.com`);
 
-    // Meanwhile the owner adds a required question and publishes, so the visitor's page lacks something it needs.
+    // Meanwhile the owner adds a required question and publishes.
     await page.goto(`/w/${slug}/captures/forms/${form.id}`);
     await page.getByRole('button', { name: 'Add a question' }).click();
     await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
@@ -191,16 +192,14 @@ test.describe('the form journey’s edges', () => {
       .getByRole('button', { name: /^Publish/ })
       .first()
       .click();
-    await expect(page.getByText(/Live · v2/).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Published.')).toBeVisible({ timeout: 30_000 });
 
+    // Spec 0063 (AC-6302): a send is checked and filed as the version the visitor saw, so the new required question
+    // never strands someone who started before it existed.
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Send' }).click();
-    // Not lost and not a dead end: the new version, the answers still in it, and why.
-    await expect(visitor.getByText(/This form was updated while you filled it in\./)).toBeVisible({ timeout: 15_000 });
-    await expect(visitor.getByLabel(/Your name/)).toHaveValue('Ada Lovelace');
-    await visitor.getByLabel(/What is your budget\?/).fill('About ten thousand');
-    await visitor.getByRole('button', { name: 'Send' }).click();
     await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByText(/This form was updated while you filled it in\./)).toHaveCount(0);
     await visitor.context().close();
   });
 
@@ -215,7 +214,8 @@ test.describe('the form journey’s edges', () => {
     await rpc(page, 'bookingPages/create', {
       workspace: slug,
       id: uuidv7(),
-      title: 'Intro call',
+      // Named apart from the booking page a new workspace starts with.
+      title: `Intro call ${tag}`,
       timeZone: 'UTC',
       mutationId: randomUUID(),
     });
@@ -226,13 +226,11 @@ test.describe('the form journey’s edges', () => {
     await page.getByRole('tab', { name: 'Settings' }).click();
     await page.getByRole('radio', { name: 'Booking' }).check({ force: true });
     await page.getByRole('button', { name: /Booking page$/ }).click();
-    await page.getByRole('option', { name: /^Intro call/ }).click();
+    await page.getByRole('option', { name: new RegExp(`^Intro call ${tag}`) }).click();
     await expect(page.getByRole('button', { name: /Booking page$/ })).toContainText('Intro call');
 
+    // The first publish is one click, with nothing asked.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const publish = page.getByRole('dialog', { name: 'Publish your form' });
-    await publish.getByRole('textbox', { name: 'Name', exact: true }).fill(`Talk to us ${tag}`);
-    await publish.getByRole('button', { name: 'Publish', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
     await page.keyboard.press('Escape');
     await page.getByRole('tab', { name: 'Settings' }).click();

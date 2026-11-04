@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { FormAttributeChoice, FormDocument } from '@crm/data';
 import {
   addQuestion,
+  canDiscard,
+  firstPublish,
+  firstWords,
   changeQuestion,
   draftGap,
   duplicateQuestion,
@@ -129,9 +132,7 @@ describe('the builder’s draft changes', () => {
     const [name] = base.questions;
     if (name === undefined) throw new Error('no question');
     expect(filedLine(name, 'Person', ATTRIBUTES)).toBe('Person › Name');
-    expect(filedLine({ ...name, filedOn: undefined }, 'Person', ATTRIBUTES)).toBe(
-      'Not filed, kept with the submission',
-    );
+    expect(filedLine({ ...name, filedOn: undefined }, 'Person', ATTRIBUTES)).toBe('Kept with the submission only');
   });
 
   it('keeps the match email question', () => {
@@ -140,7 +141,8 @@ describe('the builder’s draft changes', () => {
 
   it('says where the form stands', () => {
     const form = { status: 'live' as const, liveVersionNumber: 7, hasUnpublished: false };
-    expect(statusOf(form, false)).toEqual({ tone: 'live', text: 'Live · v7' });
+    // Plain words: Live, never a version number.
+    expect(statusOf(form, false)).toEqual({ tone: 'live', text: 'Live' });
     expect(statusOf(form, true).tone).toBe('changed');
     expect(statusOf({ ...form, status: 'paused' }, false).text).toBe('Paused');
     expect(statusOf({ status: 'draft', hasUnpublished: true }, true).text).toBe('Draft');
@@ -193,6 +195,68 @@ describe('a Settings field still being typed (the save that failed as "check you
     const empty: FormDocument = { ...saved, buttonText: '  ' };
     expect(savableDraft(empty, saved).buttonText).toBe(saved.buttonText);
     expect(draftGap(empty)).toBe('button');
+  });
+});
+
+describe('a rule still being written is a local draft (T15)', () => {
+  const two: FormDocument = {
+    ...base,
+    after: { kind: 'message', message: 'Thanks' },
+    questions: [
+      { ...base.questions[0], id: 'q1', key: 'name', label: 'Your name', answerType: 'short_text', required: true },
+      { ...base.questions[0], id: 'q2', key: 'company', label: 'Company', answerType: 'short_text', required: false },
+    ],
+    steps: [{ id: 's2', startsAt: 'q2' }],
+  } as FormDocument;
+
+  it('leaves out a question’s Show when that has no value yet, and keeps the rest of the change', () => {
+    const typing: FormDocument = {
+      ...two,
+      headline: 'New headline',
+      questions: two.questions.map((question) =>
+        question.id === 'q2'
+          ? { ...question, showWhen: { join: 'all', rules: [{ key: 'name', op: 'is' }] } }
+          : question,
+      ),
+    };
+    const sent = savableDraft(typing, two);
+    expect(sent.headline).toBe('New headline');
+    expect(sent.questions.find((question) => question.id === 'q2')?.showWhen).toBeUndefined();
+  });
+
+  it('sends the Show when once it has its value', () => {
+    const done: FormDocument = {
+      ...two,
+      questions: two.questions.map((question) =>
+        question.id === 'q2'
+          ? { ...question, showWhen: { join: 'all', rules: [{ key: 'name', op: 'is', value: 'Ada' }] } }
+          : question,
+      ),
+    };
+    expect(savableDraft(done, two)).toBe(done);
+  });
+
+  it('keeps a step’s unfinished jump and Show when out of the save, and a finished jump in', () => {
+    const typing: FormDocument = {
+      ...two,
+      steps: [
+        {
+          id: 's2',
+          startsAt: 'q2',
+          showWhen: { join: 'all', rules: [{ key: 'name', op: 'is' }] },
+          jumps: [
+            { when: { join: 'all', rules: [{ key: 'name', op: 'is' }] }, to: { ending: 'e1' } },
+            { when: { join: 'all', rules: [{ key: 'name', op: 'is_answered' }] }, to: { ending: 'e1' } },
+            { when: { join: 'all', rules: [{ key: 'name', op: 'more_than', value: 'ten' }] }, to: { ending: 'e1' } },
+          ],
+        },
+      ],
+    };
+    const [step] = savableDraft(typing, two).steps;
+    expect(step?.showWhen).toBeUndefined();
+    expect(step?.jumps).toEqual([
+      { when: { join: 'all', rules: [{ key: 'name', op: 'is_answered' }] }, to: { ending: 'e1' } },
+    ]);
   });
 });
 
@@ -285,5 +349,56 @@ describe('planNewAttributes', () => {
     const all = doc([filed, ask('b', ' ', 'short_text'), ask('c', 'CV', 'file'), ask('d', 'Notes', 'long_text')]);
     expect(planNewAttributes(all, [], true).map((plan) => [plan.title, plan.type])).toEqual([['Notes', 'text']]);
     expect(planNewAttributes(all, [], false)).toEqual([]);
+  });
+});
+
+describe('the one click first publish (the owner, 5 November 2026)', () => {
+  const ROLE = '0199f0a0-0000-7000-8000-0000000000c1';
+  const roles: readonly FormAttributeChoice[] = [
+    { attributeId: ROLE, title: 'Job title', type: 'text', isRequired: false, isUnique: false, canWrite: true },
+  ];
+  const asked = (document: FormDocument) =>
+    changeQuestion(addQuestion(document, 'q-role'), 'q-role', { label: 'Job title', answerType: 'short_text' });
+
+  it('matches each answer to a field by its label, with nothing asked', () => {
+    const draft = asked(base);
+    const first = firstPublish(draft, { name: 'Talk to us', publicKey: 'form-abc123' }, roles);
+    expect(first.document.questions.find((question) => question.id === 'q-role')?.filedOn?.attributeId).toBe(ROLE);
+    // A question already saved somewhere, or kept off the CRM on purpose, is left as it is.
+    const kept = changeQuestion(draft, 'q-role', { filedOn: null, kept: true });
+    expect(firstPublish(kept, { name: 'x', publicKey: 'form-abc123' }, roles).document.questions.at(-1)?.filedOn).toBe(
+      undefined,
+    );
+  });
+
+  it('keeps the form’s name and makes the link from it, or keeps its own key', () => {
+    expect(firstPublish(base, { name: 'Talk to us', publicKey: 'form-abc123' }, [])).toMatchObject({
+      name: 'Talk to us',
+      address: 'talk-to-us',
+    });
+    // An untitled form goes live as it is, at its own key: renaming it later is one field in Settings.
+    expect(firstPublish(base, { name: 'Untitled form', publicKey: 'form-abc123' }, [])).toMatchObject({
+      name: 'Untitled form',
+      address: 'form-abc123',
+    });
+  });
+});
+
+describe('Discard changes', () => {
+  it('is offered only on a published form with something unpublished', () => {
+    expect(canDiscard({ liveVersionNumber: 2, hasUnpublished: false }, true)).toBe(true);
+    expect(canDiscard({ liveVersionNumber: 2, hasUnpublished: true }, false)).toBe(true);
+    expect(canDiscard({ liveVersionNumber: 2, hasUnpublished: false }, false)).toBe(false);
+    expect(canDiscard({ hasUnpublished: true }, true)).toBe(false);
+  });
+});
+
+describe('the Flow’s ending lines', () => {
+  it('shows an ending’s first words, or nothing, never a stand in like “No line”', () => {
+    expect(firstWords('')).toBe('');
+    expect(firstWords('  We only take   projects over $5k. ')).toBe('We only take projects over $5k.');
+    expect(firstWords('one two three four five six seven eight nine ten eleven twelve thirteen')).toBe(
+      'one two three four five six seven eight nine ten eleven twelve…',
+    );
   });
 });
