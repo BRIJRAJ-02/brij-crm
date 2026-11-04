@@ -6,13 +6,41 @@ import type { MemberSummary, NotificationView } from '@crm/data';
 import type { NotificationItem } from '@crm/ui';
 import { actorDisplay } from '../notes/entries.ts';
 import { availabilityHref } from '../booking/links.ts';
+import { bookingsTabHref } from '../bookings/tabs.ts';
 import { formHref } from '../forms/paths.ts';
 import { recordHref } from '../records/details.ts';
 import { membersSettingsHref, webhooksHref } from '../settings/nav.ts';
 import { strings } from './strings.ts';
 
-/** One notification as NotificationList's row. */
-export function toNotificationItem(view: NotificationView, members: readonly MemberSummary[]): NotificationItem {
+/**
+ * One notification as NotificationList's row. `when` writes a booking's start on the member's clock (the screen's
+ * format settings); without it the row says nothing of when.
+ */
+export function toNotificationItem(
+  view: NotificationView,
+  members: readonly MemberSummary[],
+  when?: (iso: string) => string,
+): NotificationItem {
+  // A guest booked one of the reader's pages (B-12): the guest is the row's face, the page its sentence, and the
+  // second line says when.
+  if (view.kind === 'booking' && view.booking !== undefined) {
+    return {
+      id: view.id,
+      kind: view.kind,
+      actor: { type: 'booking', id: view.bookingId ?? null, name: view.booking.guestName || strings.someGuest },
+      createdAt: view.createdAt,
+      isRead: view.readAt !== undefined,
+      isDone: view.doneAt !== undefined,
+      ...(view.record === undefined ? {} : { record: view.record }),
+      pageTitle: view.booking.pageTitle,
+      excerpt:
+        when === undefined
+          ? ''
+          : view.booking.status === 'cancelled'
+            ? strings.bookingCancelled(when(view.booking.startsAt))
+            : when(view.booking.startsAt),
+    };
+  }
   // Someone asks to join: the row is about them, so they are its face and its sentence ("Cy Young asks to join").
   if (view.joinRequestId !== undefined) {
     return {
@@ -76,6 +104,10 @@ export function targetOf(
   if (view.kind === 'scheduling_changed') return { kind: 'href', href: availabilityHref(slug) };
   // A webhook endpoint turned off (spec 0064, AC-6423): Settings › Webhooks, where the one switch turns it back on.
   if (view.kind === 'webhook_off') return { kind: 'href', href: webhooksHref(slug) };
+  // A guest's booking (B-12): Bookings' List with its card open.
+  if (view.kind === 'booking' && view.bookingId !== undefined) {
+    return { kind: 'href', href: `${bookingsTabHref(slug, 'list')}?open=${view.bookingId}` };
+  }
   if (view.submissionId !== undefined && view.formId !== undefined) {
     return { kind: 'href', href: formHref(slug, view.formId, 'submissions', view.submissionId) };
   }

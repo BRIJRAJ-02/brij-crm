@@ -29,6 +29,7 @@ import {
   BOOKING_DURATIONS_MAX,
   PROFILE_ORDER_MAX,
   ROUTING_RULES_MAX,
+  BOOKING_NOTICE_DEFAULT,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
@@ -868,7 +869,7 @@ export async function createBookingPage(
       location: given.location ?? { type: 'video' },
       bufferBefore: given.bufferBefore ?? 0,
       bufferAfter: given.bufferAfter ?? 0,
-      minNoticeMinutes: given.minNoticeMinutes ?? 0,
+      minNoticeMinutes: given.minNoticeMinutes ?? BOOKING_NOTICE_DEFAULT,
       windowDays: given.windowDays ?? 60,
       dailyLimit: given.dailyLimit ?? null,
       slotStep: given.slotStep ?? null,

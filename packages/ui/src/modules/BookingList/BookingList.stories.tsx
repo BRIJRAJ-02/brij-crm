@@ -234,3 +234,86 @@ export const Meetings: Story = {
     await expect(canvas.getByText('Team')).toBeInTheDocument();
   },
 };
+
+/** Bookings › List's rows (`layout="columns"`): one line each, the time, who, the page, the status, then the actions. */
+function columnGroups(): BookingListGroup[] {
+  return [
+    {
+      id: '2026-10-08',
+      label: 'Today',
+      rows: [
+        {
+          id: 'grace',
+          date: '16:00 – 16:30',
+          time: '',
+          title: 'Intro call',
+          chip: { objectId: 'people', recordId: 'grace', name: 'Grace Hopper', kind: 'person' },
+          source: { name: 'Intro call', hue: 'blue' },
+          status: { label: 'Confirmed', hue: 'green' },
+          join: { href: 'https://meet.google.com/abc-defg-hij', provider: 'Google Meet' },
+          quickActions: (
+            <>
+              <Button variant="ghost" icon="calendar-clock" label="Reschedule Intro call with Grace Hopper" />
+              <Button variant="ghost-danger" icon="circle-x" label="Cancel Intro call with Grace Hopper" />
+            </>
+          ),
+        },
+        {
+          id: 'sync',
+          date: '17:00 – 18:00',
+          time: '',
+          title: 'Pipeline sync',
+          source: { name: 'Team', hue: 'green' },
+        },
+      ],
+    },
+    {
+      id: '2026-10-09',
+      label: 'Fri, 9 Oct',
+      rows: [
+        {
+          id: 'alan',
+          date: '10:00 – 11:00',
+          time: '',
+          title: 'Site visit',
+          chip: { objectId: 'people', recordId: 'alan', name: 'Alan Turing', kind: 'person' },
+          source: { name: 'Site visit', hue: 'purple' },
+          status: { label: 'Needs a host', hue: 'orange' },
+        },
+      ],
+    },
+  ];
+}
+
+/**
+ * Columns: the records table's rhythm. The open row is selected (`aria-current`); Reschedule and Cancel show on hover
+ * or focus, and always on a touch screen.
+ */
+export const Columns: Story = {
+  parameters: { crm: { preview: true } },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingList {...args} layout="columns" openId="grace" groups={columnGroups()} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const open = canvas.getByRole('button', { name: 'Grace Hopper' });
+    await expect(open.closest('li')).toHaveAttribute('aria-current', 'true');
+    await expect(canvas.getByText('Needs a host')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Alan Turing' }));
+    await expect(args.onOpen).toHaveBeenCalledWith('alan', expect.any(HTMLElement));
+    // A quick change is its own press, never the row's.
+    const opened = args.onOpen.mock.calls.length;
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel Intro call with Grace Hopper' }));
+    await expect(args.onOpen).toHaveBeenCalledTimes(opened);
+  },
+};
+
+/** Columns in a phone's list: the time and status, then who on a line of their own; the page column and quick changes go. */
+export const ColumnsNarrow: Story = {
+  render: (args) => (
+    <Stage width="phone">
+      <BookingList {...args} layout="columns" groups={columnGroups()} />
+    </Stage>
+  ),
+};

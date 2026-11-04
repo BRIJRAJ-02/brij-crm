@@ -1,8 +1,8 @@
 // Brief
-// Purpose: the Calendar · List · Availability · Roster · Round robin · Calendars bar under Bookings' TopBar, in the row People's ViewBar takes, one tab per child route, with that tab's tools at its end, as Captures has.
+// Purpose: the Pages · Calendar · List · Roster · Availability · Round robin · Routing · Calendars bar under Bookings' TopBar, in the row People's ViewBar takes, one tab per child route, with that tab's tools at its end, as Captures has.
 // Main task: switch between the week calendar, the list, the member's own hours, the team's week and the rest, each with its own address.
 // Leaves out: what each tab shows (its child route renders that into the chosen panel, and portals its tools into the strip's end).
-import { TabPanel, Tabs } from '@crm/ui';
+import { TabPanel, Tabs, usePhoneWidth } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
@@ -33,6 +33,7 @@ export interface BookingsTabsProps {
 export function BookingsTabs({ slug, tab, tabs = BOOKINGS_TABS, children, hosts }: BookingsTabsProps) {
   const navigate = useNavigate();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const isPhone = usePhoneWidth();
   return (
     <BookingsToolbarSlot.Provider value={slot}>
       <Tabs
@@ -40,7 +41,10 @@ export function BookingsTabs({ slug, tab, tabs = BOOKINGS_TABS, children, hosts 
         end={
           <>
             <div ref={setSlot} />
-            {hosts !== undefined && <HostsSwitch value={hosts.value} onChange={hosts.onChange} />}
+            {/* On a phone the Calendar's View menu holds Mine · Everyone with Day · Week (A14), so it leaves the strip. */}
+            {hosts !== undefined && !(isPhone && tab === 'calendar') && (
+              <HostsSwitch value={hosts.value} onChange={hosts.onChange} />
+            )}
           </>
         }
         label={strings.pageTabsLabel}

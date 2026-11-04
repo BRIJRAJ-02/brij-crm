@@ -1247,6 +1247,20 @@
       "when": 1795511010000,
       "tag": "0177_booking_page_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 179,
+      "version": "7",
+      "when": 1795700000000,
+      "tag": "0179_booking_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 180,
+      "version": "7",
+      "when": 1795700001000,
+      "tag": "0180_booking_meeting_link",
+      "breakpoints": true
     }
   ]
 }

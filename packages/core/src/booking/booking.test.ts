@@ -11,6 +11,7 @@ import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
 import { submitForm } from '../forms/public.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { newId } from '../engine/ids.ts';
+import { listNotifications } from '../notifications/inbox.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -484,6 +485,51 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
     );
     expect(stored.rows[0]?.meeting_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(stored.rows[0]?.manage_token_hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('tells its host in their Inbox, once, naming the booking and the guest, already emailed (B-12)', async () => {
+    const w = await workspace();
+    const { entry } = await livePage(w);
+    const input = bookInput();
+    const booked = await bookPublicSlot(entry, deps(), input);
+    // A retry of the same attempt answers the first booking and tells nobody again.
+    await bookPublicSlot(entry, deps(), input);
+    const inbox = await listNotifications(w.owner, { status: 'inbox', kind: 'booking' });
+    expect(inbox.items).toEqual([
+      expect.objectContaining({
+        kind: 'booking',
+        actor: { type: 'booking', id: booked.bookingId },
+        bookingId: booked.bookingId,
+        booking: { pageTitle: 'Intro call', guestName: 'Grace Hopper', startsAt: MONDAY_9, status: 'confirmed' },
+        record: expect.objectContaining({ name: 'Grace Hopper' }) as unknown,
+      }),
+    ]);
+    const stored = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ emailed: boolean }>(sql`select emailed_at is not null as emailed from notifications`),
+    );
+    expect(stored.rows).toEqual([{ emailed: true }]);
+  });
+
+  it('stops showing a booking’s notice once its reader lost the booking or booking.manage (hidden means absent)', async () => {
+    const w = await workspace();
+    const bea = await w.addMember('Bea', 'member');
+    const page = await createBookingPage(bea, { id: newId(), title: 'Bea call', timeZone: 'UTC', settings: {} }, NOW);
+    const booked = await bookPublicSlot(await enterBookingPage({ db }, page.publicKey), deps(), bookInput());
+    const beaInbox = () => listNotifications(bea, { status: 'inbox', kind: 'booking' });
+    expect((await beaInbox()).items.map((item) => item.bookingId)).toEqual([booked.bookingId]);
+    // Demoted to a guest (no booking.manage): the notice is absent, not shown as locked.
+    expect(
+      (await listNotifications(rescope(bea, { role: 'guest' }), { status: 'inbox', kind: 'booking' })).items,
+    ).toEqual([]);
+    // The owner's booking, its notice moved to a member with no reach to it (a reassign away): absent too.
+    const owners = await livePage(w);
+    const theirs = await bookPublicSlot(owners.entry, deps(), bookInput({ start: '2026-11-02T10:00:00.000Z' }));
+    const cal = await w.addMember('Cal', 'member');
+    const calId = cal.actor.id ?? '';
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update notifications set member_id = ${calId} where booking_id = ${theirs.bookingId}`),
+    );
+    expect((await listNotifications(cal, { status: 'inbox', kind: 'booking' })).items).toEqual([]);
   });
 
   it('links the booking to the form submission a hand off names, only when its form sends visitors to this page (AC-1058)', async () => {

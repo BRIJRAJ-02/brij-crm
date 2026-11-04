@@ -603,6 +603,22 @@ export const MarkNoShowInput = WorkspaceScoped.extend({ bookingId: Uuid, noShow:
 /** Marking a booking as a no show. */
 export type MarkNoShowInput = z.infer<typeof MarkNoShowInput>;
 
+/**
+ * The meeting's link, added by hand from the booking's panel (B-07: a video call no calendar made a link for): an
+ * https address, at most 2,000 characters. The guest and their guests are emailed it.
+ */
+export const SetMeetingLinkInput = WorkspaceScoped.extend({
+  bookingId: Uuid,
+  url: z
+    .string()
+    .trim()
+    .max(2000, 'Keep the link to 2,000 characters.')
+    .pipe(z.url({ protocol: /^https$/, hostname: z.regexes.domain, error: 'Paste the meeting’s https link.' })),
+  mutationId: Uuid,
+});
+/** Adding a booking's meeting link by hand. */
+export type SetMeetingLinkInput = z.infer<typeof SetMeetingLinkInput>;
+
 export const bookingsContract = {
   list: oc.input(ListBookingsInput).output(z.array(BookingView)),
   listAll: oc.input(ListWorkspaceBookingsInput).output(z.array(BookingListItem)),
@@ -630,6 +646,8 @@ export const bookingsContract = {
   markNoShow: oc.input(MarkNoShowInput).output(z.object({ noShow: z.boolean() })),
   /** Link a booking to a record by hand, or take the link off (polish F2): its host, the page's owner or an admin. */
   link: oc.input(LinkBookingRecordInput).output(LinkedBookingRecord),
+  /** Add or change the meeting's link by hand (B-07): its host, a co-host, the page's owner or an admin; the guest is emailed. */
+  setMeetingLink: oc.input(SetMeetingLinkInput).output(z.object({ videoUrl: z.string() })),
   /** Time the caller closed on their own calendar (spec 0027). */
   blocks: {
     create: oc.input(CreateTimeBlockInput).output(TimeBlockView),

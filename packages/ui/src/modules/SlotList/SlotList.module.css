@@ -179,6 +179,18 @@
     animation: slot-swap var(--duration-move) var(--ease-in-out) both;
   }
 
+  /* Another clock's time under it (a host's Reschedule: the guest's), quieter, at the label size. */
+  .detail {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    white-space: nowrap;
+  }
+
+  .slot[aria-pressed='true'] .detail {
+    color: inherit;
+  }
+
   .best,
   .busy {
     font: var(--text-label);

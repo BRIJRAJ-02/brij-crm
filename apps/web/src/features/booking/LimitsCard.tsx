@@ -1,13 +1,12 @@
 // Brief
 // Purpose: Availability's Limits section (spec 0037, AC-1297 to AC-1299): at most N meetings a day and a week for one person, across every page.
-// Main task: turn a limit on and set its number; the count beside it ("4 of 20 this week") says how close they are.
+// Main task: pick a limit (No limit, or a number) in each row's Select; the line under it ("4 of 20 this week") says how close they are.
 // Leaves out: per page limits (each page's own Limits), rotation caps (the rotation's settings), and any history of changes (Settings › History).
 import type { DataLayer, LimitsDraft, MeetingLimits } from '@crm/data';
 import { useScheduling } from '@crm/data/react';
-import { Card, EmptyState, Field, Switch } from '@crm/ui';
-import { useState } from 'react';
+import { Card, EmptyState, Select, SettingsRow, type SelectItem } from '@crm/ui';
 import { firstName } from './time-off.ts';
-import { LIMIT_RANGES, LIMIT_STARTS, limitsStrings as strings } from './limits-strings.ts';
+import { LIMIT_CHOICES, limitsStrings as strings } from './limits-strings.ts';
 
 /** Props for the section. */
 export interface LimitsCardProps {
@@ -17,7 +16,7 @@ export interface LimitsCardProps {
   readonly member: { readonly id: string; readonly name: string } | undefined;
 }
 
-/** The section: a Card with a row per limit, its number and the Switch that turns it on. */
+/** The section: a Card with a settings row per limit, its Select at the row's end. */
 export function LimitsCard({ data, slug, member }: LimitsCardProps) {
   const store = data.scheduling.loaded()?.limits;
   return store === undefined ? (
@@ -72,19 +71,31 @@ function Loaded({ store, slug, member }: Omit<LimitsCardProps, 'data'> & { reado
   );
 }
 
-/** A typed limit as a number in its range, or undefined when it isn't one. */
-export function parseLimit(text: string, kind: 'day' | 'week'): number | undefined {
-  const trimmed = text.trim();
-  if (!/^\d{1,3}$/.test(trimmed)) return undefined;
-  const value = Number(trimmed);
-  const range = LIMIT_RANGES[kind];
-  return value >= range.min && value <= range.max ? value : undefined;
+/** A Select's choice as a limit: `none` is no limit. */
+export function limitOf(id: string | null): number | undefined {
+  if (id === null || id === NO_LIMIT) return undefined;
+  const value = Number(id);
+  return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
+/** The Select's id for no limit. */
+const NO_LIMIT = 'none';
+
 /**
- * One limit: its Switch (on saves the last number, or a starting one; off clears it), and its number while on,
- * saved on Enter or when focus leaves, with the count as its hint.
+ * A limit's choices (critic A15: a Switch beside a number box read as two controls for one setting): No limit, then
+ * 1 to 10 a day; a week adds the round numbers a week's limit usually takes. A stored number outside them (one set
+ * before the Select) stays offered, so the row never reads blank.
  */
+export function limitItems(kind: 'day' | 'week', value: number | undefined): readonly SelectItem[] {
+  const numbers = new Set<number>(LIMIT_CHOICES[kind]);
+  if (value !== undefined) numbers.add(value);
+  return [
+    { id: NO_LIMIT, label: strings.noLimit },
+    ...[...numbers].sort((a, b) => a - b).map((each) => ({ id: String(each), label: String(each) })),
+  ];
+}
+
+/** One limit as a settings row: its name, how many are booked so far under it, and its Select at the end. */
 function LimitRow({
   kind,
   limits,
@@ -98,27 +109,8 @@ function LimitRow({
 }) {
   const value = kind === 'day' ? limits.perDay : limits.perWeek;
   const count = kind === 'day' ? limits.today : limits.thisWeek;
-  // What the field holds while typed in; undefined shows the saved number.
-  const [draft, setDraft] = useState<string | undefined>(undefined);
-  const [error, setError] = useState<string | undefined>(undefined);
-  // The number it had, so turning it off and on again brings it back.
-  const [last, setLast] = useState<number>(value ?? LIMIT_STARTS[kind]);
-  if (value !== undefined && value !== last) setLast(value);
-  const isReadOnly = readOnlyReason !== undefined;
-  const isOn = value !== undefined;
-  const commit = () => {
-    if (draft === undefined) return;
-    const parsed = parseLimit(draft, kind);
-    if (parsed === undefined) {
-      setError(kind === 'day' ? strings.dayRange : strings.weekRange);
-      return;
-    }
-    setDraft(undefined);
-    setError(undefined);
-    if (parsed !== value) onSave(parsed);
-  };
   const label = kind === 'day' ? strings.dayField : strings.weekField;
-  const hint =
+  const description =
     value === undefined
       ? kind === 'day'
         ? strings.dayBooked(count)
@@ -126,57 +118,38 @@ function LimitRow({
       : kind === 'day'
         ? strings.dayCount(count, value)
         : strings.weekCount(count, value);
-  // One row per limit: its number, and beside it the Switch that turns it on. Off, the box reads No limit with what
-  // is booked so far under it, so nothing moves when it turns on.
   return (
-    <Field
-      label={label}
-      value={value === undefined ? '' : (draft ?? String(value))}
-      placeholder={strings.noLimit}
-      inputMode="numeric"
-      autoComplete="off"
-      maxLength={3}
-      hint={hint}
-      {...(error === undefined ? {} : { error })}
-      isReadOnly={isReadOnly}
-      isDisabled={!isOn && !isReadOnly}
-      onChange={(text) => {
-        setDraft(text);
-        if (error !== undefined) setError(undefined);
-      }}
-      onSubmit={commit}
-      onBlur={commit}
-      onEscape={() => {
-        setDraft(undefined);
-        setError(undefined);
-      }}
-      after={
-        <Switch
-          label={kind === 'day' ? strings.daySwitch : strings.weekSwitch}
-          isLabelHidden
-          isSelected={isOn}
-          isReadOnly={isReadOnly}
-          onChange={(on) => {
-            setDraft(undefined);
-            setError(undefined);
-            onSave(on ? last : undefined);
-          }}
-        />
-      }
-    />
+    <SettingsRow title={label} description={description} control="compact">
+      <Select
+        label={label}
+        isLabelHidden
+        size="sm"
+        items={limitItems(kind, value)}
+        value={value === undefined ? NO_LIMIT : String(value)}
+        isReadOnly={readOnlyReason !== undefined}
+        onChange={(id) => {
+          const next = limitOf(id);
+          if (next !== value) onSave(next);
+        }}
+      />
+    </SettingsRow>
   );
 }
 
-/** The section while it loads, in its loaded anatomy: both limits' rows, switched off. */
+/** The section while it loads, in its loaded anatomy: both limits' rows, at No limit. */
 export function LimitsCardPending({ member }: { readonly member?: { readonly name: string } | undefined } = {}) {
-  const row = (label: string, switchLabel: string) => (
-    <Field
-      label={label}
-      value=""
-      isDisabled
-      hint={strings.loading}
-      after={<Switch label={switchLabel} isLabelHidden isDisabled />}
-    />
+  const row = (label: string) => (
+    <SettingsRow title={label} description={strings.loading} control="compact">
+      <Select
+        label={label}
+        isLabelHidden
+        size="sm"
+        items={[{ id: NO_LIMIT, label: strings.noLimit }]}
+        value={NO_LIMIT}
+        isDisabled
+        onChange={() => undefined}
+      />
+    </SettingsRow>
   );
   return (
     <Card
@@ -184,8 +157,8 @@ export function LimitsCardPending({ member }: { readonly member?: { readonly nam
       description={member === undefined ? strings.description : strings.descriptionFor(firstName(member.name))}
       isBusy
     >
-      {row(strings.dayField, strings.daySwitch)}
-      {row(strings.weekField, strings.weekSwitch)}
+      {row(strings.dayField)}
+      {row(strings.weekField)}
     </Card>
   );
 }

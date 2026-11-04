@@ -35,6 +35,12 @@ export const SCHEDULE_OVERRIDES_FULL =
 /** The longest minimum notice: 14 days. */
 export const BOOKING_NOTICE_MAX = 14 * 24 * 60;
 /**
+ * A new page's minimum notice when none is given: 4 hours (critic B-15, 4 November 2026), so a fresh page can't be
+ * booked for the next few minutes before its host has looked at it. Only pages made from now on take it: a stored
+ * page keeps the notice it has.
+ */
+export const BOOKING_NOTICE_DEFAULT = 4 * 60;
+/**
  * The longest cancel or move cutoff (spec 0062, AC-6202): 14 days, the same reach as the notice, since a page that
  * needs two weeks' notice to book may reasonably want two weeks' notice to change.
  */

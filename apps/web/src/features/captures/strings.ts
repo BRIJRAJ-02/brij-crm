@@ -6,8 +6,8 @@ export const strings = {
   linksTab: 'Links',
   formsTab: 'Forms',
   /** What the TopBar's count counts, for screen readers: "3 booking pages", "2 forms". */
-  linksCount: 'booking pages',
-  formsCount: 'forms',
+  linksCount: (count: number) => (count === 1 ? 'booking page' : 'booking pages'),
+  formsCount: (count: number) => (count === 1 ? 'form' : 'forms'),
   /** The editors' shared header (22 Oct 2026): one set of words for a booking page and a form. */
   copyLink: 'Copy link',
   /** Opens the live booking page in a new tab. */

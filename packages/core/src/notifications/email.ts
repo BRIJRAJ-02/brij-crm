@@ -40,6 +40,8 @@ function sentenceOf(view: NotificationView, actor: string): string {
   if (view.kind === 'scheduling_changed') return `${actor} changed your scheduling`;
   // It has its own `webhook_endpoint_off` email, so it never reaches this one; the sentence is here for the fallback.
   if (view.kind === 'webhook_off') return `A webhook endpoint turned off: ${view.excerpt}`;
+  // It has its own "New booking" email too, so it is marked emailed when made; the sentence is for the fallback.
+  if (view.kind === 'booking') return `${view.booking?.guestName ?? 'Someone'} booked ${view.excerpt}`;
   if (view.kind === 'mention' && view.noteId !== undefined) return `${actor} mentioned you in a note`;
   if (view.kind === 'mention') return `${actor} mentioned you`;
   if (view.kind === 'reply') return `${actor} replied in a thread`;
@@ -114,7 +116,9 @@ export async function prepareNotificationEmail(
     if (view.taskId !== undefined) path = `${base}/inbox?task=${view.taskId}`;
     else if (view.kind === 'scheduling_changed') path = `${base}/bookings/availability`;
     else if (view.kind === 'webhook_off') path = `${base}/settings/webhooks`;
-    else if (view.submissionId !== undefined && view.formId !== undefined) {
+    else if (view.kind === 'booking' && view.bookingId !== undefined) {
+      path = `${base}/bookings/list?open=${view.bookingId}`;
+    } else if (view.submissionId !== undefined && view.formId !== undefined) {
       path = `${base}/captures/forms/${view.formId}?tab=submissions&submission=${view.submissionId}`;
     } else {
       const objectSlug = view.record === undefined ? undefined : slugs.get(view.record.objectId);

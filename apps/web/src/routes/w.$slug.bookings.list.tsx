@@ -1,6 +1,6 @@
 import { isDataError, type BookingPageView, type MeetingsQuery, type ObjectSummary } from '@crm/data';
 import { LoadingNow, useFormatSettings } from '@crm/ui';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { BookingsFailed, BookingsListScreen } from '../features/bookings/BookingsScreen.tsx';
 import { bookingsSearchOf, parseBookingsSearch, rawOf, type BookingsSearch } from '../features/bookings/search.ts';
@@ -77,6 +77,15 @@ function List({ objects, pages }: ListLoaded) {
   const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
   // Mine or Everyone: an admin's choice, the layout's (its switch is on the strip); anyone else sees their own.
   const choice = useBookingsHosts();
+  // An email's, the Inbox's or the arrival toast's link to one booking (B-20) opens its card, then leaves the
+  // address, so a reload or Back doesn't open it again after it was closed.
+  const asked = Route.useSearch().open;
+  useEffect(() => {
+    if (asked === undefined) return;
+    void navigate({ to: '/w/$slug/bookings/list', params: { slug }, replace: true, search: rawOf('list', search) });
+    // Only when a link asks: the rest of the address is already the screen's.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
   return (
     <BookingsListScreen
       slug={slug}
@@ -89,6 +98,7 @@ function List({ objects, pages }: ListLoaded) {
       pages={pages}
       locale={navigator.languages[0] ?? 'en-GB'}
       actions={actions}
+      openFirst={asked}
       onSearch={(next) =>
         void navigate({
           to: '/w/$slug/bookings/list',

@@ -15,11 +15,19 @@ export const teamWeekStrings = {
   dayShort: (weekday: string, date: string) => `${weekday} ${date}`,
   person: 'Team member',
   thisWeek: 'This week',
+  /** The date stepper's Today (DateNav, one label with the Calendar's), and its tooltip. */
+  today: 'Today',
+  goToThisWeek: 'Go to this week',
   previousWeek: 'Previous week',
   nextWeek: 'Next week',
   search: 'Search people',
   /** The team filter (AC-1289). */
   teamFilter: 'Filter by team',
+  /** The Roster's Filter, always shown as the Calendar's is (the bookings critique, A13). */
+  filter: 'Filter',
+  filterOn: 'Filter · 1',
+  filterTeam: 'Team',
+  clearFilter: 'Clear filter',
   everyone: 'Everyone',
   hours,
   people: (count: number) => (count === 1 ? '1 person' : `${String(count)} people`),

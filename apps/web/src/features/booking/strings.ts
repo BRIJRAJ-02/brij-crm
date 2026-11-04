@@ -382,6 +382,8 @@ export const strings = {
   step: 'Start times every',
   stepDuration: 'Meeting length',
   none: 'None',
+  /** A cancel or move cutoff of 0 (critic B-15): guests may change a booking any time before it starts. */
+  anyTime: 'Any time',
   minutes: (count: number) => `${String(count)} minutes`,
   hoursCount: (count: number) => (count === 1 ? '1 hour' : `${String(count)} hours`),
   days: (count: number) => (count === 1 ? '1 day' : `${String(count)} days`),
@@ -444,6 +446,8 @@ export const strings = {
   /** A day off row's remove button: the day opens again by the weekly hours. */
   removeDayOff: (date: string) => `Remove the day off on ${date}`,
   noDaysOff: 'No days off yet',
+  /** A day off with no note, in Availability's Time off card: what the row is, beside time off's reasons. */
+  dayOff: 'Day off',
   /** Days off while the schedules load, for screen readers. */
   daysOffLoading: 'Loading days off',
   pickDate: 'Pick the day to close.',

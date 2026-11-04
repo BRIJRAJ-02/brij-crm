@@ -9,8 +9,11 @@
  * 2026): they are what somebody setting up bookings does next, not workspace housekeeping, and a person who had
  * not connected a calendar had no reason to go looking three levels into Settings for the one thing that makes
  * every other tab work. Routing (spec 0037, AC-1447) follows Round robin, for holders of `routing.manage` only.
+ * Pages comes first (the bookings critique, B-02, 5 November 2026): the booking pages themselves, the same list as
+ * Captures › Links, so somebody setting up bookings finds where pages live without leaving Bookings.
  */
 export const BOOKINGS_TABS = [
+  'pages',
   'calendar',
   'list',
   'roster',

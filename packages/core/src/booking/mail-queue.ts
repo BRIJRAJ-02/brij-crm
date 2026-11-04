@@ -27,6 +27,8 @@ export const BOOKING_MAIL_KINDS = [
   'approved',
   'declined',
   'pending_expire',
+  // A meeting link added by hand (B-07, migration 0180): the guest and their guests get it.
+  'meeting_link',
 ] as const;
 
 /** One kind of booking email. */

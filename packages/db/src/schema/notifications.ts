@@ -23,6 +23,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { actorColumns, timestamptz, workspaceId } from './common.ts';
 import { automations } from './automations.ts';
+import { bookings } from './booking.ts';
 import { comments } from './comments.ts';
 import { formSubmissions } from './forms.ts';
 import { notes } from './notes.ts';
@@ -43,6 +44,7 @@ export const notificationKind = pgEnum('notification_kind', [
   'automation',
   'scheduling_changed',
   'webhook_off',
+  'booking',
 ]);
 
 const actor = actorColumns('actor');
@@ -78,6 +80,8 @@ export const notifications = pgTable(
     dueTaskId: uuid('due_task_id'),
     /** A webhook endpoint turned off after 3 days of failures (spec 0064, AC-6423): told to each owner and admin. */
     webhookEndpointId: uuid('webhook_endpoint_id'),
+    /** A guest booked one of the member's pages (migration 0179, B-12): the booking, told to its host. */
+    bookingId: uuid('booking_id'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     readAt: timestamptz('read_at'),
     doneAt: timestamptz('done_at'),
@@ -147,7 +151,11 @@ export const notifications = pgTable(
           and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)
         or (${t.kind}::text = 'webhook_off' and ${t.webhookEndpointId} is not null and ${t.recordId} is null
           and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
-          and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)`,
+          and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)
+        or (${t.kind}::text = 'booking' and ${t.bookingId} is not null
+          and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
+          and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null
+          and ${t.webhookEndpointId} is null and ${t.dueTaskId} is null)`,
     ),
     foreignKey({
       name: 'notifications_automation',
@@ -177,6 +185,18 @@ export const notifications = pgTable(
     index('notifications_by_webhook_endpoint')
       .on(t.workspaceId, t.webhookEndpointId)
       .where(sql`${t.webhookEndpointId} is not null`),
+    // A booking's notice goes with it (a purge deletes the booking), one per recipient per booking (migration 0179).
+    foreignKey({
+      name: 'notifications_booking',
+      columns: [t.workspaceId, t.bookingId],
+      foreignColumns: [bookings.workspaceId, bookings.id],
+    }).onDelete('cascade'),
+    uniqueIndex('notifications_one_per_booking')
+      .on(t.workspaceId, t.memberId, t.bookingId)
+      .where(sql`${t.bookingId} is not null`),
+    index('notifications_by_booking')
+      .on(t.workspaceId, t.bookingId)
+      .where(sql`${t.bookingId} is not null`),
     // One per recipient per comment, and per task (its assignment, which turns into its due day: migration 0135).
     uniqueIndex('notifications_one_per_comment')
       .on(t.workspaceId, t.memberId, t.commentId)

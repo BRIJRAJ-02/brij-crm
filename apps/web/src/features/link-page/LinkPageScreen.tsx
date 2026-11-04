@@ -22,6 +22,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  CopyButton,
   EmptyState,
   focusLater,
   HUES,
@@ -675,12 +676,6 @@ function Blocks({
     void linkPage.archive(slug, item.id, false);
     focusNear(strings.archived, index);
   };
-  const copy = (href: string) => {
-    navigator.clipboard.writeText(href).then(
-      () => toasts.toast({ tone: 'success', message: strings.copied }),
-      () => toasts.toast({ tone: 'danger', message: strings.copyFailed }),
-    );
-  };
   const copyHrefOf = (item: ProfileItem): string | undefined => {
     if (item.kind === 'link') return item.url;
     // The card's vCard, as a visitor saves it: the same address Save contact opens, and a QR code can carry.
@@ -735,55 +730,63 @@ function Blocks({
     const kind = BLOCK_KINDS[item.kind];
     const editKind = item.kind;
     return (
-      <MenuTrigger>
-        <Button variant="ghost" icon="ellipsis" label={strings.moreFor(words.title)} />
-        <Menu label={strings.moreFor(words.title)}>
-          {kind.isEditable && (
-            <MenuItem
-              id="edit"
-              icon={item.kind === 'page' ? 'clock' : 'pencil'}
-              onAction={() => {
-                setEditing({ kind: editKind, item, id: item.id });
-              }}
-            >
-              {/* A booking page block's own editor holds its window (and its size on a grid page); "Edit booking
+      <>
+        {/* Copy link says it worked in place, as every copy does (C11), so it sits on the row, not in the menu. */}
+        {href !== undefined && (
+          <CopyButton
+            value={href}
+            label={strings.copyLink}
+            isIconOnly
+            variant="ghost"
+            announcement={strings.copied}
+            failureMessage={strings.copyFailed}
+          />
+        )}
+        <MenuTrigger>
+          <Button variant="ghost" icon="ellipsis" label={strings.moreFor(words.title)} />
+          <Menu label={strings.moreFor(words.title)}>
+            {kind.isEditable && (
+              <MenuItem
+                id="edit"
+                icon={item.kind === 'page' ? 'clock' : 'pencil'}
+                onAction={() => {
+                  setEditing({ kind: editKind, item, id: item.id });
+                }}
+              >
+                {/* A booking page block's own editor holds its window (and its size on a grid page); "Edit booking
                   page" below opens the page itself, so this one is named for what it opens. */}
-              {item.kind !== 'page'
-                ? strings.edit
-                : theme.layout === 'grid'
-                  ? reachStrings.sizeAndSchedule
-                  : reachStrings.schedule}
+                {item.kind !== 'page'
+                  ? strings.edit
+                  : theme.layout === 'grid'
+                    ? reachStrings.sizeAndSchedule
+                    : reachStrings.schedule}
+              </MenuItem>
+            )}
+            {index > 0 && (
+              <MenuItem id="up" icon="chevron-up" onAction={() => moveFromMenu(item, index - 1)}>
+                {strings.moveUp}
+              </MenuItem>
+            )}
+            {index < items.length - 1 && (
+              <MenuItem id="down" icon="chevron-down" onAction={() => moveFromMenu(item, index + 1)}>
+                {strings.moveDown}
+              </MenuItem>
+            )}
+            <MenuSeparator />
+            {item.kind === 'page' && item.page !== undefined && (
+              <MenuItem id="page" icon="calendar-clock" href={pageEditorHref(item.page.workspaceSlug, item.pageId)}>
+                {strings.editPage}
+              </MenuItem>
+            )}
+            <MenuItem id="archive" icon="archive" onAction={() => archive(item, index)}>
+              {strings.archive}
             </MenuItem>
-          )}
-          {href !== undefined && (
-            <MenuItem id="copy" icon="copy" onAction={() => copy(href)}>
-              {strings.copyLink}
+            <MenuItem id="delete" icon="trash" isDanger onAction={() => setDeleting(item)}>
+              {strings.remove}
             </MenuItem>
-          )}
-          {index > 0 && (
-            <MenuItem id="up" icon="chevron-up" onAction={() => moveFromMenu(item, index - 1)}>
-              {strings.moveUp}
-            </MenuItem>
-          )}
-          {index < items.length - 1 && (
-            <MenuItem id="down" icon="chevron-down" onAction={() => moveFromMenu(item, index + 1)}>
-              {strings.moveDown}
-            </MenuItem>
-          )}
-          <MenuSeparator />
-          {item.kind === 'page' && item.page !== undefined && (
-            <MenuItem id="page" icon="calendar-clock" href={pageEditorHref(item.page.workspaceSlug, item.pageId)}>
-              {strings.editPage}
-            </MenuItem>
-          )}
-          <MenuItem id="archive" icon="archive" onAction={() => archive(item, index)}>
-            {strings.archive}
-          </MenuItem>
-          <MenuItem id="delete" icon="trash" isDanger onAction={() => setDeleting(item)}>
-            {strings.remove}
-          </MenuItem>
-        </Menu>
-      </MenuTrigger>
+          </Menu>
+        </MenuTrigger>
+      </>
     );
   };
 

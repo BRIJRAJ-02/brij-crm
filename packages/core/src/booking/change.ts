@@ -870,6 +870,42 @@ export async function markNoShow(
   });
 }
 
+/**
+ * Adds or changes a booking's meeting link by hand (B-07: a video call no calendar made a link for), from Bookings:
+ * its host, a co-host, the page's owner or `booking.admin`, as any change (`hostTarget`; a booking they can't change
+ * answers NOT_FOUND, one they may only See FORBIDDEN). A cancelled booking, or one already started, is
+ * BOOKING_CLOSED. The guest and their guests are emailed the link (`meeting_link`), in the same transaction; the same
+ * link again changes nothing and emails nobody. The address is checked by the contract (https, a host name).
+ */
+export async function setMeetingLink(
+  target: ChangeTarget,
+  input: { readonly url: string },
+  now: Date = new Date(),
+): Promise<{ readonly videoUrl: string }> {
+  const { principal } = target.scope.access;
+  if (principal.kind !== 'member') throw refuse('FORBIDDEN', 'Only a member adds a meeting link from Bookings.');
+  return inWorkspace(target.scope, async (tx) => {
+    const { row, page } = await readTarget(tx, target, true);
+    checkChangeable(row, now, 'changed');
+    // A request the host hasn't answered has no meeting yet: its guest would get a link for a time not agreed.
+    if (row.approval === 'pending') throw refuse('BOOKING_CLOSED', 'Confirm or decline this request first.');
+    if (row.videoUrl === input.url) return { videoUrl: input.url };
+    await tx
+      .update(bookings)
+      .set({ videoUrl: input.url, ...updatedBy(actorOf(target, page)) })
+      .where(eq(bookings.id, row.id));
+    // Audited (security review): the link goes out to an outside guest as if from the host. The row names the
+    // booking only, never the link.
+    await writeAudit(tx, target.scope.workspaceId, target.scope.actor, {
+      action: 'booking.meeting_link_set',
+      targetType: 'booking',
+      targetId: row.id,
+    });
+    await enqueueBookingMail(tx, row.id, ['meeting_link']);
+    return { videoUrl: input.url };
+  });
+}
+
 /** What a link to a record nobody may see, or that doesn't exist, answers: the same either way. */
 const NO_SUCH_RECORD = 'That record doesn’t exist, or you can’t see it.';
 

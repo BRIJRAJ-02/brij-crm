@@ -39,7 +39,8 @@ export type NotificationItemKind =
   | 'join_request'
   | 'automation'
   | 'scheduling_changed'
-  | 'webhook_off';
+  | 'webhook_off'
+  | 'booking';
 
 /** One notification, as the inbox shows it. */
 export interface NotificationItem {
@@ -57,6 +58,8 @@ export interface NotificationItem {
   readonly isNote?: boolean;
   /** A form's new submission: the form's name, which its sentence names ("New submission to Contact us"). */
   readonly formName?: string;
+  /** A guest's booking: the booking page's title, which its sentence names ("Ada Lovelace booked Intro call"). */
+  readonly pageTitle?: string;
   /** The comment's start (mention tokens kept), or the task's title. */
   readonly excerpt: string;
 }
@@ -190,9 +193,11 @@ export function NotificationList({
         : // A webhook endpoint that turned off leads with the endpoint, not with who acted: nobody did (spec 0064).
           item.kind === 'webhook_off'
           ? strings.webhookOff(item.actor.name === '' ? strings.someEndpoint : item.actor.name)
-          : item.isNote === true
-            ? strings.mentionInNote(item.actor.name)
-            : strings.sentence[item.kind](item.actor.name);
+          : item.kind === 'booking' && item.pageTitle !== undefined && item.pageTitle !== ''
+            ? strings.booked(item.actor.name, item.pageTitle)
+            : item.isNote === true
+              ? strings.mentionInNote(item.actor.name)
+              : strings.sentence[item.kind](item.actor.name);
     return (
       <GridListItem
         id={row.id}

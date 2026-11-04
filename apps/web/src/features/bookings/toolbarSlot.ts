@@ -34,3 +34,22 @@ export const BookingsHosts = createContext<HostsChoice | undefined>(undefined);
 
 /** The layout's Mine or Everyone, for the Calendar and List tabs' reads; undefined for anyone but an admin. */
 export const useBookingsHosts = () => useContext(BookingsHosts);
+
+/**
+ * Opens New booking page, held by the Bookings layout (its dialog sits with the TopBar's New): the TopBar's New menu,
+ * Pages' empty list and the Calendar's empty state all open the one dialog. Undefined outside the layout.
+ */
+export const BookingsNewPage = createContext<(() => void) | undefined>(undefined);
+
+/** The layout's New booking page, or undefined outside Bookings. */
+export const useBookingsNewPage = () => useContext(BookingsNewPage);
+
+/**
+ * Whether Bookings may offer Connect calendar: false when the deployment has calendar sync off and nothing is
+ * connected, so every Connect calendar link and notice hides rather than leading to a page that can only say so
+ * (the bookings critique, A2). True outside the layout, so a screen rendered alone keeps its links.
+ */
+export const BookingsCalendarSync = createContext<boolean>(true);
+
+/** Whether Bookings may offer Connect calendar. */
+export const useCanConnectCalendar = () => useContext(BookingsCalendarSync);

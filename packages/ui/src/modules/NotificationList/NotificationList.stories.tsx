@@ -109,7 +109,19 @@ function SampleInbox({
       isDone: false,
       excerpt: '',
     };
-    return [scheduling, webhookOff, ...sampleItems()];
+    // A guest booked one of the reader's pages (B-12): the guest under the booking's mark, the page in the sentence,
+    // their person as the chip and when as the second line.
+    const booking: NotificationItem = {
+      id: 'n7',
+      kind: 'booking',
+      actor: { type: 'booking', id: null, name: 'Ada Lovelace' },
+      createdAt: '2026-10-08T13:20:00.000Z',
+      isRead: false,
+      isDone: false,
+      pageTitle: 'Intro call',
+      excerpt: 'Thu 15 Oct, 10:00',
+    };
+    return [booking, scheduling, webhookOff, ...sampleItems()];
   });
   const source = arraySource(items, (item) => item.id);
   return (

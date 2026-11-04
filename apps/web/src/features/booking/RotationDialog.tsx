@@ -16,6 +16,7 @@ import {
 import {
   Button,
   Callout,
+  Disclosure,
   Field,
   focusLater,
   InfoTip,
@@ -105,6 +106,8 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   const [id] = useState(() => data.rotations.newId());
   const [isBusy, setBusy] = useState(false);
   const [isConfirming, setConfirming] = useState(false);
+  // More options starts folded; Everyone on the roster has only each person's settings, so it opens there.
+  const [isMoreOpen, setMoreOpen] = useState(rotation?.follows === 'everyone');
   // What went wrong, and the member a refusal was about, taken from the list that was sent, not the draft since.
   const [failure, setFailure] = useState<
     { readonly message: string; readonly memberId?: string; readonly isReach?: boolean } | undefined
@@ -120,9 +123,13 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
 
   const change = (memberId: string, patch: Partial<Draft>) =>
     setMembers((current) => current.map((member) => (member.memberId === memberId ? { ...member, ...patch } : member)));
-  const left: SelectItem[] = people
-    .filter((person) => !members.some((member) => member.memberId === person.id))
-    .map((person) => ({ id: person.id, label: person.name, description: person.email }));
+  // Everyone who may join, and anyone already in the group who no longer may (so their name still shows).
+  const everyone: SelectItem[] = [
+    ...people.map((person) => ({ id: person.id, label: person.name, description: person.email })),
+    ...(rotation?.members ?? [])
+      .filter((member) => !people.some((person) => person.id === member.memberId))
+      .map((member) => ({ id: member.memberId, label: member.name })),
+  ];
   // Everyone on the roster: membership follows the workspace, so the 2 to 20 of a chosen group doesn't apply.
   const isRoster = rotation?.follows === 'everyone';
   const countError = isRoster
@@ -378,82 +385,102 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
             isRequired
             {...(nameError === undefined ? {} : { error: nameError })}
           />
-          <RadioGroup
-            label={strings.strategy}
-            variant="cards"
-            value={strategy}
-            onChange={(value) => {
-              if (value === 'fair' || value === 'priority' || value === 'even') setStrategy(value);
-            }}
-          >
-            <Radio value="fair" icon="scale" description={strings.fairLine}>
-              {strings.fairCard}
-            </Radio>
-            <Radio value="priority" icon="star" description={strings.priorityLine}>
-              {strings.priorityCard}
-            </Radio>
-            <Radio value="even" icon="users" description={strings.evenLine}>
-              {strings.evenCard}
-            </Radio>
-          </RadioGroup>
-          {strategy === 'even' && (
-            <Select
-              label={strings.evenGap}
-              items={GAPS}
-              value={String(evenGap)}
-              onChange={(value) => setEvenGap(Number(value ?? 3))}
-            />
-          )}
-          <Select
-            label={strings.window}
-            info={<InfoTip label={strings.window}>{strings.windowInfo}</InfoTip>}
-            items={WINDOWS}
-            value={String(windowDays)}
-            onChange={(value) => setWindowDays(value === '7' ? 7 : value === '90' ? 90 : 30)}
-          />
-          <Select
-            label={strings.returning}
-            hint={strings.returningHint}
-            items={RETURNING}
-            value={returning}
-            onChange={(value) => {
-              if (value === 'owner' || value === 'last_host' || value === 'none') setReturning(value);
-            }}
-          />
+          {/* People first (B-04): who shares the meetings is the one choice a new group needs; how it picks, the
+              window, returning guests and each person's weight and limits fold under More options. */}
           {isRoster ? (
             <Callout tone="info">
               {strings.rosterNote(members.filter((member) => member.isOn).length, members.length)}
             </Callout>
           ) : (
             <Select
-              label={strings.addMember}
-              placeholder={left.length === 0 ? strings.noMembersLeft : strings.addMemberPlaceholder}
-              items={left}
+              label={strings.people}
+              selectionMode="multiple"
+              placeholder={strings.peoplePlaceholder}
+              items={everyone}
               isSearchable
-              isDisabled={left.length === 0 || members.length >= 20}
-              value={null}
+              searchLabel={strings.addMemberPlaceholder}
+              values={members.map((member) => member.memberId)}
               // Who can join, in plain words (SS-R1): a link here would open the reader's own hours, not a teammate's.
               hint={strings.membersHint(members.length)}
               {...(hasTried && countError !== undefined ? { error: countError } : {})}
-              onChange={(memberId) => {
-                if (memberId === null) return;
-                setMembers((current) => [
-                  ...current,
-                  { memberId, weight: '100', priority: 2, dailyCap: null, weeklyCap: null, isOn: true },
-                ]);
+              onValuesChange={(ids) => {
+                const kept = members.filter((member) => ids.includes(member.memberId));
+                const added = ids
+                  .filter((memberId) => !members.some((member) => member.memberId === memberId))
+                  .map((memberId) => ({
+                    memberId,
+                    weight: '100',
+                    priority: 2,
+                    dailyCap: null,
+                    weeklyCap: null,
+                    isOn: true,
+                  }));
+                if (failure?.memberId !== undefined && !ids.includes(failure.memberId)) setFailure(undefined);
+                setMembers([...kept, ...added]);
               }}
             />
           )}
-          {members.length > 0 && (
-            <Table
-              label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}
-              isScrollable
-              columns={isRoster ? ROSTER_COLUMNS : COLUMNS}
-              rows={members}
-              getRowId={(member) => member.memberId}
-              renderCell={renderCell}
-            />
-          )}
+          <Disclosure
+            title={strings.moreOptions}
+            variant="quiet"
+            isExpanded={isMoreOpen}
+            onExpandedChange={setMoreOpen}
+          >
+            <SettingsStack>
+              <RadioGroup
+                label={strings.strategy}
+                variant="cards"
+                value={strategy}
+                onChange={(value) => {
+                  if (value === 'fair' || value === 'priority' || value === 'even') setStrategy(value);
+                }}
+              >
+                <Radio value="fair" icon="scale" description={strings.fairLine}>
+                  {strings.fairCard}
+                </Radio>
+                <Radio value="priority" icon="star" description={strings.priorityLine}>
+                  {strings.priorityCard}
+                </Radio>
+                <Radio value="even" icon="users" description={strings.evenLine}>
+                  {strings.evenCard}
+                </Radio>
+              </RadioGroup>
+              {strategy === 'even' && (
+                <Select
+                  label={strings.evenGap}
+                  items={GAPS}
+                  value={String(evenGap)}
+                  onChange={(value) => setEvenGap(Number(value ?? 3))}
+                />
+              )}
+              <Select
+                label={strings.window}
+                info={<InfoTip label={strings.window}>{strings.windowInfo}</InfoTip>}
+                items={WINDOWS}
+                value={String(windowDays)}
+                onChange={(value) => setWindowDays(value === '7' ? 7 : value === '90' ? 90 : 30)}
+              />
+              <Select
+                label={strings.returning}
+                hint={strings.returningHint}
+                items={RETURNING}
+                value={returning}
+                onChange={(value) => {
+                  if (value === 'owner' || value === 'last_host' || value === 'none') setReturning(value);
+                }}
+              />
+              {members.length > 0 && (
+                <Table
+                  label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}
+                  isScrollable
+                  columns={isRoster ? ROSTER_COLUMNS : COLUMNS}
+                  rows={members}
+                  getRowId={(member) => member.memberId}
+                  renderCell={renderCell}
+                />
+              )}
+            </SettingsStack>
+          </Disclosure>
         </SettingsStack>
       </Modal>
       <Modal

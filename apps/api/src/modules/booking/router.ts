@@ -34,6 +34,7 @@ import {
   listRequests,
   linkBookingRecord,
   markNoShow,
+  setMeetingLink,
   routingDecision,
   routingTest,
   createSkill,
@@ -270,6 +271,12 @@ export const bookingsRouter = member.bookings.router({
   link: member.bookings.link.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       linkBookingRecord(context.scope, { bookingId: input.bookingId, recordId: input.recordId }),
+    ),
+  ),
+  // A meeting link added by hand (B-07): through the booking's target, as a cancel; the guest is emailed it.
+  setMeetingLink: member.bookings.setMeetingLink.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      setMeetingLink(hostTarget(context.scope, input.bookingId), { url: input.url }),
     ),
   ),
   move: member.bookings.move.handler(({ context, input }) =>

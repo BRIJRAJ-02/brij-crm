@@ -884,6 +884,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       assignments: os.bookings.assignments.handler(notServed),
       reassign: os.bookings.reassign.handler(notServed),
       markNoShow: os.bookings.markNoShow.handler(notServed),
+      setMeetingLink: os.bookings.setMeetingLink.handler(notServed),
       link: os.bookings.link.handler(notServed),
       blocks: {
         create: os.bookings.blocks.create.handler(notServed),

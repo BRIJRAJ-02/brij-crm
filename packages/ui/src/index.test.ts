@@ -63,6 +63,7 @@ describe('@crm/ui', () => {
       'Currency',
       'CurrencyPicker',
       'CustomiseSidebar',
+      'DateNav',
       'DatePicker',
       'DateRangePicker',
       'DayStrip',
@@ -278,7 +279,9 @@ describe('@crm/ui', () => {
       'useFormatSettings',
       'useKeyboardPlatform',
       'useNow',
+      'usePhoneWidth',
       'usePhotoCrop',
+      'weekRangeLabel',
     ]);
   });
 });

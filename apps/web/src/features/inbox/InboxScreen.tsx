@@ -15,6 +15,7 @@ import {
   Select,
   Switch,
   TopBar,
+  useFormatSettings,
   type IconName,
   type ListSource,
   type NotificationItem,
@@ -56,6 +57,7 @@ const KINDS: readonly { readonly value: 'all' | InboxKind; readonly label: strin
   { value: 'assignments', label: strings.assignments, icon: 'user-check' },
   { value: 'due', label: strings.dueToday, icon: 'calendar-clock' },
   { value: 'submissions', label: strings.submissions, icon: 'clipboard-list' },
+  { value: 'bookings', label: strings.bookings, icon: 'calendar-clock' },
 ];
 
 /** The list's notifications as NotificationList's rows, each mapped once while the members stay, loading more near the end. */
@@ -64,7 +66,23 @@ function useNotificationItems(
   members: readonly MemberSummary[],
   loadMore: (() => void) | undefined,
 ): ListSource<NotificationItem> {
-  const cache = useMemo(() => ({ items: new WeakMap<NotificationView, NotificationItem>(), members }), [members]);
+  // A booking's row says when on the member's clock and in their language (B-12): "Thu 5 Nov, 10:00".
+  const { locale, timeZone } = useFormatSettings();
+  const cache = useMemo(() => {
+    const format = new Intl.DateTimeFormat(locale, {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone,
+    });
+    return {
+      items: new WeakMap<NotificationView, NotificationItem>(),
+      members,
+      when: (iso: string) => format.format(new Date(iso)),
+    };
+  }, [members, locale, timeZone]);
   return useMemo(
     () => ({
       count: items.length,
@@ -73,7 +91,7 @@ function useNotificationItems(
         if (view === undefined) return undefined;
         const held = cache.items.get(view);
         if (held !== undefined) return held;
-        const made = toNotificationItem(view, cache.members);
+        const made = toNotificationItem(view, cache.members, cache.when);
         cache.items.set(view, made);
         return made;
       },

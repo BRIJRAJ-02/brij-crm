@@ -340,8 +340,8 @@ describe('cancelling a booking', () => {
   it('asks first, naming the booking; Esc and Keep booking change nothing', async () => {
     const week = await renderWeek([], [bookingOf()]);
     await openCard(/^Quick chat,/);
-    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
-    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
+    // Cancel sits beside Reschedule (B-06), not in More.
+    await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
     await confirmAlone();
     expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
     const labels = [...(alert()?.querySelectorAll('button') ?? [])].map((button) => button.textContent);
@@ -349,24 +349,22 @@ describe('cancelling a booking', () => {
     expect(labels.at(-1)).toBe('Cancel booking');
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
-    // The card is back, and focus with it on More, which holds Cancel booking.
+    // The card is back, and focus with it on Cancel, the button that asked.
     await expect.poll(card).not.toBeNull();
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for this booking');
-    // Enter opens More again, from the keyboard.
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
+    // Enter asks again, from the keyboard.
     await userEvent.keyboard('{Enter}');
-    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
     await confirmAlone();
     await userEvent.click(page.getByRole('button', { name: /^Keep booking/ }));
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for this booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
     expect(week.actions.cancel).not.toHaveBeenCalled();
   });
 
   it('stays busy while the booking already shows cancelled, cancels once, and keeps a refusal inside', async () => {
     const week = await renderWeek([], [bookingOf()]);
     await openCard(/^Quick chat,/);
-    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
-    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
+    await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
     await userEvent.fill(page.getByRole('textbox', { name: 'Reason' }), 'Ill today');
     await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel booking' }));
     await expect.poll(() => alert()?.textContent).toContain('Cancelling');
@@ -558,19 +556,17 @@ describe('cancelling from the list', () => {
       ),
       { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
     );
-    // A booking's row is titled by its page, "You and Ada Lovelace" under it.
-    await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));
-    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
-    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
+    // A booking's row is titled by its guest (A18), its page in a column of its own.
+    await userEvent.click(page.getByRole('button', { name: 'Ada Lovelace', exact: true }));
+    await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'Cancel booking' }));
     await expect.poll(alert).not.toBeNull();
     expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for this booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
     expect(cancel).not.toHaveBeenCalled();
 
     await userEvent.keyboard('{Enter}');
-    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
     await expect.poll(alert).not.toBeNull();
     await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel booking' }));
     // The booking already shows cancelled in the panel; the confirm stays, busy, until the server answers.
@@ -578,12 +574,12 @@ describe('cancelling from the list', () => {
     expect(cancel).toHaveBeenCalledTimes(1);
     answer.resolve(undefined);
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Quick chat');
+    await expect.poll(() => document.activeElement?.textContent).toBe('Ada Lovelace');
   });
 });
 
 describe('the list rows', () => {
-  it('title a booking by its page and link its guest to their person, as round 6 did', async () => {
+  it('title a booking by its guest, its page beside, and link the guest to their person from the panel', async () => {
     const people = {
       id: '0199f0a0-0000-7000-8000-0000000000f1',
       apiSlug: 'people',
@@ -635,9 +631,11 @@ describe('the list rows', () => {
       ),
       { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
     );
-    await expect.element(page.getByRole('button', { name: 'Quick chat', exact: true })).toBeVisible();
+    // The row is the guest, its page in a column of its own (A18); their person opens from the panel.
+    await expect.element(page.getByText('Quick chat', { exact: true })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Ada Lovelace', exact: true }));
     await expect
-      .element(page.getByRole('link', { name: 'Ada Lovelace' }))
+      .element(page.getByRole('dialog').getByRole('link', { name: 'Ada Lovelace' }))
       .toHaveAttribute('href', '/w/acme/objects/people/0199f0a0-0000-7000-8000-0000000000f3/overview');
   });
 
@@ -676,6 +674,7 @@ describe('the list rows', () => {
               reassign: vi.fn(),
               rotations: vi.fn(() => Promise.resolve([])),
               markNoShow: vi.fn(() => Promise.resolve()),
+              setMeetingLink: vi.fn(() => Promise.resolve()),
             }}
             onSearch={() => undefined}
           />
@@ -684,17 +683,19 @@ describe('the list rows', () => {
       );
     // The booking's panel, opened as the host opens it, from its row.
     const open = async () => {
-      await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));
+      await userEvent.click(page.getByRole('button', { name: 'Ada Lovelace', exact: true }));
     };
     shown = await render(bookingOf());
     await open();
-    await expect.element(page.getByText('No link was made. Send the guest one.')).toBeVisible();
+    await expect.element(page.getByText('No link yet.')).toBeVisible();
+    // Its fix is beside it (B-07): Add meeting link.
+    await expect.element(page.getByRole('button', { name: 'Add meeting link' })).toBeVisible();
     shown.unmount();
     // With a link made, the panel names its provider and says nothing is owed.
     shown = await render({ ...bookingOf(), videoUrl: 'https://meet.google.com/abc-defg-hij' });
     await open();
     await expect.element(page.getByText('Google Meet').first()).toBeVisible();
-    await expect.element(page.getByText('No link was made. Send the guest one.')).not.toBeInTheDocument();
+    await expect.element(page.getByText('No link yet.')).not.toBeInTheDocument();
   });
 
   it('with no calendar connected, starts without the calendars panel and offers Connect a calendar in the bar', async () => {
@@ -737,10 +738,10 @@ describe('the list rows', () => {
     );
     await expect.element(page.getByRole('link', { name: 'Connect a calendar' }).first()).toBeVisible();
     expect(document.querySelector('aside[aria-label="Calendars"]')).toBeNull();
-    // Without a calendar there are only bookings, so there is no Show to pick (Q71), and with one link no Filter.
-    expect([...document.querySelectorAll('button')].some((button) => button.textContent.startsWith('Filter'))).toBe(
-      false,
-    );
+    // Without a calendar there are only bookings, so there is no Show to pick (Q71), and with no link nothing to
+    // filter by: Filter stays in the bar, off, so the bar keeps one shape (the bookings critique, A13).
+    const filter = [...document.querySelectorAll('button')].find((button) => button.textContent.startsWith('Filter'));
+    expect(filter?.disabled).toBe(true);
   });
 
   it('with no calendar connected, reads a source left in the address as All, so the list can’t empty unseen', async () => {
@@ -800,12 +801,12 @@ describe('the member zone', () => {
 
   it('draws a block on the member’s day and hour, from their Preferences zone', async () => {
     await renderWeek([late], [], 'Asia/Kolkata');
-    await expect.poll(() => columnsOf(/^Blocked, 5:00/)).toEqual(['Wednesday']);
+    await expect.poll(() => columnsOf(/^Blocked, 05:00/)).toEqual(['Wednesday']);
     // The hour axis says which zone its hours are in, in full for screen readers and on hover.
     const corner = document.querySelector('[title="Times in Kolkata time (GMT+5:30)"]');
     expect(corner?.textContent).toContain('GMT+5:30');
-    await openCard(/^Blocked, 5:00/);
-    expect(card()?.textContent).toMatch(/Wednesday \d+ \w+ · 5:00\s*–\s*6:00/);
+    await openCard(/^Blocked, 05:00/);
+    expect(card()?.textContent).toMatch(/Wednesday \d+ \w+ · 05:00\s*–\s*06:00/);
   });
 
   it('draws the same block from Tuesday night when the member’s zone is UTC', async () => {
@@ -934,7 +935,7 @@ describe('linking a booking to a record by hand (polish F2)', () => {
         at: '/w/acme/bookings/list',
       },
     );
-    await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));
+    await userEvent.click(page.getByRole('button', { name: 'Ada Lovelace', exact: true }));
     return { link, notify };
   }
 

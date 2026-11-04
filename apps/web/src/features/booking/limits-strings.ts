@@ -3,21 +3,24 @@
 /** The ranges the server takes (spec 0037's Numbers): 1 to 50 a day, 1 to 200 a week. */
 export const LIMIT_RANGES = { day: { min: 1, max: 50 }, week: { min: 1, max: 200 } } as const;
 
-/** What a limit starts at when its Switch is turned on for the first time. */
-export const LIMIT_STARTS = { day: 8, week: 30 } as const;
+/**
+ * The numbers each limit's Select offers after No limit: 1 to 10, then round numbers up to each range's top, so a
+ * salon or clinic still sets a real cap (50 a day, 200 a week). All inside `LIMIT_RANGES`.
+ */
+export const LIMIT_CHOICES = {
+  day: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50],
+  week: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200],
+} as const;
 
 const meetings = (count: number) => (count === 1 ? '1 meeting' : `${String(count)} meetings`);
 
 /** Meeting limits' words. */
 export const limitsStrings = {
   title: 'Meeting limits',
-  description: 'Across every booking page. Once a limit is reached, no page offers that day or week.',
-  descriptionFor: (first: string) =>
-    `Across every booking page. Once ${first} reaches a limit, no page offers them that day or week.`,
+  description: 'Across every booking page.',
+  descriptionFor: (first: string) => `${first}’s, across every booking page.`,
   loading: 'Loading meeting limits',
   failed: 'Couldn’t load meeting limits.',
-  daySwitch: 'Limit meetings a day',
-  weekSwitch: 'Limit meetings a week',
   dayField: 'Meetings a day',
   weekField: 'Meetings a week',
   noLimit: 'No limit',
@@ -25,17 +28,15 @@ export const limitsStrings = {
   // At the limit (or past it, when it was lowered under what is booked) the day or week is closed: say so.
   dayCount: (count: number, limit: number) =>
     count >= limit
-      ? `${String(count)} of ${String(limit)} today. Pages offer no more times today.`
+      ? `${String(count)} of ${String(limit)} today. Full for today.`
       : `${String(count)} of ${String(limit)} today`,
   weekCount: (count: number, limit: number) =>
     count >= limit
-      ? `${String(count)} of ${String(limit)} this week. Pages offer no more times this week.`
+      ? `${String(count)} of ${String(limit)} this week. Full this week.`
       : `${String(count)} of ${String(limit)} this week`,
   // With no limit, what is booked so far.
-  dayBooked: (count: number) => `${meetings(count)} today, no limit.`,
-  weekBooked: (count: number) => `${meetings(count)} this week, no limit.`,
-  dayRange: 'Use a whole number from 1 to 50.',
-  weekRange: 'Use a whole number from 1 to 200.',
+  dayBooked: (count: number) => `${meetings(count)} today`,
+  weekBooked: (count: number) => `${meetings(count)} this week`,
   // Read only (AC-1299): why it can't be changed here.
   setByOthers: 'Your meeting limits are set by others.',
   seeOnly: (first: string) => `You can see ${first}’s meeting limits but not change them.`,

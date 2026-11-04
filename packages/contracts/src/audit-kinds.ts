@@ -85,6 +85,7 @@ export const AUDIT_KINDS = {
     'form.submissions_deleted',
     'form.submissions_restored',
     'booking.record_linked',
+    'booking.meeting_link_set',
     'booking.record_unlinked',
     'delegation.granted',
     'delegation.changed',

@@ -183,15 +183,129 @@
   }
 
   @container (inline-size < 480px) {
-    .root:not([data-placement='card']) .row {
+    .root:not([data-placement='card'], [data-layout='columns']) .row {
       flex-direction: column;
       gap: var(--space-4);
     }
 
-    .root:not([data-placement='card']) .when {
+    .root:not([data-placement='card'], [data-layout='columns']) .when {
       flex-direction: row;
       gap: var(--space-6);
       inline-size: auto;
+    }
+  }
+
+  /* Columns (Bookings › List): the records table's rhythm, one line a row at the row height, every row on one grid
+     so the time, who, source, status and actions line up down the list. */
+  .root[data-layout='columns'] .row {
+    display: grid;
+    grid-template-columns:
+      calc(var(--size-measure) / 2) minmax(0, 1fr) minmax(0, var(--size-column))
+      var(--size-column-narrow) auto;
+    align-items: center;
+    gap: var(--space-12);
+    min-block-size: var(--size-row);
+    padding-block: var(--space-4);
+  }
+
+  .root[data-layout='columns'] .date {
+    font: var(--text-body);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-body);
+  }
+
+  .root[data-layout='columns'] .main {
+    flex-direction: row;
+  }
+
+  .root[data-layout='columns'] .titleLine {
+    gap: var(--space-4);
+    margin-inline-start: 0;
+  }
+
+  /* The title button takes its words' width and gives way to the row's other columns, its label cut short (the panel names it whole). */
+  .name {
+    display: flex;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+  }
+
+  .root[data-layout='columns'] .main,
+  .root[data-layout='columns'] .titleLine {
+    min-inline-size: 0;
+  }
+
+  /* The guest's face before their name, as a record chip draws a person; the name's button keeps its own padding. */
+  .face {
+    display: flex;
+    flex: none;
+  }
+
+  .root[data-layout='columns'] .join {
+    margin-inline-start: var(--space-8);
+  }
+
+  .source {
+    display: flex;
+    min-inline-size: 0;
+    overflow: clip;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .status {
+    display: flex;
+    min-inline-size: 0;
+  }
+
+  /* Reschedule and Cancel: their room kept, shown while the row is hovered or holds focus, and always on touch. */
+  .quick {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .quick {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .row:hover .quick,
+    .row:focus-within .quick,
+    .row[data-open] .quick {
+      opacity: 1;
+    }
+  }
+
+  /* A narrow list (a phone): the time and the status on the first line, who on the second, with the whole width for
+     their name; the source and the quick changes go, since the row opens the booking's sheet, which holds Reschedule
+     and Cancel. */
+  @container (inline-size < 480px) {
+    .root[data-layout='columns'] .row {
+      grid-template-areas:
+        'when status'
+        'who who';
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--space-2) var(--space-8);
+    }
+
+    .root[data-layout='columns'] .date {
+      grid-area: when;
+    }
+
+    .root[data-layout='columns'] .main {
+      grid-area: who;
+      margin-inline-start: calc(-1 * var(--space-2));
+    }
+
+    .root[data-layout='columns'] .status {
+      grid-area: status;
+    }
+
+    .root[data-layout='columns'] .source,
+    .root[data-layout='columns'] .actions {
+      display: none;
     }
   }
 

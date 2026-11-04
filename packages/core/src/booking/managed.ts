@@ -32,6 +32,7 @@ import {
   type ManagedPart,
   type SetManagedMembersInput,
   type UpdateManagedPageInput,
+  BOOKING_NOTICE_DEFAULT,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
@@ -412,7 +413,7 @@ function defaulted(title: string, given: Partial<BookingPageSettings>) {
     location: given.location ?? { type: 'video' as const },
     bufferBefore: given.bufferBefore ?? 0,
     bufferAfter: given.bufferAfter ?? 0,
-    minNoticeMinutes: given.minNoticeMinutes ?? 0,
+    minNoticeMinutes: given.minNoticeMinutes ?? BOOKING_NOTICE_DEFAULT,
     windowDays: given.windowDays ?? 60,
     dailyLimit: given.dailyLimit ?? null,
     slotStep: given.slotStep ?? null,

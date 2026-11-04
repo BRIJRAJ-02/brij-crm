@@ -43,8 +43,15 @@ export function CapturesTopBar({ slug, tab }: CapturesTopBarProps) {
 }
 
 /** A list's count beside the title, once the list is in: the same held list the tab's screen reads. */
-function ListCount<Item>({ view, label }: { readonly view: CaptureListView<Item>; readonly label: string }) {
+function ListCount<Item>({
+  view,
+  label,
+}: {
+  readonly view: CaptureListView<Item>;
+  /** What it counts, by the count ("1 booking page", B-19). */
+  readonly label: (count: number) => string;
+}) {
   const list = useCaptureList(view);
   if (list.status !== 'ready') return null;
-  return <Badge count={list.items.length} max={Infinity} label={label} />;
+  return <Badge count={list.items.length} max={Infinity} label={label(list.items.length)} />;
 }

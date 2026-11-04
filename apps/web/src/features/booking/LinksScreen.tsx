@@ -147,7 +147,6 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     groupId: MANAGED_GROUP,
     title: template.title,
     href: managedPageHref(slug, template.id),
-    colourKey: template.id,
     facts: [managedStrings.memberBadge(template.members.length)],
     badge: managedStrings.badge,
     isPending: templateList.status === 'ready' && templateList.pendingIds.has(template.id),
@@ -179,12 +178,12 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       groupId: groupOf(page),
       title: page.title,
       ...(isViewOnly ? {} : { href: pageEditorHref(slug, page.id) }),
-      // Pages have no colour of their own yet: the card takes a stable one from the page's id.
-      colourKey: page.id,
+      // No colour dot (the bookings critique, A22, B-16): a dot before the title read as a status. The state is a
+      // badge, as on a form's card, and the switch.
       facts: factsOf(page),
       // The link Copy link copies, as a path.
       ...(isDraft ? {} : { address: publicBookingPath(page) }),
-      // Off shows in the muted title and the switch; the badge is for what they can't say.
+      // Off shows in the muted title, the switch and a Paused badge (as a paused form's); the rest are what they can't say.
       ...(isPending
         ? { badge: strings.copying }
         : isDraft
@@ -193,6 +192,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
             ? { badge: strings.viewOnly }
             : page.pausedReason === 'host_removed'
               ? { badge: strings.hostRemoved }
+              : isOff
+                ? { badge: strings.notTakingBookings }
               : page.isPrivate
                 ? { badge: strings.linkOnly }
                 : page.isEditor === true
