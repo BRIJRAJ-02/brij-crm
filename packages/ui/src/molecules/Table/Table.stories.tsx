@@ -280,6 +280,45 @@ const SHIFTS: readonly Shift[] = [
   { id: 'total', name: 'Total', days: ['2', '2', '2', '1', '0'] },
 ];
 
+/** A page's own list (a form's Submissions): out to the page's edges, columns sized to content, the count under it. */
+function PageList() {
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  return (
+    <Table
+      label="Members"
+      columns={COLUMNS.map((column, index) => ({ ...column, size: index === COLUMNS.length - 1 ? 'fill' : 'fit' }))}
+      rows={MEMBERS}
+      getRowId={(member) => member.id}
+      renderCell={cell}
+      selected={selected}
+      onSelectedChange={setSelected}
+      getSelectLabel={(member) => member.name}
+      edge="page"
+      footer="3 members"
+    />
+  );
+}
+
+/**
+ * `edge="page"` and `footer`: the rows run out through the page's gutter with the checkbox on the content edge, the
+ * selection column the records grid's width, and a quiet count under the rows.
+ */
+export const PageEdgeWithCount: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <PageList />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('3 members')).toBeVisible();
+    // The checkbox sits on the content edge, a gutter in from the rows' own start.
+    const row = canvas.getAllByRole('row')[1]?.getBoundingClientRect();
+    const box = canvas.getByRole('checkbox', { name: 'Select Ada Lovelace' }).closest('label')?.getBoundingClientRect();
+    await expect(Math.round((box?.left ?? 0) - (row?.left ?? 0))).toBeGreaterThanOrEqual(16);
+  },
+};
+
 /**
  * The even layout (`layout="even"`): the row header column one set width and the days sharing the rest as equals,
  * whatever their content; the current column (`isCurrent`), quiet columns (`tone: 'quiet'`) and a row of sums

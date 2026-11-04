@@ -181,7 +181,7 @@ export function FormEditor(props: FormEditorProps) {
     [data, slug],
   );
   const jobs = useJobFollower(data.jobs.view(slug, 'mine'), heldJobs);
-  // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
+  // The end of the tab strip, where a tab draws its own tools (Analytics' period).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // The Flow view (spec 0063, AC-6325): the steps, their jumps and the endings, read only, from the Form tab.
   const [isFlowOpen, setFlowOpen] = useState(false);
@@ -1320,7 +1320,9 @@ export function FormEditor(props: FormEditorProps) {
               // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
               <Tabs
                 variant="bar"
-                end={<div ref={setToolbarSlot} />}
+                // Only Analytics draws its period at the strip's end; Submissions keeps its tools in a row of its own
+                // under the tabs, as People does, so no empty slot wraps onto a line of its own on a phone.
+                {...(current === 'analytics' ? { end: <div ref={setToolbarSlot} /> } : {})}
                 label={strings.tabs}
                 selectedKey={current}
                 onSelectionChange={(value) => {

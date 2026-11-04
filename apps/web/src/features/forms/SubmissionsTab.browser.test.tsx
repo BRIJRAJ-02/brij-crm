@@ -201,8 +201,9 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
       expect(person.width).toBeLessThanOrEqual(1);
       const selectAll = document.querySelector('thead [data-handle]')?.getBoundingClientRect();
       expect(selectAll?.width ?? 0).toBeGreaterThan(1);
-      const frame = document.querySelector('[data-phone="rows"]')?.parentElement;
-      expect(frame === null || frame === undefined ? 0 : frame.scrollWidth - frame.clientWidth).toBeLessThanOrEqual(0);
+      // The table's own frame (its rows run out to the tab's edges, so the frame, not its parent, is the box to check).
+      const frame = document.querySelector('[data-phone="rows"]');
+      expect(frame === null ? 0 : frame.scrollWidth - frame.clientWidth).toBeLessThanOrEqual(0);
       // The person on the first line, when under it.
       const name = row.getByRole('rowheader').element().getBoundingClientRect();
       const when = row.getByRole('gridcell').nth(2).element().getBoundingClientRect();

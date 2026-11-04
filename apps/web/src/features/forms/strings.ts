@@ -47,6 +47,8 @@ export const strings = {
   turnOffFailed: (name: string) => `Couldn’t pause ${name}. It’s still live.`,
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
+  /** Under a list with more to load: how many are shown so far. */
+  submissionsShown: (n: number) => `${count(n, 'submission', 'submissions')} shown`,
   noSubmissionsYet: 'No submissions yet',
   /** A draft card's one action: back into its builder to finish it and publish. */
   editDraft: 'Edit',

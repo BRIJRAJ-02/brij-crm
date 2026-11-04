@@ -126,6 +126,38 @@
     padding-inline: var(--space-4) 0;
   }
 
+  /* The selection column: the records grid's check column (size-column-check), its checkbox centred in it, so a
+     list that selects lines up with People and Companies (the owner, 5 November 2026). */
+  .column[data-select],
+  .cell[data-select] {
+    padding-inline: calc((var(--size-column-check) - var(--size-check)) / 2);
+  }
+
+  /* The count under the rows (`footer`): the records grid's footer band, quiet, a row tall. */
+  .withFoot {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .foot {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    block-size: var(--size-row);
+    padding-inline: var(--space-8);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .withFoot[data-edge='page'] .foot {
+    margin-inline: calc(-1 * var(--space-16));
+    padding-inline: var(--space-16);
+  }
+
   /* Directly in a settings page's body (PageEdge): the rows run out through the page's space-16 gutter to its
      edges, so their hairlines meet the sidebar's, and the first and last columns' text sit on the content edges,
      in line with the section headings, the Tabs' first label and a Card's border. */
@@ -422,6 +454,31 @@
       align-items: center;
       inline-size: var(--size-control);
       padding-inline: var(--space-4) 0;
+    }
+
+    /* A row's lines take their own width here: a fitted or filling column's sizing is the table's, not a line's. */
+    .root[data-phone='rows'] .cell[data-size] {
+      inline-size: auto;
+      max-inline-size: none;
+    }
+
+    /* The select all checkbox sits over the rows' own. */
+    .root[data-phone='rows'] .column[data-select] {
+      padding-inline: var(--space-4) 0;
+    }
+
+    /* At a page's edge the rows keep the page's gutter, each row's checkbox on the header's line. */
+    .root[data-phone='rows'][data-edge='page'] .row:not(:has(.cell[data-handle])) {
+      padding-inline: var(--space-16);
+    }
+
+    .root[data-phone='rows'][data-edge='page'] .row:has(.cell[data-handle]) {
+      padding-inline: calc(var(--space-16) + var(--size-control)) var(--space-16);
+    }
+
+    .root[data-phone='rows'][data-edge='page'] .cell[data-handle],
+    .root[data-phone='rows'][data-edge='page'] .column[data-select] {
+      padding-inline-start: var(--space-16);
     }
   }
 }
