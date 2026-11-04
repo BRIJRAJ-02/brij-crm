@@ -74,23 +74,25 @@ async function open() {
 }
 
 describe('the live dialog after the first publish (AC-6, T44)', () => {
-  it('says it in one line: the QR code, the link with Copy link, one row of equal buttons, and a row to the embeds', async () => {
+  it('says it in one line: the link with Copy link, one row of equal buttons, the QR code with its download, and a row to the embeds', async () => {
     await open();
     // One line: the form's own name, live; no second line repeating it.
     await expect.element(page.getByRole('heading', { name: 'Apply is live' })).toBeVisible();
     expect(page.getByText('Your form is live').query()).toBeNull();
-    // The QR code first, then the link, its own name strong, with Copy link (the one primary).
+    // The link, its own name strong, with Copy link (the one primary), and its QR code.
     await expect.element(page.getByRole('img', { name: 'QR code for the form’s link' })).toBeInTheDocument();
     await expect.element(page.getByRole('group', { name: 'Link' })).toBeVisible();
     await expect.element(page.getByText('apply', { exact: true })).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Copy link/ })).toBeVisible();
-    // One row of equal buttons: Email, WhatsApp and the QR code's download (PNG or SVG from its menu).
+    // One row of equal buttons: Email and WhatsApp (and More where the browser has a share sheet).
     const ways = page.getByRole('group', { name: 'Send the link' }).element();
     const widths = new Set([...ways.children].map((each) => Math.round(each.getBoundingClientRect().width)));
     expect(widths.size).toBe(1);
     expect(page.getByRole('link', { name: 'Email' }).element().getAttribute('href')).toMatch(/^mailto:/);
     expect(page.getByRole('link', { name: 'WhatsApp' }).element().getAttribute('href')).toMatch(/^https:\/\/wa\.me\//);
-    await expect.element(page.getByRole('button', { name: /^QR code/ })).toBeVisible();
+    // The QR code's download sits with the code, not in the row (PNG or SVG from its menu).
+    await expect.element(page.getByRole('button', { name: /^Download QR code/ })).toBeVisible();
+    expect(ways.contains(page.getByRole('button', { name: /^Download QR code/ }).element())).toBe(false);
     // No embed tiles or code here: one row to the Share tab, where they are set up with a preview.
     expect(page.getByRole('radiogroup').query()).toBeNull();
     expect(page.getByRole('textbox', { name: /Embed snippet/ }).query()).toBeNull();

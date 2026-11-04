@@ -37,9 +37,12 @@ export interface QrCodeProps {
   readonly frameLabel?: string;
   /**
    * `paper` keeps the white ground in a dark app too (spec 0065 H2's print sheet): a code drawn to be printed is
-   * printed on white. Left out, a dark app draws the softer grey ground.
+   * printed on white.
+   * `drawn` (the default): the code paints its own light ground. `clear`: no ground on screen, for a caller that sets
+   * the code on a light tile of its own (ReadyPanel's `share`), so the tile and the code read as one surface. A saved
+   * copy still prints on the light surface (the caller writes the ground's fill in).
    */
-  readonly ground?: 'paper';
+  readonly ground?: 'drawn' | 'clear' | 'paper';
 }
 
 /** The quiet margin around the modules, in modules, as scanners need. */
@@ -116,7 +119,7 @@ export function QrCode({
   colour,
   picture,
   frameLabel,
-  ground,
+  ground = 'drawn',
 }: QrCodeProps) {
   const clipId = useId();
   const centre = safeImageSrc(picture);
@@ -149,8 +152,8 @@ export function QrCode({
       // scanner reads an inverted code. A saved PNG is always white (AC-5122).
       data-theme="light"
       data-size={width}
-      data-ground={ground}
       data-framed={isFramed || undefined}
+      data-ground={ground}
       role="img"
       aria-label={label}
       viewBox={`${String(-out)} ${String(-out)} ${String(size + out * 2)} ${String(height + out * 2)}`}
