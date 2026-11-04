@@ -72,7 +72,7 @@ test.describe('the form template gallery', () => {
 
     // Picking one shows it beside the list; Use makes the draft and opens its editor.
     await gallery.getByRole('radio', { name: 'Feedback' }).click();
-    await gallery.getByRole('button', { name: 'Use Feedback' }).click();
+    await gallery.getByRole('button', { name: 'Start Feedback' }).click();
     await expect(page).toHaveURL(/\/captures\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
     await expect(page.getByRole('heading', { level: 1, name: /Feedback/ })).toBeVisible({ timeout: 30_000 });
 
