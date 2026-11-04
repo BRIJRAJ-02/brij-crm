@@ -402,3 +402,70 @@ describe('the Flow’s ending lines', () => {
     );
   });
 });
+
+describe('After they send keeps an unfinished rule or ending out of the save (T20)', () => {
+  const doc = {
+    ...base,
+    after: { kind: 'message', message: 'Thanks' },
+    endings: [{ id: 'ending_1', heading: 'Not a fit' }],
+    routing: {
+      rules: [
+        {
+          id: 'r1',
+          when: { join: 'all', rules: [{ key: 'name', op: 'is_answered' }] },
+          then: { kind: 'ending', endingId: 'ending_1' },
+        },
+      ],
+    },
+  } as FormDocument;
+
+  it('waits for a link rule’s address, and blocks Publish until it has one', () => {
+    const typing: FormDocument = {
+      ...doc,
+      routing: {
+        rules: [
+          ...doc.routing.rules,
+          {
+            id: 'r2',
+            when: { join: 'all', rules: [{ key: 'name', op: 'is_answered' }] },
+            then: { kind: 'redirect', url: 'https://' },
+          },
+        ],
+      },
+    };
+    expect(savableDraft(typing, doc).routing.rules.map((rule) => rule.id)).toEqual(['r1']);
+    expect(draftGap(typing)).toBe('route');
+    const done: FormDocument = {
+      ...typing,
+      routing: {
+        rules: typing.routing.rules.map((rule) =>
+          rule.id === 'r2' ? { ...rule, then: { kind: 'redirect', url: 'https://example.com' } } : rule,
+        ),
+      },
+    };
+    expect(savableDraft(done, doc)).toBe(done);
+    expect(draftGap(done)).toBeUndefined();
+  });
+
+  it('keeps a rule’s saved conditions while a new one has no value yet', () => {
+    const typing: FormDocument = {
+      ...doc,
+      routing: {
+        rules: doc.routing.rules.map((rule) => ({
+          ...rule,
+          when: { join: 'all', rules: [{ key: 'name', op: 'is' }] },
+        })),
+      },
+    };
+    expect(savableDraft(typing, doc).routing.rules).toEqual(doc.routing.rules);
+  });
+
+  it('leaves an ending’s half typed button out, keeping its words', () => {
+    const typing: FormDocument = {
+      ...doc,
+      endings: [{ id: 'ending_1', heading: 'Changed', button: { kind: 'url', url: 'https://' } }],
+    };
+    expect(savableDraft(typing, doc).endings).toEqual([{ id: 'ending_1', heading: 'Changed' }]);
+    expect(draftGap(typing)).toBe('route');
+  });
+});

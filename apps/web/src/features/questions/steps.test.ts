@@ -10,6 +10,11 @@ import {
   removeStep,
   restoreStep,
   stepPlaces,
+  isContactQuestion,
+  isFirstStep,
+  splitAt,
+  splitIntoSteps,
+  startsAStep,
   type Flow,
 } from './steps.ts';
 
@@ -92,5 +97,73 @@ describe('a form’s New step dividers (spec 0063, AC-6303)', () => {
     // One with nothing under it yet is no step a visitor counts.
     expect(stepPlaces({ ...flow, steps: [...flow.steps, { id: 's3' }] }).get('s3')).toEqual({ number: 0, count: 0 });
     expect(questionsBefore(flow, 's2').map((each) => each.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('Steps as pages (T20, 5 November 2026)', () => {
+  const ids = () => {
+    let next = 0;
+    return () => {
+      next += 1;
+      return `n${String(next)}`;
+    };
+  };
+  const typed = (id: string, answerType: FormQuestion['answerType'], label = id): FormQuestion => ({
+    ...question(id),
+    answerType,
+    label,
+  });
+  const words = { details: 'Your details' };
+
+  it('splits after the contact details, titled, and gives the first page a header', () => {
+    const questions = [
+      typed('name', 'short_text', 'Your name'),
+      typed('email', 'email'),
+      typed('phone', 'phone'),
+      typed('role', 'choice', 'Which role?'),
+      typed('cv', 'file'),
+    ];
+    const split = splitIntoSteps({ questions, steps: [] }, ids(), words);
+    expect(order(split)).toEqual(['|n1', 'name', 'email', 'phone', '|n2', 'role', 'cv']);
+    expect(split.steps[0]).toEqual({ id: 'n1', startsAt: 'name', title: 'Your details' });
+    expect(split.steps[1]).toEqual({ id: 'n2', startsAt: 'role' });
+  });
+
+  it('splits in the middle when nothing is contact detail, and leaves one question as one page', () => {
+    expect(order(splitIntoSteps({ questions: QUESTIONS, steps: [] }, ids(), words))).toEqual([
+      '|n1',
+      'a',
+      'b',
+      '|n2',
+      'c',
+      'd',
+    ]);
+    expect(order(splitIntoSteps({ questions: QUESTIONS.slice(0, 1), steps: [] }, ids(), words))).toEqual(['|n1', 'a']);
+    expect(splitIntoSteps({ questions: [], steps: [] }, ids(), words).steps).toEqual([]);
+  });
+
+  it('keeps breaks a form already has, adding only the first page’s header', () => {
+    expect(order(splitIntoSteps(flow, ids(), words))).toEqual(['|n1', 'a', 'b', '|s2', 'c', 'd']);
+    const headed = splitIntoSteps(flow, ids(), words);
+    expect(splitIntoSteps(headed, ids(), words)).toBe(headed);
+  });
+
+  it('splits at a question, and knows which questions start a page and which break is first', () => {
+    const split = splitAt(flow, 'd', 'n1');
+    expect(order(split)).toEqual(['a', 'b', '|s2', 'c', '|n1', 'd']);
+    expect(splitAt(split, 'd', 'n2')).toBe(split);
+    expect(startsAStep(split, 'd')).toBe(true);
+    expect(startsAStep(split, 'b')).toBe(false);
+    expect(startsAStep(split, 'a')).toBe(true);
+    const headed = splitIntoSteps(flow, ids(), words);
+    expect(isFirstStep(headed, 'n1')).toBe(true);
+    expect(isFirstStep(headed, 's2')).toBe(false);
+  });
+
+  it('calls email, phone and a name or company question contact detail', () => {
+    expect(isContactQuestion(typed('x', 'email'))).toBe(true);
+    expect(isContactQuestion(typed('x', 'short_text', 'Company name'))).toBe(true);
+    expect(isContactQuestion(typed('x', 'short_text', 'What do you need?'))).toBe(false);
+    expect(isContactQuestion(typed('x', 'choice', 'Your name'))).toBe(false);
   });
 });

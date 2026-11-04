@@ -6,7 +6,7 @@
 import type { BrandKit, BrandStore, PublicForm } from '@crm/data';
 import type { FormLookTheme } from '@crm/data/forms';
 import { useBrand } from '@crm/data/react';
-import { HostedFormPreview, Select, type PageBrand } from '@crm/ui';
+import { HostedFormPreview, Select, type PageBrand, type PreviewTextChange } from '@crm/ui';
 import { strings } from './strings.ts';
 
 /** The kit as the picker and the preview read it, or undefined while it loads. One held per workspace, so the
@@ -77,13 +77,15 @@ export interface BrandedFormPreviewProps {
   readonly step?: number;
   /** `preview` (the default) is the editor's inert column; `page` is the draft opened in a tab to try. */
   readonly mode?: 'preview' | 'page';
+  /** The headline and the button, edited where they are (T21). */
+  readonly onTextChange?: (change: PreviewTextChange) => void;
 }
 
 /**
  * The preview wearing the workspace's kit. While the kit loads, or where the workspace has none, it draws the
  * product's own accent, which is what the hosted page draws too, so the two never disagree.
  */
-export function BrandedFormPreview({ brand, slug, form, step, mode }: BrandedFormPreviewProps) {
+export function BrandedFormPreview({ brand, slug, form, step, mode, onTextChange }: BrandedFormPreviewProps) {
   const kit = useKit(brand, slug);
   const colours = brand.colours(kit?.accent, kit?.accentDark);
   const logoSrc = kit?.logo === undefined ? undefined : brand.logoSrc(slug, kit.logo.version);
@@ -97,6 +99,7 @@ export function BrandedFormPreview({ brand, slug, form, step, mode }: BrandedFor
       brand={wearing}
       {...(step === undefined ? {} : { step })}
       {...(mode === undefined ? {} : { mode })}
+      {...(onTextChange === undefined ? {} : { onTextChange })}
     />
   );
 }

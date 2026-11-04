@@ -33,6 +33,7 @@ import {
   HostedFormPreview,
   PreviewLayout,
   Select,
+  type PreviewTextChange,
   TabPanel,
   Tabs,
   TopBar,
@@ -67,8 +68,9 @@ import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { ReadyDialog } from './PublishDialog.tsx';
+import { AFTER_ROW, AfterSendSection } from './AfterSendSection.tsx';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
-import { addStep } from '../questions/steps.ts';
+import { splitIntoSteps } from '../questions/steps.ts';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
 import { afterPageProblem } from './after-page.ts';
 import { emailToMakeUnique, readyMatch } from './match.ts';
@@ -81,10 +83,6 @@ import { strings as questionStrings } from '../questions/strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
-import { insightsHref } from '../insights/search.ts';
-
-/** The refusals that are fixed in Settings, not on the Form tab (spec 0063, AC-6315, AC-6316, AC-6326). */
-const IN_SETTINGS: readonly PublishProblem['code'][] = ['ENDING_INVALID', 'SCORE_FILING_INVALID'];
 
 /** Props for the editor: what its route loaded through the data layer. */
 export interface FormEditorProps {
@@ -118,6 +116,9 @@ function filingOf(document: FormDocument | undefined): string {
       .sort(([a], [b]) => String(a).localeCompare(String(b))),
   ]);
 }
+
+/** The Steps header that stands for the first page while it has no break of its own (`QuestionsSection`). */
+const LEAD_STEP = '~lead';
 
 /** How long after the last change the draft saves. */
 const SAVE_AFTER_MS = 1_000;
@@ -257,13 +258,6 @@ export function FormEditor(props: FormEditorProps) {
 
   const isPublished = form.liveVersionNumber !== undefined;
 
-  /** The Flow's Add a step: one click, placed and named by the list (it splits the last step), then opened on the Form tab. */
-  const addStepFromFlow = () => {
-    const id = data.forms.newId();
-    setDraft((before) => withFlow(before, addStep({ questions: before.questions, steps: before.steps }, id)));
-    setFlowOpen(false);
-    void navigate({ href: `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${id}`)}` });
-  };
   // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
   // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
   // reuses what this already holds rather than asking again.
@@ -287,9 +281,11 @@ export function FormEditor(props: FormEditorProps) {
     const steps = preview.steps ?? [];
     const target =
       preview.layout === 'steps'
-        ? steps.find((step) =>
-            stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId,
-          )
+        ? stepId === LEAD_STEP
+          ? steps[0]
+          : steps.find((step) =>
+              stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId,
+            )
         : undefined;
     const lifted = new Set(target?.keys ?? (key === undefined ? [] : [key]));
     const form = {
@@ -390,10 +386,13 @@ export function FormEditor(props: FormEditorProps) {
         message:
           gap === 'redirect'
             ? strings.publishGap(strings.redirectIncomplete)
-            : strings.publishGapButton(strings.buttonTextMissing),
+            : gap === 'route'
+              ? strings.routeIncomplete
+              : strings.publishGapButton(strings.buttonTextMissing),
       });
       setShowGaps(true);
-      if (tab !== 'settings') void navigate({ href: formHref(slug, form.id, 'settings') });
+      // Everything a visitor meets is on the Form tab now (T20, T21): After they send, and the preview's words.
+      void navigate({ href: `${formHref(slug, form.id)}?question=${AFTER_ROW}` });
       return;
     }
     // The first publish is one click (the owner, 5 November 2026, after Tally): each answer meets a field with its
@@ -475,11 +474,9 @@ export function FormEditor(props: FormEditorProps) {
     });
     if (found !== undefined) {
       setProblem(found);
-      // Each refusal opens the tab that holds what it is about (spec 0063, AC-6326): the endings and the score's
-      // filing live in Settings, everything else on the Form tab.
-      // A recall refused in an ending's words carries its ending, so it goes to Settings too.
-      const where = IN_SETTINGS.includes(found.code) || found.endingId !== undefined ? 'settings' : 'form';
-      if (tab !== where) void navigate({ href: formHref(slug, form.id, where) });
+      // Each refusal opens where it is fixed (spec 0063, AC-6326): everything a visitor meets, the endings and the
+      // score included, is on the Form tab now (T20).
+      if (tab !== 'form') void navigate({ href: formHref(slug, form.id) });
       return;
     }
     const wasPublished = isPublished;
@@ -604,6 +601,12 @@ export function FormEditor(props: FormEditorProps) {
     }, failed);
   };
 
+  // The headline, the line under it and the button, typed on the preview itself (T21: the Text card went). The
+  // preview shows the draft as a visitor gets it, so an empty headline shows the default until words are typed.
+  const changeText = (change: PreviewTextChange) => {
+    setDraft((before) => ({ ...before, ...change }));
+  };
+
   const goTab = (next: FormTab) => {
     void navigate({ href: formHref(slug, form.id, next) });
   };
@@ -620,8 +623,7 @@ export function FormEditor(props: FormEditorProps) {
       <EditorActions
         // A draft has no link yet: Copy link shows from the first publish, as the forms list shows it.
         {...(isPublished ? { link: data.forms.hostedUrl(form.publicKey) } : {})}
-        // Its visits, finishes and sources (spec 0067), once it has a public address to visit.
-        {...(isPublished ? { insightsHref: insightsHref(slug, { kind: 'form', page: form.id }) } : {})}
+        // No Insights here (T22): the Analytics tab is the form's one door to how it does.
         preview={
           <Button
             icon="eye"
@@ -760,10 +762,9 @@ export function FormEditor(props: FormEditorProps) {
             members={members}
             isReadOnly={!canManage}
             settings={settings}
-            onDraftChange={setDraft}
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
-            showGaps={showGaps}
+            onStatusChange={setStatus}
           />
         );
       case 'install':
@@ -807,7 +808,18 @@ export function FormEditor(props: FormEditorProps) {
               layout={draft.layout}
               isReadOnly={!canManage}
               onChange={(layout) => {
-                setDraft((before) => ({ ...before, layout }));
+                // Steps splits the form into pages at once (T20, Tally's page breaks): a header on every page, after
+                // the contact details or in the middle, breaks it already has kept.
+                setDraft((before) =>
+                  layout === 'steps'
+                    ? withFlow(
+                        { ...before, layout },
+                        splitIntoSteps({ questions: before.questions, steps: before.steps }, () => data.forms.newId(), {
+                          details: questionStrings.yourDetails,
+                        }),
+                      )
+                    : { ...before, layout },
+                );
               }}
             />
             <FlowView
@@ -815,16 +827,15 @@ export function FormEditor(props: FormEditorProps) {
               isOpen={isFlowOpen}
               questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
               stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
-              endingsHref={formHref(slug, form.id, 'settings')}
-              {...(canManage ? { onAddStep: addStepFromFlow } : {})}
+              endingsHref={`${formHref(slug, form.id)}?question=${AFTER_ROW}`}
               onOpenChange={setFlowOpen}
             />
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               {...(questionStats === undefined ? {} : { stats: questionStats })}
               onOpened={setPreviewRow}
-              // The Flow sits beside Add a question, with Steps: the only layout whose steps and jumps visitors walk.
-              {...(draft.layout === 'steps'
+              // The Flow sits beside Add a question once a step jumps (T20): before that, the list is the flow.
+              {...(draft.layout === 'steps' && draft.steps.some((step) => (step.jumps?.length ?? 0) > 0)
                 ? {
                     actionsStart: (
                       <Button
@@ -881,6 +892,20 @@ export function FormEditor(props: FormEditorProps) {
                 ? {}
                 : { problem: { questionId: shown.questionId, message: shown.message } })}
             />
+            <AfterSendSection
+              slug={slug}
+              draft={draft}
+              target={target}
+              isReadOnly={!canManage}
+              toasts={toasts}
+              newId={() => data.forms.newId()}
+              onDraftChange={setDraft}
+              showGaps={showGaps}
+              {...(props.question === AFTER_ROW ? { focusRow: AFTER_ROW } : {})}
+              {...(shown?.endingId === undefined
+                ? {}
+                : { problem: { endingId: shown.endingId, message: shown.message } })}
+            />
           </>
         );
     }
@@ -900,11 +925,13 @@ export function FormEditor(props: FormEditorProps) {
                   slug={slug}
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
+                  {...(canManage ? { onTextChange: changeText } : {})}
                 />
               ) : (
                 <HostedFormPreview
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
+                  {...(canManage ? { onTextChange: changeText } : {})}
                 />
               ),
             previewControls: (

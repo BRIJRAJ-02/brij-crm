@@ -131,7 +131,7 @@ async function openBuilder() {
 describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
   it('shows the rule it has, offers only the targets below it, says where everyone else goes, in both themes', async () => {
     await openBuilder();
-    await userEvent.click(page.getByRole('button', { name: /^Step 2 · Your budget/ }));
+    // A step with logic shows it under its header, always (T20).
     // The rule it has, in Typeform's words: its conditions, then Jump to, then where everyone else goes.
     await expect.element(page.getByText('Logic', { exact: true })).toBeVisible();
     await expect.element(page.getByText('Otherwise, go to Step 3 · Your team')).toBeVisible();
@@ -150,8 +150,9 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
 
   it('Add logic is one click to a working rule: the step’s choice question, its first option, the next place', async () => {
     await openBuilder();
-    await userEvent.click(page.getByRole('button', { name: /^Step 2 · Your budget/ }));
-    await userEvent.click(page.getByRole('button', { name: 'Add logic' }));
+    // Add logic is in the step header's menu (T20).
+    await userEvent.click(page.getByRole('button', { name: 'Step 2 · Your budget options' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Add logic' }));
     // A second rule, ready filled: Budget is Under $1k, Jump to Step 3. Nothing to fill in before it works.
     await expect.poll(() => document.querySelectorAll('[aria-label="Remove jump 2"]').length).toBe(1);
     const pickers = [...document.querySelectorAll('button')].filter((each) =>
@@ -162,18 +163,22 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
 
   it('Show only if… is one click to a ready condition, and Always show takes it away', async () => {
     await openBuilder();
-    await userEvent.click(page.getByRole('button', { name: /^Step 3 · Your team/ }));
-    await userEvent.click(page.getByRole('button', { name: 'Show only if…' }));
+    await userEvent.click(page.getByRole('button', { name: 'Step 3 · Your team options' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Show only if…' }));
     await expect.element(page.getByText('Show only if', { exact: true })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Always show' }));
     await expect.element(page.getByText('Show only if', { exact: true })).not.toBeInTheDocument();
-    await expect.element(page.getByRole('button', { name: 'Show only if…' })).toHaveFocus();
+    await expect.element(page.getByRole('button', { name: 'Step 3 · Your team options' })).toHaveFocus();
   });
 
-  it('shows a number for each choice of a scored question, in both themes', async () => {
+  it('gives points in one click, then a number for each choice, in both themes', async () => {
     await openBuilder();
     await userEvent.click(page.getByRole('button', { name: /^Budget/ }));
-    await expect.element(page.getByRole('textbox', { name: 'Points for Under $1k' })).toBeVisible();
+    // No points until asked (T20, Typeform's score): Give points is one click to 1, 2, 3.
+    expect(page.getByRole('textbox', { name: 'Points for Under $1k' }).query()).toBeNull();
+    await userEvent.click(page.getByRole('button', { name: 'Give points' }));
+    await expect.element(page.getByRole('textbox', { name: 'Points for Under $1k' })).toHaveValue('1');
+    await expect.element(page.getByRole('textbox', { name: 'Points for $10k' })).toHaveValue('3');
     await userEvent.fill(page.getByRole('textbox', { name: 'Points for $10k' }), '5');
     await expect.element(page.getByRole('textbox', { name: 'Points for $10k' })).toHaveValue('5');
     await page.screenshot({ path: '.vitest/shots/s5-points-light.png' });

@@ -22,3 +22,6 @@ export function namedHosts(hosts: RouteHosts | undefined): readonly string[] | u
 export function requiredSkills(hosts: RouteHosts | undefined): readonly string[] | undefined {
   return hosts === undefined || Array.isArray(hosts) ? undefined : hosts.requireSkillIds;
 }
+
+/** At most this many rules on one form or one team page (AC-1601). Here, with no Zod, so the builder reads it too. */
+export const ROUTING_RULES_MAX = 20;

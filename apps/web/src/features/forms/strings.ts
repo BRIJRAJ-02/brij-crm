@@ -174,7 +174,7 @@ export const strings = {
   /** A question kept off the CRM, with the submission only. */
   submissionOnly: 'Submission only',
   embedTiles: 'Put it on your site',
-  ownFormThanks: 'Thank you. That is with us.',
+  ownFormThanks: 'Thanks, we got it.',
 
   // Settings tab
   nameRequired: 'Give the form a name.',
@@ -656,4 +656,56 @@ export const strings = {
     paused: 'Paused',
     archived: 'Archived',
   } satisfies Record<FormStatus, string>,
+  // After they send (T20, 5 November 2026): the end of the Form tab's list, as Typeform's endings and Tally's thank you
+  // page sit at the end of a form. Endings, routing and the score live here, never in Settings.
+  afterSend: 'After they send',
+  anotherEnding: 'Another ending',
+  sendElsewhere: 'Send to a booking page or link',
+  afterMenu: 'More ways to end',
+  thankYouPage: 'Thank you page',
+  /** What everyone no rule sends elsewhere gets, as the default row's choice. */
+  afterEveryone: 'Everyone else',
+  afterKindThanks: 'Thank you page',
+  afterKindBooking: 'Booking page',
+  afterKindLink: 'Link',
+  bookingRow: (title: string | undefined) => (title === undefined ? 'Booking page' : `Booking page · ${title}`),
+  linkRow: (url: string) => (url.trim() === '' || url === 'https://' ? 'Link' : `Link · ${url}`),
+  messageRow: 'Message',
+  /** A rule's condition on its row: "When Budget is Under $1k". */
+  whenLine: (line: string) => `When ${line}`,
+  dependingOnAnswers: 'Depending on answers',
+  addCondition: 'Depending on answers…',
+  /** An ending nothing sends anyone to yet. */
+  endingUnreached: 'Nothing leads here yet',
+  /** An ending only a step's jump reaches. */
+  endingByJump: 'Reached by a jump',
+  removeOutcome: 'Remove',
+  outcomeRemoved: 'Removed.',
+  insertAnswer: 'Insert an answer',
+  insertScore: 'Score',
+  linkAddress: 'Address',
+  scoreRow: 'Score',
+  scoreSaveTo: 'Save the score to',
+  scoreSaveHelp: 'Points from the answers add up to a score. Save it on the record to sort and filter by it.',
+  routeIncomplete: 'A link needs a full address that starts with https://.',
+  // The preview's words, edited in place (T21: the Text card went).
+  editHeadline: 'Edit the headline',
+  editButton: 'Edit the button',
+  // Settings as rows (T21: label left, a compact control right, no cards).
+  saveAnswersTo: 'Save answers to',
+  onlySubmissions: 'Only in Submissions',
+  emailEach: 'Email each submission to',
+  acceptingRow: 'Accepting submissions',
+  acceptingHelp: 'Turn off to close the form. Visitors see that it is closed.',
+  spamRow: 'Spam',
+  linkHelp: 'Links with the old address keep working.',
+  ownerHelpTip: 'Who owns the records this form makes. Records already made keep their owner.',
+  savingHelpTip: 'Each submission adds or updates a record here, matched by email. A change goes live with Publish.',
+  savingChangedToast: (where: string) => `Answers will save to ${where} once you publish.`,
+  savingOffToast: 'Answers will stay in Submissions once you publish.',
+  // Analytics (T22)
+  analyticsFinishedOf: (finished: string, started: string) => `${finished} of ${started} who started finished`,
+  analyticsAllFinished: 'Everyone who started finished.',
+  analyticsSourceLine: (views: string, finished: string, count: number) =>
+    `${views} ${count === 1 ? 'view' : 'views'} · ${finished} finished`,
 } as const;
