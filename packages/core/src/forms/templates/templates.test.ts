@@ -271,17 +271,13 @@ describe('filing a template onto the workspace’s standard attributes (AC-6323)
   it('keeps an open answer with the submission rather than writing it onto the person', async () => {
     const w = await workspace();
     // A support form's "What is happening?" and an NPS "why" are not a person's description (security review).
-    for (const templateId of ['support_request', 'nps', 'feedback'] as const) {
+    // Nor Contact us' message or a demo's goal (forms fix a5): each shows on the person's timeline instead.
+    for (const templateId of ['support_request', 'nps', 'feedback', 'contact_us', 'demo_request'] as const) {
       const created = await createFormFromTemplate(w.scope, { id: newId(), templateId });
       const open = created.draft.questions.filter((each) => each.answerType === 'long_text');
       expect(open.length).toBeGreaterThan(0);
       expect(open.every((each) => each.filedOn === undefined && each.kept === true)).toBe(true);
     }
-    // Contact us keeps its filing: a short line about the person genuinely is a description.
-    const contact = await createFormFromTemplate(w.scope, { id: newId(), templateId: 'contact_us' });
-    expect(contact.draft.questions.find((each) => each.key === 'message')?.filedOn?.attributeId).toBe(
-      w.attribute('people.description'),
-    );
   });
 
   it('files a Steps template’s breaks, one per step the template names', async () => {

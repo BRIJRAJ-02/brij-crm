@@ -137,8 +137,9 @@ const JOB_TITLE: FormTemplateQuestion = {
  * purpose-neutral field that anyone with People read sees and that exports, search, webhooks and the API all carry.
  * A support form's "What is happening?", a feedback form's "What could be better?" and an NPS "why" are none of
  * them a person's description, and the first complaint somebody files should not become their permanent one
- * (security review, slice 8). `intro` is the exception, for the templates where a short line about the person
- * genuinely is a description.
+ * (security review, slice 8). Contact us' message and a demo's goal are no exception either (forms fix a5, 5
+ * November 2026): filed there, the first message filled it and a returning person's next one never reached the
+ * record. Each stays with its submission and shows on the person's timeline.
  */
 const note = (id: string, key: string, label: string, placeholder: string): FormTemplateQuestion => ({
   id,
@@ -147,12 +148,6 @@ const note = (id: string, key: string, label: string, placeholder: string): Form
   answerType: 'long_text',
   placeholder,
   required: false,
-});
-
-/** A long answer that really is about the person, filed on People · Description where the workspace has it. */
-const intro = (id: string, key: string, label: string, placeholder: string): FormTemplateQuestion => ({
-  ...note(id, key, label, placeholder),
-  filesOnto: 'description',
 });
 
 /** Every template that exists in code, by id: the gallery offers each of them (`OFFERED_FORM_TEMPLATE_IDS`). */
@@ -178,7 +173,9 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     layout: 'classic',
     headline: 'Talk to us',
     buttonText: 'Send message',
-    questions: [...WHO, COMPANY, intro('message', 'message', 'How can we help?', 'Tell us what you need')],
+    // The message stays with the submission and shows on the person's timeline (forms fix a5): filed on Description it
+    // filled once, and a second message never reached the record.
+    questions: [...WHO, COMPANY, note('message', 'message', 'How can we help?', 'Tell us what you need')],
   },
 
   demo_request: {
@@ -193,7 +190,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
       ...WHO,
       COMPANY,
       JOB_TITLE,
-      intro('goal', 'goal', 'What would you like to see?', 'The part of your work we should start with'),
+      note('goal', 'goal', 'What would you like to see?', 'The part of your work we should start with'),
     ],
   },
 

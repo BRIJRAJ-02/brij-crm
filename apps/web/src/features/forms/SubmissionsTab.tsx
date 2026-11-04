@@ -17,6 +17,7 @@ import {
   MenuItem,
   MenuTrigger,
   Avatar,
+  Badge,
   BulkActionBar,
   focusLater,
   Button,
@@ -236,6 +237,24 @@ export function SubmissionsTab({
         const message = isDataError(error) ? error.message : strings.failedText;
         if (kind === 'delete') setDeleteFailure(message);
         else toasts.toast({ tone: 'danger', message });
+      },
+    );
+  };
+
+  // Use new (forms fix a4): one kept answer written over the record's value, the panel read again after.
+  const [usingNew, setUsingNew] = useState<string | undefined>(undefined);
+  const applyNew = (submissionId: string, questionId: string) => {
+    if (usingNew !== undefined) return;
+    setUsingNew(questionId);
+    data.submissions.useNewAnswer(slug, submissionId, questionId).then(
+      () => {
+        setUsingNew(undefined);
+        toasts.toast({ tone: 'success', message: strings.usedNew });
+        void router.invalidate();
+      },
+      (error: unknown) => {
+        setUsingNew(undefined);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
       },
     );
   };
@@ -494,11 +513,24 @@ export function SubmissionsTab({
         return <RelativeTime value={submission.receivedAt} />;
       case 'person': {
         // The record it filed into; else the name it gave, or its email (the State column says if it is in the CRM).
+        // One click target per row (forms fix a10): the chip shows who, never links away; the row opens the panel,
+        // which links to the record. "Returning" when it went to a record that was already there (forms fix a4).
         const crm = submission.crm;
-        if (crm.state !== 'linked')
-          return <TruncatedText>{nameOf(submission) ?? submission.email ?? ''}</TruncatedText>;
-        const href = link(crm.record.objectId, crm.record.recordId);
-        return <RecordChip display={crm.record} {...(href === undefined ? {} : { href })} isFlat />;
+        const returning = submission.isReturning === true ? <Badge text={strings.returning} isWhole /> : null;
+        if (crm.state !== 'linked') {
+          return (
+            <>
+              <TruncatedText>{nameOf(submission) ?? submission.email ?? ''}</TruncatedText>
+              {returning}
+            </>
+          );
+        }
+        return (
+          <>
+            <RecordChip display={crm.record} isFlat />
+            {returning}
+          </>
+        );
       }
       case EMAIL_COLUMN:
         return <TruncatedText>{submission.email ?? ''}</TruncatedText>;
@@ -712,7 +744,19 @@ export function SubmissionsTab({
               }
             : {})}
         >
-          <SubmissionDetail submission={open} link={link} isFiling={isFiling} />
+          <SubmissionDetail
+            submission={open}
+            link={link}
+            isFiling={isFiling}
+            {...(canManage
+              ? {
+                  onUseNew: (questionId: string) => {
+                    applyNew(open.id, questionId);
+                  },
+                }
+              : {})}
+            {...(usingNew === undefined ? {} : { usingNew })}
+          />
         </Panel>
       )}
       <Modal
@@ -823,11 +867,21 @@ function SubmissionDetail({
   submission,
   link,
   isFiling,
+  onUseNew,
+  usingNew,
 }: {
   readonly submission: SubmissionView;
   readonly link: ReturnType<typeof recordLinks>;
   readonly isFiling: boolean;
+  /** Use new (forms fix a4): writes a kept answer over the record's value; absent for a reader who only views. */
+  readonly onUseNew?: (questionId: string) => void;
+  /** The kept answer being written now. */
+  readonly usingNew?: string;
 }) {
+  const keptAnswers = submission.kept.flatMap((each) => {
+    const answer = submission.answers.find((one) => one.questionId === each.questionId);
+    return answer === undefined ? [] : [answer];
+  });
   const source = cameFromOf(submission);
   const filing = answerFiling(submission.answers, submission.crm, isFiling, submission.refused);
   const reasons = submission.crm.state === 'linked' ? notSavedReasons(submission.answers, submission.refused) : [];
@@ -856,6 +910,34 @@ function SubmissionDetail({
             }))}
           />
           <p>{strings.notSavedNext}</p>
+        </Callout>
+      )}
+      {keptAnswers.length > 0 && submission.mainRecord !== undefined && (
+        // A returning person's new answers that filing left as they were (their question fills only an empty value):
+        // said, never dropped in silence, with Use new beside each (forms fix a4).
+        <Callout tone="info" title={strings.keptTitle(keptAnswers.length, submission.mainRecord.name)}>
+          <DescriptionList
+            layout="stacked"
+            items={keptAnswers.map((answer) => ({
+              id: answer.questionId,
+              term: answer.label,
+              description:
+                onUseNew === undefined ? (
+                  answerText(answer)
+                ) : (
+                  <Button
+                    size="sm"
+                    isPending={usingNew === answer.questionId}
+                    label={strings.useNewLabel(answer.label)}
+                    onPress={() => {
+                      onUseNew(answer.questionId);
+                    }}
+                  >
+                    {strings.useNew}
+                  </Button>
+                ),
+            }))}
+          />
         </Callout>
       )}
       <FieldGroup

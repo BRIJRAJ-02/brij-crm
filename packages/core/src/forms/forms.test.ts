@@ -56,6 +56,7 @@ import {
   releaseSubmission,
   resolveSubmission,
   retrySubmission,
+  useNewAnswer,
 } from './submissions.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -928,8 +929,46 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     const [record] = await getRecords(w.scope, { ids: [existing.recordId] });
     expect(record?.values[w.attribute('people.job_title')]).toBe('Countess');
     expect(record?.values[w.attribute('people.description')]).toBe('Wrote the first program');
-    expect((await getSubmission(w.scope, { submissionId: submission.id })).records).toMatchObject([
-      { action: 'updated', record: { recordId: existing.recordId } },
+    const view = await getSubmission(w.scope, { submissionId: submission.id });
+    expect(view.records).toMatchObject([{ action: 'updated', record: { recordId: existing.recordId } }]);
+    // The name and job title differed and were left as they were: the panel says so (forms fix a4), and the list
+    // tags them.
+    expect(view.kept).toEqual([{ questionId: 'name' }, { questionId: 'title' }]);
+    expect(view.isReturning).toBe(true);
+    const page = await listSubmissions(w.scope, { formId: live.id });
+    expect(page.items[0]?.isReturning).toBe(true);
+    // Use new writes it through the member's own access, and it no longer reads as kept.
+    const used = await useNewAnswer(w.scope, { submissionId: submission.id, questionId: 'title' });
+    expect(used.kept).toEqual([{ questionId: 'name' }]);
+    const [after] = await getRecords(w.scope, { ids: [existing.recordId] });
+    expect(after?.values[w.attribute('people.job_title')]).toBe('Engineer');
+    expect(await refusalOf(useNewAnswer(w.scope, { submissionId: submission.id, questionId: 'title' }))).toMatchObject([
+      { code: 'FORM_STATE' },
+    ]);
+  });
+
+  it('adds a returning visitor’s new phone number to the list, keeping the old one (forms fix a4)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const existing = await createRecord(w.scope, {
+      objectId: w.people,
+      values: {
+        [w.attribute('people.name')]: { firstName: 'Ada' },
+        [w.attribute('people.email_addresses')]: ['ada@example.com'],
+        [w.attribute('people.phone_numbers')]: [{ number: '+447700900123', country: 'GB' }],
+      },
+    });
+    await submit(
+      live.publicKey,
+      body({ name: 'Ada', email: 'ada@example.com', phone: { number: '+447700900999', country: 'GB' } }),
+    );
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const [record] = await getRecords(w.scope, { ids: [existing.recordId] });
+    expect(record?.values[w.attribute('people.phone_numbers')]).toEqual([
+      { number: '+447700900123', country: 'GB' },
+      { number: '+447700900999', country: 'GB' },
     ]);
   });
 

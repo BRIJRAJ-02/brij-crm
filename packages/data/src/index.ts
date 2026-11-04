@@ -7839,6 +7839,11 @@ export function createDataLayer({
       /** Processes a failed submission again (AC-566). */
       retry: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.retry({ workspace, submissionId, mutationId: mintId() }, options)),
+      /** Use new (forms fix a4): writes one answer filing kept off the record over the record's value. */
+      useNewAnswer: (workspace: string, submissionId: string, questionId: string) =>
+        call((options) =>
+          api.submissions.useNewAnswer({ workspace, submissionId, questionId, mutationId: mintId() }, options),
+        ),
       /** Deletes a submission; the records it made stay (AC-575). */
       delete: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.delete({ workspace, submissionId, mutationId: mintId() }, options)),

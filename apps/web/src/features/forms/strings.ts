@@ -546,6 +546,14 @@ export const strings = {
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
   spamFilesTitle: 'Our spam check caught this',
   spamFiles: (day: string) => `Open files only if you trust the sender. Removed on ${day} unless marked Not spam.`,
+  /** A submission that went to a record already there (forms fix a4): a tag in the list. */
+  returning: 'Returning',
+  /** A returning person's answers filing left as they were, with Use new (forms fix a4). */
+  keptTitle: (count: number, name: string) =>
+    count === 1 ? `${name} already had a different answer here` : `${name} already had different answers here`,
+  useNew: 'Use new',
+  useNewLabel: (question: string) => `Use the new answer for ${question}`,
+  usedNew: 'Saved on the record.',
   /** Over the answers filing left off the record, each with why (late trap #50). */
   notSavedTitle: (count: number) =>
     count === 1 ? 'One answer wasn’t saved on the record' : `${String(count)} answers weren’t saved on the record`,

@@ -428,16 +428,18 @@ export function matchKey(
 /**
  * The value an answer writes on a matched record (AC-558): `fill` only an
  * empty value, `always` overwrite; for a list (emails, domains) the answer's
- * items join the ones held, never replacing them. Undefined writes nothing.
+ * new items always join the ones held, never replacing them. Undefined writes nothing.
  */
 export function mergedValue(planned: Planned, current: unknown): unknown {
   const { attribute, value } = planned;
   const isEmpty = current === null || current === undefined || (Array.isArray(current) && current.length === 0);
+  // A list (emails, phones, domains) gains a new item whatever the question's rule (forms fix a4): a returning
+  // visitor's new phone number was dropped because the list wasn't empty, and the old ones are never replaced.
   if (attribute.isMulti && attribute.type !== 'select' && Array.isArray(value)) {
     const held: readonly unknown[] = Array.isArray(current) ? (current as unknown[]) : [];
     const seen = new Set(held.map((item) => JSON.stringify(item)));
     const added = (value as unknown[]).filter((item) => !seen.has(JSON.stringify(item)));
-    if (added.length === 0 || (!planned.always && !isEmpty)) return undefined;
+    if (added.length === 0) return undefined;
     return [...held, ...added];
   }
   if (!isEmpty && !planned.always) return undefined;
@@ -622,6 +624,8 @@ export type Filed =
       readonly action: 'created' | 'updated' | 'matched';
       readonly refused: readonly { questionId: string; message: string }[];
       readonly assignment: Assignment;
+      /** The answers that differed from the record's held value and were left as it was (forms fix a4). */
+      readonly kept?: readonly string[];
     }
   | {
       readonly kind: 'failed';
@@ -725,6 +729,7 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   let action: 'created' | 'updated' | 'matched';
   let skipped: readonly EngineRefusal[] = [];
   let gaveOwner: boolean;
+  let keptIds: readonly string[] = [];
   /** The attributes the write was asked for: a file's bytes are copied only for one the record really took. */
   let requested: ReadonlySet<string>;
   if (matchedId === undefined) {
@@ -757,6 +762,7 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
     const values = await changesFor(tx, recordId, planned, owner, ownerValue);
     requested = new Set(values.changes.keys());
     gaveOwner = values.gaveOwner;
+    keptIds = values.kept;
     if (values.changes.size === 0) {
       action = 'matched';
     } else {
@@ -822,7 +828,14 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
       role: 'main',
     })
     .onConflictDoNothing();
-  return { kind: 'filed', recordId, action, refused: allRefused, assignment: kept };
+  return {
+    kind: 'filed',
+    recordId,
+    action,
+    refused: allRefused,
+    assignment: kept,
+    ...(keptIds.length === 0 ? {} : { kept: keptIds }),
+  };
 }
 
 /** What a submission that wasn't filed records of its owner: a rotation's pick wasn't made, so it says so. */
@@ -927,13 +940,29 @@ export async function changesFor(
   owner: AttributeDef | undefined,
   ownerValue: unknown,
   held?: ReturnType<typeof heldValues>,
-): Promise<{ readonly changes: ReadonlyMap<string, unknown>; readonly gaveOwner: boolean }> {
+): Promise<{
+  readonly changes: ReadonlyMap<string, unknown>;
+  readonly gaveOwner: boolean;
+  /** The questions whose answer differed from a value the record holds, left as it was by their `fill` rule. */
+  readonly kept: readonly string[];
+}> {
   const ids = [...planned.map((each) => each.attribute.id), ...(owner === undefined ? [] : [owner.id])];
   const currentOf = held ?? heldValues(indexHeld(await currentItems(tx, [recordId], ids)), recordId);
   const changes = new Map<string, unknown>();
+  const kept: string[] = [];
   for (const each of planned) {
-    const next = mergedValue(each, currentOf(each.attribute));
+    const current = currentOf(each.attribute);
+    const next = mergedValue(each, current);
     if (next !== undefined) changes.set(each.attribute.id, next);
+    else if (
+      !each.always &&
+      !(each.attribute.isMulti && each.attribute.type !== 'select') &&
+      current !== null &&
+      current !== undefined &&
+      JSON.stringify(current) !== JSON.stringify(each.value)
+    ) {
+      kept.push(each.questionId);
+    }
   }
   let gaveOwner = false;
   // A matched record keeps its owner; one with none gets the form's choice (AC-567, processing rules).
@@ -944,7 +973,7 @@ export async function changesFor(
       gaveOwner = true;
     }
   }
-  return { changes, gaveOwner };
+  return { changes, gaveOwner, kept };
 }
 
 /** Current items grouped by record and attribute, each group in position order: built once for many records. */
@@ -1246,7 +1275,13 @@ export async function settle(
       processedAt: sql`now()`,
       mainRecordId: filed.recordId,
       assignment: filed.assignment,
-      outcome: { refused: filed.refused, ...extraOutcome },
+      // What filing did to the record, so the list can tag a returning person, and the answers it left as they were.
+      outcome: {
+        refused: filed.refused,
+        action: filed.action,
+        ...(filed.kept === undefined ? {} : { kept: filed.kept.map((questionId) => ({ questionId })) }),
+        ...extraOutcome,
+      },
       failure: null,
       updatedAt: sql`now()`,
     })

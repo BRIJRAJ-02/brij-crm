@@ -26,7 +26,7 @@ import * as z from 'zod';
 import { checkId } from '../engine/ids.ts';
 import { queueFormWebhooks } from '../webhooks/queue.ts';
 import { readRecords } from '../engine/records.ts';
-import { loadAttributesById } from '../engine/values.ts';
+import { loadAttributes, loadAttributesById } from '../engine/values.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -38,7 +38,7 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { withdrawSubmissionNotices } from '../notifications/notify.ts';
 import { UNKNOWN_FORM } from './forms.ts';
-import { FORMS_PROCESS, requiredFieldFailure, siteFieldFailure } from './process.ts';
+import { FORMS_PROCESS, fileOntoRecord, requiredFieldFailure, siteFieldFailure } from './process.ts';
 import { canSeeForm, loadForm, loadForms, loadVersions, millis } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
@@ -101,6 +101,12 @@ export const COLUMNS = {
 
 const record = (value: unknown): Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+/** Whether filing went to a record that was already there (forms fix a4): its stored action, updated or matched. */
+const isReturning = (outcome: unknown): boolean => {
+  const action = record(outcome).action;
+  return action === 'updated' || action === 'matched';
+};
 
 /** A stored context as members read it: read back through its schema, so a bad row shows nothing rather than failing. */
 function contextOf(stored: unknown): SubmissionContext | undefined {
@@ -296,6 +302,7 @@ export async function listSubmissions(
         ...(main === undefined ? {} : { mainRecord: main }),
         ...summaryOf(version?.document, answers),
         crm: crmOf(row.state, main, files),
+        ...(isReturning(row.outcome) ? { isReturning: true } : {}),
       };
     });
     return {
@@ -432,6 +439,15 @@ export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: 
       ? [{ questionId, message }]
       : [];
   });
+  const keptList = record(row.outcome).kept;
+  // Only while the record shows: a kept answer is about the record it was kept off.
+  const kept =
+    main === undefined
+      ? []
+      : (Array.isArray(keptList) ? keptList : []).flatMap((item) => {
+          const { questionId } = record(item);
+          return typeof questionId === 'string' && shownQuestions.has(questionId) ? [{ questionId }] : [];
+        });
   const assignment = record(row.assignment);
   // A failure for a required field nothing filled is named here, not where it was stored: the job that wrote it
   // runs as the system and sees every field, while this reader may not (security review, 27 October 2026).
@@ -453,6 +469,7 @@ export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: 
     ...(main === undefined ? {} : { mainRecord: main }),
     ...summaryOf(version?.document, answers),
     crm: crmOf(row.state, main, await formFiles(tx, form)),
+    ...(isReturning(row.outcome) ? { isReturning: true } : {}),
     versionNumber: version?.number ?? 1,
     answers,
     hidden,
@@ -461,6 +478,7 @@ export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: 
     records,
     ...(failure === undefined ? {} : { failure }),
     refused,
+    kept,
     ...(removedOn === undefined ? {} : { filesRemovedOn: removedOn }),
     ...(typeof assignment.reason === 'string'
       ? {
@@ -672,6 +690,62 @@ export async function retrySubmission(
     hooks,
     false,
   );
+}
+
+/** What Use new answers for an answer that is no longer kept off the record (written already, or never kept). */
+export const NOT_KEPT = 'That answer is already on the record.';
+
+/**
+ * Use new (forms fix a4): writes one answer filing kept off the record (its question fills only an empty value, and
+ * the record held another) over the record's value now. Through the member's own access, as an edit on the record
+ * would be: a record or field they can't write refuses here with the engine's reason. The answer then no longer
+ * reads as kept. No `forms.manage`: a member who may open the submission and write the record may do it by hand.
+ */
+export async function useNewAnswer(
+  scope: EngineScope,
+  input: { readonly submissionId: string; readonly questionId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const before = await viewIn(tx, scope, input.submissionId);
+      const recordId = before.mainRecord?.recordId;
+      if (recordId === undefined || !before.kept.some((each) => each.questionId === input.questionId)) {
+        throw refuse('FORM_STATE', NOT_KEPT);
+      }
+      const [row] = await tx
+        .select({ versionId: formSubmissions.versionId, answers: formSubmissions.answers })
+        .from(formSubmissions)
+        .where(eq(formSubmissions.id, before.id))
+        .for('update');
+      const version = row === undefined ? undefined : (await loadVersions(tx, [row.versionId])).get(row.versionId);
+      const question = version?.document.questions.find((each) => each.id === input.questionId);
+      const objectId = version?.document.targets.main?.objectId;
+      if (row === undefined || question === undefined || objectId === undefined) throw refuse('FORM_STATE', NOT_KEPT);
+      const filed = await fileOntoRecord(context, {
+        recordId,
+        questions: [{ ...question, update: 'always' }],
+        attributes: await loadAttributes(tx, objectId),
+        answers: record(row.answers),
+      });
+      const [refusal] = filed.refused;
+      if (refusal !== undefined) throw refuse('FORM_STATE', refusal.message);
+      await tx
+        .update(formSubmissions)
+        .set({
+          outcome: sql`jsonb_set(${formSubmissions.outcome}, '{kept}', coalesce((
+            select jsonb_agg(item) from jsonb_array_elements(${formSubmissions.outcome}->'kept') item
+            where item->>'questionId' <> ${input.questionId}), '[]'::jsonb))`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(formSubmissions.id, before.id));
+      return viewIn(tx, scope, before.id);
+    },
+    hooks,
+  );
+  return result;
 }
 
 /** Deletes a submission (AC-575): its answers go; the records it created stay. */
