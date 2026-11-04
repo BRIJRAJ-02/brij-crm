@@ -10,6 +10,24 @@ const SECTIONS = ['Small plates', 'Mains', 'Sides', 'Desserts', 'Wine', 'Cocktai
   href: `#section-${String(index)}`,
 }));
 
+/** Sliding's own component: the artifact's preview calls a story's render directly, so its hooks live here. */
+function SlidingDemo() {
+  const [current, setCurrent] = useState('0');
+  return (
+    <Stage width="phone">
+      <SectionTabs
+        label="Sections"
+        sections={SECTIONS}
+        current={current}
+        onSelect={(id, event) => {
+          event.preventDefault();
+          setCurrent(id);
+        }}
+      />
+    </Stage>
+  );
+}
+
 const meta = {
   title: 'Molecules/SectionTabs',
   component: SectionTabs,
@@ -31,22 +49,7 @@ export const Default: Story = {
 /** Pressing a pill makes it current here (a page's scroll spy does it as the reader scrolls): the fill slides to it. */
 export const Sliding: Story = {
   parameters: { crm: { preview: true } },
-  render: function Sliding() {
-    const [current, setCurrent] = useState('0');
-    return (
-      <Stage width="phone">
-        <SectionTabs
-          label="Sections"
-          sections={SECTIONS}
-          current={current}
-          onSelect={(id, event) => {
-            event.preventDefault();
-            setCurrent(id);
-          }}
-        />
-      </Stage>
-    );
-  },
+  render: () => <SlidingDemo />,
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('link', { name: 'Sides' }));
     await expect(canvas.getByRole('link', { name: 'Sides' })).toHaveAttribute('aria-current', 'location');

@@ -5,7 +5,7 @@ import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import type { PublicMenu } from '@crm/contracts';
-import { sampleMenu, samplePhotoHref } from '../MenuList/MenuList.stories.tsx';
+import { sampleMenu, samplePhotoHref } from '../../workbench/menu-samples.ts';
 import { ItemSheet, PicksSheet, type GuestPick } from './ItemSheet.tsx';
 
 const id = (n: number) => `0199f0a0-0000-7000-8000-${String(n).padStart(12, '0')}`;

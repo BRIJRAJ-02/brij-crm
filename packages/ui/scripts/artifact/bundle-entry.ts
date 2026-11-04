@@ -19,3 +19,12 @@ export { IconScope } from '../../src/atoms/Icon/Icon.tsx';
 export { createFixedClock } from '../../src/provider/clock.ts';
 export { Stage } from '../../src/workbench/Stage/Stage.tsx';
 export { FieldSurfaces } from '../../src/workbench/FieldSurfaces/FieldSurfaces.tsx';
+// The business page's parts (spec 0066, B4 lite) live on the public booking entry, not the app's; its card draws them.
+export {
+  BusinessHours,
+  BusinessLocation,
+  BusinessMenu,
+  BusinessPage,
+  BusinessReserve,
+  businessAction,
+} from '../../src/modules/BusinessPage/BusinessPage.tsx';

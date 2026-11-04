@@ -369,9 +369,13 @@ for (const { card, file } of stories) {
   if (preview.css !== undefined && preview.css.trim() !== '') {
     problems.push(`components/${card.name}/preview.html carries CSS of its own; its styles must come from bundle.css.`);
   }
-  for (const marker of ['@testing-library', '@vitest/', 'chai']) {
-    if (preview.code.includes(marker))
-      problems.push(`components/${card.name}/preview.html pulls storybook/test in (${marker}).`);
+  // `chai` as a word: the business page's `wheelchair` amenity holds the letters, not the library.
+  for (const [marker, found] of [
+    ['@testing-library', (code: string) => code.includes('@testing-library')],
+    ['@vitest/', (code: string) => code.includes('@vitest/')],
+    ['chai', (code: string) => /\bchai\b/.test(code)],
+  ] as const) {
+    if (found(preview.code)) problems.push(`components/${card.name}/preview.html pulls storybook/test in (${marker}).`);
   }
   const html = previewHtml(card, inlineSafe(preview.code));
   write(`components/${card.name}/preview.html`, html);
