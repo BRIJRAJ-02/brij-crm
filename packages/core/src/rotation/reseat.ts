@@ -11,7 +11,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { BookingCalendar, EventRef } from '../booking/calendar.ts';
-import { recordEvent } from '../booking/mail-queue.ts';
+import { ownMeetingLink, recordEvent } from '../booking/mail-queue.ts';
 import { loadPage, type PageRecord } from '../booking/slots.ts';
 import { writeAssignment, type AssignmentRow } from './ledger.ts';
 import type { SeatPick } from './pick.ts';
@@ -138,7 +138,7 @@ function guestsOf(answers: unknown): readonly string[] {
 function eventLocation(page: PageRecord, phone: string | undefined): string | undefined {
   switch (page.location.type) {
     case 'video':
-      return undefined;
+      return page.location.link;
     case 'phone':
       return phone === undefined ? undefined : `Phone: ${phone}`;
     default:
@@ -209,14 +209,14 @@ export async function remakeEvent(
             .map((guest) => ({ email: guest, name: guest })),
           ...others,
         ],
-        video: page.location.type === 'video',
+        video: page.location.type === 'video' && ownMeetingLink(page.location) === undefined,
         ...(location === undefined ? {} : { location }),
       }),
     'booking.event_failed',
     bookingId,
     log,
   );
-  await inWorkspace(scope, (tx) => recordEvent(tx, bookingId, written));
+  await inWorkspace(scope, (tx) => recordEvent(tx, bookingId, written, ownMeetingLink(page.location)));
 }
 
 /** Three tries of a calendar call; undefined when all failed (logged). */

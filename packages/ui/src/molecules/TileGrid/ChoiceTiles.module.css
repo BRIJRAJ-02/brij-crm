@@ -5,6 +5,19 @@
    tick in its top end corner. Press scales to scale-press; the tick eases in on opacity and scale (at once under
    reduced motion). */
 @layer components {
+  /* With a visible label (`isLabelVisible`): the label, as a Field's, over the tiles. */
+  .labelled {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .title {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   .root {
     display: grid;
     /* auto-fit, not auto-fill: a short run (three embed tiles in a wide card) shares the whole row, so the tiles end

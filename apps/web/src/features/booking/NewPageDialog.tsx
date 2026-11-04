@@ -1,67 +1,60 @@
 // Brief
-// Purpose: New booking page (spec 0025 experience, AC-678; spec 0058, AC-5 and AC-17): a centred dialog, "Add a booking page", then its Ready panel.
-// Main task: a title and one length, then Create page; the Ready panel shows the link (Copy, Share, QR, a small preview), and Edit page opens the editor.
-// An admin also chooses who it books: themselves, one host from a rotation (spec 0029, AC-732), or everyone on the roster, which makes a workspace link (30 Oct 2026).
-// Leaves out: the schedule (the page follows the default; another is picked on the editor's Hours tab, as Calendly and Cal.com do), everything else a page has (its editor), and its web address part (the server makes one from the title).
+// Purpose: New booking page, the Calendly way (the bookings area, 4 November 2026, after the owner's "what is this
+// nonsense"): a title, the page's type as a short list (Just me, selected; Round robin for an admin), and a length.
+// Main task: name it and press Create page, which makes it as a draft and opens its editor, where Publish puts it live.
+// The header's Team links opens this same dialog as New workspace link or New team link (`kind`), with only what that
+// one asks: a title (and a length for the workspace link). A managed page ("A page each") waits under More types.
+// Leaves out: the schedule (the page follows the default; another is picked on the editor's Hours tab, as Calendly and
+// Cal.com do), everything else a page has (its editor), its web address (the server makes one from the title), the
+// workspace and team links as types (they are links, not page types: the header's Team links), and Collective (the
+// server can't make one yet). No choice is ever shown turned off: one that can't apply is left out.
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import {
-  Button,
-  Callout,
-  Field,
-  InfoTip,
-  focusLater,
-  Link,
-  Modal,
-  PreviewFrame,
-  Radio,
-  RadioGroup,
-  ReadyPanel,
-  SegmentedControl,
-  Select,
-} from '@crm/ui';
+import { Button, Callout, Disclosure, Field, Link, Modal, SegmentedControl, Select, TileGrid } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { lengthOf } from './durations.ts';
 import { memberZone } from './zone.ts';
 import { strings } from './strings.ts';
 import { managedStrings } from './managed-strings.ts';
-import { publicBookingUrl, roundRobinHref } from './links.ts';
+import { roundRobinHref } from './links.ts';
 
 /** The lengths offered as segments; any other the server allows goes through Custom. */
 const SEGMENTS = [15, 30, 45, 60] as const;
 const CUSTOM = 'custom';
 
+/** What the dialog makes: a page (the default), the workspace's own link, or a Team link (a form). */
+export type NewPageKind = 'page' | 'workspace' | 'team-link';
+
+/** A page's type, as the list offers it. */
+type PageType = 'me' | 'rotation' | 'managed';
+
 /** Props for the dialog. */
 export interface NewPageDialogProps {
   readonly data: DataLayer;
   readonly slug: string;
-  /** The reader may book a rotation's hosts (booking.admin): the dialog offers who it books. */
+  /** The reader may book a rotation's hosts (booking.admin): the list offers Round robin. */
   readonly canBookTeams?: boolean;
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  /** The page exists and its Ready panel was dismissed (Edit page, Esc or close): the caller opens its editor. */
+  /** The page exists, as a draft: the caller opens its editor, where Publish puts it live. */
   readonly onCreated: (page: BookingPageView) => void;
   /** Makes it Link only from the start (Bookings' "Create a link only page", for reserved time). */
   readonly isLinkOnly?: boolean;
-  /**
-   * The reader may make forms (`forms.manage`): the dialog offers the Team link (spec 0037, AC-1353), a form in front
-   * of the live team pages, made in one step; `onTeamLink` then opens its editor.
-   */
+  /** What it makes; `page` unless the header's Team links asked for the workspace link or a Team link. */
+  readonly kind?: NewPageKind;
+  /** A Team link was made (spec 0037, AC-1353): the caller opens its form's editor. */
   readonly onTeamLink?: (formId: string) => void;
-  /** Opened as New › Team link (`?new=team-link`): the Team link is chosen. */
-  readonly isTeamLinkAsked?: boolean;
   /**
-   * The reader may set up managed pages (`booking.admin`, spec 0037, AC-1333): the dialog offers "Everyone, their
-   * own page", which makes the template in one step; `onManaged` then opens its editor, where the parts the
-   * workspace sets and who has it are chosen.
+   * The reader may set up managed pages (`booking.admin`, spec 0037, AC-1333): More types offers "A page each",
+   * which makes the template in one step; `onManaged` then opens its editor.
    */
   readonly onManaged?: (templateId: string) => void;
 }
 
 /**
- * The dialog: Title and Duration, then Cancel or Create page; once made, the Ready panel in the same Modal. The page
- * follows the default schedule. The id is minted once per opening, so a retry makes one page.
+ * The dialog: Title, then the type (for an admin) and Duration, then Cancel or Create page. The id is minted once per
+ * opening, so a retry makes one page.
  */
 export function NewPageDialog({
   data,
@@ -71,31 +64,25 @@ export function NewPageDialog({
   onClose,
   onCreated,
   isLinkOnly = false,
+  kind = 'page',
   onTeamLink,
-  isTeamLinkAsked = false,
   onManaged,
 }: NewPageDialogProps) {
   const [title, setTitle] = useState('');
   // A segment's minutes, or `custom` with the typed minutes beside it.
   const [length, setLength] = useState('30');
   const [custom, setCustom] = useState('');
-  // The page just made: the dialog turns to its Ready panel until it is dismissed (spec 0058, AC-5).
-  const [created, setCreated] = useState<BookingPageView | undefined>(undefined);
-  // `everyone` makes the workspace's own link, booking whoever on the roster is free (team scheduling, decision 3).
-  const [who, setWho] = useState<'me' | 'rotation' | 'everyone' | 'team-link' | 'managed'>(
-    isTeamLinkAsked ? 'team-link' : 'me',
-  );
-  // Asked for as New › Team link while the dialog was already mounted: it opens on the Team link.
-  const [wasAsked, setWasAsked] = useState(isTeamLinkAsked);
-  if (isTeamLinkAsked !== wasAsked) {
-    setWasAsked(isTeamLinkAsked);
-    if (isTeamLinkAsked) setWho('team-link');
-  }
-  const canTeamLink = onTeamLink !== undefined && !isLinkOnly;
-  const isTeamLink = canTeamLink && who === 'team-link';
-  // A managed page is nobody's bookable page: Link only means nothing for it, and it has no rotation.
-  const canManaged = onManaged !== undefined && !isLinkOnly;
-  const isManaged = canManaged && who === 'managed';
+  // Just me, always first and chosen (the owner, 4 November 2026: nothing else is ever pre-selected).
+  const [type, setType] = useState<PageType>('me');
+  // More types, folded until opened; held open while its type is the one chosen, so the choice never hides.
+  const [isMoreOpen, setMoreOpen] = useState(false);
+  const isTeamLink = kind === 'team-link' && onTeamLink !== undefined;
+  const isWorkspace = kind === 'workspace' && canBookTeams;
+  const isPage = !isTeamLink && !isWorkspace;
+  // A managed page is nobody's bookable page: Link only means nothing for it.
+  const canManaged = isPage && onManaged !== undefined && !isLinkOnly;
+  const isManaged = canManaged && type === 'managed';
+  const isTeam = isPage && canBookTeams && type === 'rotation';
   const [rotationId, setRotationId] = useState<string | null>(null);
   const [rotationError, setRotationError] = useState<string | undefined>(undefined);
   const rotations = useCaptureList(data.rotations.view(slug));
@@ -107,11 +94,9 @@ export function NewPageDialog({
           description: rotationStrings.summary(each.strategy, each.windowDays, each.pages),
         }))
       : [];
-  const isTeam = canBookTeams && who === 'rotation';
   // The group the page books: the one picked, else the workspace's only group, so a team with one needn't pick it.
   const onlyRotation = rotationItems.length === 1 ? rotationItems[0]?.id : undefined;
   const pickedRotation = rotationId ?? onlyRotation ?? null;
-  const isWorkspace = canBookTeams && who === 'everyone' && !isLinkOnly;
   // No group yet: Manage round robin opens in a new tab, so what is typed here stays (flow walks B8), and the
   // groups are read again when this tab is back in front.
   const isWaitingForGroup = isOpen && isTeam && rotations.status === 'ready' && rotationItems.length === 0;
@@ -149,7 +134,8 @@ export function NewPageDialog({
     setTitle('');
     setLength('30');
     setCustom('');
-    setWho('me');
+    setType('me');
+    setMoreOpen(false);
     setRotationId(null);
     setRotationError(undefined);
     setErrors({});
@@ -227,10 +213,12 @@ export function NewPageDialog({
         id,
         title: title.trim(),
         timeZone: memberZone(data, slug),
+        // A draft until its first Publish, as a form is (the bookings area, 4 November 2026).
+        isDraft: true,
         // A one on one page follows the default schedule (AC-17); a round robin page books by each host's own hours.
         settings: {
           ...(isTeam || isWorkspace ? { durations: [minutes] } : { durations: [minutes], scheduleId: null }),
-          ...(isLinkOnly ? { isPrivate: true } : {}),
+          ...(isLinkOnly && !isWorkspace ? { isPrivate: true } : {}),
         },
         ...(isTeam && pickedRotation !== null
           ? { kind: 'round_robin' as const, hosts: { fixed: [], rotations: [pickedRotation] } }
@@ -243,9 +231,7 @@ export function NewPageDialog({
           // The workspace's first link made "Everyone on the roster": the held rotations read it.
           if (isWorkspace) data.rotations.view(slug).reload();
           reset();
-          setCreated(page);
-          // Create page leaves with the form, so focus goes to the panel's first control, Copy link, never the page.
-          focusLater(() => document.querySelector<HTMLElement>('[role="dialog"] section button'));
+          onCreated(page);
         },
         (error: unknown) => {
           setBusy(false);
@@ -264,47 +250,33 @@ export function NewPageDialog({
     reset();
     onClose();
   };
-  if (created !== undefined) {
-    // Any way out of the Ready panel goes on to the editor, as Create page always has.
-    const finish = () => {
-      setCreated(undefined);
-      onCreated(created);
-    };
-    return (
-      <Modal
-        // The one heading: the panel under it leads with its line, not a second title.
-        title={strings.readyTitle}
-        isOpen={isOpen}
-        onOpenChange={(open) => {
-          if (!open) finish();
-        }}
-        actions={
-          // Copy link is the panel's one primary: sharing is what the moment is for.
-          <Button onPress={finish}>{strings.readyEdit}</Button>
-        }
-      >
-        <ReadyPanel
-          message={strings.readyMessage}
-          link={publicBookingUrl(created)}
-          shareTitle={created.title}
-          previewLabel={strings.readyPreview}
-          // The visitor's page itself, inert, at the QR code's height, drawn at half size from its top so the page's
-          // name and title show rather than being cut at the slot's foot.
-          previewScale="shrunk"
-          preview={<PreviewFrame src={`/b/${created.publicKey}`} title={created.title} version={created.updatedAt} />}
-        />
-      </Modal>
-    );
-  }
+  const pick = (value: string) => {
+    if (value === 'me' || value === 'rotation' || value === 'managed') setType(value);
+  };
+  // The types, each a mark, a name and one plain line (Calendly's New event type). Round robin is booking.admin's.
+  const types = [
+    { id: 'me', name: strings.typeMe, icon: 'user' as const, description: strings.typeMeLine },
+    ...(canBookTeams
+      ? [
+          {
+            id: 'rotation',
+            name: strings.typeRoundRobin,
+            icon: 'refresh-cw' as const,
+            description: strings.typeRoundRobinLine,
+          },
+        ]
+      : []),
+  ];
   return (
     <Modal
+      // The name stays put while a type is picked: picking one is a choice in the dialog, not another dialog.
       title={
-        isLinkOnly
-          ? strings.addLinkOnlyPage
-          : isTeamLink
-            ? rotationStrings.addTeamLink
-            : isManaged
-              ? managedStrings.addManaged
+        isTeamLink
+          ? strings.addTeamLink
+          : isWorkspace
+            ? strings.addWorkspaceLink
+            : isLinkOnly
+              ? strings.addLinkOnlyPage
               : strings.addPage
       }
       isOpen={isOpen}
@@ -342,45 +314,50 @@ export function NewPageDialog({
         autoFocus
         {...(errors.title === undefined ? {} : { error: errors.title })}
       />
-      {(canBookTeams || canTeamLink) && (
-        <RadioGroup
-          label={rotationStrings.whoBooks}
-          // Three short choices in a row; what each means waits in the tip, not in three lines under them.
-          info={
-            <InfoTip label={rotationStrings.whoBooks}>
-              {canTeamLink ? rotationStrings.whoBooksInfoTeamLink : rotationStrings.whoBooksInfo}
-            </InfoTip>
-          }
-          orientation="horizontal"
-          value={who}
-          isDisabled={isBusy}
-          onChange={(value) => {
-            if (
-              value === 'me' ||
-              value === 'rotation' ||
-              value === 'everyone' ||
-              value === 'team-link' ||
-              value === 'managed'
-            ) {
-              setWho(value);
-            }
-          }}
-        >
-          <Radio value="me">{rotationStrings.bookMe}</Radio>
-          {canBookTeams && <Radio value="rotation">{rotationStrings.bookRotation}</Radio>}
-          {/* A workspace link is on nobody's profile, so Link only means nothing for it. */}
-          {canBookTeams && !isLinkOnly && <Radio value="everyone">{rotationStrings.bookEveryone}</Radio>}
-          {/* A form in front of the team pages: with none live there is nothing to send people to. */}
-          {canTeamLink && <TeamLinkRadio data={data} slug={slug} />}
-          {/* One page set up here, with a page of it for each person picked in its editor (spec 0037, AC-1333). */}
+      {/* The type, for whoever has more than one to pick: Just me is chosen, and anything rarer waits under More
+          types. One list, so a type under More types is picked as the others are. */}
+      {isPage && (canBookTeams || canManaged) && (
+        <>
+          <TileGrid
+            variant="choice"
+            label={strings.typeLabel}
+            isLabelVisible
+            showsDescription
+            tileWidth="wide"
+            value={type === 'managed' ? null : type}
+            tiles={isBusy ? types.map((tile) => ({ ...tile, isDisabled: true })) : types}
+            onChange={pick}
+          />
+
           {canManaged && (
-            <Radio value="managed" description={managedStrings.managedInfo}>
-              {managedStrings.bookManaged}
-            </Radio>
+            <Disclosure
+              title={strings.moreTypes}
+              variant="quiet"
+              isExpanded={isMoreOpen || type === 'managed'}
+              onExpandedChange={setMoreOpen}
+            >
+              <TileGrid
+                variant="choice"
+                label={strings.moreTypes}
+                showsDescription
+                tileWidth="wide"
+                value={type === 'managed' ? 'managed' : null}
+                tiles={[
+                  {
+                    id: 'managed',
+                    name: managedStrings.bookManaged,
+                    icon: 'layers',
+                    description: strings.typeManagedLine,
+                    ...(isBusy ? { isDisabled: true } : {}),
+                  },
+                ]}
+                onChange={pick}
+              />
+            </Disclosure>
           )}
-        </RadioGroup>
+        </>
       )}
-      {/* What the choice above decides comes under it, so choosing a card never moves the cards. */}
+      {/* A length for anything that books; a Team link and a managed page take theirs in their editors. */}
       {!isTeamLink && !isManaged && (
         <>
           <SegmentedControl
@@ -428,7 +405,7 @@ export function NewPageDialog({
               </Link>
             }
           >
-            {rotationStrings.noRotations}
+            {strings.noGroupsYet}
           </Callout>
         ) : (
           <Select
@@ -446,22 +423,5 @@ export function NewPageDialog({
           />
         ))}
     </Modal>
-  );
-}
-
-/**
- * The Team link's choice (spec 0037, AC-1353): it offers the live team pages, the workspace link among them, so with
- * none it is off and says why. Mounted only while the dialog is open, so the pages are read only then; while they
- * load it stays on (the server refuses a Team link with no page anyway).
- */
-function TeamLinkRadio({ data, slug }: { readonly data: DataLayer; readonly slug: string }) {
-  const pages = useCaptureList(data.bookingPages.view(slug));
-  const hasNone =
-    pages.status === 'ready' && !pages.items.some((page) => page.kind === 'round_robin' && page.status === 'live');
-  return (
-    // In a row of short choices, like the others: only the reason it is off shows under it.
-    <Radio value="team-link" isDisabled={hasNone} {...(hasNone ? { description: rotationStrings.teamLinkNone } : {})}>
-      {rotationStrings.teamLink}
-    </Radio>
   );
 }

@@ -25,6 +25,8 @@ import { DeletePageDialog } from './DeletePageDialog.tsx';
 import { managedStrings } from './managed-strings.ts';
 import { managedPageHref, pageEditorHref, publicBookingPath, publicBookingUrl, type PageTab } from './links.ts';
 import { sharingStrings } from './sharing-strings.ts';
+import { publishStrings } from './publish-strings.ts';
+import { isDraftPage } from './draft-page.ts';
 import { strings } from './strings.ts';
 
 /** The groups' ids: the workspace's own links, the reader's own pages, and one per colleague (`member:<id>`). */
@@ -170,6 +172,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     const isOff = page.status === 'paused';
     // A member sees the workspace's links to copy and open (owner, 30 Oct 2026): no editor, switch or menu.
     const isViewOnly = page.scope === 'workspace' && !page.canChange;
+    // Made as a draft and never published (the bookings area): its editor's Publish puts it live, not a switch.
+    const isDraft = isDraftPage(page);
     return {
       id: page.id,
       groupId: groupOf(page),
@@ -179,22 +183,24 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       colourKey: page.id,
       facts: factsOf(page),
       // The link Copy link copies, as a path.
-      address: publicBookingPath(page),
+      ...(isDraft ? {} : { address: publicBookingPath(page) }),
       // Off shows in the muted title and the switch; the badge is for what they can't say.
       ...(isPending
         ? { badge: strings.copying }
-        : isViewOnly
-          ? { badge: strings.viewOnly }
-          : page.pausedReason === 'host_removed'
-            ? { badge: strings.hostRemoved }
-            : page.isPrivate
-              ? { badge: strings.linkOnly }
-              : page.isEditor === true
-                ? { badge: sharingStrings.editorBadge }
-                : {}),
+        : isDraft
+          ? { badge: publishStrings.statusDraft }
+          : isViewOnly
+            ? { badge: strings.viewOnly }
+            : page.pausedReason === 'host_removed'
+              ? { badge: strings.hostRemoved }
+              : page.isPrivate
+                ? { badge: strings.linkOnly }
+                : page.isEditor === true
+                  ? { badge: sharingStrings.editorBadge }
+                  : {}),
       isOff,
       isPending,
-      ...(isViewOnly
+      ...(isViewOnly || isDraft
         ? {}
         : {
             toggle: {
@@ -208,7 +214,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
               hint: page.status === 'live' ? strings.takingBookings : strings.notTakingBookings,
             },
           }),
-      copyValue: publicBookingUrl(page),
+      ...(isDraft ? {} : { copyValue: publicBookingUrl(page) }),
       actions: (
         <>
           {/* Off, there is nothing to open: the muted title and the switch say why. */}

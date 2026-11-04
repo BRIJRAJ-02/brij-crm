@@ -1,6 +1,7 @@
-// New booking page in Chromium (spec 0058): it asks for a title and a length only and makes a page on the default
-// schedule (AC-17), then turns to the Ready panel with the link, Copy, Share, its QR code and a small preview (AC-5),
-// left in one action for the editor. Axe clean in light and dark.
+// New booking page in Chromium (spec 0058; the bookings area, 4 November 2026): a title, the type as a short list
+// (Just me chosen, Round robin, A page each under More types) and a length; Create page makes the page as a draft on
+// the default schedule (AC-17) and goes straight on to its editor, where Publish puts it live. No workspace or team
+// link among the types, and nothing shown turned off. Axe clean in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
 import type { BookingPageView, DataLayer, RotationView } from '@crm/data';
@@ -11,6 +12,7 @@ import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { NewPageDialog } from './NewPageDialog.tsx';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { strings } from './strings.ts';
+import { managedStrings } from './managed-strings.ts';
 
 let shown: InApp | undefined;
 
@@ -49,7 +51,7 @@ const MADE = {
   updatedAt: '2026-10-31T09:00:00.000Z',
 } as unknown as BookingPageView;
 
-async function render(rotationList: readonly RotationView[] = []) {
+async function render(rotationList: readonly RotationView[] = [], options: { readonly managed?: boolean } = {}) {
   const create = vi.fn(() => Promise.resolve(MADE));
   const data = {
     preferences: { of: () => held({ status: 'loading' as const }) },
@@ -62,7 +64,17 @@ async function render(rotationList: readonly RotationView[] = []) {
   } as unknown as DataLayer;
   const onCreated = vi.fn();
   shown = await renderInApp(
-    () => <NewPageDialog data={data} slug="acme" canBookTeams isOpen onClose={() => undefined} onCreated={onCreated} />,
+    () => (
+      <NewPageDialog
+        data={data}
+        slug="acme"
+        canBookTeams
+        isOpen
+        onClose={() => undefined}
+        onCreated={onCreated}
+        {...(options.managed === true ? { onManaged: () => undefined } : {})}
+      />
+    ),
     { data, pattern: '/w/$slug/captures/links', at: '/w/acme/captures/links' },
   );
   return { create, onCreated };
@@ -78,56 +90,49 @@ async function checkThemes(name: string) {
 }
 
 describe('New booking page', () => {
-  it('asks for a title and a length only, and makes the page on the default schedule (AC-17)', async () => {
+  it('asks for a title, a type and a length, and makes a draft on the default schedule (AC-17)', async () => {
     const { create, onCreated } = await render();
     const dialog = page.getByRole('dialog', { name: strings.addPage });
     await expect.element(dialog.getByRole('textbox', { name: strings.title })).toHaveFocus();
-    // No schedule to pick, and no hint lines: the page follows the default.
+    // Just me is chosen; Round robin is the one other type, each with one plain line.
+    await expect.element(dialog.getByRole('radio', { name: new RegExp(strings.typeMe) })).toBeChecked();
+    await expect.element(dialog.getByRole('radio', { name: new RegExp(strings.typeRoundRobin) })).not.toBeChecked();
+    await expect.element(dialog.getByText(strings.typeRoundRobinLine)).toBeVisible();
+    // Links aren't page types any more, and nothing is offered turned off.
+    expect(dialog.getByText(/Workspace link|Team link/).elements()).toHaveLength(0);
+    expect(dialog.getByRole('radio', { disabled: true }).elements()).toHaveLength(0);
+    // No schedule to pick: the page follows the default.
     expect(dialog.getByText('Schedule', { exact: true }).elements()).toHaveLength(0);
-    expect(dialog.getByRole('button', { name: /Schedule/ }).elements()).toHaveLength(0);
     await checkThemes('new-page');
     await userEvent.fill(dialog.getByRole('textbox', { name: strings.title }), 'Intro call');
     await userEvent.click(dialog.getByRole('radio', { name: strings.minutesShort(45) }), { force: true });
     await userEvent.click(dialog.getByRole('button', { name: strings.createPage }));
     expect(create).toHaveBeenCalledWith(
       'acme',
-      expect.objectContaining({ title: 'Intro call', settings: { durations: [45], scheduleId: null } }),
+      expect.objectContaining({
+        title: 'Intro call',
+        isDraft: true,
+        settings: { durations: [45], scheduleId: null },
+      }),
     );
-    // The editor waits until the Ready panel is left.
-    await expect.element(page.getByRole('heading', { name: strings.readyTitle })).toBeVisible();
-    expect(onCreated).not.toHaveBeenCalled();
-  });
-
-  it('shows the Ready panel with the link, Copy, QR and a preview, left in one action (AC-5)', async () => {
-    const { onCreated } = await render();
-    await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Intro call');
-    await userEvent.click(page.getByRole('button', { name: strings.createPage }));
-    const ready = page.getByRole('dialog', { name: strings.readyTitle });
-    await expect.element(ready.getByRole('heading', { name: strings.readyTitle })).toBeVisible();
-    // One heading: the Modal's title says it, and the panel leads with its line.
-    expect(ready.getByRole('heading').elements()).toHaveLength(1);
-    // Focus moves on to Copy link, the panel's one primary, so it never drops to the page.
-    await expect.element(ready.getByRole('button', { name: 'Copy link' })).toHaveFocus();
-    // The address is cut in the middle when short of room: its start and its end (the key) stay in view.
-    const end = ready.getByText('k3x9k3x9k3x9k3x9', { exact: true });
-    await expect.element(end).toBeVisible();
-    expect(end.element().parentElement?.textContent).toBe(`${location.origin}/b/k3x9k3x9k3x9k3x9`);
-    await expect.element(ready.getByRole('button', { name: 'Copy link' })).toBeVisible();
-    await expect.element(ready.getByRole('img', { name: 'QR code for the link' })).toBeVisible();
-    await expect.element(ready.getByRole('group', { name: strings.readyPreview })).toBeVisible();
-    expect(ready.getByTitle('Preview of Intro call').elements()).toHaveLength(1);
-    await checkThemes('ready');
-    await userEvent.click(ready.getByRole('button', { name: strings.readyEdit }));
-    expect(onCreated).toHaveBeenCalledWith(MADE);
-  });
-
-  it('goes on to the editor when the Ready panel is closed with Escape', async () => {
-    const { onCreated } = await render();
-    await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Intro call');
-    await userEvent.click(page.getByRole('button', { name: strings.createPage }));
-    await expect.element(page.getByRole('heading', { name: strings.readyTitle })).toBeVisible();
-    await userEvent.keyboard('{Escape}');
+    // Straight on to the editor: no Ready panel, the live moment comes with Publish.
     await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(MADE));
+  });
+
+  it('keeps A page each under More types, offered only where managed pages can be made', async () => {
+    await render([], { managed: true });
+    const dialog = page.getByRole('dialog', { name: strings.addPage });
+    expect(dialog.getByRole('radio', { name: new RegExp(managedStrings.bookManaged) }).elements()).toHaveLength(0);
+    await userEvent.click(dialog.getByRole('button', { name: strings.moreTypes }));
+    const managed = dialog.getByRole('radio', { name: new RegExp(managedStrings.bookManaged) });
+    await expect.element(managed).toBeInTheDocument();
+    // The panel is still opening: settle it, so the press lands on the tile rather than where it was.
+    for (const animation of document.getAnimations()) animation.finish();
+    await userEvent.click(managed, { force: true });
+    await expect.element(managed).toBeChecked();
+    // A managed page takes its lengths in its own editor.
+    await expect.element(dialog.getByRole('radiogroup', { name: strings.duration })).not.toBeInTheDocument();
+    await checkThemes('more-types');
   });
 
   it('books the workspace’s only round robin group without asking to pick it', async () => {
@@ -140,14 +145,14 @@ describe('New booking page', () => {
     } as unknown as RotationView;
     const { create } = await render([SALES]);
     await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Sales intro');
-    await userEvent.click(page.getByRole('radio', { name: new RegExp(rotationStrings.bookRotation) }), { force: true });
+    await userEvent.click(page.getByRole('radio', { name: new RegExp(strings.typeRoundRobin) }), { force: true });
     // The picker shows it chosen.
     await expect.element(page.getByLabelText(rotationStrings.rotation).getByText('Sales team')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: strings.createPage }));
     expect(page.getByText(rotationStrings.rotationRequired).elements()).toEqual([]);
     expect(create).toHaveBeenCalledWith(
       'acme',
-      expect.objectContaining({ kind: 'round_robin', hosts: { fixed: [], rotations: [SALES.id] } }),
+      expect.objectContaining({ kind: 'round_robin', isDraft: true, hosts: { fixed: [], rotations: [SALES.id] } }),
     );
   });
 });

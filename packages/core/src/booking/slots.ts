@@ -63,8 +63,8 @@ export interface PageRecord extends BookingPageSettings {
   readonly isDeleted: boolean;
   /** A private page books inside its host's holds and waives its minimum notice (spec 0027, AC-707). */
   readonly isPrivate: boolean;
-  /** Paused by the system because its last host was removed (spec 0031, AC-814); absent otherwise. */
-  readonly pausedReason?: 'host_removed';
+  /** Paused by the system because its last host was removed (spec 0031, AC-814), or a draft never published; absent otherwise. */
+  readonly pausedReason?: 'host_removed' | 'draft';
   /** A round robin page's routing rules (spec 0043, AC-1608); a stored list that doesn't parse reads as none. */
   readonly routingRules?: readonly RoutingRule[];
   /**
@@ -161,7 +161,7 @@ export function pageOf(
     moveCutoffMinutes: row.moveCutoffMinutes,
     requiresConfirmation: row.requiresConfirmation,
     linksOnly: row.linksOnly,
-    ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
+    ...(row.pausedReason === 'host_removed' || row.pausedReason === 'draft' ? { pausedReason: row.pausedReason } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     ...(row.draft === null || row.draftChangedAt === null
       ? {}

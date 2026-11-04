@@ -4,7 +4,7 @@
 // the race: several visitors booking one slot at once get exactly one booking.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import type { PublicBookInput } from '@crm/contracts';
+import { BookingLocation, type PublicBookInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { enterBookingByToken, enterBookingPage, enterPublicForm, type BookingEntry } from '../access/door.ts';
 import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
@@ -224,6 +224,73 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
     expect(await refusalOf(getPublicBookingPage(entry))).toMatchObject({ code: 'BOOKING_CLOSED' });
     expect(await refusalOf(enterBookingPage({ db }, 'AAAAAAAAAAAAAAAA'))).toMatchObject({ code: 'NOT_FOUND' });
     expect(await refusalOf(enterBookingPage({ db }, 'not a key'))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('keeps a host’s own meeting link off the page and puts it on the booking (critic B-07, 5 Nov 2026)', async () => {
+    const w = await workspace();
+    const link = 'https://meet.example.com/ada-intro';
+    const { page, entry } = await livePage(w, { location: { type: 'video', link } });
+    expect(page.location).toEqual({ type: 'video', link });
+    // The page a guest reads says video, never the link: that comes with a booking.
+    expect((await getPublicBookingPage(entry)).location).toEqual({ type: 'video' });
+    const booked = await bookPublicSlot(entry, deps(), bookInput());
+    const stored = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ video_url: string | null }>(sql`select video_url from bookings where id = ${booked.bookingId}`),
+    );
+    expect(stored.rows[0]?.video_url).toBe(link);
+    // The contract takes https only, with no name or password in it, and no longer than a booking's video_url holds.
+    expect(BookingLocation.safeParse({ type: 'video', link: 'http://meet.example.com/x' }).success).toBe(false);
+    expect(BookingLocation.safeParse({ type: 'video', link: 'javascript:alert(1)' }).success).toBe(false);
+    expect(BookingLocation.safeParse({ type: 'video', link: 'https://ada:secret@meet.example.com/x' }).success).toBe(
+      false,
+    );
+    const long = `https://meet.example.com/${'a'.repeat(2_000)}`;
+    expect(BookingLocation.safeParse({ type: 'video', link: long }).success).toBe(false);
+    // Kept as one spelling.
+    expect(BookingLocation.parse({ type: 'video', link: 'HTTPS://Meet.Example.com/x' })).toEqual({
+      type: 'video',
+      link: 'https://meet.example.com/x',
+    });
+  });
+
+  it('keeps a host’s own meeting link from a member who may only see the page (critic B-07)', async () => {
+    const w = await workspace();
+    const link = 'https://meet.example.com/team-room';
+    const made = await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'Talk to us',
+        timeZone: 'UTC',
+        scope: 'workspace',
+        settings: { durations: [30], location: { type: 'video', link } },
+      },
+      NOW,
+    );
+    expect(made.location).toEqual({ type: 'video', link });
+    const bea = await w.addMember('Bea', 'member');
+    const seen = (await listBookingPages(bea, NOW)).find((page) => page.id === made.id);
+    expect(seen?.canChange).toBe(false);
+    expect(seen?.location).toEqual({ type: 'video' });
+  });
+
+  it('answers a guest on a draft as if there were no page, and pausing a draft keeps it a draft (4 Nov 2026)', async () => {
+    const w = await workspace();
+    const page = await createBookingPage(
+      w.owner,
+      { id: newId(), title: 'Secret plans', timeZone: 'UTC', isDraft: true },
+      NOW,
+    );
+    const entry = await enterBookingPage({ db }, page.publicKey);
+    // Nothing of it reaches a guest, not even that it exists: its facts and its times both answer NOT_FOUND.
+    expect(await refusalOf(getPublicBookingPage(entry))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(mondaySlots(entry))).toMatchObject({ code: 'NOT_FOUND' });
+    // Paused from the list, it is still a draft; only going live publishes it.
+    const paused = await updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'paused' } });
+    expect(paused.pausedReason).toBe('draft');
+    const live = await updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'live' } });
+    expect(live.pausedReason).toBeUndefined();
+    expect((await getPublicBookingPage(entry)).title).toBe('Secret plans');
   });
 
   it('opens in the view its host chose, and in Month until one is chosen (owner, 25 Oct 2026)', async () => {

@@ -140,6 +140,10 @@ export const strings = {
   },
   // States.
   noTimesTitle: 'No open times in the next two months.',
+  /** A shared link (Share specific times) whose every time has been taken. */
+  sharedGoneTitle: 'These times have been taken.',
+  sharedGoneText: 'Pick another time from the page.',
+  seeAllTimes: 'See all times',
   noTimesText: 'Check back soon.',
   unreachable: 'Times unavailable. Try again shortly.',
   paused: 'Nothing is bookable here right now.',

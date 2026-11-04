@@ -62,6 +62,7 @@ import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 import { BOOKING_DRAFT_KEYS } from '@crm/contracts';
 import { changedOnly, diffPage, publishedSnapshot } from './drafts.ts';
 import { keepVersion } from './versions.ts';
+import { withoutMeetingLink } from './mail-queue.ts';
 import {
   checkAnswersObject,
   checkNoNewWall,
@@ -378,7 +379,12 @@ function viewOf(
     createdAt: page.createdAt.toISOString(),
     updatedAt: page.updatedAt.toISOString(),
   };
-  return draftedView(view, page, (questions) => seen(questions, page.answersObjectId));
+  const drafted = draftedView(view, page, (questions) => seen(questions, page.answersObjectId));
+  // A host's own meeting link is for those who change the page and those who booked (critic B-07): a member who may
+  // only see it (a workspace link, a colleague's page) gets the location without it, the draft's included.
+  return changeable
+    ? drafted
+    : { ...drafted, location: withoutMeetingLink(drafted.location) };
 }
 
 /**
@@ -817,7 +823,10 @@ export function slugRefusal(error: unknown) {
  */
 export async function createBookingPage(
   scope: EngineScope,
-  input: Pick<CreateBookingPageInput, 'id' | 'title' | 'timeZone' | 'settings' | 'kind' | 'hosts' | 'scope'>,
+  input: Pick<
+    CreateBookingPageInput,
+    'id' | 'title' | 'timeZone' | 'settings' | 'kind' | 'hosts' | 'scope' | 'isDraft'
+  >,
   now: Date = new Date(),
 ): Promise<BookingPageView> {
   requirePermission(scope, 'booking.manage');
@@ -863,7 +872,8 @@ export async function createBookingPage(
       windowDays: given.windowDays ?? 60,
       dailyLimit: given.dailyLimit ?? null,
       slotStep: given.slotStep ?? null,
-      status: given.status ?? 'live',
+      // A draft waits, paused, for its first Publish (the bookings area, 4 November 2026).
+      status: input.isDraft === true ? 'paused' : (given.status ?? 'live'),
       scheduleId: given.scheduleId ?? null,
       rescheduleHost: given.rescheduleHost ?? 'same',
       isPrivate: given.isPrivate ?? false,
@@ -921,6 +931,7 @@ export async function createBookingPage(
           dailyLimit: settings.dailyLimit,
           slotStep: settings.slotStep,
           status: settings.status,
+          ...(input.isDraft === true ? { pausedReason: 'draft' } : {}),
           scheduleId: settings.scheduleId,
           // Mirrored for one release, while `hours_mode` stays readable (spec 0035, AC-975).
           hoursMode: settings.scheduleId === null ? 'mine' : 'own',
@@ -1170,8 +1181,14 @@ export async function updatePageIn(
         ...(settings.windowDays === undefined ? {} : { windowDays: settings.windowDays }),
         ...(settings.dailyLimit === undefined ? {} : { dailyLimit: settings.dailyLimit }),
         ...(settings.slotStep === undefined ? {} : { slotStep: settings.slotStep }),
-        // A status set by a person clears the system's reason for a pause (spec 0031, AC-814).
-        ...(settings.status === undefined ? {} : { status: settings.status, pausedReason: null }),
+        // A status set by a person clears the system's reason for a pause (spec 0031, AC-814); a draft stays a
+        // draft until it goes live, so pausing one never makes it read as published.
+        ...(settings.status === undefined
+          ? {}
+          : {
+              status: settings.status,
+              ...(settings.status === 'live' || page.pausedReason !== 'draft' ? { pausedReason: null } : {}),
+            }),
         ...(settings.scheduleId === undefined
           ? {}
           : { scheduleId: settings.scheduleId, hoursMode: settings.scheduleId === null ? 'mine' : 'own' }),

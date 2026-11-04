@@ -56,6 +56,8 @@ interface SampleProps {
   readonly isEmpty?: boolean;
   /** A break between steps after the email (spec 0063). */
   readonly withStep?: boolean;
+  /** A booking page's questions always asked, first and locked (critic A7). */
+  readonly withFixed?: boolean;
 }
 
 /** A page break: the step's place and title, an inline header among the cards (T20). */
@@ -65,6 +67,13 @@ const STEP: QuestionListItem = {
   label: 'Step 2 · Your company',
 };
 
+/** A booking page's questions every guest is asked first (critic A7): locked, never opening or moving. */
+const FIXED: readonly QuestionListItem[] = [
+  { id: 'fixed-name', label: 'Name', typeLabel: 'Short text', typeIcon: 'type', isRequired: true },
+  { id: 'fixed-email', label: 'Email', typeLabel: 'Email', typeIcon: 'mail', isRequired: true },
+  { id: 'fixed-notes', label: 'Anything the host should know', typeLabel: 'Long text', typeIcon: 'file-text' },
+];
+
 /** The list holding its own order and open questions, as the form builder does. */
 function SampleQuestions({
   initialOpen = [],
@@ -73,6 +82,7 @@ function SampleQuestions({
   width = 'fill',
   isEmpty = false,
   withStep = false,
+  withFixed = false,
 }: SampleProps) {
   const [items, setItems] = useState<readonly QuestionListItem[]>(
     isEmpty
@@ -89,6 +99,7 @@ function SampleQuestions({
       <QuestionList
         label="Questions"
         items={items}
+        {...(withFixed ? { fixedItems: FIXED } : {})}
         openIds={open}
         onOpenChange={(id, isOpen) => {
           setOpen((before) => {
@@ -159,6 +170,17 @@ export const Default: Story = {
     await expect(canvas.getAllByRole('row')).toHaveLength(4);
     await expect(canvas.getByText('Untitled question')).toBeInTheDocument();
     await expect(canvas.getByText(/Person › Budget band/)).toBeInTheDocument();
+  },
+};
+
+/** `fixedItems`: the questions always asked, first, each with a lock and no grip, counted in the heading. */
+export const WithFixed: Story = {
+  args: { withFixed: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('list', { name: 'Always asked' })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('img', { name: 'Always asked' })).toHaveLength(3);
+    // Only the page's own questions are rows that open and move.
+    await expect(canvas.getAllByRole('row')).toHaveLength(4);
   },
 };
 

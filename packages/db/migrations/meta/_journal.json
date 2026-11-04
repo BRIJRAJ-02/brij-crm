@@ -1240,6 +1240,13 @@
       "when": 1795511003000,
       "tag": "0176_pause_full_forms",
       "breakpoints": true
+    },
+    {
+      "idx": 177,
+      "version": "7",
+      "when": 1795511010000,
+      "tag": "0177_booking_page_drafts",
+      "breakpoints": true
     }
   ]
 }

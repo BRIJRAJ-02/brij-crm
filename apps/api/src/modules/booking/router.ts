@@ -115,6 +115,7 @@ export const bookingPagesRouter = member.bookingPages.router({
           ...(input.kind === undefined ? {} : { kind: input.kind }),
           ...(input.scope === undefined ? {} : { scope: input.scope }),
           ...(input.hosts === undefined ? {} : { hosts: input.hosts }),
+          ...(input.isDraft === undefined ? {} : { isDraft: input.isDraft }),
         }),
       );
     } catch (error) {
@@ -130,8 +131,9 @@ export const bookingPagesRouter = member.bookingPages.router({
         ...(input.routing === undefined ? {} : { routing: input.routing }),
       }),
     );
-    // A save of what guests see goes live at once outside the draft (spec 0068): the link page's copies go too.
-    if (BOOKING_DRAFT_KEYS.some((key) => input.settings[key] !== undefined))
+    // A save of what guests see goes live at once outside the draft (spec 0068): the link page's copies go too, as
+    // they do when the page goes live or stops (a draft's first Publish, Pause, Resume).
+    if (input.settings.status !== undefined || BOOKING_DRAFT_KEYS.some((key) => input.settings[key] !== undefined))
       await forgetLinkPage(context, saved.handle);
     return saved;
   }),

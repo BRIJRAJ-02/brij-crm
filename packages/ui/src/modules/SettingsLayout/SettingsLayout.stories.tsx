@@ -18,6 +18,7 @@ import { SaveBar } from '../SaveBar/SaveBar.tsx';
 import { TopBar } from '../Toolbar/Toolbar.tsx';
 import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
+import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Form } from '../../molecules/Form/Form.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import {
@@ -287,6 +288,46 @@ export const InputRows: Story = {
     await expect(canvas.getByRole('textbox', { name: 'Your name' })).toHaveValue('Ada Lovelace');
     await expect(canvas.getByText(/analytical-engine\.example\.com/)).toBeVisible();
     await expect(canvas.getByRole('button', { name: /Week starts on/ })).toBeInTheDocument();
+  },
+};
+
+/**
+ * `rows="inline"`: an editor's ~550px column beside its preview (the booking page editor). Every row keeps its label
+ * on the left and its control on the right, the label giving way first, so a Field, a SegmentedControl and a Switch
+ * line up at one edge rather than the wider ones dropping under their labels.
+ */
+export const InlineRows: Story = {
+  render: () => (
+    <Stage width="dialog">
+      <SettingsStack rows="inline">
+        <Card title="Details">
+          <SettingsRow title="Title" control="field">
+            <Field label="Title" isLabelHidden defaultValue="Intro call" />
+          </SettingsRow>
+          <SettingsRow title="Opens in">
+            <SegmentedControl
+              label="Opens in"
+              size="compact"
+              segments={[
+                { value: 'month', label: 'Month' },
+                { value: 'list', label: 'List' },
+                { value: 'chat', label: 'Book by chat' },
+              ]}
+              defaultValue="month"
+            />
+          </SettingsRow>
+          <SettingsRow title="Confirm each booking first">
+            <Switch label="Confirm each booking first" isLabelHidden />
+          </SettingsRow>
+        </Card>
+      </SettingsStack>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const field = canvas.getByRole('textbox', { name: 'Title' });
+    const label = canvas.getAllByText('Title').find((element) => element.tagName !== 'LABEL') ?? field;
+    // The field sits beside its label, not under it.
+    await expect(field.getBoundingClientRect().top).toBeLessThan(label.getBoundingClientRect().bottom);
   },
 };
 

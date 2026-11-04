@@ -26,7 +26,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit } from '../members/audit.ts';
 import type { BookingCalendar } from './calendar.ts';
 import { hostLockKey, lockKey } from './locks.ts';
-import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
+import { enqueueBookingMail, ownMeetingLink, recordEvent } from './mail-queue.ts';
 import { loadPage } from './slots.ts';
 import { manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { matchVisitor } from './visitor.ts';
@@ -309,11 +309,16 @@ export async function bookAsHost(
             .filter((guest) => guest !== booker?.email.trim().toLowerCase())
             .map((guest) => ({ email: guest, name: guest })),
         ],
-        video: result.place?.type === 'video',
+        // A host's own meeting link stands in for one the calendar would make, and goes on the event (critic B-07).
+        video: result.place?.type === 'video' && ownMeetingLink(result.place) === undefined,
         // In person or a custom place goes on the event; a phone page's number is the guest's, which isn't asked here.
-        ...(result.place === undefined || result.place.type === 'video' || result.place.type === 'phone'
+        ...(result.place === undefined || result.place.type === 'phone'
           ? {}
-          : { location: result.place.value }),
+          : result.place.type === 'video'
+            ? result.place.link === undefined
+              ? {}
+              : { location: result.place.link }
+            : { location: result.place.value }),
       });
     } catch (error) {
       deps.log?.warn('booking.event_failed', {
@@ -324,7 +329,12 @@ export async function bookAsHost(
     }
   }
   await inWorkspace(scope, async (tx) => {
-    await recordEvent(tx, result.bookingId, written);
+    await recordEvent(
+      tx,
+      result.bookingId,
+      written,
+      result.place === undefined ? undefined : ownMeetingLink(result.place),
+    );
     await enqueueBookingMail(tx, result.bookingId, ['confirmed']);
   });
   return {

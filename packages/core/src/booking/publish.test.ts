@@ -259,3 +259,28 @@ describe('a booking page’s draft (AC-6810, AC-6811)', () => {
     expect(seen.rows[0]?.n).toBe(0);
   });
 });
+
+describe('a page made as a draft (the bookings area, 4 November 2026)', () => {
+  it('waits paused with the draft reason until its first Publish, which sets it live and clears the reason', async () => {
+    const ada = await person('Ada');
+    const made = await createBookingPage(ada.scope, {
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'Europe/London',
+      isDraft: true,
+    });
+    expect(made.status).toBe('paused');
+    expect(made.pausedReason).toBe('draft');
+    // Guests can't book it: the slot engine reads it paused.
+    expect((await guestsSee(ada.workspaceId, made.id))?.status).toBe('paused');
+    // Edits before the first Publish go into the draft as on any page, and Publish writes them.
+    await saveBookingPageDraft(ada.scope, { pageId: made.id, settings: { title: 'Intro call' } });
+    await publishBookingPage(ada.scope, { pageId: made.id });
+    expect((await getBookingPage(ada.scope, { pageId: made.id })).pausedReason).toBe('draft');
+    const live = await updateBookingPage(ada.scope, { pageId: made.id, settings: { status: 'live' } });
+    expect(live.status).toBe('live');
+    expect(live.pausedReason).toBeUndefined();
+    expect(live.title).toBe('Intro call');
+    expect((await guestsSee(ada.workspaceId, made.id))?.status).toBe('live');
+  });
+});

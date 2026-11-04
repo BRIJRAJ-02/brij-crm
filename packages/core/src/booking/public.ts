@@ -109,7 +109,7 @@ import {
   routeBooking,
   type BookingRouting,
 } from '../routing/booking.ts';
-import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
+import { enqueueBookingMail, ownMeetingLink, recordEvent, withoutMeetingLink } from './mail-queue.ts';
 import { checkOneOffLink, oneOffStateOf, oneOffTokenHash, useOneOffLink } from './one-off-links.ts';
 import { ensureManageToken, managePath, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { queueBookingWebhook } from '../webhooks/queue.ts';
@@ -171,7 +171,9 @@ async function livePage(tx: WorkspaceTx, entry: BookingEntry): Promise<PageRecor
 function liveOf(page: PageRecord | undefined): PageRecord {
   // A managed template is not a page (spec 0037, AC-1333): it holds settings for its members' pages, and its own
   // public link answers as a deleted page does, so nobody ever books the template.
-  if (page === undefined || page.isDeleted || page.kind === 'managed') {
+  // A draft, never published (the bookings area, 4 November 2026), answers as no page at all: a guessed address
+  // never learns that an unpublished page exists.
+  if (page === undefined || page.isDeleted || page.kind === 'managed' || page.pausedReason === 'draft') {
     throw refuse('NOT_FOUND', 'This page is no longer available.');
   }
   if (page.status !== 'live') throw refuse('BOOKING_CLOSED', 'This page isn’t taking bookings right now.');
@@ -247,9 +249,9 @@ function initialsOf(name: string): string {
   return `${first}${last}`.toUpperCase();
 }
 
-/** The location a visitor may see. */
+/** The location a visitor may see: a host's own meeting link is never on the page, only in a booking's emails. */
 function publicLocation(page: PageRecord): PublicLocation {
-  return page.location;
+  return page.location.type === 'video' ? { type: 'video' } : withoutMeetingLink(page.location);
 }
 
 /** Reads account pictures (schema auth, through the identity login): the public page's host picture. */
@@ -398,8 +400,8 @@ export async function readAddressedPage(entry: BookingEntry & { readonly handle:
   checkEntry(entry);
   return inWorkspace(entry.scope, async (tx) => {
     const page = await loadPage(tx, entry.pageId);
-    // A managed template has no address of its own (AC-1333).
-    if (page === undefined || page.isDeleted || page.kind === 'managed') {
+    // A managed template has no address of its own (AC-1333), and a draft has none yet.
+    if (page === undefined || page.isDeleted || page.kind === 'managed' || page.pausedReason === 'draft') {
       throw refuse('NOT_FOUND', 'This page is no longer available.');
     }
     return { publicKey: page.publicKey, handle: entry.handle, slug: page.slug };
@@ -1025,7 +1027,7 @@ function eventDescription(page: PageRecord, input: PublicBookInput): string {
 function eventLocation(page: PageRecord, input: PublicBookInput): string | undefined {
   switch (page.location.type) {
     case 'video':
-      return undefined;
+      return page.location.link;
     case 'phone':
       return input.phone === undefined || input.phone === '' ? undefined : `Phone: ${input.phone}`;
     default:
@@ -1559,7 +1561,8 @@ export async function bookPublicSlot(
             .filter((guest) => guest !== input.email)
             .map((guest) => ({ email: guest, name: guest })),
         ],
-        video: page.location.type === 'video',
+        // A host's own meeting link stands in for one the calendar would make (critic B-07).
+        video: page.location.type === 'video' && ownMeetingLink(page.location) === undefined,
         ...(eventLocation(page, input) === undefined ? {} : { location: eventLocation(page, input) }),
       });
     } catch (error) {
@@ -1572,7 +1575,7 @@ export async function bookPublicSlot(
   }
   // The outcome, and the emails (after the event, so the confirmation knows whether the calendar already invited them).
   await inWorkspace(entry.scope, async (tx) => {
-    await recordEvent(tx, booked.bookingId, written);
+    await recordEvent(tx, booked.bookingId, written, ownMeetingLink(page.location));
     await enqueueBookingMail(tx, booked.bookingId, ['confirmed']);
   });
   return booked;

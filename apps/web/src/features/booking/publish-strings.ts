@@ -1,5 +1,33 @@
 /** The booking page editor's Publish copy (spec 0068, AC-6811, AC-6812). */
 export const publishStrings = {
+  /** The header (the bookings area, 4 November 2026): one status, Preview, Publish, the rest under ⋯. */
+  statusDraft: 'Draft',
+  statusChanged: 'Live · edited',
+  preview: 'Preview',
+  publish: 'Publish',
+  publishing: 'Publishing',
+  viewPage: 'View page',
+  insights: 'Insights',
+  versions: 'Versions',
+  discard: 'Discard unpublished changes',
+  published: (title: string) => `Published ${title}.`,
+  /** The first Publish's moment, as a form's: the page's name, live. */
+  liveTitle: (title: string) => `${title} is live`,
+  done: 'Done',
+  putOnSite: 'Put it on your site',
+  /** Versions: each published version, the live one marked, any other brought back as the draft. */
+  versionsTitle: 'Versions',
+  versionsNone: 'No published versions yet',
+  versionLive: 'Live',
+  restore: 'Restore',
+  close: 'Close',
+  /** Discard changes asks first. */
+  discardTitle: 'Discard unpublished changes?',
+  discardText: 'Guests keep seeing the page as it is now.',
+  discardKeep: 'Keep my changes',
+  discardConfirm: 'Discard changes',
+  /** Publish couldn't: the reason and the way to the setting. */
+  publishRefused: 'Publish didn’t go through.',
   /** A refused Publish's way to the setting: "Go to Hours". */
   goTo: (tab: string) => `Go to ${tab}`,
   /** A version in the menu: who and when. */

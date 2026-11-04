@@ -1,5 +1,5 @@
-// The workspace link's screens in Chromium (30 Oct 2026): Booking pages › New offers "Workspace link" to an admin as
-// one of three cards and makes it with no schedule or rotation to pick; Captures › Links puts the workspace's own
+// The workspace link's screens in Chromium (30 Oct 2026): New workspace link (from the Links header's Team links, 4
+// Nov 2026) makes it as a draft with no type, schedule or rotation to pick; Captures › Links puts the workspace's own
 // links in a Workspace group ahead of members' pages, and stays one ungrouped grid without any; the link's Hosts
 // lead with one switch for everyone, including people who join later; the roster rotation's dialog lists everyone
 // with their switches and no Add or Remove. Each is axe clean at 390 and 1280, in light and dark. With
@@ -113,8 +113,8 @@ async function checkEverywhere(name: string, target: () => HTMLElement | null = 
   }
 }
 
-describe('Booking pages › New: Everyone on the roster', () => {
-  it('makes a workspace link, with no schedule or group to pick', async () => {
+describe('Captures › Links › Team links › New workspace link', () => {
+  it('makes a workspace link as a draft, with no type, schedule or group to pick', async () => {
     const create = vi.fn(() =>
       Promise.resolve(pageOf('n1', 'Talk to us', { kind: 'round_robin', scope: 'workspace' })),
     );
@@ -130,26 +130,35 @@ describe('Booking pages › New: Everyone on the roster', () => {
     const onCreated = vi.fn();
     shown = await renderInApp(
       () => (
-        <NewPageDialog data={data} slug="acme" canBookTeams isOpen onClose={() => undefined} onCreated={onCreated} />
+        <NewPageDialog
+          data={data}
+          slug="acme"
+          canBookTeams
+          kind="workspace"
+          isOpen
+          onClose={() => undefined}
+          onCreated={onCreated}
+        />
       ),
       { data, pattern: '/w/$slug/captures/links', at: '/w/acme/captures/links' },
     );
-    await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Talk to us');
-    await userEvent.click(page.getByRole('radio', { name: new RegExp(rotationStrings.bookEveryone) }), { force: true });
-    await expect.element(page.getByRole('radio', { name: new RegExp(rotationStrings.bookEveryone) })).toBeChecked();
-    // No help lines under the choices (spec 0058, AC-3): what each means is in the tip.
-    expect(page.getByText(/on nobody’s profile/).elements()).toHaveLength(0);
+    const dialog = page.getByRole('dialog', { name: strings.addWorkspaceLink });
+    await userEvent.fill(dialog.getByRole('textbox', { name: strings.title }), 'Talk to us');
     // Nothing else to choose: the hosts are the workspace's, each booked by their own hours.
-    expect(page.getByRole('button', { name: new RegExp(rotationStrings.rotation) }).elements()).toHaveLength(0);
-    expect(page.getByText('Schedule', { exact: true }).elements()).toHaveLength(0);
+    expect(dialog.getByRole('radio', { name: new RegExp(strings.typeMe) }).elements()).toHaveLength(0);
+    expect(dialog.getByRole('button', { name: new RegExp(rotationStrings.rotation) }).elements()).toHaveLength(0);
+    expect(dialog.getByText('Schedule', { exact: true }).elements()).toHaveLength(0);
     await checkEverywhere('new-everyone', () => document.querySelector('[role="dialog"]'));
-    await userEvent.click(page.getByRole('button', { name: strings.createPage }));
-    // The Ready panel first (spec 0058, AC-5); Edit page goes on to the editor.
-    await userEvent.click(page.getByRole('button', { name: strings.readyEdit }));
+    await userEvent.click(dialog.getByRole('button', { name: strings.createPage }));
     await vi.waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(create).toHaveBeenCalledWith(
       'acme',
-      expect.objectContaining({ kind: 'round_robin', scope: 'workspace', settings: { durations: [30] } }),
+      expect.objectContaining({
+        kind: 'round_robin',
+        scope: 'workspace',
+        isDraft: true,
+        settings: { durations: [30] },
+      }),
     );
     // "Everyone on the roster" was made with the first link: the held groups read it.
     expect(rotations.reload).toHaveBeenCalled();

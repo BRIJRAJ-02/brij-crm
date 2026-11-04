@@ -468,6 +468,30 @@ export const ChoiceConfirm: Story = {
   },
 };
 
+/** `isLabelVisible`: the label over the tiles, as a Field's, naming the group once (New booking page's Type). */
+export const ChoiceLabelled: Story = {
+  render: () => (
+    <Stage width="dialog">
+      <TileGrid
+        variant="choice"
+        label="Type"
+        isLabelVisible
+        showsDescription
+        tileWidth="wide"
+        defaultValue="me"
+        tiles={[
+          { id: 'me', name: 'Just me', icon: 'user', description: 'Guests book time with you.' },
+          { id: 'rotation', name: 'Round robin', icon: 'refresh-cw', description: 'Whoever on the team is free.' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('radiogroup', { name: 'Type' })).toBeInTheDocument();
+    await expect(canvas.getByText('Type')).toBeVisible();
+  },
+};
+
 /** Action mode: each tile starts something at once (Add block). A description reaches screen readers and a tooltip. */
 export const ChoiceAction: Story = {
   parameters: { crm: { screenshot: false } },
