@@ -19,6 +19,7 @@ import { ButtonLink, EmptyState, SegmentedControl, SettingsStack, Skeleton, Stat
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PageInsights } from '../insights/PageInsights.tsx';
+import { AnalyticsAnswers } from './AnalyticsAnswers.tsx';
 import { formHref } from './paths.ts';
 import { useFormToolbarSlot } from './toolbarSlot.ts';
 import { strings } from './strings.ts';
@@ -96,43 +97,53 @@ export interface AnalyticsTabProps {
 }
 
 /**
- * The five figure cards (T45, one row): Views, Starts, Finished, Completion and Median time, each against the period
- * before only when there was something before ("+100% vs 30 days before" from nothing says nothing).
+ * The four figure cards (lane 3c, after Tally's four equal cards), each with a line under its figure so their feet
+ * line up: Views (with how many started: one card, not two), Submissions (counted from the submissions themselves,
+ * so it never contradicts the Submissions tab, even for those sent before visits were counted), Completion and
+ * Median time. A change is said only when there was something before ("+100% vs 30 days before" from nothing says
+ * nothing).
  */
-function statsOf(analytics: FormAnalytics): readonly StatItem[] {
-  const { totals, previous, range } = analytics;
+function statsOf(analytics: FormAnalytics, dayWords: (day: string) => string): readonly StatItem[] {
+  const { totals, previous, range, countingSince } = analytics;
   const median = totals.medianMs;
-  const hadBefore = previous.views > 0;
+  // Submissions the visits never counted (sent before counting began): Completion says where its figures start,
+  // rather than a 0% beside four submissions.
+  const untracked = totals.submissions > totals.completions && countingSince !== undefined;
   return [
     {
       id: 'views',
       label: strings.analyticsViews,
       value: figure(totals.views),
-      ...(hadBefore ? compared(totals.views, previous.views, range, figure) : {}),
+      comparison: strings.analyticsStarted(figure(totals.starts)),
     },
     {
-      id: 'starts',
-      label: strings.analyticsStarts,
-      value: figure(totals.starts),
-      ...(hadBefore ? compared(totals.starts, previous.starts, range, figure) : {}),
-    },
-    {
-      id: 'finished',
-      label: strings.analyticsCompletions,
-      value: figure(totals.completions),
-      ...(hadBefore ? compared(totals.completions, previous.completions, range, figure) : {}),
+      id: 'submissions',
+      label: strings.analyticsSubmissions,
+      // Past what the read counts it says "5,000+", and no change: a capped figure against another says nothing.
+      value:
+        totals.submissionsAtLeast === true
+          ? strings.analyticsAtLeast(figure(totals.submissions))
+          : figure(totals.submissions),
+      ...(previous.submissions > 0 && totals.submissionsAtLeast !== true && previous.submissionsAtLeast !== true
+        ? compared(totals.submissions, previous.submissions, range, figure)
+        : { comparison: strings.analyticsInPeriod(range) }),
     },
     {
       id: 'completion',
       label: strings.analyticsCompletion,
-      value: percent(totals.completions, totals.starts),
-      comparison: strings.analyticsFinishedOf(figure(totals.completions), figure(totals.starts)),
+      value: totals.starts === 0 ? '—' : percent(totals.completions, totals.starts),
+      comparison: untracked
+        ? strings.analyticsCountingSince(dayWords(countingSince))
+        : totals.starts === 0
+          ? strings.analyticsNoStarts
+          : strings.analyticsFinishedOf(figure(totals.completions), figure(totals.starts)),
     },
     {
       id: 'median',
       label: strings.analyticsMedian,
       value: median === undefined ? '—' : duration(median),
-      ...(hadBefore || median === undefined ? comparedTime(median, previous.medianMs) : {}),
+      comparison: strings.analyticsTimeLine,
+      ...(previous.views > 0 || median === undefined ? comparedTime(median, previous.medianMs) : {}),
     },
   ];
 }
@@ -148,12 +159,13 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
   const state = useFormAnalytics(view);
 
   // The questions the live form asks, in order, so a drop off row can be named where it is edited.
-  const labels = useMemo(() => {
-    // The live version's questions: the tab exists only for a published form, and a visit counted against a
-    // question the draft has renamed should still read as the question the visitor actually saw.
-    const document = form.live ?? form.draft;
-    return new Map(document.questions.map((question) => [question.id, question.label]));
-  }, [form.live, form.draft]);
+  // The live version's questions: the tab exists only for a published form, and a visit counted against a
+  // question the draft has renamed should still read as the question the visitor actually saw.
+  const liveQuestions = (form.live ?? form.draft).questions;
+  const labels = useMemo(
+    () => new Map(liveQuestions.map((question) => [question.id, question.label])),
+    [liveQuestions],
+  );
 
   // The period sits at the end of the tab strip, as Submissions' tools do (T22: it was jammed onto the figures), so
   // the page opens on the figures themselves. Before the editor has drawn the strip it sits at the top instead.
@@ -195,7 +207,11 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
 
   const { analytics } = state;
   // Empty is a sentence and the way to fix it (AC-6321), never a row of flat bars pretending to be data.
-  if (analytics.totals.views === 0 && analytics.previous.views === 0) {
+  const { totals, previous } = analytics;
+  const dayFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const dayWords = (day: string) => dayFormat.format(new Date(`${day}T00:00:00Z`));
+  const stats = statsOf(analytics, dayWords);
+  if (totals.views === 0 && previous.views === 0 && totals.submissions === 0 && previous.submissions === 0) {
     return (
       <SettingsStack>
         {period}
@@ -212,11 +228,11 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
 
   // Nothing in this range, but the form has been seen before now: the range control stays, so the way out is
   // obvious, and nothing is drawn as a flat line pretending to be data.
-  if (analytics.totals.views === 0) {
+  if (totals.views === 0 && totals.submissions === 0) {
     return (
       <SettingsStack>
         {period}
-        <Stats label={strings.analyticsSummary} items={statsOf(analytics)} variant="cards" />
+        <Stats label={strings.analyticsSummary} items={stats} variant="cards" />
         <EmptyState icon="chart-line" title={strings.analyticsNoneInRange}>
           {strings.analyticsNoneInRangeText}
         </EmptyState>
@@ -224,7 +240,6 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
     );
   }
 
-  const dayFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const dayOnly = new Intl.DateTimeFormat(undefined, { day: 'numeric', timeZone: 'UTC' });
   // Where people stop, by the question's own words, of those who started (T45: never "Q3", never a chart of two).
   const steps = analytics.byQuestion
@@ -239,7 +254,14 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
     <SettingsStack>
       {period}
       <PageInsights
-        stats={statsOf(analytics)}
+        stats={stats}
+        answers={
+          <AnalyticsAnswers
+            questions={liveQuestions}
+            answers={analytics.answers}
+            {...(totals.submissionsAtLeast === true ? { latestOf: totals.submissions } : {})}
+          />
+        }
         started={analytics.totals.starts}
         steps={steps}
         stepLabel={strings.analyticsQuestion}

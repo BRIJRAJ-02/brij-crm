@@ -419,10 +419,10 @@ describe('Settings as plain rows (T21)', () => {
     }
     expect(page.getByRole('textbox', { name: 'Headline' }).query()).toBeNull();
     // Grouped under headings (the owner, 5 November 2026: less text, never less structure).
-    for (const group of ['Form', 'CRM', 'Emails', 'Answers']) {
+    for (const group of ['Form', 'CRM', 'Emails', 'Submissions']) {
       await expect.element(page.getByRole('heading', { name: group, exact: true })).toBeVisible();
     }
-    for (const row of ['Name', 'Link', 'Save answers to', 'Owner', 'Email each submission to', 'Taking answers']) {
+    for (const row of ['Name', 'Link', 'Save answers to', 'Owner', 'Email each submission to', 'Taking submissions']) {
       await expect.element(page.getByText(row, { exact: true }).first()).toBeVisible();
     }
     await expect.element(page.getByRole('button', { name: 'Copy link' })).toBeVisible();
@@ -493,23 +493,26 @@ describe('Settings as plain rows (T21)', () => {
     const closes = page.getByRole('button', { name: /Closes$/ }).last();
     await expect.element(closes).toHaveTextContent('Never');
     await closes.click();
-    await page.getByRole('listbox').getByRole('option', { name: 'After a number of answers' }).click();
+    await page.getByRole('listbox').getByRole('option', { name: 'After a number of submissions' }).click();
     expect(closings).toEqual([{ after: 100 }]);
-    await expect.element(page.getByRole('textbox', { name: 'Number of answers' })).toHaveValue('100');
+    await expect.element(page.getByRole('textbox', { name: 'Number of submissions' })).toHaveValue('100');
     await expect.element(page.getByRole('textbox', { name: 'Message when closed' })).toBeVisible();
   });
 
-  it('says how long answers are kept, linking to where it is set (critique b S2)', async () => {
+  it('says how long the workspace keeps submissions, as a Select at the field height, its reach in view (lane 3c)', async () => {
     await show(formView({}), []);
-    await expect
-      .element(page.getByRole('link', { name: 'For 12 months' }))
-      .toHaveAttribute('href', '/w/acme/settings/general');
+    await expect.element(page.getByText('12 months', { exact: true })).toBeVisible();
+    // A Select at the field's height, never the old 26px link off to Settings › General.
+    expect(page.getByRole('link', { name: 'For 12 months' }).query()).toBeNull();
+    await expect.element(page.getByText('Every form in this workspace')).toBeVisible();
   });
 
   it('opens Spam › Review where something waits, and says so when nothing does (forms fixes 2)', async () => {
     await show(formView({}), []);
     expect(page.getByRole('link', { name: 'Review' }).query()).toBeNull();
     await expect.element(page.getByText('Nothing caught')).toBeVisible();
+    // With nothing caught, the Spam filter is still one press away (lane 3c).
+    expect(page.getByRole('link', { name: 'View spam' }).element().getAttribute('href')).toMatch(/state=spam$/);
     shown?.unmount();
     await show({ ...formView({}), spamCount: 3 }, []);
     await expect.element(page.getByRole('link', { name: 'Review' })).toBeVisible();
@@ -532,9 +535,9 @@ describe('Settings as plain rows (T21)', () => {
     await expect.element(message).toHaveValue('Back soon');
   });
 
-  it('closes and opens the form from Taking answers', async () => {
+  it('closes and opens the form from Taking submissions', async () => {
     await show(formView({}), []);
-    (page.getByRole('switch', { name: 'Taking answers' }).element() as HTMLElement).click();
+    (page.getByRole('switch', { name: 'Taking submissions' }).element() as HTMLElement).click();
     expect(statuses).toEqual(['paused']);
   });
 });

@@ -57,12 +57,26 @@ export const strings = {
   addressPending: '/f/…',
   thisMonth: (n: number) => `${count(n, 'submission', 'submissions')} this month`,
   spam: (n: number) => `${new Intl.NumberFormat().format(n)} spam`,
-  accepting: 'Taking answers',
+  accepting: 'Taking submissions',
   notAccepting: 'Paused',
+  /** The list card's state badge for a form never published (lane 3c: a badge, never a greyed title). */
+  draftBadge: 'Draft',
+  /** The card's meta line (lane 3c, Klaviyo's list): "5 questions · edited 2h ago · 4 submissions". */
+  editedAgo: (when: string) => `edited ${when}`,
+  /** The list's sort (lane 3c), the record lists' sort chip: by when it changed, or by name. */
+  sortLabel: 'Sort forms',
+  sortUpdated: 'Updated',
+  sortName: 'Name',
+  /** Turning a form off from the list asks first: it ends something (lane 3c). */
+  pauseForm: 'Pause',
+  resumeForm: 'Resume',
+  pauseTitle: (name: string) => `Pause “${name}”?`,
+  pauseText: 'It stops taking submissions until you resume it. Its link says it’s closed.',
+  pauseFormAction: 'Pause form',
   /** The forms list (forms fix a9): when the last answer came, a form's answers since the reader last looked, and
    * the way to its Submissions. */
   lastAnswer: (when: string) => `last ${when}`,
-  newAnswers: 'New answers',
+  newAnswers: 'New submissions',
   openSubmissions: 'Submissions',
   openSubmissionsOf: (name: string) => `Open the submissions to ${name}`,
   notPublishedYet: 'Not published',
@@ -94,7 +108,12 @@ export const strings = {
   formLine: 'Line under the title',
   formLinePlaceholder: 'Add a line under it (optional)',
   previewOpen: 'Preview',
-  previewNotLive: 'Preview, not live. Answers are checked here, and nothing is sent.',
+  previewNotLive: 'Preview · nothing is sent',
+  /** The full page Preview's bar (lane 3c): the way back, and Desktop or Phone. */
+  backToEditor: 'Back to editor',
+  previewDevice: 'Preview on',
+  previewDesktop: 'Desktop',
+  previewPhone: 'Phone',
   publish: 'Publish',
   /** The ⋯ menu's way back to the live form, and its confirm (it loses work, so it asks first). */
   discardChanges: 'Discard changes',
@@ -294,25 +313,31 @@ export const strings = {
   copyLineDefault: 'Thanks, we got it. We will come back to you soon.',
   /** Closes (forms fix b2): when the form stops taking answers by itself, and what it says then. */
   closesRow: 'Closes',
-  closesHelp: 'Stop taking answers on a day, or after enough have come in. Pause stops it now.',
+  closesHelp: 'Stop taking submissions on a day, or after enough have come in. Pause stops it now.',
   closesNever: 'Never',
   closesOnDate: 'On a date',
-  closesAfterCount: 'After a number of answers',
+  closesAfterCount: 'After a number of submissions',
   closesDay: 'Last day',
   closesPast: 'Pick today or a day to come.',
   closesCountError: (max: number) => `Give a whole number from 1 to ${max.toLocaleString('en')}.`,
   /** Under a setting that waits for Publish on a live form (forms review): said, not only in a hover tip. */
-  closesCount: 'Number of answers',
+  closesCount: 'Number of submissions',
   closedMessageRow: 'Message when closed',
-  closedMessageDefault: 'This form isn’t taking answers right now.',
+  closedMessageDefault: 'This form isn’t taking enquiries right now.',
   /** Settings' groups (the owner, 5 November 2026: less text never means less structure). */
   groupForm: 'Form',
   groupCrm: 'CRM',
   groupEmails: 'Emails',
-  groupAnswers: 'Answers',
+  groupAnswers: 'Submissions',
   /** How long the workspace keeps answers (critique b S2): said here, changed in Settings › General. */
-  keptRow: 'Answers kept',
-  keptHelp: 'How long every form’s answers are kept is set for the whole workspace, in Settings › General.',
+  keptRow: 'Keep submissions',
+  keptHelp:
+    'Set for the whole workspace: every form keeps them this long, and Settings › General says the same. Older ones are deleted nightly; the people they made stay.',
+  /** Under Keep submissions: it is the workspace's, so its reach is said in view. */
+  keptAllForms: 'Every form in this workspace',
+  keptEveryForm: 'This applies to every form in the workspace.',
+  /** Settings › Spam with nothing caught: the way to the filter anyway (lane 3c). */
+  spamView: 'View spam',
   keptForever: 'Until deleted',
   keptMonths: (months: number) => `For ${String(months)} months`,
   /** Also create a deal (forms fix a3): a switch under Save answers to, People only. */
@@ -761,7 +786,7 @@ export const strings = {
   analyticsNoMedian: 'No finishes yet',
   analyticsQuestion: 'Question',
   analyticsSummary: 'Headline figures',
-  analyticsCompletions: 'Finished',
+  analyticsSubmissions: 'Submissions',
   analyticsDirect: 'Direct',
   analyticsEmpty: 'No visits yet',
   analyticsEmptyText: 'Numbers show here once people open the form.',
@@ -847,7 +872,7 @@ export const strings = {
   saveAnswersTo: 'Save answers to',
   onlySubmissions: 'Only in Submissions',
   emailEach: 'Email each submission to',
-  acceptingRow: 'Taking answers',
+  acceptingRow: 'Taking submissions',
   acceptingHelp: 'Turn off to close the form. Visitors see that it is closed.',
   spamRow: 'Spam',
   linkHelp: 'Links with the old address keep working.',
@@ -857,5 +882,32 @@ export const strings = {
   savingChangedToast: (where: string) => `Answers will save to ${where} once you publish.`,
   savingOffToast: 'Answers will stay in Submissions once you publish.',
   // Analytics (T22)
-  analyticsFinishedOf: (finished: string, started: string) => `${finished} of ${started} who started finished`,
+  analyticsFinishedOf: (finished: string, started: string) => `${finished} of ${started} who started`,
+  // Analytics, lane 3c: four figures with a line each, and the Answers section (Sprig's results, Tally's insights).
+  analyticsStarted: (started: string) => `${started} started`,
+  analyticsInPeriod: (days: number) => `In the last ${String(days)}\u00a0days`,
+  analyticsNoStarts: 'No starts counted yet',
+  analyticsCountingSince: (day: string) => `Counted since ${day}`,
+  analyticsTimeLine: 'First answer to send',
+  analyticsAnswers: 'Answers',
+  analyticsResponses: (n: number, shown: string) => (n === 1 ? '1 response' : `${shown} responses`),
+  /** A Submissions figure past what the read counts ("5,000+"), and the Answers line then. */
+  analyticsAtLeast: (shown: string) => `${shown}+`,
+  analyticsAnswersLatest: (shown: string) => `From the latest ${shown} submissions.`,
+  analyticsNoAnswers: 'Nobody answered this yet',
+  analyticsAnswersOf: (question: string) => `Answers to ${question}`,
+  analyticsLatestOf: (question: string) => `Latest answers to ${question}`,
+  analyticsLatest: 'Latest answers',
+  analyticsAnswer: 'Answer',
+  analyticsShare: 'Share',
+  analyticsBar: 'Share of responses',
+  analyticsPicked: 'Picked',
+  analyticsPickedOf: (count: string, total: string) => `${count} of ${total}`,
+  // The submission panel (lane 3c)
+  backToSubmissions: 'Back to submissions',
+  openRecord: (name: string) => `Open ${name}`,
+  analyticsYes: 'Yes',
+  analyticsNo: 'No',
+  analyticsAgreed: 'Agreed',
+  analyticsNotAgreed: 'Not agreed',
 } as const;
