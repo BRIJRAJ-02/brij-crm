@@ -209,7 +209,11 @@ export function settingsCommands(
           name: strings.settingsPage(page.label),
           icon: entry.icon,
           // The page's own words, then the navigation's (what "Find a setting" matches too), for the entry's own page.
-          terms: [...(SETTINGS_TERMS[page.id] ?? []), ...(page.id === entry.id ? (entry.keywords ?? []) : [])],
+          terms: [
+            ...(SETTINGS_TERMS[page.id] ?? []),
+            ...(page.id === entry.id ? (entry.keywords ?? []) : []),
+            ...('keywords' in page && page !== entry ? (page.keywords ?? []) : []),
+          ],
           run: go(page.href),
         })),
       ),

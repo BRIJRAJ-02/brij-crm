@@ -176,7 +176,9 @@ describe('searchSettings', () => {
 
   it('matches keywords, accents and punctuation aside, every word typed', () => {
     expect(searchSettings(owner, '2FA').map((hit) => hit.id)).toEqual(['security']);
-    expect(searchSettings(owner, 'Two-factor').map((hit) => hit.id)).toEqual(['security', 'roles']);
+    expect(searchSettings(owner, 'Two-factor').map((hit) => hit.id)).toEqual(['security', 'workspace-security']);
+    // A tab's own words open that tab, not its entry's first.
+    expect(searchSettings(owner, 'session length').map((hit) => hit.href)).toEqual(['/w/acme/settings/security']);
     expect(searchSettings(owner, 'google calendar').map((hit) => hit.id)).toEqual(['calendars']);
   });
 

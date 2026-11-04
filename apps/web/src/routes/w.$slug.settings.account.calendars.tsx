@@ -7,8 +7,8 @@ import { isConnectResult, type ConnectResult } from '../features/settings/connec
 import { SettingsFailed, SettingsMissing, SettingsPage } from '../features/settings/SettingsPage.tsx';
 
 // Settings › Account › Calendars (specs 0024 and 0026; the one place to connect a calendar since 5 November 2026):
-// every member's own calendar connections, with Connect in the TopBar. Bookings › Calendars shows the same screen as
-// a working view. `?calendar=` is how connecting went, as the API's callback sends the browser back (through
+// every member's own calendar connections, a Connect button per provider in the empty state. Bookings › Calendars
+// shows the same screen as a working view. `?calendar=` is how connecting went, as the API's callback sends the browser back (through
 // `/settings/calendar`); the screen says so once.
 
 /** The page's address: how a connect just went, if one did. */

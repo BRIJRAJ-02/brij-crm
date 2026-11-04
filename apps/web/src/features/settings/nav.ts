@@ -6,7 +6,7 @@
 // settings route does with object-tabs.ts.
 import type { ObjectSummary, Permission } from '@crm/data';
 import { strings as listStrings } from '../lists/strings.ts';
-import { settingsHomeHref, trashHref } from '../workspace/objects.ts';
+import { trashHref } from '../workspace/objects.ts';
 import { historyHref } from './history-href.ts';
 import { strings as history } from './history-nav-strings.ts';
 import { strings as members } from './members-strings.ts';
@@ -44,8 +44,8 @@ export const objectSettingsHref = (
   tab: ObjectTab = 'attributes',
 ) => `/w/${slug}/settings/objects/${object.apiSlug}/${tab}`;
 
-/** Settings › Account › Profile (spec 0031, AC-821): the member's own name and picture. Where Settings opens. */
-export const profileHref = settingsHomeHref;
+/** Settings › Account › Profile (spec 0031, AC-821): the member's own name and picture. Settings' first entry. */
+export const profileHref = (slug: string) => `/w/${slug}/settings/account/profile`;
 
 /** Settings › Account › Preferences (spec 0026): the interface theme. */
 export const preferencesHref = (slug: string) => `/w/${slug}/settings/account/preferences`;
@@ -159,6 +159,8 @@ export interface SettingsTab {
   readonly requires?: Permission;
   /** Not for a guest (spec 0031, slice 9). */
   readonly notForGuests?: true;
+  /** Other words for this tab's page, for Find a setting and ⌘K ("session length" finds Sign in rules). */
+  readonly keywords?: readonly string[];
 }
 
 /** One entry in the settings navigation. */
@@ -290,7 +292,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           label: members.title,
           href: membersSettingsHref(slug),
           icon: 'users',
-          keywords: ['invite', 'invitations', 'invite link', 'remove member'],
+          keywords: ['invite', 'invitations', 'invite link', 'email domain', 'remove member'],
           tabs: [
             { id: 'members', label: members.title, href: membersSettingsHref(slug) },
             { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), notForGuests: true },
@@ -303,7 +305,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           label: strings.rolesAndAccess,
           href: rolesSettingsHref(slug),
           icon: 'key',
-          keywords: ['permissions', 'admin', 'owner', 'two factor', 'security', 'session length'],
+          keywords: ['permissions', 'admin', 'owner'],
           tabs: [
             { id: 'roles', label: roles.title, href: rolesSettingsHref(slug), notForGuests: true },
             {
@@ -311,6 +313,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
               label: strings.signInRules,
               href: workspaceSecurityHref(slug),
               requires: 'security.manage',
+              keywords: ['require two factor', 'security', 'session length', 'sign out everyone'],
             },
           ],
         },
@@ -495,7 +498,7 @@ export function searchSettings(groups: readonly SettingsNavGroup[], query: strin
             icon: entry.icon,
             where: `${group.label} › ${entry.label}`,
           },
-          keywords: [] as readonly string[],
+          keywords: tab.keywords ?? [],
         })),
     ]),
   );

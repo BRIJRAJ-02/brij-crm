@@ -230,7 +230,24 @@ export function Sidebar(props: SidebarProps) {
             </div>
           )
         )}
-        {!isCollapsed && find !== undefined && <div className={styles.search}>{find}</div>}
+        {!isCollapsed && find !== undefined && (
+          // Down from the field moves into the list, to its first item, as a search over a list does (Linear, ⌘K).
+          // The key handler sits on the field's wrapper, as the body's sits on the body: the field keeps its own keys.
+          <div
+            className={styles.search}
+            {...{
+              onKeyDown: (event: KeyboardEvent) => {
+                if (event.key !== 'ArrowDown') return;
+                const first = bodyRef.current?.querySelector<HTMLElement>('a[href], button:not([disabled])');
+                if (first === null || first === undefined) return;
+                event.preventDefault();
+                first.focus();
+              },
+            }}
+          >
+            {find}
+          </div>
+        )}
         <div className={styles.scroll}>
           <div
             ref={bodyRef}

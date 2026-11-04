@@ -19,10 +19,11 @@ import styles from './AppShell.module.css';
 import { strings } from './strings.ts';
 
 /**
- * What the shell tells the pieces inside it: whether the page is narrower than `bp-page-compact`, and (for the
- * sidebar alone) whether it is a phone's list (`phoneSidebar="full"`), the whole width under 480px.
+ * What the shell tells the pieces inside it: whether the page is narrower than `bp-page-compact`, whether it is a
+ * phone (under `bp-container-md`, 480px), and (for the sidebar alone) whether it is a phone's list
+ * (`phoneSidebar="full"`), the whole width there.
  */
-export const AppShellContext = createContext({ isCompact: false, isFull: false });
+export const AppShellContext = createContext({ isCompact: false, isFull: false, isPhone: false });
 
 const COMPACT_QUERY = `(width < ${String(breakpointToken('bp-page-compact'))}px)`;
 /** A phone: the width under which a container drops to one column (`bp-container-md`, 480px). */
@@ -128,20 +129,23 @@ export function AppShell({
   }, []);
   const pushed = isCompact || pushes.length === 0 ? undefined : pushes.includes('lg') ? 'lg' : 'md';
   // One object while the width class holds, so a panel opening (AppShell's state) doesn't re-render every reader.
-  const shell = useMemo(() => ({ isCompact, isFull: false }), [isCompact]);
+  const shell = useMemo(() => ({ isCompact, isFull: false, isPhone }), [isCompact, isPhone]);
   const sidebarShell = useMemo(
-    () => ({ isCompact: isCompact && !(isFull && isPhone), isFull }),
+    () => ({ isCompact: isCompact && !(isFull && isPhone), isFull, isPhone }),
     [isCompact, isFull, isPhone],
   );
   return (
     <AppShellContext value={shell}>
       <PanelPushContext value={push}>
         <div className={styles.root} data-phone-sidebar={phoneSidebar === 'rail' ? undefined : phoneSidebar}>
-          <VisuallyHidden isFocusable>
-            <a className={styles.skip} href={`#${mainId}`}>
-              {strings.skipToContent}
-            </a>
-          </VisuallyHidden>
+          {/* On a phone's settings list the page is hidden behind it, so there is no content to skip to. */}
+          {!(isFull && isPhone) && (
+            <VisuallyHidden isFocusable>
+              <a className={styles.skip} href={`#${mainId}`}>
+                {strings.skipToContent}
+              </a>
+            </VisuallyHidden>
+          )}
           <div className={styles.sidebar}>
             <AppShellContext value={sidebarShell}>{sidebar}</AppShellContext>
           </div>

@@ -1,8 +1,7 @@
 // Settings' old addresses (5 November 2026): each one still lands on the page it became, keeping its search where a
-// provider's callback carries one, and Settings itself opens on Profile (on a wide screen; a phone's is the list).
+// provider's callback carries one. (Settings' own address, the phone's list, is WorkspaceFrame.browser.test.tsx's.)
 import { isRedirect } from '@tanstack/react-router';
-import { afterEach, describe, expect, it } from 'vitest';
-import { page } from 'vitest/browser';
+import { describe, expect, it } from 'vitest';
 import { Route as AccountIndex } from '../../routes/w.$slug.settings.account.index.tsx';
 import { Route as AccountScheduling } from '../../routes/w.$slug.settings.account.scheduling.tsx';
 import { Route as AccountSecurity } from '../../routes/w.$slug.settings.account.security.tsx';
@@ -10,7 +9,6 @@ import { Route as Automations } from '../../routes/w.$slug.settings.automations.
 import { Route as Calendar } from '../../routes/w.$slug.settings.calendar.tsx';
 import { Route as Developer } from '../../routes/w.$slug.settings.developer.tsx';
 import { Route as HistorySignIns } from '../../routes/w.$slug.settings.history.sign-ins.tsx';
-import { Route as SettingsIndex } from '../../routes/w.$slug.settings.index.tsx';
 import { Route as SchedulingCalendars } from '../../routes/w.$slug.settings.scheduling.calendars.tsx';
 import { Route as Rotations } from '../../routes/w.$slug.settings.scheduling.rotations.tsx';
 import { Route as Webhooks } from '../../routes/w.$slug.settings.webhooks.tsx';
@@ -25,10 +23,6 @@ function redirectOf(route: { readonly options: { readonly beforeLoad?: unknown }
   }
   return undefined;
 }
-
-afterEach(async () => {
-  await page.viewport(1280, 800);
-});
 
 describe('Settings’ old addresses', () => {
   it('sends each to the page it became, replacing the address', () => {
@@ -56,11 +50,5 @@ describe('Settings’ old addresses', () => {
         replace: true,
       });
     }
-  });
-
-  it('opens Settings on Profile on a wide screen, and stays on the list on a phone', async () => {
-    expect(redirectOf(SettingsIndex)).toMatchObject({ to: '/w/$slug/settings/account/profile', replace: true });
-    await page.viewport(390, 844);
-    expect(redirectOf(SettingsIndex)).toBeUndefined();
   });
 });

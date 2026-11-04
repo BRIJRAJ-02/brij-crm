@@ -486,6 +486,9 @@ export const SettingsFind: Story = {
     await userEvent.type(field, 'pre');
     await expect(canvas.getByRole('link', { name: 'Preferences' })).toBeInTheDocument();
     await expect(canvas.queryByRole('link', { name: 'Profile' })).toBeNull();
+    // Down from the field reaches the first match.
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('link', { name: 'Preferences' })).toHaveFocus();
   },
 };
 

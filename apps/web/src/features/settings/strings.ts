@@ -22,6 +22,8 @@ export const strings = {
   /** The settings sidebar's search (the owner, 5 November 2026): filters the entries, Enter opens the first. */
   findSetting: 'Find a setting',
   noSettingFound: 'No setting matches',
+  /** Said to a screen reader as the matches change. */
+  settingsFound: (count: number) => (count === 1 ? '1 setting' : `${String(count)} settings`),
   /** The phone's settings list (under 480px): the way back from a page to the list. */
   allSettings: 'All settings',
   /** The settings navigation's entries. */

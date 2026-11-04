@@ -794,6 +794,15 @@ describe('collapseRuns', () => {
     expect(collapseRuns([saved('a', 0), saved('b', late)], format)).toHaveLength(2);
   });
 
+  it('never folds a run across midnight, so each day holds its own', () => {
+    const atMidnight = (id: string, iso: string): AuditEntryView => ({ ...saved(id, 0), at: iso });
+    const rows = collapseRuns(
+      [atMidnight('a', '2026-11-05T00:05:00Z'), atMidnight('b', '2026-11-04T23:55:00Z')],
+      format,
+    );
+    expect(rows.map((row) => row.count)).toEqual([1, 1]);
+  });
+
   it('counts a run only while it is unbroken', () => {
     const other = { ...saved('x', 2), action: 'list.archived' } as AuditEntryView;
     expect(collapseRuns([saved('a', 0), other, saved('b', 3)], format).map((row) => row.count)).toEqual([1, 1, 1]);

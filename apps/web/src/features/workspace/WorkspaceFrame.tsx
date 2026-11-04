@@ -18,6 +18,7 @@ import {
   AppShell,
   AppShellContext,
   Avatar,
+  EmptyState,
   Field,
   FileLinksContext,
   GRID_SHORTCUTS,
@@ -31,6 +32,7 @@ import {
   ProviderMark,
   ShortcutHelp,
   Sidebar,
+  VisuallyHidden,
   type Toasts,
 } from '@crm/ui';
 import { useLocation, useNavigate } from '@tanstack/react-router';
@@ -660,23 +662,29 @@ function SettingsNavigation({
   const hits = searchSettings(groups, query);
   const isSearching = query.trim() !== '';
   const find = (
-    <Field
-      label={settingsStrings.findSetting}
-      isLabelHidden
-      variant="search"
-      placeholder={settingsStrings.findSetting}
-      value={query}
-      onChange={setQuery}
-      onSubmit={() => {
-        const [first] = hits;
-        if (first === undefined) return;
-        setQuery('');
-        void navigate({ href: first.href });
-      }}
-      onEscape={() => {
-        setQuery('');
-      }}
-    />
+    <>
+      <Field
+        label={settingsStrings.findSetting}
+        isLabelHidden
+        variant="search"
+        placeholder={settingsStrings.findSetting}
+        value={query}
+        onChange={setQuery}
+        onSubmit={() => {
+          const [first] = hits;
+          if (first === undefined) return;
+          setQuery('');
+          void navigate({ href: first.href });
+        }}
+        onEscape={() => {
+          setQuery('');
+        }}
+      />
+      {/* How many match, said as it changes (WCAG 4.1.3); no match is the list's own EmptyState, a status too. */}
+      <VisuallyHidden>
+        <span role="status">{hits.length > 0 ? settingsStrings.settingsFound(hits.length) : ''}</span>
+      </VisuallyHidden>
+    </>
   );
   return (
     <Sidebar
@@ -686,9 +694,11 @@ function SettingsNavigation({
       keyboard="arrows"
       find={find}
     >
-      {isSearching ? (
-        // The matches, in one group whose label says what was found (or that nothing was).
-        <NavGroup label={hits.length === 0 ? settingsStrings.noSettingFound : settingsStrings.settings} isLabelShown>
+      {isSearching && hits.length === 0 ? (
+        <EmptyState layout="row" icon="search" title={settingsStrings.noSettingFound} />
+      ) : isSearching ? (
+        // The matches, in one unlabelled group (the field says what they are), best first; Enter opens the first.
+        <NavGroup label={settingsStrings.settings}>
           {hits.map((hit) => (
             <NavItem
               key={`${hit.id}:${hit.href}`}

@@ -22,6 +22,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
+import { focusPage } from '../navigation/focus.ts';
 import { WorkspaceFrame, type SettingsSidebar, type WorkspaceFrameProps } from './WorkspaceFrame.tsx';
 
 // The frame reaches the data layer on undo and sign out, which these tests never press, for the calendar banner,
@@ -178,6 +179,7 @@ async function renderFrame(
       {...(more.workspaces === undefined ? {} : { workspaces: more.workspaces })}
       {...(settings === undefined ? {} : { settings })}
     >
+      <h1 tabIndex={-1}>Page</h1>
       <input aria-label="Draft" />
     </WorkspaceFrame>
   );
@@ -244,7 +246,7 @@ describe('the workspace frame’s sidebar', () => {
     const settings = [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find((link) =>
       link.textContent.startsWith('Settings'),
     );
-    expect(settings?.getAttribute('href')).toBe('/w/acme/settings/account/profile');
+    expect(settings?.getAttribute('href')).toBe('/w/acme/settings');
     expect(settings?.querySelector('kbd')).not.toBeNull();
     expect(settings?.getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+,$/);
   });
@@ -252,8 +254,8 @@ describe('the workspace frame’s sidebar', () => {
   it('opens Settings on ⌘, (Ctrl+, off a Mac)', async () => {
     const router = await renderFrame();
     await pressSettingsKey(document.body);
-    // Settings opens on its first entry, Profile (5 November 2026).
-    expect(router.state.location.pathname).toBe('/w/acme/settings/account/profile');
+    // Settings' own address: the list on a phone, its first entry (Profile) on a wider screen (5 November 2026).
+    expect(router.state.location.pathname).toBe('/w/acme/settings');
   });
 
   it('leaves a text field’s ⌘, alone, so a draft is never left behind', async () => {
@@ -694,6 +696,7 @@ describe('Find a setting (5 November 2026)', () => {
   it('sits under the head and filters the entries, a tab’s too, saying where each sits', async () => {
     await renderFrame({ current: 'profile', backHref: '/w/acme/start' }, { at: '/w/acme/settings/account/profile' });
     await field().fill('teams');
+    expect(nav()?.querySelector('span[role="status"]')?.textContent).toBe('1 setting');
     const links = [...(nav()?.querySelectorAll('a[href]') ?? [])].filter(
       (link) => link.getAttribute('aria-label') !== 'Leave settings',
     );
@@ -724,6 +727,7 @@ describe('Find a setting (5 November 2026)', () => {
     await renderFrame({ current: 'profile', backHref: '/w/acme/start' }, { at: '/w/acme/settings/account/profile' });
     await field().fill('zebra');
     expect(nav()?.textContent).toContain('No setting matches');
+    expect(nav()?.querySelector('[role="status"]:not(:empty)')?.textContent).toContain('No setting matches');
     expect(nav()?.querySelector('a[aria-current]')).toBeNull();
     await act(async () => {
       field()
@@ -753,6 +757,26 @@ describe('Settings on a phone (5 November 2026)', () => {
     expect(nav?.getBoundingClientRect().width).toBe(390);
     expect(document.querySelector<HTMLElement>('main')?.checkVisibility()).toBe(false);
     await expect.element(page.getByRole('link', { name: 'Sign in and security' })).toBeVisible();
+  });
+
+  it('hands focus to the page’s title when an entry of the list opens it, and back to the list from the page', async () => {
+    const router = await renderFrame({ backHref: '/w/acme/start' }, { at: '/w/acme/settings' });
+    const entry = document.querySelector<HTMLElement>(
+      'nav[aria-label="Settings"] a[href="/w/acme/settings/account/profile"]',
+    );
+    entry?.focus();
+    await act(async () => {
+      await router.navigate({ href: '/w/acme/settings/account/profile' });
+    });
+    // The list hid with its entry: focus goes on to the page's title, not to nowhere.
+    focusPage(document, '/w/acme/settings/account/profile');
+    expect(document.activeElement?.textContent).toBe('Page');
+    await act(async () => {
+      await router.navigate({ href: '/w/acme/settings' });
+    });
+    // The page hid with its title: focus goes to the list's first entry.
+    focusPage(document, '/w/acme/settings');
+    expect(document.activeElement?.closest('nav[aria-label="Settings"]')).not.toBeNull();
   });
 
   it('shows a page alone, with no rail beside it', async () => {

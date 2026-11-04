@@ -39,7 +39,24 @@ export function focusFirstLoad(doc: Document, pathname: string): void {
 function isInTabList(doc: Document): boolean {
   const active: unknown = doc.activeElement;
   if (typeof active !== 'object' || active === null || !('closest' in active)) return false;
-  return (active as Element).closest('[role="tablist"], nav[data-keyboard="arrows"]') !== null;
+  const element = active as Element;
+  // Only an entry still drawn keeps focus: on a phone the settings list hides as its page opens (5 November 2026).
+  // A field in the list (Find a setting) never does: the page it opened takes focus, so its title is heard.
+  return (
+    element.closest('[role="tablist"], nav[data-keyboard="arrows"]') !== null &&
+    element.tagName !== 'INPUT' &&
+    isDrawn(element)
+  );
+}
+
+/**
+ * The settings list's place when no page title is drawn (a phone's Settings, where the list is the page): its
+ * current entry, else its first.
+ */
+function listPlace(doc: Document): HTMLElement | null {
+  const list = doc.querySelector<HTMLElement>('nav[data-keyboard="arrows"]');
+  if (list === null || !isDrawn(list)) return null;
+  return list.querySelector<HTMLElement>('a[aria-current="page"]') ?? list.querySelector<HTMLElement>('a[href]');
 }
 
 /**
@@ -69,7 +86,10 @@ function isInOverlay(doc: Document): boolean {
 export function focusPage(doc: Document, pathname: string): void {
   if (isInTabList(doc) || isInOverlay(doc)) return;
   const field = FIRST_FIELD[pathname];
-  const target = (field === undefined ? null : doc.querySelector<HTMLElement>(field)) ?? pageHeading(doc);
+  const heading = pageHeading(doc);
+  const target =
+    (field === undefined ? null : doc.querySelector<HTMLElement>(field)) ??
+    (heading !== null && isDrawn(heading) ? heading : (listPlace(doc) ?? heading));
   target?.focus();
 }
 

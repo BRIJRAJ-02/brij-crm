@@ -799,7 +799,8 @@ export function MembersScreen({
       // may invite (the owner, 4 November 2026: Members, Teams and Roles as one item, one row of tabs).
       tabBar={{
         count: page.total,
-        ...(tab === 'members' && canInvite ? { end: searchField } : {}),
+        // The search for everyone on the Members tab (a guest's by name alone), at the strip's end or atop the body.
+        ...(tab === 'members' ? { end: searchField } : {}),
         ...(canInvite
           ? {
               extra: { id: 'joining', label: strings.joiningTab, count: invitations.length + requests.length },

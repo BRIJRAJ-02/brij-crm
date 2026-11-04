@@ -170,7 +170,9 @@ export function collapseRuns(
       run !== undefined &&
       actorKey(run.last.actor) === actorKey(entry.actor) &&
       run.sentence.full === sentence.full &&
-      Math.abs(Date.parse(run.last.at) - Date.parse(entry.at)) <= gap
+      Math.abs(Date.parse(run.last.at) - Date.parse(entry.at)) <= gap &&
+      // A run never crosses midnight, so each day's heading holds only its own changes.
+      format.dayKey(run.last.at) === format.dayKey(entry.at)
     ) {
       run.last = entry;
       run.count += 1;

@@ -218,16 +218,17 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
       <PreviewLayout
         bodyWidth="form"
         previewShare="wide"
-        {...(refusal !== undefined
-          ? // A refused change says why above the sections, where every one of them can be seen from.
-            { notices: <Callout tone="danger">{refusal}</Callout> }
-          : kit !== undefined && !canEdit
-            ? { notices: <Callout tone="info">{strings.readOnly}</Callout> }
-            : kit?.templateDraft !== undefined
-              ? {
-                  // A template waits for Publish (owner, 4 Nov 2026): every public page changes at once when it goes,
-                  // so the bar heads the page, where the editors' bars sit.
-                  notices: (
+        // Every notice that holds, together (a refused colour never hides a template waiting for Publish): a refusal
+        // above the sections, where each can be seen from; the read only note; then the Publish bar (owner, 4 Nov
+        // 2026: every public page changes at once when it goes, so it heads the page, where the editors' bars sit).
+        {...(refusal === undefined && (kit === undefined || canEdit) && kit?.templateDraft === undefined
+          ? {}
+          : {
+              notices: (
+                <>
+                  {refusal !== undefined && <Callout tone="danger">{refusal}</Callout>}
+                  {kit !== undefined && !canEdit && <Callout tone="info">{strings.readOnly}</Callout>}
+                  {canEdit && kit.templateDraft !== undefined && (
                     <>
                       <PublishBar
                         status="draft"
@@ -237,9 +238,10 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
                       />
                       <Callout tone="info">{strings.templatePublishNote}</Callout>
                     </>
-                  ),
-                }
-              : {})}
+                  )}
+                </>
+              ),
+            })}
         preview={preview}
         previewControls={
           <SegmentedControl
