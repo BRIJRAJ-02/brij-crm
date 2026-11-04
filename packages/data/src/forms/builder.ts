@@ -65,6 +65,7 @@ export {
   SKILLS_MAX,
   type KnownValue,
   matchesShowWhen,
+  NUMBER_OPS,
   summarizeShowWhen,
   VALUELESS_OPS,
   visibleQuestions,

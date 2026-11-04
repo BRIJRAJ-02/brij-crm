@@ -8,6 +8,7 @@ import { FORM_SLUG, type PublishAttribute, type QuestionPreset, slugFromName } f
 import * as list from '../questions/questions.ts';
 import { keepBreaks, renameStepKeys, type Flow } from '../questions/steps.ts';
 import type { PlannedAttribute, QuestionChange } from '../questions/questions.ts';
+import { isSavable } from '../routing/facts.ts';
 import { strings } from './strings.ts';
 
 /** A new question at the end: Short text, no label yet ("Untitled question"), not filed, optional. */
@@ -216,12 +217,56 @@ export function draftGap(document: FormDocument): DraftGap | undefined {
 /**
  * The draft as it can be saved: a field still being typed (a partial web address, empty button words) keeps what
  * the server holds, so every other change still saves, and the half typed field never comes back as a failed save.
+ * A rule still being written is the same (T15, 4 November 2026: picking a question and a comparison saved a rule
+ * with no value, and the toast said "Your last change didn't save"): a Show when that is not complete keeps the
+ * server's, and a jump whose conditions are not complete is left out of the save, until it has its value.
  */
 export function savableDraft(document: FormDocument, saved: FormDocument): FormDocument {
   const after =
     document.after.kind === 'redirect' && !isRedirectAddress(document.after.url) ? saved.after : document.after;
   const buttonText = document.buttonText.trim() === '' ? saved.buttonText : document.buttonText;
-  return after === document.after && buttonText === document.buttonText ? document : { ...document, after, buttonText };
+  const questions = savableQuestions(document.questions, saved.questions);
+  const steps = savableSteps(document.steps, saved.steps);
+  return after === document.after &&
+    buttonText === document.buttonText &&
+    questions === document.questions &&
+    steps === document.steps
+    ? document
+    : { ...document, after, buttonText, questions, steps };
+}
+
+/** The questions with each unfinished Show when back at the server's (or none): the same list when all are done. */
+function savableQuestions(
+  questions: FormDocument['questions'],
+  saved: FormDocument['questions'],
+): FormDocument['questions'] {
+  if (questions.every((question) => question.showWhen === undefined || isSavable(question.showWhen))) return questions;
+  return questions.map((question) => {
+    if (question.showWhen === undefined || isSavable(question.showWhen)) return question;
+    const kept = saved.find((each) => each.id === question.id)?.showWhen;
+    const { showWhen: _draft, ...rest } = question;
+    return kept === undefined ? rest : { ...rest, showWhen: kept };
+  });
+}
+
+/** The steps with an unfinished Show when back at the server's, and unfinished jumps left out. */
+function savableSteps(steps: FormDocument['steps'], saved: FormDocument['steps']): FormDocument['steps'] {
+  const isDone = (step: FormDocument['steps'][number]) =>
+    (step.showWhen === undefined || isSavable(step.showWhen)) &&
+    (step.jumps ?? []).every((jump) => isSavable(jump.when));
+  if (steps.every(isDone)) return steps;
+  return steps.map((step) => {
+    if (isDone(step)) return step;
+    const { showWhen, jumps, ...rest } = step;
+    const kept =
+      showWhen === undefined || isSavable(showWhen) ? showWhen : saved.find((each) => each.id === step.id)?.showWhen;
+    const done = (jumps ?? []).filter((jump) => isSavable(jump.when));
+    return {
+      ...rest,
+      ...(kept === undefined ? {} : { showWhen: kept }),
+      ...(done.length === 0 ? {} : { jumps: done }),
+    };
+  });
 }
 
 /**

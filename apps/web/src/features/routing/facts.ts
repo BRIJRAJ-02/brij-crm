@@ -10,6 +10,7 @@ import {
   hiddenFactKey,
   KNOWN_FACT,
   KNOWN_VALUES,
+  NUMBER_OPS,
   summarizeShowWhen,
   VALUELESS_OPS,
   type Condition,
@@ -201,6 +202,24 @@ export function isComplete(showWhen: ShowWhen): boolean {
       condition.key !== '' &&
       (isValueless(condition.op) ||
         (typeof condition.value === 'string' ? condition.value.trim() !== '' : (condition.value?.length ?? 0) > 0)),
+  );
+}
+
+/**
+ * Whether conditions can be saved as they stand: every one complete (`isComplete`), and a number comparison's value a
+ * number. Anything less is a rule still being written, which the builder keeps as a local draft rather than sending
+ * a save the server refuses ("Give a value to compare with.").
+ */
+export function isSavable(showWhen: ShowWhen): boolean {
+  return (
+    isComplete(showWhen) &&
+    showWhen.rules.every(
+      (condition) =>
+        !NUMBER_OPS.includes(condition.op) ||
+        (typeof condition.value === 'string' &&
+          condition.value.trim() !== '' &&
+          Number.isFinite(Number(condition.value.replaceAll(',', '')))),
+    )
   );
 }
 

@@ -196,6 +196,68 @@ describe('a Settings field still being typed (the save that failed as "check you
   });
 });
 
+describe('a rule still being written is a local draft (T15)', () => {
+  const two: FormDocument = {
+    ...base,
+    after: { kind: 'message', message: 'Thanks' },
+    questions: [
+      { ...base.questions[0], id: 'q1', key: 'name', label: 'Your name', answerType: 'short_text', required: true },
+      { ...base.questions[0], id: 'q2', key: 'company', label: 'Company', answerType: 'short_text', required: false },
+    ],
+    steps: [{ id: 's2', startsAt: 'q2' }],
+  } as FormDocument;
+
+  it('leaves out a question’s Show when that has no value yet, and keeps the rest of the change', () => {
+    const typing: FormDocument = {
+      ...two,
+      headline: 'New headline',
+      questions: two.questions.map((question) =>
+        question.id === 'q2'
+          ? { ...question, showWhen: { join: 'all', rules: [{ key: 'name', op: 'is' }] } }
+          : question,
+      ),
+    };
+    const sent = savableDraft(typing, two);
+    expect(sent.headline).toBe('New headline');
+    expect(sent.questions.find((question) => question.id === 'q2')?.showWhen).toBeUndefined();
+  });
+
+  it('sends the Show when once it has its value', () => {
+    const done: FormDocument = {
+      ...two,
+      questions: two.questions.map((question) =>
+        question.id === 'q2'
+          ? { ...question, showWhen: { join: 'all', rules: [{ key: 'name', op: 'is', value: 'Ada' }] } }
+          : question,
+      ),
+    };
+    expect(savableDraft(done, two)).toBe(done);
+  });
+
+  it('keeps a step’s unfinished jump and Show when out of the save, and a finished jump in', () => {
+    const typing: FormDocument = {
+      ...two,
+      steps: [
+        {
+          id: 's2',
+          startsAt: 'q2',
+          showWhen: { join: 'all', rules: [{ key: 'name', op: 'is' }] },
+          jumps: [
+            { when: { join: 'all', rules: [{ key: 'name', op: 'is' }] }, to: { ending: 'e1' } },
+            { when: { join: 'all', rules: [{ key: 'name', op: 'is_answered' }] }, to: { ending: 'e1' } },
+            { when: { join: 'all', rules: [{ key: 'name', op: 'more_than', value: 'ten' }] }, to: { ending: 'e1' } },
+          ],
+        },
+      ],
+    };
+    const [step] = savableDraft(typing, two).steps;
+    expect(step?.showWhen).toBeUndefined();
+    expect(step?.jumps).toEqual([
+      { when: { join: 'all', rules: [{ key: 'name', op: 'is_answered' }] }, to: { ending: 'e1' } },
+    ]);
+  });
+});
+
 describe('Show when and routing follow a question’s key (spec 0043)', () => {
   it('a renamed draft question’s conditions read its new key, and Show when clears with null', () => {
     const withBudget: FormDocument = {
