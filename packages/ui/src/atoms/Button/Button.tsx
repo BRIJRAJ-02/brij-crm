@@ -12,14 +12,19 @@ import { Kbd } from '../Kbd/Kbd.tsx';
 import { ProviderMark, type ProviderName } from '../ProviderMark/ProviderMark.tsx';
 import { keyShortcuts, type KeyboardPlatform } from '../Kbd/shortcuts.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
-import { NumberPop } from '../NumberPop/NumberPop.tsx';
 import { Spinner } from '../Spinner/Spinner.tsx';
-import { TextSwap } from '../TextSwap/TextSwap.tsx';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import { TooltipKbdContext } from '../Tooltip/tooltip-kbd.ts';
 import { useFooterRole } from './footer-keys.ts';
 import styles from './Button.module.css';
 import { strings } from './strings.ts';
+
+// The motion parts load with the first button that asks for them (spec 0068, AC-6806): every Button carries them
+// otherwise, and their styles would weigh on pages that never animate a label or an amount (the booking page's CSS).
+const LazyTextSwap = lazy(() => import('../TextSwap/TextSwap.tsx').then((module) => ({ default: module.TextSwap })));
+const LazyNumberPop = lazy(() =>
+  import('../NumberPop/NumberPop.tsx').then((module) => ({ default: module.NumberPop })),
+);
 
 /** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours. */
 export type ButtonVariant =
@@ -244,7 +249,9 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
       {face.children !== undefined &&
         (look.animateLabel === true ? (
           <span className={styles.label} {...(look.labelReserve === undefined ? {} : { 'data-reserve': '' })}>
-            <TextSwap>{face.children}</TextSwap>
+            <Suspense fallback={face.children}>
+              <LazyTextSwap>{face.children}</LazyTextSwap>
+            </Suspense>
             {look.labelReserve === undefined ? null : (
               <span className={styles.reserve} aria-hidden="true">
                 {look.labelReserve}
@@ -268,7 +275,9 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
       {'amount' in face && face.amount !== undefined && (
         <span className={styles.amount}>
           <VisuallyHidden>{strings.amountSeparator}</VisuallyHidden>
-          <NumberPop value={face.amount} />
+          <Suspense fallback={face.amount}>
+            <LazyNumberPop value={face.amount} />
+          </Suspense>
         </span>
       )}
       {keycaps(look.kbd, variant)}
