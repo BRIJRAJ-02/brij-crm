@@ -65,7 +65,8 @@ export interface BookingClient {
     query: {
       readonly from: string;
       readonly to: string;
-      readonly duration: number;
+      /** Left out, the page's first length: the page's first read, sent beside its facts before it knows them. */
+      readonly duration?: number;
       readonly tz: string;
       /** A form's hand off (spec 0043, AC-1609): a team page then offers only the hosts its routing chose. */
       readonly p?: string;
@@ -181,7 +182,8 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
         `${encodeURIComponent(publicKey)}/slots?${new URLSearchParams({
           from: query.from,
           to: query.to,
-          duration: String(query.duration),
+          // Left out, the page's first length (the page's first read, sent beside its facts).
+          ...(query.duration === undefined ? {} : { duration: String(query.duration) }),
           tz: query.tz,
           ...(query.p === undefined ? {} : { p: query.p }),
         }).toString()}`,

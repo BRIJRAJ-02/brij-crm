@@ -303,6 +303,21 @@ export interface ChatAnswer {
   readonly suggestions: readonly string[];
   /** On a read back, the suggestion that books it, so the page can draw it as the answer's confirm button. */
   readonly confirm?: string;
+  /** Which of the visitor's details the chat waits on next, once a time is held: the page's prompt box asks for it. */
+  readonly asks?: ChatAsks;
+}
+
+/** The details a held time still waits on: both, the name, the email, or a number to call. */
+export type ChatAsks = 'details' | 'name' | 'email' | 'phone';
+
+/** What the chat waits on next, from its state alone: once a time is held and before the read back, the details owed. */
+export function asksOf(state: ChatState, needsPhone: boolean): ChatAsks | undefined {
+  if (state.readBack || state.held === undefined || !state.chosen) return undefined;
+  if (state.name === undefined && state.email === undefined) return 'details';
+  if (state.name === undefined) return 'name';
+  if (state.email === undefined) return 'email';
+  if (needsPhone && state.phone === undefined) return 'phone';
+  return undefined;
 }
 
 /** The phrases offered as buttons; each one reads back through `step` as what it says. */
@@ -384,11 +399,14 @@ export function answer(
   const { now, hour12, page, duration, needsPhone } = context;
   const offers = state.offered;
   const named = state.window?.phrase;
+  const asks = asksOf(state, needsPhone);
   const say = (text: string, shown: readonly string[] = [], suggestions?: readonly string[]): ChatAnswer => ({
     text,
     offers: shown,
     suggestions: state.readBack ? [SAY.confirm, SAY.somethingElse] : (suggestions ?? moreSuggestions(shown, now)),
     ...(state.readBack ? { confirm: SAY.confirm } : {}),
+    // Only while nothing is offered: with times on screen, picking one comes first.
+    ...(asks === undefined || shown.length > 0 ? {} : { asks }),
   });
   const held = state.held === undefined ? undefined : timeLabel(state.held, now, hour12);
   const lengths = page.durations.map(String);

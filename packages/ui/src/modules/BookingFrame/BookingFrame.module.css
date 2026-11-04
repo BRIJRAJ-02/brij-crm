@@ -82,7 +82,10 @@
     display: flex;
     justify-content: center;
     min-block-size: 100dvb;
-    padding: var(--space-24) var(--space-16) var(--space-32);
+    /* The page reaches the screen's edges (book.html's viewport-fit=cover), so its padding keeps clear of a notch and
+       of the home indicator and Safari's floating toolbar at the foot (a phone's side insets are equal). */
+    padding: var(--space-24) max(var(--space-16), env(safe-area-inset-left))
+      calc(var(--space-32) + env(safe-area-inset-bottom));
     background: var(--surface-subtle);
     color: var(--text);
     font: var(--text-body);
@@ -150,19 +153,35 @@
     object-fit: contain;
   }
 
-  /* No entrance on the rail or the card: the page's frame is the first thing
-     painted and it never arrives, it is simply there. What animates is the
-     content inside it, where something really does arrive. */
+  .names {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* No entrance on the rail or the card: the page's frame is the first thing painted and it never arrives, it is
+     simply there. */
   .identity {
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
   }
 
-  .names {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+  /* Stacked on a phone, the face sits beside the name rather than over it, as Calendly's and Cal.com's phone pages
+     head theirs: the times start a picture's height higher, on the first screen (4 November 2026). Everything after
+     the name runs the whole width. */
+  @media (width < 1024px) {
+    .identity {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: var(--space-12) var(--space-16);
+    }
+
+    /* The face and the name take a column each; whatever follows the name takes the row. */
+    .names ~ * {
+      grid-column: 1 / -1;
+    }
   }
 
   .host {
@@ -434,6 +453,12 @@
     gap: var(--space-16);
     min-inline-size: 0;
     padding: var(--space-20);
+  }
+
+  /* Book by chat scrolls its own thread, so its body clips nothing: the composer can then stay on screen, held to
+     the foot of the window while the card runs past it (a phone, 4 November 2026: it sat below Safari's toolbar). */
+  .coverBody[data-view='chat'] {
+    overflow: visible;
   }
 
   /* Stacked under the month, the times scroll in a box of their own, eight rows tall (four rows of times and the next one's top): the card

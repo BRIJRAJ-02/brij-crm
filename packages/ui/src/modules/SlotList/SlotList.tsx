@@ -39,6 +39,8 @@ export interface SlotListProps {
   /** `column` (one time per row, scrolling in its pane: Month) or `grid` (two to four across: List, and phones). */
   readonly layout?: 'column' | 'grid';
   readonly isLoading?: boolean;
+  /** How many time boxes stand in while loading: 16 (a nine to five day) unless the caller knows better (the chat's six). */
+  readonly ghosts?: number;
   /** Shown in the list's place when the day has no time to show (all hidden as busy, say). */
   readonly empty?: ReactNode;
   /** A key that changes with the day, the zone or the view, so the times stagger in again. */
@@ -77,6 +79,7 @@ export function SlotList({
   variant = 'picker',
   layout = 'column',
   isLoading = false,
+  ghosts = GHOST_SLOTS,
   empty,
   drawKey,
   answered,
@@ -90,7 +93,8 @@ export function SlotList({
     >
       {variant === 'offers' ? (
         <p className={styles.day} aria-hidden="true">
-          {heading}
+          {/* The day's label line while loading, so the times below sit where they will. */}
+          {isLoading && heading === '' ? <Skeleton shape="text" width="short" /> : heading}
         </p>
       ) : (
         <div className={styles.head}>
@@ -120,7 +124,7 @@ export function SlotList({
         <>
           <VisuallyHidden>{strings.loading}</VisuallyHidden>
           <ul className={styles.list} aria-busy="true">
-            {Array.from({ length: GHOST_SLOTS }, (_, index) => (
+            {Array.from({ length: ghosts }, (_, index) => (
               <li key={index} className={styles.item} data-loading="" aria-hidden="true">
                 <Skeleton shape="fill" />
               </li>

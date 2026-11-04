@@ -70,6 +70,20 @@ export const strings = {
     `Booking your ${String(minutes)} min ${title} with ${host}. When suits you?`,
   chatNoTimes: (host: string) => `${host} has nothing open right now. Check back soon.`,
   chatSuggestions: ['Something later', 'Next week'] as readonly string[],
+  /**
+   * What the prompt box asks after each reply (the owner, 4 Nov 2026: the words follow the conversation): the first
+   * question while times run over several days, the time once they're one day's, then each detail the chat waits on,
+   * then the read back's yes.
+   */
+  chatPrompts: {
+    when: 'When works for you?',
+    time: 'Which time?',
+    details: 'Your name and email',
+    name: 'Your name',
+    email: 'Your email',
+    phone: 'Your phone number',
+    confirm: 'Yes, or what to change',
+  },
   chatTooMany: 'That was a lot at once. Give it a few seconds and try again.',
   chatTooLong: 'This chat is too long to go on. Start over to book.',
   chatBooked: 'Booked. Opening your booking.',

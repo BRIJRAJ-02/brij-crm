@@ -372,8 +372,12 @@ export async function membersBusy(
   to: Date,
 ): Promise<MembersBusy> {
   // A reader answers at most 62 days at once; a page's 62 day chunk plus its margins can be a few hours more
-  // (any read made before 06:00 in the visitor's zone), so a longer range is read in pieces.
-  const windows = busyWindows(from, to);
+  // (any read made before 06:00 in the visitor's zone), so a longer range is read in pieces. The range is widened to
+  // whole quarter hours first: a page's first read starts at "now" to the millisecond, so without this no two reads
+  // ever asked the same range and the api's minute long busy cache never answered one (4 Nov 2026: every page load
+  // waited on Google). A wider read only holds more busy time, which the engine clips to the slots anyway.
+  const range = alignedBusyRange(from, to);
+  const windows = busyWindows(range.from, range.to);
   const answers = await Promise.all(
     memberIds.flatMap((memberId) =>
       windows.map((window) =>
@@ -389,6 +393,17 @@ export async function membersBusy(
     ),
     blocked: answers.some((answer) => answer.status === 'blocked'),
     noCalendar: answers.every((answer) => answer.status === 'none'),
+  };
+}
+
+/** How finely a busy read's range is rounded outwards, so reads a few minutes apart ask the same range. */
+export const BUSY_ALIGN_MS = 15 * 60_000;
+
+/** [from, to) widened to whole quarter hours, so a cache keyed by range answers reads made minutes apart. */
+export function alignedBusyRange(from: Date, to: Date): { readonly from: Date; readonly to: Date } {
+  return {
+    from: new Date(Math.floor(from.getTime() / BUSY_ALIGN_MS) * BUSY_ALIGN_MS),
+    to: new Date(Math.ceil(to.getTime() / BUSY_ALIGN_MS) * BUSY_ALIGN_MS),
   };
 }
 

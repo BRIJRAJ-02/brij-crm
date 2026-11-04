@@ -65,6 +65,22 @@ function daysOf(starts: readonly string[], zone: string, locale: string, hour12:
   return [...days].map(([day, times]): BookingChatDay => ({ day, times }));
 }
 
+/**
+ * What the prompt box asks after a reply (the owner, 4 Nov 2026): the read back's yes, the detail the chat waits on,
+ * the time when the reply offers one day's, the day when it offers several. Anything else keeps the first question.
+ */
+function promptOf(reply: {
+  readonly confirm?: string;
+  readonly asks?: 'details' | 'name' | 'email' | 'phone';
+  readonly days: readonly BookingChatDay[];
+}): string | undefined {
+  if (reply.confirm !== undefined) return strings.chatPrompts.confirm;
+  if (reply.asks !== undefined) return strings.chatPrompts[reply.asks];
+  if (reply.days.length === 1) return strings.chatPrompts.time;
+  if (reply.days.length > 1) return strings.chatPrompts.when;
+  return undefined;
+}
+
 /** A new conversation: a fresh id and the greeting, drawn from the times the page holds. */
 function fresh(props: ChatPanelProps): ChatMemory {
   const { page, starts, zone, locale, hour12, duration } = props;
@@ -83,6 +99,8 @@ function fresh(props: ChatPanelProps): ChatMemory {
         sent: text,
         days: daysOf(offered, zone, locale, hour12, duration),
         suggestions: offered.length === 0 ? [] : strings.chatSuggestions,
+        // The opening question, whatever day its times fall on.
+        prompt: strings.chatPrompts.when,
       },
     ],
   };
@@ -123,13 +141,20 @@ export function ChatPanel(props: ChatPanelProps) {
       .then(
         (reply) => {
           setWaiting(false);
+          const days = daysOf(reply.offers, zone, locale, hour12, reply.duration);
+          const prompt = promptOf({
+            days,
+            ...(reply.confirm === undefined ? {} : { confirm: reply.confirm }),
+            ...(reply.asks === undefined ? {} : { asks: reply.asks }),
+          });
           const answer: Line = {
             id: `a${String(thread.length)}`,
             role: 'assistant',
             text: reply.text,
             sent: reply.text,
-            days: daysOf(reply.offers, zone, locale, hour12, reply.duration),
+            days,
             suggestions: reply.suggestions,
+            ...(prompt === undefined ? {} : { prompt }),
             ...(reply.confirm === undefined ? {} : { confirm: reply.confirm }),
             ...(reply.readBack === undefined
               ? {}

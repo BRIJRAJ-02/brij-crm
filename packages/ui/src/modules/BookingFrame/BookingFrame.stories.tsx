@@ -2,11 +2,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
+import { BookingChatGhost } from '../BookingChat/BookingChatGhost.tsx';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
 import { DayStrip } from '../DayStrip/DayStrip.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
@@ -265,8 +265,9 @@ export const SwitchingViews: Story = {
 };
 
 /**
- * A page opening on Book by chat, while it loads: the chat's shape over the month (the greeting's place at the top,
- * the composer's at the foot), so the card is the month's size from the first frame.
+ * A page opening on Book by chat, while it loads: the chat's own shape over the month (BookingChatGhost: the greeting's
+ * bubble and a day's times at the top, the prompt box at the foot), so the card is the month's size from the first
+ * frame and the times fill in where their places were.
  */
 export const ChatLoadingOverMonth: Story = {
   render: (args) => (
@@ -281,12 +282,7 @@ export const ChatLoadingOverMonth: Story = {
           </Button>
         }
         aside={<SlotList heading="" slots={[]} value={undefined} onChange={fn()} isLoading />}
-        cover={
-          <>
-            <Skeleton shape="block" lines={3} />
-            <Skeleton shape="block" />
-          </>
-        }
+        cover={<BookingChatGhost />}
       >
         <MonthTiles
           month="2026-10"
@@ -304,9 +300,7 @@ export const ChatLoadingOverMonth: Story = {
   ),
   play: async ({ canvasElement }) => {
     const body = canvasElement.querySelector('section > div:last-child')?.getBoundingClientRect();
-    const composer = canvasElement
-      .querySelector('section [inert] + div > div > [data-shape]:last-child')
-      ?.getBoundingClientRect();
+    const composer = canvasElement.querySelector('section [inert] + div > div > :last-child')?.getBoundingClientRect();
     // The composer's place stands at the foot of the card's body.
     await expect(composer).toBeDefined();
     await expect(Math.abs((body?.bottom ?? 0) - (composer?.bottom ?? 0))).toBeLessThanOrEqual(32);

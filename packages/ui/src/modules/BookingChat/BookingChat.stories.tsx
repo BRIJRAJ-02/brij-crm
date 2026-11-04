@@ -175,12 +175,50 @@ export const StartOver: Story = {
   },
 };
 
-/** The page's times are loading: a skeleton, and Send waits. */
+/**
+ * The page's times are loading: the chat's own shape (BookingChatGhost), the greeting's bubble, a day's times and
+ * the prompt box, where the chat puts them, not two bars in an empty card (4 November 2026).
+ */
 export const Loading: Story = {
   args: { isLoading: true },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvasElement.querySelector('[aria-busy="true"]')).not.toBeNull();
+    await expect(canvas.queryByRole('textbox')).toBeNull();
+    // The bubble, the day's label, six times and the prompt box.
+    await expect(
+      canvasElement.querySelectorAll('[aria-busy="true"] [aria-hidden="true"]').length,
+    ).toBeGreaterThanOrEqual(9);
+  },
+};
+
+/** After a time is held, the prompt box asks for exactly what the chat waits on (the reply's `prompt`), not "When". */
+export const AsksForDetails: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <BookingChat
+        {...args}
+        lines={[
+          greeting(),
+          { id: 'v1', role: 'visitor', text: 'Fri 9 Oct at 9:30 AM' },
+          {
+            id: 'a1',
+            role: 'assistant',
+            text: 'Great, Fri 9 Oct at 9:30 AM it is. What’s your name and email?',
+            prompt: 'Your name and email',
+          },
+        ]}
+      />
+    </Stage>
+  ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('log')).toHaveTextContent('Loading times');
-    await expect(canvas.getByRole('button', { name: 'Send' })).toBeDisabled();
+    const field = canvas.getByRole('textbox', { name: 'Message' });
+    await expect(field).toHaveAttribute('placeholder', 'Your name and email');
+    // Send is always there, quiet until there is something to send, then the accent.
+    const send = canvas.getByRole('button', { name: 'Send' });
+    await expect(send).toBeDisabled();
+    await userEvent.type(field, 'Grace Hopper, grace@example.com');
+    await expect(send).toBeEnabled();
+    await expect(send).toHaveAttribute('data-variant', 'primary');
   },
 };
 

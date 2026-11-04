@@ -122,6 +122,7 @@ export async function chatTurn(
         offers: [...said.offers],
         suggestions: [...said.suggestions],
         ...(said.confirm === undefined ? {} : { confirm: said.confirm }),
+        ...(said.asks === undefined ? {} : { asks: said.asks }),
         ...(said.confirm === undefined ||
         state.held === undefined ||
         state.name === undefined ||

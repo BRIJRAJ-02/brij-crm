@@ -103,13 +103,14 @@ describe('a booking page before its facts arrive', () => {
     const row = identity?.lastElementChild;
     expect(row?.getAttribute('aria-label')).toBe('Ada Lovelace’s social links');
     expect(row?.querySelectorAll('a')).toHaveLength(2);
-    // Every link's hit area is at least 32px, and the first mark starts where the name does.
+    // Every link's hit area is at least 32px, and the first mark starts where the block's lines do: stacked (this
+    // project's phone sized window), the facts' edge, since the name now sits beside the face (4 November 2026).
     for (const link of row?.querySelectorAll('a') ?? []) {
       expect(link.getBoundingClientRect().height).toBeGreaterThanOrEqual(30);
     }
-    const name = host.querySelector('aside p')?.getBoundingClientRect().left ?? 0;
+    const edge = host.querySelector('aside ul')?.getBoundingClientRect().left ?? 0;
     const mark = row?.querySelector('img, svg')?.getBoundingClientRect().left ?? 0;
-    expect(Math.abs(mark - name)).toBeLessThanOrEqual(1);
+    expect(Math.abs(mark - edge)).toBeLessThanOrEqual(1);
     expect(heightOf('aside > div > div')).toBe(before.names);
     expect(host.querySelector('aside ul')?.getBoundingClientRect().top).toBe(before.facts);
   });
