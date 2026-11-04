@@ -7,7 +7,7 @@ import { afterEach, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { Card, PreviewLayout } from '@crm/ui';
 import { renderInApp } from '../../testing/renderInApp.tsx';
-import { BrandedFormPreview, BrandThemeSelectWithKit } from './FormBrand.tsx';
+import { BrandedFormPreview, DesignButton, type FormLook } from './FormBrand.tsx';
 // The app's own stylesheet, as `main.tsx` loads it: without it the shots below would be unstyled markup.
 import '@crm/ui/styles.css';
 
@@ -65,29 +65,31 @@ function storeOf(kit: BrandKit): BrandStore {
   } as unknown as BrandStore;
 }
 
-/** The picker on its own, its value kept as the editor's draft keeps it. */
+/** The Design button on its own, its look kept as the editor's draft keeps it. */
 function Picker({ kit }: { readonly kit: BrandKit }) {
-  const [theme, setTheme] = useState<'plain' | 'brand'>('brand');
+  const [look, setLook] = useState<FormLook>({ colour: 'light', corners: 'rounded', theme: 'brand' });
   return (
     <>
-      <BrandThemeSelectWithKit brand={storeOf(kit)} slug="acme" value={theme} isReadOnly={false} onChange={setTheme} />
-      <p>{`Look: ${theme}`}</p>
+      <DesignButton brand={storeOf(kit)} slug="acme" look={look} isReadOnly={false} onChange={setLook} />
+      <p>{`Look: ${look.colour} ${look.corners} ${look.theme ?? 'plain'}`}</p>
     </>
   );
 }
 
-it('offers Brand beside Plain, and keeps what is picked (AC-6327)', async () => {
+it('holds the look behind one Design button: Colour, Corners, and Workspace brand or Plain (AC-6327)', async () => {
   app = await renderInApp(() => <Picker kit={KIT} />, { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' });
-  const trigger = page.getByRole('button', { name: /colours/i });
-  await expect.element(trigger).toHaveTextContent('Brand colours');
-  await userEvent.click(trigger);
-  await userEvent.click(page.getByRole('option', { name: /plain colours/i }));
-  await expect.element(page.getByText('Look: plain')).toBeVisible();
+  await userEvent.click(page.getByRole('button', { name: 'Design' }));
+  const panel = page.getByRole('dialog', { name: 'Design' });
+  await expect.element(panel.getByRole('radio', { name: 'Workspace brand' })).toBeChecked();
+  await userEvent.click(panel.getByText('Plain', { exact: true }));
+  await userEvent.click(panel.getByText('Dark', { exact: true }));
+  await userEvent.click(panel.getByText('Square', { exact: true }));
+  await expect.element(page.getByText('Look: dark square plain')).toBeVisible();
 });
 
 it('says where to add a kit the workspace hasn’t saved yet (AC-6327)', async () => {
   app = await renderInApp(() => <Picker kit={EMPTY} />, { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' });
-  await userEvent.click(page.getByRole('button', { name: /colours/i }));
+  await userEvent.click(page.getByRole('button', { name: 'Design' }));
   await expect.element(page.getByText('Add your logo and colour in Settings › Brand.')).toBeVisible();
 });
 
@@ -102,11 +104,11 @@ it('wears the workspace logo in the preview while the look is Brand (AC-6327)', 
 });
 
 /**
- * The Form tab as the editor draws it (spec 0058, AC-1): the preview column with its look controls above it, the
- * Colours picker open on Brand. One shot per theme, so the picker and the branded preview are checked in both.
+ * The Form tab as the editor draws it (spec 0058, AC-1): the preview column with Design above it, open. One shot per
+ * theme, so the panel and the branded preview are checked in both.
  */
 for (const theme of ['light', 'dark'] as const) {
-  it(`draws Colours beside the look controls, over the branded preview, in ${theme} (AC-6327)`, async () => {
+  it(`draws Design over the branded preview, open, in ${theme} (AC-6327)`, async () => {
     await page.viewport(1280, 900);
     document.documentElement.dataset.theme = theme;
     app = await renderInApp(
@@ -123,11 +125,11 @@ for (const theme of ['light', 'dark'] as const) {
       ),
       { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' },
     );
-    await userEvent.click(page.getByRole('button', { name: /colours/i }));
-    await expect.element(page.getByRole('option', { name: /plain colours/i })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Design' }));
+    await expect.element(page.getByRole('radio', { name: 'Plain' })).toBeVisible();
     // After the page settles: the menu's own motion is done, so the shot is not caught mid open or mid theme change.
     await new Promise((resolve) => globalThis.setTimeout(resolve, 400));
-    await page.screenshot({ path: `../../.vitest/shots/s9-look-picker-${theme}.png` });
+    await page.screenshot({ path: `../../.vitest/shots/design-popover-${theme}.png` });
     await userEvent.keyboard('{Escape}');
     document.documentElement.dataset.theme = 'light';
   });

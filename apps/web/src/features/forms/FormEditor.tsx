@@ -34,7 +34,6 @@ import {
   focusLater,
   HostedFormPreview,
   PreviewLayout,
-  Select,
   type PreviewTextChange,
   TabPanel,
   Tabs,
@@ -63,7 +62,7 @@ import {
   mintEndingId,
   withQuestions,
 } from './draft.ts';
-import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from './FormBrand.tsx';
+import { BrandedFormPreview, DesignButton } from './FormBrand.tsx';
 import { LogicMap } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
@@ -159,7 +158,7 @@ export function FormEditor(props: FormEditorProps) {
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
   // After a publish that changed where answers go: offer to file the submissions before it the same way.
-  const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | 'menu' | undefined>(undefined);
+  const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | undefined>(undefined);
   const [isRetargeting, setRetargeting] = useState(false);
   // A blocked Publish shows every incomplete Settings field's message at once, wherever it was pressed from.
   const [showGaps, setShowGaps] = useState(false);
@@ -701,18 +700,6 @@ export function FormEditor(props: FormEditorProps) {
                         },
                       ]
                     : []),
-                  // Earlier submissions saved again the way the form saves now: once it saves to the CRM and has some.
-                  ...(form.live?.targets.main !== undefined && form.submissionCount > 0
-                    ? [
-                        {
-                          id: 'sync',
-                          label: strings.syncOld,
-                          icon: 'refresh-cw' as const,
-                          description: strings.syncOldText,
-                          onAction: () => setSyncOffer('menu'),
-                        },
-                      ]
-                    : []),
                 ],
               },
             }
@@ -882,6 +869,8 @@ export function FormEditor(props: FormEditorProps) {
               />
             )}
             <QuestionsSection
+              // A never published form with nothing in it (Blank) opens on its first question, ready to type.
+              startsWithQuestion={!isPublished}
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               {...(questionStats === undefined ? {} : { stats: questionStats })}
               onOpened={setPreviewRow}
@@ -1062,61 +1051,17 @@ export function FormEditor(props: FormEditorProps) {
                   {...(canManage ? { onTextChange: changeText } : {})}
                 />
               ),
+            // Design (5 November 2026): one button holding the look, over the preview it changes.
             previewControls: (
-              <>
-                <Select
-                  label={strings.colour}
-                  isLabelHidden
-                  size="sm"
-                  isReadOnly={!canManage}
-                  items={[
-                    { id: 'light', label: strings.light, icon: 'sun' },
-                    { id: 'dark', label: strings.dark, icon: 'moon' },
-                  ]}
-                  value={draft.look.colour}
-                  onChange={(colour) => {
-                    if (colour === 'light' || colour === 'dark') {
-                      setDraft((before) => ({ ...before, look: { ...before.look, colour } }));
-                    }
-                  }}
-                />
-                <Select
-                  label={strings.corners}
-                  isLabelHidden
-                  size="sm"
-                  isReadOnly={!canManage}
-                  items={[
-                    { id: 'rounded', label: strings.rounded },
-                    { id: 'square', label: strings.square },
-                  ]}
-                  value={draft.look.corners}
-                  onChange={(corners) => {
-                    if (corners === 'rounded' || corners === 'square') {
-                      setDraft((before) => ({ ...before, look: { ...before.look, corners } }));
-                    }
-                  }}
-                />
-                {/* Colours (spec 0063, AC-6327): the workspace's brand kit, or the product's own. */}
-                {props.brand === undefined ? (
-                  <BrandThemeSelect
-                    value={draft.look.theme ?? 'plain'}
-                    isReadOnly={!canManage}
-                    onChange={(theme) => {
-                      setDraft((before) => ({ ...before, look: { ...before.look, theme } }));
-                    }}
-                  />
-                ) : (
-                  <BrandThemeSelectWithKit
-                    brand={props.brand}
-                    slug={slug}
-                    value={draft.look.theme ?? 'plain'}
-                    isReadOnly={!canManage}
-                    onChange={(theme) => {
-                      setDraft((before) => ({ ...before, look: { ...before.look, theme } }));
-                    }}
-                  />
-                )}
-              </>
+              <DesignButton
+                look={draft.look}
+                isReadOnly={!canManage}
+                {...(props.brand === undefined ? {} : { brand: props.brand })}
+                slug={slug}
+                onChange={(look) => {
+                  setDraft((before) => ({ ...before, look }));
+                }}
+              />
             ),
           }
         : {})}
