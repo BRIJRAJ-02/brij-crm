@@ -641,7 +641,6 @@ function ListTable(
         {...(list.canWrite ? { addRow: { label: strings.add(object.singularName), onAdd } } : {})}
         emptyState={
           <EmptyState
-            icon={list.icon}
             title={hasFilter ? strings.filteredEmpty(object.pluralName) : strings.empty(object.pluralName)}
             {...(hasFilter
               ? {
@@ -851,7 +850,6 @@ function ListBoardBody(
   if (field === undefined) {
     return (
       <EmptyState
-        icon="kanban"
         title={strings.noGroupField(list.name)}
         {...(list.canManage
           ? {

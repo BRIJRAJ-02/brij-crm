@@ -630,12 +630,12 @@ export function RecordsScreen({
             {isReordering && <Spinner label={strings.updating} />}
             {/* In the bar, so the table never moves when the connection drops and comes back. */}
             {live === 'paused' && (
-              <Callout placement="bar" isAnnounced>
+              <Callout tone="info" placement="bar" isAnnounced>
                 {strings.livePaused}
               </Callout>
             )}
             {ungrouped !== undefined && (
-              <Callout placement="bar" isAnnounced>
+              <Callout tone="info" placement="bar" isAnnounced>
                 {ungrouped}
               </Callout>
             )}
@@ -798,6 +798,7 @@ export function RecordsScreen({
               emptyState={
                 filteredEmpty ?? (
                   <EmptyState
+                    layout="block"
                     title={strings.emptyTitle(object.pluralName)}
                     icon={object.icon}
                     // The top bar's New person is the one primary on the page. An empty object is where a list

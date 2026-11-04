@@ -97,7 +97,7 @@ function ArchiveConfirm({
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       {attribute.type === 'record_reference' ? strings.confirmBoth : strings.confirmText}
-      {usedBy !== undefined && <Callout>{usedBy}</Callout>}
+      {usedBy !== undefined && <Callout tone="warning">{usedBy}</Callout>}
     </Modal>
   );
 }

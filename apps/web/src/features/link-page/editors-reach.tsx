@@ -575,7 +575,6 @@ export function TimesChooser({ slug, item, items, linkPage, chrome, onSubmit, on
     body = (
       <EmptyState
         layout="row"
-        icon="calendar-clock"
         title={strings.noPagesYet}
         actions={<ButtonLink href={linksHref(slug)}>{strings.noPagesAction}</ButtonLink>}
       />

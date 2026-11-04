@@ -53,9 +53,7 @@ export function FlowView({ draft, isOpen, questionHref, stepHref, endingsHref, o
       {draft.layout === 'classic' ? (
         <p>{strings.flowClassic}</p>
       ) : resolved.length === 0 ? (
-        <EmptyState icon="git-branch" title={strings.flowEmptyTitle}>
-          {strings.flowEmpty}
-        </EmptyState>
+        <EmptyState title={strings.flowEmptyTitle}>{strings.flowEmpty}</EmptyState>
       ) : (
         resolved.map((step, place) => {
           const stepId = step.id;

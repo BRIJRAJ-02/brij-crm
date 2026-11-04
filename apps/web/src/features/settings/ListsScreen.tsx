@@ -165,7 +165,7 @@ export function ListsScreen({ data, toasts, slug, lists, objects, members }: Lis
         renderCell={cell}
         isScrollable
         onRowAction={open}
-        emptyState={<EmptyState icon="list" title={listStrings.settingsEmpty} />}
+        emptyState={<EmptyState title={listStrings.settingsEmpty} />}
       />
       {archived.length > 0 && (
         <Disclosure title={listStrings.archivedSection} count={archived.length}>

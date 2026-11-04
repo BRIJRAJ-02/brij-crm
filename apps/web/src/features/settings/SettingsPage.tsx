@@ -3,7 +3,7 @@
 // Main task: hand SettingsLayout what the page's route loaded, so every settings page has the same header (AC-683).
 // Leaves out: loading anything itself (each settings route's loader read through the data layer), and the sidebar (the settings layout route draws it).
 import type { Hue, ObjectIcon } from '@crm/data';
-import { EmptyState, Link, SettingsLayout, TopBar, type Crumb } from '@crm/ui';
+import { EmptyState, Link, SettingsLayout, TopBar, ViewOnlyTag, type Crumb } from '@crm/ui';
 import { useLocation, useParams } from '@tanstack/react-router';
 import type { ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
@@ -22,6 +22,11 @@ interface SettingsPageBase {
   readonly hue?: Hue;
   /** Beside the title: a Standard or Custom badge. */
   readonly meta?: ReactNode;
+  /**
+   * The viewer may look but not change anything here: a "View only" tag beside the title, whose InfoTip gives this
+   * reason ("Only owners and admins can change this."). In place of a callout in the body.
+   */
+  readonly viewOnly?: string;
   /** The page's one primary action, at the bar's end ("New object", "Connect Google calendar"). */
   readonly actions?: ReactNode;
   /** The visible title, for a page that moves focus to it itself (a cancelled job's Cancel goes away). */
@@ -77,6 +82,7 @@ export function SettingsPage({
   icon,
   hue,
   meta,
+  viewOnly,
   actions,
   isLoading = false,
   hasTile = false,
@@ -110,11 +116,22 @@ export function SettingsPage({
         isLoading={isLoading}
         hasTile={hasTile}
         footer={footer}
+        // The frame owns the bar, so the tag heads the body instead.
+        {...(viewOnly === undefined ? {} : { viewOnly })}
       >
         {children}
       </SettingsLayout>
     );
   }
+  const barMeta =
+    viewOnly === undefined ? (
+      meta
+    ) : (
+      <>
+        {meta}
+        <ViewOnlyTag reason={viewOnly} />
+      </>
+    );
   return (
     <WorkspacePage
       page={{
@@ -134,7 +151,7 @@ export function SettingsPage({
                   {...(titleRef === undefined ? {} : { titleRef })}
                   {...(icon === undefined ? {} : { icon })}
                   {...(hue === undefined ? {} : { hue })}
-                  {...(meta === undefined ? {} : { meta })}
+                  {...(barMeta === undefined ? {} : { meta: barMeta })}
                 >
                   {actions}
                 </TopBar>,
@@ -178,6 +195,7 @@ export function SettingsMissing({ backTo = 'objects' }: { readonly backTo?: 'obj
   return (
     <SettingsPage title={strings.missingTitle} {...(isObject ? { crumbs: settingsCrumbs(slug) } : {})}>
       <EmptyState
+        layout="block"
         icon="search"
         title={strings.missingText}
         actions={
@@ -207,7 +225,7 @@ export function SettingsFailed({
 }) {
   return (
     <SettingsPage title={title}>
-      <EmptyState tone="error" title={heading} onRetry={onRetry}>
+      <EmptyState layout="block" tone="error" title={heading} onRetry={onRetry}>
         {text}
       </EmptyState>
     </SettingsPage>

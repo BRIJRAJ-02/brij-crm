@@ -51,6 +51,7 @@ function RestoreBody({
   };
   return (
     <EmptyState
+      layout="block"
       icon="trash"
       title={strings.deletedTitle(deleted.name)}
       actions={

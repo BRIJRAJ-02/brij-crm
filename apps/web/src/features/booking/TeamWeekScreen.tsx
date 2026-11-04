@@ -542,7 +542,6 @@ function Loaded({
             // clears in one press.
             <EmptyState
               title={words.noMatch}
-              icon="search"
               {...(query === ''
                 ? {}
                 : {

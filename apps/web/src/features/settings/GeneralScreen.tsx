@@ -357,9 +357,8 @@ export function GeneralScreen({
   };
 
   return (
-    <SettingsPage title={strings.generalTitle}>
-      {/* Said once for the page; each field keeps its lock. */}
-      {!mayManage && <Callout tone="info">{strings.readOnly}</Callout>}
+    // Said once for the page, as a tag by its title; each field keeps its lock.
+    <SettingsPage title={strings.generalTitle} {...(mayManage ? {} : { viewOnly: strings.readOnly })}>
       {movedTo !== undefined && (
         <Callout
           tone="warning"
@@ -618,8 +617,11 @@ export function GeneralPending() {
   const mayManage = useCan('workspace.manage');
   const mayDelete = useCan('workspace.delete');
   return (
-    <SettingsPage title={strings.generalTitle} isLoading>
-      {access !== undefined && !mayManage && <Callout tone="info">{strings.readOnly}</Callout>}
+    <SettingsPage
+      title={strings.generalTitle}
+      isLoading
+      {...(access !== undefined && !mayManage ? { viewOnly: strings.readOnly } : {})}
+    >
       <SettingsSection title={strings.workspaceSection}>
         <Card isBusy>
           <SettingsRow title={strings.name} control="field">

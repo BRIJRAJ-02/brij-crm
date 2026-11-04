@@ -68,7 +68,7 @@ function CalendarError({ error }: ErrorComponentProps) {
   return (
     // Inside the Bookings frame, which already draws the TopBar and the tab strip: the tab's own panel says so.
     <PageColumn>
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
+      <EmptyState layout="block" tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
         {isDataError(error) ? error.message : strings.failedText}
       </EmptyState>
     </PageColumn>

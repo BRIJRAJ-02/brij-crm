@@ -158,7 +158,7 @@ function ActivityRows({
     <>
       <Card isBusy={isStale}>
         {/* Nothing yet is one quiet line, not a block. */}
-        {items.length === 0 ? <EmptyState layout="row" icon="shield-check" title={copy.empty} /> : items.map(eventRow)}
+        {items.length === 0 ? <EmptyState layout="row" title={copy.empty} /> : items.map(eventRow)}
       </Card>
       {failure !== undefined && (
         <EmptyState layout="row" tone="error" title={copy.failedMore} onRetry={() => void showMore()}>

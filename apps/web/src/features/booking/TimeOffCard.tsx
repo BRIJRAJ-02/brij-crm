@@ -157,7 +157,7 @@ function Loaded({
   return (
     <Card title={strings.title}>
       {list.upcoming.length === 0 ? (
-        <EmptyState layout="row" icon="plane" title={strings.none} />
+        <EmptyState layout="row" title={strings.none} />
       ) : (
         table(list.upcoming, strings.title)
       )}

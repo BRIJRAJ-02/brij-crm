@@ -162,7 +162,7 @@ export function SchedulingAccessScreen({
             </SettingsRow>
           );
         })}
-        {over.length === 0 && <EmptyState layout="row" icon="users" title={strings.nobodyOverMe} />}
+        {over.length === 0 && <EmptyState layout="row" title={strings.nobodyOverMe} />}
       </Card>
     );
     const roleReach = roleManagesEveryone(access.role);
@@ -212,7 +212,7 @@ export function SchedulingAccessScreen({
             </SettingsRow>
           );
         })}
-        {!roleReach && held.length === 0 && <EmptyState layout="row" icon="calendar-clock" title={strings.onlyYours} />}
+        {!roleReach && held.length === 0 && <EmptyState layout="row" title={strings.onlyYours} />}
       </Card>
     );
   }

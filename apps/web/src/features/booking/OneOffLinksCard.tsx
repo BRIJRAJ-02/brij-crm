@@ -126,7 +126,7 @@ export function OneOffLinksCard({ data, slug, page, pageUrl, isReadOnly, onSaved
       {loaded.status === 'error' && <EmptyState layout="row" tone="error" title={strings.linksFailed} onRetry={read} />}
       {loaded.status === 'ready' &&
         (loaded.links.length === 0 ? (
-          <EmptyState layout="row" icon="link" title={strings.noLinks} />
+          <EmptyState layout="row" title={strings.noLinks} />
         ) : (
           <Table
             label={strings.oneOffLinks}

@@ -164,13 +164,7 @@ export function UsersScreen({
         isLoading={isLoading}
         isScrollable
         onRowAction={(id) => void navigate({ href: adminUserHref(slug, id) })}
-        emptyState={
-          q === '' ? (
-            <EmptyState icon="users" title={strings.noUsers} />
-          ) : (
-            <EmptyState icon="search" title={strings.noMatches} />
-          )
-        }
+        emptyState={q === '' ? <EmptyState title={strings.noUsers} /> : <EmptyState title={strings.noMatches} />}
       />
       {state.error !== undefined && (
         <Callout tone="danger" isAnnounced>

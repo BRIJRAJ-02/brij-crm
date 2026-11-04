@@ -91,7 +91,7 @@ function Shown({
     >
       {role === undefined ? (
         // A role the reader can't name (one deleted since the page loaded): said, never a skeleton left spinning.
-        <EmptyState icon="id-card" title={strings.capabilities.unread} />
+        <EmptyState title={strings.capabilities.unread} />
       ) : (
         <>
           <RolePowers

@@ -280,7 +280,7 @@ export function ManagedPageEditor({ data, slug, template: loaded, people, toasts
               />
             </SettingsRow>
           ))}
-          {members.length === 0 && <EmptyState layout="row" icon="users" title={strings.noPeople} />}
+          {members.length === 0 && <EmptyState layout="row" title={strings.noPeople} />}
         </Card>
         {/* The ending that keeps every page, at the foot and asked for in a Modal: the opposite of the x beside a
             person above, which deletes theirs. Its own card, so it is never pressed while reaching for Save. */}

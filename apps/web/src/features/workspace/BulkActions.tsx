@@ -480,14 +480,14 @@ export function useBulkActions({
   const actions = !canWrite ? (
     // Spec 0009's words for an object the person may only read; the server refuses them anyway.
     <>
-      <Callout placement="bar" isAnnounced>
+      <Callout tone="info" placement="bar" isAnnounced>
         {bulkStrings.readOnly(object.pluralName)}
       </Callout>
       {exportButton}
     </>
   ) : note?.tone === 'info' ? (
     // A count of zero: said for a moment in the actions' place, while the selection it was for clears.
-    <Callout placement="bar" isAnnounced>
+    <Callout tone="info" placement="bar" isAnnounced>
       {note.text}
     </Callout>
   ) : (

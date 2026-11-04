@@ -60,7 +60,7 @@ export function DaysOff({
   return (
     <Card title={strings.daysOff}>
       {upcoming.length === 0 ? (
-        <EmptyState layout="row" icon="calendar" title={strings.noDaysOff} />
+        <EmptyState layout="row" title={strings.noDaysOff} />
       ) : (
         <Table
           label={strings.daysOff}

@@ -129,7 +129,11 @@ function FormRoute() {
         currentPage="captures"
         page={{
           topBar: <TopBar title={strings.missingTitle} icon="clipboard-list" />,
-          body: <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>,
+          body: (
+            <EmptyState layout="block" title={strings.missingTitle}>
+              {strings.missingText}
+            </EmptyState>
+          ),
         }}
       />
     );
@@ -160,7 +164,12 @@ function FormError({ error }: ErrorComponentProps) {
       page={{
         topBar: <TopBar title={strings.forms} icon="clipboard-list" />,
         body: (
-          <EmptyState tone="error" title={strings.formFailedTitle} onRetry={() => void router.invalidate()}>
+          <EmptyState
+            layout="block"
+            tone="error"
+            title={strings.formFailedTitle}
+            onRetry={() => void router.invalidate()}
+          >
             {isDataError(error) ? error.message : strings.failedText}
           </EmptyState>
         ),

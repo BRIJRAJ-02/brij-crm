@@ -379,7 +379,7 @@ function SavedTask({
   if (state.status === 'missing' || task === undefined) {
     return (
       <TaskModal title={strings.task} onClose={onClose} actions={close}>
-        <EmptyState icon="search" title={strings.missing} />
+        <EmptyState title={strings.missing} />
       </TaskModal>
     );
   }

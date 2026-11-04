@@ -53,6 +53,7 @@ export function ArchivedObjectScreen({ slug, object, firstLive }: ArchivedObject
         topBar: <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />,
         body: (
           <EmptyState
+            layout="block"
             icon="archive"
             title={strings.objectArchived(object.pluralName)}
             actions={

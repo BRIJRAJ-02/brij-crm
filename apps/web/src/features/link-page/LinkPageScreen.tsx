@@ -931,7 +931,7 @@ function Blocks({
       // Their own set of networks (the Social links card below), under the bio as visitors see it.
       {...(shownSocials.length === 0 ? {} : { socials: <SocialLinks links={shownSocials} /> })}
       empty={
-        <EmptyState title={strings.empty} icon="link">
+        <EmptyState layout="block" title={strings.empty} icon="link">
           {strings.emptyText}
         </EmptyState>
       }
@@ -976,6 +976,7 @@ function Blocks({
     const hasArchived = archived.length > 0;
     list = (
       <EmptyState
+        layout="block"
         illustration={<SpotIllustration kind="link-page" />}
         title={strings.empty}
         actions={

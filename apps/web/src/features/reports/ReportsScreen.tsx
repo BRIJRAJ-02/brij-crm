@@ -167,11 +167,7 @@ export function ReportsScreen({ slug, search, objects, members, permissions, meI
       <WorkspacePage
         page={{
           topBar: <TopBar title={strings.reports} icon="chart-bar" />,
-          body: (
-            <EmptyState icon="chart-bar" title={strings.noObjectsTitle}>
-              {strings.noObjectsText}
-            </EmptyState>
-          ),
+          body: <EmptyState title={strings.noObjectsTitle}>{strings.noObjectsText}</EmptyState>,
         }}
       />
     );

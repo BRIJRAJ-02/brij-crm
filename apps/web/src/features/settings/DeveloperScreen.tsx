@@ -147,9 +147,7 @@ export function DeveloperScreen({ data, toasts, slug }: DeveloperScreenProps) {
       isLoading={list.status === 'loading'}
     >
       {list.status === 'ready' && list.items.length === 0 ? (
-        <EmptyState icon="code" title={strings.emptyTitle}>
-          {strings.emptyText}
-        </EmptyState>
+        <EmptyState title={strings.emptyTitle}>{strings.emptyText}</EmptyState>
       ) : (
         <Table
           label={strings.title}

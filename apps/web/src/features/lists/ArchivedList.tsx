@@ -46,6 +46,7 @@ export function ArchivedList({ data, toasts, slug, list, objectName }: ArchivedL
         topBar: <TopBar title={list.name} icon={list.icon} hue={list.hue} />,
         body: (
           <EmptyState
+            layout="block"
             icon="archive"
             title={strings.archivedTitle(list.name)}
             {...(list.canManage && list.isObjectArchived !== true

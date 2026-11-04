@@ -113,7 +113,7 @@ export function Insights({ linkPage, slug, items }: InsightsProps) {
           onRetry={() => linkPage.reach.insights(slug, days).retry()}
         />
       ) : state.counts.views === 0 && state.counts.before.views === 0 ? (
-        <EmptyState layout="row" icon="chart-line" title={words.empty}>
+        <EmptyState layout="row" title={words.empty}>
           {words.emptyText}
         </EmptyState>
       ) : (

@@ -144,7 +144,7 @@ export function SharingPanel({
           )}
         </SettingsRow>
       ))}
-      {editors.length === 0 && <EmptyState layout="row" icon="users" title={strings.none} />}
+      {editors.length === 0 && <EmptyState layout="row" title={strings.none} />}
       <Modal
         title={strings.removeTitle(asked?.name ?? '')}
         variant="confirm"

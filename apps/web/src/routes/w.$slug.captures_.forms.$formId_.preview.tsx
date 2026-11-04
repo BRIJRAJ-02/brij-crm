@@ -34,7 +34,12 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId_/preview'
 function PreviewRoute() {
   const { form, brand } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  if (form === undefined) return <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>;
+  if (form === undefined)
+    return (
+      <EmptyState layout="block" title={strings.missingTitle}>
+        {strings.missingText}
+      </EmptyState>
+    );
   return (
     <main>
       <Callout placement="banner" tone="info">

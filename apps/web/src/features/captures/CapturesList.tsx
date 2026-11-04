@@ -65,6 +65,7 @@ export function CapturesList({
       {status === 'ready' && cards.length === 0 ? (
         <PageColumn align="center">
           <EmptyState
+            layout="block"
             title={empty.title}
             icon={empty.icon}
             {...(empty.illustration === undefined ? {} : { illustration: empty.illustration })}

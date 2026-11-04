@@ -1591,8 +1591,8 @@ export function PageEditor({
                           />
                         </Card>
                       )}
-                      {draft.questions.length > 0 && (
-                        <Callout tone="info">{isChatOff ? strings.chatOffRequired : strings.chatAsksNone}</Callout>
+                      {draft.questions.length > 0 && isChatOff && (
+                        <Callout tone="info">{strings.chatOffRequired}</Callout>
                       )}
                       <QuestionsSection
                         questions={draft.questions}

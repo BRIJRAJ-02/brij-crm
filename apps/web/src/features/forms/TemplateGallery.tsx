@@ -186,7 +186,7 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
         </EmptyState>
       )}
       {phase.kind === 'ready' && phase.items.length === 0 && (
-        <EmptyState title={strings.galleryEmpty} icon="clipboard-list" actions={blankAction}>
+        <EmptyState title={strings.galleryEmpty} actions={blankAction}>
           {strings.galleryEmptyText}
         </EmptyState>
       )}

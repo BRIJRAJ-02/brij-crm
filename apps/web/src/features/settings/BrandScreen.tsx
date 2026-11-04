@@ -9,7 +9,6 @@ import {
   AccentPicker,
   BookingFrame,
   Button,
-  Callout,
   Card,
   Disclosure,
   EmptyState,
@@ -208,29 +207,28 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
       <HostedFormPreview form={SAMPLE_FORM} brand={wearing} />
     );
   return (
-    <SettingsPage title={strings.title} fillsView>
+    <SettingsPage
+      title={strings.title}
+      fillsView
+      {...(kit !== undefined && !canEdit ? { viewOnly: strings.readOnly } : {})}
+    >
       <PreviewLayout
         bodyWidth="form"
         previewShare="wide"
-        {...(kit !== undefined && !canEdit
-          ? { notices: <Callout tone="info">{strings.readOnly}</Callout> }
-          : kit?.templateDraft !== undefined
-            ? {
-                // A template waits for Publish (owner, 4 Nov 2026): every public page changes at once when it goes,
-                // so the bar heads the page, where the editors' bars sit.
-                notices: (
-                  <>
-                    <PublishBar
-                      status="draft"
-                      changes={[strings.templateChange(nameOf(kit.template), nameOf(kit.templateDraft))]}
-                      onPublish={publishTemplate}
-                      onDiscard={discardTemplate}
-                    />
-                    <Callout tone="info">{strings.templatePublishNote}</Callout>
-                  </>
-                ),
-              }
-            : {})}
+        {...(kit?.templateDraft !== undefined && canEdit
+          ? {
+              // A template waits for Publish (owner, 4 Nov 2026): every public page changes at once when it goes,
+              // so the bar heads the page, where the editors' bars sit.
+              notices: (
+                <PublishBar
+                  status="draft"
+                  changes={[strings.templateChange(nameOf(kit.template), nameOf(kit.templateDraft))]}
+                  onPublish={publishTemplate}
+                  onDiscard={discardTemplate}
+                />
+              ),
+            }
+          : {})}
         preview={preview}
         previewControls={
           <SegmentedControl
@@ -246,9 +244,7 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
       >
         {state.status === 'error' ? (
           <Card>
-            <EmptyState title={strings.failed} icon="palette">
-              <Button onPress={() => brand.kit(slug).retry()}>{strings.retry}</Button>
-            </EmptyState>
+            <EmptyState tone="error" title={strings.failed} onRetry={() => brand.kit(slug).retry()} />
           </Card>
         ) : (
           <Card

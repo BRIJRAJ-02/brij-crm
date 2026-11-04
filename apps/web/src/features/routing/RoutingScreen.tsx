@@ -200,6 +200,7 @@ function Overview({
       emptyState={
         // Empty only with no workspace link and no team page with rules: a team page comes first.
         <EmptyState
+          layout="block"
           icon="git-branch"
           title={strings.emptyTitle}
           actions={
@@ -415,7 +416,6 @@ function Decisions({
           emptyState={
             state.status === 'ready' && state.hasMore ? undefined : isFiltered ? (
               <EmptyState
-                icon="git-branch"
                 title={strings.noMatch}
                 actions={
                   <Button
@@ -435,7 +435,7 @@ function Decisions({
                 }
               />
             ) : (
-              <EmptyState icon="git-branch" title={strings.noDecisions} />
+              <EmptyState title={strings.noDecisions} />
             )
           }
           renderCell={(decision, column) => {
