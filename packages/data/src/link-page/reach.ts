@@ -38,6 +38,7 @@ import {
   type ProfileNotice,
   type ProfileTileSize,
   type ProfileWindowState,
+  PROFILE_TITLE_MAX,
 } from '@crm/contracts/link-page';
 import { toDataError, type DataError } from '../errors.ts';
 
@@ -76,7 +77,10 @@ export type ReachDraft =
       readonly display?: 'row' | 'grid';
     } & DraftExtras)
   | ({ readonly kind: 'times'; readonly workspaceId?: string; readonly pageId?: string } & DraftWindow)
-  | ({ readonly kind: 'banner'; readonly text: string; readonly url?: string } & DraftWindow);
+  | ({ readonly kind: 'banner'; readonly text: string; readonly url?: string } & DraftWindow)
+  // Spec 0065 (AC-6528): a place's menu, or its reservation page, with the row's own words when the owner gave any.
+  | ({ readonly kind: 'menu'; readonly placeId?: string; readonly label?: string } & DraftWindow)
+  | ({ readonly kind: 'reserve'; readonly placeId?: string; readonly label?: string } & DraftWindow);
 
 /** Why a spec 0061 field can't be kept, by field: `alt:0` is a gallery's first picture's description. */
 export type ReachProblems = Readonly<Partial<Record<string, string>>>;
@@ -249,6 +253,19 @@ export function checkReachBlock(
     case 'times':
       if (draft.workspaceId === undefined || draft.pageId === undefined) problems.page = 'Pick a booking page.';
       return done({ kind: 'times', workspaceId: draft.workspaceId ?? '', pageId: draft.pageId ?? '', ...window });
+    case 'menu':
+    case 'reserve': {
+      if (draft.placeId === undefined) problems.placeId = 'Pick a place.';
+      const label = draft.label?.trim() ?? '';
+      const long = lineProblem(label, PROFILE_TITLE_MAX.place, 'Keep the label to 60 characters.');
+      if (long !== undefined) problems.label = long;
+      return done({
+        kind: draft.kind,
+        placeId: draft.placeId ?? '',
+        ...(label === '' ? {} : { label }),
+        ...window,
+      });
+    }
     case 'banner': {
       const text = draft.text.trim();
       if (text === '') problems.text = 'Write the banner’s line.';

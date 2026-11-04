@@ -570,6 +570,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       saveQrStyle: os.profile.saveQrStyle.handler(notServed),
       pageChoices: os.profile.pageChoices.handler(notServed),
       formChoices: os.profile.formChoices.handler(notServed),
+      placeChoices: os.profile.placeChoices.handler(notServed),
       saveTheme: os.profile.saveTheme.handler(notServed),
       look: os.profile.look.handler(notServed),
       saveAccent: os.profile.saveAccent.handler(notServed),
@@ -758,6 +759,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       archiveResource: os.hospitality.archiveResource.handler(notServed),
       restoreResource: os.hospitality.restoreResource.handler(notServed),
       deleteResource: os.hospitality.deleteResource.handler(notServed),
+      qrCodes: os.hospitality.qrCodes.handler(notServed),
+      regenerateTableCode: os.hospitality.regenerateTableCode.handler(notServed),
     },
     // The Menu app (spec 0065, H1) is driven against its own fake in `menu/store.test.ts`.
     menu: {

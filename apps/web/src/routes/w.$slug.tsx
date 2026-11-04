@@ -111,7 +111,9 @@ function WorkspaceRoute() {
   // So does a booking page's draft Preview (spec 0068).
   const isPagePreview =
     useMatch({ from: '/w/$slug/captures_/links/$pageId_/preview', shouldThrow: false }) !== undefined;
-  const isPreview = isFormPreview || isPagePreview;
+  // And Menu QR's print sheet (spec 0065, H2), so only the sheets print.
+  const isQrPrint = useMatch({ from: '/w/$slug/qr_/print', shouldThrow: false }) !== undefined;
+  const isPreview = isFormPreview || isPagePreview || isQrPrint;
   // The frame is mounted here, once, so moving between the pages inside never remounts the sidebar or a menu or
   // confirm open in it; each page fills its bars (WorkspaceLayout).
   const { data, toasts, me } = Route.useRouteContext();

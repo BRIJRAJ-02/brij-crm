@@ -32,7 +32,7 @@ through the same component.
 - `menu` is `GET /api/public/menu/:key`'s answer: the snapshot, the items sold out now and the header.
 - The bar: the logo (`logoHref`, never cropped), or without one a squircle in the menu's ink with the business's first
   letter, so the bar is never an empty band; the business's name fades in once the heading has scrolled away; the
-  table a QR code named (`table`); and SectionTabs, whose fill slides to the section under the bar as the page scrolls.
+  table a QR code named (`table`, its name as the guest reads it: "Table 4", from `tableDisplayName`); and SectionTabs, whose fill slides to the section under the bar as the page scrolls.
 - The header: `coverHref` (a 3:1 photo) when there is one, the place's name as an eyebrow, the business as the h1 and
   its line, open now, the address and phone, then the menus (serving now first; the rest say "Serving from 18:00"),
   search (the library's Field, `variant="search"`, wearing the look through the root's token remap, with a clear
@@ -75,3 +75,8 @@ Escape closes a sheet.
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
 
 - `at` reads the menu at another instant than now (the editor's Preview at, after checklabs' `?at=` preview): which menus and sections serve, and the open line, follow it.
+
+## Unavailable (Live or Hidden)
+
+A menu its owner has hidden (`menu.hidden`) draws as the same page, in the menu's look with its bar, header (name, address, phone) and foot, and one card in place of the dishes: "This menu isn't available right now", with the ways still open: Reserve a table (only an `/r/<key>` path the answer carries, while the place takes reservations online) and Call (the place's phone). No search, filters or menu switcher. A variant, not a new component: the look, the header and the foot are MenuList's own, and a separate page would draw them twice.
+

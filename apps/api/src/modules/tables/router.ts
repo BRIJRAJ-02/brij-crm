@@ -1,3 +1,4 @@
+import { menuCacheTags } from '@crm/contracts';
 import {
   businessCacheTags,
   freeTables,
@@ -26,8 +27,12 @@ export const tablesRouter = t.router({
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       saveTableSetup(context.scope, { placeId: input.placeId, rules: input.rules }, { slotCache: context.visitSlots }),
     );
-    // The business page's Reserve opens or closes with the setup's online switch (spec 0066, AC-6642).
-    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, [input.placeId]));
+    // The business page's Reserve opens or closes with the setup's online switch (spec 0066, AC-6642), and so does a
+    // hidden menu's Reserve a table (spec 0065): both pages' copies go.
+    await forgetAfterCommit(context.edgeCache, [
+      ...businessCacheTags(context.scope.workspaceId, [input.placeId]),
+      ...menuCacheTags(input.placeId),
+    ]);
     return saved;
   }),
   day: t.day.handler(({ context, input }) =>

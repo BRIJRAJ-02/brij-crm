@@ -17,7 +17,7 @@ import {
 import type { PublicMenu, SnapshotItem, SnapshotSection, SnapshotSubsection } from '@crm/contracts';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { UNSAFE_PortalProvider } from 'react-aria';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
 import { Reveal } from '../../atoms/Reveal/Reveal.tsx';
@@ -49,7 +49,7 @@ export interface MenuListProps {
   readonly logoHref?: string;
   /** Where each photo is served; without it no photo draws. */
   readonly photoHref?: MenuPhotoHref;
-  /** The table a QR code opened the menu at ("4"), shown in the bar (H2). */
+  /** The table a QR code opened the menu at, as the guest reads it ("Table 4", "Bar 2"), shown in the bar (H2). */
   readonly table?: string;
   /** The picks kept in the guest's browser (AC-6530); without `onPicksChange` the menu has no picks. */
   readonly picks?: readonly GuestPick[];
@@ -121,6 +121,11 @@ export function MenuList({
 }: MenuListProps) {
   const clock = useNow();
   const now = new Date(at ?? clock);
+  // Taken down for now (Live or Hidden): the menu's own look, header and foot, a plain line, and the ways still open.
+  const isUnavailable = menu.hidden === true;
+  const reservePath =
+    menu.reservePath !== undefined && /^\/r\/[A-Za-z0-9_-]{16}$/.test(menu.reservePath) ? menu.reservePath : undefined;
+  const phoneHref = menu.place.phone === undefined ? undefined : `tel:${menu.place.phone.replace(/[^0-9+]/g, '')}`;
   const { place, business } = menu;
   const { currency } = menu.menu;
   const locale = place.locale;
@@ -255,7 +260,7 @@ export function MenuList({
               <p className={styles.barName} data-shown={isNameShown ? '' : undefined} aria-hidden={!isNameShown}>
                 {business.name}
               </p>
-              {table === undefined ? null : <span className={styles.table}>{strings.table(table)}</span>}
+              {table === undefined ? null : <span className={styles.table}>{table}</span>}
             </div>
             {shownSections.length < 2 ? null : (
               <div className={styles.barTabs}>
@@ -315,7 +320,7 @@ export function MenuList({
                 </a>
               )}
             </p>
-            {menus.length > 1 ? (
+            {isUnavailable ? null : menus.length > 1 ? (
               <SegmentedControl
                 label={strings.menus}
                 segments={menus.map(({ menu: each }) => ({ value: each.id, label: each.name }))}
@@ -324,30 +329,32 @@ export function MenuList({
                 isFitted
               />
             ) : null}
-            <Field
-              variant="search"
-              type="search"
-              label={strings.search}
-              isLabelHidden
-              placeholder={strings.searchPlaceholder}
-              value={query}
-              maxLength={60}
-              onChange={setQuery}
-              {...(query === ''
-                ? {}
-                : {
-                    suffix: (
-                      <Button
-                        variant="ghost"
-                        icon="x"
-                        isRound
-                        label={strings.clearSearch}
-                        onPress={() => setQuery('')}
-                      />
-                    ),
-                  })}
-            />
-            {offered.length === 0 ? null : (
+            {isUnavailable ? null : (
+              <Field
+                variant="search"
+                type="search"
+                label={strings.search}
+                isLabelHidden
+                placeholder={strings.searchPlaceholder}
+                value={query}
+                maxLength={60}
+                onChange={setQuery}
+                {...(query === ''
+                  ? {}
+                  : {
+                      suffix: (
+                        <Button
+                          variant="ghost"
+                          icon="x"
+                          isRound
+                          label={strings.clearSearch}
+                          onPress={() => setQuery('')}
+                        />
+                      ),
+                    })}
+              />
+            )}
+            {isUnavailable || offered.length === 0 ? null : (
               <ChoiceChips
                 label={strings.filters}
                 isLabelHidden
@@ -359,7 +366,31 @@ export function MenuList({
           </header>
 
           <main className={styles.body} aria-labelledby={headingId}>
-            {current !== undefined && !current.serving.now ? (
+            {isUnavailable ? (
+              <div className={styles.unavailable}>
+                <span className={styles.unavailableMark} aria-hidden="true">
+                  <Icon name="utensils" />
+                </span>
+                <h2 className={styles.unavailableTitle}>{strings.unavailable}</h2>
+                {reservePath !== undefined || phoneHref !== undefined ? (
+                  <div className={styles.unavailableActions}>
+                    {reservePath === undefined ? null : (
+                      <ButtonLink href={reservePath} variant="primary" icon="calendar-check">
+                        {strings.reserve}
+                      </ButtonLink>
+                    )}
+                    {phoneHref === undefined || place.phone === undefined ? null : (
+                      <ButtonLink href={phoneHref} icon="phone" label={strings.call(place.phone)}>
+                        {strings.callShort}
+                      </ButtonLink>
+                    )}
+                  </div>
+                ) : (
+                  <p>{strings.unavailableLater}</p>
+                )}
+              </div>
+            ) : null}
+            {!isUnavailable && current !== undefined && !current.serving.now ? (
               <p className={styles.notice}>
                 <Icon name="clock" size="sm" />
                 {current.serving.next === undefined
@@ -367,7 +398,7 @@ export function MenuList({
                   : strings.servingFrom(when(current.serving.next))}
               </p>
             ) : null}
-            {shownSections.length === 0 ? (
+            {isUnavailable ? null : shownSections.length === 0 ? (
               <div className={styles.empty}>
                 <p>{isFiltering ? strings.noMatches : strings.noMenu}</p>
                 {isFiltering ? (

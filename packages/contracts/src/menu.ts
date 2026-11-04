@@ -470,9 +470,22 @@ export const PublicMenu = z.object({
    * photos, and the page says it isn't available right now.
    */
   hidden: z.literal(true).optional(),
+  /**
+   * While hidden, the place's reservation page (`/r/<key>`) when Table seating takes reservations there online, so
+   * the page can still offer Reserve a table. Absent otherwise.
+   */
+  reservePath: z.string().optional(),
 });
 /** The guest menu's answer. */
 export type PublicMenu = z.infer<typeof PublicMenu>;
+
+/**
+ * `GET /api/public/menu/:key/tables/:code` (spec 0065, H2): the table a QR named, as the guest's bar shows it. Only a
+ * live table of the key's own place, while Menu QR is installed; anything else is the same 404.
+ */
+export const PublicMenuTable = z.object({ label: z.string(), name: z.string() });
+/** The table a QR named. */
+export type PublicMenuTable = z.infer<typeof PublicMenuTable>;
 
 /** The Menu app's procedures (AC-6520 to AC-6527). */
 export const menuContract = {

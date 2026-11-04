@@ -35,6 +35,11 @@ export interface QrCodeProps {
   readonly picture?: string;
   /** A frame around the code with this label under it (AC-6124), up to 20 characters: "Scan me". */
   readonly frameLabel?: string;
+  /**
+   * `paper` keeps the white ground in a dark app too (spec 0065 H2's print sheet): a code drawn to be printed is
+   * printed on white. Left out, a dark app draws the softer grey ground.
+   */
+  readonly ground?: 'paper';
 }
 
 /** The quiet margin around the modules, in modules, as scanners need. */
@@ -102,7 +107,17 @@ export function qrPictureBox(count: number): {
  * with their picture in the middle and a labelled frame, all inside the one SVG
  * so a saved copy carries them.
  */
-export function QrCode({ value, label, children, size: width = 'md', ref, colour, picture, frameLabel }: QrCodeProps) {
+export function QrCode({
+  value,
+  label,
+  children,
+  size: width = 'md',
+  ref,
+  colour,
+  picture,
+  frameLabel,
+  ground,
+}: QrCodeProps) {
   const clipId = useId();
   const centre = safeImageSrc(picture);
   const hasPicture = centre !== undefined;
@@ -134,6 +149,7 @@ export function QrCode({ value, label, children, size: width = 'md', ref, colour
       // scanner reads an inverted code. A saved PNG is always white (AC-5122).
       data-theme="light"
       data-size={width}
+      data-ground={ground}
       data-framed={isFramed || undefined}
       role="img"
       aria-label={label}

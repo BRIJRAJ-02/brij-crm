@@ -18,6 +18,7 @@ import type {
   PlaceFields,
   PlaceFloor,
   PlaceHours,
+  PlaceQrCodes,
   ResourceKind,
 } from '@crm/contracts';
 import { dataError, toDataError, type DataError } from '../errors.ts';
@@ -112,6 +113,11 @@ export interface HospitalityProcedures {
     input: Scoped & { placeId: string; resourceId: string; mutationId: string },
     options: Options,
   ) => Promise<PlaceFloor>;
+  readonly qrCodes: (input: Scoped & { placeId: string }, options: Options) => Promise<PlaceQrCodes>;
+  readonly regenerateTableCode: (
+    input: Scoped & { placeId: string; resourceId: string; mutationId: string },
+    options: Options,
+  ) => Promise<PlaceQrCodes>;
 }
 
 /** What one table change may set: `areaId: null` takes it out of its area. */
@@ -257,6 +263,16 @@ export function openHospitality(given: {
   const appsHeld = new Map<string, ReturnType<typeof holder<AppsView>>>();
   const businessHeld = new Map<string, ReturnType<typeof holder<BusinessView>>>();
   const floors = new Map<string, ReturnType<typeof holder<PlaceFloor>>>();
+  const qrHeld = new Map<string, ReturnType<typeof holder<PlaceQrCodes>>>();
+  const qrOf = (workspace: string, placeId: string) => {
+    const key = `${workspace}:${placeId}`;
+    let found = qrHeld.get(key);
+    if (found === undefined) {
+      found = holder(() => call((options) => api.qrCodes({ workspace, placeId }, options)), now);
+      qrHeld.set(key, found);
+    }
+    return found;
+  };
 
   const appsOf = (workspace: string) => {
     let found = appsHeld.get(workspace);
@@ -437,6 +453,24 @@ export function openHospitality(given: {
             places: view.places.map((each) => (each.id === saved.id ? saved : each)),
           });
         },
+      ),
+
+    /**
+     * One place's table QR codes (spec 0065, H2), read when first held (and again when held after a second, so tables
+     * added on the place's page show).
+     */
+    qrCodes: (workspace: string, placeId: string): HospitalityHeld<PlaceQrCodes> => qrOf(workspace, placeId).held,
+    /** Reads a place's codes now (the route's loader); rejects with the refusal. */
+    readQrCodes: (workspace: string, placeId: string): Promise<PlaceQrCodes> => qrOf(workspace, placeId).read(),
+    /**
+     * A new code for one table (H2; the screen asks first, since the old print stops working). The code is the
+     * server's to draw, so the copy shows saving until it lands; refused, nothing changed.
+     */
+    regenerateTableCode: (workspace: string, placeId: string, resourceId: string): Promise<DataError | undefined> =>
+      qrOf(workspace, placeId).change(
+        (codes) => codes,
+        () =>
+          call((options) => api.regenerateTableCode({ workspace, placeId, resourceId, mutationId: mintId() }, options)),
       ),
 
     /** One place's areas and tables (AC-6509), read when first held. */

@@ -108,5 +108,25 @@ describe('the guest menu shell', () => {
     expect(answer.body).toContain('<h1>Somewhere &lt;Nowhere&gt;</h1>');
     expect(answer.body).toContain(MENU_HIDDEN_LINE);
     expect(answer.body).not.toContain('Burrata');
+    expect(answer.body).toContain('Powered by Timefix');
+  });
+
+  it('offers a hidden menu’s ways still open: Reserve a table on our own path only, and Call', async () => {
+    const hidden: PublicMenu = {
+      ...MENU,
+      menu: { currency: 'GBP', menus: [], items: {}, groups: {} },
+      place: { ...MENU.place, phone: '+44 20 7946 0000' },
+      hidden: true,
+      reservePath: '/r/AbCdEfGhIjKlMnOp',
+    };
+    const answer = await menuShellFor(`/m/${KEY}`, { shell: SHELL, readMenu: () => Promise.resolve(hidden) });
+    expect(answer.body).toContain('<a href="/r/AbCdEfGhIjKlMnOp">Reserve a table</a>');
+    expect(answer.body).toContain('<a href="tel:+442079460000">Call +44 20 7946 0000</a>');
+    const elsewhere = await menuShellFor(`/m/${KEY}`, {
+      shell: SHELL,
+      readMenu: () => Promise.resolve({ ...hidden, reservePath: 'https://evil.example/r/x' }),
+    });
+    expect(elsewhere.body).not.toContain('href="https://evil.example');
+    expect(elsewhere.body).not.toContain('Reserve a table</a>');
   });
 });

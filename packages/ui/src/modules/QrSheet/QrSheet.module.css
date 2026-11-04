@@ -1,0 +1,186 @@
+/* QrSheet: A4 sheets of table tent cards, light on white in either theme (the sheet carries data-theme="light").
+   A sheet is the page's whole width at A4's ratio, so with no print margins it fills exactly one printed page; on
+   screen it is a page of paper at about A4's own width. A card is two faces with a dashed fold between them; the back
+   face is turned upside down so it reads the right way once folded into a tent. The cut lines are the cards' own
+   dashed edges. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-24);
+    padding: var(--space-24) var(--space-16);
+    background: var(--surface-sunken);
+    color: var(--text);
+    font: var(--text-body);
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-12);
+    inline-size: min(100%, var(--size-dialog-wide));
+  }
+
+  .group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-12);
+  }
+
+  .notice {
+    inline-size: min(100%, var(--size-dialog-wide));
+  }
+
+  /* The cards sit inside a margin most home printers can print to (about 8mm), the page itself having none. */
+  .sheet {
+    display: grid;
+    padding: var(--space-32);
+    page: qr-sheet;
+    grid-template-rows: repeat(2, 1fr);
+    inline-size: min(100%, var(--size-dialog-wide));
+    aspect-ratio: 210 / 297;
+    background: var(--surface);
+    box-shadow: var(--shadow-md);
+    break-after: page;
+  }
+
+  .sheet[data-per-page='4'] {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .card {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    min-block-size: 0;
+    min-inline-size: 0;
+    border: var(--border-width-hairline) dashed var(--border-strong);
+    container-type: inline-size;
+  }
+
+  .face {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: var(--space-16);
+    min-block-size: 0;
+    padding: var(--space-16) var(--space-20);
+  }
+
+  /* The fold: the line between the two faces. The back face is turned, so its start edge is the middle. */
+  .face[data-side='back'] {
+    border-block-start: var(--border-width-hairline) dashed var(--border-strong);
+    rotate: 180deg;
+  }
+
+  .code {
+    display: flex;
+    justify-content: center;
+    block-size: 100%;
+    aspect-ratio: 1;
+    min-block-size: 0;
+    max-inline-size: 100%;
+    overflow: hidden;
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+    text-align: start;
+  }
+
+  .logo {
+    display: block;
+    inline-size: auto;
+    max-inline-size: 70%;
+    block-size: var(--size-bar);
+    margin-block-end: var(--space-4);
+    object-fit: contain;
+    object-position: left center;
+  }
+
+  .mark {
+    display: grid;
+    place-items: center;
+    inline-size: var(--size-bar);
+    block-size: var(--size-bar);
+    margin-block-end: var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--text);
+    color: var(--surface);
+    font: var(--text-heading);
+  }
+
+  .venue {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-title-regular);
+    overflow-wrap: anywhere;
+  }
+
+  .table {
+    margin: 0;
+    font: var(--text-note-title);
+    overflow-wrap: anywhere;
+  }
+
+  .scan {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+  }
+
+  /* A quarter card is narrow: the code above, the words under it, centred. */
+  @container (width < 480px) {
+    .face {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
+      justify-items: center;
+      gap: var(--space-8);
+      padding: var(--space-12);
+    }
+
+    .words {
+      align-items: center;
+      text-align: center;
+    }
+
+    .logo,
+    .mark {
+      display: none;
+    }
+
+    .table {
+      font: var(--text-heading);
+    }
+  }
+
+  @media print {
+    .root {
+      display: block;
+      padding: 0;
+      background: none;
+    }
+
+    .controls,
+    .notice {
+      display: none;
+    }
+
+    .sheet {
+      inline-size: 100%;
+      box-shadow: none;
+    }
+  }
+}
+
+/* A named page, so only the sheets print on A4 with no margin; every other page prints as it always did. */
+@page qr-sheet {
+  size: A4;
+  margin: 0;
+}

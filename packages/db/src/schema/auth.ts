@@ -528,7 +528,7 @@ export const profileItems = auth.table(
     foreignKey({ name: 'profile_items_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     check(
       'profile_items_kind',
-      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial', 'socials', 'media', 'image', 'gallery', 'times', 'banner')`,
+      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial', 'socials', 'media', 'image', 'gallery', 'times', 'banner', 'menu', 'reserve')`,
     ),
     check('profile_items_position', sql`${t.position} between 0 and 999`),
     check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),

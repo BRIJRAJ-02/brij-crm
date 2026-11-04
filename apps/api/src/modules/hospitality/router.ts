@@ -12,6 +12,8 @@ import {
   listApps,
   moveResource,
   listResources,
+  listQrCodes,
+  regenerateTableCode,
   removeApp,
   restoreResource,
   saveArea,
@@ -157,6 +159,14 @@ export const hospitalityRouter = h.router({
   deleteResource: h.deleteResource.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       deleteResource(context.scope, { placeId: input.placeId, resourceId: input.resourceId }),
+    ),
+  ),
+  // Menu QR (spec 0065, H2): a place's table codes, and a new code for one table. A code changes no guest menu answer
+  // (the menu is read by key; the table by its code, never cached), so nothing at the edge is purged.
+  qrCodes: h.qrCodes.handler(({ context, input }) => listQrCodes(context.scope, { placeId: input.placeId })),
+  regenerateTableCode: h.regenerateTableCode.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      regenerateTableCode(context.scope, { placeId: input.placeId, resourceId: input.resourceId }),
     ),
   ),
 });

@@ -29,7 +29,6 @@ export const strings = {
   allergenFooter: (list: readonly string[]) =>
     `This menu’s dishes name: ${list.join(', ')}. Tell your server about any allergy before you order.`,
   yourPicks: 'Your picks',
-  table: (label: string) => `Table ${label}`,
   close: 'Close',
   noMenu: 'This menu is empty for now.',
   diet: {
@@ -59,4 +58,9 @@ export const strings = {
     soya: 'soya',
     sulphites: 'sulphites',
   },
+  /** A hidden menu's page (Live or Hidden, spec 0065): what it says, and the ways still open. */
+  unavailable: 'This menu isn’t available right now',
+  unavailableLater: 'Please check back soon.',
+  reserve: 'Reserve a table',
+  callShort: 'Call',
 } as const;

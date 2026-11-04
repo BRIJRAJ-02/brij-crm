@@ -22,7 +22,7 @@ function WithPicks({
       photoHref={samplePhotoHref}
       picks={picks}
       onPicksChange={setPicks}
-      table="4"
+      table="Table 4"
       {...(openItemId === undefined ? {} : { openItemId })}
       {...(isPicksOpen === undefined ? {} : { isPicksOpen })}
     />
@@ -141,5 +141,37 @@ export const Filtered: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Vegan' }));
     await expect(canvas.queryByRole('button', { name: /^Burrata/ })).toBeNull();
     await expect(canvas.getByRole('button', { name: /^Charred hispi/ })).toBeVisible();
+  },
+};
+
+/** A hidden menu (Live or Hidden): the menu's look and header, one line saying so, Reserve a table and Call. */
+export const Unavailable: Story = {
+  render: () => {
+    const menu = sampleMenu();
+    return (
+      <Stage width="fill" height="page">
+        <MenuList
+          menu={{
+            ...menu,
+            menu: { ...menu.menu, menus: [], items: {}, groups: {} },
+            soldOut: [],
+            hidden: true,
+            reservePath: '/r/AbCdEfGhIjKlMnOp',
+            place: { ...menu.place, phone: '+44 20 7946 0000' },
+          }}
+          table="Table 4"
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'This menu isn’t available right now' })).toBeVisible();
+    await expect(canvas.getByRole('link', { name: 'Reserve a table' })).toHaveAttribute('href', '/r/AbCdEfGhIjKlMnOp');
+    await expect(canvas.getByRole('link', { name: 'Call +44 20 7946 0000' })).toHaveAttribute(
+      'href',
+      'tel:+442079460000',
+    );
+    await expect(canvas.queryByRole('searchbox')).toBeNull();
   },
 };

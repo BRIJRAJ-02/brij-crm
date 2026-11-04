@@ -14,6 +14,7 @@ import type {
   ProfileQrStyle,
   ProfileCounts,
   ProfileFormChoice,
+  ProfilePlaceChoice,
   ProfileItem,
   ProfileItems,
   ProfileLinkImport,
@@ -98,6 +99,7 @@ export interface LinkPageApi {
   readonly counts: (input: { readonly workspace: string }) => Promise<ProfileCounts>;
   readonly pageChoices: (input: { readonly workspace: string }) => Promise<readonly ProfilePageChoice[]>;
   readonly formChoices: (input: { readonly workspace: string }) => Promise<readonly ProfileFormChoice[]>;
+  readonly placeChoices: (input: { readonly workspace: string }) => Promise<readonly ProfilePlaceChoice[]>;
   readonly saveTheme: (input: {
     readonly workspace: string;
     readonly theme: PageTheme;
@@ -191,6 +193,10 @@ interface ProfileProcedures {
     input: { workspace: string },
     options: { signal?: AbortSignal },
   ) => Promise<readonly ProfileFormChoice[]>;
+  readonly placeChoices: (
+    input: { workspace: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<readonly ProfilePlaceChoice[]>;
   readonly saveTheme: (
     input: { workspace: string; theme: PageTheme; mutationId: string },
     options: { signal?: AbortSignal },
@@ -292,6 +298,9 @@ export type BlockProblems = Readonly<
       // pictures (`alt:0` is the first one's description) and a banner's line.
       | 'showFrom'
       | 'hideAfter'
+      // Spec 0065: a Menu or Reserve block's place and its row's own words.
+      | 'placeId'
+      | 'label'
       | 'style'
       | 'size'
       | 'thumb'
@@ -431,7 +440,9 @@ export function checkBlock(
     draft.kind === 'image' ||
     draft.kind === 'gallery' ||
     draft.kind === 'times' ||
-    draft.kind === 'banner'
+    draft.kind === 'banner' ||
+    draft.kind === 'menu' ||
+    draft.kind === 'reserve'
   ) {
     return checkReachBlock(draft);
   }
@@ -864,6 +875,14 @@ export function createLinkPageStore(deps: LinkPageDeps) {
         throw toDataError(error);
       }),
     /**
+     * The places a Menu or Reserve block can name (spec 0065, AC-6528), with whether each kind would show now and why
+     * not; none while neither Menu nor Table seating is installed. Read fresh each time it is asked.
+     */
+    placeChoices: (workspace: string): Promise<readonly ProfilePlaceChoice[]> =>
+      deps.api.placeChoices({ workspace }).catch((error: unknown) => {
+        throw toDataError(error);
+      }),
+    /**
      * Saves the page's look (spec 0054, AC-5421), whole and at once, the way a reorder saves. The caller shows the
      * pick before this answers and puts it back on a refusal, which is why the refusal comes back rather than a
      * toast: the control that changed is where the reason belongs.
@@ -957,6 +976,7 @@ export function openLinkPage(given: {
       counts: (input) => call((options) => profile.counts(input, options)),
       pageChoices: (input) => call((options) => profile.pageChoices(input, options)),
       formChoices: (input) => call((options) => profile.formChoices(input, options)),
+      placeChoices: (input) => call((options) => profile.placeChoices(input, options)),
       saveTheme: (input) => call((options) => profile.saveTheme(input, options)),
       setIndexable: (input) => call((options) => profile.setIndexable(input, options)),
       setShareImage: (input) => call((options) => profile.setShareImage(input, options)),
@@ -1033,6 +1053,14 @@ export function openLinkPage(given: {
     /** The forms the person may still place, from every workspace, read fresh each time it is asked. */
     formChoices: (workspace: string): Promise<readonly ProfileFormChoice[]> =>
       deps.api.formChoices({ workspace }).catch((error: unknown) => {
+        throw toDataError(error);
+      }),
+    /**
+     * The places a Menu or Reserve block can name (spec 0065, AC-6528), with whether each kind would show now and why
+     * not; none while neither Menu nor Table seating is installed. Read fresh each time it is asked.
+     */
+    placeChoices: (workspace: string): Promise<readonly ProfilePlaceChoice[]> =>
+      deps.api.placeChoices({ workspace }).catch((error: unknown) => {
         throw toDataError(error);
       }),
     /**

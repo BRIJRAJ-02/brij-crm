@@ -58,7 +58,8 @@
     "./business-page": "./src/business-page-model.ts",
     "./brand-colour": "./src/brand-colour.ts",
     "./computed": "./src/computed-rules.ts",
-    "./formula": "./src/formula/index.ts"
+    "./formula": "./src/formula/index.ts",
+    "./zip": "./src/zip.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

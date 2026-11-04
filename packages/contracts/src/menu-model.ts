@@ -342,6 +342,31 @@ export function menuWorkspaceTags(cacheId: string): readonly string[] {
   return /^[0-9a-f]{32}$/.test(cacheId) ? [`menu-ws:${cacheId}`] : [];
 }
 
+/**
+ * The shape of a table's code (spec 0065, H2): 22 base64url characters, 122 random bits from a v4 uuid, which a
+ * table's printed QR carries as `/m/<menu key>?t=<code>`. Anything else never reaches the limiter or the database.
+ */
+export const TABLE_CODE_PATTERN = /^[A-Za-z0-9_-]{22}$/;
+
+/** Whether `code` can be a table's code. */
+export const isTableCode = (code: string): boolean => TABLE_CODE_PATTERN.test(code);
+
+/** The address a table's QR opens: the place's guest menu with the table's code (H2). */
+export const menuTablePagePath = (key: string, code: string): string => `/m/${key}?t=${code}`;
+
+/** The guest menu's read of the table a QR named, which also counts the scan (H2). */
+export const menuTablePath = (key: string, code: string): string => `/api/public/menu/${key}/tables/${code}`;
+
+/**
+ * How a guest sees a table's label (H2): "Table 4" for a bare number or a "T" and a number (the Add tables run's
+ * "T1 to T10"), otherwise the label as the owner typed it ("Bar 2", "Window").
+ */
+export function tableDisplayName(label: string): string {
+  const trimmed = label.trim();
+  const number = /^(?:t\s*)?(\d{1,4})$/i.exec(trimmed)?.[1];
+  return number === undefined ? trimmed : `Table ${number}`;
+}
+
 /** The guest menu's address on our origin. */
 export const menuPagePath = (key: string): string => `/m/${key}`;
 

@@ -4,7 +4,6 @@ export const strings = {
   loading: 'Loading the menu',
   missing: 'This menu isn’t here',
   missingLine: 'The link may be old. Ask a member of staff for the menu.',
-  hidden: 'This menu isn’t available right now.',
   offline: 'The menu didn’t load',
   offlineLine: 'Check your connection and try again.',
 } as const;

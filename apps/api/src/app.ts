@@ -708,6 +708,8 @@ export function createApp({
     limiter: services.menuLimiter ?? createMemoryLimiter(),
     edgeCache,
     rendered: edge.rendered,
+    visitorKey: visitors,
+    ...(services.now === undefined ? {} : { now: services.now }),
   });
   // The business page (spec 0066, B4 lite): the published page, its pictures and its brand, by the business handle.
   mountPublicBusiness(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });

@@ -4,7 +4,8 @@
 //
 // The shell function already wrote the menu into the page and left the read as a boot block, so the first paint needs
 // no request; the page reads again behind it, and again whenever the tab comes back, so a dish sold out mid service
-// shows. The table a QR code opened it at comes in the fragment (`#t=4`, H2).
+// shows. A table's QR adds its code (`?t=<code>`, H2): the page asks the server which table that is (counting the
+// scan) and shows "Table 4" in the bar.
 import '@crm/ui/styles.css';
 import { createMenuClient, isDataError, type PublicMenu } from '@crm/data/menu-guest';
 import { menuLogoPath, menuLookPath, menuPhotoPath } from '@crm/data/menu';
@@ -19,7 +20,7 @@ import {
 } from '@crm/ui/public-menu';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { picksStore, readMenuBoot, tableOf } from './boot.ts';
+import { picksStore, readMenuBoot, tableCodeOf } from './boot.ts';
 import { strings } from './strings.ts';
 
 const root = document.getElementById('root');
@@ -28,7 +29,7 @@ if (root === null) throw new Error('The menu page has no #root.');
 const key = /^\/m\/([^/]+)\/?$/.exec(globalThis.location.pathname)?.[1] ?? '';
 const client = createMenuClient({ origin: globalThis.location.origin });
 const boot = readMenuBoot(document, key, Date.now());
-const table = tableOf(globalThis.location.hash);
+const tableCode = tableCodeOf(globalThis.location.search);
 const picks = picksStore(key, () => {
   try {
     return globalThis.localStorage;
@@ -58,6 +59,18 @@ function keptPicks(menu: PublicMenu, was: readonly GuestPick[]): readonly GuestP
 function MenuPage() {
   const [menu, setMenu] = useState<PublicMenu | undefined>(boot);
   const [failed, setFailed] = useState<'missing' | 'offline' | undefined>();
+  // The table a QR opened the menu at ("Table 4", H2), named by the server from the code; an old or unknown code
+  // simply shows no table.
+  const [table, setTable] = useState<string | undefined>();
+  useEffect(() => {
+    if (tableCode === undefined) return;
+    const controller = new AbortController();
+    client.table(key, tableCode, controller.signal).then(
+      (found) => setTable(found.name),
+      () => undefined,
+    );
+    return () => controller.abort();
+  }, []);
   // A pick saved against an older menu (a size or option since removed) is dropped once the menu is read.
   const [chosen, setChosen] = useState<readonly GuestPick[]>(() =>
     boot === undefined || boot.hidden === true ? picks.read() : keptPicks(boot, picks.read()),
@@ -106,20 +119,14 @@ function MenuPage() {
       </EmptyState>
     );
   }
-  // Taken down for now (Live or Hidden): the business's name and one plain line, nothing of the menu.
-  if (menu.hidden === true) {
-    return (
-      <EmptyState icon="utensils" title={menu.business.name}>
-        {strings.hidden}
-      </EmptyState>
-    );
-  }
+  // Taken down for now (Live or Hidden): MenuList's own unavailable page, in the menu's look with its header, the
+  // ways still open (Reserve a table, Call) and the foot; nothing of the menu.
   return (
     <MenuList
       menu={menu}
       {...(menu.logo === undefined ? {} : { logoHref: menuLogoPath(key, menu.logo) })}
       photoHref={(photoId, size, version) => menuPhotoPath(key, photoId, size, version)}
-      {...(table === undefined ? {} : { table })}
+      {...(table === undefined || menu.hidden === true ? {} : { table })}
       picks={chosen}
       onPicksChange={(next) => {
         setChosen(next);

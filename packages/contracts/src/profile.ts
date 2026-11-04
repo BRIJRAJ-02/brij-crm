@@ -12,6 +12,7 @@ import {
   ProfileItems,
   ProfileLinkImportResult,
   ProfilePageChoice,
+  ProfilePlaceChoice,
   ProfileQrStyle,
 } from './booking/link-page.ts';
 import { PROFILE_INSIGHT_DAYS } from './booking/link-page-rules.ts';
@@ -447,6 +448,8 @@ export const profileContract = {
   pageChoices: oc.input(WorkspaceScoped).output(z.array(ProfilePageChoice)),
   /** The forms the caller may place on their link page (spec 0052, AC-5213), their own and not placed yet. */
   formChoices: oc.input(WorkspaceScoped).output(z.array(ProfileFormChoice)),
+  /** The places the caller may put a Menu or Reserve block for (spec 0065, AC-6528), with each kind's facts. */
+  placeChoices: oc.input(WorkspaceScoped).output(z.array(ProfilePlaceChoice)),
   /** The look of the caller's own link page (spec 0054): read with the profile, saved whole. */
   saveTheme: oc.input(WorkspaceScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
   /** The caller's own link page accent and photos (spec 0060), for the Design panel. */

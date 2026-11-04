@@ -46,6 +46,8 @@ describe('the block registry', () => {
       'faq',
       'testimonial',
       'contact',
+      'menu',
+      'reserve',
       'banner',
       'heading',
     ]);

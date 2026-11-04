@@ -23,7 +23,9 @@ import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { readMenuBrandIn, type PageBrand } from '../brand/public.ts';
 import { businessCacheId } from './cache-tags.ts';
+import { appInstalled } from './gate.ts';
 import { soldOutIds } from './menu-rows.ts';
+import { reservePathOf } from './public-page.ts';
 
 const { businessProfiles, menuDrafts, menuPhotos, menuVersions, places } = schema;
 
@@ -109,6 +111,11 @@ export async function readPublicMenu(
       .from(businessProfiles)
       .where(eq(businessProfiles.workspaceId, entry.workspaceId));
     const hidden = await isHidden(tx, entry.workspaceId);
+    // Hidden, the page still offers Reserve a table while the place takes reservations online (spec 0065).
+    const reservePath =
+      hidden && (await appInstalled(tx, entry.workspaceId, 'table_seating'))
+        ? await reservePathOf(tx, entry.workspaceId, entry.placeId)
+        : undefined;
     const soldOut = hidden ? new Set<string>() : await soldOutIds(tx, entry.workspaceId);
     const brand = await readMenuBrandIn(tx, entry.workspaceId);
     // Hidden, the answer keeps the header and the look and drops every menu, dish and group.
@@ -139,6 +146,7 @@ export async function readPublicMenu(
       menu: snapshot,
       soldOut: [...soldOut].filter((id) => Object.hasOwn(snapshot.items, id)).sort(),
       ...(hidden ? { hidden: true as const } : {}),
+      ...(reservePath === undefined ? {} : { reservePath }),
     };
     return { menu, brand };
   });

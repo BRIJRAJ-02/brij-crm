@@ -4,7 +4,7 @@
 // Main task: fill a block's few fields and see it as a visitor will, then Add or Save; it shows on the list at once.
 // Leaves out: saving itself (the screen does, through the data layer, optimistic), and drawing the blocks, which is
 // the library's LinkPage.
-import type { BlockDraft, BlockProblems, ProfilePageChoice } from '@crm/data';
+import type { BlockDraft, BlockProblems, ProfilePageChoice, ProfilePlaceChoice } from '@crm/data';
 import {
   Button,
   ButtonLink,
@@ -21,6 +21,7 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
+import { businessSettingsHref } from '../settings/nav.ts';
 import {
   heldPicture,
   PICTURE_TYPES,
@@ -731,4 +732,209 @@ export function BannerEditor({ item, items, linkPage, chrome, onSubmit, onClose 
       </Form>
     </EditorModal>
   );
+}
+
+/** The places to choose from, as they load. */
+type PlaceChoices =
+  | { readonly status: 'loading' }
+  | { readonly status: 'error' }
+  | { readonly status: 'ready'; readonly choices: readonly ProfilePlaceChoice[] };
+
+/**
+ * A place's menu or its reservation page (spec 0065, AC-6528): one of the workspace's places, read fresh each time
+ * it opens, and an optional label for the row. With one place it is picked already; a place whose block would be
+ * hidden now (the menu unpublished or hidden, reservations off) says so beside it. Editing keeps the place.
+ */
+function PlaceChooser({
+  which,
+  slug,
+  item,
+  items,
+  linkPage,
+  chrome,
+  onSubmit,
+  onClose,
+}: BlockEditorProps & { readonly which: 'menu' | 'reserve' }) {
+  const focusFirst = useFocusesFirstField();
+  const formId = useId();
+  const editing = item?.kind === 'menu' || item?.kind === 'reserve' ? item : undefined;
+  const [choices, setChoices] = useState<PlaceChoices>({ status: 'loading' });
+  const [picked, setPicked] = useState<string | null>(editing?.placeId ?? null);
+  const [label, setLabel] = useState(editing?.label ?? '');
+  const [problems, setProblems] = useState<BlockProblems>({});
+  const [attempt, setAttempt] = useState(0);
+  const extras = useBlockExtras(editing, false);
+  const fallback = which === 'menu' ? words.menuTitle : words.reserveTitle;
+  useEffect(() => {
+    let isCurrent = true;
+    linkPage.placeChoices(slug).then(
+      (found) => {
+        if (!isCurrent) return;
+        const open = found.filter((choice) => (which === 'menu' ? choice.menu : choice.reserve) !== undefined);
+        setChoices({ status: 'ready', choices: open });
+        setPicked((was) => was ?? open[0]?.placeId ?? null);
+      },
+      () => {
+        if (isCurrent) setChoices({ status: 'error' });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [linkPage, slug, which, attempt]);
+  const factsOf = (choice: ProfilePlaceChoice | undefined) => (which === 'menu' ? choice?.menu : choice?.reserve);
+  const chosen = choices.status === 'ready' ? choices.choices.find((each) => each.placeId === picked) : undefined;
+  const facts = factsOf(chosen) ?? editing?.place;
+  const submit = () => {
+    const draft: BlockDraft = {
+      kind: which,
+      ...(picked === null ? {} : { placeId: picked }),
+      ...(label.trim() === '' ? {} : { label }),
+      ...extras.draft,
+    };
+    const checked = linkPage.check(draft, items, editing?.id);
+    if (!checked.ok) {
+      setProblems(checked.problems);
+      extras.take(checked.problems);
+      return;
+    }
+    onSubmit(draft, facts === undefined ? undefined : { place: facts });
+  };
+  let body: ReactNode;
+  if (choices.status === 'loading') {
+    body = <Skeleton shape="field" width="full" />;
+  } else if (choices.status === 'error') {
+    body = (
+      <Callout
+        tone="danger"
+        actions={
+          <Button
+            onPress={() => {
+              setChoices({ status: 'loading' });
+              setAttempt((was) => was + 1);
+            }}
+          >
+            {strings.retry}
+          </Button>
+        }
+      >
+        {words.placesFailed}
+      </Callout>
+    );
+  } else if (editing === undefined && choices.choices.length === 0) {
+    body = (
+      <EmptyState
+        layout="row"
+        icon="store"
+        title={words.noPlacesTitle}
+        actions={<ButtonLink href={businessSettingsHref(slug)}>{words.openBusiness}</ButtonLink>}
+      >
+        {words.noPlacesText}
+      </EmptyState>
+    );
+  } else {
+    body = (
+      <Form
+        id={formId}
+        onSubmit={submit}
+        label={which === 'menu' ? words.newMenu : words.newReserve}
+        focusesFirstField={focusFirst}
+      >
+        {editing === undefined ? (
+          // One place is picked already: nothing to ask. Several, and the owner picks one.
+          choices.choices.length < 2 ? null : (
+            <Select
+              label={words.place}
+              searchLabel={words.placeSearch}
+              items={choices.choices.map((choice) => {
+                const each = factsOf(choice);
+                return {
+                  id: choice.placeId,
+                  label: each?.name ?? '',
+                  icon: 'store' as const,
+                  description: each?.status === 'paused' ? words.placeOff(each.reason) : '',
+                };
+              })}
+              value={picked}
+              onChange={(next) => {
+                setPicked(next);
+                setProblems((held) => ({ ...held, placeId: undefined }));
+              }}
+              {...errorOf(problems, 'placeId')}
+            />
+          )
+        ) : (
+          <Field label={words.place} isReadOnly readOnlyReason={words.placeFixed} value={editing.place?.name ?? ''} />
+        )}
+        {facts?.status === 'paused' ? <Callout tone="warning">{words.placeOff(facts.reason)}</Callout> : null}
+        <Field
+          label={words.label}
+          name="label"
+          value={label}
+          placeholder={fallback}
+          maxLength={60}
+          onChange={(next) => {
+            setLabel(next);
+            setProblems((held) => ({ ...held, label: undefined }));
+          }}
+          {...errorOf(problems, 'label')}
+        />
+        {extras.fields}
+      </Form>
+    );
+  }
+  const title =
+    editing === undefined
+      ? which === 'menu'
+        ? words.newMenu
+        : words.newReserve
+      : which === 'menu'
+        ? words.editMenu
+        : words.editReserve;
+  return (
+    <EditorModal
+      title={title}
+      formId={formId}
+      submitLabel={editing === undefined ? strings.add : strings.save}
+      onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
+      canSubmit={choices.status === 'ready' && (editing !== undefined || choices.choices.length > 0)}
+      preview={
+        facts === undefined ? undefined : (
+          <DraftPage
+            layout="blocks"
+            caption={strings.howItLooks}
+            blocks={[
+              which === 'menu'
+                ? {
+                    kind: 'menu',
+                    id: editing?.id ?? 'draft',
+                    title: label.trim() === '' ? fallback : label.trim(),
+                    href: '',
+                    dishes: [],
+                  }
+                : {
+                    kind: 'reserve',
+                    id: editing?.id ?? 'draft',
+                    title: label.trim() === '' ? fallback : label.trim(),
+                    href: '',
+                  },
+            ]}
+          />
+        )
+      }
+    >
+      {body}
+    </EditorModal>
+  );
+}
+
+/** A place's menu block (spec 0065, AC-6528). */
+export function MenuChooser(props: BlockEditorProps) {
+  return <PlaceChooser {...props} which="menu" />;
+}
+
+/** A place's Reserve a table block (spec 0065, AC-6528). */
+export function ReserveChooser(props: BlockEditorProps) {
+  return <PlaceChooser {...props} which="reserve" />;
 }

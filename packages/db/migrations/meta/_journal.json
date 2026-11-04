@@ -1261,6 +1261,13 @@
       "when": 1795520500000,
       "tag": "0179_business_pages",
       "breakpoints": true
+    },
+    {
+      "idx": 180,
+      "version": "7",
+      "when": 1795520700000,
+      "tag": "0180_menu_qr_and_blocks",
+      "breakpoints": true
     }
   ]
 }

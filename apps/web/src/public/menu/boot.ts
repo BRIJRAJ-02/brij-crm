@@ -1,5 +1,6 @@
-// The guest menu page's small pure helpers (spec 0065, H1): the shell's boot block, the table in the fragment, and
+// The guest menu page's small pure helpers (spec 0065, H1): the shell's boot block, the table's code in the address, and
 // Your picks kept in this browser only (AC-6530), each tolerant of storage that is blocked or holds something else.
+import { isTableCode } from '@crm/contracts/menu';
 import type { PublicMenu } from '@crm/data/menu-guest';
 import type { GuestPick } from '@crm/ui/public-menu';
 
@@ -22,10 +23,13 @@ export function readMenuBoot(document: Document, key: string, now: number): Publ
   }
 }
 
-/** The table a QR code named in the fragment (`#t=4`), at most 12 characters, or undefined. */
-export function tableOf(hash: string): string | undefined {
-  const table = new URLSearchParams(hash.replace(/^#/, '')).get('t')?.trim();
-  return table === undefined || table === '' || table.length > 12 ? undefined : table;
+/**
+ * The code a table's QR carries in the address (`?t=<code>`, spec 0065 H2), or undefined: only something shaped like
+ * a code is ever sent to be looked up. The table's name comes from the server, never from the address.
+ */
+export function tableCodeOf(search: string): string | undefined {
+  const code = new URLSearchParams(search).get('t')?.trim();
+  return code !== undefined && isTableCode(code) ? code : undefined;
 }
 
 /** The storage the picks live in, or undefined where the browser blocks it. */

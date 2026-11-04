@@ -11,6 +11,8 @@ export const strings = {
   questions: 'Questions',
   /** The one primary action under the person: their contact card, downloaded as a vCard. */
   saveContact: 'Save contact',
+  /** A menu block's dish and its price, in the line under its title (spec 0065, AC-6528). */
+  dishPrice: (name: string, price: string) => `${name} ${price}`,
   /** Under Save contact: the page as a pass a visitor keeps in Apple Wallet (26 October 2026). */
   addToWallet: 'Add to Apple Wallet',
   /** The address pill under the bio: its visible label is the address itself, so its name says what pressing it does. */

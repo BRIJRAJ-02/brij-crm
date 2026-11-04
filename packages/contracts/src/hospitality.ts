@@ -402,6 +402,39 @@ export const ResourceInput = WorkspaceScoped.extend({ placeId: Uuid, resourceId:
 /** One resource. */
 export type ResourceInput = z.infer<typeof ResourceInput>;
 
+/** One table's QR (spec 0065, H2): its label and area, its code, and how many scans it had in the last 30 days. */
+export const TableQr = z.object({
+  id: Uuid,
+  label: z.string(),
+  areaName: z.string().optional(),
+  /** The code its printed QR carries (`/m/<menu key>?t=<code>`): 22 random base64url characters. */
+  code: z.string(),
+  /** Visitors a day who opened the menu from this code, summed over the last 30 days. */
+  scans: z.number().int().nonnegative(),
+});
+/** One table's QR. */
+export type TableQr = z.infer<typeof TableQr>;
+
+/**
+ * A place's QR codes (H2): the place, its guest menu's key, whether guests can read a menu there now (published and
+ * not hidden), and its live tables in order with their codes. Archived tables and other kinds of resource have none.
+ */
+export const PlaceQrCodes = z.object({
+  placeId: Uuid,
+  placeName: z.string(),
+  menuKey: z.string(),
+  /** `live` guests see the menu; `unpublished` it was never published; `hidden` it is switched to Hidden. */
+  menuState: z.enum(['live', 'unpublished', 'hidden']),
+  tables: z.array(TableQr),
+});
+/** A place's QR codes. */
+export type PlaceQrCodes = z.infer<typeof PlaceQrCodes>;
+
+/** A table whose code to replace: its old print stops opening the table. */
+export const RegenerateTableCodeInput = WorkspaceScoped.extend({ placeId: Uuid, resourceId: Uuid, mutationId: Uuid });
+/** A table whose code to replace. */
+export type RegenerateTableCodeInput = z.infer<typeof RegenerateTableCodeInput>;
+
 /**
  * The Hospitality setup (H0). `apps` is any member's (empty without early access); `install` and `remove` are
  * `workspace.manage`'s; the rest are `hospitality.manage`'s, and refuse `APP_NOT_INSTALLED` while no Hospitality app
@@ -425,6 +458,10 @@ export const hospitalityContract = {
   restoreResource: oc.input(ResourceInput).output(PlaceFloor),
   /** Refused `IN_USE` while the resource holds future reservations (none until Table seating, H3). */
   deleteResource: oc.input(ResourceInput).output(PlaceFloor),
+  /** A place's table QR codes (H2): `hospitality.manage`, and only while Menu QR is installed. */
+  qrCodes: oc.input(PlaceInput).output(PlaceQrCodes),
+  /** A new code for one table (H2): the old print stops opening it. `hospitality.manage`, Menu QR installed. */
+  regenerateTableCode: oc.input(RegenerateTableCodeInput).output(PlaceQrCodes),
 };
 
 /** The operator console's one write (AC-6502): a workspace's early access flag on or off. */
