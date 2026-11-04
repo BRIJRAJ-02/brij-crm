@@ -352,6 +352,22 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace exported the submissions of Contact us',
   ],
   [
+    { ...base, action: 'form.submissions_deleted', target: form, params: { submissions: 3 } },
+    'Ada Lovelace deleted 3 submissions of Contact us',
+  ],
+  [
+    { ...base, action: 'form.submissions_deleted', target: form, params: { submissions: 1 } },
+    'Ada Lovelace deleted a submission of Contact us',
+  ],
+  [
+    { ...base, action: 'form.submissions_restored', target: form, params: { submissions: 3 } },
+    'Ada Lovelace restored 3 submissions of Contact us',
+  ],
+  [
+    { ...base, action: 'form.submissions_restored', target: form, params: { submissions: 1 } },
+    'Ada Lovelace restored a submission of Contact us',
+  ],
+  [
     { ...base, action: 'form.owner_changed', target: form, params: {} },
     'Ada Lovelace changed who gets Contact us’s leads',
   ],

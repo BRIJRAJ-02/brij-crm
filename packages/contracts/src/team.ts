@@ -74,6 +74,10 @@ export const AUDIT_ACTIONS = [
   // A form's submissions exported as CSV (forms fixes 3), downloaded at once or as a background job: visitors'
   // answers left the workspace, so History says who took them. The row holds how many and which way, never answers.
   'form.exported',
+  // A form's submissions deleted (soft, kept 30 days), one at a time or many in one request, and that Delete undone
+  // (forms fixes 3). One row a request: the form and how many, never which ones or their answers.
+  'form.submissions_deleted',
+  'form.submissions_restored',
   'booking.no_show',
   'booking.no_show_undone',
   // A booking linked to a record by hand from its card, and the link taken off (polish F2).

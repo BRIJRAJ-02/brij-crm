@@ -32,7 +32,7 @@ import { readRecords, updateRecord } from '../engine/records.ts';
 import { currentItems, loadAttributes, loadAttributesById } from '../engine/values.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { can, fieldLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -40,6 +40,7 @@ import { attributeVisible, visibleRecords } from '../access/visibility.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { withdrawSubmissionNotices } from '../notifications/notify.ts';
+import { writeAudit } from '../members/audit.ts';
 import { UNKNOWN_FORM } from './forms.ts';
 import {
   FORMS_PROCESS,
@@ -49,7 +50,7 @@ import {
   requiredFieldFailure,
   siteFieldFailure,
 } from './process.ts';
-import { canSeeForm, loadForm, loadForms, loadVersions, millis } from './shared.ts';
+import { canSeeForm, loadForm, loadForms, loadVersions, millis, pauseIfFull } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
 
@@ -913,6 +914,7 @@ export async function deleteSubmission(
         .update(formSubmissions)
         .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
         .where(eq(formSubmissions.id, row.id));
+      await auditSubmissions(context, 'form.submissions_deleted', row.formId, 1);
     },
     hooks,
   );
@@ -930,6 +932,11 @@ export async function restoreSubmission(
     scope,
     async (context) => {
       const { tx } = context;
+      // A form with an answer limit is locked before the submission, as the send path and Delete form lock it first.
+      const capped = await lockCappedForm(
+        tx,
+        (await viewIn(tx, scope, checkId(input.submissionId, UNKNOWN_SUBMISSION), true)).formId,
+      );
       const row = await lockedSubmission(tx, scope, input.submissionId, true);
       const restored = await tx
         .update(formSubmissions)
@@ -937,11 +944,51 @@ export async function restoreSubmission(
         .where(and(eq(formSubmissions.id, row.id), isNotNull(formSubmissions.deletedAt)))
         .returning({ id: formSubmissions.id });
       if (restored.length === 0) throw refuse('FORM_STATE', NOT_DELETED);
+      await auditSubmissions(context, 'form.submissions_restored', row.formId, 1);
+      if (capped !== undefined) await pauseIfFull(context, capped.formId, capped.document);
       return viewIn(tx, scope, row.id);
     },
     hooks,
   );
   return result;
+}
+
+/**
+ * One History row for a Delete or its Undo (forms fixes 3), one a request however many it touched: the form and how
+ * many, never which submissions or their answers.
+ */
+async function auditSubmissions(
+  context: Pick<WriteContext, 'tx' | 'scope'>,
+  action: 'form.submissions_deleted' | 'form.submissions_restored',
+  formId: string,
+  submissions: number,
+): Promise<void> {
+  await writeAudit(context.tx, context.scope.workspaceId, context.scope.actor, {
+    action,
+    targetType: 'form',
+    targetId: formId,
+    after: { submissions },
+  });
+}
+
+/**
+ * Before an Undo puts submissions back (forms fixes 3): a live form whose live version closes after N answers is
+ * locked, as the send path locks it, and answered with that version, so the Undo can pause it in the same write once it
+ * holds N again (`pauseIfFull`, which notes the `forms` change). A form with no limit is never locked, as a send leaves
+ * it unlocked. Called before any submission is locked: every form writer locks the form first.
+ */
+async function lockCappedForm(
+  tx: WorkspaceTx,
+  formId: string,
+): Promise<{ readonly formId: string; readonly document: FormDocument } | undefined> {
+  const capOf = async (form: Awaited<ReturnType<typeof loadForm>>) => {
+    if (form?.status !== 'live' || form.liveVersionId === null) return undefined;
+    const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+    return live?.document.closing?.after === undefined ? undefined : { formId: form.id, document: live.document };
+  };
+  if ((await capOf(await loadForm(tx, formId))) === undefined) return undefined;
+  // Read again under the lock: a Publish or a Pause meanwhile decides.
+  return capOf(await loadForm(tx, formId, true));
 }
 
 /** What a bulk Delete or its Undo naming more than `DELETE_SUBMISSIONS_MAX` submissions answers. */
@@ -1007,14 +1054,17 @@ export async function deleteSubmissions(
       // One still being filed waits for its filing, as a single delete refuses it (state review).
       const isFiling = (row: Row) => row.state === 'received' || row.state === 'processing';
       const stillFiling = rows.filter(isFiling).length;
-      const deletedIds = rows.filter((row) => !isFiling(row)).map((row) => row.id);
-      if (deletedIds.length > 0) {
+      const deleted = rows.filter((row) => !isFiling(row));
+      const deletedIds = deleted.map((row) => row.id);
+      const formId = deleted[0]?.formId;
+      if (formId !== undefined) {
         // Their notifications go with them: the inboxes showing one hear of it.
         await withdrawSubmissionNotices(context, sql`n.submission_id = any(${uuidList(deletedIds)})`);
         await tx
           .update(formSubmissions)
           .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
           .where(inArray(formSubmissions.id, deletedIds));
+        await auditSubmissions(context, 'form.submissions_deleted', formId, deletedIds.length);
       }
       return { deletedIds, stillFiling, skipped: ids.length - deletedIds.length - stillFiling };
     },
@@ -1037,14 +1087,20 @@ export async function restoreSubmissions(
   const ids = bulkIds(input.submissionIds);
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
+      // A form with an answer limit is locked before its submissions, as the send path and Delete form lock it first.
+      const capped = await lockCappedForm(tx, (await readableForm(tx, scope, input.formId)).id);
       const rows = await lockedRows(tx, scope, input.formId, ids, true);
       const restoredIds = rows.map((row) => row.id);
-      if (restoredIds.length > 0) {
+      const formId = rows[0]?.formId;
+      if (formId !== undefined) {
         await tx
           .update(formSubmissions)
           .set({ deletedAt: null, updatedAt: sql`now()` })
           .where(inArray(formSubmissions.id, restoredIds));
+        await auditSubmissions(context, 'form.submissions_restored', formId, restoredIds.length);
+        if (capped !== undefined) await pauseIfFull(context, capped.formId, capped.document);
       }
       return { restoredIds, skipped: ids.length - restoredIds.length };
     },

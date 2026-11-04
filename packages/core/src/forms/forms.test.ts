@@ -1700,6 +1700,88 @@ describe('the submissions screen’s reads (AC-572, AC-573)', () => {
       await refusalOf(deleteSubmissions(outside.scope, { formId: live.id, submissionIds: deleted.deletedIds })),
     ).toMatchObject([{ code: 'NOT_FOUND' }]);
   });
+
+  it('writes one History row for each Delete and Undo, with how many, and none when nothing moved (forms fixes 3)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const store = async () => {
+      const [row] = await w.query<{ id: string }>(sql`
+        insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, state, answers)
+        select workspace_id, id, live_version_id, gen_random_uuid(), 'held', '{}'::jsonb
+        from forms where id = ${live.id}::uuid
+        returning id::text`);
+      if (row === undefined) throw new Error('A submission expected.');
+      return row.id;
+    };
+    const one = await store();
+    const many = [await store(), await store(), await store()];
+    const rows = async () =>
+      w.query<{ action: string; target_id: string; after: unknown }>(sql`
+        select action, target_id::text, after from audit_events
+        where workspace_id = ${w.scope.workspaceId} and action like 'form.submissions_%'
+        order by at, id`);
+    await deleteSubmission(w.scope, { submissionId: one });
+    await restoreSubmission(w.scope, { submissionId: one });
+    const deleted = await deleteSubmissions(w.scope, { formId: live.id, submissionIds: many });
+    await restoreSubmissions(w.scope, { formId: live.id, submissionIds: deleted.deletedIds });
+    // Nothing left to put back, or nothing of this form's to delete (an unknown id, another form's): no row.
+    await restoreSubmissions(w.scope, { formId: live.id, submissionIds: deleted.deletedIds });
+    const other = await liveForm(w);
+    await deleteSubmissions(w.scope, { formId: other.id, submissionIds: [newId(), one] });
+    expect(await rows()).toEqual([
+      { action: 'form.submissions_deleted', target_id: live.id, after: { submissions: 1 } },
+      { action: 'form.submissions_restored', target_id: live.id, after: { submissions: 1 } },
+      { action: 'form.submissions_deleted', target_id: live.id, after: { submissions: 3 } },
+      { action: 'form.submissions_restored', target_id: live.id, after: { submissions: 3 } },
+    ]);
+  });
+
+  it('an Undo that fills a form again pauses it in the same write, and tells other tabs (forms fixes 3)', async () => {
+    const w = await workspace();
+    const store = async (formId: string, deleted: boolean, state = 'held') => {
+      const [row] = await w.query<{ id: string }>(sql`
+        insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, state, answers, deleted_at)
+        select workspace_id, id, live_version_id, gen_random_uuid(), ${state}, '{}'::jsonb,
+          ${deleted ? sql`now()` : sql`null`}
+        from forms where id = ${formId}::uuid
+        returning id::text`);
+      if (row === undefined) throw new Error('A submission expected.');
+      return row.id;
+    };
+    const formsRows = async () =>
+      (
+        await w.query<{ n: number }>(
+          sql`select count(*)::int as n from outbox where workspace_id = ${w.scope.workspaceId} and kind = 'forms'`,
+        )
+      )[0]?.n;
+    const status = async (formId: string) => (await getForm(w.scope, { formId })).status;
+    // Closes after 2, holds 1: putting one back fills it.
+    const single = await liveForm(w, (document) => ({ ...document, closing: { after: 2 } }));
+    await store(single.id, false);
+    const back = await store(single.id, true);
+    await restoreSubmission(w.scope, { submissionId: back }, [outboxHook()]);
+    expect(await status(single.id)).toBe('paused');
+    expect(await formsRows()).toBe(1);
+    // A bulk Undo, the same.
+    const bulk = await liveForm(w, (document) => ({ ...document, closing: { after: 3 } }));
+    await store(bulk.id, false);
+    const named = [await store(bulk.id, true), await store(bulk.id, true)];
+    await restoreSubmissions(w.scope, { formId: bulk.id, submissionIds: named }, [outboxHook()]);
+    expect(await status(bulk.id)).toBe('paused');
+    expect(await formsRows()).toBe(2);
+    // Room left (spam takes no place), or no limit at all: it stays live and tells nobody.
+    const room = await liveForm(w, (document) => ({ ...document, closing: { after: 3 } }));
+    await store(room.id, false);
+    await store(room.id, false, 'spam');
+    await restoreSubmission(w.scope, { submissionId: await store(room.id, true) }, [outboxHook()]);
+    const uncapped = await liveForm(w);
+    await restoreSubmissions(w.scope, { formId: uncapped.id, submissionIds: [await store(uncapped.id, true)] }, [
+      outboxHook(),
+    ]);
+    expect(await status(room.id)).toBe('live');
+    expect(await status(uncapped.id)).toBe('live');
+    expect(await formsRows()).toBe(2);
+  });
 });
 
 describe('book a meeting after sending (AC-1055 to AC-1057)', () => {

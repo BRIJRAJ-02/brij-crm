@@ -309,6 +309,12 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(['form.notify_changed'], form, NoParams),
   /** A form's submissions exported (forms fixes 3): the form only; how many and which way stay in the row. */
   entry(['form.exported'], form, NoParams),
+  /** A form's submissions deleted, or that Delete undone (forms fixes 3): the form and how many, never which ones. */
+  entry(
+    ['form.submissions_deleted', 'form.submissions_restored'],
+    form,
+    z.strictObject({ submissions: z.number().int().min(1) }),
+  ),
   /** A record link row names the booking only: the record is never named or sent. */
   entry(
     ['booking.no_show', 'booking.no_show_undone', 'booking.record_linked', 'booking.record_unlinked'],

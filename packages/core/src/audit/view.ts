@@ -581,6 +581,15 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'form.created':
     case 'form.exported':
       return { ...base, action, target: thing('form', names.forms), params: {}, changes: [] };
+    case 'form.submissions_deleted':
+    case 'form.submissions_restored':
+      return {
+        ...base,
+        action,
+        target: thing('form', names.forms),
+        params: { submissions: Math.max(1, Math.trunc(numberOf(after.submissions) ?? 1)) },
+        changes: [],
+      };
     case 'form.owner_changed': {
       const leadsTo = (side: Bag): AuditValue | undefined => {
         const rotationId = uuidOf(side.ownerRotationId);

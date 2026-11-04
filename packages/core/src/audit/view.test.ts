@@ -262,6 +262,11 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     row('form.exported', 'form', form, { after: { submissions: 12, way: 'download' } }),
     row('form.exported', 'form', form, { after: { way: 'background' } }),
   ],
+  'form.submissions_deleted': [
+    row('form.submissions_deleted', 'form', form, { after: { submissions: 3 } }),
+    row('form.submissions_deleted', 'form', form, { after: { submissions: 1 } }),
+  ],
+  'form.submissions_restored': [row('form.submissions_restored', 'form', form, { after: { submissions: 3 } })],
   'booking.no_show': [row('booking.no_show', 'booking', booking)],
   'list.created': [row('list.created', 'list', listId)],
   'list.updated': [row('list.updated', 'list', listId, { before: { name: 'Sales' }, after: { name: 'Deals' } })],
