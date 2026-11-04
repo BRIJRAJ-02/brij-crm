@@ -5107,6 +5107,25 @@ export function createDataLayer({
       link: (workspace: string, bookingId: string, record: LinkedRecordDisplay | null): Promise<void> =>
         linkBooking(workspace, bookingId, record),
       /**
+       * Adds or changes a booking's meeting link by hand (B-07): its Join shows at once in every list, range and page
+       * of meetings, and goes back on a refusal (`BOOKING_CLOSED` once it started or was cancelled, `INPUT_INVALID` for
+       * an address that isn't https), which it throws on. The guest is emailed the link.
+       */
+      setMeetingLink: async (workspace: string, bookingId: string, url: string): Promise<void> => {
+        const edit = (booking: BookingListItem): BookingListItem => ({ ...booking, videoUrl: url });
+        const weeks = bookingsLists.patchBooking(workspace, bookingId, edit);
+        const list = meetings.patchBooking(workspace, bookingId, edit);
+        try {
+          await call((options) =>
+            api.bookings.setMeetingLink({ workspace, bookingId, url, mutationId: mintId() }, options),
+          );
+        } catch (error) {
+          weeks();
+          list();
+          throw error;
+        }
+      },
+      /**
        * Cancels a booking (AC-640): shown cancelled at once, back on a
        * refusal; the guest is emailed, with the reason when there is one.
        * Every list and range is read again once the server has it.

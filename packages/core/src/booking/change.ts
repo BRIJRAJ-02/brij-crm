@@ -870,6 +870,33 @@ export async function markNoShow(
   });
 }
 
+/**
+ * Adds or changes a booking's meeting link by hand (B-07: a video call no calendar made a link for), from Bookings:
+ * its host, a co-host, the page's owner or `booking.admin`, as any change (`hostTarget`; a booking they can't change
+ * answers NOT_FOUND, one they may only See FORBIDDEN). A cancelled booking, or one already started, is
+ * BOOKING_CLOSED. The guest and their guests are emailed the link (`meeting_link`), in the same transaction; the same
+ * link again changes nothing and emails nobody. The address is checked by the contract (https, a host name).
+ */
+export async function setMeetingLink(
+  target: ChangeTarget,
+  input: { readonly url: string },
+  now: Date = new Date(),
+): Promise<{ readonly videoUrl: string }> {
+  const { principal } = target.scope.access;
+  if (principal.kind !== 'member') throw refuse('FORBIDDEN', 'Only a member adds a meeting link from Bookings.');
+  return inWorkspace(target.scope, async (tx) => {
+    const { row, page } = await readTarget(tx, target, true);
+    checkChangeable(row, now, 'changed');
+    if (row.videoUrl === input.url) return { videoUrl: input.url };
+    await tx
+      .update(bookings)
+      .set({ videoUrl: input.url, ...updatedBy(actorOf(target, page)) })
+      .where(eq(bookings.id, row.id));
+    await enqueueBookingMail(tx, row.id, ['meeting_link']);
+    return { videoUrl: input.url };
+  });
+}
+
 /** What a link to a record nobody may see, or that doesn't exist, answers: the same either way. */
 const NO_SUCH_RECORD = 'That record doesn’t exist, or you can’t see it.';
 

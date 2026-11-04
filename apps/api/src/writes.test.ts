@@ -2340,6 +2340,17 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     // Only the booking's own row (its person filed by the host's booking): the mark itself stores none.
     return [{ kind: 'records', object_id: m.people.id }];
   },
+  // A meeting link added by hand (B-07): settings like a no show; the link stores no row of its own.
+  'bookings.setMeetingLink': async (m, mutationId) => {
+    const bookingId = await hostBooking(m);
+    await m.client.bookings.setMeetingLink({
+      workspace: m.slug,
+      bookingId,
+      url: 'https://meet.example.com/abc-defg-hij',
+      mutationId,
+    });
+    return [{ kind: 'records', object_id: m.people.id }];
+  },
   // A booking linked to a deal by hand (polish F2): settings like a no show, so the link stores no row of its own.
   'bookings.link': async (m, mutationId) => {
     const bookingId = await hostBooking(m);
@@ -3422,6 +3433,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,
   'bookings.markNoShow': 3,
+  'bookings.setMeetingLink': 3,
   // The page, the booking and the deal, then the link.
   'bookings.link': 4,
   'bookings.move': 3,

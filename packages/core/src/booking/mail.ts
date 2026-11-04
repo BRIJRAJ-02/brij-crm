@@ -554,6 +554,36 @@ export async function prepareBookingMail(
             }));
         return { messages: [toVisitor, ...toGuests, ...toHost], invited: [], stamp };
       }
+      case 'meeting_link': {
+        // A link the host added by hand (B-07): the visitor and their guests get it, with a fresh calendar file
+        // where no calendar event holds the meeting. The host added it, so they get nothing.
+        if (row.videoUrl === null) return { messages: [], invited: [], skipped: 'no link' };
+        const join = { label: 'Join the call', url: row.videoUrl };
+        const toVisitor: BookingMail = {
+          to: row.visitorEmail,
+          subject: `Meeting link: ${name}`,
+          preview: preview(row.visitorTimeZone),
+          heading: 'Your meeting link',
+          intro: `${hostName} added the link for ${page.title}.`,
+          rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), { label: 'Where', value: where }],
+          button: join,
+          footnote: change,
+          why: visitorWhy,
+          ...ics('REQUEST', everyone),
+        };
+        const toGuests: BookingMail[] = guests.map((guest) => ({
+          to: guest,
+          subject: `Meeting link: ${name}`,
+          preview: preview(row.visitorTimeZone),
+          heading: 'The meeting link',
+          intro: `${hostName} added the link for ${page.title}.`,
+          rows: [when(row.visitorTimeZone), { label: 'Where', value: where }],
+          button: join,
+          why: guestWhy,
+          ...guestFile('REQUEST', guest),
+        }));
+        return { messages: [toVisitor, ...toGuests], invited: [], stamp };
+      }
       case 'host_changed':
       case 'approved':
       case 'pending_expire':
