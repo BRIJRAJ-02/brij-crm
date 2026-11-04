@@ -43,6 +43,8 @@ import { routeHostIds } from '../routing/hosts.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import {
   isClosedByRule,
+  isFull,
+  pauseIfFull,
   loadForm,
   loadVersions,
   logicFormOf,
@@ -378,7 +380,7 @@ export async function getPublicForm(
     const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
     if (live === undefined) throw new Error('A live form names a version that is gone.');
     // Closed by Pause, or by its own closing rule (forms fix b2): either way the page shows the closed message.
-    const isClosed = form.status === 'paused' || (await isClosedByRule(tx, form.id, live.document));
+    const isClosed = form.status === 'paused' || isClosedByRule(live.document);
     const rendered = publicFormOf(live.document, {
       publicKey: form.publicKey,
       status: isClosed ? 'paused' : 'live',
@@ -555,13 +557,23 @@ export async function submitForm(
     scope,
     async (context) => {
       const { tx } = context;
-      const form = publicRow(await loadForm(tx, input.formId));
-      if (form.status !== 'live') throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
-      const current = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+      const unlocked = publicRow(await loadForm(tx, input.formId));
+      // A send stored before the form closed, retried, still gets its answer (the replay below).
+      const isReplay = async () => alreadySent(tx, unlocked.id, body);
+      if (unlocked.status !== 'live' && !(await isReplay())) throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
+      const current = (await loadVersions(tx, [unlocked.liveVersionId])).get(unlocked.liveVersionId);
       if (current === undefined) throw new Error('A live form names a version that is gone.');
+      // A form that closes after a number of answers takes its sends one at a time (forms fixes 2), so two sends
+      // never both take the last place; every other form never waits on another's send.
+      const caps = current.document.closing?.after !== undefined;
+      const form = caps ? publicRow(await loadForm(tx, input.formId, true)) : unlocked;
       // Its own closing rule, against the live version (forms fix b2). The idempotent replay below answers a send
       // that landed before it closed, so a retried send still gets its answer.
-      if ((await isClosedByRule(tx, form.id, current.document)) && !(await alreadySent(tx, form.id, body))) {
+      const isClosed =
+        form.status !== 'live' ||
+        isClosedByRule(current.document) ||
+        (caps && (await isFull(tx, form.id, current.document)));
+      if (isClosed && !(await isReplay())) {
         throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
       }
       // The version the visitor filled in (AC-6302): a form published again while they filled it in is checked,
@@ -706,6 +718,9 @@ export async function submitForm(
         return { next: again, verdict: judged.verdict, replayed: true };
       }
       await attachUploads(tx, { submissionId: row.id, ids: claimedIds });
+      // The send that takes the last place pauses the form, in this same write (forms fixes 2): a page view then
+      // reads the paused form and counts nothing. Spam takes no place.
+      if (caps && state !== 'spam') await pauseIfFull(tx, form.id, current.document);
       if (state === 'received') {
         // The form is sent, so nothing stays saved for later (AC-6319), and today's visit is a completion
         // (AC-6320). Both ride in this transaction: a submission that doesn't commit changes neither. A spam or

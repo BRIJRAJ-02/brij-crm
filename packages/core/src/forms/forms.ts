@@ -57,7 +57,9 @@ import {
   loadForm,
   loadVersions,
   millis,
+  isFull,
   objectName,
+  pauseIfFull,
   publicFormOf,
   publishAttributes,
   workspacePublicKey,
@@ -1161,6 +1163,8 @@ export async function publishForm(
         { liveVersionId: form.draftVersionId, status: form.status === 'draft' ? 'live' : form.status },
         true,
       );
+      // A version that closes after fewer answers than the form already has goes live closed (forms fixes 2).
+      await pauseIfFull(tx, form.id, draft.document);
       const published = await loadForm(tx, form.id);
       if (published === undefined) throw new Error('The form went away under its publish.');
       return viewOf(tx, scope, published);
@@ -1289,6 +1293,9 @@ function nextStatus(form: FormRow, wanted: FormStatus): FormStatus | undefined {
   return undefined;
 }
 
+/** Why a form that has its number of answers can't be opened again as it is. */
+export const FORM_FULL = 'It already has the answers it closes after. Raise the number in Closes, then publish.';
+
 /** Pauses and resumes a form (Accepting), archives and restores it (AC-549); anything else is 409 `FORM_STATE`. */
 export async function setFormStatus(
   scope: EngineScope,
@@ -1310,6 +1317,13 @@ export async function setFormStatus(
         );
       }
       if (next === form.status) return viewOf(tx, scope, form);
+      // A form that closed by reaching its number of answers stays closed until the number is raised (forms fixes 2).
+      if (next === 'live' && form.liveVersionId !== null) {
+        const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+        if (live !== undefined && (await isFull(tx, form.id, live.document))) {
+          throw refuse('FORM_STATE', FORM_FULL);
+        }
+      }
       await touchForm(tx, scope, form.id, { status: next, archivedAt: next === 'archived' ? sql`now()` : null }, false);
       const moved = await loadForm(tx, form.id);
       if (moved === undefined) throw new Error('The form went away under its change.');

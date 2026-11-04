@@ -440,20 +440,47 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
 }
 
 /**
- * Whether a live form's own closing rule has closed it (forms fix b2): its moment has passed, or it holds as many
- * answers (spam left out) as it closes after. Counts only when the rule names a number, and stops at that number.
+ * Whether a live form's own closing rule has closed it by the clock (forms fix b2): its moment has passed. No count
+ * is read: a form that reaches its number of answers is paused by the send that fills it (`pauseIfFull`, forms
+ * fixes 2), so a page view, an upload and a saved part fill cost no read of the submissions at all.
  */
-export async function isClosedByRule(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
-  const closing = document.closing;
-  if (closing === undefined) return false;
-  const now = new Date();
-  if (closedByRule(document, { now, answers: 0 })) return true;
-  if (closing.after === undefined) return false;
+export function isClosedByRule(document: FormDocument, now = new Date()): boolean {
+  return closedByRule(
+    { closing: document.closing?.at === undefined ? undefined : { at: document.closing.at } },
+    {
+      now,
+      answers: 0,
+    },
+  );
+}
+
+/**
+ * Whether a form holds as many answers as its closing rule closes after (spam and deleted ones left out). Reads at
+ * most that many rows, and only when the rule names a number: the send path under the form's lock, Publish and
+ * Resume.
+ */
+export async function isFull(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
+  const after = document.closing?.after;
+  if (after === undefined) return false;
   const counted = await tx.execute<{ n: number }>(sql`
     select count(*)::int as n from (
       select 1 from form_submissions
-      where form_id = ${formId}::uuid and state <> 'spam' and deleted_at is null limit ${closing.after}
+      where form_id = ${formId}::uuid and state <> 'spam' and deleted_at is null limit ${after}
     ) kept
   `);
-  return closedByRule(document, { now, answers: counted.rows[0]?.n ?? 0 });
+  return (counted.rows[0]?.n ?? 0) >= after;
+}
+
+/**
+ * Pauses a live form that has reached its number of answers (forms fixes 2): Taking answers turns off, as Pause
+ * does, so the page says the closed message and nothing counts again until someone raises the number or resumes it.
+ * Answers whether it paused.
+ */
+export async function pauseIfFull(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
+  if (!(await isFull(tx, formId, document))) return false;
+  await tx
+    .update(forms)
+    .set({ status: 'paused', updatedAt: sql`now()` })
+    .where(and(eq(forms.id, formId), eq(forms.status, 'live')));
+  return true;
 }

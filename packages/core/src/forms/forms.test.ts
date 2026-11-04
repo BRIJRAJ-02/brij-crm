@@ -33,6 +33,7 @@ import {
   deleteForm,
   duplicateForm,
   formAttributes,
+  FORM_FULL,
   getForm,
   isSlugAvailable,
   listForms,
@@ -524,6 +525,20 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     ]);
     // The first send, retried, still gets its answer: it landed before the form closed.
     await submit(live.publicKey, first);
+    // The send that filled it paused it (forms fixes 2): a page view counts nothing, and it stays closed until the
+    // number is raised.
+    expect((await getForm(w.scope, { formId: live.id })).status).toBe('paused');
+    expect(await refusalOf(setFormStatus(w.scope, { formId: live.id, status: 'live' }))).toMatchObject([
+      { code: 'FORM_STATE', message: FORM_FULL },
+    ]);
+    const form = await getForm(w.scope, { formId: live.id });
+    const raised = await saveFormDraft(w.scope, {
+      formId: live.id,
+      document: { ...form.draft, closing: { after: 5 } },
+      expectedRevision: form.revision,
+    });
+    await publishForm(w.scope, { formId: live.id, expectedRevision: raised.revision });
+    expect((await setFormStatus(w.scope, { formId: live.id, status: 'live' })).status).toBe('live');
     const past = await liveForm(w, (document) => ({ ...document, closing: { at: '2020-01-01T00:00:00.000Z' } }));
     const late = await enterPublicForm({ db }, past.publicKey);
     expect((await getPublicForm(late.scope, { formId: late.formId })).status).toBe('paused');
