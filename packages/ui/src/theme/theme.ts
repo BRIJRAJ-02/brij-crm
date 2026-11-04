@@ -16,7 +16,7 @@ export const THEME_STORAGE_KEY = 'crm.theme';
  * colour (a meta can't read a CSS variable). theme-boot.js and index.html
  * carry the same two values; tests check all three against tokens.json.
  */
-export const THEME_SURFACE = { light: '#f8f9fb', dark: '#18191c' } as const;
+export const THEME_SURFACE = { light: '#fdfdff', dark: '#18191c' } as const;
 
 /** Reads any stored value as a choice. Only `light` and `dark` are kept; anything else is `system`. */
 export function parseThemeChoice(value: unknown): ThemeChoice {

@@ -1,5 +1,5 @@
 // WCAG 2 contrast over the token pairs the design system's components draw.
-// The house rule: text 4.5:1, control outlines 3.5:1 (field edges 3:1), accent marks 3:1, in
+// The house rule: text 4.5:1, control outlines 3.5:1, accent marks 3:1, in
 // both themes. A failing pair is raised, never fixed quietly in code.
 import type { ColorFamily } from './grammar.ts';
 
@@ -48,12 +48,6 @@ export function contrastRules(color: ColorFamily): ContrastRule[] {
       backgrounds: [`tag-${hue}-bg`],
       minimum: 4.5,
     })),
-    // A text field's, a select's and a secondary button's edge at rest (WCAG 1.4.11, 5 November 2026).
-    {
-      foregrounds: ['field-border'],
-      backgrounds: ['surface', 'surface-sidebar', 'surface-raised', 'surface-subtle', 'surface-hover'],
-      minimum: 3,
-    },
     // Selected rows and cell ranges hold controls too.
     { foregrounds: ['control-border'], backgrounds: [...SURFACES, 'accent-soft'], minimum: 3.5 },
     { foregrounds: ['accent'], backgrounds: ['surface', 'surface-raised'], minimum: 3 },

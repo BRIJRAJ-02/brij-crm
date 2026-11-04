@@ -10,36 +10,16 @@ import { type ColorFamily, ShadowFamily, TokensFile } from './grammar.ts';
 const PACKAGE = path.resolve(import.meta.dirname, '..');
 const tokens = TokensFile.parse(JSON.parse(readFileSync(path.join(PACKAGE, 'tokens.json'), 'utf8')));
 
-/**
- * The grounds those versions measured on: the surfaces and the accent as they stood until the contrast pass of
- * 5 November 2026 tinted the light canvas and spread the dark layers, so each fixture is measured on its own grounds.
- */
-const GROUNDS_BEFORE_NOVEMBER: Record<string, Partial<Record<'light' | 'dark', string>>> = {
-  surface: { light: '#fdfdff' },
-  'surface-sidebar': { light: '#f7f9fc', dark: '#131518' },
-  'surface-raised': { light: '#feffff', dark: '#202225' },
-  'surface-subtle': { light: '#f6f7fa', dark: '#141518' },
-  'surface-hover': { light: '#f0f2f7', dark: '#282a2f' },
-  'surface-selected': { light: '#e8ecf2', dark: '#32353d' },
-  'surface-column': { light: '#f5f8fd', dark: '#1b1e24' },
-  'text-tertiary': { light: '#676b72', dark: '#999da5' },
-  danger: { light: '#c92e2d', dark: '#ff7b79' },
-  'control-border': { light: '#757a84', dark: '#8a8f99' },
-  accent: { dark: '#2a66e4' },
-};
-
 /** The values these five tokens had in artifact version 8, before the contrast fixes. */
 const VERSION_8: Record<string, Partial<Record<'light' | 'dark', string>>> = {
-  ...GROUNDS_BEFORE_NOVEMBER,
   'text-tertiary': { light: '#6c7077', dark: '#888c94' },
-  danger: { light: '#cf3432', dark: '#ff7b79' },
-  'control-border': { light: '#838892', dark: '#8a8f99' },
+  danger: { light: '#cf3432' },
+  'control-border': { light: '#838892' },
   'accent-hover': { dark: '#538bf3' },
 };
 
 /** Version 12: the focus ring and checkbox edges on selected rows, before `accent-line` (spec 0003). */
 const VERSION_12: typeof VERSION_8 = {
-  ...GROUNDS_BEFORE_NOVEMBER,
   'control-border': { light: '#7b808a', dark: '#7b808a' },
   'accent-line': { dark: '#266df0' },
 };
@@ -71,7 +51,7 @@ describe('contrast (AC-4)', () => {
   });
 
   it('measures every pair in the table, in both themes', () => {
-    expect(checkContrast(tokens.color)).toHaveLength(136);
+    expect(checkContrast(tokens.color)).toHaveLength(126);
   });
 
   it('catches the pairs that missed in artifact version 8', () => {

@@ -21,9 +21,9 @@ export const NOTICEABLE_DELTA = 10;
  * stylesheet that draws the accent on any other light surface must add it here, so the property test covers it.
  */
 export const LIGHT_SURFACES: readonly string[] = [
-  '#f8f9fb',
-  '#fefeff',
-  '#f2f4f7',
+  '#fdfdff',
+  '#feffff',
+  '#f6f7fa',
   '#e8f0ff',
   '#f1f2f4',
   '#fce6ec',
@@ -42,8 +42,8 @@ export const LIGHT_SURFACES: readonly string[] = [
  */
 export const DARK_SURFACES: readonly string[] = [
   '#18191c',
-  '#26282d',
-  '#121316',
+  '#202225',
+  '#141518',
   '#1e2b47',
   '#2e3238',
   '#3a1c23',

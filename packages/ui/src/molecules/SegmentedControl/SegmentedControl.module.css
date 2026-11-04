@@ -11,7 +11,7 @@
     grid-auto-columns: 1fr;
     grid-auto-flow: column;
     padding: var(--space-2);
-    border: var(--border-width-hairline) solid var(--field-border);
+    border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--surface-sunken);
   }

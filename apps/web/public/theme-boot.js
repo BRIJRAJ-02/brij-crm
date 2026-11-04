@@ -10,7 +10,7 @@
     const choice = window.localStorage.getItem('crm.theme');
     if (choice === 'light' || choice === 'dark') {
       document.documentElement.setAttribute('data-theme', choice);
-      const surface = choice === 'dark' ? '#18191c' : '#f8f9fb';
+      const surface = choice === 'dark' ? '#18191c' : '#fdfdff';
       const metas = document.querySelectorAll('meta[name="theme-color"]');
       for (let i = 0; i < metas.length; i += 1) metas[i].setAttribute('content', surface);
     }
