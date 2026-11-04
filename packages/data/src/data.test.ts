@@ -750,6 +750,25 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       restoreResource: os.hospitality.restoreResource.handler(notServed),
       deleteResource: os.hospitality.deleteResource.handler(notServed),
     },
+    // The Menu app (spec 0065, H1) is driven against its own fake in `menu/store.test.ts`.
+    menu: {
+      draft: os.menu.draft.handler(notServed),
+      saveMenu: os.menu.saveMenu.handler(notServed),
+      deleteMenu: os.menu.deleteMenu.handler(notServed),
+      saveSection: os.menu.saveSection.handler(notServed),
+      deleteSection: os.menu.deleteSection.handler(notServed),
+      saveItem: os.menu.saveItem.handler(notServed),
+      deleteItem: os.menu.deleteItem.handler(notServed),
+      removePhoto: os.menu.removePhoto.handler(notServed),
+      placeItem: os.menu.placeItem.handler(notServed),
+      move: os.menu.move.handler(notServed),
+      saveGroup: os.menu.saveGroup.handler(notServed),
+      deleteGroup: os.menu.deleteGroup.handler(notServed),
+      setSoldOut: os.menu.setSoldOut.handler(notServed),
+      setHidden: os.menu.setHidden.handler(notServed),
+      publish: os.menu.publish.handler(notServed),
+      discard: os.menu.discard.handler(notServed),
+    },
     // Account sessions (spec 0033) are driven against their own fake in `account/sessions.test.ts`.
     account: {
       sessions: {

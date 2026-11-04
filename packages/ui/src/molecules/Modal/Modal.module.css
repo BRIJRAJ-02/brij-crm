@@ -29,6 +29,8 @@
   .scrim[data-holds-input],
   .scrim[data-variant='peek'],
   .scrim[data-variant='sheet'],
+  .scrim[data-variant='sheet-card'],
+  .scrim[data-variant='sheet-side'],
   .scrim[data-variant='palette'],
   .scrim[data-variant='drawer'] {
     background: var(--scrim);
@@ -361,6 +363,108 @@
     animation: slide-out var(--duration-exit) var(--ease-out) forwards;
   }
 
+  /* A public page's sheets (spec 0065, the guest menu, after the checklabs guest app): on a phone both are a bottom
+     sheet, the window's width and at most 92% of its height, rising from the foot over the drawer curve in
+     duration-modal and sinking in duration-exit. From 480px wide (the scrim's container) `sheet-card` floats centred,
+     size-dialog less two space-16 wide, every corner rounded, and reveals out of a soft blur, a little low and a
+     little small (transitions.dev's panel reveal), leaving faster; `sheet-side` stands at the end edge, size-panel
+     wide and the window's height, sliding in from the end. Their surface is the page's own: whatever the page sets
+     for surface-raised and text, which the guest menu points at its look. */
+  .scrim:has(> .root[data-variant='sheet-card']),
+  .scrim:has(> .root[data-variant='sheet-side']) {
+    place-items: end stretch;
+    padding: 0;
+  }
+
+  .root[data-variant='sheet-card'],
+  .root[data-variant='sheet-side'] {
+    --sheet-blur: var(--space-2);
+
+    inline-size: 100%;
+    max-block-size: 92dvh;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .root[data-variant='sheet-card'] .head,
+  .root[data-variant='sheet-side'] .head {
+    min-block-size: var(--size-toolbar);
+    border-block-end-color: transparent;
+  }
+
+  .root[data-variant='sheet-card'] .body,
+  .root[data-variant='sheet-side'] .body {
+    padding-block-start: 0;
+  }
+
+  .root[data-variant='sheet-card'][data-entering],
+  .root[data-variant='sheet-side'][data-entering] {
+    animation: rise var(--duration-modal) var(--ease-drawer);
+  }
+
+  .root[data-variant='sheet-card'][data-exiting],
+  .root[data-variant='sheet-side'][data-exiting] {
+    animation: sink var(--duration-exit) var(--ease-out) forwards;
+  }
+
+  @container modal-scrim (width >= 480px) {
+    .root[data-variant='sheet-card'] {
+      align-self: center;
+      justify-self: center;
+      inline-size: calc(var(--size-dialog) - 2 * var(--space-16));
+      max-block-size: calc(100dvh - 2 * var(--space-32));
+      border-radius: var(--radius-xl);
+    }
+
+    .root[data-variant='sheet-card'][data-entering] {
+      animation: card-in var(--duration-modal) var(--ease-out);
+    }
+
+    .root[data-variant='sheet-card'][data-exiting] {
+      animation: card-out var(--duration-exit) var(--ease-out) forwards;
+    }
+
+    .root[data-variant='sheet-side'] {
+      justify-self: end;
+      align-self: stretch;
+      inline-size: var(--size-panel);
+      block-size: 100dvh;
+      max-block-size: none;
+      border-radius: 0;
+      border-start-start-radius: var(--radius-xl);
+      border-end-start-radius: var(--radius-xl);
+    }
+
+    .root[data-variant='sheet-side'][data-entering] {
+      animation: slide-in var(--duration-modal) var(--ease-drawer);
+    }
+
+    .root[data-variant='sheet-side'][data-exiting] {
+      animation: slide-out var(--duration-exit) var(--ease-out) forwards;
+    }
+
+    .root[data-variant='sheet-side'] .dialog {
+      block-size: 100%;
+    }
+  }
+
+  @keyframes card-in {
+    from {
+      opacity: 0;
+      filter: blur(var(--sheet-blur));
+      translate: 0 var(--space-8);
+      scale: var(--scale-enter);
+    }
+  }
+
+  @keyframes card-out {
+    to {
+      opacity: 0;
+      filter: blur(var(--sheet-blur));
+      scale: var(--scale-enter);
+    }
+  }
+
   /* Opened from the keyboard (the palette's ⌘K), it appears at once. */
   .scrim[data-opened-by='keyboard'][data-entering],
   .root[data-opened-by='keyboard'][data-entering] {
@@ -448,6 +552,10 @@
     .root[data-variant='sheet'][data-exiting],
     .root[data-variant='drawer'][data-entering],
     .root[data-variant='drawer'][data-exiting],
+    .root[data-variant='sheet-card'][data-entering],
+    .root[data-variant='sheet-card'][data-exiting],
+    .root[data-variant='sheet-side'][data-entering],
+    .root[data-variant='sheet-side'][data-exiting],
     :dir(rtl) .root[data-variant='drawer'][data-entering],
     :dir(rtl) .root[data-variant='drawer'][data-exiting] {
       animation: none;

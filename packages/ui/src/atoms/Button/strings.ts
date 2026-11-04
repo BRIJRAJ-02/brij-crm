@@ -4,5 +4,7 @@ export const strings = {
   copy: 'Copy',
   copiedLabel: 'Copied',
   copiedAnnouncement: 'Copied',
+  /** Between a label and its amount, for screen readers only ("Add to your picks · £9.50"). */
+  amountSeparator: ' · ',
   copyFailed: 'Couldn’t copy. Select the link and copy it yourself.',
 } as const;

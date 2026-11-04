@@ -1,0 +1,90 @@
+/* SectionTabs (spec 0065, AC-6529; spec 0068, AC-6806): a row of pills that scrolls sideways, the current one
+   filled in the text colour with the surface's colour on it. The fill is one element under the pills that slides to
+   the chosen pill and takes its width, in duration-move on the ease in out curve (transitions.dev's tabs sliding);
+   its first place is drawn without moving. Reduced motion moves it at once. */
+@layer components {
+  .root {
+    min-inline-size: 0;
+  }
+
+  .row {
+    position: relative;
+    display: flex;
+    gap: var(--space-4);
+    overflow-x: auto;
+    padding-block: var(--space-4);
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .fill {
+    position: absolute;
+    inset-block: var(--space-4);
+    inset-inline-start: 0;
+    inline-size: var(--fill-width, 0);
+    border-radius: var(--radius-full);
+    background: var(--text);
+    translate: var(--fill-x, 0) 0;
+    transition-duration: var(--duration-move);
+    transition-property: translate, inline-size;
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  .fill[data-instant] {
+    transition: none;
+  }
+
+  .fill[data-hidden] {
+    visibility: hidden;
+  }
+
+  .tab {
+    position: relative;
+    flex: none;
+    padding: var(--space-6) var(--space-12);
+    border-radius: var(--radius-full);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
+    white-space: nowrap;
+    scroll-snap-align: center;
+    transition: color var(--duration-move) var(--ease-in-out);
+  }
+
+  .tab[aria-current='location'] {
+    color: var(--surface-raised);
+  }
+
+  .tab:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tab:not([aria-current='location']):hover {
+      color: var(--text);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fill,
+    .tab {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .fill {
+      background: Highlight;
+    }
+
+    .tab[aria-current='location'] {
+      color: HighlightText;
+    }
+  }
+}

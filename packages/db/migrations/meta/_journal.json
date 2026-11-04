@@ -1226,6 +1226,13 @@
       "when": 1795520000000,
       "tag": "0174_hospitality_apps",
       "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1795520100000,
+      "tag": "0175_hospitality_menu",
+      "breakpoints": true
     }
   ]
 }

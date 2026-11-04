@@ -35,6 +35,20 @@ export { workspaceBrands } from './brand.ts';
 export { PAGE_VERSION_KINDS, pageVersions } from './pages.ts';
 export { areas, businessProfiles, places, resources, workspaceApps } from './hospitality.ts';
 export {
+  menuDrafts,
+  menuItemOptionGroups,
+  menuItems,
+  menuItemSizes,
+  menuOptionGroups,
+  menuOptions,
+  menuPhotos,
+  menuPlacements,
+  menuPlaces,
+  menus,
+  menuSections,
+  menuVersions,
+} from './menu.ts';
+export {
   attendeeMatch,
   attendeeResponse,
   calendarAccessRole,

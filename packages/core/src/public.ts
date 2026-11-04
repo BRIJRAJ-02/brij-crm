@@ -133,3 +133,14 @@ export { isShownAt } from './profile/schedule.ts';
 // Insights (spec 0067): a visit's origin from what its page sent, and a share link's numbers only page.
 export { originOf, type VisitOrigin } from './insights/visits.ts';
 export { readInsightShare } from './insights/shares.ts';
+
+// The guest menu (spec 0065, H1, AC-6528): a menu key's door (ids only, through `crm_menu_by_key`), the place's live
+// snapshot with Sold out over it, and its photos, only those the snapshot shows.
+export {
+  enterMenuPage,
+  menuLookStylesheet,
+  readMenuPhoto,
+  readPublicMenu,
+  type MenuEntry,
+  type PublicMenuRead,
+} from './hospitality/public-menu.ts';

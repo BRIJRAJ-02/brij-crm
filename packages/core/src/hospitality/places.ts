@@ -4,7 +4,7 @@
 // rule the editor runs too (`hoursProblem`), and stored whole as one document.
 import { randomBytes } from 'node:crypto';
 import {
-  EMPTY_HOURS,
+  RESTAURANT_HOURS,
   HOSPITALITY_LIMITS,
   hoursProblem,
   type BusinessProfile,
@@ -97,7 +97,7 @@ export async function insertPlace(
     workspaceId: scope.workspaceId,
     id,
     ...placeColumns(fields),
-    hours: EMPTY_HOURS,
+    hours: RESTAURANT_HOURS,
     publicKey: newKey(),
     menuKey: newKey(),
     position,

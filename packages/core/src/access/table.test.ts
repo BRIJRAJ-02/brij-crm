@@ -22,6 +22,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // Where a workspace's logo and a link page's photos are kept (spec 0060): pure, a path from ids.
   'brandLogoFolder',
   'pageImageFolder',
+  // Where a workspace's menu photos are kept (spec 0065, H1): pure, a path from an id.
+  'menuPhotoFolder',
+  // Pure: what keeps a menu from publishing (spec 0065, H1).
+  'publishProblem',
   // Link page blocks and reach (spec 0061): pure, a share link read into a provider and id, the addresses built back
   // from them, a picture's bytes checked and cleaned, a page's own tags read, a view's facts, a block's window.
   'parseMediaLink',

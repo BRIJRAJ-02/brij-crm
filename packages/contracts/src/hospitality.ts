@@ -75,7 +75,8 @@ export const HoursRange = z.strictObject({
 /** One opening range. */
 export type HoursRange = z.infer<typeof HoursRange>;
 
-const DayRanges = z
+/** One day's opening ranges: up to three, in order, none overlapping, only the last past midnight. */
+export const PlaceDayRanges = z
   .array(HoursRange)
   .max(L.rangesPerDay, `A day takes up to ${String(L.rangesPerDay)} opening times.`)
   .check((ctx) => {
@@ -87,7 +88,7 @@ const DayRanges = z
 export const HoursException = z.strictObject({
   date: z.iso.date({ error: 'Give the special day a date.' }),
   closed: z.boolean().optional(),
-  ranges: DayRanges.optional(),
+  ranges: PlaceDayRanges.optional(),
   note: z
     .string()
     .trim()
@@ -104,8 +105,8 @@ export type HoursException = z.infer<typeof HoursException>;
 export const PlaceHours = z
   .strictObject({
     weekly: z.strictObject(
-      Object.fromEntries(WEEK_DAYS.map((day) => [day, DayRanges.optional()])) as {
-        [Day in (typeof WEEK_DAYS)[number]]: z.ZodOptional<typeof DayRanges>;
+      Object.fromEntries(WEEK_DAYS.map((day) => [day, PlaceDayRanges.optional()])) as {
+        [Day in (typeof WEEK_DAYS)[number]]: z.ZodOptional<typeof PlaceDayRanges>;
       },
     ),
     exceptions: z.array(HoursException).max(L.exceptions),

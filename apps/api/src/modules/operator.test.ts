@@ -23,10 +23,24 @@ const CHROME =
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
+/** Every tag list the edge cache was asked to forget. */
+const forgotten: string[][] = [];
 
 beforeAll(() => {
   ({ db, identity } = testConnections());
-  ({ app } = signInApp({ db, identity }, { OPERATOR_EMAILS: [OPERATOR, UNVERIFIED], SITE_ORIGINS: [SITE] }));
+  ({ app } = signInApp(
+    { db, identity },
+    { OPERATOR_EMAILS: [OPERATOR, UNVERIFIED], SITE_ORIGINS: [SITE] },
+    {
+      edgeCache: {
+        tag: () => undefined,
+        forget: (tags) => {
+          forgotten.push([...tags]);
+          return Promise.resolve();
+        },
+      },
+    },
+  ));
 });
 afterAll(async () => {
   await identity.close();
@@ -199,6 +213,20 @@ describe('the one write: early access (spec 0065, AC-6502)', () => {
         )
       ).code,
     ).toBe('NOT_FOUND');
+  });
+
+  it('forgets the workspace’s guest menus at the edge when its business apps close, and only then', async () => {
+    const m = await memberWithWorkspace(app);
+    const client = rpcClient(app, await asOperator());
+    const tag = `menu-ws:${m.workspace.id}`;
+    forgotten.length = 0;
+    await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'business_apps', on: true });
+    expect(forgotten.flat()).not.toContain(tag);
+    expect(
+      await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'business_apps', on: false }),
+    ).toEqual({ workspaceId: m.workspace.id, before: ['business_apps'], after: [] });
+    expect(forgotten).toContainEqual([tag]);
+    expect((await m.client.hospitality.apps({ workspace: m.slug })).available).toBe(false);
   });
 });
 

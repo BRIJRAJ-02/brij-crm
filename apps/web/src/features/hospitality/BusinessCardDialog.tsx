@@ -4,7 +4,19 @@
 // Leaves out: everything else about the business (Settings › Business), more places, hours and tables.
 import type { BusinessKind, FirstBusiness, WorkspaceSettings } from '@crm/data';
 import { BUSINESS_KINDS } from '@crm/data/hospitality';
-import { Button, CountryPicker, CurrencyPicker, Field, FormRow, Form, Modal, Select, type FormRefusal } from '@crm/ui';
+import {
+  Button,
+  CountryPicker,
+  CurrencyPicker,
+  Field,
+  FormRow,
+  Form,
+  Modal,
+  Select,
+  currencyOfCountry,
+  useFormatSettings,
+  type FormRefusal,
+} from '@crm/ui';
 import { useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
@@ -60,6 +72,16 @@ export function BusinessCardDialog({ isOpen, onOpenChange, workspace, onInstall 
   );
 }
 
+/** The region of a language tag (en-GB is GB), or undefined. */
+function regionOf(locale: string): string | undefined {
+  try {
+    const region = new Intl.Locale(locale).maximize().region;
+    return region !== undefined && /^[A-Z]{2}$/.test(region) ? region : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The card's form, mounted afresh with each opening, so it starts from the workspace as it stands. */
 function CardForm({
   formId,
@@ -78,10 +100,24 @@ function CardForm({
   const [kind, setKind] = useState<BusinessKind>('restaurant');
   const [addressLine, setAddressLine] = useState('');
   const [city, setCity] = useState('');
-  const [country, setCountry] = useState<string | null>(workspace?.country ?? null);
-  const [timeZone, setTimeZone] = useState(workspace?.timeZone ?? 'UTC');
-  const [currency, setCurrency] = useState<string | null>(workspace?.currency ?? null);
+  // Sensible defaults so a first install works without reading anything (spec 0068, foolproof): the workspace's own,
+  // else the person's time zone, and the country and currency their language's region suggests.
+  const settings = useFormatSettings();
+  const [country, setCountryValue] = useState<string | null>(
+    workspace?.country ?? settings.country ?? regionOf(settings.locale) ?? null,
+  );
+  const [timeZone, setTimeZone] = useState(workspace?.timeZone ?? settings.timeZone);
+  const [currency, setCurrency] = useState<string | null>(
+    workspace?.currency ?? settings.currency ?? currencyOfCountry(country ?? undefined) ?? null,
+  );
+  // The currency follows the country until the person picks one themselves.
+  const [currencyPicked, setCurrencyPicked] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  const setCountry = (next: string | null) => {
+    setCountryValue(next);
+    const follows = currencyOfCountry(next ?? undefined);
+    if (!currencyPicked && follows !== undefined) setCurrency(follows);
+  };
   const zones = useMemo(() => zoneItems(timeZone, new Date()), [timeZone]);
   const kinds = BUSINESS_KINDS.map((id) => ({ id, label: strings.kinds[id] }));
   const install = () => {
@@ -180,7 +216,14 @@ function CardForm({
             if (zone !== null) setTimeZone(zone);
           }}
         />
-        <CurrencyPicker label={strings.currency} value={currency} onChange={setCurrency} />
+        <CurrencyPicker
+          label={strings.currency}
+          value={currency}
+          onChange={(next) => {
+            setCurrencyPicked(true);
+            setCurrency(next);
+          }}
+        />
       </FormRow>
     </Form>
   );

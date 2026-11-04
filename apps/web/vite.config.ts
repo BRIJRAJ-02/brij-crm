@@ -96,7 +96,15 @@ function deployedStylePolicy(): Plugin {
  * does when deployed.
  */
 function hostedForms(): Plugin {
-  const rewrite = (url: string | undefined) => (url !== undefined && /^\/f\/[^/?#]+/.test(url) ? '/form.html' : url);
+  // The guest menu (spec 0065, H1) is a second static shell the same way: `/m/<key>` to its own entry.
+  const rewrite = (url: string | undefined) =>
+    url === undefined
+      ? url
+      : /^\/f\/[^/?#]+/.test(url)
+        ? '/form.html'
+        : /^\/m\/[^/?#]+\/?(?:[?#].*)?$/.test(url)
+          ? '/menu.html'
+          : url;
   return {
     name: 'crm:hosted-forms',
     configureServer(server) {
@@ -214,6 +222,11 @@ function inlineBookingShell(): Plugin {
       handler() {
         const shell = readFileSync(path.join(outDir, 'book.html'), 'utf8');
         const fonts = packFonts(readdirSync(path.join(outDir, 'assets')));
+        // The guest menu's shell, for `api/menu.mjs` (spec 0065, H1), the same way.
+        writeFileSync(
+          path.join(import.meta.dirname, 'api', 'menu-shell.generated.mjs'),
+          `// Written by the build (crm:booking-shell in vite.config.ts). Never edit it, and never commit it.\nexport const MENU_SHELL = ${JSON.stringify(readFileSync(path.join(outDir, 'menu.html'), 'utf8'))};\n`,
+        );
         writeFileSync(
           path.join(import.meta.dirname, 'api', 'shell.generated.mjs'),
           `// Written by the build (crm:booking-shell in vite.config.ts). Never edit it, and never commit it.\nexport const BOOKING_SHELL = ${JSON.stringify(shell)};\nexport const PACK_FONTS = ${JSON.stringify(fonts)};\n`,
@@ -254,7 +267,7 @@ export default defineConfig({
     layerOrder(),
     // Inter preloaded by its built name on every entry, so a cold first visit paints in it from the start
     // (never fallback, then Inter): the app, the hosted form and the public booking page all draw with it.
-    preloadFonts(FIRST_SCREEN_FONTS, ['/index.html', '/form.html', '/book.html']),
+    preloadFonts(FIRST_SCREEN_FONTS, ['/index.html', '/form.html', '/book.html', '/menu.html']),
     // Live updates' socket must be one vercel.json's CSP allows.
     realtimeCsp(),
     // A web DSN must be on Sentry's EU ingest and allowed by the same CSP; both checks run on every build.
@@ -296,6 +309,7 @@ export default defineConfig({
         index: path.join(import.meta.dirname, 'index.html'),
         form: path.join(import.meta.dirname, 'form.html'),
         book: path.join(import.meta.dirname, 'book.html'),
+        menu: path.join(import.meta.dirname, 'menu.html'),
       },
     },
   },

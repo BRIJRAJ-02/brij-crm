@@ -127,8 +127,25 @@ export interface PlaceHoursShape {
   readonly exceptions: readonly HoursExceptionShape[];
 }
 
-/** Hours with nothing open: a new place starts closed until someone sets its week. */
+/** Hours with nothing open. */
 export const EMPTY_HOURS: PlaceHoursShape = { weekly: {}, exceptions: [] };
+
+/**
+ * A new place's week (owner, 4 Nov 2026): a restaurant's, lunch 12:00 to 15:00 and dinner 18:00 to 22:00, Tuesday to
+ * Sunday, closed Monday, so the menu and the table pages read sensibly before anyone opens the hours.
+ */
+export const RESTAURANT_HOURS: PlaceHoursShape = {
+  weekly: Object.fromEntries(
+    (['tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map((day) => [
+      day,
+      [
+        { from: '12:00', to: '15:00', name: 'Lunch' },
+        { from: '18:00', to: '22:00', name: 'Dinner' },
+      ],
+    ]),
+  ),
+  exceptions: [],
+};
 
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 

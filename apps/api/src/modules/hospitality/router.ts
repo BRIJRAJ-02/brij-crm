@@ -1,3 +1,4 @@
+import { menuCacheTags } from '@crm/contracts';
 import {
   addResources,
   archiveResource,
@@ -5,6 +6,7 @@ import {
   deleteArea,
   deleteResource,
   getBusiness,
+  menuPlaceIds,
   installApp,
   listApps,
   moveResource,
@@ -17,7 +19,7 @@ import {
   updateResource,
 } from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
-import { member } from '../../orpc.ts';
+import { member, type RequestContext } from '../../orpc.ts';
 
 // The Hospitality suite's setup (spec 0065, H0): the Apps page, the business, its places and each place's floor.
 // Inside a workspace, behind the member door; core checks the permission (`workspace.manage` to install and remove,
@@ -26,10 +28,18 @@ import { member } from '../../orpc.ts';
 // sidebars follow, and the rest store none (each screen holds its own copy and reads it again when opened).
 const h = member.hospitality;
 
+/**
+ * Purges every place's guest menu from the edge (Rules settled: Routes): the business, a place's address or hours,
+ * or an app installed or removed changes what `/m/<key>` answers, so its copies go once the write committed.
+ */
+async function forgetMenus(context: RequestContext & { readonly scope: Parameters<typeof menuPlaceIds>[0] }) {
+  await context.edgeCache.forget(menuCacheTags(...(await menuPlaceIds(context.scope))));
+}
+
 export const hospitalityRouter = h.router({
   apps: h.apps.handler(({ context }) => listApps(context.scope)),
-  install: h.install.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+  install: h.install.handler(async ({ context, input }) => {
+    const view = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       installApp(
         context.scope,
         {
@@ -39,31 +49,41 @@ export const hospitalityRouter = h.router({
         },
         hooks,
       ),
-    ),
-  ),
-  remove: h.remove.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+    );
+    await forgetMenus(context);
+    return view;
+  }),
+  remove: h.remove.handler(async ({ context, input }) => {
+    const view = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       removeApp(context.scope, { app: input.app, withDependents: input.withDependents }, hooks),
-    ),
-  ),
+    );
+    await forgetMenus(context);
+    return view;
+  }),
   business: h.business.handler(({ context }) => getBusiness(context.scope)),
-  saveBusiness: h.saveBusiness.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => saveBusiness(context.scope, input.profile)),
-  ),
+  saveBusiness: h.saveBusiness.handler(async ({ context, input }) => {
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      saveBusiness(context.scope, input.profile),
+    );
+    await forgetMenus(context);
+    return saved;
+  }),
   createPlace: h.createPlace.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       createPlace(context.scope, { id: input.id, place: input.place }),
     ),
   ),
-  updatePlace: h.updatePlace.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+  updatePlace: h.updatePlace.handler(async ({ context, input }) => {
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       updatePlace(context.scope, {
         placeId: input.placeId,
         ...(input.place === undefined ? {} : { place: input.place }),
         ...(input.hours === undefined ? {} : { hours: input.hours }),
       }),
-    ),
-  ),
+    );
+    await context.edgeCache.forget(menuCacheTags(saved.id));
+    return saved;
+  }),
   resources: h.resources.handler(({ context, input }) => listResources(context.scope, { placeId: input.placeId })),
   saveArea: h.saveArea.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>

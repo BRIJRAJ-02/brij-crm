@@ -117,6 +117,15 @@ export async function readFormBrand(entry: { readonly scope: EngineScope }): Pro
   });
 }
 
+/**
+ * A guest menu's brand (spec 0065, AC-6570 groundwork): its workspace's accent and logo, in the caller's transaction
+ * on the workspace the menu door found (`enterMenuPage`), so it reads that one workspace only.
+ */
+export async function readMenuBrandIn(tx: WorkspaceTx, workspaceId: string): Promise<PageBrand> {
+  const brand = await brandRowOf(tx, workspaceId);
+  return pageBrandOf(accentsOf(undefined, brand), brand);
+}
+
 /** One photo of a link page: where the store keeps it, its checked type, and the version its path carries. */
 export interface LookImage {
   readonly path: string;

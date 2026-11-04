@@ -59,6 +59,8 @@ export { Reveal, type RevealProps } from './atoms/Reveal/Reveal.tsx';
 export { NumberPop, type NumberPopProps } from './atoms/NumberPop/NumberPop.tsx';
 /** The moment something is done: a check that draws itself (spec 0068, AC-6806). */
 export { SuccessCheck, type SuccessCheckProps } from './atoms/SuccessCheck/SuccessCheck.tsx';
+/** Words that change in place, the old rising out and the new rising in (spec 0068, AC-6806). */
+export { TextSwap, type TextSwapProps } from './atoms/TextSwap/TextSwap.tsx';
 export { Spinner, type SpinnerProps } from './atoms/Spinner/Spinner.tsx';
 export { StatusDot, type StatusDotProps } from './atoms/StatusDot/StatusDot.tsx';
 /** A booking link's colour from its id, the same on its card and its bookings on the week (grey and red left out). */
@@ -102,6 +104,8 @@ export { memoIntl } from './lib/intl-memo.ts';
 export { safeHref } from './lib/safe-href.ts';
 export { strings as sharedStrings } from './lib/strings.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
+/** A country's currency (GB is GBP, DE is EUR), so a form can start from the one a place most likely uses. */
+export { currencyOfCountry } from './lib/region-defaults.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
 export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
 export {
@@ -399,6 +403,8 @@ export {
 } from './modules/VisitorBar/VisitorBar.tsx';
 export { SampleTable, type SampleTableProps } from './molecules/SampleTable/SampleTable.tsx';
 export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
+/** A long page's sections as pills that follow the reader, the current one's fill sliding to it (spec 0068, AC-6806). */
+export { SectionTabs, type SectionTab, type SectionTabsProps } from './molecules/SectionTabs/SectionTabs.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export {
   TileGrid,
@@ -513,6 +519,16 @@ export {
   type FormLayoutThumbnailProps,
 } from './modules/HostedFormPreview/FormLayoutThumbnail.tsx';
 export { HostedFormPreview, type HostedFormPreviewProps } from './modules/HostedFormPreview/HostedFormPreview.tsx';
+/** The guest menu (spec 0065, H1): a place's published menu as a guest reads it, and the editor's phone preview. */
+export { MenuList, type MenuListProps } from './modules/MenuList/MenuList.tsx';
+/** A dish's sheet and Your picks on the guest menu (spec 0065, H1). */
+export {
+  ItemSheet,
+  PicksSheet,
+  picksTotal,
+  type GuestPick,
+  type MenuPhotoHref,
+} from './modules/ItemSheet/ItemSheet.tsx';
 export {
   OptionsEditor,
   type OptionOutcome,

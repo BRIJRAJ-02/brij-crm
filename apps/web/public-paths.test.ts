@@ -35,7 +35,7 @@ describe('vercel.json (handle addresses)', () => {
     const sources = config.rewrites.map((rule) => rule.source);
     expect(sources).toContain(PROFILE_SOURCE);
     expect(sources).toContain(PAGE_SOURCE);
-    expect(sources.indexOf(PAGE_SOURCE)).toBeLessThan(sources.indexOf('/((?!api/|api$|f/|b/|embed/).*)'));
+    expect(sources.indexOf(PAGE_SOURCE)).toBeLessThan(sources.indexOf('/((?!api/|api$|f/|b/|m/|embed/).*)'));
     expect(config.headers.map((rule) => rule.source)).toEqual(
       expect.arrayContaining([APP_HEADER_SOURCE, HANDLE_HEADER_SOURCE]),
     );
@@ -155,8 +155,14 @@ describe('the public booking host', () => {
   });
 
   it('keeps every path vercel.json sends to the booking or form bundle', () => {
-    for (const pathname of ['/ada', '/ada-lovelace/30min', '/b/AbCdEfGhIjKlMnOp', '/f/contact']) {
-      expect(['/book.html', '/form.html', '/api/handle']).toContain(destinationOf(pathname));
+    for (const pathname of [
+      '/ada',
+      '/ada-lovelace/30min',
+      '/b/AbCdEfGhIjKlMnOp',
+      '/f/contact',
+      '/m/AbCdEfGhIjKlMnOp',
+    ]) {
+      expect(['/book.html', '/form.html', '/api/handle', '/api/menu']).toContain(destinationOf(pathname));
       expect(servedOnPublicHost(pathname), pathname).toBe(true);
     }
   });
