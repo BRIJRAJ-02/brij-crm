@@ -41,6 +41,7 @@ import {
   type PreviewTextChange,
   TabPanel,
   Tabs,
+  ToggleButton,
   TopBar,
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
@@ -68,9 +69,8 @@ import {
   uploadsOffFor,
 } from './draft.ts';
 import { BrandedFormPreview, LookControls } from './FormBrand.tsx';
-import { LogicMap } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
-import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
+import { AnalyticsTab } from './AnalyticsTab.tsx';
 import { ShareTab } from './ShareTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { ReadyDialog, type LiveFiling } from './PublishDialog.tsx';
@@ -183,8 +183,8 @@ export function FormEditor(props: FormEditorProps) {
   const jobs = useJobFollower(data.jobs.view(slug, 'mine'), heldJobs);
   // The end of the tab strip, where a tab draws its own tools (Analytics' period).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
-  // The Flow view (spec 0063, AC-6325): the steps, their jumps and the endings, read only, from the Form tab.
-  const [isFlowOpen, setFlowOpen] = useState(false);
+  // Logic · n shows only the cards that carry rules (forms fixes 3, the design critic: a map that said only Edit).
+  const [isLogicOnly, setLogicOnly] = useState(false);
   // The name, link, owner and who is emailed: each saves on its own on the Settings tab, with no Save.
   const settings = useFormSettings({
     slug,
@@ -367,14 +367,7 @@ export function FormEditor(props: FormEditorProps) {
   }
   const viewOnly = !canManage && isPublished;
 
-  // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
-  // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
-  // reuses what this already holds rather than asking again.
-  const analyticsView = useMemo(
-    () => (isPublished ? data.forms.analytics(slug, form.id, FORM_CHIP_RANGE) : undefined),
-    [isPublished, data, slug, form.id],
-  );
-  const questionStats = useQuestionStats(analyticsView);
+  // No answered share on the question cards (forms fixes 3, the design critic: it belongs in Analytics).
   const isChanged = isPublished && !sameDocument(draft, form.live);
   const status = statusOf(form, isChanged);
   const liveIds = useMemo(() => new Set(form.live?.questions.map((question) => question.id) ?? []), [form.live]);
@@ -1056,44 +1049,29 @@ export function FormEditor(props: FormEditorProps) {
                 );
               }}
             />
-            {isFlowOpen && (
-              <LogicMap
-                slug={slug}
-                draft={draft}
-                problems={logicIssues}
-                onSuggest={(suggestion) => {
-                  const ids = { rule: data.forms.newId(), ending: mintEndingId(draft.endings ?? []) };
-                  setDraft((before) => suggestion.apply(before, ids));
-                  toasts.toast({ tone: 'success', message: strings.suggestionAdded });
-                }}
-                questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
-                stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
-                endingsHref={`${formHref(slug, form.id)}?question=${AFTER_ROW}`}
-                onOpenChange={setFlowOpen}
-              />
-            )}
             <QuestionsSection
               // A new form never saved since it was made with nothing in it (Blank) opens on its first question.
               startsWithQuestion={!isPublished && form.revision === 1}
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
-              {...(questionStats === undefined ? {} : { stats: questionStats })}
               onOpened={openRow}
-              // The Logic map's door (T41): how many rules the form has, and how many need a look.
+              // Logic · n (T41; forms fixes 3): how many rules the form has and how many need a look, pressed to show only
+              // the cards that carry them. Off while the form has none.
+              logicOnly={isLogicOnly && logicCount(draft) > 0}
               {...(draft.questions.length === 0
                 ? {}
                 : {
                     actionsStart: (
-                      <Button
+                      <ToggleButton
                         variant="ghost"
                         icon={logicIssues.length > 0 ? 'triangle-alert' : 'git-branch'}
-                        onPress={() => {
-                          setFlowOpen(true);
-                        }}
+                        isSelected={isLogicOnly && logicCount(draft) > 0}
+                        isDisabled={logicCount(draft) === 0}
+                        onChange={setLogicOnly}
                       >
                         {logicIssues.length > 0
                           ? strings.logicButtonWarn(logicCount(draft), logicIssues.length)
                           : strings.logicButton(logicCount(draft))}
-                      </Button>
+                      </ToggleButton>
                     ),
                   })}
               steps={{

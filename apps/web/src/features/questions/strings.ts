@@ -248,6 +248,10 @@ export const strings = {
   jumpGone: 'This jump no longer points to a step below this one. Choose where it goes.',
   /** One at a time: a question as a jump's target, after "→": its own words, as its card shows them (no number). */
   jumpToQuestion: (label: string) => label,
+  /** A card's rules on its second line (forms fixes 3): "Skips to Budget", or how many it has. */
+  skipsTo: (name: string) => `Skips to ${name}`,
+  rulesCount: (n: number) => (n === 1 ? '1 rule' : `${String(n)} rules`),
+  logicSeparator: ' · ',
   jumpGoneQuestion: 'This jump no longer points to a question below this one. Choose where it goes.',
   /** One at a time: the heading over a question's rules, and its rules row under it. */
   afterQuestion: 'After this question',

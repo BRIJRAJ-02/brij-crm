@@ -778,10 +778,6 @@ export const strings = {
   analyticsNoneInRange: 'No visits in this period',
   analyticsNoneInRangeText: 'Try a longer period.',
   analyticsFailed: 'Analytics didn’t load',
-  /** A question card's chip (AC-6322): "82% answered", or nothing at all when nobody reached it. */
-  analyticsChip: (answered: string) => `${answered} answered`,
-  /** What the chip's percentage is of, as its tooltip: the denominator, which the card has no room to say. */
-  analyticsReached: (answered: string, reached: string) => `${answered} of the ${reached} who reached this question`,
 
   status: {
     draft: 'Not published',

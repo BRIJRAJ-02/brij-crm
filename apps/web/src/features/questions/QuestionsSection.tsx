@@ -19,6 +19,7 @@ import {
   type FormJump,
   type FormLayout,
   type FormStep,
+  type JumpTarget,
 } from '@crm/data/forms';
 import {
   Button,
@@ -78,6 +79,7 @@ import {
   questionJumpChoices,
   removeJump,
   targetOfId,
+  targetWords,
 } from './jumps.ts';
 import {
   changeStep,
@@ -160,12 +162,6 @@ export interface QuestionsSectionProps {
   readonly toasts: Toasts;
   /** The question a publish refused, and why: kept open, with the error inline. */
   readonly problem?: { readonly questionId: string; readonly message: string };
-  /**
-   * How each question performs, by question id (spec 0063, AC-6322): a short chip on the card's second line, so a
-   * weak question is visible where it is edited. Absent on a form with no analytics, and a question nobody has
-   * reached has no entry.
-   */
-  readonly stats?: ReadonlyMap<string, { readonly stat: string; readonly statTitle: string }>;
   /** A question to open and bring into view as the screen shows (a link from Settings' map of where answers go). */
   readonly focusQuestionId?: string;
   /** Whether the member may add attributes: an unfiled question is then filed onto a new one when the form is published. */
@@ -180,6 +176,11 @@ export interface QuestionsSectionProps {
   readonly onOpened?: (rowId: string) => void;
   /** Before Add a question in the list's header: a form's Logic. */
   readonly actionsStart?: ReactNode;
+  /**
+   * Only the cards that carry rules (a form's Logic · n pressed, forms fixes 3): questions with a Show only if or
+   * rules of their own, steps with either. Nothing moves and nothing is added while it is on.
+   */
+  readonly logicOnly?: boolean;
   /**
    * What is wrong with the logic at one place (T41), in words: a question's Show only if, a step, or one of a step's
    * rules. A form passes it; a booking page has no logic to check.
@@ -328,7 +329,6 @@ function TypeMenu({ children, label, allowed, current, onPick, presets }: TypeMe
 /** The questions: a header with the count and Add a question, then the cards. */
 export function QuestionsSection(props: QuestionsSectionProps) {
   const { questions, onChange, attributes, objectName, liveIds, newId, toasts, problem, isReadOnly } = props;
-  const { stats } = props;
   const warningsAt = (place: LogicPlaceRef): readonly string[] => props.logicWarnings?.(place) ?? [];
   const isFilingOff = props.isFilingOff === true;
   const isLocked = (question: FormQuestion) => props.locked?.ids.has(question.id) === true;
@@ -578,8 +578,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       : {}),
     // Where an answer is saved shows in its editor, not on the row: the row stays the question and its type (T17).
     // Only a complete condition is said: one still being written shows nothing rather than "Shows when … is".
-    ...shownWhenOf(question.showWhen, questionFacts(questions.slice(0, questions.indexOf(question)))),
-    ...(stats?.get(question.id) ?? {}),
+    ...logicLineOf(
+      shownWhenOf(question.showWhen, questionFacts(questions.slice(0, questions.indexOf(question)))).condition,
+      jumpsLine(question.jumps ?? [], (to) =>
+        targetWords(to, questionJumpChoices(questions, breaks?.endings ?? [], question.id)),
+      ),
+    ),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
   // Steps as pages (spec 0063; T20, 5 November 2026: Tally's page breaks): with the Steps layout each break is an
@@ -626,7 +630,10 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               // Clearly a step (T39): its number, its name and how many questions it holds.
               note: strings.questionCount(place.count),
               // Named by every question, so one that comes after the step reads by its label, not as removed.
-              ...shownWhenOf(step.showWhen, questionFacts(questions)),
+              ...logicLineOf(
+                shownWhenOf(step.showWhen, questionFacts(questions)).condition,
+                jumpsLine(step.jumps ?? [], (to) => targetWords(to, jumpChoices(flow, breaks.endings ?? [], step.id))),
+              ),
               hasProblem: stepProblem?.stepId === step.id,
             },
           ];
@@ -635,7 +642,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   // A step's rules sit under its last question (critique c, 7: read after the questions they read), as a note row:
   // "After this step: If … → …, Otherwise → …".
   // With One at a time a question's rules sit right under it, the same note row: "After this question: If … → …".
-  const items: readonly QuestionListItem[] = !isStepped
+  const allItems: readonly QuestionListItem[] = !isStepped
     ? !isOneByOne
       ? headed
       : headed.flatMap((item): QuestionListItem[] => {
@@ -653,6 +660,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         if (step === undefined || (step.jumps?.length ?? 0) === 0) return [item];
         return [item, { id: `${AFTER_ROW}${step.id}`, kind: 'note', label: strings.afterStep(header?.label ?? '') }];
       });
+
+  // Logic · n pressed (forms fixes 3): only the cards that carry rules, each saying them on its second line.
+  const isLogicOnly = props.logicOnly === true;
+  const items: readonly QuestionListItem[] = isLogicOnly
+    ? allItems.filter((item) => item.kind !== 'note' && item.condition !== undefined)
+    : allItems;
 
   // A step with logic shows it under its header, always: its rules are what the header is about.
   const shownOpen: ReadonlySet<string> = new Set([
@@ -1036,8 +1049,9 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         </>
       }
       items={items}
-      // A quiet + between the cards, always there (T39: adding in between was "a find"); not on a read only list.
-      {...(isReadOnly ? {} : { gaps: 'shown' as const, renderGap: gapFor })}
+      // A quiet + between the cards, always there (T39: adding in between was "a find"); not on a read only list,
+      // nor while only the cards with rules show.
+      {...(isReadOnly || isLogicOnly ? {} : { gaps: 'shown' as const, renderGap: gapFor })}
       openIds={shownOpen}
       onOpenChange={(id, isOpen) => {
         // The question or divider a publish refused stays open until it is fixed.
@@ -1391,7 +1405,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           </MenuTrigger>
         );
       }}
-      {...(isReadOnly
+      {...(isReadOnly || isLogicOnly
         ? {}
         : {
             onMove: (id: string, index: number) => {
@@ -2489,6 +2503,27 @@ function StepEditor({
       )}
     </>
   );
+}
+
+/**
+ * A card's rules on its second line (forms fixes 3, the design critic: rules shown where they live): its Show only if
+ * and where its own rules send people, joined, or nothing when it has neither.
+ */
+function logicLineOf(shown: string | undefined, jumps: string | undefined): { readonly condition?: string } {
+  const parts = [shown, jumps].filter((part): part is string => part !== undefined);
+  return parts.length === 0 ? {} : { condition: parts.join(strings.logicSeparator) };
+}
+
+/** Where a card's rules send people, said short: "Skips to Budget" for one rule, "3 rules" for more. */
+function jumpsLine(
+  jumps: readonly { readonly to: JumpTarget }[],
+  nameOf: (to: JumpTarget) => string | undefined,
+): string | undefined {
+  const [only] = jumps;
+  if (only === undefined) return undefined;
+  if (jumps.length > 1) return strings.rulesCount(jumps.length);
+  const name = nameOf(only.to);
+  return name === undefined ? strings.rulesCount(1) : strings.skipsTo(name);
 }
 
 /** A row's "Shows when …" line, only when its Show when has a complete condition to say. */
