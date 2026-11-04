@@ -118,17 +118,20 @@ export type BotReason = 'trap' | 'too_fast';
  * (`ticketElapsedMs`) at least `MIN_FILL_MS` old. With tickets set up (every
  * deploy: `createApp` makes the book), a missing or invalid ticket is
  * `too_fast` (B-04): the client's own `startedAt` can say anything, so it is
- * read only where no ticket book exists (`tickets: false`). The reason goes in
+ * read only where no ticket book exists (`tickets: false`). An `expired` one
+ * passes: it is ours, and its age is past any fill time. The reason goes in
  * the refusal's log line, so a person refused can be traced.
  */
 export function botReason(
   input: { readonly company_url?: string; readonly startedAt?: number },
   now: number,
   ticketElapsedMs?: number,
-  options: { readonly tickets?: boolean } = {},
+  options: { readonly tickets?: boolean; readonly expired?: boolean } = {},
 ): BotReason | undefined {
   if (input.company_url !== undefined && input.company_url !== '') return 'trap';
   if (ticketElapsedMs !== undefined) return ticketElapsedMs < MIN_FILL_MS ? 'too_fast' : undefined;
+  // A ticket past its day is ours and was made more than `MIN_FILL_MS` ago: a tab left open overnight books.
+  if (options.expired === true) return undefined;
   if (options.tickets !== false) return 'too_fast';
   return input.startedAt !== undefined && now - input.startedAt < MIN_FILL_MS ? 'too_fast' : undefined;
 }

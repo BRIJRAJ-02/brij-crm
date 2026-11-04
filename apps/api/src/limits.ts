@@ -15,8 +15,12 @@ export interface LimitRule {
 export type LimitDecision =
   { readonly allowed: true } | { readonly allowed: false; readonly retryAfterSeconds: number };
 
-/** Counts a hit on `key` under `rule`. */
-export type PublicLimiter = (key: string, rule: LimitRule) => LimitDecision;
+/**
+ * Counts a hit on `key` under `rule`. With `count: false` it only answers whether the window is already spent, and
+ * counts nothing: a budget spent only by what succeeded (a booking's emails and guest invitations, B-02) is checked
+ * that way first, then counted once the work is done.
+ */
+export type PublicLimiter = (key: string, rule: LimitRule, options?: { readonly count?: boolean }) => LimitDecision;
 
 /**
  * A fixed window limiter in memory, at most `maxKeys` keys: when full, expired
@@ -31,9 +35,15 @@ export function createMemoryLimiter(
   const now = options.now ?? Date.now;
   const maxKeys = options.maxKeys ?? 100_000;
   const windows = new Map<string, { readonly start: number; readonly windowMs: number; count: number }>();
-  return (key, rule) => {
+  return (key, rule, options = {}) => {
     const at = now();
     const current = windows.get(key);
+    if (options.count === false) {
+      if (current === undefined || at - current.start >= rule.windowMs || current.count < rule.max) {
+        return { allowed: true };
+      }
+      return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((current.start + rule.windowMs - at) / 1000)) };
+    }
     if (current === undefined || at - current.start >= rule.windowMs) {
       if (windows.size >= maxKeys) {
         // Full: drop what has expired, then the oldest down to 90%, so the next full scan is maxKeys / 10 inserts away.

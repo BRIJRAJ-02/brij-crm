@@ -63,6 +63,24 @@ describe('a visitor’s name', () => {
   it('a web address in the name is refused', () => {
     expect(book({ name: 'Your account is locked, verify at https://evil.example' }).success).toBe(false);
   });
+
+  it.each([
+    ['a one letter host', 'Prize at x.com'],
+    ['a country domain', 'Claim at claim-prize.de'],
+    ['a full width dot', 'Verify at evil。com'],
+    ['a path', 'Go to evil.example/login'],
+    ['a right to left override', 'Eve‮gnp.exe'],
+    ['a zero width space', 'E​ve'],
+  ])('%s in the name is refused', (_label, name) => {
+    expect(book({ name }).success).toBe(false);
+  });
+
+  it.each([['J.R.R. Tolkien'], ['St.John Smith'], ['Dr. Ada Lovelace'], ['میترا‌ احمدی']])(
+    '%s is taken as typed',
+    (name) => {
+      expect(book({ name }).data?.name).toBe(name);
+    },
+  );
 });
 
 describe('a visitor’s email', () => {

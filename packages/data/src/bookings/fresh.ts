@@ -87,6 +87,8 @@ export function keepFresh(read: () => Promise<boolean>, deps: FreshDeps = {}): F
   let wait = FRESH_EVERY_MS;
   let cancel: (() => void) | undefined;
   let reading = false;
+  // A read asked for while one was out (a change event, B-17): that read began before the change, so one more follows.
+  let again = false;
   let stopped = false;
 
   const clear = () => {
@@ -100,12 +102,21 @@ export function keepFresh(read: () => Promise<boolean>, deps: FreshDeps = {}): F
     cancel = later(tick, Math.round(wait * (1 - SPREAD + random() * 2 * SPREAD)));
   };
   const run = () => {
-    if (stopped || reading) return;
+    if (stopped) return;
+    if (reading) {
+      again = true;
+      return;
+    }
     clear();
     reading = true;
     const settle = (landed: boolean) => {
       reading = false;
       wait = landed ? FRESH_EVERY_MS : Math.min(FRESH_MAX_MS, wait * 2);
+      if (again) {
+        again = false;
+        run();
+        return;
+      }
       schedule();
     };
     read().then(settle, () => {

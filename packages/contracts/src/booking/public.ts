@@ -364,22 +364,35 @@ export type PublicViewerAnswer = z.infer<typeof PublicViewerAnswer>;
 /** The longest a visitor's name may be. */
 export const VISITOR_NAME_MAX = 200;
 
-/** Whether a code unit is a control character (C0, DEL): never part of a name or a number, and a CR or LF would reach a mail header. */
-const isControl = (code: number): boolean => code < 0x20 || code === 0x7f;
+/**
+ * Whether a code unit is never part of a name or a number: a C0 or C1 control or DEL (a CR or LF would reach a mail
+ * header), or an invisible character that can disguise what a name says in "<name> invited you" (a zero width space,
+ * a byte order mark, and the bidirectional overrides and isolates that reverse text).
+ */
+const isHidden = (code: number): boolean =>
+  code < 0x20 ||
+  (code >= 0x7f && code <= 0x9f) ||
+  // A zero width space; the joiners (emoji, Persian and Indic names) and the marks right to left text needs pass.
+  code === 0x200b ||
+  (code >= 0x202a && code <= 0x202e) ||
+  (code >= 0x2066 && code <= 0x2069) ||
+  code === 0xfeff;
 
-/** Whether `text` holds a control character. */
+/** Whether `text` holds a control or invisible character (`isHidden`). */
 function hasControl(text: string): boolean {
-  for (let at = 0; at < text.length; at += 1) if (isControl(text.charCodeAt(at))) return true;
+  for (let at = 0; at < text.length; at += 1) if (isHidden(text.charCodeAt(at))) return true;
   return false;
 }
 
 /**
  * A web address in a name (B-06): a scheme, `www.`, a host followed by a path, or a host on a common top level
- * domain. A person's name never needs one, and the guest invitation reads "<name> invited you", so one would turn a
- * booking into a link sent from our domain. Initials ("J.R.R. Tolkien") and a name with a dot ("St.John") pass.
+ * domain, its dot a full stop or a full width or ideographic one (which some mail clients link too). A person's name
+ * never needs one, and the guest invitation reads "<name> invited you", so one would turn a booking into a link sent
+ * from our domain. Initials ("J.R.R. Tolkien") and a name with a dot before a word no domain uses ("St.John") pass.
+ * A denylist can't name every domain: the mail templates draw the name as plain text, which is the real guard.
  */
 const WEB_ADDRESS =
-  /(?:[a-z][a-z0-9+.-]*:\/\/|\bwww\.|[a-z0-9-]{2,}\.[a-z]{2,}\/|[a-z0-9-]{2,}\.(?:com|net|org|io|co|info|biz|xyz|ru|cn|app|dev|link|site|online|top|me|ly|gl|to|shop|click|live|tk|ml|ga|cf|gq)\b)/i;
+  /(?:[a-z][a-z0-9+.-]*:\/\/|\bwww[.。．]|[\p{L}\p{N}-]+[.。．][a-z]{2,}\/|[\p{L}\p{N}-]+[.。．](?:com|net|org|io|co|info|biz|xyz|ru|cn|app|dev|link|site|online|top|me|ly|gl|to|shop|click|live|tk|ml|ga|cf|gq|de|uk|eu|us|ai|cc|ws|su|page|club|vip|icu|buzz|work|fun|store|tech|space|website|win|bid|loan|pw|zip|mov)\b)/iu;
 
 /**
  * Why a visitor's name can't be taken, or undefined when it can: no control characters (B-07), no web address

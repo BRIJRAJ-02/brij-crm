@@ -2352,6 +2352,23 @@ export function createDataLayer({
   followBookings(router, (workspace) => {
     refreshBookings(workspace);
   });
+  /**
+   * A member's booking write under a mutation id this tab knows (B-17): its `bookings` echo (and, for a booking made
+   * here, its person's `records` echo, `echoes`) is skipped, since the write already reads every held Bookings view
+   * again on its answer.
+   */
+  const bookingWrite = async <T>(echoes: number, send: (mutationId: string) => Promise<T>): Promise<T> => {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    try {
+      const answer = await send(mutationId);
+      mutations.answered(mutationId, echoes);
+      return answer;
+    } catch (error) {
+      mutations.forget(mutationId);
+      throw error;
+    }
+  };
   // An automation, or a run's outcome, changed (parity #53): the held list and log read again, once for a burst.
   router.on('automations', (workspace) => {
     automationsLoaded?.changed(workspace);
@@ -2431,6 +2448,8 @@ export function createDataLayer({
       layer.reload(workspace);
     });
     schedules.changed(workspace);
+    // Bookings hear of changes by their own event now (B-17): a reset reads what Bookings holds again.
+    refreshBookings(workspace);
     accessLoaded?.teamWeek.changed(workspace);
     accessLoaded?.timeOff.changed(workspace);
     automationsLoaded?.changed(workspace);
@@ -4313,14 +4332,16 @@ export function createDataLayer({
       requests: (workspace: string, pageId: string): Promise<BookingRequestView[]> =>
         call((options) => api.bookingFlow.requests({ workspace, pageId }, options)),
       confirm: (workspace: string, bookingId: string): Promise<boolean> =>
-        call((options) => api.bookingFlow.confirm({ workspace, bookingId, mutationId: mintId() }, options)).then(
-          (answer) => answer.confirmed,
-        ),
+        bookingWrite(1, (mutationId) =>
+          call((options) => api.bookingFlow.confirm({ workspace, bookingId, mutationId }, options)),
+        ).then((answer) => answer.confirmed),
       decline: (workspace: string, bookingId: string, reason?: string): Promise<boolean> =>
-        call((options) =>
-          api.bookingFlow.decline(
-            { workspace, bookingId, ...(reason === undefined ? {} : { reason }), mutationId: mintId() },
-            options,
+        bookingWrite(1, (mutationId) =>
+          call((options) =>
+            api.bookingFlow.decline(
+              { workspace, bookingId, ...(reason === undefined ? {} : { reason }), mutationId },
+              options,
+            ),
           ),
         ).then((answer) => answer.declined),
     },
@@ -5062,8 +5083,9 @@ export function createDataLayer({
         workspace: string,
         input: Omit<BookAsHostInput, 'workspace' | 'mutationId'>,
       ): Promise<{ bookingId: string; notInCrm?: string }> => {
-        const booked = await call((options) =>
-          api.bookings.bookAsHost({ ...input, workspace, mutationId: mintId() }, options),
+        // Two echoes: the person it filed (`records`) and the `bookings` row.
+        const booked = await bookingWrite(2, (mutationId) =>
+          call((options) => api.bookings.bookAsHost({ ...input, workspace, mutationId }, options)),
         );
         reloadBookings(workspace);
         return booked;
@@ -5098,10 +5120,9 @@ export function createDataLayer({
           ...(reason === '' ? {} : { cancelReason: reason }),
         }));
         try {
-          await call((options) =>
-            api.bookings.cancel(
-              { workspace, bookingId, ...(reason === '' ? {} : { reason }), mutationId: mintId() },
-              options,
+          await bookingWrite(1, (mutationId) =>
+            call((options) =>
+              api.bookings.cancel({ workspace, bookingId, ...(reason === '' ? {} : { reason }), mutationId }, options),
             ),
           );
         } catch (error) {
@@ -5131,10 +5152,12 @@ export function createDataLayer({
           };
         });
         try {
-          await call((options) =>
-            api.bookings.move(
-              { workspace, bookingId, start, ...(minutes === undefined ? {} : { minutes }), mutationId: mintId() },
-              options,
+          await bookingWrite(1, (mutationId) =>
+            call((options) =>
+              api.bookings.move(
+                { workspace, bookingId, start, ...(minutes === undefined ? {} : { minutes }), mutationId },
+                options,
+              ),
             ),
           );
         } catch (error) {

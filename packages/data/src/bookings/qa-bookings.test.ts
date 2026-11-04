@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { BookingListItem } from '@crm/contracts';
 import { createLiveRouter } from '../live/router.ts';
 import { FRESH_EVERY_MS, keepFresh } from './fresh.ts';
-import { BOOKINGS_EVENT_WAIT_MS, followBookings } from './live.ts';
+import { BOOKINGS_EVENT_GAP_MS, BOOKINGS_EVENT_SPREAD_MS, followBookings } from './live.ts';
 import { createBookingsStore } from './store.ts';
 
 /** A clock the test turns by hand. */
@@ -19,6 +19,7 @@ function manualClock() {
         timers = timers.filter((each) => each !== timer);
       };
     },
+    now: () => now,
     advance: (ms: number) => {
       now += ms;
       const due = timers.filter((each) => each.at <= now);
@@ -52,12 +53,13 @@ describe('a booking made on the public page reaches the owner’s open Bookings 
 
   // B-17 (fixed): a `bookings` change event comes from every public book, move and cancel (and a host's answer)
   // through the outbox and the relay, and the data layer reads Bookings' held reads again in place. So with live
-  // updates connected, an owner watching Bookings sees a visitor's new booking within about a second, without leaving
-  // the page, and the list stays on screen while it reads.
-  it('with live updates connected, a bookings event reads the open list again in place', async () => {
+  // updates connected, an owner watching Bookings sees a visitor's new booking within a couple of seconds, without
+  // leaving the page, and the list stays on screen while it reads.
+  function setup() {
     const clock = manualClock();
     let reads = 0;
-    let answer: (rows: readonly BookingListItem[]) => void = () => undefined;
+    const answers: ((rows: readonly BookingListItem[]) => void)[] = [];
+    let isVisible = true;
     const store = createBookingsStore({
       api: {
         listAll: () => {
@@ -65,7 +67,7 @@ describe('a booking made on the public page reaches the owner’s open Bookings 
           return reads === 1
             ? Promise.resolve([])
             : new Promise<readonly BookingListItem[]>((resolve) => {
-                answer = resolve;
+                answers.push(resolve);
               });
         },
         calendar: () => Promise.reject(new Error('not read')),
@@ -76,34 +78,102 @@ describe('a booking made on the public page reaches the owner’s open Bookings 
       later: clock.later,
       random: () => 0.5,
     });
-    const list = store.view('ws', 'upcoming');
-    const release = list.retain();
-    await list.ready();
     const router = createLiveRouter();
     followBookings(
       router,
       (workspace) => {
         store.refreshHeld(workspace);
       },
-      { later: clock.later, random: () => 0.5 },
+      { later: clock.later, random: () => 0.5, now: clock.now, isVisible: () => isVisible },
     );
-    // A burst of events reads once.
-    router.dispatch('ws', { kind: 'bookings', seq: 2, at: '2027-01-04T09:00:00.000Z' });
-    router.dispatch('ws', { kind: 'bookings', seq: 3, at: '2027-01-04T09:00:00.100Z' });
-    expect(reads).toBe(1);
-    clock.advance(BOOKINGS_EVENT_WAIT_MS.most);
-    expect(reads).toBe(2);
+    const event = (workspace: string, seq: number) => {
+      router.dispatch(workspace, { kind: 'bookings', seq, at: '2027-01-04T09:00:00.000Z' });
+    };
+    return {
+      clock,
+      store,
+      event,
+      reads: () => reads,
+      answer: (rows: readonly BookingListItem[]) => answers.shift()?.(rows),
+      hide: () => {
+        isVisible = false;
+      },
+    };
+  }
+  const settle = async () => {
+    for (let turn = 0; turn < 5; turn += 1) await Promise.resolve();
+  };
+  const row = (id: string) => ({ id }) as unknown as BookingListItem;
+
+  it('with live updates connected, a bookings event reads the open list again in place', async () => {
+    const t = setup();
+    const list = t.store.view('ws', 'upcoming');
+    const release = list.retain();
+    await list.ready();
+    // A burst of events reads once, a random 0 to 2 seconds on.
+    t.event('ws', 2);
+    t.event('ws', 3);
+    expect(t.reads()).toBe(1);
+    t.clock.advance(BOOKINGS_EVENT_SPREAD_MS);
+    expect(t.reads()).toBe(2);
     // In place: the list stays shown while it reads, then takes the answer.
     expect(list.getSnapshot().status).toBe('ready');
-    answer([{ id: 'b1' } as unknown as BookingListItem]);
-    await Promise.resolve();
-    await Promise.resolve();
+    t.answer([row('b1')]);
+    await settle();
     const shown = list.getSnapshot();
     expect(shown.status === 'ready' ? shown.bookings.map((each) => each.id) : []).toEqual(['b1']);
     // Another workspace's event reads nothing here.
-    router.dispatch('other', { kind: 'bookings', seq: 1, at: '2027-01-04T09:01:00.000Z' });
-    clock.advance(BOOKINGS_EVENT_WAIT_MS.most);
-    expect(reads).toBe(2);
+    t.event('other', 1);
+    t.clock.advance(BOOKINGS_EVENT_GAP_MS);
+    expect(t.reads()).toBe(2);
+    release();
+  });
+
+  it('a change while a read is out reads once more after it, so the read that began before it never wins', async () => {
+    const t = setup();
+    const list = t.store.view('ws', 'upcoming');
+    const release = list.retain();
+    await list.ready();
+    t.event('ws', 2);
+    t.clock.advance(BOOKINGS_EVENT_SPREAD_MS);
+    expect(t.reads()).toBe(2);
+    // A second booking while that read is out: its read waits for the gap, then for the read out.
+    t.event('ws', 3);
+    t.clock.advance(BOOKINGS_EVENT_GAP_MS);
+    expect(t.reads()).toBe(2);
+    t.answer([row('b1')]);
+    await settle();
+    expect(t.reads()).toBe(3);
+    t.answer([row('b1'), row('b2')]);
+    await settle();
+    const shown = list.getSnapshot();
+    expect(shown.status === 'ready' ? shown.bookings.map((each) => each.id) : []).toEqual(['b1', 'b2']);
+    release();
+  });
+
+  it('steady traffic reads at most once a gap, and a hidden tab reads nothing until it shows', async () => {
+    const t = setup();
+    const list = t.store.view('ws', 'upcoming');
+    const release = list.retain();
+    await list.ready();
+    t.event('ws', 2);
+    t.clock.advance(BOOKINGS_EVENT_SPREAD_MS);
+    t.answer([]);
+    await settle();
+    expect(t.reads()).toBe(2);
+    // Events every half second for the gap: one trailing read.
+    for (let seq = 3; seq < 3 + BOOKINGS_EVENT_GAP_MS / 500; seq += 1) {
+      t.event('ws', seq);
+      t.clock.advance(500);
+    }
+    t.clock.advance(BOOKINGS_EVENT_GAP_MS);
+    expect(t.reads()).toBe(3);
+    t.answer([]);
+    await settle();
+    t.hide();
+    t.event('ws', 99);
+    t.clock.advance(BOOKINGS_EVENT_GAP_MS + BOOKINGS_EVENT_SPREAD_MS);
+    expect(t.reads()).toBe(3);
     release();
   });
 });

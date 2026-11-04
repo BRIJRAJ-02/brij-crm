@@ -380,10 +380,17 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     log,
   };
 
-  /** Answers 429 when any of the limits is spent, else undefined. */
-  const limited = (checks: readonly (readonly [string, LimitRule])[]): Response | undefined => {
+  /**
+   * Answers 429 when any of the limits is spent, else undefined. Each is counted in turn, so the narrowest go first
+   * (an address, a page) and an instance ceiling last: a flood refused by its own address never spends everyone's.
+   * With `count: false`, only whether one is already spent.
+   */
+  const limited = (
+    checks: readonly (readonly [string, LimitRule])[],
+    options: { readonly count?: boolean } = {},
+  ): Response | undefined => {
     for (const [key, rule] of checks) {
-      const decision = limiter(key, rule);
+      const decision = limiter(key, rule, options);
       if (!decision.allowed) {
         return answer(
           'RATE_LIMITED',
@@ -396,17 +403,24 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     return undefined;
   };
 
+  /** The page's daily guest invitations (B-02): the booking and the guest page's Add guests share one budget. */
+  const guestsKey = (pageId: string) => [`booking:guests-page:${pageId}`, BOOKING_LIMITS.guestInvitesPerPage] as const;
+  /** One page's mail to one visitor email (B-02): 5 an hour, the forms' per form rule, hashed. */
+  const emailLimit = (key: string, email: string) =>
+    [`booking:book-email:${key}:${emailKey(email)}`, BOOKING_LIMITS.booksPerEmail] as const;
+
   /**
-   * Spends one of the page's daily guest invitations per guest (B-02): 429 once the page has invited
-   * `guestInvitesPerPage` people today, else undefined. Keyed by the page's id, so the booking and the guest page's
-   * Add guests share one budget.
+   * Whether a booking's mail budgets are already spent (B-02): the visitor's email on this page, and, when it invites
+   * anyone, the page's guest invitations today. Counted only once a booking is made (`spendBooked`), so a refused or
+   * replayed request never spends a real visitor's budget.
    */
-  const guestsLimited = (pageId: string, count: number): Response | undefined => {
-    for (let spent = 0; spent < count; spent += 1) {
-      const refused = limited([[`booking:guests-page:${pageId}`, BOOKING_LIMITS.guestInvitesPerPage]]);
-      if (refused !== undefined) return refused;
-    }
-    return undefined;
+  const mailSpent = (key: string, pageId: string, email: string, guests: number): Response | undefined =>
+    limited([emailLimit(key, email), ...(guests === 0 ? [] : [guestsKey(pageId)])], { count: false });
+
+  /** Counts what a new booking sent (B-02): one mail to its visitor, and one invitation per guest. */
+  const spendBooked = (key: string, pageId: string, email: string, guests: number): void => {
+    limiter(...emailLimit(key, email));
+    for (let sent = 0; sent < guests; sent += 1) limiter(...guestsKey(pageId));
   };
 
   /** Whether a bot check finds a booking a bot's (B-04): the ticket is the clock wherever a ticket book exists. */
@@ -418,7 +432,10 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     const elapsed = ticket?.kind === 'valid' ? ticket.elapsedMs : undefined;
     const now = (services.now?.() ?? new Date()).getTime();
     return {
-      reason: botReason(input, now, elapsed, { tickets: services.tickets !== undefined }),
+      reason: botReason(input, now, elapsed, {
+        tickets: services.tickets !== undefined,
+        expired: ticket?.kind === 'expired',
+      }),
       ticket: ticket?.kind ?? 'none',
     };
   };
@@ -944,9 +961,11 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     try {
       const found = await changeEntry(c);
       if ('refused' in found) return found.refused;
-      const spent = guestsLimited(found.entry.pageId, input.data.emails.length);
+      const spent = limited([guestsKey(found.entry.pageId)], { count: false });
       if (spent !== undefined) return spent;
       const added = await addGuests(guestTarget(found.entry), deps, { emails: input.data.emails });
+      // Only the guests actually invited count against the page's day (B-02).
+      for (let sent = 0; sent < added.added; sent += 1) limiter(...guestsKey(found.entry.pageId));
       if (added.added > 0) wakeRelay();
       return ok({ added: added.added, guests: [...added.guests] });
     } catch (error) {
@@ -1488,6 +1507,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       const entry = await enterBookingPage({ db }, key);
       // The booking limits and the form's bot checks apply only to a turn about to book.
       let bookRefused: Response | undefined;
+      let asked: { readonly email: string; readonly guests: number } | undefined;
       const link = routedLink(entry, input.data.p);
       const turn = await chatTurn(entry, deps, input.data, [outboxHook()], {
         ...(link === undefined ? {} : { link }),
@@ -1504,15 +1524,16 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
           }
           bookRefused =
             limited([
-              ['booking:book:instance', BOOKING_LIMITS.booksPerInstance],
               [`booking:book:${address}`, BOOKING_LIMITS.booksPerAddress],
               [`booking:book-page:${key}`, BOOKING_LIMITS.booksPerPage],
-              [`booking:book-email:${key}:${emailKey(booking.email)}`, BOOKING_LIMITS.booksPerEmail],
-            ]) ?? guestsLimited(entry.pageId, booking.guests);
+              ['booking:book:instance', BOOKING_LIMITS.booksPerInstance],
+            ]) ?? mailSpent(key, entry.pageId, booking.email, booking.guests);
+          asked = booking;
           return bookRefused === undefined;
         },
       });
       if (bookRefused !== undefined) return bookRefused;
+      if (turn.bookedNew && asked !== undefined) spendBooked(key, entry.pageId, asked.email, asked.guests);
       if (turn.bookedNew) wakeRelay();
       return ok(turn.reply);
     } catch (error) {
@@ -1534,11 +1555,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   app.post('/public/booking/:publicKey/book', async (c) => {
     const address = addressKey(c.get('clientIp'));
     const key = c.req.param('publicKey');
-    // The instance's own ceiling first (B-02): nothing below runs in a flood.
+    // The address and the page first, the instance's own ceiling last (B-02): a flood its own address refuses never
+    // spends every page's ceiling.
     const refused = limited([
-      ['booking:book:instance', BOOKING_LIMITS.booksPerInstance],
       [`booking:book:${address}`, BOOKING_LIMITS.booksPerAddress],
       [`booking:book-page:${key}`, BOOKING_LIMITS.booksPerPage],
+      ['booking:book:instance', BOOKING_LIMITS.booksPerInstance],
     ]);
     if (refused !== undefined) return refused;
     let body: unknown;
@@ -1555,15 +1577,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       log.warn('booking.bot_refused', { requestId: c.get('requestId'), reason: bot.reason, ticket: bot.ticket });
       return answer('INPUT_INVALID', BOT_REFUSED);
     }
-    // Each booking mails its visitor: 5 an hour per page and address typed (B-02, the forms' per form rule), hashed.
-    const emailRefused = limited([
-      [`booking:book-email:${key}:${emailKey(input.data.email)}`, BOOKING_LIMITS.booksPerEmail],
-    ]);
-    if (emailRefused !== undefined) return emailRefused;
     try {
       const entry = await enterBookingPage({ db }, key);
-      const guestsRefused = guestsLimited(entry.pageId, input.data.guests?.length ?? 0);
-      if (guestsRefused !== undefined) return guestsRefused;
+      // Each booking mails its visitor and guests (B-02): refused once those budgets are spent, counted once it's made.
+      const guests = input.data.guests?.length ?? 0;
+      const mailRefused = mailSpent(key, entry.pageId, input.data.email, guests);
+      if (mailRefused !== undefined) return mailRefused;
       const handoff = handoffFor(entry, input.data.prefill);
       const booked = await bookPublicSlot(
         entry,
@@ -1573,7 +1592,10 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
         handoff === undefined ? undefined : { submissionId: handoff.submissionId },
       );
       // The records it made reach screens live: wake the relay once the write committed.
-      if (!booked.replayed) wakeRelay();
+      if (!booked.replayed) {
+        spendBooked(key, entry.pageId, input.data.email, guests);
+        wakeRelay();
+      }
       // Today's Insights visit is finished by this booking (spec 0067, AC-6702), in the background, once: a replay
       // made nothing new. Keyed as the page's beacons are, so it finishes the visit they counted.
       const userAgent = c.req.header('user-agent');

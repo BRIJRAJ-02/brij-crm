@@ -59,6 +59,7 @@ import { needsRead, pageEnded } from './reads.ts';
 import { refusalLine } from './refusal.ts';
 import { guessCountry } from '../country.ts';
 import { oneOffHash } from './one-off.ts';
+import { keepTicket, type TicketKeeper } from './ticket.ts';
 import { landingOf } from '../landing.ts';
 import { strings } from './strings.ts';
 import {
@@ -233,9 +234,10 @@ export function BookingPage({
   }, [client, publicKey, handoff]);
   const prefill = given ?? handed;
   const [startedAt] = useState(now);
-  // The fill ticket (spec 0023, B-04), asked for as the page loads: the server's clock for the bot check a booking
+  // The fill ticket (spec 0023, B-04), asked for as the page loads and kept ready (`ticket.ts`): the server's clock for
+  // the bot check a booking passes.
   // passes. A booking without one is refused as too fast, so the page carries it rather than its own clock.
-  const [ticket] = useState(() => client.ticket(publicKey));
+  const [tickets] = useState(() => keepTicket(() => client.ticket(publicKey)));
   // A one off link's token hashed once (spec 0062): the facts and every slots read send it (B-10).
   const [linkHash] = useState(() =>
     oneOffToken === undefined ? Promise.resolve(undefined) : oneOffHash(oneOffToken).catch(() => undefined),
@@ -400,7 +402,7 @@ export function BookingPage({
           detected={timeZone}
           now={now}
           startedAt={startedAt}
-          ticket={ticket}
+          tickets={tickets}
           linkHash={linkHash}
           onBooked={onBooked}
           onEnded={ended}
@@ -602,7 +604,7 @@ function Booking({
   detected,
   now,
   startedAt,
-  ticket,
+  tickets,
   linkHash,
   prefill,
   handoff,
@@ -644,7 +646,7 @@ function Booking({
   readonly now: () => number;
   readonly startedAt: number;
   /** The page's fill ticket (B-04): every booking and chat turn carries it. */
-  readonly ticket: Promise<string | undefined>;
+  readonly tickets: TicketKeeper;
   /** The one off link's token hashed, when the page was opened with one (B-10): every slots read sends it. */
   readonly linkHash: Promise<string | undefined>;
   readonly prefill?: Prefill;
@@ -935,7 +937,8 @@ function Booking({
   const book = (values: BookingDetailsValues): Promise<BookingDetailsOutcome> => {
     if (time === undefined) return Promise.resolve({ kind: 'failed', message: strings.errors.failed });
     const needsPhone = page.location.type === 'phone';
-    return ticket
+    return tickets
+      .take()
       .then((filled) =>
         client.book(page.publicKey, {
           idempotencyKey: step.attempt,
@@ -1454,7 +1457,7 @@ function Booking({
             duration={duration}
             starts={allStarts}
             startedAt={startedAt}
-            ticket={ticket}
+            tickets={tickets}
             memory={chatMemory}
             onMemory={setChatMemory}
             onDuration={(minutes) => {

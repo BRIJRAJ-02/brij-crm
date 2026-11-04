@@ -647,7 +647,6 @@ async function moveTeamBooking(
         .returning();
       if (updated === undefined) throw new Error('The booking was not moved.');
       await auditChangedFor(tx, target, row, 'moved');
-      await announceBookings(tx, target.scope, [row.id], deps.hooks);
       await syncHosts(tx, updated.id, chosen.hosts);
       await recordSeats(tx, scope, updated.id, changes);
       const organiserChanged = chosen.organiser !== row.hostMemberId;
@@ -660,6 +659,8 @@ async function moveTeamBooking(
         'reminder_1h',
       ]);
       await queueBookingWebhook(tx, 'booking.rescheduled', updated.id);
+      // Last: the outbox takes the workspace's counter row, which every other write in it then waits for.
+      await announceBookings(tx, target.scope, [row.id], deps.hooks);
       return { updated, organiserChanged };
     } catch (error) {
       if (postgresError(error)?.code === '23P01') {
@@ -1082,6 +1083,8 @@ export async function expireRequest(scope: EngineScope, bookingId: string, now: 
     const [row] = await tx.select().from(bookings).where(eq(bookings.id, bookingId)).for('update');
     if (row?.approval !== 'pending' || row.status !== 'confirmed') return false;
     await declineRow(tx, row, now, null, null, { type: 'booking', id: row.pageId, memberId: null });
+    // The wait ran out (B-17): an open Bookings screen shows it declined.
+    await announceBookings(tx, scope, [row.id]);
     return true;
   });
 }

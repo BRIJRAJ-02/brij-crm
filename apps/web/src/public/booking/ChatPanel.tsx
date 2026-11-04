@@ -21,6 +21,7 @@ import {
 import { useState } from 'react';
 import { strings } from './strings.ts';
 import { dayKey, dayLabels, longDate, offerWords, rangeLabel, timeLabel, zoneName } from './time.ts';
+import type { TicketKeeper } from './ticket.ts';
 
 /** The most visitor lines one chat sends (the API's cap). */
 const MAX_LINES = 40;
@@ -99,7 +100,7 @@ export interface ChatPanelProps {
   /** When the page loaded, for the bot checks a booking passes. */
   readonly startedAt: number;
   /** The page's fill ticket (B-04): the turn that books carries it, as the details form's booking does. */
-  readonly ticket: Promise<string | undefined>;
+  readonly tickets: TicketKeeper;
   /** The chat settled on another length: the rail follows. */
   readonly onDuration: (minutes: number) => void;
   readonly onBooked: (manageToken: string) => void;
@@ -199,7 +200,7 @@ export function ChatPanel(props: ChatPanelProps) {
     hour12,
     duration,
     startedAt,
-    ticket,
+    tickets,
     memory,
     onMemory,
     onDuration,
@@ -416,7 +417,8 @@ export function ChatPanel(props: ChatPanelProps) {
     }
     setWaiting(true);
     setError(undefined);
-    ticket
+    tickets
+      .peek()
       .then((filled) =>
         client.chat(page.publicKey, {
           conversationId,
