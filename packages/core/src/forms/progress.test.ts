@@ -817,8 +817,9 @@ describe('analytics (AC-6320, AC-6321)', () => {
     const why = read.answers.find((answer) => answer.questionId === 'why');
     expect(why?.responses).toBe(3);
     expect(why?.latest).toEqual(['Reason 2', 'Reason 1', 'Reason 0']);
-    // An email is a contact, not something to read at a glance: no card, and never its addresses.
-    expect(read.answers.some((answer) => answer.questionId === 'email')).toBe(false);
+    // An email is a contact: its card counts the answers, so the form's numbering holds, and never lists one.
+    const emailQuestion = read.answers.find((answer) => answer.questionId === 'email');
+    expect(emailQuestion).toEqual({ questionId: 'email', responses: 3 });
     expect(JSON.stringify(read)).not.toContain('@example.com');
   });
 

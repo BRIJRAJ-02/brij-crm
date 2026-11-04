@@ -225,6 +225,12 @@ const TEXT_TYPES: ReadonlySet<AnswerType> = new Set<AnswerType>([
   'address',
 ]);
 
+/**
+ * The answer types a card counts but never shows: a contact. The card says how many answered, so the form's
+ * numbering holds, and lists none of the addresses or numbers (the Submissions table says who sent what).
+ */
+const COUNT_ONLY_TYPES: ReadonlySet<AnswerType> = new Set<AnswerType>(['email', 'phone']);
+
 /** Keys as a Postgres text array literal; a key is `[a-z][a-z0-9_]*` (`QUESTION_KEY`), so it needs no quoting. */
 const keyList = (keys: readonly string[]) => `{${keys.filter((key) => QUESTION_KEY.test(key)).join(',')}}`;
 
@@ -254,7 +260,9 @@ async function answersIn(
   const shown = (document?.questions ?? []).filter(
     (question) =>
       question.answerType !== 'ranking' &&
-      (COUNTED_TYPES.has(question.answerType) || TEXT_TYPES.has(question.answerType)) &&
+      (COUNTED_TYPES.has(question.answerType) ||
+        TEXT_TYPES.has(question.answerType) ||
+        COUNT_ONLY_TYPES.has(question.answerType)) &&
       document !== undefined &&
       !answerHidden(scope, document, question),
   );
@@ -318,6 +326,7 @@ async function answersIn(
       });
       return { ...base, choices };
     }
+    if (COUNT_ONLY_TYPES.has(question.answerType)) return base;
     const words = latest
       .filter((row) => row.key === question.key)
       .map((row) => answerWords(row.value, { answerType: question.answerType }).slice(0, FORM_ANSWER_TEXT_MAX))

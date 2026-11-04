@@ -177,7 +177,7 @@ export const FormAnalyticsAnswer = z.object({
   choices: z.array(FormAnalyticsChoice).max(FORM_ANSWER_CHOICES_MAX).optional(),
   latest: z.array(z.string().max(FORM_ANSWER_TEXT_MAX)).max(FORM_ANSWER_LATEST).optional(),
 });
-/** One question's answers over the range. */
+/** One question's answers over the range; an email or a phone carries its count alone. */
 export type FormAnalyticsAnswer = z.infer<typeof FormAnalyticsAnswer>;
 
 /**

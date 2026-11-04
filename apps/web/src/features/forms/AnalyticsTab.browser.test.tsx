@@ -12,6 +12,7 @@ import { AnalyticsTab } from './AnalyticsTab.tsx';
 const DOCUMENT = {
   questions: [
     { id: 'name', key: 'name', label: 'Your name', answerType: 'short_text', required: true, update: 'fill' },
+    { id: 'email', key: 'email', label: 'Work email', answerType: 'email', required: true, update: 'fill' },
     { id: 'budget', key: 'budget', label: 'What budget do you have in mind?', answerType: 'choice', required: true },
     { id: 'when', key: 'when', label: 'When would you like to start?', answerType: 'choice', required: true },
   ],
@@ -154,8 +155,30 @@ describe('the Analytics tab (T45)', () => {
     });
     const figures = page.getByRole('group', { name: 'This period' });
     await expect.element(figures.getByText('4', { exact: true })).toBeVisible();
-    await expect.element(figures.getByText(/Counted since/)).toBeVisible();
+    // Views, Completion and Median time each say where counting began: never "0 started" or "No finishes yet"
+    // beside four submissions.
+    expect(figures.getByText(/Counted since/).all()).toHaveLength(3);
+    expect(figures.getByText('0 started').query()).toBeNull();
+    expect(figures.getByText('No finishes yet').query()).toBeNull();
     expect(figures.getByText('0%').query()).toBeNull();
+  });
+
+  it('numbers every question as the form does, an email counted but never listed', async () => {
+    await draw({
+      range: 30,
+      totals: { views: 3, starts: 3, completions: 3, submissions: 3 },
+      previous: NONE,
+      byDay: [{ day: '2026-11-04', views: 3, starts: 3, completions: 3 }],
+      byQuestion: [],
+      bySource: [{ source: 'direct', views: 3, completions: 3 }],
+      answers: [
+        { questionId: 'name', responses: 3, latest: ['Ada'] },
+        { questionId: 'email', responses: 3 },
+      ],
+    });
+    await expect.element(page.getByRole('heading', { name: '2. Work email' })).toBeVisible();
+    await expect.element(page.getByText('3 responses').nth(1)).toBeVisible();
+    expect(page.getByRole('table', { name: /Work email/ }).query()).toBeNull();
   });
 
   it('draws a card per question: bars with share and count for a choice, the latest words for text', async () => {

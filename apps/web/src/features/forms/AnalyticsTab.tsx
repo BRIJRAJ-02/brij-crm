@@ -106,15 +106,17 @@ export interface AnalyticsTabProps {
 function statsOf(analytics: FormAnalytics, dayWords: (day: string) => string): readonly StatItem[] {
   const { totals, previous, range, countingSince } = analytics;
   const median = totals.medianMs;
-  // Submissions the visits never counted (sent before counting began): Completion says where its figures start,
-  // rather than a 0% beside four submissions.
-  const untracked = totals.submissions > totals.completions && countingSince !== undefined;
+  // Submissions the visits never counted (sent before counting began): the visit figures say where they start,
+  // never "0 started" or "No finishes yet" beside four submissions.
+  const untracked = totals.submissions > totals.completions;
+  const since =
+    countingSince === undefined ? strings.analyticsNoStarts : strings.analyticsCountingSince(dayWords(countingSince));
   return [
     {
       id: 'views',
       label: strings.analyticsViews,
       value: figure(totals.views),
-      comparison: strings.analyticsStarted(figure(totals.starts)),
+      comparison: untracked && totals.starts === 0 ? since : strings.analyticsStarted(figure(totals.starts)),
     },
     {
       id: 'submissions',
@@ -133,7 +135,7 @@ function statsOf(analytics: FormAnalytics, dayWords: (day: string) => string): r
       label: strings.analyticsCompletion,
       value: totals.starts === 0 ? '—' : percent(totals.completions, totals.starts),
       comparison: untracked
-        ? strings.analyticsCountingSince(dayWords(countingSince))
+        ? since
         : totals.starts === 0
           ? strings.analyticsNoStarts
           : strings.analyticsFinishedOf(figure(totals.completions), figure(totals.starts)),
@@ -143,7 +145,11 @@ function statsOf(analytics: FormAnalytics, dayWords: (day: string) => string): r
       label: strings.analyticsMedian,
       value: median === undefined ? '—' : duration(median),
       comparison: strings.analyticsTimeLine,
-      ...(previous.views > 0 || median === undefined ? comparedTime(median, previous.medianMs) : {}),
+      ...(median === undefined && untracked
+        ? { comparison: since }
+        : previous.views > 0 || median === undefined
+          ? comparedTime(median, previous.medianMs)
+          : {}),
     },
   ];
 }

@@ -144,7 +144,11 @@ export function AnalyticsAnswers({ questions, answers, latestOf }: AnalyticsAnsw
             </Card>
           );
         }
-        const latest = (answer.latest ?? []).map((text, at) => ({ id: String(at), text }));
+        // An email or a phone: how many answered, and none of them (a contact says nothing at a glance).
+        if (answer.latest === undefined) {
+          return <Card key={question.id} title={title} description={responses} actions={type} />;
+        }
+        const latest = answer.latest.map((text, at) => ({ id: String(at), text }));
         return (
           <Card key={question.id} title={title} description={responses} actions={type}>
             <Table
