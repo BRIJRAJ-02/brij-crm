@@ -10,9 +10,9 @@ export const strings = {
   whatsapp: 'WhatsApp',
   /** The device's own share sheet. */
   more: 'More',
-  /** The QR code's download button: its visible word, then its fuller name (it starts with the word). */
-  qrCode: 'QR code',
-  qrCodeName: 'QR code, download',
+  /** The QR code's download button, under the code: its visible word, then its fuller name (it starts with the word). */
+  download: 'Download',
+  downloadName: 'Download QR code',
   downloadQr: 'Download the QR code',
   downloadPng: 'Download PNG',
   downloadSvg: 'Download SVG',

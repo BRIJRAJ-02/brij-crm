@@ -79,4 +79,10 @@
       fill: var(--border-strong);
     }
   }
+
+  /* Clear: the caller's tile is the ground (ReadyPanel's share), so the code paints none of its own in either theme.
+     Last, so it outranks the dark theme's grey above at the same weight. */
+  .root[data-ground='clear'] .ground {
+    fill: none;
+  }
 }

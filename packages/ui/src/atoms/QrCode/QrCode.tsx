@@ -35,6 +35,12 @@ export interface QrCodeProps {
   readonly picture?: string;
   /** A frame around the code with this label under it (AC-6124), up to 20 characters: "Scan me". */
   readonly frameLabel?: string;
+  /**
+   * `drawn` (the default): the code paints its own light ground. `clear`: no ground on screen, for a caller that sets
+   * the code on a light tile of its own (ReadyPanel's `share`), so the tile and the code read as one surface. A saved
+   * copy still prints on the light surface (the caller writes the ground's fill in).
+   */
+  readonly ground?: 'drawn' | 'clear';
 }
 
 /** The quiet margin around the modules, in modules, as scanners need. */
@@ -102,7 +108,17 @@ export function qrPictureBox(count: number): {
  * with their picture in the middle and a labelled frame, all inside the one SVG
  * so a saved copy carries them.
  */
-export function QrCode({ value, label, children, size: width = 'md', ref, colour, picture, frameLabel }: QrCodeProps) {
+export function QrCode({
+  value,
+  label,
+  children,
+  size: width = 'md',
+  ref,
+  colour,
+  picture,
+  frameLabel,
+  ground = 'drawn',
+}: QrCodeProps) {
   const clipId = useId();
   const centre = safeImageSrc(picture);
   const hasPicture = centre !== undefined;
@@ -135,6 +151,7 @@ export function QrCode({ value, label, children, size: width = 'md', ref, colour
       data-theme="light"
       data-size={width}
       data-framed={isFramed || undefined}
+      data-ground={ground}
       role="img"
       aria-label={label}
       viewBox={`${String(-out)} ${String(-out)} ${String(size + out * 2)} ${String(height + out * 2)}`}
