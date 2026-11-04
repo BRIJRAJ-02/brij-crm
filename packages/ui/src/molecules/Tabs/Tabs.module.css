@@ -170,6 +170,12 @@
     min-block-size: calc(var(--size-bar) - var(--border-width-hairline));
   }
 
+  /* An end a page fills through a portal, empty on this tab (a form's Settings): it takes no room, so on a phone it
+     never wraps under the tabs as a blank bar's height (lane 3c). */
+  .end:has(> :only-child:empty) {
+    display: none;
+  }
+
   /* In the bar, the first tab's label starts at the page's gutter, under the TopBar's title (the tab's own
      padding makes up the rest), and the tabs keep their whole width: on a phone the tools wrap under them
      rather than cutting the last tab (Tasks, Bookings; the owner, 21 October 2026). */

@@ -59,6 +59,8 @@ export interface PageInsightsProps {
   readonly days: readonly PageDay[];
   /** The period in words, for the chart's name ("the last 30 days"). */
   readonly periodWords: string;
+  /** What reads after where people stop, before the views over time: a form's Answers. */
+  readonly answers?: ReactNode;
 }
 
 /** The step that lost the most people (the first of a tie), or none when nobody stopped part way. */
@@ -70,7 +72,16 @@ export function worstStep(steps: readonly PageStep[]): PageStep | undefined {
 }
 
 /** The figure cards, where people stop, the views over time and the sources. */
-export function PageInsights({ stats, started, steps, stepLabel, sources, days, periodWords }: PageInsightsProps) {
+export function PageInsights({
+  stats,
+  started,
+  steps,
+  stepLabel,
+  sources,
+  days,
+  periodWords,
+  answers,
+}: PageInsightsProps) {
   const { locale } = useFormatSettings();
   const worst = worstStep(steps);
   const hasBars = started >= BARS_FROM_STARTS;
@@ -125,6 +136,7 @@ export function PageInsights({ stats, started, steps, stepLabel, sources, days, 
           />
         </Card>
       )}
+      {answers}
       {/* A line over time only once there is a line to see: a few views make a row of zeroes and one spike. */}
       {totalViews >= BARS_FROM_STARTS && days.length > 1 && (
         <Card title={strings.overTime}>

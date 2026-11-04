@@ -450,10 +450,12 @@ export {
   PhonePreview,
   PreviewFrame,
   PreviewLayout,
+  PreviewPage,
   type EditorStatusTone,
   type PhonePreviewProps,
   type PreviewFrameProps,
   type PreviewLayoutProps,
+  type PreviewPageProps,
 } from './modules/PreviewLayout/PreviewLayout.tsx';
 export {
   HoursEditor,

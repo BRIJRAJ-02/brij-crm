@@ -3,6 +3,7 @@ import { expect } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
+import { Panel } from '../../molecules/Panel/Panel.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { NavItem, NavSection, Sidebar } from '../Sidebar/Sidebar.tsx';
 import { Toolbar, TopBar, ViewBar } from '../Toolbar/Toolbar.tsx';
@@ -12,9 +13,11 @@ import { AppShell } from './AppShell.tsx';
 function SampleShell({
   withPanel = false,
   withBanner = false,
+  withPushingPanel = false,
 }: {
   readonly withPanel?: boolean;
   readonly withBanner?: boolean;
+  readonly withPushingPanel?: boolean;
 }) {
   return (
     <Stage height="page">
@@ -70,6 +73,11 @@ function SampleShell({
           : {})}
       >
         <EmptyState title="No companies yet">Companies you add or import show here.</EmptyState>
+        {withPushingPanel && (
+          <Panel title="Grace Hopper" isOpen onClose={() => undefined} pushesPage>
+            A submission opened beside its table.
+          </Panel>
+        )}
       </AppShell>
     </Stage>
   );
@@ -125,5 +133,20 @@ export const WithPanel: Story = {
   args: { withPanel: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('complementary')).toHaveTextContent('No record open');
+  },
+};
+
+/**
+ * A Panel that pushes the page (`pushesPage`): the main column, bars and all, gives up the panel's width, so the
+ * Filter at the bar's end stays clear of it (a form's submission beside its table, lane 3c).
+ */
+export const PushedByPanel: Story = {
+  args: { withPushingPanel: true },
+  play: async ({ canvas }) => {
+    const main = canvas.getByRole('main');
+    await expect(main).toHaveAttribute('data-pushed', 'md');
+    const panel = canvas.getByRole('dialog', { name: 'Grace Hopper' });
+    const filter = canvas.getByRole('button', { name: 'Filter' });
+    await expect(filter.getBoundingClientRect().right).toBeLessThanOrEqual(panel.getBoundingClientRect().left);
   },
 };

@@ -46,7 +46,13 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { DeleteFormDialog, DiscardChangesDialog, RetargetFormDialog, type RetargetAsk } from './FormConfirms.tsx';
+import {
+  DeleteFormDialog,
+  DiscardChangesDialog,
+  PauseFormDialog,
+  RetargetFormDialog,
+  type RetargetAsk,
+} from './FormConfirms.tsx';
 import { retargetStep } from './retarget.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
@@ -747,7 +753,13 @@ export function FormEditor(props: FormEditorProps) {
       });
   };
 
-  // Pause and Resume act at once, as a booking page's do, and their toast offers Undo (the owner, 22 Oct 2026).
+  // Resume acts at once, its toast offering Undo (the owner, 22 Oct 2026). Pausing ends something, so the header's
+  // menu and Settings' switch ask first (lane 3c), as the forms list does; its toast offers Undo too.
+  const [isPausing, setPausing] = useState(false);
+  const askStatus = (next: 'live' | 'paused') => {
+    if (next === 'paused') setPausing(true);
+    else setStatus('live');
+  };
   const setStatus = (next: 'live' | 'paused') => {
     data.forms.setStatus(slug, form.id, next).then((view) => {
       apply(view);
@@ -820,7 +832,7 @@ export function FormEditor(props: FormEditorProps) {
           ? {
               menu: {
                 ...(isPublished ? { status: form.status === 'paused' ? ('paused' as const) : ('live' as const) } : {}),
-                onPause: () => setStatus('paused'),
+                onPause: () => askStatus('paused'),
                 onResume: () => setStatus('live'),
                 onDuplicate: () => {
                   data.forms.duplicate(slug, form.id).then((copy) => {
@@ -936,7 +948,7 @@ export function FormEditor(props: FormEditorProps) {
             settings={settings}
             onRetarget={askRetarget}
             isRetargeting={isRetargeting}
-            onStatusChange={setStatus}
+            onStatusChange={askStatus}
             onSettingsChange={applySettings}
             {...(props.keepMonths === undefined ? {} : { keepMonths: props.keepMonths })}
           />
@@ -1294,6 +1306,21 @@ export function FormEditor(props: FormEditorProps) {
           setDiscarding(false);
           toasts.toast({ tone: 'success', message: strings.discarded });
           focusLater(() => moreRef.current);
+        }}
+      />
+      <PauseFormDialog
+        data={data}
+        slug={slug}
+        form={isPausing ? form : undefined}
+        onClose={() => setPausing(false)}
+        onDone={(_paused, view) => {
+          setPausing(false);
+          apply(view);
+          toasts.toast({
+            tone: 'success',
+            message: capturesStrings.pausedToast(view.name),
+            action: { label: capturesStrings.undo, onAction: () => setStatus('live') },
+          });
         }}
       />
       <DeleteFormDialog

@@ -61,14 +61,15 @@
     white-space: nowrap;
   }
 
-  /* With a subtitle: the title over one quiet line, the bar a little taller for it. */
+  /* With a subtitle: the title over one quiet line, the head as roomy above and below as the body is (space-16,
+     the body's padding), so the name doesn't sit against the top edge (lane 3c, the critic's 10). */
   .heading {
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: var(--space-2);
     min-inline-size: 0;
-    padding-block: var(--space-4);
+    padding-block: var(--space-16);
   }
 
   .subtitle {

@@ -128,3 +128,25 @@ export const Stacked: Story = {
     await expect(gap).toBeGreaterThan(12);
   },
 };
+
+/** On a phone, where the panel is the whole screen: its close is Back, at the head's start, and no X (lane 3c). */
+export const CloseAsBack: Story = {
+  render: () => (
+    <Stage>
+      <Panel
+        title="Grace Hopper"
+        subtitle="Website enquiry · Today 14:30"
+        isOpen
+        onClose={() => undefined}
+        closeAs="back"
+        backLabel="Back to submissions"
+      >
+        Every answer, then the records it touched.
+      </Panel>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Back to submissions' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Close' })).toBeNull();
+  },
+};

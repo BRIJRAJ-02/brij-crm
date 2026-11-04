@@ -49,6 +49,17 @@
     outline: none;
   }
 
+  /* A Panel that pushes the page is open: the main column, bars and all, gives up the panel's width at once (the
+     panel's own slide carries the motion: animating the padding would lay the page out again every frame), so
+     nothing on the page sits under it. */
+  .main[data-pushed='md'] {
+    padding-inline-end: var(--size-panel);
+  }
+
+  .main[data-pushed='lg'] {
+    padding-inline-end: var(--size-panel-wide);
+  }
+
   /* A place a page fills through a portal: no box of its own. */
   .slot {
     display: contents;

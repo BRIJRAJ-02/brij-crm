@@ -1219,7 +1219,12 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
       assignment: { memberId: w.ownerId, reason: 'fixed_member' },
       refused: [],
     });
-    expect(view.answers.map((answer) => [answer.key, answer.attributeId !== undefined])).toEqual([
+    // The panel lists every question, a skipped one with no value (lane 3c); these are the answered ones.
+    expect(
+      view.answers
+        .filter((answer) => answer.value !== null)
+        .map((answer) => [answer.key, answer.attributeId !== undefined]),
+    ).toEqual([
       ['name', true],
       ['email', true],
       ['phone', true],
@@ -1558,7 +1563,12 @@ describe('the submissions screen’s reads (AC-572, AC-573)', () => {
     const processed = seen.items[0];
     if (processed === undefined) throw new Error('A submission expected.');
     const detail = await getSubmission(member, { submissionId: processed.id });
-    expect(detail.answers.map((answer) => answer.key)).toEqual(['name', 'email']);
+    expect(detail.answers.filter((answer) => answer.value !== null).map((answer) => answer.key)).toEqual([
+      'name',
+      'email',
+    ]);
+    // The hidden field's question is absent, not shown as skipped (AC-573), while every other question comes.
+    expect(detail.answers.map((answer) => answer.key)).not.toContain('title');
     await deleteSubmission(w.scope, { submissionId: processed.id });
     await expect(getSubmission(w.scope, { submissionId: processed.id })).rejects.toMatchObject({
       refusal: { code: 'NOT_FOUND' },
@@ -1804,7 +1814,7 @@ describe('a visitor mid fill when the form is published again (spec 0063, AC-630
     const [stored] = await submissionIds(w, v1.id);
     if (stored === undefined) throw new Error('No submission.');
     const view = await getSubmission(w.scope, { submissionId: stored.id });
-    const kept = view.answers.map((answer) => answer.key);
+    const kept = view.answers.filter((answer) => answer.value !== null).map((answer) => answer.key);
     expect(kept).toContain('size');
     expect(kept).not.toContain('seats');
   });
