@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
-import { answer, offerWords, replay, settledLength, type ChatContext, type ChatPage } from './agent.ts';
+import { answer, greeting, offerWords, replay, settledLength, type ChatContext, type ChatPage } from './agent.ts';
+import { doneLine } from './turn.ts';
 
 const zone = 'Europe/London';
 // Wednesday 21 October 2026, 10:00 in London.
@@ -45,14 +46,14 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     expect(turn.state.intent).toBe('offer');
     expect(turn.offers).toHaveLength(6);
     expect(turn.offers[0]).toBe(at('2026-10-27T12:00'));
-    expect(turn.text).toBe('Here’s what’s open Tuesday afternoon.');
+    expect(turn.text).toBe('Here’s when I’m free Tuesday afternoon.');
     expect(turn.suggestions).toEqual(['Something later', 'Earliest you have']);
   });
 
   it('says when a window is empty and offers the nearest', () => {
     const turn = words(['saturday']);
     expect(turn.state.intent).toBe('none-in-window');
-    expect(turn.text).toBe('Nothing is open Saturday. Here are the closest times.');
+    expect(turn.text).toBe('I’m not free Saturday. These are the closest.');
     expect(turn.offers).toHaveLength(6);
   });
 
@@ -70,6 +71,25 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     // Nothing held, or everything read back: nothing asked.
     expect(words(['next tuesday afternoon']).asks).toBeUndefined();
     expect(words(["I'm Ada Lovelace", 'tomorrow at 3pm', 'ada@example.com']).asks).toBeUndefined();
+  });
+
+  it('speaks as the host: their first name to open, "we" on a team page (owner, 4 Nov 2026)', () => {
+    const lines = (isTeam: boolean) =>
+      answer(replay(['saturday'], context()), {
+        now,
+        hour12: true,
+        page: { ...page, hostName: 'Ada Lovelace', ...(isTeam ? { isTeam } : {}) },
+        duration: 30,
+        needsPhone: false,
+      }).text;
+    expect(greeting({ ...page, hostName: 'Ada Lovelace' }, 30)).toBe(
+      `Hi, I’m Ada. When suits you for a 30 min ${page.title}?`,
+    );
+    expect(greeting({ ...page, hostName: 'Acme', isTeam: true }, 30)).toBe(
+      `Hi, it’s Acme. When suits you for a 30 min ${page.title}?`,
+    );
+    expect(lines(false)).toBe('I’m not free Saturday. These are the closest.');
+    expect(lines(true)).toBe('We’re not free Saturday. These are the closest.');
   });
 
   it('reads a bare morning hour that missed as the afternoon', () => {
@@ -110,7 +130,7 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     expect(readBack.state.intent).toBe('details');
     expect(readBack.state.readBack).toBe(true);
     expect(readBack.text).toBe(
-      'Thursday 22 Oct at 3:00 PM, 30 minutes, for Ada Lovelace (ada@example.com). Shall I book it?',
+      'Thursday 22 Oct at 3:00 PM, 30 min, for Ada Lovelace (ada@example.com). Shall I book it?',
     );
     expect(readBack.suggestions).toEqual(['Yes, book it', 'Something else']);
     expect(words([...steps, 'Yes, book it']).state.intent).toBe('book');
@@ -121,7 +141,7 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
 
   it('asks for a phone number on a phone page', () => {
     const turn = words(['tomorrow at 3pm', "I'm Ada, ada@example.com"], { needsPhone: true });
-    expect(turn.text).toBe('Thanks, Ada. And a number to call you on?');
+    expect(turn.text).toBe('Thanks, Ada. What number should I call?');
     const done = words(['tomorrow at 3pm', "I'm Ada, ada@example.com", '+44 20 7946 0958'], { needsPhone: true });
     expect(done.state.readBack).toBe(true);
   });
@@ -129,7 +149,7 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
   it('answers questions without booking, keeping a held time', () => {
     const turn = words(['tomorrow at 3pm', 'Ada, ada@example.com', 'where is it?']);
     expect(turn.state.intent).toBe('location');
-    expect(turn.text).toBe('It’s a video call. Ada will send you the link. Tomorrow at 3:00 PM is still yours.');
+    expect(turn.text).toBe('It’s a video call. I’ll send you the link. Tomorrow at 3:00 PM is still yours.');
     expect(words(['how long is it?']).text).toMatch(/^It’s 30 minutes\./);
     expect(words(['can I cancel if something comes up?']).state.intent).toBe('change-policy');
   });
@@ -137,7 +157,7 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
   it('settles the meeting length from what the visitor asked, if offered', () => {
     expect(settledLength(['make it an hour'], [30, 60], 30)).toBe(60);
     expect(settledLength(['make it 45 minutes'], [30, 60], 30)).toBe(30);
-    expect(words(['make it 45 minutes']).text).toBe('This page offers 30 or 60 minutes.');
+    expect(words(['make it 45 minutes']).text).toBe('I can do 30 or 60 minutes.');
   });
 
   it('forgets a time that was taken since it was held (AC-1517)', () => {
@@ -163,5 +183,26 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     const turn = words(['tomorrow'], { slots: [] });
     expect(turn.state.intent).toBe('exhausted');
     expect(turn.offers).toEqual([]);
+  });
+});
+
+describe('the chat’s last line (owner, 4 Nov 2026)', () => {
+  const booked = (hostName: string, pending?: true) => ({ booking: { hostName }, ...(pending ? { pending } : {}) });
+  it('names the host a team or round robin page picked, and only there', () => {
+    expect(doneLine(booked('Asha Rao'), true, 'tomorrow at 9:00 AM', 'grace@example.com')).toBe(
+      'You’re booked with Asha. See you tomorrow at 9:00 AM. Details are on their way to grace@example.com.',
+    );
+    expect(doneLine(booked('Asha Rao and Ben Ode'), true, 'tomorrow at 9:00 AM', undefined)).toBe(
+      'You’re booked with Asha Rao and Ben Ode. See you tomorrow at 9:00 AM. The details are in your email.',
+    );
+    expect(doneLine(booked('Ada Lovelace'), false, 'tomorrow at 9:00 AM', undefined)).toBe(
+      'You’re booked. See you tomorrow at 9:00 AM. The details are in your email.',
+    );
+  });
+
+  it('says a request was sent on a page that confirms each booking first', () => {
+    expect(doneLine(booked('Ada Lovelace', true), false, 'tomorrow at 9:00 AM', undefined)).toBe(
+      'Request sent for tomorrow at 9:00 AM. I’ll confirm shortly. The details are in your email.',
+    );
   });
 });

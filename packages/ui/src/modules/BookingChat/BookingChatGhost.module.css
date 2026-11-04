@@ -1,30 +1,37 @@
-/* Book by chat's loading shape: BookingChat's own geometry (its thread, the greeting's bubble, SlotList's offers
-   and the prompt box at the foot), drawn in skeletons, so nothing moves when the chat arrives in its place. */
+/* Book by chat's loading shape: BookingChat's own geometry (its thread, the host's name, their face beside the
+   greeting's bubble, SlotList's offers in line with it, and the prompt box at the foot), drawn in skeletons, so
+   nothing moves when the chat arrives in its place. */
 @layer components {
   /* The thread fills what the box leaves (BookingChat's own thread, twelve rows tall on its own); the times stand as
-     far under the bubble as a reply's do (the line's gap and the offers' margin). */
+     far under the bubble as a reply's do. */
   .thread {
-    container-type: inline-size;
     display: flex;
     flex: 1 1 calc(var(--size-row) * 12);
     flex-direction: column;
-    gap: var(--space-24);
-    overflow: hidden;
+    gap: var(--space-8);
+    padding-inline-end: var(--space-4);
   }
 
-  /* The greeting: two lines of body text in the bubble's padding, at most the bubble's width; one line in a wide card
-     (the page beside its rail). */
+  /* In line with the bubbles, past the face: the name's line, then the times. */
+  .who,
+  .offers {
+    padding-inline-start: calc(var(--avatar-md) + var(--space-8));
+    font: var(--text-label);
+  }
+
+  /* The face beside the bubble, level with its foot; the times start as far below as a reply's offers do. */
+  .said {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-8);
+    padding-block-end: var(--space-12);
+  }
+
+  /* The greeting: two lines of body text (the page's own type) in the bubble's padding, as it reads on a phone; beside
+     the rail it may take one, the times then rising a line as they arrive (the booking page's CSS budget). */
   .bubble {
-    inline-size: 85%;
+    inline-size: 80%;
     block-size: calc(2lh + 2 * var(--space-8));
-    font: var(--text-body);
-  }
-
-  @container (width >= 480px) {
-    .bubble {
-      inline-size: 60%;
-      block-size: calc(1lh + 2 * var(--space-8));
-    }
   }
 
   /* The prompt box's place: BookingChat's composer at its least height, and like it held to the window's foot on a
@@ -32,7 +39,6 @@
   .composer {
     position: sticky;
     inset-block-end: max(var(--space-12), env(safe-area-inset-bottom));
-    flex: none;
     block-size: calc(var(--size-toolbar) + var(--space-24));
   }
 }

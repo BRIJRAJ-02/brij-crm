@@ -175,7 +175,7 @@
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
       align-items: center;
-      gap: var(--space-12) var(--space-16);
+      gap: var(--space-12);
     }
 
     /* The face and the name take a column each; whatever follows the name takes the row. */
@@ -431,12 +431,13 @@
     animation: none;
   }
 
-  /* A view's parts top down; a last part that doesn't grow (the chat's composer, loading) sits at the foot. */
+  /* A view's parts top down; a last part that doesn't grow (the chat's composer, loading) sits at the foot. It clips
+     nothing: Book by chat scrolls its own thread, and its prompt box stays on screen, held to the window's foot while
+     the card runs past it (a phone, 4 November 2026: it sat below Safari's toolbar). */
   .coverBody {
     justify-content: space-between;
     flex: 1;
     min-block-size: 0;
-    overflow-y: auto;
   }
 
   .panes {
@@ -455,10 +456,16 @@
     padding: var(--space-20);
   }
 
-  /* Book by chat scrolls its own thread, so its body clips nothing: the composer can then stay on screen, held to
-     the foot of the window while the card runs past it (a phone, 4 November 2026: it sat below Safari's toolbar). */
-  .coverBody[data-view='chat'] {
-    overflow: visible;
+  /* On a phone the chat sets the card's height rather than borrowing the month's (owner review, 4 November 2026): the
+     month leaves the layout and the chat flows, so the page is its one scroller. */
+  @media (width < 1024px) {
+    .stage[data-view='chat'] > .under {
+      display: none;
+    }
+
+    .stage[data-view='chat'] > .cover {
+      position: static;
+    }
   }
 
   /* Stacked under the month, the times scroll in a box of their own, eight rows tall (four rows of times and the next one's top): the card

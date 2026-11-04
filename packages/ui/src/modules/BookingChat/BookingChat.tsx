@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
+import { ChoiceChips } from '../../molecules/ChoiceChips/ChoiceChips.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { SlotList, type Slot } from '../SlotList/SlotList.tsx';
 import styles from './BookingChat.module.css';
@@ -34,6 +36,25 @@ export interface BookingChatLine {
    * the conversation rather than repeating the opening question. Left out, the opening question.
    */
   readonly prompt?: string;
+  /** What the prompt box takes after this reply, for the phone's keyboard and autofill: an email, a number, a name. */
+  readonly answer?: 'email' | 'tel' | 'name';
+  /**
+   * One choice the visitor makes with a tap, shown picked (the meeting's length on a page with several): the page's
+   * own ChoiceChips, under the line while it is the last reply.
+   */
+  readonly choice?: {
+    readonly label: string;
+    readonly options: readonly { readonly id: string; readonly label: string }[];
+    readonly selected: string;
+  };
+}
+
+/** The host the chat speaks as: their name and picture (the rail's face), and the name shown over their messages. */
+export interface BookingChatHost {
+  readonly name: string;
+  readonly image?: string;
+  /** Over the first message of each of their runs: the host's first name, or a team page's name. */
+  readonly label: string;
 }
 
 /** What a read back would book, as the confirm card heads it: the date tile, the meeting, when and who. */
@@ -63,6 +84,10 @@ export interface BookingChatError {
 /** Props for BookingChat. */
 export interface BookingChatProps {
   readonly lines: readonly BookingChatLine[];
+  /** Who speaks: their face at the foot of each run of their messages, their name over its first. */
+  readonly host: BookingChatHost;
+  /** The visitor's name once the chat has heard it: their initials beside their messages, a person mark before. */
+  readonly visitorName?: string;
   /** The page's times are still loading: a skeleton, and the field waits. */
   readonly isLoading?: boolean;
   /** A turn is out: the field waits and the thread says so. */
@@ -72,12 +97,42 @@ export interface BookingChatProps {
   readonly onSend: (text: string) => void;
   /** The visitor pressed an offered time. */
   readonly onPickTime: (id: string) => void;
+  /** The visitor picked another option of a line's `choice`. */
+  readonly onChoose?: (id: string) => void;
   /** The chat is over (it booked, or the page closed): the field and buttons are done. */
   readonly isDone?: boolean;
   /** What a screen reader hears when it ends ("Booked. Opening your booking."). */
   readonly doneNote?: string;
   /** The longest message, in characters. */
   readonly maxLength?: number;
+}
+
+/** The face beside a run's last message: the host's (the rail's picture or initials), or the visitor's. */
+function faceOf(role: BookingChatLine['role'], host: BookingChatHost, visitorName: string | undefined) {
+  if (role === 'assistant')
+    return (
+      <Avatar name={host.name} size="md" isDecorative {...(host.image === undefined ? {} : { src: host.image })} />
+    );
+  // The visitor's initials once the chat knows their name; until then a plain person mark, never a guessed face.
+  return visitorName === undefined || visitorName.trim() === '' ? (
+    <Avatar name={strings.you} size="md" hue="gray" isDecorative mark={<Icon name="user-round" size="sm" />} />
+  ) : (
+    <Avatar name={visitorName} size="md" isDecorative />
+  );
+}
+
+/** The prompt box's keyboard and autofill for what it is asked for; plain text otherwise. */
+function inputFor(answer: BookingChatLine['answer']) {
+  switch (answer) {
+    case 'email':
+      return { inputMode: 'email' as const, autoComplete: 'email' };
+    case 'tel':
+      return { inputMode: 'tel' as const, autoComplete: 'tel' };
+    case 'name':
+      return { autoComplete: 'name' };
+    default:
+      return { autoComplete: 'off' };
+  }
 }
 
 /** Words past this many arrive together: a long reply never makes the visitor wait on its last words. */
@@ -109,11 +164,14 @@ function Written({ text }: { text: string }) {
  */
 export function BookingChat({
   lines,
+  host,
+  visitorName,
   isLoading = false,
   isWaiting = false,
   error,
   onSend,
   onPickTime,
+  onChoose,
   isDone = false,
   doneNote,
   maxLength = 500,
@@ -130,17 +188,29 @@ export function BookingChat({
 
   // The newest line in view as the thread grows: at once when a line arrives, then again as each line, its times and
   // its card finish opening to their height, so the thread follows them down rather than stopping short (the owner,
-  // 2 November 2026). It glides there, unless less motion was asked for.
+  // 2 November 2026). It glides there, unless less motion was asked for. On a phone the page is the only scroller
+  // (the thread takes its whole height), so the newest line is brought into the window instead, above the prompt box
+  // (its scroll margin); never for the greeting, so the page never moves on its own as it opens.
+  const hasMoved = useRef(false);
+  const shownLength = useRef(lines.length);
   useEffect(() => {
+    if (lines.length !== shownLength.current) {
+      hasMoved.current = true;
+      shownLength.current = lines.length;
+    }
     const thread = threadRef.current;
-    if (thread !== null) thread.scrollTop = thread.scrollHeight;
+    if (thread === null) return;
+    thread.scrollTop = thread.scrollHeight;
+    if (hasMoved.current) thread.lastElementChild?.scrollIntoView({ block: 'nearest' });
   }, [lines.length, isWaiting, error, isLoading]);
   useEffect(() => {
     const thread = threadRef.current;
     if (thread === null) return undefined;
     const follow = () => {
       const isStill = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      thread.scrollTo({ top: thread.scrollHeight, behavior: isStill ? 'auto' : 'smooth' });
+      const behavior = isStill ? 'auto' : 'smooth';
+      thread.scrollTo({ top: thread.scrollHeight, behavior });
+      if (hasMoved.current) thread.lastElementChild?.scrollIntoView({ block: 'nearest', behavior });
     };
     thread.addEventListener('animationstart', follow);
     thread.addEventListener('animationend', follow);
@@ -169,18 +239,47 @@ export function BookingChat({
       {/* Focusable, so the thread scrolls from the keyboard where the browser wouldn't (Safari). */}
       {/* eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex -- a scrolling region must be reachable */}
       <div ref={threadRef} className={styles.thread} role="log" aria-label={strings.thread} tabIndex={0}>
-        {lines.map((line) => {
+        {lines.map((line, index) => {
           const isLive = line.id === lastAssistant && !isLocked;
+          // A run is one speaker's messages in a row (iMessage, Intercom): the name over its first, the face at its
+          // foot, and a wider gap where the speaker changes. The typing dots close the host's run while a reply is out.
+          const isRunStart = lines[index - 1]?.role !== line.role;
+          const next = lines[index + 1]?.role ?? (isWaiting ? 'assistant' : undefined);
+          const isRunEnd = next !== line.role;
           return (
             <div
               key={line.id}
               className={styles.line}
               data-role={line.role}
+              data-run-start={isRunStart || undefined}
               // How long the reply takes to write itself, so its times and suggestions come after its words.
               style={{ '--words': String(Math.min(line.text.split(/\s+/).length, STAGGERED_WORDS)) }}
             >
-              <VisuallyHidden>{strings.said(line.role === 'visitor' ? strings.you : strings.assistant)}</VisuallyHidden>
-              <p className={styles.bubble}>{line.role === 'assistant' ? <Written text={line.text} /> : line.text}</p>
+              <VisuallyHidden>{strings.said(line.role === 'visitor' ? strings.you : host.label)}</VisuallyHidden>
+              {isRunStart && line.role === 'assistant' && (
+                <span className={styles.who} aria-hidden="true">
+                  {host.label}
+                </span>
+              )}
+              <div className={styles.said}>
+                <span className={styles.face}>{isRunEnd && faceOf(line.role, host, visitorName)}</span>
+                <p className={styles.bubble}>{line.role === 'assistant' ? <Written text={line.text} /> : line.text}</p>
+              </div>
+              {isLive && line.choice !== undefined && (
+                <div className={styles.offers}>
+                  <ChoiceChips
+                    label={line.choice.label}
+                    isLabelHidden
+                    isSingle
+                    choices={line.choice.options}
+                    selected={[line.choice.selected]}
+                    onChange={(picked) => {
+                      const next = picked[0];
+                      if (next !== undefined && next !== line.choice?.selected) onChoose?.(next);
+                    }}
+                  />
+                </div>
+              )}
               {(isLive || answered?.line === line.id) &&
                 line.days?.map((group) => (
                   <div key={group.day} className={styles.offers}>
@@ -252,11 +351,24 @@ export function BookingChat({
           );
         })}
         {isWaiting && (
-          <div className={styles.line} data-role="assistant" aria-busy="true">
-            <span className={styles.waiting}>
-              <Spinner />
-              <span className={styles.thinking}>{strings.waiting}</span>
-            </span>
+          // The host typing: three dots in their bubble, their face beside it, until the reply takes its place.
+          <div
+            className={styles.line}
+            data-role="assistant"
+            data-run-start={lines.at(-1)?.role !== 'assistant' || undefined}
+            aria-busy="true"
+          >
+            <div className={styles.said}>
+              <span className={styles.face}>{faceOf('assistant', host, visitorName)}</span>
+              <p className={styles.bubble}>
+                <VisuallyHidden>{strings.waiting}</VisuallyHidden>
+                <span className={styles.typing} aria-hidden="true">
+                  <span className={styles.dot} />
+                  <span className={styles.dot} />
+                  <span className={styles.dot} />
+                </span>
+              </p>
+            </div>
           </div>
         )}
         {isDone && doneNote !== undefined && (
@@ -293,9 +405,11 @@ export function BookingChat({
           <Field
             ref={fieldRef}
             variant="cell"
-            label={strings.message}
+            // The question it answers names the box, and the phone's keyboard and autofill follow it (an email, a number).
+            label={lastReply?.prompt ?? strings.message}
             isLabelHidden
             placeholder={lastReply?.prompt ?? strings.placeholder}
+            {...inputFor(lastReply?.answer)}
             value={draft}
             onChange={setDraft}
             onSubmit={send}
@@ -303,7 +417,6 @@ export function BookingChat({
             maxLength={maxLength}
             showCounter
             isDisabled={isDone}
-            autoComplete="off"
           />
         </div>
         {/* Always there, as an AI chat's send: a round grey button while there is nothing to send, the accent once

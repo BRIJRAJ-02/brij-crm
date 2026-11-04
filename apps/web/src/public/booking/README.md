@@ -19,6 +19,15 @@ Since 20 October 2026 the pages draw with the component library through `@crm/ui
 - Prefill (`prefill.ts`): a form's signed hand off (`?p=<token>`, spec 0023 AC-1058, 24 hours). The page asks `GET /api/public/booking/:publicKey/prefill` for the name and email (never reading them from the address), shows "Booking as {name}. Not you?", and sends the token with the booking, which then stores the form's submission. No visual change.
 - The visitor's own calendar (spec 0028), in VisitorBar on top: someone signed in to Timefix in this browser is known (their name and email fill the form, their connected calendar is laid over the times); anyone else sees a small secondary "Connect your calendar" link (spec 0058, AC-24) that opens Match with your calendar, which says what it reads and goes to Google for this visit only and back to the same length, day and zone (`visitor.ts` writes and reads the return address, then tidies it). Times that clash are hidden unless Show all times is on, up to three carry Best (and mark their day), every time clashing says so with Show all times, and a calendar that can't be read shows every time. Not you forgets them for the visit (a guest's calendar at the server too). The host on their own page and the editor's preview get no bar.
 
+## Book by chat (`ChatPanel.tsx`)
+
+The chat speaks as the host and does what the details step does (chat parity, 4 Nov 2026):
+- The greeting shows the page's lengths as chips (two or more) and the zone as a "Dubai time · Change" chip, which opens the rail's picker.
+- Once the time, name and email are in, the server's read back waits while the page asks its own questions: required ones one by one, choices as chips.
+- Then one row: "Add a guest", "Add a note", each optional question, and "That's all".
+- The page's own lines are `local`: never sent, so the server's replay never reads an answer as a time.
+- Guests, the note and the answers go with each turn and are booked with the yes, checked as the form's are. A form's hand off goes too.
+
 ## The guest page (`ManagePage.tsx`)
 
 BookingReceipt: the host with the state's mark, the title by state (You're booked, with "Ada will see you then." under it right after booking; Your booking, cancelled, passed), then one card that leads with the summary (spec 0058, AC-19): the date chip, what and who ("Intro call  with Ada Lovelace"), the range, the whole date and zone and how soon, then Join the call and Add to calendar (Google, Outlook, Apple / .ics) while it's ahead, or a link to book again; Who in full, Where and the note follow. "Powered by Timefix" sits at the foot.

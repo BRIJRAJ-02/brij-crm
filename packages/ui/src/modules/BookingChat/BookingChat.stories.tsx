@@ -17,7 +17,7 @@ function greeting(): BookingChatLine {
   return {
     id: 'greet',
     role: 'assistant',
-    text: 'Booking your 30 min Intro call with Ada. When suits you?',
+    text: 'Hi, I’m Ada. When suits you for a 30 min Intro call?',
     days: [
       times('Fri 9 Oct', ['9:00 AM', '9:30 AM', '10:00 AM']),
       times('Mon 12 Oct', ['9:00 AM', '9:30 AM', '10:00 AM']),
@@ -29,7 +29,7 @@ function greeting(): BookingChatLine {
 const meta = {
   title: 'Modules/BookingChat',
   component: BookingChat,
-  args: { lines: [], onSend: fn(), onPickTime: fn() },
+  args: { lines: [], host: { name: 'Ada Lovelace', label: 'Ada' }, onSend: fn(), onPickTime: fn() },
   render: (args) => (
     <Stage width="fill">
       <BookingChat {...args} />
@@ -79,11 +79,11 @@ export const ReadBack: Story = {
       greeting(),
       { id: 'v1', role: 'visitor', text: 'tomorrow at 3pm' },
       { id: 'a1', role: 'assistant', text: 'Great, tomorrow at 3:00 PM it is. What’s your name and email?' },
-      { id: 'v2', role: 'visitor', text: 'Ada Lovelace, ada@example.com' },
+      { id: 'v2', role: 'visitor', text: 'Grace Hopper, grace@example.com' },
       {
         id: 'a2',
         role: 'assistant',
-        text: 'Tomorrow at 3:00 PM, 30 minutes, for Ada Lovelace (ada@example.com). Shall I book it?',
+        text: 'Tomorrow at 3:00 PM, 30 min, for Grace Hopper (grace@example.com). Shall I book it?',
         suggestions: ['Yes, book it', 'Something else'],
         confirm: 'Yes, book it',
         card: {
@@ -92,13 +92,13 @@ export const ReadBack: Story = {
           month: 'Oct',
           title: 'Intro call with Ada Lovelace',
           when: 'Friday, 9 October 2026 · 3:00 – 3:30 PM',
-          who: 'Ada Lovelace · ada@example.com',
+          who: 'Grace Hopper · grace@example.com',
         },
       },
     ]);
     return (
       <Stage width="fill">
-        <BookingChat {...args} lines={lines} />
+        <BookingChat {...args} lines={lines} visitorName="Grace Hopper" />
       </Stage>
     );
   },
@@ -112,7 +112,7 @@ export const ReadBack: Story = {
   },
 };
 
-/** A turn is out: a spinner line, and the field holds. */
+/** A turn is out: the host typing (three dots in their bubble), and the field holds. */
 export const Waiting: Story = {
   args: { isWaiting: true },
   render: (args) => (
@@ -121,7 +121,6 @@ export const Waiting: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await waitFor(() => expect(canvas.getByRole('progressbar')).toBeVisible());
     await expect(canvas.getByRole('log')).toHaveTextContent('One moment');
     await expect(canvas.queryByRole('list', { name: 'Times on Fri 9 Oct' })).toBeNull();
     await expect(canvas.getByRole('button', { name: 'Send' })).toBeDisabled();
@@ -205,14 +204,17 @@ export const AsksForDetails: Story = {
             role: 'assistant',
             text: 'Great, Fri 9 Oct at 9:30 AM it is. What’s your name and email?',
             prompt: 'Your name and email',
+            answer: 'name',
           },
         ]}
       />
     </Stage>
   ),
   play: async ({ canvas }) => {
-    const field = canvas.getByRole('textbox', { name: 'Message' });
+    // The box is named by the question it answers, and fills in a name.
+    const field = canvas.getByRole('textbox', { name: 'Your name and email' });
     await expect(field).toHaveAttribute('placeholder', 'Your name and email');
+    await expect(field).toHaveAttribute('autocomplete', 'name');
     // Send is always there, quiet until there is something to send, then the accent.
     const send = canvas.getByRole('button', { name: 'Send' });
     await expect(send).toBeDisabled();
@@ -228,7 +230,7 @@ export const NoTimes: Story = {
     <Stage width="fill">
       <BookingChat
         {...args}
-        lines={[{ id: 'greet', role: 'assistant', text: 'Ada has nothing open right now. Check back soon.' }]}
+        lines={[{ id: 'greet', role: 'assistant', text: 'I’m fully booked right now. Check back soon.' }]}
       />
     </Stage>
   ),
@@ -250,7 +252,7 @@ export const Done: Story = {
           {
             id: 'a1',
             role: 'assistant',
-            text: 'Done. You’re booked for tomorrow at 3:00 PM. The details are on their way to ada@example.com.',
+            text: 'You’re booked. See you tomorrow at 3:00 PM. Details are on their way to grace@example.com.',
             suggestions: ['Something later'],
           },
         ]}
@@ -260,5 +262,61 @@ export const Done: Story = {
   play: async ({ canvas }) => {
     await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Message' })).toBeDisabled());
     await expect(canvas.queryByRole('button', { name: 'Something later' })).toBeNull();
+  },
+};
+
+/** Chat parity (4 Nov 2026): a page with several lengths shows them as chips under the greeting, picked to its default. */
+export const Lengths: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <BookingChat
+        {...args}
+        lines={[
+          {
+            ...greeting(),
+            choice: {
+              label: 'Meeting length',
+              options: [
+                { id: '15', label: '15 min' },
+                { id: '30', label: '30 min' },
+                { id: '60', label: '60 min' },
+              ],
+              selected: '30',
+            },
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  args: { onChoose: fn() },
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('radio', { name: '60 min' }));
+    await expect(args.onChoose).toHaveBeenCalledWith('60');
+  },
+};
+
+/** Once the time, name and email are in, the page's own "anything else" row: a guest, a note, an optional question. */
+export const Extras: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <BookingChat
+        {...args}
+        lines={[
+          greeting(),
+          { id: 'v1', role: 'visitor', text: 'Fri at 9:30, Grace Hopper, grace@example.com' },
+          {
+            id: 'p1',
+            role: 'assistant',
+            text: 'Anything else before I book it?',
+            suggestions: ['Add a guest', 'Add a note', 'Your role', 'That’s all'],
+          },
+        ]}
+        visitorName="Grace Hopper"
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add a guest' }));
+    await expect(args.onSend).toHaveBeenCalledWith('Add a guest');
   },
 };

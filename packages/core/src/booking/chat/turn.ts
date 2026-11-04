@@ -19,7 +19,7 @@ import {
   readPublicSlots,
   type PublicBookingDeps,
 } from '../public.ts';
-import { answer, fullTimeLabel, OFFER_COUNT, replay, settledLength, type ChatPage } from './agent.ts';
+import { answer, OFFER_COUNT, replay, settledLength, timeLabel, voiceOf, type ChatPage } from './agent.ts';
 import { isYes } from './parse.ts';
 
 /** The furthest one turn looks ahead, in days: the slots read's own cap. */
@@ -49,8 +49,11 @@ export async function chatTurn(
   deps: PublicBookingDeps,
   input: PublicChatInput,
   hooks: readonly AfterWrite[] = [],
-  /** `mayBook` is asked once, just before a booking: false (a spent limit, the bot checks) skips it. */
-  options: { readonly mayBook?: () => boolean } = {},
+  /**
+   * `mayBook` is asked once, just before a booking: false (a spent limit, the bot checks) skips it. `link` is a form's
+   * verified hand off (spec 0043): a team page then offers only the hosts its routing chose, as the picker does.
+   */
+  options: { readonly mayBook?: () => boolean; readonly link?: { readonly submissionId: string } } = {},
 ): Promise<ChatTurn> {
   const page = await getPublicBookingPage(entry);
   const nowDate = deps.now?.() ?? new Date();
@@ -63,6 +66,7 @@ export async function chatTurn(
   const chatPage: ChatPage = {
     title: page.title,
     hostName: page.hostName,
+    ...(page.team === undefined ? {} : { isTeam: true }),
     durations: page.durations,
     location: page.location,
   };
@@ -74,15 +78,13 @@ export async function chatTurn(
 
   const key = chatIdempotencyKey(input.conversationId);
   const done = (
-    booking: { readonly booking: PublicBooking; readonly manageToken: string },
+    booking: { readonly booking: PublicBooking; readonly manageToken: string; readonly pending?: true },
     /** The address just typed; left out for a retry, whose booking may have gone to an earlier one. */
     email: string | undefined,
     isNew: boolean,
   ): ChatTurn => ({
     reply: {
-      text: `Done. You’re booked for ${fullTimeLabel(booking.booking.start, now, input.hour12)}. ${
-        email === undefined ? 'The details are in your email.' : `The details are on their way to ${email}.`
-      }`,
+      text: doneLine(booking, page.team !== undefined, timeLabel(booking.booking.start, now, input.hour12), email),
       offers: [],
       suggestions: [],
       duration,
@@ -97,17 +99,21 @@ export async function chatTurn(
     if (made !== undefined) return done(made, undefined, false);
   }
 
-  const read = await readPublicSlots(entry, deps, {
-    from: nowDate.toISOString(),
-    to: new Date(nowDate.getTime() + horizonDays * 86_400_000).toISOString(),
-    duration,
-    tz: input.timeZone,
-  });
+  const read = await readPublicSlots(
+    entry,
+    deps,
+    {
+      from: nowDate.toISOString(),
+      to: new Date(nowDate.getTime() + horizonDays * 86_400_000).toISOString(),
+      duration,
+      tz: input.timeZone,
+    },
+    options.link,
+  );
   // Fail closed, as the picker does: no calendar, no times.
   if (read.calendar === 'unreachable') {
-    return quiet(
-      `${page.hostName}’s calendar can’t be read right now, so I can’t offer times. Try again a little later.`,
-    );
+    const we = voiceOf(chatPage);
+    return quiet(`${we.i === 'I' ? 'I' : 'We'} can’t see ${we.my} calendar right now. Try again in a bit.`);
   }
   const slots = read.slots.map((slot) => slot.start);
   const context = { slots, now, horizonDays, needsPhone, durations: page.durations };
@@ -123,6 +129,8 @@ export async function chatTurn(
         suggestions: [...said.suggestions],
         ...(said.confirm === undefined ? {} : { confirm: said.confirm }),
         ...(said.asks === undefined ? {} : { asks: said.asks }),
+        // The name the chat has heard, so the page can draw the visitor's initials beside their lines.
+        ...(state.name === undefined ? {} : { name: state.name }),
         ...(said.confirm === undefined ||
         state.held === undefined ||
         state.name === undefined ||
@@ -136,7 +144,7 @@ export async function chatTurn(
   }
 
   const start = state.held;
-  if (options.mayBook?.() === false) return quiet('I couldn’t book that just now. Say yes again in a moment.');
+  if (options.mayBook?.() === false) return quiet('That didn’t go through. Say yes again in a moment.');
   try {
     const booked = await bookPublicSlot(
       entry,
@@ -149,6 +157,11 @@ export async function chatTurn(
         email: state.email,
         timeZone: input.timeZone,
         ...(state.phone === undefined ? {} : { phone: state.phone }),
+        // What the chat collected beside the conversation: guests, a note, the page's own questions' answers.
+        ...(input.guests === undefined || input.guests.length === 0 ? {} : { guests: [...input.guests] }),
+        ...(input.note === undefined || input.note === '' ? {} : { note: input.note }),
+        ...(input.answers === undefined ? {} : { answers: { ...input.answers } }),
+        ...(input.p === undefined ? {} : { prefill: input.p }),
       },
       hooks,
       undefined,
@@ -168,8 +181,8 @@ export async function chatTurn(
       reply: {
         text:
           others.length === 0
-            ? 'Someone just took that time, and nothing else is open. Sorry.'
-            : 'Someone just took that time. Here’s what’s closest now.',
+            ? 'Someone just took that time, and nothing else is free. Sorry.'
+            : 'Someone just took that time. These are the closest.',
         offers: others,
         suggestions: [],
         duration,
@@ -177,4 +190,24 @@ export async function chatTurn(
       bookedNew: false,
     };
   }
+}
+
+/**
+ * The chat's last line, in the host's voice (owner, 4 Nov 2026): "You're booked. See you tomorrow at 9:00 AM.", naming
+ * the host a team or round robin page picked ("You're booked with Asha."), or, on a page that confirms each booking
+ * first, that the request is sent.
+ */
+export function doneLine(
+  booking: { readonly booking: Pick<PublicBooking, 'hostName'>; readonly pending?: true },
+  isTeam: boolean,
+  when: string,
+  email: string | undefined,
+): string {
+  const details = email === undefined ? 'The details are in your email.' : `Details are on their way to ${email}.`;
+  if (booking.pending === true)
+    return `Request sent for ${when}. ${isTeam ? 'We’ll' : 'I’ll'} confirm shortly. ${details}`;
+  // A round robin's one host by their first name; a collective's several as the booking names them.
+  const hosts = booking.booking.hostName;
+  const named = /,| and /u.test(hosts) ? hosts : (hosts.trim().split(/\s+/u)[0] ?? hosts);
+  return `You’re booked${isTeam ? ` with ${named}` : ''}. See you ${when}. ${details}`;
 }
