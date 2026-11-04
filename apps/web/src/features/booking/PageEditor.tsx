@@ -120,11 +120,13 @@ import { sharingStrings } from './sharing-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
 import { publishStrings } from './publish-strings.ts';
+import { activityStrings } from './activity-strings.ts';
+import { PageBookingsTab, PageInsightsTab } from './PageActivityTabs.tsx';
+import { ShareTimesCard } from './ShareTimesCard.tsx';
 import { isDraftPage } from './draft-page.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
 import { strings as socialsStrings } from './socials-strings.ts';
-import { insightsHref } from '../insights/search.ts';
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
@@ -904,7 +906,10 @@ export function PageEditor({
     .flatMap((rotation) => rotation.members.map((member) => ({ id: member.memberId, name: member.name })))
     .filter((member, at, all) => all.findIndex((each) => each.id === member.id) === at);
   // The tabs: Hosts on a round robin page only. A tab shown that this page doesn't have falls back to Page.
-  const tabs: readonly PageTab[] = PAGE_TABS.filter((each) => each !== 'hosts' || isTeam);
+  // Hosts on a round robin page only; Bookings and Insights for whoever may change the page (its own figures).
+  const tabs: readonly PageTab[] = PAGE_TABS.filter(
+    (each) => (each !== 'hosts' || isTeam) && ((each !== 'bookings' && each !== 'insights') || !isLocked),
+  );
   const shown: PageTab = tabs.includes(tab) ? tab : 'page';
   // The tabs whose fields hold an error now: what's marked red on them, and a refusal's field from the server.
   const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
@@ -924,6 +929,8 @@ export function PageEditor({
     hosts: refusedTab === 'hosts',
     hours: refusedTab === 'hours' || (isWeekDirty && !week.isValid),
     share: refusedTab === 'share',
+    bookings: false,
+    insights: false,
   };
   const tabLabel: Readonly<Record<PageTab, string>> = {
     page: strings.page,
@@ -932,6 +939,8 @@ export function PageEditor({
     hosts: strings.hostsTab,
     hours: strings.availabilityTab,
     share: strings.shareTab,
+    bookings: activityStrings.bookingsTab,
+    insights: activityStrings.insightsTab,
   };
   // What Save can't send yet, said in the bar and by Publish: a field on this tab or another that needs a fix.
   const blockedReason =
@@ -1085,15 +1094,6 @@ export function PageEditor({
                           },
                         },
                       ]),
-                  // Its visits, bookings and where people stop (spec 0067).
-                  {
-                    id: 'insights',
-                    label: publishStrings.insights,
-                    icon: 'chart-line' as const,
-                    onAction: () => {
-                      void navigate({ href: insightsHref(slug, { kind: 'booking', page: page.id }) });
-                    },
-                  },
                   ...(isLocked
                     ? []
                     : [
@@ -1189,24 +1189,29 @@ export function PageEditor({
                   previewShare="wide"
                   bodyLayout="stack"
                   {...(isTimesStale ? { previewNote: <Callout tone="info">{strings.previewSavedTimes}</Callout> } : {})}
-                  // The page in a phone beside every tab (the owner, 22 Oct 2026), showing the unsaved edits.
-                  preview={
-                    <PreviewFrame
-                      src={`/b/${page.publicKey}`}
-                      title={page.title}
-                      // The page's save, or a save of the schedule it books by, draws it again with the new times.
-                      version={`${page.updatedAt}|${hours.schedule?.updatedAt ?? ''}`}
-                      draft={{
-                        title: draft.title,
-                        description: draft.description,
-                        durations: draft.durations,
-                        location: draft.location,
-                        // The owner's links as they are now, while the draft shows them (booking socials).
-                        ...(showsSocials ? { socials: draft.showSocials ? previewLinks : [] } : {}),
-                        defaultView: draft.defaultView,
-                      }}
-                    />
-                  }
+                  // The page in a phone beside every settings tab (the owner, 22 Oct 2026), showing the unsaved edits;
+                  // Bookings and Insights take the whole width, as a form's Submissions and Analytics do.
+                  {...(shown === 'bookings' || shown === 'insights'
+                    ? {}
+                    : {
+                        preview: (
+                          <PreviewFrame
+                            src={`/b/${page.publicKey}`}
+                            title={page.title}
+                            // The page's save, or a save of the schedule it books by, draws it again with the new times.
+                            version={`${page.updatedAt}|${hours.schedule?.updatedAt ?? ''}`}
+                            draft={{
+                              title: draft.title,
+                              description: draft.description,
+                              durations: draft.durations,
+                              location: draft.location,
+                              // The owner's links as they are now, while the draft shows them (booking socials).
+                              ...(showsSocials ? { socials: draft.showSocials ? previewLinks : [] } : {}),
+                              defaultView: draft.defaultView,
+                            }}
+                          />
+                        ),
+                      })}
                   notices={
                     <>
                       {/* A refused Publish says why where it happened, with the way to the setting to fix. The
@@ -1548,6 +1553,17 @@ export function PageEditor({
                           <ShareBlock name={page.title} link={savedLink} />
                         )}
                       </Card>
+                      {/* A few open times as their own link, or as text (the bookings area, 5 November 2026). */}
+                      {!isLocked && (
+                        <ShareTimesCard
+                          data={data}
+                          publicKey={page.publicKey}
+                          title={page.title}
+                          duration={page.durations[0] ?? 30}
+                          link={savedLink}
+                          isLive={page.status === 'live'}
+                        />
+                      )}
                       {/* The snippet for someone else's site (spec 0062, L3). */}
                       <EmbedCard
                         script={data.forms.embedUrl()}
@@ -2174,6 +2190,8 @@ export function PageEditor({
                       </Card>
                     </SettingsStack>
                   )}
+                  {shown === 'bookings' && <PageBookingsTab data={data} slug={slug} pageId={page.id} />}
+                  {shown === 'insights' && <PageInsightsTab data={data} slug={slug} pageId={page.id} />}
                 </PreviewLayout>
               </TabPanel>
             </Tabs>
@@ -2251,6 +2269,8 @@ const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
   hosts: [rotationStrings.hosts, routingStrings.routing],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff, strings.limitGroups.buffers],
   share: [strings.shareLinkSection, socialsStrings.title],
+  bookings: [activityStrings.upcoming],
+  insights: [activityStrings.insightsTab],
 };
 
 /**
@@ -2268,6 +2288,8 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
     hosts: strings.hostsTab,
     hours: strings.availabilityTab,
     share: strings.shareTab,
+    bookings: activityStrings.bookingsTab,
+    insights: activityStrings.insightsTab,
   };
   return (
     <WorkspacePage

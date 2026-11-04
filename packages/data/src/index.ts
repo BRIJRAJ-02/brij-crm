@@ -4347,6 +4347,20 @@ export function createDataLayer({
           pageRules.receive(workspace, page);
           return page;
         }),
+      /**
+       * A live page's open times, as its guests see them (the public page's own read, so what the host picks is
+       * what a guest can book): Share specific times (the bookings area, 5 November 2026). The public client loads
+       * with `import()`, never in the first load. A draft or paused page answers as the public page does.
+       */
+      openTimes: async (
+        publicKey: string,
+        query: { readonly from: string; readonly to: string; readonly duration: number; readonly tz: string },
+        signal?: AbortSignal,
+      ): Promise<readonly string[]> => {
+        const { createBookingClient } = await import('./booking/public.ts');
+        const answer = await createBookingClient({ origin, fetch }).slots(publicKey, query, signal);
+        return answer.slots.map((slot) => slot.start);
+      },
       /** A new page with defaults. Refusals: `ID_TAKEN`, `SLUG_TAKEN` (field `slug`). */
       create: (
         workspace: string,

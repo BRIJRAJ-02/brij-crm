@@ -385,6 +385,7 @@ export function BookingPage({
           {...(loaded.early === undefined ? {} : { early: loaded.early })}
           chosen={back.chosen}
           {...(back.at === undefined ? {} : { at: back.at })}
+          {...(back.times === undefined ? {} : { sharedTimes: back.times })}
           isPreview={isPreview}
           isEditorPreview={isEditorPreview}
           addressPath={addressPath}
@@ -586,6 +587,7 @@ function Booking({
   onEnded,
   chosen,
   at,
+  sharedTimes,
   connected,
   isPreview,
   isEditorPreview,
@@ -602,6 +604,11 @@ function Booking({
    * in, that time is chosen and the details form opens on it. A time that is gone by then says so over fresh times.
    */
   readonly at?: string;
+  /**
+   * The times a host shared (Share specific times, 5 November 2026): the page offers only these, each while it is
+   * still free, so a taken one simply isn't there.
+   */
+  readonly sharedTimes?: readonly string[];
   /** What a guest connect just answered. */
   readonly connected?: ConnectResult;
   /** Inside a frame of any kind: no visitor. */
@@ -697,6 +704,11 @@ function Booking({
     readonly back: boolean;
   }>({ step: 'pick', attempt: '', back: false });
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  // The shared times, as instants, for the reads to keep only those (Share specific times).
+  const shared = useMemo(
+    () => (sharedTimes === undefined ? undefined : new Set(sharedTimes.map((each) => Date.parse(each)))),
+    [sharedTimes],
+  );
   // Whether a next times chip's time has been answered (spec 0061, AC-6110): once a visit, whatever happens next.
   const isAtDone = useRef(at === undefined);
   // "Not you?": no name, no email and no overlay for the rest of the visit.
@@ -753,7 +765,10 @@ function Booking({
         const next = new Map(current);
         next.set(
           wanted,
-          answer.slots.map((slot) => slot.start),
+          answer.slots
+            .map((slot) => slot.start)
+            // A shared link offers only the times its host picked, of those still free.
+            .filter((start) => shared === undefined || shared.has(Date.parse(start))),
         );
         const overlays = new Map(read.key === readKey ? read.overlays : []);
         if (answer.viewer === undefined) overlays.delete(wanted);
@@ -844,6 +859,7 @@ function Booking({
     handoff,
     onEnded,
     at,
+    shared,
     early,
     reload,
     page.durations,
