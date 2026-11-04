@@ -1,6 +1,7 @@
 // Brief
 // Purpose: New form opens a gallery of ready forms (spec 0063, AC-6323), so nobody starts from an empty page they then have to understand.
-// Main task: pick one from the list, see the form it makes beside it, and Use it to land in its editor.
+// Main task: pick one from the list, see the form it makes beside it, and Use it (or Enter, or a double click) to
+// land in its editor.
 // Leaves out: editing the template (that is the builder), making templates of your own.
 import {
   isDataError,
@@ -65,18 +66,23 @@ function tileOf(template: FormTemplateSummary): ChoiceTile {
   };
 }
 
-/** The form a template makes, as a visitor would see it: its words and questions in the hosted page's shape. */
+/**
+ * The form a template makes, as a visitor would see it: its words and questions in the hosted page's shape. Blank
+ * shows the empty form it really makes, Untitled form with nothing asked yet (forms fixes 3: it showed a sample's
+ * own headline, someone else's words).
+ */
 function sampleOf(template: FormTemplateSummary): PublicForm {
+  const isBlank = template.id === 'blank';
   return {
     key: `template-${template.id}`,
     status: 'live',
     versionNumber: 1,
-    headline: template.sample.headline,
+    headline: isBlank ? strings.untitledForm : template.sample.headline,
     buttonText: template.sample.buttonText,
     language: 'en',
     look: { colour: 'light', corners: 'rounded' },
     layout: template.preview.layout,
-    questions: [...template.sample.questions],
+    questions: isBlank ? [] : [...template.sample.questions],
     offersMeeting: false,
   };
 }
@@ -209,8 +215,9 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
       {...(chosen === undefined
         ? {}
         : {
+            // The phone takes the pane's height (forms fixes 3: capped, it sat small in a tall empty pane).
             aside: (
-              <PhonePreview>
+              <PhonePreview size="pane">
                 <HostedFormPreview key={chosen.id} form={sampleOf(chosen)} />
               </PhonePreview>
             ),
@@ -289,6 +296,13 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
           onChange={(id) => {
             const next = phase.items.find((each) => each.id === id);
             if (next !== undefined) setPicked(next.id);
+          }}
+          // Enter on a template, or a double click, uses it, as Use <name> does (forms fixes 3).
+          onConfirm={(id) => {
+            const next = phase.items.find((each) => each.id === id);
+            if (next === undefined) return;
+            setPicked(next.id);
+            start(next.id);
           }}
         />
       )}

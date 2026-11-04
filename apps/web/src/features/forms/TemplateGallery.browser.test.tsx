@@ -130,7 +130,8 @@ describe('the gallery (AC-6323)', () => {
 
   it('shows the picked template beside the list, as a visitor sees it, and the arrows move it', async () => {
     await open();
-    await expect.element(page.getByText('Fill this in')).toBeVisible();
+    // Blank shows the empty form it makes, never a sample's words (forms fixes 3).
+    await expect.element(page.getByText('Untitled form')).toBeVisible();
     await userEvent.keyboard('{ArrowDown}');
     // The preview follows the pick: the Feedback form's own headline and question.
     await expect.element(page.getByText('How did we do?')).toBeVisible();
@@ -146,6 +147,20 @@ describe('the gallery (AC-6323)', () => {
     await userEvent.click(page.getByRole('button', { name: 'Use Feedback' }).element());
     await expect.poll(() => run.made.map((form) => form.id)).toEqual([MADE.id]);
     expect(run.asked).toEqual([{ templateId: 'feedback' }]);
+  });
+
+  it('uses a template on Enter, as Use does (forms fixes 3)', async () => {
+    const run = await open();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect.element(page.getByRole('radio', { name: 'Feedback' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => run.asked).toEqual([{ templateId: 'feedback' }]);
+  });
+
+  it('uses a template on a double click (forms fixes 3)', async () => {
+    const run = await open();
+    await userEvent.dblClick(page.getByText('A rating, and why. Anonymous.'));
+    await expect.poll(() => run.asked).toEqual([{ templateId: 'feedback' }]);
   });
 
   it('turns the other tiles off while it is making one, so a second Use makes no second form', async () => {

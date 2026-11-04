@@ -158,8 +158,6 @@ export const strings = {
   theme: 'Brand',
   themeBrand: 'Workspace brand',
   themePlain: 'Plain',
-  /** The one button over the preview that holds the look (5 November 2026): Colour, Corners and Colours. */
-  design: 'Design',
   /** Said under Brand colours while the workspace has neither a colour nor a logo saved. */
   themeBrandEmpty: 'Add your logo and colour in Settings › Brand.',
   /** The workspace logo over the form reads as nothing: the headline beside it already names the form. */
@@ -323,6 +321,14 @@ export const strings = {
     'Saving to Deals keeps no person, so there is no one to email back. Save to People with a deal instead; answers saved on the deal stay there.',
   dealsMove: 'Save to People',
   alsoDealTip: 'Each submission also adds a deal, linked to the person and their company.',
+  /**
+   * Turning Also create a deal off when questions are saved on the deal (forms fixes 3): they become Not filed, and
+   * turning it back on doesn't file them again, so it asks first rather than offering an Undo that can't put them back.
+   */
+  dealOffTitle: 'Stop creating deals?',
+  dealOffText: (questions: number) =>
+    `${questions === 1 ? '1 question is' : `${String(questions)} questions are`} saved on the deal. ${questions === 1 ? 'Its answers' : 'Their answers'} will stay with each submission instead, and turning deals back on won’t save ${questions === 1 ? 'it' : 'them'} on the deal again.`,
+  dealOffAction: 'Stop creating deals',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
     `Changes here go live when you publish. Until then, submissions are still saved to ${objectName}.`,
@@ -786,14 +792,18 @@ export const strings = {
   // page sit at the end of a form. Endings, routing and the score live here, never in Settings.
   afterSend: 'After they send',
   /** The one line of what everyone gets (T39): "Everyone sees [Thank you page]", "Everyone else" once a rule exists. */
-  everyoneSees: 'Everyone sees',
-  everyoneElseSees: 'Everyone else sees',
-  everyoneGets: 'What everyone else sees',
+  /** What everyone gets, as labelled rows (forms fixes 3): Show, then Message, Booking page or Address. */
+  afterShow: 'Show',
+  afterMessage: 'Message',
+  /** The default card's title once a rule sends some people elsewhere. */
+  everyoneElse: 'Everyone else',
+  /** Show's own name, said as its row reads (label in name). */
+  showEveryone: (isElse: boolean) => (isElse ? 'Show everyone else' : 'Show everyone'),
   afterKindThanks: 'Thank you page',
-  afterKindBooking: 'A booking page',
-  afterKindLink: 'A link',
-  /** The quiet line that adds a rule. */
-  sendSome: 'Send some people somewhere else',
+  afterKindBooking: 'Booking page',
+  afterKindLink: 'Link',
+  /** The button in After they send's head that adds a rule. */
+  sendSome: 'Add a route',
   sendSomeNeedsQuestion: 'Add a question with choices first, so a rule has something to read.',
   rulesFull: (most: number) => `A form holds ${String(most)} rules.`,
   /** A rule's destination, after its arrow. */
@@ -810,8 +820,6 @@ export const strings = {
   ruleDeleted: 'Rule deleted.',
   addCondition: 'Add a condition',
   /** A booking page's countdown, in the sentence: "after 5 seconds". */
-  countdownInLine: 'at once',
-  countdownAfterInLine: (seconds: number) => `after ${String(seconds)} seconds`,
   ifWord: 'If',
   /** A used question deleted with the rules that read it (T41), one Undo for both. */
   deletedWithRules: (label: string, count: number) =>

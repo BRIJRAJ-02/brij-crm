@@ -1,5 +1,5 @@
-// After they send in Chromium (T39, 5 November 2026): "Everyone sees [Thank you page]" with its words in place, one
-// quiet "+ Send some people somewhere else" making a ready "If … → …" rule card on a choice question (never the
+// After they send in Chromium (T39; forms fixes 3): Show [Thank you page] and its Message as labelled rows, one
+// "+ Add a route" in the section head making a ready "If … → …" rule card on a choice question (never the
 // consent or the name), its destination picked in the sentence, Delete under its ⋯ with Undo, Insert an answer in
 // place of typing {{key}}, the score only once a question gives points, and the paused or deleted booking page said
 // beside the choice (late trap #53). The word "ending" appears nowhere.
@@ -126,7 +126,7 @@ describe('After they send (T39)', () => {
     await show(DRAFT);
     await userEvent.click(page.getByRole('textbox', { name: 'Thank-you message' }));
     await expect.poll(() => edited[0]).toBe('default');
-    await userEvent.click(page.getByRole('button', { name: 'Send some people somewhere else' }));
+    await userEvent.click(page.getByRole('button', { name: 'Add a route' }));
     await expect.poll(() => latest.endings?.length).toBe(1);
     await userEvent.click(page.getByRole('textbox', { name: 'Heading' }));
     await expect.poll(() => edited.at(-1)).toEqual({ endingId: 'ending_1' });
@@ -135,30 +135,28 @@ describe('After they send (T39)', () => {
     await expect.poll(() => edited.at(-1)).toBeUndefined();
   });
 
-  it('reads as one sentence, the thank you words edited under it, and never says ending', async () => {
+  it('reads as labelled rows, Show and Message, and never says ending', async () => {
     await show(DRAFT);
     await expect.element(page.getByRole('heading', { name: 'After they send' })).toBeVisible();
-    await expect.element(page.getByText(/^Everyone sees/)).toBeVisible();
-    await expect
-      .element(page.getByRole('button', { name: /What everyone else sees/ }))
-      .toHaveTextContent('Thank you page');
+    await expect.element(page.getByText('Show', { exact: true })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /Show everyone/ })).toHaveTextContent('Thank you page');
     const words = page.getByRole('textbox', { name: 'Thank-you message' });
     await expect.element(words).toHaveValue('Thanks, we will be in touch.');
-    // No Score line while no question gives points, and no header actions.
+    // No Score line while no question gives points.
     expect(page.getByText('Score', { exact: true }).query()).toBeNull();
     expect(document.body.textContent).not.toMatch(/ending/i);
   });
 
   it('adds a rule on the choice question, never the consent or the name, with a thank-you message', async () => {
     await show(DRAFT);
-    await userEvent.click(page.getByRole('button', { name: 'Send some people somewhere else' }));
+    await userEvent.click(page.getByRole('button', { name: 'Add a route' }));
     await expect.poll(() => latest.routing.rules.length).toBe(1);
     expect(latest.routing.rules[0]?.when.rules[0]).toEqual({ key: 'budget', op: 'is', value: 'Under $1k' });
     expect(latest.routing.rules[0]?.then).toEqual({ kind: 'ending', endingId: 'ending_1' });
     // The picker it starts on is the rule's question, focused, and the value is a real choice.
     await expect.element(page.getByRole('button', { name: /Question, rule 1$/ })).toHaveFocus();
     await expect.element(page.getByRole('button', { name: /Value, rule 1$/ })).toHaveTextContent('Under $1k');
-    await expect.element(page.getByText(/^Everyone else sees/)).toBeVisible();
+    await expect.element(page.getByRole('heading', { name: 'Everyone else' })).toBeVisible();
     // Insert an answer: the words never ask for braces.
     const heading = page.getByRole('textbox', { name: 'Heading' });
     await userEvent.clear(heading);
@@ -171,7 +169,7 @@ describe('After they send (T39)', () => {
 
   it('sends people on to a booking page picked in the sentence, and deletes the rule with Undo', async () => {
     await show(DRAFT, [page_('live')]);
-    await userEvent.click(page.getByRole('button', { name: 'Send some people somewhere else' }));
+    await userEvent.click(page.getByRole('button', { name: 'Add a route' }));
     await userEvent.click(page.getByRole('button', { name: /Where they go, rule 1$/ }));
     await userEvent.click(page.getByRole('option', { name: 'Booking page · Demo call' }));
     await expect.poll(() => latest.routing.rules[0]?.then).toEqual({ kind: 'book', bookingPageId: DEMO, message: '' });

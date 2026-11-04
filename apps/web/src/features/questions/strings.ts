@@ -142,6 +142,8 @@ export const strings = {
   /** Joins a step's questions to the step above it (the break goes). */
   mergeUp: 'Merge with the step above',
   stepMerged: (name: string) => `Merged ${name} into the step above.`,
+  /** Two or more merges in a row, said once with one Undo (forms fixes 3). */
+  stepsMerged: (count: number) => `Merged ${String(count)} steps into the ones above.`,
   /** A divider's name: its step's place ("New step" while empty), then its title when it has one ("Step 2 · Your company"). */
   stepName: (number: number, title?: string) => {
     // A divider with nothing under it yet is no step a visitor counts.

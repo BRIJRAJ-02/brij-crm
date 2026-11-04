@@ -160,6 +160,23 @@ describe('Steps as pages (AC-6303, T20)', () => {
     await expect.element(page.getByRole('button', { name: /^Step 3 · Your team(?!.* options$)/ })).toBeVisible();
   });
 
+  it('says two merges in a row once, and its one Undo brings both steps back (forms fixes 3)', async () => {
+    await open('steps', [
+      { id: 's1', startsAt: 'name' },
+      { id: 's2', startsAt: 'company' },
+      { id: 's3', startsAt: 'size' },
+    ]);
+    await userEvent.click(page.getByRole('button', { name: 'Step 3 options' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Merge with the step above' }));
+    await userEvent.click(page.getByRole('button', { name: 'Step 2 options' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Merge with the step above' }));
+    await expect.element(page.getByText('Merged 2 steps into the ones above.')).toBeVisible();
+    expect(page.getByRole('button', { name: 'Undo' }).all()).toHaveLength(1);
+    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+    await expect.element(page.getByRole('button', { name: /^Step 3(?!.* options$)/ })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /^Step 2(?!.* options$)/ })).toBeVisible();
+  });
+
   it('keeps a quiet + in every gap, a step header counting its questions, and adds a question at a step’s top', async () => {
     await open('steps', [
       { id: 's1', startsAt: 'name' },

@@ -120,7 +120,7 @@ describe('the question card (T40)', () => {
     await expect.element(page.getByRole('button', { name: 'Add a question' })).toHaveFocus();
   });
 
-  it('works by keyboard alone: the new question takes focus, then Tab goes type, Required, ⋯ and on (forms QA)', async () => {
+  it('works by keyboard alone: the new question takes focus; its head holds type, Required and ⋯ (forms QA, fixes 3)', async () => {
     await show();
     // Your name open, so the new question goes under it, before Anything else?.
     (page.getByRole('button', { name: /^Your name/ }).element() as HTMLElement).focus();
@@ -134,7 +134,15 @@ describe('the question card (T40)', () => {
     await expect.element(words).toHaveFocus();
     await userEvent.keyboard('What is your budget?');
     await expect.element(words).toHaveValue('What is your budget?');
-    // Shift Tab reaches its type, Tab its body and footer: Required, then its ⋯, then the next card.
+    // Shift Tab walks back up the head: Close, its ⋯, Required (turned on here), then its type.
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await expect.element(page.getByRole('button', { name: 'Close What is your budget?' })).toHaveFocus();
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await expect.element(page.getByRole('button', { name: 'More for What is your budget?' })).toHaveFocus();
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await expect.element(page.getByRole('switch', { name: 'Required' })).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await expect.poll(() => latest.find((each) => each.label === 'What is your budget?')?.required).toBe(true);
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
     await expect.element(page.getByRole('button', { name: /answer type$/ })).toHaveFocus();
     // Its type by the keyboard: the menu, a type picked by its first letters, and focus back on the type.
@@ -143,25 +151,14 @@ describe('the question card (T40)', () => {
     await userEvent.keyboard('Number');
     await userEvent.keyboard('{Enter}');
     await expect.element(page.getByRole('button', { name: 'Number, answer type' })).toHaveFocus();
-    await userEvent.keyboard('{Tab}');
+    // Tab goes on along the head and into the body: Required, ⋯, Close, then the words.
+    await userEvent.keyboard('{Tab}{Tab}{Tab}{Tab}');
     await expect.element(words).toHaveFocus();
-    const stops: string[] = [];
-    for (let at = 0; at < 6; at += 1) {
+    // On through the body's fields to the next card.
+    for (let at = 0; at < 4; at += 1) {
       await userEvent.keyboard('{Tab}');
-      const active = document.activeElement;
-      stops.push(active?.getAttribute('aria-label') ?? active?.getAttribute('role') ?? active?.tagName ?? '');
-      if (
-        active?.getAttribute('role') === 'switch' ||
-        (active instanceof HTMLInputElement && active.type === 'checkbox')
-      ) {
-        await userEvent.keyboard(' ');
-        await expect.poll(() => latest.find((each) => each.label === 'What is your budget?')?.required).toBe(true);
-      }
-      if (active?.getAttribute('aria-label')?.startsWith('More for') === true) break;
+      if (document.activeElement?.closest('[role="row"]')?.textContent.includes('Anything else?') === true) break;
     }
-    expect(stops.at(-1)).toBe('More for What is your budget?');
-    await userEvent.keyboard('{Tab}');
-    // On to the next card.
     expect(document.activeElement?.closest('[role="row"]')?.textContent).toContain('Anything else?');
   });
 

@@ -67,7 +67,7 @@ import {
   withQuestions,
   uploadsOffFor,
 } from './draft.ts';
-import { BrandedFormPreview, DesignButton } from './FormBrand.tsx';
+import { BrandedFormPreview, LookControls } from './FormBrand.tsx';
 import { LogicMap } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
@@ -190,6 +190,36 @@ export function FormEditor(props: FormEditorProps) {
       setForm((before) => ({ ...view, revision: before.revision }));
     },
   });
+
+  // A status change made elsewhere (forms fixes 3): Pause in another tab, or the send that filled the form and paused
+  // it. The form is read again for its status and counts only; the draft being edited and its revision stay this
+  // tab's, so nothing typed here is overwritten.
+  // A read that answers after a newer view of the form (this tab's own Resume or Settings change, or a later read)
+  // is dropped by its time, so it never puts back an older status or settings (review, forms fixes 3). A form
+  // deleted elsewhere reloads the route, which says so.
+  const formId = form.id;
+  useEffect(() => {
+    let isMounted = true;
+    const stop = data.forms.onChanged(slug, () => {
+      data.forms.get(slug, formId).then(
+        (view) => {
+          if (!isMounted) return;
+          setForm((before) =>
+            Date.parse(view.updatedAt) < Date.parse(before.updatedAt)
+              ? before
+              : { ...view, draft: before.draft, revision: before.revision },
+          );
+        },
+        (error: unknown) => {
+          if (isMounted && isDataError(error) && error.code === 'NOT_FOUND') void router.invalidate();
+        },
+      );
+    });
+    return () => {
+      isMounted = false;
+      stop();
+    };
+  }, [data, slug, formId, router]);
 
   // What the server holds: the draft last saved, and the revision a save names.
   const saved = useRef<{ document: FormDocument; revision: number }>({
@@ -1226,9 +1256,9 @@ export function FormEditor(props: FormEditorProps) {
                   {...(previewEnding === undefined ? {} : { ending: previewEnding })}
                 />
               ),
-            // Design (5 November 2026): one button holding the look, over the preview it changes.
+            // The look, upfront over the preview it changes (forms fixes 3): Mode, Corners and Brand, no click away.
             previewControls: (
-              <DesignButton
+              <LookControls
                 look={draft.look}
                 isReadOnly={!canManage}
                 {...(props.brand === undefined ? {} : { brand: props.brand })}
@@ -1308,7 +1338,7 @@ export function FormEditor(props: FormEditorProps) {
 
   return (
     <WorkspacePage
-      currentPage="forms"
+      currentPage="captures"
       page={{
         topBar,
         body: (

@@ -804,6 +804,10 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     props.onOpened?.(`${STEP_ROW}${stepId}`);
   };
 
+  // The merges whose toast is still showing (forms fixes 3: two merges in a row stacked two toasts): one more merge
+  // replaces that toast with one saying how many, whose Undo puts every one of them back.
+  const mergeRun = useRef<{ readonly key: string; readonly merged: readonly MergedStep[] } | undefined>(undefined);
+
   /** Merge with the step above: the break goes, its questions join the step before it, with Undo. */
   const merge = (stepId: string) => {
     if (breaks === undefined || flow === undefined) return;
@@ -812,16 +816,25 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     const name = strings.stepName(places.get(stepId)?.number ?? 1, step.title);
     const index = breaks.steps.indexOf(step);
     breaks.onChange((before) => removeStep(before, stepId).flow);
-    toasts.toast({
+    const run = mergeRun.current;
+    const isRunShowing = run !== undefined && toasts.queue.visibleToasts.some((each) => each.key === run.key);
+    const merged: readonly MergedStep[] = [...(isRunShowing ? run.merged : []), { step, index }];
+    if (isRunShowing) toasts.dismiss(run.key);
+    const key = toasts.toast({
       tone: 'info',
-      message: strings.stepMerged(name),
+      message: merged.length === 1 ? strings.stepMerged(name) : strings.stepsMerged(merged.length),
       action: {
         label: strings.undo,
         onAction: () => {
-          breaks.onChange((before) => restoreStep(before, step, index));
+          mergeRun.current = undefined;
+          // The last merged first, so each step goes back where it stood before its own merge.
+          breaks.onChange((before) =>
+            [...merged].reverse().reduce((flowNow, each) => restoreStep(flowNow, each.step, each.index), before),
+          );
         },
       },
     });
+    mergeRun.current = { key, merged };
   };
 
   const commitRename = () => {
@@ -1145,51 +1158,65 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         const question = questions.find((each) => each.id === id);
         if (question === undefined) return null;
         return (
-          <QuestionEditor
-            question={question}
-            questions={questions}
-            // Its type change reads the deal's fields too, so an answer saved on the deal keeps its place (forms fixes 2).
-            attributes={[...attributes, ...(props.deal?.items ?? [])]}
-            isLocked={isLocked(question)}
-            isReadOnly={isReadOnly}
-            refFor={refFor}
-            focusOn={focusOn}
-            onChange={(change) => {
-              onChange((before) => changeQuestion(before, id, change, liveIds));
-            }}
-            onChoicesInvalid={(isInvalid) => {
-              markRefused(id, isInvalid);
-            }}
-            warnings={warningsAt({ kind: 'question', questionId: id })}
-          />
+          <>
+            <QuestionHead
+              question={question}
+              isReadOnly={isReadOnly}
+              // A question just added, or one a publish refused, takes focus and comes into view.
+              isJustAdded={justAdded === id || problem?.questionId === id}
+              {...(problem?.questionId === id ? { problem: problem.message } : {})}
+              onLabel={(label) => {
+                setFresh((before) => (before.has(id) ? new Set([...before].filter((each) => each !== id)) : before));
+                // Its words pick a field the object already has, until Save answer to is chosen by hand (T40).
+                const field =
+                  objectName === undefined || isFilingOff || chosen.has(id) || question.filedOn !== undefined
+                    ? undefined
+                    : question.kept === true
+                      ? matchingField(questions, id, label, attributes)
+                      : undefined;
+                onChange((before) =>
+                  changeQuestion(before, id, field === undefined ? { label } : { label, filedOn: field }, liveIds),
+                );
+              }}
+              onSubmit={() => {
+                // Enter goes on to the next question, of the same type, under this one (Typeform's way).
+                if (question.label.trim() !== '') addAt(question.answerType);
+              }}
+              onEscape={() => dropFresh(question)}
+            />
+            <QuestionEditor
+              question={question}
+              questions={questions}
+              // Its type change reads the deal's fields too, so an answer saved on the deal keeps its place (forms fixes 2).
+              attributes={[...attributes, ...(props.deal?.items ?? [])]}
+              isLocked={isLocked(question)}
+              isReadOnly={isReadOnly}
+              refFor={refFor}
+              focusOn={focusOn}
+              onChange={(change) => {
+                onChange((before) => changeQuestion(before, id, change, liveIds));
+              }}
+              onChoicesInvalid={(isInvalid) => {
+                markRefused(id, isInvalid);
+              }}
+              warnings={warningsAt({ kind: 'question', questionId: id })}
+            />
+          </>
         );
       }}
+      // The open card's head (forms fixes 3, after Typeform's and Sprig's cards): its answer type as one labelled
+      // menu, then Required and the ⋯ at its end; the words are the body's first field, full width.
+      actionsIn="head"
       renderOpenHead={(id) => {
         const question = questions.find((each) => each.id === id);
         if (question === undefined) return null;
         return (
-          <QuestionHead
+          <TypeRow
             question={question}
             allowed={allowed}
             isLocked={isLocked(question)}
             {...(props.locked === undefined ? {} : { lockReason: props.locked.reason })}
             isReadOnly={isReadOnly}
-            // A question just added, or one a publish refused, takes focus and comes into view.
-            isJustAdded={justAdded === id || problem?.questionId === id}
-            {...(problem?.questionId === id ? { problem: problem.message } : {})}
-            onLabel={(label) => {
-              setFresh((before) => (before.has(id) ? new Set([...before].filter((each) => each !== id)) : before));
-              // Its words pick a field the object already has, until Save answer to is chosen by hand (T40).
-              const field =
-                objectName === undefined || isFilingOff || chosen.has(id) || question.filedOn !== undefined
-                  ? undefined
-                  : question.kept === true
-                    ? matchingField(questions, id, label, attributes)
-                    : undefined;
-              onChange((before) =>
-                changeQuestion(before, id, field === undefined ? { label } : { label, filedOn: field }, liveIds),
-              );
-            }}
             onType={(type) => {
               onChange((before) =>
                 changeQuestion(
@@ -1200,11 +1227,6 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                 ),
               );
             }}
-            onSubmit={() => {
-              // Enter goes on to the next question, of the same type, under this one (Typeform's way).
-              if (question.label.trim() !== '') addAt(question.answerType);
-            }}
-            onEscape={() => dropFresh(question)}
           />
         );
       }}
@@ -1433,6 +1455,12 @@ function filingItem(
 /** A lead header's stand in id: the questions before the first break, which have no break of their own yet. */
 const LEAD = '~lead';
 
+/** A step merged into the one above, and where it stood: what its Undo puts back. */
+interface MergedStep {
+  readonly step: FormStep;
+  readonly index: number;
+}
+
 /** A question's first points, one click from Give points: the answer itself, yes over no, or 1, 2, 3 by choice. */
 function startingPoints(question: FormQuestion): NonNullable<FormQuestion['points']> {
   if (question.answerType === 'rating' || question.answerType === 'scale') return 'value';
@@ -1443,17 +1471,11 @@ function startingPoints(question: FormQuestion): NonNullable<FormQuestion['point
 /** Props for an open question's head. */
 interface QuestionHeadProps {
   readonly question: FormQuestion;
-  readonly allowed: ReadonlySet<AnswerType>;
-  /** A question that stays as it is: its type can't change. */
-  readonly isLocked: boolean;
-  /** Why it stays, said on its type. */
-  readonly lockReason?: string;
   readonly isReadOnly: boolean;
   /** Just added: its words take focus, and the card comes into view. */
   readonly isJustAdded: boolean;
   readonly problem?: string;
   readonly onLabel: (label: string) => void;
-  readonly onType: (type: AnswerType) => void;
   /** Enter: the next question. */
   readonly onSubmit: () => void;
   /** Escape: a new question never given words goes again; answers whether it did. */
@@ -1461,23 +1483,10 @@ interface QuestionHeadProps {
 }
 
 /**
- * An open question's head (T40, 5 November 2026; owner: "cluttered and not proper"): the question typed right in the
- * card's header row, large, with its answer type as a small icon menu at its start. No second title, no separate
- * Question field.
+ * An open question's words (T40, 5 November 2026; forms fixes 3, the owner: the type beside the words read cramped):
+ * the body's first field, large and full width, as Typeform's and Sprig's cards put the question under their head.
  */
-function QuestionHead({
-  question,
-  allowed,
-  isLocked,
-  lockReason,
-  isReadOnly,
-  isJustAdded,
-  problem,
-  onLabel,
-  onType,
-  onSubmit,
-  onEscape,
-}: QuestionHeadProps) {
+function QuestionHead({ question, isReadOnly, isJustAdded, problem, onLabel, onSubmit, onEscape }: QuestionHeadProps) {
   const labelRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   // A question just added takes focus without jumping, then glides into view (at once with reduced motion).
   // After the type menu that made it has closed and handed focus back (forms QA: by keyboard, focus stayed behind).
@@ -1494,33 +1503,8 @@ function QuestionHead({
     });
   }, [isJustAdded]);
   const isConsent = question.answerType === 'consent';
-  const typeName = strings.answerTypes[CHOICE_FAMILY.has(question.answerType) ? 'choice' : question.answerType];
-  // Its type, said and changeable at a glance (UX review): the icon, the type's name and a chevron.
-  const typeButton = (
-    <Button
-      variant="ghost"
-      size="sm"
-      icon={TYPE_ICONS[question.answerType]}
-      iconRight="chevrons-up-down"
-      // On a phone the icon and chevron stand alone, so the question keeps the room to be read.
-      isLabelCollapsible
-      label={strings.typeMenu(typeName)}
-      isDisabled={isReadOnly || isLocked}
-    >
-      {typeName}
-    </Button>
-  );
   return (
     <>
-      {isLocked && lockReason !== undefined ? (
-        <Tooltip content={lockReason}>{typeButton}</Tooltip>
-      ) : isReadOnly || isLocked ? (
-        typeButton
-      ) : (
-        <TypeMenu label={strings.answerType} allowed={allowed} current={question.answerType} onPick={onType}>
-          {typeButton}
-        </TypeMenu>
-      )}
       <Field
         ref={labelRef}
         // A consent's label is its exact wording, shown beside the tick box (spec 0023, AC-1053).
@@ -1568,7 +1552,7 @@ interface QuestionEditorProps {
 /**
  * One question open, under its head (T40): only what its type needs. Its choices (with Choice's two switches, pick
  * more than one and show as a dropdown), its type's settings, its points once it gives some, its placeholder edited
- * in place, and its Show only if once it has one. Required and the ⋯ are in the card's footer.
+ * in place, and its Show only if once it has one. Required and the ⋯ are in the card's head.
  */
 function QuestionEditor({
   question,
@@ -1596,12 +1580,11 @@ function QuestionEditor({
   }, [isDescriptionNew]);
   return (
     <>
-      {/* The quiet line under the question, once added: left empty, it goes again. */}
+      {/* The line under the question, once added: left empty, it goes again. Labelled, as every body field is. */}
       {question.description !== undefined && (
         <Field
           ref={descriptionRef}
           label={strings.description}
-          isLabelHidden
           size="sm"
           isWrapping
           placeholder={strings.descriptionPlaceholder}
@@ -1664,7 +1647,6 @@ function QuestionEditor({
       {!NO_PLACEHOLDER_TYPES.includes(question.answerType) && (
         <Field
           label={strings.placeholder}
-          isLabelHidden
           size="sm"
           placeholder={strings.placeholderInline}
           value={question.placeholder ?? ''}
@@ -1702,6 +1684,47 @@ function QuestionEditor({
         />
       )}
     </>
+  );
+}
+
+/** Props for an open question's answer type row. */
+interface TypeRowProps {
+  readonly question: FormQuestion;
+  readonly allowed: ReadonlySet<AnswerType>;
+  /** A question that stays as it is: its type can't change. */
+  readonly isLocked: boolean;
+  readonly lockReason?: string;
+  readonly isReadOnly: boolean;
+  readonly onType: (type: AnswerType) => void;
+}
+
+/**
+ * An open question's answer type, at the start of its head (forms fixes 3, after Typeform's type select): the type's
+ * icon, name and a chevron on a secondary button, named "<type>, answer type", opening the grouped type menu. It was a
+ * ghost menu squeezed beside the question's words.
+ */
+function TypeRow({ question, allowed, isLocked, lockReason, isReadOnly, onType }: TypeRowProps) {
+  const typeName = strings.answerTypes[CHOICE_FAMILY.has(question.answerType) ? 'choice' : question.answerType];
+  const typeButton = (
+    <Button
+      variant="secondary"
+      size="sm"
+      icon={TYPE_ICONS[question.answerType]}
+      iconRight="chevrons-up-down"
+      // On a phone the icon and chevron stand alone, so Required and the ⋯ keep their place in the head.
+      isLabelCollapsible
+      label={strings.typeMenu(typeName)}
+      isDisabled={isReadOnly || isLocked}
+    >
+      {typeName}
+    </Button>
+  );
+  if (isLocked && lockReason !== undefined) return <Tooltip content={lockReason}>{typeButton}</Tooltip>;
+  if (isReadOnly || isLocked) return typeButton;
+  return (
+    <TypeMenu label={strings.answerType} allowed={allowed} current={question.answerType} onPick={onType}>
+      {typeButton}
+    </TypeMenu>
   );
 }
 

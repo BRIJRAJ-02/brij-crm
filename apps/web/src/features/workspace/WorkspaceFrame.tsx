@@ -72,7 +72,7 @@ const DEFAULT_NAV: NavState = {
   version: 0,
   favourites: [],
   top: ['tasks', 'notes'],
-  scheduling: ['bookings', 'captures', 'forms'],
+  scheduling: ['bookings', 'captures'],
 };
 
 /** Nothing read, ever: one snapshot, so React sees no change. */
