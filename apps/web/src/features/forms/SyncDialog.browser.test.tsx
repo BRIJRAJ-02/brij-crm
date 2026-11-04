@@ -70,7 +70,9 @@ describe('Sync earlier submissions (AC-14)', () => {
     await expect.element(counts).not.toHaveTextContent('already match');
     // One button besides the way out, naming how many it syncs.
     const sync = dialog.getByRole('button', { name: /^Sync/ });
-    await expect.element(sync).toHaveTextContent('Sync 12 submissions');
+    // Named alone; its keycap (⌘↵, the footer's primary) is stated as a shortcut, not read as part of the name.
+    await expect.element(sync).toHaveAccessibleName('Sync 12 submissions');
+    await expect.element(sync).toHaveAttribute('aria-keyshortcuts');
     await expect.element(dialog.getByRole('button', { name: /^Cancel/ })).toBeVisible();
     await userEvent.click(sync);
     expect(started).toEqual(['unfiled']);

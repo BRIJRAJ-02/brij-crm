@@ -189,9 +189,8 @@ export function TemplateGallery({ data, slug, isOpen, onClose, onCreated }: Temp
       {...(making === undefined ? {} : { status: strings.galleryMakingOne(makingName) })}
       actions={
         <>
-          <Button variant="secondary" onPress={close}>
-            {strings.cancel}
-          </Button>
+          {/* The dialog's own close, so it shows ESC; closing goes through close() in onOpenChange. */}
+          <Button slot="close">{strings.cancel}</Button>
           {chosen !== undefined && (
             <Button
               variant="primary"
