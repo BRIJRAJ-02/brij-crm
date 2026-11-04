@@ -346,11 +346,12 @@ export function SubmissionsTab({
   const addable = picked.filter((submission) => submission.crm.state === 'not_in_crm' && submission.crm.canAddToCrm);
   const hasEmailColumn = nameQuestion !== undefined && shown.some((submission) => submission.email !== undefined);
   const columns: readonly TableColumn[] = [
-    { id: 'person', label: strings.person, isRowHeader: true, isInline: true },
+    // On a phone each row is two lines (forms fixes 2): the person, then when and its state; the rest open with it.
+    { id: 'person', label: strings.person, isRowHeader: true, isInline: true, phone: 'title' },
     // When and State lead after the person, so a long email or answer scrolling the table sideways never hides them.
     { id: 'when', label: strings.when },
     { id: 'state', label: strings.state },
-    ...(hasEmailColumn ? [{ id: EMAIL_COLUMN, label: strings.email }] : []),
+    ...(hasEmailColumn ? [{ id: EMAIL_COLUMN, label: strings.email, phone: 'hidden' as const }] : []),
     // The questions the list carries answers for (the server sends each row's first answers), in the form's order,
     // but the one the Person column already says. A question earns a column when some row answered it.
     ...questions
@@ -363,7 +364,7 @@ export function SubmissionsTab({
           }),
       )
       .slice(0, ANSWER_COLUMNS)
-      .map((question) => ({ id: question.id, label: question.label })),
+      .map((question) => ({ id: question.id, label: question.label, phone: 'hidden' as const })),
   ];
 
   /** Marks every picked submission spam, or not spam, one after another, with progress in the bar. */
@@ -752,6 +753,7 @@ export function SubmissionsTab({
           // A long email or answer widens the table: it scrolls sideways in its own frame (its far end fading), as
           // Tally's and Typeform's response tables do, rather than pushing When and State off the page.
           isScrollable
+          phoneLayout="rows"
           {...(canManage
             ? {
                 selected,

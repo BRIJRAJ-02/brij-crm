@@ -170,4 +170,24 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     await expect.element(page.getByText('Submission restored.')).toBeVisible();
     await expect.poll(() => app.router.state.location.href).toContain(`submission=${id(1)}`);
   });
+
+  it('reads each row as two lines on a phone, with nothing to scroll sideways (forms fixes 2)', async () => {
+    await page.viewport(390, 844);
+    try {
+      await show(undefined);
+      const row = page.getByRole('row').filter({ hasText: 'Ada Lovelace' });
+      await expect.element(row).toBeVisible();
+      // No header row on a phone, and the table fits its frame.
+      const header = document.querySelector('thead');
+      expect(header === null ? 'none' : getComputedStyle(header).display).toBe('none');
+      const frame = document.querySelector('[data-phone="rows"]')?.parentElement;
+      expect(frame === null || frame === undefined ? 0 : frame.scrollWidth - frame.clientWidth).toBeLessThanOrEqual(0);
+      // The person on the first line, when under it.
+      const person = row.getByRole('rowheader').element().getBoundingClientRect();
+      const when = row.getByRole('gridcell').nth(2).element().getBoundingClientRect();
+      expect(when.top).toBeGreaterThanOrEqual(person.bottom - 1);
+    } finally {
+      await page.viewport(1280, 900);
+    }
+  });
 });
