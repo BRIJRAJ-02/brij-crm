@@ -25,7 +25,7 @@ import {
   type TableColumn,
   RecordChip,
 } from '@crm/ui';
-import { useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
@@ -36,6 +36,8 @@ import { CalendarHealthChip, useCalendarHealth, useSchedulingStore } from './Cal
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { DistributionPanel } from './DistributionPanel.tsx';
+import { pageEditorHref } from './links.ts';
+import { NewPageDialog } from './NewPageDialog.tsx';
 import { RotationDialog } from './RotationDialog.tsx';
 import { strings } from './rotation-strings.ts';
 import { SharingPanel } from './SharingPanel.tsx';
@@ -190,6 +192,9 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
   // Where the frame wants this tab's one primary action, when the frame is Bookings rather than Settings.
   const actionSlot = useBookingsActionSlot();
   const [isInviting, setInviting] = useState(false);
+  // Make a booking page from a group's card (B-04): the one Add a booking page dialog, offering who it books.
+  const [isAddingPage, setAddingPage] = useState(false);
+  const navigate = useNavigate();
   // Members whose upcoming bookings an admin may hand on, one prompt at a time (every member a save removed).
   const [queue, setQueue] = useState<readonly Handing[]>([]);
   const handing = queue[0];
@@ -272,9 +277,10 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
 
   const isEmpty = state.status === 'ready' && state.items.length === 0;
   const isAloneEmpty = canManage && people.length < 2 && isEmpty;
-  // The one New group, in whichever bar this frame has: Settings' own TopBar takes it as an action, and the
-  // Bookings frame takes it through the slot its layout lends the chosen tab.
-  const action = newButton === undefined || isEmpty ? undefined : newButton;
+  // The one New group, in whichever bar this frame has, on every state (A5: loading, empty, failed and listed alike,
+  // so the TopBar's end never sits empty): Settings' own TopBar takes it as an action, and the Bookings frame takes
+  // it through the slot its layout lends the chosen tab.
+  const action = newButton;
   return (
     <SettingsPage
       title={strings.title}
@@ -298,6 +304,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
           // Alone in the workspace: round robin needs teammates first.
           <EmptyState
             icon="users-round"
+            layout="fill"
             title={strings.emptyAloneTitle}
             // The help sits once, beside the page's title.
             actions={
@@ -323,8 +330,9 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
         ) : (
           <EmptyState
             icon="users-round"
+            layout="fill"
             title={strings.emptyTitle}
-            // No groups yet: New group is the page's one primary, here; the help sits once, beside the page's title.
+            // No groups yet: New group here too, beside the TopBar's (A5); the help sits once, beside the page's title.
             {...(canManage ? { actions: newButton } : {})}
           >
             {canManage ? strings.emptyText : strings.emptyMemberText}
@@ -347,12 +355,27 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                       <>
                         {/* What the reader edits without being an admin (spec 0037, AC-1332). */}
                         {rotation.isEditor === true && <Badge text={sharingStrings.editorBadge} isWhole />}
+                        {/* A group on no page yet ends in one that books it (B-04), never a dead end; making one is an
+                            admin's. Once it books a page, the same action waits in More, so the card's head stays
+                            the title's on a phone. */}
+                        {canManage && rotation.follows !== 'everyone' && rotation.pages === 0 && (
+                          <Button
+                            icon="plus"
+                            size="sm"
+                            onPress={() => {
+                              setAddingPage(true);
+                            }}
+                          >
+                            {strings.makePage}
+                          </Button>
+                        )}
                         <MenuTrigger>
                           <Button variant="ghost" icon="ellipsis" label={strings.rowActions(rotation.name)} />
                           <Menu
                             label={strings.rowActions(rotation.name)}
                             onAction={(key) => {
                               if (key === 'edit') open(rotation);
+                              if (key === 'page') setAddingPage(true);
                               if (key === 'delete') {
                                 setDeleteError(undefined);
                                 setDeleting(rotation);
@@ -362,6 +385,11 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                             <MenuItem id="edit" icon="pencil">
                               {strings.edit}
                             </MenuItem>
+                            {canManage && rotation.follows !== 'everyone' && (
+                              <MenuItem id="page" icon="plus">
+                                {strings.makePage}
+                              </MenuItem>
+                            )}
                             {/* Everyone on the roster follows the workspace: its link keeps it, so it isn't deleted here.
                               An editor changes a group but never deletes it (AC-1331). */}
                             {rotation.follows !== 'everyone' && rotation.canManage !== false && (
@@ -505,6 +533,22 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
           {strings.deleteText}
         </SettingsStack>
       </Modal>
+      {/* Mounted only while asked for: it mints a page id and reads the groups as it mounts. */}
+      {canManage && isAddingPage && (
+        <NewPageDialog
+          data={data}
+          slug={slug}
+          canBookTeams
+          isOpen
+          onClose={() => {
+            setAddingPage(false);
+          }}
+          onCreated={(page) => {
+            setAddingPage(false);
+            void navigate({ to: pageEditorHref(slug, page.id) });
+          }}
+        />
+      )}
       {canInvite && (
         <InviteTeamDialog
           data={data}

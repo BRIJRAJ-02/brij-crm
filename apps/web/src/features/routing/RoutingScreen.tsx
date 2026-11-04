@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Bookings › Routing (spec 0037, AC-1383), for holders of routing.manage: every routed form and team page in one place, and every decision they made.
 // Main task: see where each surface sends people when no rule matches and how it did in 30 days; then scan decisions, filter them, and open one to see why it went where it did.
-// Then (L7) Skills, Test, and Won means under the Overview.
+// Then (L7) Skills, Test, and Won means under the Overview. With nothing to route, the Overview is one EmptyState (New team page) with no table headers and no Won means (A16).
 // Leaves out: editing rules (each surface's own Routing card, linked), Smart (L8), Insights (L9).
 import type {
   AttributeDefinition,
@@ -128,6 +128,10 @@ export function RoutingScreen({ data, slug, search, members, stage, toasts, onSe
           <EmptyState tone="error" title={strings.failedTitle} onRetry={() => overviewHeld.reload()}>
             {overview.message === '' ? strings.failedText : overview.message}
           </EmptyState>
+        ) : overview.status === 'ready' && surfaces.length === 0 ? (
+          // Nothing routes yet (A16): the tab's one EmptyState, with no table headers and no Won means card, which
+          // mean nothing until a route exists.
+          <NothingRoutes slug={slug} />
         ) : (
           <>
             <Overview
@@ -147,6 +151,27 @@ export function RoutingScreen({ data, slug, search, members, stage, toasts, onSe
         <Decisions data={data} slug={slug} search={search} surfaces={surfaces} members={members} onSearch={onSearch} />
       )}
     </PageColumn>
+  );
+}
+
+/**
+ * The Overview with nothing to route (no workspace link and no team page with rules): a team page comes first, so
+ * that is its one primary action, placed as every Bookings tab's empty state is (the fill layout).
+ */
+function NothingRoutes({ slug }: { readonly slug: string }) {
+  return (
+    <EmptyState
+      icon="git-branch"
+      layout="fill"
+      title={strings.emptyTitle}
+      actions={
+        <ButtonLink variant="primary" icon="plus" href={linksHref(slug)}>
+          {strings.newTeamPage}
+        </ButtonLink>
+      }
+    >
+      {strings.emptyText}
+    </EmptyState>
   );
 }
 
@@ -197,18 +222,7 @@ function Overview({
       isLoading={isLoading}
       isScrollable
       onRowAction={onDecisions}
-      emptyState={
-        // Empty only with no workspace link and no team page with rules: a team page comes first.
-        <EmptyState
-          icon="git-branch"
-          title={strings.emptyTitle}
-          actions={
-            <ButtonLink variant="secondary" icon="plus" href={linksHref(slug)}>
-              {strings.newTeamPage}
-            </ButtonLink>
-          }
-        />
-      }
+      emptyState={<NothingRoutes slug={slug} />}
       renderCell={(surface, column) => {
         switch (column) {
           case 'name':

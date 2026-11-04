@@ -80,10 +80,12 @@ test.describe('round robin', () => {
     await page.getByRole('button', { name: 'New group' }).first().click();
     const group = page.getByRole('dialog', { name: 'New group' });
     await group.getByLabel('Name').fill('Sales team');
+    // People first (B-04): one list that stays open while three are checked.
+    await group.getByRole('button', { name: /People/ }).click();
     for (let added = 0; added < 3; added += 1) {
-      await group.getByRole('button', { name: /Add a member/ }).click();
-      await page.getByRole('option').first().click();
+      await page.getByRole('option').nth(added).click();
     }
+    await page.keyboard.press('Escape');
     await group.getByRole('button', { name: 'Create group' }).click();
     await expect(page.getByText('Made Sales team.')).toBeVisible();
     await expect(group).toHaveCount(0);

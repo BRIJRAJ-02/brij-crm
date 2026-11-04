@@ -31,6 +31,8 @@ export const strings = {
           ? 'Web page'
           : 'Message',
   emptyTitle: 'Nothing routes yet',
+  /** The empty Overview's one line: what routing does, so the primary below it makes sense. */
+  emptyText: 'Send each guest to the right teammate by their answers. Start with a team page.',
   newTeamPage: 'New team page',
   decisionsOf: (name: string) => `Decisions of ${name}`,
   failedTitle: 'Routing couldn’t load',

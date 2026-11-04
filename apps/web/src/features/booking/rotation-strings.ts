@@ -27,6 +27,8 @@ export const strings = {
     'Each booking goes to a free teammate, shared fairly.',
   ],
   createPage: 'Create a booking page',
+  /** On a group's card: a team page that books this group (B-04: the group no longer ends in a dead end). */
+  makePage: 'Make a booking page',
   failedTitle: 'Round robin didn’t load',
   failedText: 'Check your connection and try again.',
   summary: (strategy: 'fair' | 'priority' | 'even', days: number, pages: number) =>
@@ -82,6 +84,11 @@ export const strings = {
   days: (count: number) => `${String(count)} days`,
   addMember: 'Add a member',
   addMemberPlaceholder: 'Search people',
+  /** The dialog's first choice after the name: who shares the meetings (B-04: people first, the rules folded). */
+  people: 'People',
+  peoplePlaceholder: 'Pick 2 or more teammates',
+  /** The fold holding how it picks, the window, returning guests and each person's weight and limits. */
+  moreOptions: 'More options',
   /** On the server's refusal of one member: save the group without them. Short, so a long name never widens it. */
   removeFromGroup: 'Remove from group',
   /** Remove from group's name: its visible words first (WCAG 2.5.3), then the member it removes. */
