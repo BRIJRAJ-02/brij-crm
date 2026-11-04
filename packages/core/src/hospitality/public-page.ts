@@ -11,7 +11,7 @@ import {
   type BusinessKind,
   type PlaceHoursShape,
   type PublicBusinessPage,
-  type PublicMenu,
+  type BusinessPageMenu,
 } from '@crm/contracts';
 import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -23,8 +23,9 @@ import { refuse } from '../engine/refusals.ts';
 import { businessCacheTags } from './cache-tags.ts';
 import { pagePlaces } from './business-page.ts';
 import { installedHospitalityApps } from './gate.ts';
+import { readTableService } from '../visits/table-service.ts';
 
-const { businessPages, businessPhotos, businessProfiles, placeSlugs, workspaces } = schema;
+const { businessPages, businessPhotos, businessProfiles, places, placeSlugs, workspaces } = schema;
 
 /** The id `withWorkspace` takes for a read that belongs to no workspace: the definer reads past it. */
 const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000';
@@ -37,7 +38,11 @@ const noPage = () => refuse('NOT_FOUND', 'There’s no page at this address.');
  * the default answers nothing, and the page then shows no Menu section. H1 passes its own reader of the published
  * menu snapshot. Called only while the Menu app is installed, inside the business's own workspace transaction.
  */
-export type MenuSource = (tx: WorkspaceTx, workspaceId: string, placeId: string) => Promise<PublicMenu | undefined>;
+export type MenuSource = (
+  tx: WorkspaceTx,
+  workspaceId: string,
+  placeId: string,
+) => Promise<BusinessPageMenu | undefined>;
 
 /** No menus yet: every place answers none. */
 export const NO_MENUS: MenuSource = () => Promise.resolve(undefined);
@@ -138,6 +143,9 @@ export async function enterBusinessPage(
     );
     const current = row.handle;
     const menu = apps.has('menu') ? await menus(tx, workspaceId, placeId) : undefined;
+    // Reserve opens the place's reservation page (spec 0066 B7, `/r/<public key>`) once its table service takes
+    // reservations online; installed but not yet taking them, the page offers Call to book or Directions instead.
+    const reservePath = apps.has('table_seating') ? await reservePathOf(tx, workspaceId, placeId) : undefined;
     const brand = await businessBrandOf(tx, workspaceId);
     const page: PublicBusinessPage = {
       handle: current,
@@ -166,7 +174,11 @@ export async function enterBusinessPage(
       })),
       placeId,
       ...(menu === undefined || menu.sections.length === 0 ? {} : { menu }),
-      ...(apps.has('table_seating') ? { reserve: 'soon' as const } : {}),
+      ...(apps.has('table_seating')
+        ? reservePath === undefined
+          ? { reserve: 'soon' as const }
+          : { reserve: 'open' as const, reservePath }
+        : {}),
       ...(brand.answer === undefined ? {} : { brand: brand.answer }),
       indexable: !content.hiddenPlaces.includes(placeId),
       publishedAt: new Date(row.publishedAt).toISOString(),
@@ -174,6 +186,17 @@ export async function enterBusinessPage(
     };
     return { page, workspaceId, brand };
   });
+}
+
+/** The place's reservation page's path while its table service takes reservations online, else undefined. */
+async function reservePathOf(tx: WorkspaceTx, workspaceId: string, placeId: string): Promise<string | undefined> {
+  const service = await readTableService(tx, placeId);
+  if (service?.rules.online !== true) return undefined;
+  const [place] = await tx
+    .select({ publicKey: places.publicKey })
+    .from(places)
+    .where(and(eq(places.workspaceId, workspaceId), eq(places.id, placeId)));
+  return place === undefined ? undefined : `/r/${encodeURIComponent(place.publicKey)}`;
 }
 
 /** A published gallery picture's address on our own origin, under the business's current handle. */

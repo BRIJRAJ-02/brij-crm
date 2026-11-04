@@ -87,6 +87,8 @@ export interface BusinessPageProps {
   readonly places?: readonly { readonly name: string; readonly href: string; readonly isCurrent: boolean }[];
   /** The place's published menu (the Menu app); no Menu section without one. */
   readonly menu?: readonly BusinessMenuSection[] | undefined;
+  /** The whole guest menu (`/m/<key>`, with photos and options): a Full menu link under the Menu section. */
+  readonly menuHref?: string | undefined;
   /** Reserve a table (Table seating); absent without the app. */
   readonly reserve?: BusinessReserveState | undefined;
   readonly directions?: { readonly google: string; readonly apple: string } | undefined;
@@ -290,6 +292,7 @@ export function BusinessPage(props: BusinessPageProps) {
   const locale = placeLocale(visitorLocale, place.country);
   const logo = props.logo === undefined ? undefined : safeImageSrc(props.logo);
   const website = props.website === undefined ? undefined : safeHref(props.website);
+  const menuHref = props.menuHref === undefined ? undefined : safeHref(props.menuHref);
   const hasMenu = menu !== undefined && menu.some((section) => section.items.length > 0);
   const hasAbout = about !== undefined || amenities.length > 0;
   const sections: Section[] = [
@@ -346,6 +349,13 @@ export function BusinessPage(props: BusinessPageProps) {
                   {strings.menu}
                 </h2>
                 <BusinessMenu sections={menu} />
+                {menuHref !== undefined && (
+                  <p className={styles.more}>
+                    <Link href={menuHref} icon="utensils" weight="strong">
+                      {strings.fullMenu}
+                    </Link>
+                  </p>
+                )}
               </section>
             )}
             {hasAbout && (

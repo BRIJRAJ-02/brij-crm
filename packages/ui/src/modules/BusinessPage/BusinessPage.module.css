@@ -265,6 +265,11 @@
   }
 
   /* Directions under the panel's action: a quiet link, centred under the button. */
+  /* The Full menu link under the Menu section. */
+  .more {
+    margin: 0;
+  }
+
   .panelLink {
     margin: 0;
     text-align: center;

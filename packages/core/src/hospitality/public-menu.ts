@@ -12,6 +12,9 @@ import {
   MENU_PHOTO_WIDTHS,
   MenuSnapshot,
   WARM_PRESET,
+  formatPrice,
+  type BusinessPageMenu,
+  type BusinessPageMenuSection,
   type MenuPhotoSize,
   type PlaceHours,
   type PublicMenu,
@@ -222,4 +225,67 @@ export function menuLookStylesheet(brand: PageBrand): string {
     `:root[data-theme='dark']{${block('dark')}}`,
     '',
   ].join('\n');
+}
+
+/**
+ * A place's published menu as its business page shows it (spec 0066, AC-6642, the Menu section): each menu's sections
+ * and sub sections in order, each with its dishes' names, descriptions and prices in the place's locale, and the
+ * whole guest menu's address (`/m/<menu key>`). Read inside the business's own workspace transaction, from the latest
+ * snapshot only (never the draft); nothing while the menu is hidden or has no published version. Sold out dishes stay
+ * out, as the page can't say so.
+ */
+export async function businessMenuOf(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  placeId: string,
+): Promise<BusinessPageMenu | undefined> {
+  if (await isHidden(tx, workspaceId)) return undefined;
+  const [latest] = await tx
+    .select({ snapshot: menuVersions.snapshot })
+    .from(menuVersions)
+    .where(and(eq(menuVersions.workspaceId, workspaceId), eq(menuVersions.placeId, placeId)))
+    .orderBy(desc(menuVersions.version))
+    .limit(1);
+  if (latest === undefined) return undefined;
+  const parsed = MenuSnapshot.safeParse(latest.snapshot);
+  if (!parsed.success) return undefined;
+  const [place] = await tx
+    .select({ locale: places.locale, menuKey: places.menuKey })
+    .from(places)
+    .where(and(eq(places.workspaceId, workspaceId), eq(places.id, placeId)));
+  if (place === undefined) return undefined;
+  const snapshot = parsed.data;
+  const soldOut = await soldOutIds(tx, workspaceId);
+  const several = snapshot.menus.length > 1;
+  const priceOf = (minor: number | undefined) =>
+    minor === undefined ? undefined : formatPrice(minor, snapshot.currency, place.locale);
+  const sectionOf = (name: string, itemIds: readonly string[]): BusinessPageMenuSection => ({
+    name,
+    items: itemIds.flatMap((id) => {
+      const item = snapshot.items[id];
+      if (item === undefined || soldOut.has(id)) return [];
+      // A dish priced by size reads its smallest size's price.
+      const sized = item.sizes.length === 0 ? undefined : Math.min(...item.sizes.map((size) => size.priceMinor));
+      const price = priceOf(item.priceMinor ?? sized);
+      return [
+        {
+          name: item.name,
+          ...(item.description === undefined ? {} : { description: item.description }),
+          ...(price === undefined ? {} : { price }),
+        },
+      ];
+    }),
+  });
+  const sections = snapshot.menus.flatMap((menu) =>
+    menu.sections.flatMap((section) => {
+      const title = several ? `${menu.name} · ${section.name}` : section.name;
+      return [
+        sectionOf(title, section.itemIds),
+        ...section.sections.map((sub) => sectionOf(`${title} · ${sub.name}`, sub.itemIds)),
+      ];
+    }),
+  );
+  const shown = sections.filter((section) => section.items.length > 0);
+  if (shown.length === 0) return undefined;
+  return { sections: shown, ...(isMenuKey(place.menuKey) ? { path: `/m/${place.menuKey}` } : {}) };
 }

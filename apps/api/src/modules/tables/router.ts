@@ -1,4 +1,5 @@
 import {
+  businessCacheTags,
   freeTables,
   getTableSetup,
   listServiceDay,
@@ -7,6 +8,7 @@ import {
   setReservationAlert,
   setVisitStatus,
 } from '@crm/core';
+import { forgetAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -20,11 +22,14 @@ const t = member.tables;
 
 export const tablesRouter = t.router({
   setup: t.setup.handler(({ context, input }) => getTableSetup(context.scope, { placeId: input.placeId })),
-  saveSetup: t.saveSetup.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+  saveSetup: t.saveSetup.handler(async ({ context, input }) => {
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       saveTableSetup(context.scope, { placeId: input.placeId, rules: input.rules }, { slotCache: context.visitSlots }),
-    ),
-  ),
+    );
+    // The business page's Reserve opens or closes with the setup's online switch (spec 0066, AC-6642).
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, [input.placeId]));
+    return saved;
+  }),
   day: t.day.handler(({ context, input }) =>
     listServiceDay(context.scope, { placeId: input.placeId, date: input.date }),
   ),

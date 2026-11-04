@@ -5,6 +5,8 @@ export const strings = {
   /** The section tabs' landmark. */
   sections: 'Sections',
   menu: 'Menu',
+  /** The link under the Menu section to the whole guest menu. */
+  fullMenu: 'See the full menu',
   about: 'About',
   hours: 'Opening hours',
   location: 'Location',

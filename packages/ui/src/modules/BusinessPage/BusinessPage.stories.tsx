@@ -195,9 +195,28 @@ export const SeveralPlaces: Story = {
   },
 };
 
-/** Reserve once the reservation flow is open: a link to `/<handle>/reserve`. */
+/** Reserve once the reservation flow is open: a link to the place's reservation page, `/r/<key>` (Table seating). */
 export const ReserveOpen: Story = {
-  args: { reserve: { kind: 'open', href: '/somewhere-nowhere/reserve' } },
+  args: { reserve: { kind: 'open', href: '/r/AbCdEfGhIjKlMnOp' } },
+  play: async ({ canvasElement }) => {
+    for (const reserve of within(canvasElement).getAllByRole('link', { name: 'Reserve a table' })) {
+      await expect(reserve).toHaveAttribute('href', '/r/AbCdEfGhIjKlMnOp');
+    }
+  },
+};
+
+/** The Menu app's whole guest menu linked under the Menu section (`/m/<key>`). */
+export const FullMenuLink: Story = {
+  // The page is Restaurant's with one more link; checked in play, so no shot of its own.
+  parameters: { crm: { screenshot: false } },
+  args: { menuHref: '/m/AbCdEfGhIjKlMnOp' },
+  play: async ({ canvasElement }) => {
+    const menu = within(canvasElement).getByRole('region', { name: 'Menu' });
+    await expect(within(menu).getByRole('link', { name: 'See the full menu' })).toHaveAttribute(
+      'href',
+      '/m/AbCdEfGhIjKlMnOp',
+    );
+  },
 };
 
 /** Open now: Thursday from 10 until 1 at night. */

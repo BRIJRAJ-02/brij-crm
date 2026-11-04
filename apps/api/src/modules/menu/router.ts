@@ -1,5 +1,6 @@
 import { menuCacheTags } from '@crm/contracts';
 import {
+  businessCacheTags,
   deleteItem,
   deleteMenu,
   deleteOptionGroup,
@@ -17,6 +18,7 @@ import {
   setItemSoldOut,
   setMenuHidden,
 } from '@crm/core';
+import { forgetAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member, type RequestContext } from '../../orpc.ts';
 import { errorFields, log } from '../../log.ts';
@@ -127,6 +129,8 @@ export const menuRouter = m.router({
       setItemSoldOut(context.scope, { itemId: input.itemId, soldOut: input.soldOut }),
     );
     await context.edgeCache.forget(menuCacheTags(...placeIds));
+    // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
     return draft;
   }),
   setHidden: m.setHidden.handler(async ({ context, input }) => {
@@ -134,6 +138,8 @@ export const menuRouter = m.router({
       setMenuHidden(context.scope, { hidden: input.hidden }),
     );
     await context.edgeCache.forget(menuCacheTags(...placeIds));
+    // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
     return draft;
   }),
   publish: m.publish.handler(async ({ context, input }) => {
@@ -141,6 +147,8 @@ export const menuRouter = m.router({
       publishMenus(context.scope),
     );
     await context.edgeCache.forget(menuCacheTags(...placeIds));
+    // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
     await removeFiles(context, removedPaths);
     return draft;
   }),

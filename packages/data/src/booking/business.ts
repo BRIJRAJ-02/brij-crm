@@ -11,8 +11,8 @@ export {
   type BusinessAmenity,
   type PublicBusinessPage,
   type PublicBusinessPlace,
-  type PublicMenu,
-  type PublicMenuSection,
+  type BusinessPageMenu,
+  type BusinessPageMenuSection,
 } from '@crm/contracts/business-page';
 export { nextOpening, openAt, rangesOn, weekDayOf, type OpenNow } from '@crm/contracts/hospitality-hours';
 export { WEEK_DAYS, type HoursRangeShape, type PlaceHoursShape, type WeekDay } from '@crm/contracts/hospitality';

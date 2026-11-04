@@ -138,12 +138,13 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
         isCurrent: each.id === place.id,
       }))}
       menu={shown.menu?.sections}
+      menuHref={shown.menu?.path}
       {...(shown.reserve === undefined
         ? {}
         : {
             reserve:
-              shown.reserve === 'open'
-                ? { kind: 'open' as const, href: `/${encodeURIComponent(shown.handle)}/reserve` }
+              shown.reserve === 'open' && shown.reservePath !== undefined
+                ? { kind: 'open' as const, href: shown.reservePath }
                 : { kind: 'soon' as const },
           })}
       directions={directions}

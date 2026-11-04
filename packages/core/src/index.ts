@@ -1039,6 +1039,8 @@ export {
   type BusinessPageEntry,
   type MenuSource,
 } from './hospitality/public-page.ts';
+/** A place's published menu as its business page shows it (spec 0066 B4 with 0065 H1): the page's `MenuSource`. */
+export { businessMenuOf } from './hospitality/public-menu.ts';
 /** The operator console's one write (spec 0065, AC-6502): a workspace's early access flag, behind the operator gate. */
 export { setEarlyAccess } from './operator/early-access.ts';
 // The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.

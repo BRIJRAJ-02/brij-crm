@@ -13,7 +13,7 @@ export const BUSINESS_PAGE_LIMITS = {
   aboutMax: 1000,
   /** A picture's description for people who can't see it. */
   altMax: 120,
-  /** Handles a business holds, its old ones included (migration 0175). */
+  /** Handles a business holds, its old ones included (migration 0179). */
   handles: 20,
   /** A place's slug. */
   slugMax: 60,
@@ -132,8 +132,11 @@ export interface BusinessPageContentShape {
 /** A page nobody has drafted anything on yet. */
 export const EMPTY_BUSINESS_PAGE: BusinessPageContentShape = { gallery: [], amenities: [], hiddenPlaces: [] };
 
-/** One section of a published menu (0065 H1), as the business page shows it. */
-export interface PublicMenuSection {
+/**
+ * One section of a published menu (0065 H1), as the business page shows it. Named apart from the guest menu's own
+ * `PublicMenu` (`menu.ts`), which is the whole snapshot `/m/<key>` reads.
+ */
+export interface BusinessPageMenuSection {
   readonly name: string;
   readonly items: readonly {
     readonly name: string;
@@ -144,8 +147,10 @@ export interface PublicMenuSection {
 }
 
 /** A place's published menu, or nothing until the Menu app (H1) publishes one. */
-export interface PublicMenu {
-  readonly sections: readonly PublicMenuSection[];
+export interface BusinessPageMenu {
+  readonly sections: readonly BusinessPageMenuSection[];
+  /** The whole guest menu's address on the public host (`/m/<menu key>`), with photos, options and Your picks. */
+  readonly path?: string | undefined;
 }
 
 /** One place as the public page shows it. */
@@ -183,9 +188,14 @@ export interface PublicBusinessPage {
   /** The place this address shows: the one its slug names, else the first. */
   readonly placeId: string;
   /** The place's published menu (when the Menu app is installed and has published one). */
-  readonly menu?: PublicMenu | undefined;
+  readonly menu?: BusinessPageMenu | undefined;
   /** Reserve a table: `soon` while the reservation flow isn't open yet, `open` once it is; absent without the app. */
   readonly reserve?: 'soon' | 'open' | undefined;
+  /**
+   * Where Reserve goes while `reserve` is `open`: the place's reservation page on the public host (`/r/<public key>`,
+   * Table seating, spec 0066 B7).
+   */
+  readonly reservePath?: string | undefined;
   /** The workspace's brand kit versions: its accent stylesheet's and its logo's (`/brand.css?v=`, `/logo?v=`). */
   readonly brand?: { readonly version?: string | undefined; readonly logo?: string | undefined } | undefined;
   /** Whether search engines may list this address (AC-6644: a place can be hidden). */

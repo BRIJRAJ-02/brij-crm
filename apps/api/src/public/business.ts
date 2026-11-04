@@ -14,6 +14,7 @@
 import { errorStatus, HANDLE_PATTERN, PLACE_SLUG_PATTERN, type ErrorCode } from '@crm/contracts';
 import {
   businessCacheTags,
+  businessMenuOf,
   enterBusinessPage,
   publicBusinessBrand,
   publicBusinessPhoto,
@@ -46,7 +47,7 @@ export interface PublicBusinessDeps {
   readonly files: FileStore | undefined;
   readonly limiter: PublicLimiter;
   readonly edgeCache?: EdgeCache;
-  /** A place's published menu (0065 H1); none until the Menu app's menus land. */
+  /** A place's published menu (0065 H1): the Menu app's latest snapshot by default (`businessMenuOf`). */
   readonly menus?: MenuSource;
 }
 
@@ -125,11 +126,7 @@ export function mountPublicBusiness(app: Hono<{ Variables: Variables }>, deps: P
     const spent = limited(c, handle);
     if (spent !== undefined) return spent;
     try {
-      const entry = await enterBusinessPage(
-        { db: deps.db, ...(deps.menus === undefined ? {} : { menus: deps.menus }) },
-        handle,
-        slug,
-      );
+      const entry = await enterBusinessPage({ db: deps.db, menus: deps.menus ?? businessMenuOf }, handle, slug);
       deps.edgeCache?.tag(entry.page.tags);
       return Response.json(entry.page, {
         headers: {
