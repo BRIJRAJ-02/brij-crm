@@ -272,9 +272,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
-      // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
       // The operator console's one write (spec 0065, AC-6502, migration 0174).
       { name: 'crm_set_early_access', owner: 'crm_operator' },
+      // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
@@ -466,10 +466,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   // Each owner role, its functions, their signatures, and who calls each: the app (and so the worker, which
-  // inherits it), or the worker alone. Listing workspaces reaches across them, so it is the worker's (spec 0008);
-  // the app keeps it too until milestone 3's contract migration, once every worker runs on crm_worker_user. The
-  // prune is the worker's alone from the start (spec 0007, milestone 3), and so is the daily cleanup's workspace
-  // listing (spec 0008, milestone 3).
+  // inherits it), the worker alone, or definers alone (a helper only other definer functions call, never the app or
+  // the worker). Listing workspaces reaches across them, so it is the worker's (spec 0008); the app keeps it too
+  // until milestone 3's contract migration, once every worker runs on crm_worker_user. The prune is the worker's
+  // alone from the start (spec 0007, milestone 3), and so is the daily cleanup's workspace listing (spec 0008,
+  // milestone 3).
   it.each([
     [
       'crm_search',
@@ -562,7 +563,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_booking_profile_pages',
         'crm_booking_owner_slugs',
         'crm_booking_owner_pages',
-        // Whether a person is an active member of a workspace: executable by crm_handle alone, so no signature below.
+        // Whether a person is an active member of a workspace: executable by crm_handle alone (`definers` below).
         'crm_workspace_member',
       ],
       [
@@ -572,8 +573,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_booking_profile_pages(uuid, uuid, smallint, uuid, text, integer)',
         'crm_booking_owner_slugs(uuid, uuid, text)',
         'crm_booking_owner_pages(uuid, uuid, uuid[])',
+        'crm_workspace_member(uuid, uuid)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'definers'],
     ],
     ['crm_address', ['crm_claim_workspace_address'], ['crm_claim_workspace_address(text)'], ['app']],
     ['crm_calendar_lookup', ['crm_calendar_account_shared'], ['crm_calendar_account_shared(uuid)'], ['app']],
@@ -616,7 +618,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_social_links',
         'crm_social_links_of',
         // The link page's (migration 0098); the last two, its data check and its packing, run only inside the
-        // others and no one else may call them, so they have no signature below.
+        // others and no one else may call them (`definers` below).
         'crm_profile_items',
         'crm_profile_items_archived',
         'crm_profile_items_public',
@@ -657,12 +659,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_accent',
         'crm_save_profile_image',
         // An old handle let go to make room at the cap (late trap #76, migration 0124): called only by the two
-        // above that take a handle, as crm_pack_profile_items is, so it has no signature below.
+        // above that take a handle, as crm_pack_profile_items is (`definers` below).
         'crm_make_handle_room',
         // The link pages carrying a form, for a webhook's link_page.signup (spec 0064, slice 3).
         'crm_webhook_form_handles',
         // Spec 0061 (migration 0147). The kind cap and the picture ids a block names run only inside the others,
-        // as the pack does, so they have no signature below.
+        // as the pack does (`definers` below).
         'crm_profile_kind_cap',
         'crm_profile_item_images',
         'crm_count_profile_booking',
@@ -677,8 +679,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_sitemap_handles',
         'crm_profile_identity',
         'crm_save_profile_identity',
-        // Publish for link pages (spec 0068, migration 0172). The rows reader runs only inside the others, so it has
-        // no signature below.
+        // Publish for link pages (spec 0068, migration 0172). The rows reader runs only inside the others
+        // (`definers` below).
         'crm_link_page_rows',
         'crm_link_page_state',
         'crm_publish_link_page',
@@ -750,10 +752,17 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_claim_business_handle(uuid, text)',
         'crm_list_business(uuid, text, text[], boolean)',
         'crm_sitemap_businesses(text, integer)',
+        // The six that run only inside the others: crm_handle's own to call, never the app's or the worker's.
+        'crm_check_profile_item(text, jsonb, uuid, uuid, uuid)',
+        'crm_pack_profile_items(uuid, uuid)',
+        'crm_make_handle_room(uuid)',
+        'crm_profile_kind_cap(text)',
+        'crm_profile_item_images(jsonb)',
+        'crm_link_page_rows(uuid, uuid)',
       ],
-      // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
-      // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 56 }, () => 'app'),
+      // One per signature: the first 56 crm_app's to call and nobody else's, the last six crm_handle's alone.
+      // Counted rather than written out, since a signature added without the count moved read as unreachable.
+      [...Array.from({ length: 56 }, () => 'app'), ...Array.from({ length: 6 }, () => 'definers')],
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -774,17 +783,27 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         [name, fns],
       );
       expect(role.rows).toEqual([{ login: false, owned: 0, members: 0, app: false }]);
-      // The app (or the worker alone) can call each, and nobody else by default.
+      // Every function listed has its signature, and every signature its caller, so none goes unchecked.
+      expect(callers).toHaveLength(signatures.length);
+      expect([...new Set(signatures.map((signature) => signature.slice(0, signature.indexOf('('))))].sort()).toEqual(
+        [...fns].sort(),
+      );
+      // The app (or the worker alone, or definers alone) can call each, and nobody else. Each row is read by its own
+      // signature; a null `proacl` is Postgres's default grant, EXECUTE to PUBLIC, which aclexplode(NULL) would hide.
       for (const [index, signature] of signatures.entries()) {
         const grants = await owner.query<{ app: boolean; worker: boolean; anyone: boolean }>(
           `
-        select has_function_privilege('crm_app', $1, 'EXECUTE') as app,
-          has_function_privilege('crm_worker', $1, 'EXECUTE') as worker,
-          exists (select 1 from aclexplode((select proacl from pg_proc where proname = $2)) where grantee = 0) as anyone
+        select has_function_privilege('crm_app', p.oid, 'EXECUTE') as app,
+          has_function_privilege('crm_worker', p.oid, 'EXECUTE') as worker,
+          (p.proacl is null or exists (select 1 from aclexplode(p.proacl) where grantee = 0)) as anyone
+        from pg_proc p where p.oid = $1::regprocedure
       `,
-          [signature, fns[index]],
+          [signature],
         );
-        expect(grants.rows, signature).toEqual([{ app: callers[index] === 'app', worker: true, anyone: false }]);
+        const caller = callers[index];
+        expect(grants.rows, signature).toEqual([
+          { app: caller === 'app', worker: caller !== 'definers', anyone: false },
+        ]);
       }
       // And an app login can't become it.
       await expect(
