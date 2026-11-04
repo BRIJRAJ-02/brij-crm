@@ -424,7 +424,7 @@ export function SettingsTab({
   const tip = (label: string, text: string) => <InfoTip label={label}>{text}</InfoTip>;
 
   return (
-    <SettingsStack>
+    <SettingsStack width="readable">
       <SettingsSection title={strings.groupForm}>
         {isPublished && (
           <>
