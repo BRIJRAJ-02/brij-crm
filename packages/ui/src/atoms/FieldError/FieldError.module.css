@@ -11,6 +11,6 @@
   }
 
   .root[data-inset='check'] {
-    padding-inline-start: calc(var(--size-check) + var(--space-8));
+    padding-inline-start: calc(var(--size-icon) + var(--space-8));
   }
 }

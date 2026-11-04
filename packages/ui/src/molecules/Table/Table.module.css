@@ -130,7 +130,9 @@
      list that selects lines up with People and Companies (the owner, 5 November 2026). */
   .column[data-select],
   .cell[data-select] {
-    padding-inline: calc((var(--size-column-check) - var(--size-check)) / 2);
+    inline-size: var(--size-column-check);
+    padding-inline: 0;
+    text-align: center;
   }
 
   /* The count under the rows (`footer`): the records grid's footer band, quiet, a row tall. */
