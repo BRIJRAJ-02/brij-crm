@@ -25,7 +25,7 @@ import type {
 } from '@crm/contracts';
 
 /** The templates' version, moved whenever a template's questions change, so a report can say which one made a form. */
-export const FORM_TEMPLATES_VERSION = 2;
+export const FORM_TEMPLATES_VERSION = 3;
 
 /** One question a template asks, before it knows a workspace's attribute ids. */
 export interface FormTemplateQuestion {
@@ -70,6 +70,8 @@ export interface FormTemplate {
   readonly preview: readonly FormTemplatePreviewRow[];
   readonly layout: FormLayout;
   readonly headline: string;
+  /** What the form's thank you page says (critique c: each template thanks for its own job, not one line for all). */
+  readonly thanks: string;
   readonly buttonText: string;
   readonly questions: readonly FormTemplateQuestion[];
   /**
@@ -100,6 +102,14 @@ const WHO: readonly FormTemplateQuestion[] = [
     filesOnto: 'email_addresses',
   },
 ];
+
+/**
+ * Name and a personal email, for a form a person fills in for themselves rather than for their work (critique c:
+ * an event, a job, a newsletter or feedback never asks for a work email).
+ */
+const PERSON: readonly FormTemplateQuestion[] = WHO.map((question) =>
+  question.answerType === 'email' ? { ...question, label: 'Email', placeholder: 'you@example.com' } : question,
+);
 
 const PHONE: FormTemplateQuestion = {
   id: 'phone',
@@ -166,6 +176,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'field'],
     layout: 'classic',
     headline: 'Fill this in and we will come back to you',
+    thanks: 'Thanks. We will come back to you soon.',
     buttonText: 'Send',
     questions: [...WHO, PHONE],
   },
@@ -177,6 +188,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'long'],
     layout: 'classic',
     headline: 'Talk to us',
+    thanks: 'Thanks for getting in touch. We will reply within one working day.',
     buttonText: 'Send message',
     questions: [...WHO, COMPANY, intro('message', 'message', 'How can we help?', 'Tell us what you need')],
   },
@@ -188,6 +200,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'long'],
     layout: 'classic',
     headline: 'Book a demo',
+    thanks: 'Thanks. We will be in touch to find a time for your demo.',
     buttonText: 'Request a demo',
     questions: [
       ...WHO,
@@ -204,9 +217,10 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'date'],
     layout: 'classic',
     headline: 'Save your seat',
+    thanks: 'You’re in. We will email the details before the day.',
     buttonText: 'Sign me up',
     questions: [
-      ...WHO,
+      ...PERSON,
       {
         id: 'day',
         key: 'day',
@@ -240,9 +254,10 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'rating', 'long'],
     layout: 'classic',
     headline: 'How did we do?',
+    thanks: 'Thank you. Every answer is read.',
     buttonText: 'Send feedback',
     questions: [
-      ...WHO,
+      ...PERSON,
       {
         id: 'rating',
         key: 'rating',
@@ -260,10 +275,11 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     purpose: '0 to 10, and why.',
     preview: ['field', 'scale', 'long'],
     layout: 'classic',
-    headline: 'One question, if you have a moment',
+    headline: 'How likely are you to recommend us?',
+    thanks: 'Thank you. That helps more than you know.',
     buttonText: 'Send',
     questions: [
-      ...WHO,
+      ...PERSON,
       {
         id: 'nps',
         key: 'nps',
@@ -283,9 +299,10 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'choices', 'upload'],
     layout: 'classic',
     headline: 'Apply to join us',
+    thanks: 'Thanks for applying. We read every application and will reply either way.',
     buttonText: 'Send application',
     questions: [
-      ...WHO,
+      ...PERSON,
       PHONE,
       {
         id: 'role',
@@ -329,10 +346,11 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field'],
     layout: 'classic',
     headline: 'Get the monthly note',
+    thanks: 'You’re subscribed. The next note arrives at the start of the month.',
     buttonText: 'Subscribe',
     // Marketing email needs the person's say so, in words they saw (spec 0023, AC-1053).
     questions: [
-      ...WHO,
+      ...PERSON,
       {
         id: 'marketing',
         key: 'marketing',
@@ -351,6 +369,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'long', 'choices'],
     layout: 'classic',
     headline: 'Tell us what went wrong',
+    thanks: 'Got it. We are on it and will reply by email.',
     buttonText: 'Send request',
     questions: [
       ...WHO,
@@ -380,6 +399,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'field'],
     layout: 'steps',
     headline: 'Welcome aboard',
+    thanks: 'All set. We will be in touch with your next steps.',
     buttonText: 'Finish setup',
     questions: [
       ...WHO,
@@ -416,6 +436,7 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'choices', 'choices'],
     layout: 'classic',
     headline: 'Tell us about your team',
+    thanks: 'Thanks. We will be in touch with what fits your team.',
     buttonText: 'Send',
     questions: [
       ...WHO,
@@ -460,20 +481,9 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
     preview: ['field', 'field', 'long'],
     layout: 'classic',
     headline: 'Before we meet',
+    thanks: 'Thanks. We look forward to meeting you.',
     buttonText: 'Continue',
     endsWithBooking: true,
-    questions: [
-      ...WHO,
-      COMPANY,
-      note('agenda', 'agenda', 'What would you like to cover?', 'So we can come prepared'),
-      {
-        id: 'when',
-        key: 'when',
-        label: 'Any times that suit you?',
-        answerType: 'short_text',
-        placeholder: 'Weekday mornings',
-        required: false,
-      },
-    ],
+    questions: [...WHO, COMPANY, note('agenda', 'agenda', 'What would you like to cover?', 'So we can come prepared')],
   },
 };

@@ -78,13 +78,13 @@ function stepsOf(template: FormTemplate): FormStep[] {
 
 /**
  * What follows a send: on to `bookingPageId` for a template that ends with Book a meeting and was given a page, and
- * otherwise the plain thank you every other template has.
+ * otherwise the template's own thank you (critique c: each says something about its own job).
  */
 function afterOf(template: FormTemplate, bookingPageId: string | undefined): FormAfter {
   if (template.endsWithBooking === true && bookingPageId !== undefined) {
-    return { kind: 'booking', bookingPageId, countdownSeconds: BOOKING_COUNTDOWN.default, message: '' };
+    return { kind: 'booking', bookingPageId, countdownSeconds: BOOKING_COUNTDOWN.default, message: template.thanks };
   }
-  return { kind: 'message', message: '' };
+  return { kind: 'message', message: template.thanks };
 }
 
 /**
