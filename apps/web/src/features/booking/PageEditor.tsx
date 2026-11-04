@@ -159,6 +159,8 @@ export interface PageEditorProps {
 const QUESTIONS_MAX = 20;
 
 const LOCATIONS = ['video', 'address', 'phone', 'custom'] as const;
+/** Location's "I'll send a link": video with no link, the host sending it (critic B-07). */
+const SEND_LINK = 'send-link';
 
 const minutesItems = (values: readonly number[]): SelectItem[] =>
   values.map((value) => ({ id: String(value), label: value === 0 ? strings.none : strings.minutes(value) }));
@@ -300,12 +302,21 @@ function slugProblem(value: string): string | undefined {
 }
 
 /** Whether a draft is fine to send: the server would refuse it otherwise. */
+/** A host's own meeting link that can't be saved: empty, or not an https address (critic B-07). */
+function meetingLinkProblem(location: BookingPageSettings['location']): string | undefined {
+  if (location.type !== 'video' || location.link === undefined) return undefined;
+  const link = location.link.trim();
+  if (link === '') return strings.meetingLinkRequired;
+  return URL.canParse(link) && new URL(link).protocol === 'https:' ? undefined : strings.meetingLinkInvalid;
+}
+
 function sendable(draft: BookingPageSettings): boolean {
   return (
     draft.title.trim() !== '' &&
     slugProblem(draft.slug) === undefined &&
     draft.durations.length > 0 &&
     (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '') &&
+    meetingLinkProblem(draft.location) === undefined &&
     redirectProblem(draft) === undefined
   );
 }
@@ -464,14 +475,9 @@ export function PageEditor({
     isOwner: destination.status === 'ready' ? destination.destination.isOwner : undefined,
     connections: calendar.status === 'ready' ? calendar.connections.map((connection) => connection.status) : undefined,
   });
-  const noLinkHint =
-    noLinkReason === 'reconnect'
-      ? strings.noVideoLinkReconnect
-      : noLinkReason === 'none'
-        ? calendar.status === 'ready' && !calendar.enabled
-          ? strings.noVideoLinkNoSync
-          : strings.noVideoLink
-        : undefined;
+  // No calendar of the owner's makes a video link (or theirs needs reconnecting): Location offers "I'll send a link"
+  // and Video asks for the host's own link (critic B-07).
+  const makesNoLink = noLinkReason !== undefined;
   // A custom length typed in minutes, added to the page's lengths on Add or Enter.
   const [lengthText, setLengthText] = useState('');
   const [lengthError, setLengthError] = useState<string | undefined>(undefined);
@@ -874,6 +880,9 @@ export function PageEditor({
         ? 'unsaved'
         : 'error';
   const location = draft.location;
+  // What Location's Select shows: "I'll send a link" is video with no link while no calendar makes one.
+  const locationChoice =
+    location.type === 'video' && location.link === undefined && makesNoLink ? SEND_LINK : location.type;
   // The Sharing section's address: the saved link (the one that works now), and the /b/ link a Link only page keeps.
   const savedLink = publicBookingUrl(page);
   const bLink = publicBookingUrl({ ...page, isPrivate: true });
@@ -899,7 +908,9 @@ export function PageEditor({
   const shown: PageTab = tabs.includes(tab) ? tab : 'page';
   // The tabs whose fields hold an error now: what's marked red on them, and a refusal's field from the server.
   const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
-  const isWhereMissing = (location.type === 'address' || location.type === 'custom') && location.value.trim() === '';
+  const isWhereMissing =
+    ((location.type === 'address' || location.type === 'custom') && location.value.trim() === '') ||
+    meetingLinkProblem(location) !== undefined;
   const hasError: Readonly<Record<PageTab, boolean>> = {
     page: refusedTab === 'page' || slugProblem(draft.slug) !== undefined,
     meeting:
@@ -1360,7 +1371,7 @@ export function PageEditor({
                   {shown === 'page' && (
                     // Plain rows under small group headers, as a form's Settings tab (critic A8, 4 Nov 2026): a label on
                     // the left with its help in a tip, the control on the right.
-                    <SettingsStack width="readable">
+                    <SettingsStack width="readable" rows="inline">
                       <Card title={strings.details}>
                         <SettingsRow title={strings.description} control="field">
                           <Field
@@ -1523,7 +1534,7 @@ export function PageEditor({
                   {shown === 'share' && (
                     // Every way to hand the page out, in one place (critic A21, 4 Nov 2026): its link through the
                     // forms' own share part, then the snippet, one-time links, the social links and the link page.
-                    <SettingsStack width="readable">
+                    <SettingsStack width="readable" rows="inline">
                       <Card title={strings.shareLinkSection}>
                         {isDraft ? (
                           <SettingsRow title={strings.notPublished} description={strings.publishToShare}>
@@ -1584,7 +1595,7 @@ export function PageEditor({
                     </SettingsStack>
                   )}
                   {shown === 'meeting' && (
-                    <SettingsStack width="readable">
+                    <SettingsStack width="readable" rows="inline">
                       <Card title={strings.meeting}>
                         <SettingsRow title={strings.title} control="field">
                           <Field
@@ -1689,17 +1700,56 @@ export function PageEditor({
                           <Select
                             label={strings.location}
                             isLabelHidden
-                            items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
-                            value={location.type}
+                            // With no calendar to make a video link (critic B-07, 5 Nov 2026): "I'll send a link" is
+                            // video with no link, the page's default, and Video asks for the host's own link below.
+                            // With one, Video is the calendar's link, or the host's own when the page keeps one.
+                            items={[
+                              ...(makesNoLink ? [{ id: SEND_LINK, label: strings.locations.sendLink }] : []),
+                              ...LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] })),
+                            ]}
+                            value={locationChoice}
                             isReadOnly={readOnly('location')}
-                            {...(location.type === 'video' && noLinkHint !== undefined ? { hint: noLinkHint } : {})}
+                            // Only the reconnect case still needs a word: the field below asks for the rest.
+                            {...(locationChoice === 'video' &&
+                            noLinkReason === 'reconnect' &&
+                            location.type === 'video' &&
+                            location.link === undefined
+                              ? { hint: strings.noVideoLinkReconnect }
+                              : {})}
                             onChange={(type) => {
-                              if (type === 'video' || type === 'phone') change({ location: { type } });
+                              if (type === SEND_LINK) change({ location: { type: 'video' } });
+                              // Video with nothing to make a link: the host's own, asked for right here.
+                              if (type === 'video')
+                                change({ location: makesNoLink ? { type: 'video', link: '' } : { type: 'video' } });
+                              if (type === 'phone') change({ location: { type } });
                               if (type === 'address' || type === 'custom')
                                 change({ location: { type, value: 'value' in location ? location.value : '' } });
                             }}
                           />
                         </SettingsRow>
+                        {location.type === 'video' && location.link !== undefined && (
+                          <SettingsRow
+                            title={strings.meetingLink}
+                            meta={tip(strings.meetingLink, strings.meetingLinkHelp)}
+                            control="field"
+                          >
+                            <Field
+                              label={strings.meetingLink}
+                              isLabelHidden
+                              type="url"
+                              inputMode="url"
+                              placeholder={strings.meetingLinkPlaceholder}
+                              value={location.link}
+                              maxLength={2048}
+                              isRequired
+                              isReadOnly={readOnly('location')}
+                              {...(meetingLinkProblem(location) === undefined
+                                ? {}
+                                : { error: meetingLinkProblem(location) })}
+                              onChange={(link) => change({ location: { type: 'video', link } })}
+                            />
+                          </SettingsRow>
+                        )}
                         {(location.type === 'address' || location.type === 'custom') && (
                           <SettingsRow
                             title={location.type === 'address' ? strings.addressOrRoom : strings.where}
@@ -1725,6 +1775,7 @@ export function PageEditor({
                         {...(page.ownerName === undefined ? {} : { ownerName: page.ownerName })}
                         onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
                         settingsHref={calendarsHref(slug)}
+                        canConnect={calendar.status === 'ready' && calendar.enabled}
                       />
                       {/* What happens once a booking is made, on the tab about the meeting itself (the owner, 27
                           October 2026). One row per setting (critic A1: two switches had shared one row). */}
@@ -1807,7 +1858,7 @@ export function PageEditor({
                     </SettingsStack>
                   )}
                   {shown === 'questions' && (
-                    <SettingsStack width="readable">
+                    <SettingsStack width="readable" rows="inline">
                       {targets === undefined && !isLocked && (
                         <Callout
                           tone="danger"
@@ -1886,7 +1937,7 @@ export function PageEditor({
                     </SettingsStack>
                   )}
                   {isTeam && shown === 'hosts' && (
-                    <SettingsStack width="readable">
+                    <SettingsStack width="readable" rows="inline">
                       <Callout tone="info">{publishStrings.goesLive}</Callout>
                       <HostsCard
                         data={data}
@@ -1939,7 +1990,7 @@ export function PageEditor({
                   )}
                   {shown === 'hours' && (
                     // Hours and Limits as one Availability tab (critic A6, 4 Nov 2026), the forms Settings width.
-                    <SettingsStack width="readable">
+                    <SettingsStack width="readable" rows="inline">
                       {/* In reading order (the owner, 22 Oct 2026): the schedule, its week, its days off, then
                           reserved time and conflicts, each a section with its heading. */}
                       {isTeam ? (
@@ -2033,6 +2084,7 @@ export function PageEditor({
                         destination={data.calendar.pageDestination(slug, page.id)}
                         calendars={data.calendar.calendars(slug)}
                         settingsHref={calendarsHref(slug)}
+                        canConnect={calendar.status === 'ready' && calendar.enabled}
                       />
 
                       <Card title={strings.limitGroups.buffers}>
@@ -2213,7 +2265,7 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
                 preview={<Skeleton shape="block" />}
                 {...(notices === undefined ? {} : { notices })}
               >
-                <SettingsStack width="readable">
+                <SettingsStack width="readable" rows="inline">
                   {PENDING_SECTIONS[shown].map((title) => (
                     <Card key={title} title={title} isBusy>
                       <Skeleton lines={3} />

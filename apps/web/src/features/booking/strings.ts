@@ -237,11 +237,20 @@ export const strings = {
   chatAsks: 'Book by chat asks these too: required ones in turn, optional ones if the visitor taps them.',
   durations: 'Durations',
   location: 'Location',
-  locations: { video: 'Video', address: 'In person', phone: 'Phone', custom: 'Somewhere else' },
-  /** Under Location's Video when the page's owner has no live calendar, so no video link is made (Q57, Q77). */
-  noVideoLink: 'No video link: no calendar connected.',
-  /** The same, where calendars can't be connected here (calendar sync off). */
-  noVideoLinkNoSync: 'No video link. Send one yourself.',
+  locations: {
+    video: 'Video',
+    address: 'In person',
+    phone: 'Phone',
+    custom: 'Somewhere else',
+    /** Video with no link made: the host sends it (critic B-07), the default while no calendar makes one. */
+    sendLink: 'I’ll send a link',
+  },
+  /** Video's own link, asked for while no calendar makes one (critic B-07). */
+  meetingLink: 'Meeting link',
+  meetingLinkHelp: 'Guests get it in their confirmation, never on the page.',
+  meetingLinkPlaceholder: 'https://zoom.us/j/…',
+  meetingLinkRequired: 'Paste the meeting link, or pick I’ll send a link.',
+  meetingLinkInvalid: 'Give the meeting link, starting https://.',
   /** The same, when their calendar's account has expired and needs reconnecting in Settings › Calendars. */
   noVideoLinkReconnect: 'No video link: reconnect your calendar.',
   addressOrRoom: 'Address or room',
@@ -276,6 +285,8 @@ export const strings = {
   manage: 'Manage',
   checksConflictsIn: 'Checks for conflicts in',
   noCalendars: 'No calendars connected',
+  /** Calendar sync isn't on for this deployment (the Calendars tab's "off" state): nothing to connect. */
+  calendarSyncOff: 'Calendar sync isn’t available here',
   noneChecked: 'None, so this page can double book.',
   reservedTime: 'Reserved time',
   /** The Hours and Meeting tabs' sections (22 Oct 2026). */

@@ -10,18 +10,7 @@
 // server can't make one yet). No choice is ever shown turned off: one that can't apply is left out.
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import {
-  Button,
-  Callout,
-  Disclosure,
-  Field,
-  FieldGroup,
-  Link,
-  Modal,
-  SegmentedControl,
-  Select,
-  TileGrid,
-} from '@crm/ui';
+import { Button, Callout, Disclosure, Field, Link, Modal, SegmentedControl, Select, TileGrid } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { lengthOf } from './durations.ts';
@@ -329,17 +318,17 @@ export function NewPageDialog({
           types. One list, so a type under More types is picked as the others are. */}
       {isPage && (canBookTeams || canManaged) && (
         <>
-          <FieldGroup label={strings.typeLabel}>
-            <TileGrid
-              variant="choice"
-              label={strings.typeLabel}
-              showsDescription
-              tileWidth="wide"
-              value={type === 'managed' ? null : type}
-              tiles={isBusy ? types.map((tile) => ({ ...tile, isDisabled: true })) : types}
-              onChange={pick}
-            />
-          </FieldGroup>
+          <TileGrid
+            variant="choice"
+            label={strings.typeLabel}
+            isLabelVisible
+            showsDescription
+            tileWidth="wide"
+            value={type === 'managed' ? null : type}
+            tiles={isBusy ? types.map((tile) => ({ ...tile, isDisabled: true })) : types}
+            onChange={pick}
+          />
+
           {canManaged && (
             <Disclosure
               title={strings.moreTypes}

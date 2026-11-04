@@ -252,6 +252,15 @@
     padding-block-start: 0;
   }
 
+  /* Label left, control right on every row, the label giving way first (an editor's column beside its preview). */
+  .stack[data-rows='inline'] .row {
+    flex-wrap: nowrap;
+  }
+
+  .stack[data-rows='inline'] .rowMain {
+    flex: 1 1 0;
+  }
+
   .stack[data-variant='plain'] > .row {
     padding-block-start: 0;
     border-block-start: none;
@@ -366,6 +375,10 @@
     /* On a phone an input takes the row's width under its title. */
     .rowControl[data-control='field'] {
       flex-basis: 100%;
+    }
+
+    .stack[data-rows='inline'] .row {
+      flex-wrap: wrap;
     }
 
     .root {
