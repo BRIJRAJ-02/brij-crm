@@ -38,8 +38,9 @@ test.describe('the form journey', () => {
     // Where the answer is saved shows in the question's editor, not on its row (T17).
     await expect(page.getByRole('button', { name: /Save answer to$/ }).last()).toContainText('Job title');
 
-    // Named on the page, as a title (Tally's way); then the first publish is one click, with nothing asked.
-    const title = page.getByRole('textbox', { name: 'Name', exact: true });
+    // Named on the page, as its one title (Tally's way): the headline, which an Untitled form takes as its name too.
+    // Then the first publish is one click, with nothing asked.
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
     await title.fill(`Talk to us ${tag}`);
     await title.press('Tab');
     await expect(page.getByRole('heading', { level: 1 })).toContainText(`Talk to us ${tag}`, { timeout: 15_000 });

@@ -15,6 +15,7 @@ import {
   type SubmissionView,
 } from '@crm/data';
 import {
+  DEFAULT_HEADLINE,
   FORM_ENDINGS_MAX,
   FORM_QUESTIONS_MAX,
   pathOf,
@@ -29,6 +30,7 @@ import {
   Callout,
   EditorStatus,
   Field,
+  SettingsStack,
   focusLater,
   HostedFormPreview,
   PreviewLayout,
@@ -257,6 +259,11 @@ export function FormEditor(props: FormEditorProps) {
   }
 
   const isPublished = form.liveVersionNumber !== undefined;
+  // One title (critique c, blocker 2): a draft whose headline nobody wrote yet takes the form's name, once, so a
+  // template's form reads "Lead qualification", not the stock headline.
+  if (!isPublished && canManage && form.name !== strings.untitledForm && draft.headline === DEFAULT_HEADLINE) {
+    setDraft({ ...draft, headline: form.name });
+  }
 
   // The question cards' reached and answered chips (spec 0063, AC-6322), so a weak question is visible where it is
   // edited. Only a published form has any, and the read is the Analytics tab's own 30 day one, so opening that tab
@@ -793,17 +800,31 @@ export function FormEditor(props: FormEditorProps) {
       default:
         return (
           <>
-            {/* Before the first publish the name is changed here too, as a field, beside the questions. */}
-            {!isPublished && canManage && (
-              <DraftName
-                name={form.name}
-                onRename={(name) => {
-                  data.forms.updateSettings(slug, form.id, { name }).then((view) => {
-                    setForm((before) => ({ ...before, name: view.name, revision: before.revision }));
-                  }, failed);
-                }}
-              />
-            )}
+            {/* One title (critique c, blocker 2): the headline visitors read, edited here at the top with the line
+                under it; while the form is still Untitled, its name follows the headline. */}
+            <FormTitle
+              headline={draft.headline}
+              subheading={draft.subheading ?? ''}
+              isReadOnly={!canManage}
+              onChange={(change) => {
+                setDraft((before) => {
+                  const { subheading: _was, ...rest } = before;
+                  const subheading = change.subheading ?? before.subheading ?? '';
+                  return {
+                    ...rest,
+                    headline: change.headline ?? before.headline,
+                    ...(subheading.trim() === '' ? {} : { subheading }),
+                  };
+                });
+              }}
+              onCommit={(headline) => {
+                if (isPublished || !canManage || form.name !== strings.untitledForm || headline.trim() === '') return;
+                const name = headline.trim().slice(0, 80);
+                data.forms.updateSettings(slug, form.id, { name }).then((view) => {
+                  setForm((before) => ({ ...before, name: view.name, revision: before.revision }));
+                }, failed);
+              }}
+            />
             <LayoutCard
               layout={draft.layout}
               isReadOnly={!canManage}
@@ -915,6 +936,8 @@ export function FormEditor(props: FormEditorProps) {
   const layout = (
     <PreviewLayout
       notices={notices}
+      // The phone beside the questions from a laptop's width up (critique c, blocker 1): two fifths of the width.
+      previewShare="wide"
       // Every tab reads top to bottom, full width; only the Form tab keeps the preview (the owner, 22 October 2026).
       bodyLayout="stack"
       {...(current === 'form'
@@ -1141,31 +1164,60 @@ function AfterPageNotice({
   );
 }
 
+/** What the title at the top of the Form tab changes: the headline, or the line under it. */
+interface TitleChange {
+  readonly headline?: string;
+  readonly subheading?: string;
+}
+
 /**
- * A draft's name, as the page's own title (T17, 4 November 2026: no card round one field): the borderless title
- * field, typed in place. Blur saves it; an empty one says so.
+ * The form's one title (critique c, blocker 2; Tally's page title): the headline visitors read, in the page's title
+ * type, and the line under it, quiet, each edited in place. The private name lives in Settings once published.
  */
-function DraftName({ name, onRename }: { readonly name: string; readonly onRename: (name: string) => void }) {
-  const [value, setValue] = useState(name);
-  const [error, setError] = useState<string | undefined>(undefined);
+function FormTitle({
+  headline,
+  subheading,
+  isReadOnly,
+  onChange,
+  onCommit,
+}: {
+  readonly headline: string;
+  readonly subheading: string;
+  readonly isReadOnly: boolean;
+  readonly onChange: (change: TitleChange) => void;
+  /** The headline was left: an Untitled form takes it as its name. */
+  readonly onCommit: (headline: string) => void;
+}) {
   return (
-    <Field
-      label={strings.name}
-      isLabelHidden
-      variant="title"
-      value={value}
-      maxLength={80}
-      isRequired
-      onChange={(text) => {
-        setValue(text);
-        setError(undefined);
-      }}
-      onBlur={() => {
-        const trimmed = value.trim();
-        if (trimmed === '') setError(strings.nameRequired);
-        else if (trimmed !== name) onRename(trimmed);
-      }}
-      {...(error === undefined ? {} : { error })}
-    />
+    <SettingsStack variant="nested">
+      <Field
+        label={strings.formTitle}
+        isLabelHidden
+        variant="title"
+        isWrapping
+        placeholder={strings.formTitlePlaceholder}
+        value={headline}
+        maxLength={120}
+        isReadOnly={isReadOnly}
+        onChange={(text) => {
+          onChange({ headline: text });
+        }}
+        onBlur={() => {
+          onCommit(headline);
+        }}
+      />
+      <Field
+        label={strings.formLine}
+        isLabelHidden
+        isWrapping
+        placeholder={strings.formLinePlaceholder}
+        value={subheading}
+        maxLength={240}
+        isReadOnly={isReadOnly}
+        onChange={(text) => {
+          onChange({ subheading: text });
+        }}
+      />
+    </SettingsStack>
   );
 }

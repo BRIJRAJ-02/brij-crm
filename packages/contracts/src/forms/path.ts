@@ -21,6 +21,12 @@ export const FORM_LOOK_THEMES = ['plain', 'brand'] as const;
 /** Whether a form wears its workspace's brand kit. */
 export type FormLookTheme = (typeof FORM_LOOK_THEMES)[number];
 
+/**
+ * The headline a form starts with, until it is given one (spec 0023). Here, beside the layouts, so the builder can
+ * tell a headline nobody chose from one somebody wrote without loading the document's Zod schemas.
+ */
+export const DEFAULT_HEADLINE = 'Fill this in and we will come back to you';
+
 /** The longest step title the document takes. */
 export const FORM_STEP_TITLE_MAX = 80;
 

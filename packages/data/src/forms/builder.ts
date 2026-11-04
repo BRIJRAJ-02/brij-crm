@@ -22,6 +22,7 @@ export {
   FORM_QUESTIONS_MAX,
   FORM_ENDINGS_MAX,
   FORM_STEP_TITLE_MAX,
+  DEFAULT_HEADLINE,
   pathOf,
   // Jumps, the score and recall (spec 0063 slice 5): the builder's Flow view, its points rows and its preview.
   recall,

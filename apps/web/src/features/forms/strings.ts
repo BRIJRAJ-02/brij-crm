@@ -80,6 +80,11 @@ export const strings = {
 
   // The editor
   untitledForm: 'Untitled form',
+  /** The Form tab's one title: the headline visitors read, and the line under it. */
+  formTitle: 'Title',
+  formTitlePlaceholder: 'Untitled form',
+  formLine: 'Line under the headline',
+  formLinePlaceholder: 'Add a line under it (optional)',
   previewOpen: 'Preview',
   previewNotLive: 'Preview, not live. Answers are checked here, and nothing is sent.',
   publish: 'Publish',
