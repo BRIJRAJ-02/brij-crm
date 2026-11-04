@@ -78,4 +78,33 @@ export const strings = {
   },
   /** Read after a link that asks first: pressing it opens a notice, not the link. */
   asksFirst: '(asks before it opens)',
+  /** The page's Book (spec 0068): Split's panel and the profile card, opening its first booking page. */
+  book: 'Book',
+  /** An audio intro's control (AC-6808), named for what it plays and what pressing it does. */
+  playIntro: (title: string) => `Play ${title}`,
+  pauseIntro: (title: string) => `Pause ${title}`,
+  /** What an audio intro is called when its owner gave it no title. */
+  introTitle: 'Audio intro',
+  /** An audio intro that couldn't play. */
+  introFailed: 'Can’t play this right now',
+  /** The small titles a card shows when its owner gave none. */
+  experience: 'Experience',
+  clients: 'Clients',
+  work: 'Work',
+  howIWork: 'How I work',
+  location: 'Location',
+  events: 'Next events',
+  /** A location's one action. */
+  directions: 'Directions',
+  /** The steps' switcher, and each step's name in it. */
+  steps: 'Steps',
+  stepName: (at: number, title: string) => `Step ${String(at)}: ${title}`,
+  /** A step's number, as the card shows it. */
+  stepNumber: (at: number) => String(at).padStart(2, '0'),
+  /** Events when every one has passed. */
+  noEvents: 'Nothing coming up right now',
+  /** After an event's time: where it is. */
+  atPlace: (place: string) => ` · ${place}`,
+  /** A work card or event that opens elsewhere. */
+  opensElsewhere: '(opens in a new tab)',
 } as const;

@@ -222,7 +222,18 @@ async function expectReadingOrder(root: HTMLElement) {
   }
 }
 
-/** A grid page at a phone's width: two columns, the tiles in the owner's order, a heading and writing across. */
+/** The first bento grid on the page, once its chunk has drawn it (spec 0068, AC-6808). */
+async function firstBento(root: HTMLElement): Promise<HTMLElement> {
+  const grid = await waitFor(() => {
+    const found = root.querySelector<HTMLElement>('ul[aria-label="Links"]');
+    if (found === null) throw new Error('The bento draws');
+    return found;
+  });
+  await settleAnimations();
+  return grid;
+}
+
+/** A grid page at a phone's width (spec 0068, AC-6808): one column, the cards in the owner's order. */
 export const Grid: Story = {
   args: { blocks: gridBlocks(), pageLayout: 'grid' },
   render: (args) => (
@@ -231,17 +242,11 @@ export const Grid: Story = {
     </Stage>
   ),
   play: async ({ canvas, canvasElement }) => {
-    await settleAnimations();
-    const lists = canvasElement.querySelectorAll('ul');
-    const first = lists[0];
-    if (first === undefined) throw new Error('The tiles draw');
-    // Two columns: the second small tile sits beside the first, the large one under them both.
-    const [site, x, launch] = cornersOf(first);
-    await expect(x?.top).toBe(site?.top);
-    await expect(launch?.top).toBeGreaterThan(site?.top ?? 0);
-    await expect(launch?.width).toBe((site?.width ?? 0) * 2 + 8);
+    const first = await firstBento(canvasElement);
+    const width = Math.round(first.getBoundingClientRect().width);
+    for (const corner of cornersOf(first)) await expect(corner.width).toBe(width);
     await expectReadingOrder(first);
-    // The focus order is the DOM's: Tab walks the tiles exactly in the order they show.
+    // The focus order is the DOM's: Tab walks the cards exactly in the order they show.
     const tiles = [...first.querySelectorAll('a')];
     tiles[0]?.focus();
     for (const tile of tiles.slice(1)) {
@@ -252,18 +257,23 @@ export const Grid: Story = {
   },
 };
 
-/** The same grid with room for four columns: a tablet or a laptop. */
+/** The same grid with room for more columns: every row is full, wide cards snapped so nothing leaves a hole. */
 export const GridWide: Story = {
   args: { blocks: gridBlocks(), pageLayout: 'grid' },
   play: async ({ canvasElement }) => {
-    await settleAnimations();
-    const first = canvasElement.querySelector('ul');
-    if (first === null) throw new Error('The tiles draw');
-    const [site, x, launch, intro] = cornersOf(first);
-    // Four columns: the two small tiles and the large one share the first row, the wide one goes beside them.
-    await expect(x?.top).toBe(site?.top);
-    await expect(launch?.top).toBe(site?.top);
-    await expect(intro?.top).toBeGreaterThan(site?.top ?? 0);
+    const first = await firstBento(canvasElement);
+    const box = first.getBoundingClientRect();
+    const rows = new Map<number, { left: number; right: number }>();
+    for (const cell of first.querySelectorAll(':scope > li')) {
+      const edge = cell.getBoundingClientRect();
+      const top = Math.round(edge.top);
+      const row = rows.get(top) ?? { left: edge.left, right: edge.right };
+      rows.set(top, { left: Math.min(row.left, edge.left), right: Math.max(row.right, edge.right) });
+    }
+    for (const row of rows.values()) {
+      await expect(Math.round(row.left)).toBe(Math.round(box.left));
+      await expect(Math.round(row.right)).toBe(Math.round(box.right));
+    }
     await expectReadingOrder(first);
     await picturesDrawn(canvasElement);
   },

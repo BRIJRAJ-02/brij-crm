@@ -123,14 +123,18 @@ describe('the fields every block gained', () => {
     expect(checkBlock(draft, three, 'c')).toMatchObject({ ok: true });
   });
 
-  it('never gives a heading a window, nor a kind that spans the row a size', () => {
+  it('never gives a heading a window or a span, and gives every card a span (spec 0068)', () => {
     expect(checkBlock({ kind: 'heading', title: 'Work' }, [])).toEqual({
       ok: true,
       block: { kind: 'heading', title: 'Work' },
     });
-    expect(checkBlock({ kind: 'text', body: 'Hi', size: 'large' } as never, [])).toEqual({
+    expect(checkBlock({ kind: 'banner', text: 'Sale', size: 'wide' } as never, [])).toEqual({
       ok: true,
-      block: { kind: 'text', body: 'Hi' },
+      block: { kind: 'banner', text: 'Sale' },
+    });
+    expect(checkBlock({ kind: 'text', body: 'Hi', size: 'wide' }, [])).toEqual({
+      ok: true,
+      block: { kind: 'text', body: 'Hi', size: 'wide' },
     });
   });
 
@@ -186,6 +190,7 @@ describe('Insights and the code’s style, as screens hold them', () => {
         qrStyle: () => Promise.resolve({}),
         saveQrStyle: () => Promise.resolve({}),
         upload: () => Promise.reject(new Error('unused')),
+        uploadAudio: () => Promise.reject(new Error('unused')),
       },
       mintId: () => 'm',
       now: () => clock,
@@ -220,6 +225,7 @@ describe('Insights and the code’s style, as screens hold them', () => {
         qrStyle: () => Promise.resolve(saved),
         saveQrStyle: () => save.promise,
         upload: () => Promise.reject(new Error('unused')),
+        uploadAudio: () => Promise.reject(new Error('unused')),
       },
       mintId: () => 'm',
     });
@@ -253,6 +259,7 @@ describe('Insights and the code’s style, as screens hold them', () => {
           return answer === undefined ? Promise.reject(new Error('unexpected')) : answer.promise;
         },
         upload: () => Promise.reject(new Error('unused')),
+        uploadAudio: () => Promise.reject(new Error('unused')),
       },
       mintId: () => 'm',
     });
@@ -283,6 +290,7 @@ describe('Insights and the code’s style, as screens hold them', () => {
         },
         saveQrStyle: () => Promise.resolve({}),
         upload: () => Promise.reject(new Error('unused')),
+        uploadAudio: () => Promise.reject(new Error('unused')),
       },
       mintId: () => 'm',
     });

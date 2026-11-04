@@ -50,13 +50,14 @@ import {
   createReach,
   linkExtrasOf,
   linkExtrasProblems,
+  sendAudio,
   sendPicture,
   withExtras,
   type DraftExtras,
   type DraftLinkExtras,
-  type DraftWindow,
   type ReachDraft,
 } from './reach.ts';
+import { checkBentoBlock, isBentoDraft, type BentoDraft } from './bento.ts';
 import type { Notice } from '../notice.ts';
 
 /** The blocks as a screen holds them. */
@@ -302,6 +303,12 @@ export type BlockProblems = Readonly<
       | 'caption'
       | 'text'
       | `alt:${number}`
+      // Spec 0068's cards: their own fields, and a row's or a logo's by its place (`items.0.title`).
+      | 'line'
+      | 'audio'
+      | 'address'
+      | `items.${number}.${string}`
+      | `images.${number}.${string}`
       | ProfileContactField,
       string
     >
@@ -384,27 +391,28 @@ export type BlockDraft =
     } & DraftExtras &
       DraftLinkExtras)
   | { readonly kind: 'heading'; readonly title: string; readonly group?: 'open' | 'folder' }
-  | ({ readonly kind: 'text'; readonly title?: string; readonly body: string } & DraftWindow)
+  | ({ readonly kind: 'text'; readonly title?: string; readonly body: string } & DraftExtras)
   | ({
       readonly kind: 'testimonial';
       readonly quote: string;
       readonly author: string;
       readonly role?: string;
-    } & DraftWindow)
+    } & DraftExtras)
   | ({
       readonly kind: 'faq';
       readonly title?: string;
       readonly items: readonly { readonly question: string; readonly answer: string }[];
-    } & DraftWindow)
+    } & DraftExtras)
   | ({ readonly kind: 'page'; readonly workspaceId?: string; readonly pageId?: string } & DraftExtras)
   | ({
       readonly kind: 'form';
       readonly workspaceId?: string;
       readonly formId?: string;
       readonly label: string;
-    } & DraftWindow)
-  | ({ readonly kind: 'contact' } & Readonly<Partial<Record<ProfileContactField, string>>> & DraftWindow)
-  | ReachDraft;
+    } & DraftExtras)
+  | ({ readonly kind: 'contact' } & Readonly<Partial<Record<ProfileContactField, string>>> & DraftExtras)
+  | ReachDraft
+  | BentoDraft;
 
 /** The window and size a draft carries, whatever its kind. */
 function extrasOf(draft: BlockDraft): DraftExtras {
@@ -434,6 +442,12 @@ export function checkBlock(
     draft.kind === 'banner'
   ) {
     return checkReachBlock(draft);
+  }
+  // Spec 0068's cards (AC-6808): their own fields, then the window and span every kind carries.
+  if (isBentoDraft(draft)) {
+    const own = checkBentoBlock(draft);
+    if (!own.ok) return own;
+    return withExtras(own.block, extrasOf(draft));
   }
   const base = checkOwnFields(draft, items, editing);
   const linkProblems = draft.kind === 'link' ? linkExtrasProblems(draft, items, editing) : {};
@@ -471,7 +485,7 @@ function titleProblem(title: string, kind: 'link' | 'heading'): string | undefin
  * schemas.
  */
 function checkOwnFields(
-  draft: Exclude<BlockDraft, ReachDraft>,
+  draft: Exclude<BlockDraft, ReachDraft | BentoDraft>,
   items: readonly ProfileItem[],
   editing?: string,
 ): { readonly ok: true; readonly block: ProfileBlock } | { readonly ok: false; readonly problems: BlockProblems } {
@@ -993,6 +1007,7 @@ export function openLinkPage(given: {
       qrStyle: (input) => call((options) => profile.qrStyle(input, options)),
       saveQrStyle: (input) => call((options) => profile.saveQrStyle(input, options)),
       upload: (workspace, picture) => sendPicture(given.origin, workspace, picture),
+      uploadAudio: (workspace, recording) => sendAudio(given.origin, workspace, recording),
     },
     mintId: given.mintId,
   });

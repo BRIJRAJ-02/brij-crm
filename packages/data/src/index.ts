@@ -361,6 +361,7 @@ import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/pict
 import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
+export type { BentoDraft } from './link-page/bento.ts';
 export { BRAND_QUICK_PICKS } from './brand/picks.ts';
 export type {
   DraftWindow,

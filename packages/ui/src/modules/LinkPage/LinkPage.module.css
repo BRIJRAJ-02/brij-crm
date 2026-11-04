@@ -1317,48 +1317,8 @@
     padding-inline: var(--space-12);
   }
 
-  /* A run of tiles: its own size container, so a column's width is known, and rows exactly that tall. Two columns,
-     four from the container breakpoint, in order: no dense packing, so nothing ever moves ahead of its place. */
-  .tilesRoom {
-    container-type: inline-size;
-  }
-
-  .tiles {
-    --tile-columns: 2;
-    --tile-side: calc((100cqi - (var(--tile-columns) - 1) * var(--space-8)) / var(--tile-columns));
-
-    display: grid;
-    grid-template-columns: repeat(var(--tile-columns), minmax(0, 1fr));
-    grid-auto-rows: var(--tile-side);
-    gap: var(--space-8);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  @container (inline-size >= 480px) {
-    .tiles {
-      --tile-columns: 4;
-    }
-  }
-
-  .tileItem {
-    display: flex;
-    min-inline-size: 0;
-    min-block-size: 0;
-  }
-
-  .tileItem[data-size='wide'] {
-    grid-column: span 2;
-  }
-
-  .tileItem[data-size='large'] {
-    grid-column: span 2;
-    grid-row: span 2;
-  }
-
-  /* A link's or booking page's tile: the row's own card (`.block`), stood on end, its tile at the top or its picture
-     filling it, its words at the foot. */
+  /* A link's or booking page's tile in a bento cell (spec 0068): the row's own card (`.block`), stood on end, its tile
+     at the top or its picture filling it, its words at the foot. */
   .block[data-card='tile'] {
     flex-direction: column;
     align-items: stretch;
@@ -1411,6 +1371,14 @@
   .holdCard[data-times] {
     gap: var(--space-12);
     padding: var(--space-12);
+  }
+
+  /* The times card's week strip (spec 0068): its padding, a label's line, the gap and a day's circle. */
+  .holdWeek {
+    display: flex;
+    block-size: calc(var(--space-8) * 2 + var(--space-16) + var(--space-4) + var(--size-input) + var(--space-6));
+    border-radius: var(--radius-lg);
+    overflow: hidden;
   }
 
   .holdStage {
@@ -1632,6 +1600,15 @@
     aspect-ratio: 4 / 1;
   }
 
+  /* Split with a cover (AC-6801): the band leads, the face and words wrap under it, the face over the band's foot. */
+  .root[data-template='split'] .hero[data-cover] {
+    flex-wrap: wrap;
+  }
+
+  .root[data-template='split'] .cover {
+    flex-basis: 100%;
+  }
+
   /* Every template: rows press in and lift a touch under the pointer (AC-6803). */
   .root[data-template] .block {
     transition:
@@ -1736,6 +1713,11 @@
       flex-direction: column;
       gap: var(--space-20);
       min-inline-size: 0;
+    }
+
+    /* Split leads with its cover (AC-6801): the photo at the panel's head, the face over its foot. */
+    .root[data-template='split']:not([data-preview], [data-thumbnail], [data-draft]) .cover {
+      aspect-ratio: 4 / 3;
     }
 
     /* The panel is narrow: the face sits over the words, read from its edge. */
