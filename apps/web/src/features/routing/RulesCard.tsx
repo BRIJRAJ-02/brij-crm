@@ -413,7 +413,10 @@ function RuleReport({ data, slug, surface, rules }: RuleReportProps) {
   );
 }
 
-/** A rule's one line: "When <conditions>. <route>.", or the route alone while no condition is complete yet. */
+/**
+ * A rule's one line: "When <conditions>. <route>.", or, while no condition is complete yet, that it isn't finished,
+ * never the route alone, which would read as sending everyone.
+ */
 function whenLine(conditions: string | undefined, route: string): string {
-  return conditions === undefined ? `${route}.` : `${strings.when} ${conditions}. ${route}.`;
+  return conditions === undefined ? strings.ruleUnfinished : `${strings.when} ${conditions}. ${route}.`;
 }

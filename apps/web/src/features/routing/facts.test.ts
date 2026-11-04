@@ -146,6 +146,17 @@ describe('one click rules (T15)', () => {
     // A plain number has no range to pick from: "is answered" needs no value.
     const size = questionFacts([question({ id: 'q4', key: 'size', label: 'Team size', answerType: 'number' })]);
     expect(readyConditions(size).rules[0]).toEqual({ key: 'size', op: 'is_answered' });
+    // "is answered" on a required question is always true: an optional one is picked, else the rule waits for a value.
+    const contact = questionFacts([
+      question({ id: 'q7', key: 'email', label: 'Work email', answerType: 'email', required: true }),
+      question({ id: 'q8', key: 'company', label: 'Company', answerType: 'short_text' }),
+      question({ id: 'q9', key: 'name', label: 'Your name', answerType: 'short_text', required: true }),
+    ]);
+    expect(readyConditions(contact).rules[0]).toEqual({ key: 'company', op: 'is_answered' });
+    const onlyRequired = questionFacts([
+      question({ id: 'q7', key: 'email', label: 'Work email', answerType: 'email', required: true }),
+    ]);
+    expect(readyConditions(onlyRequired).rules[0]).toEqual({ key: 'email', op: 'is' });
     // The step's own number question wins over an earlier choice elsewhere in the form.
     const mixed = questionFacts([
       question({ id: 'q5', key: 'plan', label: 'Plan', answerType: 'choice', choices: ['Free', 'Pro'] }),

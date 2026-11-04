@@ -34,6 +34,8 @@ export interface Fact {
   readonly group?: string;
   /** A rating's or a scale's lowest and highest answers, so a ready rule can name a real number on it. */
   readonly range?: { readonly from: number; readonly to: number };
+  /** A question every visitor must answer: "is answered" on it is always true, so a ready rule never picks it so. */
+  readonly isRequired?: boolean;
 }
 
 /** The comparisons each kind offers, in the order the Select lists them. */
@@ -86,10 +88,14 @@ export function readyConditions(facts: readonly Fact[], prefer: ReadonlySet<stri
   const hasOptions = (fact: Fact) => (fact.options?.length ?? 0) > 0;
   const preferred = facts.filter((fact) => prefer.has(fact.key));
   // A choice is the likeliest thing to branch on; then a number (a score, a rating); then any question at all.
+  // An optional question before a required one: "is answered" on a required question is always true.
+  const isOptional = (each: Fact) => each.isRequired !== true;
   const fact =
     preferred.find(hasOptions) ??
     preferred.find((each) => each.kind === 'number') ??
     facts.findLast(hasOptions) ??
+    preferred.find(isOptional) ??
+    facts.findLast(isOptional) ??
     preferred[0] ??
     facts.at(-1);
   return { join: 'all', rules: [{ key: fact?.key ?? '', ...readyCompare(fact) }] };
@@ -104,54 +110,60 @@ function readyCompare(fact: Fact | undefined): { readonly op: ConditionOp; reado
     // The bottom part of the range, about two thirds of the way up: 7 on 0 to 10, 4 on 1 to 5.
     return { op: 'less_than', value: String(range.from + Math.ceil((range.to - range.from) * 0.65)) };
   }
-  return { op: 'is_answered' };
+  // A required question is always answered, so the rule waits for a value to be typed rather than never filtering.
+  return fact?.isRequired === true ? { op: 'is' } : { op: 'is_answered' };
 }
 
 /** The facts a form's questions give: every question but a file one, in order. */
 export function questionFacts(questions: readonly FormQuestion[]): readonly Fact[] {
-  return questions.flatMap((question): Fact[] => {
-    const label = question.label.trim() === '' ? question.key : question.label.trim();
-    switch (question.answerType) {
-      // A file, an address, a date and time, a signature and a ranking have nothing a condition compares (spec 0063).
-      case 'file':
-      case 'address':
-      case 'datetime':
-      case 'signature':
-      case 'ranking':
-        return [];
-      case 'choice':
-      case 'dropdown':
-      case 'multi_select':
-        return [
-          {
-            key: question.key,
-            label,
-            kind: 'choice',
-            options: (question.choices ?? [])
-              .filter((choice) => choice.trim() !== '')
-              .map((choice) => ({ id: choice, label: choice })),
-          },
-        ];
-      case 'yes_no':
-      case 'checkbox':
-        return [{ key: question.key, label, kind: 'yes_no', options: yesNo() }];
-      case 'number':
-        return [{ key: question.key, label, kind: 'number' }];
-      case 'rating':
-        return [{ key: question.key, label, kind: 'number', range: { from: 1, to: 5 } }];
-      case 'scale':
-        return [
-          {
-            key: question.key,
-            label,
-            kind: 'number',
-            range: { from: question.options?.from ?? 0, to: question.options?.to ?? 10 },
-          },
-        ];
-      default:
-        return [{ key: question.key, label, kind: 'text' }];
-    }
-  });
+  return questions.flatMap((question) =>
+    factsOfQuestion(question).map((fact) => (question.required ? { ...fact, isRequired: true } : fact)),
+  );
+}
+
+/** One question's fact (none for a type a condition can't compare). */
+function factsOfQuestion(question: FormQuestion): Fact[] {
+  const label = question.label.trim() === '' ? question.key : question.label.trim();
+  switch (question.answerType) {
+    // A file, an address, a date and time, a signature and a ranking have nothing a condition compares (spec 0063).
+    case 'file':
+    case 'address':
+    case 'datetime':
+    case 'signature':
+    case 'ranking':
+      return [];
+    case 'choice':
+    case 'dropdown':
+    case 'multi_select':
+      return [
+        {
+          key: question.key,
+          label,
+          kind: 'choice',
+          options: (question.choices ?? [])
+            .filter((choice) => choice.trim() !== '')
+            .map((choice) => ({ id: choice, label: choice })),
+        },
+      ];
+    case 'yes_no':
+    case 'checkbox':
+      return [{ key: question.key, label, kind: 'yes_no', options: yesNo() }];
+    case 'number':
+      return [{ key: question.key, label, kind: 'number' }];
+    case 'rating':
+      return [{ key: question.key, label, kind: 'number', range: { from: 1, to: 5 } }];
+    case 'scale':
+      return [
+        {
+          key: question.key,
+          label,
+          kind: 'number',
+          range: { from: question.options?.from ?? 0, to: question.options?.to ?? 10 },
+        },
+      ];
+    default:
+      return [{ key: question.key, label, kind: 'text' }];
+  }
 }
 
 /** Yes and No, as a yes or no answer compares. */

@@ -27,6 +27,8 @@ export const strings = {
   // Conditions
   op: (op: ConditionOp) => OPS[op],
   when: 'When',
+  /** A rule whose conditions still need a value: said instead of its route, which would read as everyone. */
+  ruleUnfinished: 'Not finished: give each condition a value.',
   and: 'and',
   or: 'or',
   join: 'Match',
