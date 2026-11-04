@@ -279,7 +279,7 @@ test.describe('embeds and the site’s own form', () => {
     await visitor.locator('input[name="email"]').fill(`grace-${tag}@example.com`);
     await visitor.waitForTimeout(2_500);
     await visitor.getByRole('button', { name: 'Send' }).click();
-    await expect(visitor.getByRole('status')).toHaveText('Thank you. That is with us.');
+    await expect(visitor.getByRole('status')).toHaveText('Thanks, we got it.');
     const listed = await rpc<{ items: { id: string }[] }>(page, 'submissions/list', { workspace, formId: live.id });
     const first = listed.items[0];
     if (first === undefined) throw new Error('The own form’s submission did not arrive.');

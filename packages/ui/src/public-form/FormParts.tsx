@@ -193,7 +193,7 @@ export function FormHeader({
 
 /**
  * The thank you, in the booking confirmation's shape: the green check, the heading, a muted line, what was sent,
- * then one next step, Send another.
+ * and an ending's own button when it has one; nothing to send again.
  */
 export function FormThanks({
   form,
@@ -228,9 +228,7 @@ export function FormThanks({
           {button.label}
         </ButtonLink>
       )}
-      <Button variant="ghost" onPress={state.sendAnother}>
-        {state.words.sendAnother}
-      </Button>
+      {/* No Send another (T23, the audit's slice 8, Tally's way): a visitor who sent it is done. */}
     </FormConfirmation>
   );
 }
@@ -315,6 +313,7 @@ export function QuestionSlot({
       data-question={question.key}
       id={`question-${question.key}`}
       className={styles.question}
+      data-invalid={state.errors[question.key] === undefined ? undefined : true}
       onBlur={(event) => state.blur(question, event)}
     >
       {children}
@@ -438,10 +437,13 @@ export function FormMessage({
   mode,
   title,
   text,
+  retry,
 }: {
   readonly mode: HostedFormMode;
   readonly title: string;
   readonly text?: string;
+  /** A load that failed offers Try again (the audit's slice 8): a way on, never a dead end. */
+  readonly retry?: { readonly label: string; readonly onRetry: () => void };
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
   return (
@@ -452,6 +454,11 @@ export function FormMessage({
         </Heading>
         {text !== undefined && <p className={styles.subheading}>{text}</p>}
       </header>
+      {retry !== undefined && (
+        <Button variant="secondary" onPress={retry.onRetry}>
+          {retry.label}
+        </Button>
+      )}
     </FormGround>
   );
 }

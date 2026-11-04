@@ -1,5 +1,5 @@
 import type { PublicQuestion } from '@crm/contracts/forms';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { ProgressBar } from '../atoms/ProgressBar/ProgressBar.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -51,6 +51,30 @@ function takesEnter(question: PublicQuestion | undefined): boolean {
  */
 const ADVANCE_PAUSE_MS = 400;
 
+/**
+ * Whether a key press asks for the step before (T23): the up arrow on a one line field or a button (never in a
+ * list, a choice group or a long answer, which use the arrows themselves), or Shift+Tab from the step's first
+ * control, where the browser would otherwise leave the form.
+ */
+function backByKey(event: KeyboardEvent<HTMLFormElement>): boolean {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return false;
+  if (event.key === 'ArrowUp' && !event.altKey && !event.metaKey && !event.shiftKey) {
+    const isLine = target instanceof HTMLInputElement && !['radio', 'checkbox', 'range'].includes(target.type);
+    const inList = target.closest('[role="radiogroup"], [role="listbox"], [role="combobox"], [role="grid"]') !== null;
+    return (
+      (isLine || target instanceof HTMLButtonElement) && !inList && target.getAttribute('aria-expanded') !== 'true'
+    );
+  }
+  if (event.key === 'Tab' && event.shiftKey) {
+    const first = event.currentTarget.querySelector<HTMLElement>(
+      'input:not([type="hidden"]), textarea, select, button, [tabindex="0"]',
+    );
+    return first === target;
+  }
+  return false;
+}
+
 /** True when the visitor asked for less motion. */
 function prefersStill(): boolean {
   return globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -87,9 +111,11 @@ export function HostedFormSteps({
   // A resumed fill opens on the step it was left on (AC-6319), found by id among the steps this path shows.
   // A step the answers have since taken away, or an id from an older version, leaves them at the first step.
   const [shownIndex, setIndex] = useState(0);
-  // How the visitor last moved: a pointer's move eases the next question in, a key's shows it at once.
-  const [moved, setMoved] = useState<'pointer' | 'key' | undefined>(undefined);
+  // Which way the visitor last moved (T23): the next step rises in, Back comes down; none before the first move.
+  const [moved, setMoved] = useState<'forward' | 'back' | undefined>(undefined);
   const hasMoved = moved !== undefined;
+  // A move under way: the leaving step is animating out, so a second press waits for it.
+  const leaving = useRef(false);
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
   const [focusesStep, setFocusesStep] = useState(false);
   const [round, setRound] = useState(0);
@@ -169,10 +195,40 @@ export function HostedFormSteps({
   }, [index]);
 
   const go = (next: number) => {
+    if (leaving.current) return;
     setPicks(0);
-    setMoved(byPointer.current ? 'pointer' : 'key');
-    setFocusesStep(true);
-    setIndex(next);
+    const arrive = () => {
+      leaving.current = false;
+      setMoved(next < index ? 'back' : 'forward');
+      setFocusesStep(true);
+      setIndex(next);
+    };
+    // The step on screen leaves the way the visitor is going (up on, down back), quickly, before the next one
+    // comes in (T23, Typeform): opacity and transform through the Web Animations API, timed by the motion tokens.
+    // Under reduced motion it fades only; with no animation support it simply goes.
+    const leavingForm = formRef.current;
+    if (leavingForm === null || typeof leavingForm.animate !== 'function') {
+      arrive();
+      return;
+    }
+    const tokens = getComputedStyle(leavingForm);
+    const distance = tokens.getPropertyValue('--space-16').trim() || '0px';
+    const away = next < index ? distance : `calc(-1 * ${distance})`;
+    leaving.current = true;
+    const exit = leavingForm.animate(
+      prefersStill()
+        ? [{ opacity: 1 }, { opacity: 0 }]
+        : [
+            { opacity: 1, transform: 'none' },
+            { opacity: 0, transform: `translateY(${away})` },
+          ],
+      {
+        duration: Number.parseFloat(tokens.getPropertyValue('--duration-exit')) || 0,
+        easing: tokens.getPropertyValue('--ease-out').trim() || 'ease-out',
+        fill: 'forwards',
+      },
+    );
+    exit.finished.then(arrive, arrive);
   };
   // A one at a time choice goes on by itself once picked (AC-6305), through the form's own submit so the same check
   // runs; a change of mind before the pause ends starts it again, and leaving the question drops it. Only a pick by
@@ -241,7 +297,7 @@ export function HostedFormSteps({
     body = (
       <>
         {isOpen && groups.length > 0 ? (
-          <div className={styles.line}>
+          <div className={styles.line} data-mode={mode}>
             <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} isLabelHidden />
           </div>
         ) : null}
@@ -273,7 +329,7 @@ export function HostedFormSteps({
           data-layout={layout}
           noValidate
           ref={formRef}
-          data-moved={moved === 'pointer' || undefined}
+          data-enter={moved}
           // Capture: a control's press handling keeps these from bubbling.
           onPointerDownCapture={() => {
             byPointer.current = true;
@@ -282,6 +338,13 @@ export function HostedFormSteps({
             byPointer.current = false;
           }}
           onKeyDown={(event) => {
+            // Back by key (T23, Typeform): the up arrow from a one line field or a button, and Shift+Tab from the
+            // step's first control, go to the step before. Lists, choices and long answers keep their own arrows.
+            if (index > 0 && !preview && backByKey(event)) {
+              event.preventDefault();
+              go(index - 1);
+              return;
+            }
             if (!isOpen || event.key !== 'Enter' || event.nativeEvent.isComposing) return;
             // One at a time, Enter goes on from a choice too (AC-1034), and from a long answer, where Shift and Enter
             // breaks the line (AC-6305); a browser submits only from a one line field.
@@ -352,7 +415,7 @@ export function HostedFormSteps({
             );
           })}
           {isLast && <FormTrap form={form} state={state} />}
-          <div className={styles.actions}>
+          <div className={styles.actions} data-layout={layout}>
             {!isOpen && <ErrorSummary state={state} among={step.questions} />}
             <FormAlert state={state} />
             <div className={styles.buttons} data-layout={layout}>

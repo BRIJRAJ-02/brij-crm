@@ -199,6 +199,32 @@
     min-inline-size: 0;
   }
 
+  /* A required question left empty shakes once, gently, beside its one line (T23, Typeform's nudge): transform only,
+     and not at all under reduced motion, where the line alone says it. */
+  .question[data-invalid] {
+    animation: nudge var(--duration-modal) var(--ease-out);
+  }
+
+  @keyframes nudge {
+    25% {
+      translate: calc(-1 * var(--space-6)) 0;
+    }
+
+    50% {
+      translate: var(--space-4) 0;
+    }
+
+    75% {
+      translate: calc(-1 * var(--space-2)) 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .question[data-invalid] {
+      animation: none;
+    }
+  }
+
   /* The loading shape's questions column. It keeps its own copy of the Classic
      form's column (HostedForm's `.form`) rather than reaching into it, because
      one component owns its styles (`pnpm house-rules`). The places the
@@ -307,6 +333,12 @@
 
   .root[data-mode='page'] .foot {
     margin-block-start: auto;
+  }
+
+  /* One at a time on its own page (T23, Typeform): the question block sits in the middle of the window at every
+     width, the foot at the window's foot. */
+  .root[data-mode='page'][data-frame='open'] .card {
+    margin-block: auto;
   }
 
   @media (width >= 1024px) {

@@ -15,7 +15,7 @@ import type { CaptureListStore } from '../captures/list.ts';
 /**
  * What a signup says once someone has signed up. Without its own, a form with an email question thanks them as an
  * enquiry, "We will come back to you at the address you gave", which a newsletter never does (crm-f7's link page
- * walk, 28 Oct 2026). The heading above it ("Thank you. That is with us.") is every form's.
+ * walk, 28 Oct 2026). The heading above it ("Thanks, we got it.") is every form's.
  */
 export const SIGNUP_THANKS = 'You’re on the list.';
 

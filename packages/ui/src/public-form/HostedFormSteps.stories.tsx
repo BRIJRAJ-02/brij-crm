@@ -133,11 +133,9 @@ export const LastStep: Story = {
     await waitFor(() => expect(canvas.getByRole('button', { name: 'Send enquiry' })).toBeInTheDocument());
     await userEvent.click(canvas.getByRole('radio', { name: '5k to 20k' }));
     await userEvent.click(canvas.getByRole('button', { name: 'Send enquiry' }));
-    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
-    // Send another starts again from the first step.
-    await userEvent.click(canvas.getByRole('button', { name: 'Send another' }));
-    await waitFor(() => expect(canvas.getByRole('progressbar', { name: 'Step 1 of 3' })).toBeInTheDocument());
-    await expect(canvas.getByLabelText('Your name')).toHaveValue('');
+    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thanks, we got it.' })).toHaveFocus());
+    // Nothing to send again (T23).
+    await expect(canvas.queryByRole('button', { name: 'Send another' })).toBeNull();
   },
 };
 

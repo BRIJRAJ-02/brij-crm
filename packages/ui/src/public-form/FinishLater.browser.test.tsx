@@ -55,7 +55,7 @@ const saver = () => ({
   },
 });
 
-it('keeps what is typed and shows the link back, with the day it stops working', async () => {
+it('keeps what is typed and offers the ways back, with the day it stops working and no raw link (T23)', async () => {
   drawn = mountHostedForm(host, FORM, { mode: 'page', ...saver() });
   const name = host.querySelector('input');
   if (name === null) throw new Error('the form drew no input');
@@ -65,11 +65,31 @@ it('keeps what is typed and shows the link back, with the day it stops working',
   await expect.poll(() => kept.length).toBe(1);
   expect(kept[0]?.answers.name).toBe('Ada');
 
-  await expect.element(page.getByText('Come back to this')).toBeInTheDocument();
-  // The link is on screen to copy by hand, whatever the browser allows the clipboard to do.
-  await expect.element(page.getByText(/\?resume=aaa/u)).toBeInTheDocument();
+  // A quiet tick and Saved, and the ways back: Copy link carries the link, which never shows raw.
+  await expect.element(page.getByText('Saved', { exact: true })).toBeInTheDocument();
+  await expect.element(page.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+  expect(host.textContent).not.toContain('?resume=');
   // The day it stops working, in words, not an ISO timestamp.
   await expect.element(page.getByText(/December/u)).toBeInTheDocument();
+  // Closed again by Keep filling it in; Finish later is back, one quiet link.
+  await userEvent.click(page.getByRole('button', { name: 'Keep filling it in' }));
+  await expect.element(page.getByRole('button', { name: 'Finish later' })).toBeInTheDocument();
+});
+
+it('never opens the ways back on its own: a save as they move on says Saved alone (T23)', async () => {
+  const stepped: PublicForm = {
+    ...FORM,
+    layout: 'conversational',
+  };
+  drawn = mountHostedForm(host, stepped, { mode: 'page', ...saver() });
+  await expect.poll(() => host.querySelectorAll('input').length).toBeGreaterThan(0);
+  const name = host.querySelector('input');
+  if (name === null) throw new Error('the form drew no input');
+  await userEvent.fill(name, 'Ada');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => kept.length).toBe(1);
+  await expect.element(page.getByText('Saved', { exact: true })).toBeInTheDocument();
+  expect(page.getByRole('button', { name: 'Copy link' }).query()).toBeNull();
 });
 
 it('draws no Finish later on a form whose page keeps nothing', async () => {
