@@ -6,13 +6,7 @@
 // or a two column photo grid; the allergens this menu names; a dish's sheet (a bottom sheet on a phone, a centred
 // card on a wider screen); and Your selection behind a bar that rises once something is picked. Everything comes in
 // through props: the page's entry reads the menu and keeps the selection.
-import {
-  EU_ALLERGENS,
-  formatPrice,
-  nextOpening,
-  openAt,
-  servingAt,
-} from '@crm/contracts/menu';
+import { EU_ALLERGENS, formatPrice, nextOpening, openAt, servingAt } from '@crm/contracts/menu';
 import type { PublicMenu, SnapshotItem, SnapshotSection, SnapshotSubsection } from '@crm/contracts';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { UNSAFE_PortalProvider } from 'react-aria';
@@ -144,7 +138,6 @@ export function MenuList({
   const [menuId, setMenuId] = useState<string | undefined>(menus[0]?.menu.id);
   const current = menus.find((each) => each.menu.id === menuId) ?? menus[0];
 
-
   // The dish whose sheet is open, kept while the sheet leaves so its words stay as it goes.
   const [opened, setOpened] = useState<{ readonly id: string; readonly isOpen: boolean } | undefined>(
     openItemId === undefined ? undefined : { id: openItemId, isOpen: true },
@@ -157,10 +150,25 @@ export function MenuList({
   const next = status.open ? undefined : nextOpening(place.hours, now, place.timeZone);
   const address = [place.addressLine, place.city, place.postcode].filter((part) => part !== undefined).join(', ');
 
-  const sections = current?.menu.sections ?? [];
+  const sections = useMemo(() => current?.menu.sections ?? [], [current]);
   // One section at a time, chosen from the pills (checklabs' categories); a menu changed under it starts at its first.
   const [sectionId, setSectionId] = useState<string | undefined>(undefined);
   const shownSection = sections.find((section) => section.id === sectionId) ?? sections[0];
+  // A link to a section (`#h-<id>`, a section's or sub section's heading) opens its pill and scrolls to it (owner, 5
+  // Nov 2026), on the first draw and whenever the hash changes; a sub section opens the section that holds it.
+  useEffect(() => {
+    const follow = () => {
+      const id = decodeURIComponent(window.location.hash.replace(/^#h-/, ''));
+      if (id === '' || id === window.location.hash) return;
+      const owner = sections.find((section) => section.id === id || section.sections.some((sub) => sub.id === id));
+      if (owner === undefined) return;
+      setSectionId(owner.id);
+      requestAnimationFrame(() => document.getElementById(`h-${id}`)?.scrollIntoView({ block: 'start' }));
+    };
+    follow();
+    window.addEventListener('hashchange', follow);
+    return () => window.removeEventListener('hashchange', follow);
+  }, [sections]);
   const headingId = useId();
   // The allergens this menu's dishes name, in the EU list's order (ported from checklabs' allergen footer).
   const menuAllergens = EU_ALLERGENS.filter((code) =>
@@ -213,8 +221,11 @@ export function MenuList({
     );
   let drawn = 2;
 
-  /** One section's dishes: its own first (the pill names it), then each sub section under its heading. */
-  const sectionBody = (section: SnapshotSection) => {
+  /**
+   * One section's dishes: its own first, then each sub section under its heading. Under the pills the pill names the
+   * section, so its own heading is left out and its sub sections take the second level.
+   */
+  const sectionBody = (section: SnapshotSection, isTabbed: boolean) => {
     const blocks = [
       section as SnapshotSubsection,
       ...section.sections.filter((sub) => sub.itemIds.some((id) => menu.menu.items[id] !== undefined)),
@@ -223,7 +234,14 @@ export function MenuList({
       <section className={styles.section} aria-label={section.name}>
         {blocks.map((block, index) => (
           <div key={block.id} className={index === 0 ? styles.block : styles.sub}>
-            <SectionHead section={block} level={index === 0 ? 2 : 3} menu={menu} now={now} when={when} />
+            <SectionHead
+              section={block}
+              level={index === 0 ? 2 : isTabbed ? 2 : 3}
+              isNamed={!(isTabbed && index === 0)}
+              menu={menu}
+              now={now}
+              when={when}
+            />
             <ul className={styles.items} data-layout={block.layout}>
               {block.itemIds
                 .map((id) => menu.menu.items[id])
@@ -375,7 +393,7 @@ export function MenuList({
                 <p>{strings.noMenu}</p>
               </div>
             ) : sections.length === 1 || shownSection === undefined ? (
-              sections.map((section) => <div key={section.id}>{sectionBody(section)}</div>)
+              sections.map((section) => <div key={section.id}>{sectionBody(section, false)}</div>)
             ) : (
               <Tabs
                 label={strings.sections}
@@ -386,7 +404,7 @@ export function MenuList({
               >
                 {sections.map((section) => (
                   <TabPanel key={section.id} id={section.id}>
-                    {sectionBody(section)}
+                    {sectionBody(section, true)}
                   </TabPanel>
                 ))}
               </Tabs>
@@ -457,12 +475,15 @@ export function MenuList({
 function SectionHead({
   section,
   level,
+  isNamed,
   menu,
   now,
   when,
 }: {
   readonly section: SnapshotSubsection;
   readonly level: 2 | 3;
+  /** False under the pills, where the pill already names the section. */
+  readonly isNamed: boolean;
   readonly menu: PublicMenu;
   readonly now: Date;
   readonly when: (instant: Date) => string;
@@ -471,9 +492,13 @@ function SectionHead({
   const serving = servingAt(section.serving, now, menu.place.timeZone);
   return (
     <div className={styles.sectionHead}>
-      <Heading className={styles.heading} data-level={level} id={`h-${section.id}`}>
-        {section.name}
-      </Heading>
+      {isNamed ? (
+        <Heading className={styles.heading} data-level={level} id={`h-${section.id}`}>
+          {section.name}
+        </Heading>
+      ) : (
+        <span id={`h-${section.id}`} />
+      )}
       {section.description === undefined ? null : <p className={styles.sectionAbout}>{section.description}</p>}
       {serving.now ? null : (
         <p className={styles.sectionNote}>
@@ -500,11 +525,11 @@ function AddControl({
   if (count === 0)
     return (
       <span className={styles.add}>
-        <Button variant="secondary" icon="plus" isRound label={strings.addOne(item.name)} onPress={onAdd} />
+        <Button variant="primary" icon="plus" isRound label={strings.addOne(item.name)} onPress={onAdd} />
       </span>
     );
   return (
-    <span className={styles.add} role="group" aria-label={strings.quantityOf(item.name)}>
+    <span className={styles.add} data-stepper="" role="group" aria-label={strings.quantityOf(item.name)}>
       <Button variant="ghost" icon="minus" isRound label={strings.removeOne(item.name)} onPress={onRemove} />
       <span className={styles.addCount}>
         <NumberPop value={String(count)} />
@@ -561,7 +586,15 @@ function ItemCard({
           </span>
           {item.description === undefined ? null : <span className={styles.itemAbout}>{item.description}</span>}
           {price === undefined ? null : <span className={styles.price}>{price}</span>}
-          {marks.length === 0 ? null : <span className={styles.marks}>{marks.join(' · ')}</span>}
+          {marks.length === 0 ? null : (
+            <span className={styles.marks}>
+              {marks.map((mark) => (
+                <span key={mark} className={styles.markPill}>
+                  {mark}
+                </span>
+              ))}
+            </span>
+          )}
         </span>
       </button>
       {add}

@@ -295,6 +295,7 @@
      row that scrolls sideways; the chosen one filled in the text colour, the fill (the indicator) sliding between
      them under the words. No hairline under the row. */
   .bar[data-variant='pills'] {
+    margin-block-end: var(--space-16);
     border-block-end: none;
   }
 

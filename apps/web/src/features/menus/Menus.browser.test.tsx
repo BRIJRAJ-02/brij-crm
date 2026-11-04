@@ -297,18 +297,21 @@ describe('the guest menu', () => {
           { data: {}, pattern: '/m/$key', at: '/m/AbCdEfGhIjKlMnOp' },
         );
         applyTheme(theme);
-        await expect.element(page.getByRole('heading', { level: 1, name: 'Somewhere Nowhere' })).toBeInTheDocument();
+        await expect.element(page.getByRole('heading', { level: 1, name: 'Dinner' })).toBeInTheDocument();
         await expect.element(page.getByRole('button', { name: /Oysters/ }).getByText('Sold out')).toBeVisible();
         expect(await axeViolations()).toEqual([]);
         await shoot('guest', theme, width);
+        // The sections are pills, one at a time (checklabs'): the bream is under Mains.
+        await userEvent.click(page.getByRole('tab', { name: 'Mains' }));
         await userEvent.click(page.getByRole('button', { name: /^Wood fired bream/ }));
         const sheet = page.getByRole('dialog', { name: 'Wood fired bream' });
         await expect.element(sheet).toBeVisible();
-        await expect.element(sheet.getByText(/Allergens: fish/)).toBeVisible();
+        await expect.element(sheet.getByRole('heading', { name: 'Allergens' })).toBeVisible();
+        await expect.element(sheet.getByText('fish', { exact: true })).toBeVisible();
         // By keyboard, as a guest using one would: the size group holds Half, and the arrow moves to Whole.
         (sheet.getByRole('radio', { name: /Half/ }).element() as HTMLElement).focus();
         await userEvent.keyboard('{ArrowDown}');
-        await expect.element(sheet.getByRole('button', { name: /Add to your picks · £26.00/ })).toBeVisible();
+        await expect.element(sheet.getByRole('button', { name: /Add to your selection · £26.00/ })).toBeVisible();
         expect(await axeViolations()).toEqual([]);
         await shoot('guest-sheet', theme, width);
         await userEvent.keyboard('{Escape}');

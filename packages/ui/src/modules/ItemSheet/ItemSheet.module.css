@@ -1,5 +1,5 @@
 /* A dish's sheet and Your picks (spec 0065, H1), after the checklabs guest app: the photo first at 4:3, the name in
-   the menu's display face with the price, the words, the sizes and option groups as cards, allergens in words, then a
+   the menu's display face with the price, the words, the sizes and option groups as cards, allergens as chips under their label, then a
    foot that stays in view (a quantity pill and the full width Add carrying the live price). Your picks: one row per
    line (thumb, words, price, stepper), Undo after a removal, the bill, and that nothing is sent. Colours are the
    library's own names, which the guest menu points at its look, so the sheet wears the menu's warm card. */
@@ -107,13 +107,22 @@
     gap: var(--space-8);
   }
 
+  .allergenBlock {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
   .allergens {
     margin: 0;
-    padding: var(--space-12);
-    border-radius: var(--radius-lg);
-    background: var(--surface-sunken);
     color: var(--text-secondary);
     font: var(--text-label);
+  }
+
+  /* A "may contain" chip: the same chip, outlined, so it reads lighter than a "contains" one. */
+  .dietMark[data-may] {
+    border: var(--border-width-hairline) dashed var(--border);
+    background: transparent;
   }
 
   /* The foot: stays in view at the bottom of the sheet, over the words, on the sheet's own card; the reason Add waits

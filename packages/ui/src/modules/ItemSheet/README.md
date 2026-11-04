@@ -1,6 +1,6 @@
 # ItemSheet
 
-A dish's sheet on the guest menu, and Your picks (spec 0065, H1, AC-6529, AC-6530, AC-6533), after the checklabs
+A dish's sheet on the guest menu, and Your selection (spec 0065, H1, AC-6529, AC-6530, AC-6533), after the checklabs
 guest app's flow. Both are the body of a `Modal`, which MenuList opens: `sheet-card` for a dish, `sheet-side` for the
 picks.
 
@@ -17,7 +17,7 @@ ChoiceChips can't carry a price beside each choice.
   <ItemSheet item={item} menu={menu} isSoldOut={false} photoHref={photoHref} onPick={addPick} />
 </Modal>
 
-<Modal variant="sheet-side" title="Your picks" isOpen onOpenChange={close}>
+<Modal variant="sheet-side" title="Your selection" isOpen onOpenChange={close}>
   <PicksSheet menu={menu} picks={picks} onPicksChange={keepPicks} photoHref={photoHref} />
 </Modal>
 ```
@@ -26,11 +26,11 @@ ChoiceChips can't carry a price beside each choice.
   £9.50" with sizes) or Sold out, calories, the words, the dietary marks, then the sizes as radio cards (the first
   chosen) and each option group as cards with its price difference ("(+£0.50)") and its rule ("Choose up to 2 ·
   Required"), then "Allergens: milk, celery." in words. The foot stays in view: a quantity pill (1 to 99, − off at 1,
-  the count popping as it changes) and the full width "Add to your picks" carrying the live price (size or base, plus
+  the count popping as it changes) and the full width "Add to your selection" carrying the live price (size or base, plus
   options, times the quantity) at its end, popping as it changes (Button `amount`). A group whose choices aren't
   allowed yet (`choicesAllowed`: its min, its max) holds Add off with one line saying why ("Choose your sides to add
   this."). Without `onPick` (the editor's preview), for a sold out dish or one with no price there is no foot.
-- `PicksSheet`: Your picks and their count, one row per line (thumb, name, chosen size and options, line price, a
+- `PicksSheet`: Your selection and their count, one row per line (thumb, name, chosen size and options, line price, a
   stepper where − at 1 is a bin that removes it), grouped under their menu's name when they come from more than one
   menu. A removal or Clear all leaves one line with Undo, which puts the picks back as they were. Then the bill: the
   subtotal (when service is added), "Includes 20% tax" (the tax inside the prices), "Service 12.5%" on top, and the

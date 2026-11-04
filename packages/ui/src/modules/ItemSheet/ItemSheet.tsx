@@ -1,6 +1,6 @@
 // A dish's sheet and Your picks (spec 0065, H1, AC-6529, AC-6530, AC-6533), after the checklabs guest app's flow: what
 // a guest sees when they tap a dish (its photo, name, price, words, sizes and option groups as cards with their price,
-// allergens in words, calories, then a foot that stays in view with the quantity and "Add to your picks" carrying the
+// allergens in words, calories, then a foot that stays in view with the quantity and "Add to your selection" carrying the
 // live price) and the list of their picks (each line with its choices, price and stepper, Undo after a removal, the
 // total with any tax inside it and service on top). Both are the body of a `Modal` (`sheet-card`, `sheet-side`), which
 // holds focus and closes on Escape; data comes in through props, and picks are the caller's to keep.
@@ -197,16 +197,26 @@ export function ItemSheet({
           </fieldset>
         );
       })}
-      <p className={styles.allergens}>
-        {contains.length === 0 && may.length === 0
-          ? strings.noAllergens
-          : [
-              contains.length === 0 ? '' : strings.allergensLine(contains),
-              may.length === 0 ? '' : strings.mayContainLine(may),
-            ]
-              .filter((part) => part !== '')
-              .join(' ')}
-      </p>
+      {/* ALLERGENS, then each as a chip (checklabs' dish sheet); "may contain" ones say so on their chip. */}
+      <div className={styles.allergenBlock}>
+        <h3 className={styles.groupName}>{strings.allergens}</h3>
+        {contains.length === 0 && may.length === 0 ? (
+          <p className={styles.allergens}>{strings.noAllergens}</p>
+        ) : (
+          <ul className={styles.dietList}>
+            {contains.map((name) => (
+              <li key={name} className={styles.dietMark}>
+                {name}
+              </li>
+            ))}
+            {may.map((name) => (
+              <li key={name} className={styles.dietMark} data-may="">
+                {strings.mayContainChip(name)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       {canPick ? (
         <div className={styles.sheetActions}>
           {waiting === undefined ? null : (
