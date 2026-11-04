@@ -25,7 +25,11 @@ import { strings } from './strings.ts';
 export const COUNTER_FROM = 0.9;
 
 /** `md` (the default) is the 30px input of forms and panels; `sm` is the 26px of a cell editor or a toolbar. */
-export type FieldSize = 'md' | 'sm';
+/**
+ * `md` is the 30px field; `sm` the 26px one of a filter value or a panel row; `lg` the one field a block is about
+ * (a form question's own words), a row tall in the title type, so it reads first among the fields under it.
+ */
+export type FieldSize = 'md' | 'sm' | 'lg';
 
 /**
  * `default` is the boxed field; `search` the rounded search field; `cell` the bare input a grid cell edits in;

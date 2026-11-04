@@ -16,12 +16,20 @@
     container-type: inline-size;
   }
 
-  /* The section's own header, not a card: the heading and its count, then the actions at the end, one centred row. */
+  /* The section's own header, not a card: the heading and its count, then the actions at the end, one centred row.
+     It stays in view as a long list scrolls, on the page's surface, below whatever bar sticks above it (Tabs' bar
+     sets --sticky-top), so Add a question is never clipped under the tabs (T15, 4 November 2026). */
   .header {
+    position: sticky;
+    inset-block-start: var(--sticky-top, 0);
+    z-index: var(--z-sticky);
     display: flex;
     gap: var(--space-8);
     align-items: center;
     min-block-size: var(--size-input);
+    padding-block: var(--space-6);
+    margin-block: calc(-1 * var(--space-6));
+    background: var(--surface);
   }
 
   .heading {
@@ -100,13 +108,9 @@
     box-shadow: var(--shadow-focus);
   }
 
-  /* A break between steps (kind step, spec 0063): on the ground with a dashed edge, so it reads as where one group of
-     cards ends and the next begins, not as one more question. Its head is a line shorter (below the head's own
-     rules). */
-  .row[data-kind='step'] {
-    border-style: dashed;
-    background: var(--surface-subtle);
-  }
+  /* A break between steps (kind step, spec 0063) is a card like the questions, its layers mark and its "Step 2" name
+     saying what it is: the dashed grey edge read as an empty placeholder (T15, 4 November 2026). Its head is a line
+     shorter (below the head's own rules). */
 
   /* A question a publish refused: the danger edge, and "Needs a fix" by its title. */
   .row[data-problem] {

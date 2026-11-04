@@ -234,6 +234,27 @@ export const Variants: Story = {
   ),
 };
 
+/** The large size: the one field a block is about (a form question's words), a row tall in the title type, over a normal field. */
+export const Large: Story = {
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <Field label="Question" size="lg" defaultValue="How likely are you to recommend us?" />
+      <Field label="Placeholder" defaultValue="Pick a number" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const question = canvas.getByRole('textbox', { name: 'Question' });
+    const placeholder = canvas.getByRole('textbox', { name: 'Placeholder' });
+    // The question reads first: taller and in larger type than the field under it.
+    await expect(question.getBoundingClientRect().height).toBeGreaterThanOrEqual(
+      placeholder.getBoundingClientRect().height,
+    );
+    await expect(parseFloat(getComputedStyle(question).fontSize)).toBeGreaterThan(
+      parseFloat(getComputedStyle(placeholder).fontSize),
+    );
+  },
+};
+
 /** The copy variant: a public link and an embed code to copy, read only but drawn live, with no lock. Focus selects the whole value. */
 export const Copy: Story = {
   render: () => (

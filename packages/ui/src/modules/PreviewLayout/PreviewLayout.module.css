@@ -276,7 +276,8 @@
 
     .side {
       position: sticky;
-      inset-block-start: var(--space-16);
+      /* Below a sticky tab bar when the page has one (Tabs sets --sticky-top-gap), else a gutter from the top. */
+      inset-block-start: var(--sticky-top-gap, var(--space-16));
       display: block;
       min-inline-size: 0;
     }

@@ -68,6 +68,12 @@
     block-size: var(--size-control);
   }
 
+  /* The large field: the one a block is about (a form question's words), a row tall in the title type. */
+  .root[data-size='lg'] .box {
+    block-size: var(--size-row);
+    padding-inline: var(--space-12);
+  }
+
   .root[data-variant='search'] .box {
     background: var(--surface-sunken);
   }
@@ -334,6 +340,18 @@
     background: transparent;
     box-shadow: none;
     cursor: text;
+  }
+
+  .root[data-size='lg'] .input {
+    font: var(--text-title-regular);
+    letter-spacing: var(--tracking-title-regular);
+  }
+
+  /* Under a finger it keeps the 16px a phone needs not to zoom, as every field does. */
+  @media (pointer: coarse) {
+    .root[data-size='lg'] .input {
+      font-size: var(--touch-text);
+    }
   }
 
   .root[data-variant='title'] .input {
