@@ -724,13 +724,15 @@ export const NOT_KEPT = 'That answer is already on the record.';
  * Use new (forms fix a4): writes one answer filing kept off the record (its question fills only an empty value, and
  * the record held another) over the record's value now. Through the member's own access, as an edit on the record
  * would be: a record or field they can't write refuses here with the engine's reason. The answer then no longer
- * reads as kept. No `forms.manage`: a member who may open the submission and write the record may do it by hand.
+ * reads as kept. Needs `forms.manage`, as every other change to a submission does, and the record write goes
+ * through the member's own access.
  */
 export async function useNewAnswer(
   scope: EngineScope,
   input: { readonly submissionId: string; readonly questionId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -796,6 +798,7 @@ export async function undoUseNewAnswer(
   input: { readonly submissionId: string; readonly questionId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
   const { result } = await runWrite(
     scope,
     async (context) => {

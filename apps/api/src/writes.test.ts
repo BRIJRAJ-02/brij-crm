@@ -218,6 +218,8 @@ const READS: ReadonlySet<string> = new Set([
   'submissions.list',
   'submissions.get',
   'submissions.getExport',
+  // A small export in the answer (forms fixes 2): reads only, no row stored.
+  'submissions.exportNow',
   'forms.syncPreview',
   // Booking pages (spec 0025).
   'bookingPages.list',
@@ -2599,6 +2601,44 @@ async function storedSubmission(m: Member, formId: string, state: string, spam: 
   return row.id;
 }
 
+/**
+ * A processed submission whose Name answer was kept off its person (forms fix a4), for Use new: the person made
+ * through the API (its own outbox row), the submission stored as the owner. Answers the person and the submission.
+ */
+async function keptNameOn(
+  m: Member,
+): Promise<{ readonly recordId: string; readonly submissionId: string; readonly questionId: string }> {
+  const form = await formOn(m, true);
+  const name = form.live?.questions.find((question) => question.key === 'name');
+  if (name === undefined) throw new Error('The form has no Name question.');
+  const recordId = newId();
+  await m.client.records.create({
+    workspace: m.slug,
+    objectId: m.people.id,
+    id: recordId,
+    values: { [m.attribute('name')]: { firstName: 'Bo' } },
+    mutationId: newId(),
+  });
+  const [row] = await testQuery<{ id: string }>(
+    ownerUrl,
+    `insert into form_submissions
+       (workspace_id, form_id, version_id, idempotency_key, answers, state, processed_at, main_record_id, outcome)
+     select f.workspace_id, f.id, f.live_version_id, gen_random_uuid(), '{"name":"Ada Lovelace"}', 'processed', now(),
+       $2, jsonb_build_object('kept', jsonb_build_array(jsonb_build_object('questionId', $3::text)))
+     from forms f where f.id = $1
+     returning id::text`,
+    [form.id, recordId, name.id],
+  );
+  if (row === undefined) throw new Error('No submission stored.');
+  await testQuery(
+    ownerUrl,
+    `insert into form_submission_records (workspace_id, submission_id, object_id, record_id, action, role)
+     select workspace_id, id, $2, $3, 'updated', 'main' from form_submissions where id = $1`,
+    [row.id, m.people.id, recordId],
+  );
+  return { recordId, submissionId: row.id, questionId: name.id };
+}
+
 // Forms (spec 0023): their writes store no outbox row of their own; a retry queues its job, whose row names it.
 Object.assign(WRITES, {
   'forms.create': async (m: Member) => {
@@ -2743,6 +2783,25 @@ Object.assign(WRITES, {
     const submissionId = await storedSubmission(m, form.id, 'spam');
     await m.client.submissions.delete({ workspace: m.slug, submissionId, mutationId });
     return [];
+  },
+  // Use new and its Undo (forms fixes 2): the person's Name is written through the member's own access.
+  'submissions.useNewAnswer': async (m: Member, mutationId: string) => {
+    const { recordId, submissionId, questionId } = await keptNameOn(m);
+    await m.client.submissions.useNewAnswer({ workspace: m.slug, submissionId, questionId, mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId] },
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  'submissions.undoUseNewAnswer': async (m: Member, mutationId: string) => {
+    const { recordId, submissionId, questionId } = await keptNameOn(m);
+    await m.client.submissions.useNewAnswer({ workspace: m.slug, submissionId, questionId, mutationId: newId() });
+    await m.client.submissions.undoUseNewAnswer({ workspace: m.slug, submissionId, questionId, mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId] },
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId] },
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId], mutation_id: mutationId },
+    ];
   },
   'submissions.restore': async (m: Member, mutationId: string) => {
     const form = await formOn(m, true);
@@ -3381,7 +3440,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'options.archive': 2,
   'options.restore': 3,
   'forms.saveDraft': 2,
-  'forms.applySettings': 2,
+  'forms.applySettings': 3,
   'forms.publish': 2,
   'forms.setStatus': 3,
   'forms.updateSettings': 2,
@@ -3397,7 +3456,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'forms.syncStart': 3,
   'submissions.retry': 3,
   'submissions.delete': 3,
-  'submissions.restore': 3,
+  'submissions.restore': 4,
+  'submissions.useNewAnswer': 4,
+  'submissions.undoUseNewAnswer': 5,
 };
 
 // Teams (spec 0031, slice 8): every team write stores a `members` row (everyone's team list reads again), naming the

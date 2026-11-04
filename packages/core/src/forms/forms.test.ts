@@ -1113,7 +1113,7 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(entry?.answers).toBeUndefined();
   });
 
-  it('refuses Use new to a member who can’t write the field, see the record, or see the answer (forms fix a4)', async () => {
+  it('refuses Use new to a member without forms.manage, whatever their field and record rules (forms fix a4)', async () => {
     const w = await workspace();
     const live = await liveForm(w);
     const existing = await createRecord(w.scope, {
@@ -1144,8 +1144,10 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
         },
       });
     const input = { submissionId: submission.id, questionId: 'title' };
-    expect(await refusalOf(useNewAnswer(as('read'), input))).not.toEqual([]);
-    expect(await refusalOf(useNewAnswer(as('hidden'), input))).toMatchObject([{ code: 'FORM_STATE' }]);
+    // Use new is a change to the submission, so it takes forms.manage first, as every other submission edit does
+    // (forms fixes 2): a member, whatever their field rules, is refused before anything is read.
+    expect(await refusalOf(useNewAnswer(as('read'), input))).toMatchObject([{ code: 'FORBIDDEN' }]);
+    expect(await refusalOf(useNewAnswer(as('hidden'), input))).toMatchObject([{ code: 'FORBIDDEN' }]);
     const noPeople = rescope(w.scope, {
       role: 'member',
       rules: {
@@ -1155,7 +1157,7 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
         records: [],
       },
     });
-    expect(await refusalOf(useNewAnswer(noPeople, input))).toMatchObject([{ code: 'NOT_FOUND' }]);
+    expect(await refusalOf(useNewAnswer(noPeople, input))).toMatchObject([{ code: 'FORBIDDEN' }]);
     const [record] = await getRecords(w.scope, { ids: [existing.recordId] });
     expect(record?.values[title]).toBe('Countess');
   });

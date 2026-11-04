@@ -1728,6 +1728,10 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
       select: { kind: 'filter' },
     }),
   ),
+  // A small export in the request (forms fixes 2): a form on a hidden object is absent.
+  exportSubmissionsNow: refused('NOT_FOUND', (scope, world) =>
+    core.exportSubmissionsNow(scope, { formId: world.formId, select: { kind: 'filter' } }),
+  ),
   getExport: refused('NOT_FOUND', async (scope, world) =>
     core.getExport(scope, { exportId: await ownerExport(world) }),
   ),
