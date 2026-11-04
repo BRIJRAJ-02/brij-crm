@@ -25,6 +25,9 @@ export const strings = {
   /** Lists (spec 0048, AC-4827). */
   listKind: (plural: string) => `List · ${plural}`,
   createList: 'Create list',
+  /** New form, from any page: the template gallery (forms critique c). */
+  newForm: 'New form',
+  newFormTerms: ['create form', 'add form', 'make a form', 'form', 'template', 'survey', 'questionnaire', 'signup'],
   createListTerms: ['new', 'add', 'pipeline'],
   addRecordToList: (name: string, list: string) => `Add ${name} to ${list}`,
   addToListTerms: ['list', 'pipeline'],

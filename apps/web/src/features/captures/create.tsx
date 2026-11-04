@@ -12,7 +12,7 @@ import { formHref } from '../forms/paths.ts';
 import { strings as formStrings } from '../forms/strings.ts';
 import { TemplateGallery } from '../forms/TemplateGallery.tsx';
 import { useCan } from '../workspace/WorkspacePage.tsx';
-import type { CaptureTab } from './tabs.ts';
+import { formsHref, type CaptureTab } from './tabs.ts';
 
 /** The tab's New, as the TopBar and an empty list offer it. */
 export interface CapturesCreate {
@@ -56,6 +56,8 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
   const isAskedTeamLink = tab === 'links' && search.new === 'team-link' && canManageForms;
   // New › Managed page (`?new=managed`, spec 0037, AC-1333): `booking.admin`'s, as the template itself is.
   const isAskedManaged = tab === 'links' && search.new === 'managed' && canBookTeams;
+  // The command menu's New form arrives as `?new=form` (forms critique c): the template gallery opens over Forms.
+  const isAskedForm = tab === 'forms' && search.new === 'form' && canManageForms;
 
   const value: CapturesCreate =
     tab === 'links'
@@ -119,9 +121,10 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
       <TemplateGallery
         data={data}
         slug={slug}
-        isOpen={isPickingTemplate}
+        isOpen={isPickingTemplate || isAskedForm}
         onClose={() => {
           setPickingTemplate(false);
+          if (isAskedForm) void navigate({ href: formsHref(slug), replace: true });
         }}
         onCreated={(form) => {
           setPickingTemplate(false);

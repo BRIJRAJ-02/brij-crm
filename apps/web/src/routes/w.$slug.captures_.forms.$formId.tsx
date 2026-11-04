@@ -126,7 +126,7 @@ function FormRoute() {
   if (page === undefined) {
     return (
       <WorkspacePage
-        currentPage="captures"
+        currentPage="forms"
         page={{
           topBar: <TopBar title={strings.missingTitle} icon="clipboard-list" />,
           body: <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>,
@@ -156,7 +156,7 @@ function FormError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="forms"
       page={{
         topBar: <TopBar title={strings.forms} icon="clipboard-list" />,
         body: (
