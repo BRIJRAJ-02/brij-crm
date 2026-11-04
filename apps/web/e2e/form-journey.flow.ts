@@ -1,6 +1,7 @@
 // The form journey end to end (flow walks, 29 October 2026): Captures › Forms › New form; a question added and
-// mapped onto People's Job title; the first publish, in one step; a visitor sends it; the answer lands on the
-// person's Job title in People; and changing which object the form saves to asks first, Cancel keeping People.
+// mapped onto People's Job title; the first publish, one click with nothing asked (5 November 2026); a visitor
+// sends it; the answer lands on the person's Job title in People; changing which object the form saves to asks
+// first, Cancel keeping People; and Discard changes puts an edit back to what is live, after a confirm.
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { newWorkspace } from './people.ts';
@@ -37,15 +38,18 @@ test.describe('the form journey', () => {
     // Where the answer is saved shows in the question's editor, not on its row (T17).
     await expect(page.getByRole('button', { name: /Save answer to$/ }).last()).toContainText('Job title');
 
-    // The first publish, in one step: name it, check where the answers go, publish.
+    // Named on the page, as a title (Tally's way); then the first publish is one click, with nothing asked.
+    const title = page.getByRole('textbox', { name: 'Name', exact: true });
+    await title.fill(`Talk to us ${tag}`);
+    await title.press('Tab');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(`Talk to us ${tag}`, { timeout: 15_000 });
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const publish = page.getByRole('dialog', { name: 'Publish your form' });
-    await publish.getByRole('textbox', { name: 'Name', exact: true }).fill(`Talk to us ${tag}`);
-    await expect(publish.getByRole('button', { name: /Save to$/ })).toContainText('People');
-    await publish.getByRole('button', { name: 'Publish', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
+    expect(await page.getByRole('dialog', { name: 'Publish your form' }).count()).toBe(0);
     await page.keyboard.press('Escape');
-    await expect(page.getByText(/Live · v1/).first()).toBeVisible();
+    await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
+    // Nothing left to publish: the one primary goes until there is.
+    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(0);
     // Its public address, from Settings › Details › Link.
     await page.goto(`${formUrl}?tab=settings`);
     const key = await page.getByRole('textbox', { name: /^Link/ }).inputValue();
@@ -77,5 +81,21 @@ test.describe('the form journey', () => {
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(confirm).toBeHidden();
     await expect(page.getByRole('button', { name: /Save to$/ })).toContainText('People');
+
+    // A change saves to the draft by itself; Discard changes (⋯, asks first) puts it back to what is live.
+    const button = page.getByRole('textbox', { name: 'Button text' });
+    await button.fill('Send it');
+    await expect(page.getByText('Live · edited').first()).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: 'Discard changes' }).click();
+    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await discard.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(discard).toBeHidden();
+    await expect(page.getByText('Changes discarded.')).toBeVisible();
+    await expect(button).toHaveValue('Send');
+    await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
+    await page.reload();
+    await expect(page.getByText('Live', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('textbox', { name: 'Button text' })).toHaveValue('Send');
   });
 });

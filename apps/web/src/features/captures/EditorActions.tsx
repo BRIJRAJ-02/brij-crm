@@ -23,6 +23,8 @@ export interface EditorExtraAction {
   readonly label: string;
   readonly icon: IconName;
   readonly description?: string;
+  /** It throws work away (a form's Discard changes): drawn as Delete is, after the divider, and asks first. */
+  readonly isDanger?: boolean;
   readonly onAction: () => void;
 }
 
@@ -133,17 +135,34 @@ export function EditorActions({
                 {strings.duplicate}
               </MenuItem>
             )}
-            {(menu.extra ?? []).map((each) => (
-              <MenuItem
-                key={each.id}
-                id={each.id}
-                icon={each.icon}
-                {...(each.description === undefined ? {} : { description: each.description })}
-              >
-                {each.label}
-              </MenuItem>
-            ))}
-            {menu.onDelete !== undefined && <MenuSeparator />}
+            {(menu.extra ?? [])
+              .filter((each) => each.isDanger !== true)
+              .map((each) => (
+                <MenuItem
+                  key={each.id}
+                  id={each.id}
+                  icon={each.icon}
+                  {...(each.description === undefined ? {} : { description: each.description })}
+                >
+                  {each.label}
+                </MenuItem>
+              ))}
+            {(menu.onDelete !== undefined || (menu.extra ?? []).some((each) => each.isDanger === true)) && (
+              <MenuSeparator />
+            )}
+            {(menu.extra ?? [])
+              .filter((each) => each.isDanger === true)
+              .map((each) => (
+                <MenuItem
+                  key={each.id}
+                  id={each.id}
+                  icon={each.icon}
+                  isDanger
+                  {...(each.description === undefined ? {} : { description: each.description })}
+                >
+                  {each.label}
+                </MenuItem>
+              ))}
             {menu.onDelete !== undefined && (
               <MenuItem id="delete" icon="trash" isDanger>
                 {menu.deleteLabel}

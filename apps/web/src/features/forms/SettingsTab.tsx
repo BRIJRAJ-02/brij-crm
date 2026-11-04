@@ -2,9 +2,9 @@
 // Purpose: a form's Settings tab (spec 0023), for someone setting up a form in under a minute: what people see after
 // sending, whether and where submissions go in the CRM, the form's words, its details (name, link, owner: nobody, a
 // teammate, or a round robin group handing each new record to its next teammate, spec 0029) and spam.
-// Main task: scan the groups, change only what needs changing (the defaults already work), and save the name,
-// address, owner and who is emailed each submission from the SaveBar; the rest goes live on Publish, which the
-// header's state says once (not each card).
+// Main task: scan the groups and change only what needs changing (the defaults already work). Nothing here has a
+// Save: the name and link save as their field is left, the owner and who is emailed as they are picked, and the rest
+// saves to the draft and goes live with the one Publish in the header (one save model, 5 November 2026).
 // Leaves out: the daily digest (spec 0023 milestone 3), each question's filing (set on the question, linked from here),
 // and the look (on the Form tab, beside the preview, the only tab that has one).
 import type {
@@ -15,6 +15,7 @@ import type {
   MemberSummary,
   ObjectSummary,
 } from '@crm/data';
+import { FORM_SLUG } from '@crm/data/forms';
 import { useCaptureList } from '@crm/data/react';
 import {
   Avatar,
@@ -24,17 +25,14 @@ import {
   EmptyState,
   Field,
   Link,
-  SaveBar,
   SegmentedControl,
   Select,
   Switch,
   Table,
-  type SaveBarStatus,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { linksHref, pageEditorHref } from '../booking/links.ts';
-import { pageHeading } from '../navigation/focus.ts';
 import { afterPageProblem } from './after-page.ts';
 import { EndingsCard } from './EndingsCard.tsx';
 import { isRedirectAddress, sameValue } from './draft.ts';
@@ -101,10 +99,14 @@ export interface FormSettingsInput {
   readonly onFormChange: (view: FormView) => void;
 }
 
+/** The fields useFormSettings checks and saves, as the server names a refusal's field. */
+type SettingsField = 'name' | 'slug' | 'owner' | 'notifyMemberIds';
+
 /**
- * The name, address and owner as the Settings tab edits them, saved together
- * from the SaveBar (the editor's footer). Held by the editor, so a tab change
- * keeps what was typed.
+ * The name, link, owner and who is emailed, as the Settings tab edits them. Each saves on its own, with no Save
+ * button (the owner, 5 November 2026: one save model): the owner and the people emailed as they are picked, the name
+ * and the link as their field is left. A name left empty or a link that can't be one says so then, never while it is
+ * being typed, and nothing is sent. Held by the editor, so a tab change keeps what was typed.
  */
 export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -114,82 +116,112 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
     owner: form.ownerRotationId === undefined ? (form.ownerMemberId ?? NOBODY) : groupOption(form.ownerRotationId),
     notify: form.notifyMemberIds,
   };
-  // Only the edits are held, so a change made elsewhere (the first publish, a rename) shows here at once.
+  // Only the edits not yet saved are held, so a change made elsewhere (the first publish, a rename) shows at once.
   const [edits, setEdits] = useState<Partial<Applied>>({});
   const values: Applied = { ...saved, ...edits };
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
-  const isDirty =
-    values.name !== saved.name ||
-    values.address !== saved.address ||
-    values.owner !== saved.owner ||
-    !sameList(values.notify, saved.notify);
+  // What a field left in a state that can't be saved says, until it is typed into again.
+  const [left, setLeft] = useState<{ readonly name?: string; readonly slug?: string }>({});
+  // One save at a time, in the order they were made, so two quick picks never land out of order.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
 
   const set = (patch: Partial<Applied>) => {
     setEdits((before) => ({ ...before, ...patch }));
     setFailure(undefined);
-    if (status === 'saved') setStatus('idle');
+    setLeft((before) => ({
+      ...(patch.name === undefined && before.name !== undefined ? { name: before.name } : {}),
+      ...(patch.address === undefined && before.slug !== undefined ? { slug: before.slug } : {}),
+    }));
   };
 
-  const save = () => {
-    if (!isDirty || status === 'saving') return;
-    setStatus('saving');
-    const addressChanged = values.address !== saved.address;
-    data.forms
-      .updateSettings(slug, form.id, {
-        ...(values.name === saved.name ? {} : { name: values.name.trim() }),
-        ...(addressChanged ? { slug: values.address } : {}),
-        ...(values.owner === saved.owner ? {} : ownerChange(values.owner)),
-        ...(sameList(values.notify, saved.notify) ? {} : { notifyMemberIds: values.notify }),
-      })
-      .then(
+  /** Sends `patch` as it differs from what is saved; a pick that fails goes back, typed words stay with the error. */
+  const send = (patch: Partial<Applied>, isPick: boolean) => {
+    const change = {
+      ...(patch.name === undefined || patch.name.trim() === saved.name ? {} : { name: patch.name.trim() }),
+      ...(patch.address === undefined || (!isPick && patch.address === saved.address) ? {} : { slug: patch.address }),
+      // A pick (and Undo) is always sent: compared with what this render saw as saved, a quick pick back to the first
+      // value would be skipped while the pick before it was still on its way.
+      ...(patch.owner === undefined || (!isPick && patch.owner === saved.owner) ? {} : ownerChange(patch.owner)),
+      ...(patch.notify === undefined || (!isPick && sameList(patch.notify, saved.notify))
+        ? {}
+        : { notifyMemberIds: patch.notify }),
+    };
+    // What was sent leaves the edits once it is saved, unless it was changed again meanwhile.
+    const settle = () => {
+      setEdits((before) =>
+        Object.fromEntries(Object.entries(before).filter(([key, value]) => patch[key as keyof Applied] !== value)),
+      );
+    };
+    if (Object.keys(change).length === 0) {
+      settle();
+      return;
+    }
+    // The link it had, for the toast's Undo.
+    const linkBefore = saved.address;
+    queue.current = queue.current.then(() =>
+      data.forms.updateSettings(slug, form.id, change).then(
         (view) => {
           onFormChange(view);
-          setEdits({});
-          setStatus('saved');
-          if (addressChanged) toasts.toast({ tone: 'success', message: strings.addressChanged });
+          settle();
+          if ('slug' in change) {
+            toasts.toast({
+              tone: 'success',
+              message: strings.addressChanged,
+              action: {
+                label: strings.undo,
+                onAction: () => {
+                  // Sent as a pick: this render's saved link is the one being put back.
+                  send({ address: linkBefore }, true);
+                },
+              },
+            });
+          }
         },
         (error: unknown) => {
-          setStatus('idle');
           const refusal = firstRefusal(error);
+          if (isPick) settle();
           setFailure({ message: refusal.message, ...(refusal.field === undefined ? {} : { field: refusal.field }) });
         },
-      );
+      ),
+    );
   };
 
-  const barStatus: SaveBarStatus =
-    status === 'saving'
-      ? 'saving'
-      : failure !== undefined && isDirty
-        ? 'error'
-        : isDirty
-          ? 'unsaved'
-          : status === 'saved'
-            ? 'saved'
-            : 'hidden';
+  /** The name field was left: saved, or, when empty, it says so and keeps what is saved. */
+  const leaveName = () => {
+    if (edits.name === undefined) return;
+    if (edits.name.trim() === '') {
+      setLeft((before) => ({ ...before, name: strings.nameRequired }));
+      return;
+    }
+    send({ name: edits.name }, false);
+  };
 
-  const footer = (
-    <SaveBar
-      status={barStatus}
-      {...(failure === undefined ? {} : { error: failure.message })}
-      {...(values.name.trim() === '' ? { blockedReason: strings.nameRequired } : {})}
-      onSave={save}
-      onDiscard={() => {
-        setEdits({});
-        setFailure(undefined);
-        setStatus('idle');
-      }}
-      onFocusAway={() => pageHeading(document)?.focus()}
-    />
-  );
+  /** The link field was left: saved when it can be a link, else it says what a link needs. */
+  const leaveAddress = () => {
+    if (edits.address === undefined) return;
+    if (!FORM_SLUG.test(edits.address)) {
+      setLeft((before) => ({ ...before, slug: strings.addressInvalid }));
+      return;
+    }
+    send({ address: edits.address }, false);
+  };
 
-  const fieldError = (field: 'name' | 'slug' | 'owner' | 'notifyMemberIds') =>
-    failure !== undefined &&
-    (failure.field === field ||
-      (field === 'owner' && (failure.field === 'ownerMemberId' || failure.field === 'ownerRotationId')))
+  /** An owner or the people emailed, picked: saved at once. */
+  const pick = (patch: Pick<Partial<Applied>, 'owner' | 'notify'>) => {
+    set(patch);
+    send(patch, true);
+  };
+
+  const fieldError = (field: SettingsField): string | undefined => {
+    if (field === 'name' && left.name !== undefined) return left.name;
+    if (field === 'slug' && left.slug !== undefined) return left.slug;
+    return failure !== undefined &&
+      (failure.field === field ||
+        (field === 'owner' && (failure.field === 'ownerMemberId' || failure.field === 'ownerRotationId')))
       ? failure.message
       : undefined;
-  return { values, set, footer, fieldError, isDirty };
+  };
+  return { values, set, leaveName, leaveAddress, pick, fieldError };
 }
 
 /** What useFormSettings answers. */
@@ -741,11 +773,10 @@ export function SettingsTab({
                 onChange={(name) => {
                   settings.set({ name });
                 }}
-                {...(settings.values.name.trim() === ''
-                  ? { error: strings.nameRequired }
-                  : settings.fieldError('name') === undefined
-                    ? {}
-                    : { error: settings.fieldError('name') ?? '' })}
+                onBlur={settings.leaveName}
+                // Enter saves it too, so a name typed and left by Esc or a shortcut isn't lost.
+                onSubmit={settings.leaveName}
+                {...(settings.fieldError('name') === undefined ? {} : { error: settings.fieldError('name') ?? '' })}
               />
               <Field
                 label={strings.address}
@@ -758,6 +789,8 @@ export function SettingsTab({
                 onChange={(text) => {
                   settings.set({ address: text.toLowerCase() });
                 }}
+                onBlur={settings.leaveAddress}
+                onSubmit={settings.leaveAddress}
                 {...(settings.fieldError('slug') === undefined ? {} : { error: settings.fieldError('slug') ?? '' })}
               />
             </>
@@ -772,7 +805,7 @@ export function SettingsTab({
               isReadOnly={isReadOnly}
               {...(settings.fieldError('owner') === undefined ? {} : { error: settings.fieldError('owner') ?? '' })}
               onChange={(id) => {
-                settings.set({ owner: id ?? NOBODY });
+                settings.pick({ owner: id ?? NOBODY });
               }}
             />
           )}
@@ -793,7 +826,7 @@ export function SettingsTab({
             ? {}
             : { error: settings.fieldError('notifyMemberIds') ?? '' })}
           onValuesChange={(ids) => {
-            settings.set({
+            settings.pick({
               notify: [
                 ...ids.filter((id) => id !== HIDDEN_NOTIFY),
                 ...(ids.includes(HIDDEN_NOTIFY) ? hiddenNotify : []),

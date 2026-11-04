@@ -7,6 +7,7 @@ import { stepsOfBreaks } from '@crm/data/forms';
 import { Button, Card, DescriptionList, EmptyState, Link, Modal } from '@crm/ui';
 import { conditionsLine, questionFacts } from '../routing/facts.ts';
 import { idOfTarget, jumpChoices } from '../questions/jumps.ts';
+import { firstWords } from './draft.ts';
 import { strings } from './strings.ts';
 
 /** Props for the Flow view: the draft it reads, and where each part is edited. */
@@ -90,19 +91,22 @@ export function FlowView({
             stepId === undefined
               ? []
               : jumpChoices({ questions: draft.questions, steps: draft.steps }, endings, stepId);
-          const jumps = stored?.jumps ?? [];
+          // A rule still being written (no value yet) is not said: the flow shows only what a visitor would meet.
+          const jumps = (stored?.jumps ?? []).flatMap((jump) => {
+            const line = conditionsLine(jump.when, facts);
+            return line === undefined ? [] : [{ jump, line }];
+          });
+          const shownIf = stored?.showWhen === undefined ? undefined : conditionsLine(stored.showWhen, facts);
           const lines = [
-            ...(stored?.showWhen === undefined
-              ? []
-              : [{ id: `${name}-shown`, term: strings.flowShownIf, detail: conditionsLine(stored.showWhen, facts) }]),
-            ...jumps.map((jump, index) => {
+            ...(shownIf === undefined ? [] : [{ id: `${name}-shown`, term: strings.flowShownIf, detail: shownIf }]),
+            ...jumps.map(({ jump, line }, index) => {
               const target = idOfTarget(jump.to);
               const where =
                 choices.find((choice) => choice.id === target)?.label ??
                 ('ending' in jump.to ? (labelOfEnding(jump.to.ending) ?? jump.to.ending) : jump.to.step);
               return {
                 id: `${name}-${target}-${String(index)}`,
-                term: strings.flowJump(conditionsLine(jump.when, facts)),
+                term: strings.flowJump(line),
                 detail: strings.flowJumpTo(where),
               };
             }),
@@ -156,17 +160,13 @@ export function FlowView({
               {
                 id: 'thanks',
                 term: strings.flowThanks,
-                ...(draft.after.kind === 'redirect'
-                  ? { description: draft.after.url }
-                  : draft.after.message.trim() === ''
-                    ? { description: strings.flowNoLine, isPlaceholder: true }
-                    : { description: draft.after.message }),
+                description: draft.after.kind === 'redirect' ? draft.after.url : firstWords(draft.after.message),
               },
+              // Each ending's first words, or nothing: its heading already names it.
               ...endings.map((ending, place) => ({
                 id: ending.id,
                 term: strings.endingName(place + 1, ending.heading),
-                description: ending.line === undefined || ending.line === '' ? strings.flowNoLine : ending.line,
-                ...(ending.line === undefined || ending.line === '' ? { isPlaceholder: true } : {}),
+                description: firstWords(ending.line ?? ''),
               })),
             ]}
           />

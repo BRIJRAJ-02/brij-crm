@@ -164,7 +164,7 @@ export function statusOf(
   // A draft saved since the last publish (a routing rule added and taken away, say) still has Publish changes beside
   // it, so the status says edited too rather than the live version alone (Q67).
   if (isChanged || form.hasUnpublished) return { tone: 'changed', text: strings.statusChanged };
-  return { tone: 'live', text: strings.statusLive(form.liveVersionNumber) };
+  return { tone: 'live', text: strings.statusLive };
 }
 
 /** Whether two documents say the same thing (key order aside). */
@@ -286,6 +286,30 @@ export function publishStart(name: string, publicKey: string): { readonly name: 
   return { name: named, address: FORM_SLUG.test(suggested) ? suggested : publicKey };
 }
 
+/**
+ * What a first publish goes live with, with nothing asked (the owner, 5 November 2026: one click, like Tally): every
+ * answer matched to a field by its label (`fileByLabel`, what the old dialog prefilled), the form's own name ("Untitled
+ * form" stays until it is renamed), and a link made from the name, or the form's own key when the name gives none.
+ * The caller checks the link is free and falls back to the key; anything else is changed later in Settings.
+ */
+export function firstPublish(
+  document: FormDocument,
+  form: { readonly name: string; readonly publicKey: string },
+  attributes: readonly FormAttributeChoice[],
+): { readonly document: FormDocument; readonly name: string; readonly address: string } {
+  const start = publishStart(form.name, form.publicKey);
+  return {
+    document: fileByLabel(document, attributes),
+    name: start.name === '' ? form.name : start.name,
+    address: start.address,
+  };
+}
+
+/** Whether Discard changes is offered: a published form whose draft differs from what is live. */
+export function canDiscard(form: Pick<FormView, 'liveVersionNumber' | 'hasUnpublished'>, isChanged: boolean): boolean {
+  return form.liveVersionNumber !== undefined && (isChanged || form.hasUnpublished);
+}
+
 /** A new ending's id: short, stable, and never one the draft already holds. */
 export function mintEndingId(endings: readonly FormEnding[]): string {
   for (let place = 1; place <= FORM_ENDINGS_MAX + 1; place += 1) {
@@ -293,4 +317,16 @@ export function mintEndingId(endings: readonly FormEnding[]): string {
     if (!endings.some((ending) => ending.id === id)) return id;
   }
   return `ending_${String(Date.now())}`;
+}
+
+/** The most words of an ending's line the Flow shows before it trails off. */
+const FIRST_WORDS = 12;
+
+/** A line's first words, ending in "…" when there are more; empty for an empty line. */
+export function firstWords(line: string): string {
+  const words = line
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== '');
+  return words.length <= FIRST_WORDS ? words.join(' ') : `${words.slice(0, FIRST_WORDS).join(' ')}…`;
 }
