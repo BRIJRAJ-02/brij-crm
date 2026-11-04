@@ -23,7 +23,7 @@ import { fitsAttribute, scoreOf, type EngineRefusal, type FiledOn, type FormDocu
 import { isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
-import { companyFilingTarget } from '../engine/filing.ts';
+import { bySlug, companyFilingTarget, filingDomains, hasCompany } from '../engine/filing.ts';
 import { insertRecord, updateRecord } from '../engine/records.ts';
 import { uniqueKeyOf } from '../engine/unique.ts';
 import { currentItems, isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
@@ -112,6 +112,98 @@ function actingAs(context: WriteContext, scope: EngineScope): WriteContext {
     scope,
     perRecord: (work) => context.perRecord((inner) => work(actingAs(inner, scope))),
   };
+}
+
+/** A name typed for a link (a person's Company), before it is a record. */
+export interface Named {
+  readonly attribute: AttributeDef;
+  readonly questionId: string;
+  readonly name: string;
+  readonly always: boolean;
+}
+
+/** Why a typed name links nothing: the field links something other than a company. */
+export const LINK_NOT_COMPANY = 'Only a company can be linked by its name, so this answer stayed on the submission.';
+
+/** The live company named exactly this, ignoring case, if there is one and only one (the values_text index). */
+async function companyNamed(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  nameAttributeId: string,
+  name: string,
+): Promise<string | undefined> {
+  const found = await tx.execute<{ record_id: string }>(sql`
+    select v.record_id::text as record_id
+    from "values" v
+    join records r on r.workspace_id = v.workspace_id and r.id = v.record_id and r.deleted_at is null
+    where v.workspace_id = ${workspaceId}::uuid and v.attribute_id = ${nameAttributeId}::uuid
+      and v.active_until is null and not v.is_cleared and v.text_value is not null
+      and lower(left(v.text_value, 256)) collate "und-x-icu" = lower(left(${name}, 256)) collate "und-x-icu"
+    limit 2
+  `);
+  // Two companies of that name: which one is meant can't be told, so neither is linked.
+  return found.rows.length === 1 ? found.rows[0]?.record_id : undefined;
+}
+
+/**
+ * A typed company name as the person's Company (forms fixes 2, a5): the company of exactly that name, ignoring case,
+ * else one made now with it, but only while the person's email names no company domain, since email filing (spec
+ * 0059) makes the company from the domain then, which is the surer of the two. Made through the writer's own access,
+ * in its own savepoint, so a refusal makes nothing and the answer stays on the submission.
+ */
+async function linkByName(
+  context: WriteContext,
+  input: Pick<FileInput, 'objectId' | 'attributes' | 'writer'>,
+  named: readonly Named[],
+  planned: readonly Planned[],
+  /** The record the answers go on, when it exists already. */
+  recordId: string | undefined,
+): Promise<{ readonly planned: readonly Planned[]; readonly refused: { questionId: string; message: string }[] }> {
+  if (named.length === 0) return { planned: [], refused: [] };
+  const { tx, scope } = context;
+  const target = await companyFilingTarget(tx, input.objectId, input.attributes);
+  const companyAttributes = target === undefined ? undefined : await loadAttributes(tx, target.companies);
+  const nameAttribute = companyAttributes === undefined ? undefined : bySlug(companyAttributes, 'name');
+  const email = bySlug(input.attributes, 'email_addresses');
+  const emails = planned.find((each) => each.attribute.id === email?.id)?.value;
+  const hasDomain = (Array.isArray(emails) ? emails : [emails]).some(
+    (each) => typeof each === 'string' && filingDomains(each) !== undefined,
+  );
+  const linked: Planned[] = [];
+  const refused: { questionId: string; message: string }[] = [];
+  for (const each of named) {
+    if (target === undefined || nameAttribute?.type !== 'text' || each.attribute.id !== target.companyAttributeId) {
+      refused.push({ questionId: each.questionId, message: LINK_NOT_COMPANY });
+      continue;
+    }
+    if (recordId !== undefined && !each.always && (await hasCompany(tx, recordId, each.attribute))) continue;
+    let companyId = await companyNamed(tx, scope.workspaceId, nameAttribute.id, each.name);
+    if (companyId === undefined && hasDomain) continue;
+    if (companyId === undefined) {
+      // Two submissions naming one new company take turns, so the second finds the first's.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`company-name:${scope.workspaceId}:${each.name.toLowerCase()}`}, 0))`,
+      );
+      companyId = await companyNamed(tx, scope.workspaceId, nameAttribute.id, each.name);
+    }
+    if (companyId === undefined) {
+      const made = await input
+        .writer(new Set())
+        .perRecord((inner) =>
+          insertRecord(inner, { objectId: target.companies, values: { [nameAttribute.id]: each.name.slice(0, 256) } }),
+        );
+      if (!made.ok) {
+        refused.push({ questionId: each.questionId, message: made.refusals[0]?.message ?? LINK_NOT_COMPANY });
+        continue;
+      }
+      companyId = made.value.recordId;
+    }
+    const reference = { objectId: target.companies, recordId: companyId };
+    const parsed = parseAttributeInput(each.attribute, each.attribute.isMulti ? [reference] : reference);
+    if (!parsed.ok || parsed.value === null) continue;
+    linked.push({ attribute: each.attribute, questionId: each.questionId, value: parsed.value, always: each.always });
+  }
+  return { planned: linked, refused };
 }
 
 /** One answer bound for an attribute: the attribute, the value, and whether it overwrites. */
@@ -291,9 +383,15 @@ export function plan(
   answers: Readonly<Record<string, unknown>>,
   /** Which record these attributes are on: the main one (with the score), or the deal made beside it. */
   role: FiledOn['objectRole'] = 'main',
-): { readonly planned: readonly Planned[]; readonly refused: { questionId: string; message: string }[] } {
+): {
+  readonly planned: readonly Planned[];
+  readonly refused: { questionId: string; message: string }[];
+  /** Typed names for a link (a person's Company): `linkByName` finds or makes the record before the write. */
+  readonly named: readonly Named[];
+} {
   const planned: Planned[] = [];
   const refused: { questionId: string; message: string }[] = [];
+  const named: Named[] = [];
   for (const question of document.questions) {
     if (question.filedOn?.objectRole !== role || !Object.hasOwn(answers, question.key)) continue;
     const attribute = attributes.get(question.filedOn.attributeId);
@@ -305,6 +403,14 @@ export function plan(
     }
     if (!fitsAttribute(question.answerType, attribute.type)) {
       refused.push({ questionId: question.id, message: fieldChanged(attribute) });
+      continue;
+    }
+    // A typed company name (forms fixes 2): a link, found or made by name once the database can be asked.
+    if (attribute.type === 'record_reference') {
+      const text = answers[question.key];
+      if (typeof text === 'string' && text.trim() !== '') {
+        named.push({ attribute, questionId: question.id, name: text.trim(), always: question.update === 'always' });
+      }
       continue;
     }
     const converted = valueFor(attribute, answers[question.key], options);
@@ -323,10 +429,10 @@ export function plan(
     if (parsed.value === null) continue;
     planned.push({ attribute, questionId: question.id, value: parsed.value, always: question.update === 'always' });
   }
-  if (role === 'deal') return { planned, refused };
+  if (role === 'deal') return { planned, refused, named };
   // The score last, so a question filed on the same attribute is planned first and the score's own `always` wins.
   const score = planScore(document, attributes, answers);
-  return { planned: [...planned, ...score.planned], refused: [...refused, ...score.refused] };
+  return { planned: [...planned, ...score.planned], refused: [...refused, ...score.refused], named };
 }
 
 /** What a file answer says when the blob store isn't configured, so its bytes can't be given a record's home. */
@@ -574,7 +680,23 @@ export async function fileOntoRecord(
 ): Promise<FiledOnto> {
   const document = { questions: input.questions };
   const options = await optionsFor(context.tx, document, input.attributes);
-  const { planned, refused } = plan(document, input.attributes, options, input.answers);
+  const first = plan(document, input.attributes, options, input.answers);
+  const [held] = await context.tx
+    .execute<{ object_id: string }>(sql`select object_id::text from records where id = ${input.recordId}::uuid`)
+    .then((found) => found.rows);
+  // A typed company (forms fixes 2), as a form's submission links one.
+  const linked =
+    held === undefined
+      ? { planned: [], refused: [] }
+      : await linkByName(
+          context,
+          { objectId: held.object_id, attributes: input.attributes, writer: () => context },
+          first.named,
+          first.planned,
+          input.recordId,
+        );
+  const planned = [...first.planned, ...linked.planned];
+  const refused = [...first.refused, ...linked.refused];
   const ids = planned.map((each) => each.questionId);
   if (planned.length === 0) return { planned: ids, refused };
   const { changes } = await changesFor(context.tx, input.recordId, planned, undefined, undefined);
@@ -699,8 +821,7 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   // A file answer takes a new identity the record will own before anything is written; its bytes are copied once
   // the record's id is known, below, in this same transaction.
   const rehomed = await rehomeFiles(tx, first.planned, input.files);
-  const planned = rehomed.planned;
-  const refused = [...first.refused, ...rehomed.refused];
+  const answered = rehomed.planned;
   const owner = ownerAttribute(attributes);
   // A rotation's lock comes before any match key's (bookings take it first too), held to commit. A batch takes it
   // before its first submission's row (`fileBatch`), so this is the same lock taken again there.
@@ -710,7 +831,7 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   let matchedId: string | undefined = input.keepRecordId;
   if (matchedId === undefined) {
     // Two submissions for one new key take turns here, so the second finds the first's record (AC-562).
-    const match = matchKey(planned, document.targets.main?.matchAttributeId);
+    const match = matchKey(answered, document.targets.main?.matchAttributeId);
     if (match !== undefined) {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`form-match:${objectId}:${match.attribute.id}:${match.key}`}, 0))`,
@@ -720,8 +841,18 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   }
 
   if (matchedId !== undefined && input.canUse !== undefined && !(await input.canUse(matchedId))) {
-    return { kind: 'failed', failure: HIDDEN_TARGET, refused, assignment: notFiled(form) };
+    return {
+      kind: 'failed',
+      failure: HIDDEN_TARGET,
+      refused: [...first.refused, ...rehomed.refused],
+      assignment: notFiled(form),
+    };
   }
+  // A typed company, once the record is known: one already linked to a company keeps it unless the question
+  // overwrites, so no company is made for nothing.
+  const linked = await linkByName(context, input, first.named, answered, matchedId);
+  const planned = [...answered, ...linked.planned];
+  const refused = [...first.refused, ...rehomed.refused, ...linked.refused];
 
   // Who owns the record: chosen once, before anything is written (AC-567, AC-1050).
   const chosen = await chooseFor(context, input, owner, matchedId);

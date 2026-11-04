@@ -97,7 +97,8 @@ export const NO_PLACEHOLDER_TYPES: readonly AnswerType[] = [
 /** The attribute types each answer type may be filed onto (spec 0023, Answer types). */
 export const FILES_ONTO: Readonly<Record<AnswerType, readonly AttributeType[]>> = {
   // A name answer files onto a person's name too, split into first and last.
-  short_text: ['text', 'personal_name'],
+  // And a company typed by name onto a person's Company (forms fixes 2): linked by name, or made from it.
+  short_text: ['text', 'personal_name', 'record_reference'],
   long_text: ['text', 'long_text'],
   email: ['email'],
   phone: ['phone'],

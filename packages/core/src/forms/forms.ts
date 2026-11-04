@@ -52,6 +52,7 @@ import { isPeopleObject, publishedDocuments, stampConsentVersions } from './cons
 import {
   canSeeForm,
   fileable,
+  fileableOn,
   liveObjectOf,
   loadForm,
   loadVersions,
@@ -321,7 +322,7 @@ async function standardDeals(tx: WorkspaceTx, scope: EngineScope): Promise<strin
  * see, with whether they may write each. A form's Where it goes and a booking page's (spec 0057, AC-5706) list these.
  */
 export async function targetChoices(tx: WorkspaceTx, scope: EngineScope, objectId: string): Promise<FormTargetChoices> {
-  const attributes = fileable(await loadAttributes(tx, objectId));
+  const attributes = await fileableOn(tx, objectId, await loadAttributes(tx, objectId));
   const writesObject = objectLevel(scope.access, objectId) === 'write';
   const items = attributes.flatMap((attribute) => {
     const level = fieldLevel(scope.access, { id: attribute.id, objectId });

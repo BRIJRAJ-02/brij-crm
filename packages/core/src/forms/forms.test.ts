@@ -910,6 +910,47 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(parsed.success).toBe(false);
   });
 
+  it('links a typed company by its name, or makes it when the email names no company (forms fixes 2, a5)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, (document) => ({
+      ...document,
+      questions: [
+        ...document.questions,
+        question({
+          id: 'company',
+          key: 'company',
+          label: 'Company',
+          answerType: 'short_text',
+          filedOn: { objectRole: 'main', attributeId: w.attribute('people.company') },
+        }),
+      ],
+    }));
+    // Offered in Where it goes: a person's Company, and no other link.
+    const offered = (await formAttributes(w.scope, { formId: live.id })).items.filter(
+      (each) => each.type === 'record_reference',
+    );
+    expect(offered.map((each) => each.attributeId)).toEqual([w.attribute('people.company')]);
+    const companyOf = async (email: string, company: string) => {
+      await submit(live.publicKey, body({ name: 'Someone', email, company }));
+      const rows = await submissionIds(w, live.id);
+      const latest = rows.find((row) => row.state === 'received');
+      if (latest === undefined) throw new Error('No submission.');
+      await processNow(w, latest.id);
+      const view = await getSubmission(w.scope, { submissionId: latest.id });
+      const [person] = await getRecords(w.scope, { ids: [view.mainRecord?.recordId ?? ''] });
+      return person?.values[w.attribute('people.company')] as { recordId: string } | undefined;
+    };
+    // Free mail: no domain to go by, so the typed name makes the company, and the same name again finds it.
+    const made = await companyOf('ada@gmail.com', 'Acme Rockets');
+    expect(made?.recordId).toEqual(expect.any(String));
+    const again = await companyOf('bea@gmail.com', '  acme rockets ');
+    expect(again?.recordId).toBe(made?.recordId);
+    // A company email with a name nobody has: the domain makes the company, so no second one is made from the name.
+    const byDomain = await companyOf('cy@initech.io', 'Initech Labs');
+    const [company] = await getRecords(w.scope, { ids: [byDomain?.recordId ?? ''] });
+    expect(company?.values[w.attribute('companies.domains')]).toEqual(['initech.io']);
+  });
+
   it('moves a form saving to Deals to People with a deal, its Deals answers kept on the deal (forms fixes 2)', async () => {
     const w = await workspace();
     const created = await createForm(w.scope, { id: newId(), name: 'Deal form' });

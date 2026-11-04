@@ -24,6 +24,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
+import { companyFilingTarget } from '../engine/filing.ts';
 
 const { attributeOptions, forms, formVersions, objects } = schema;
 
@@ -197,6 +198,20 @@ export function fileable(attributes: ReadonlyMap<string, AttributeDef>): readonl
     .sort((a, b) => a.position - b.position);
 }
 
+/**
+ * The attributes an answer may be filed on, read from the database: `fileable`'s, with record references kept only
+ * where a typed name can link one (forms fixes 2): a person's Company, which a company name finds or makes. Any other
+ * link (a deal's people, a custom relationship) has no name to go by, so it is never offered.
+ */
+export async function fileableOn(
+  tx: WorkspaceTx,
+  objectId: string,
+  attributes: ReadonlyMap<string, AttributeDef>,
+): Promise<readonly AttributeDef[]> {
+  const company = (await companyFilingTarget(tx, objectId, attributes))?.companyAttributeId;
+  return fileable(attributes).filter((attribute) => attribute.type !== 'record_reference' || attribute.id === company);
+}
+
 /** An object's singular name. */
 export async function objectName(tx: WorkspaceTx, objectId: string): Promise<string> {
   const [row] = await tx.select({ name: objects.singularName }).from(objects).where(eq(objects.id, objectId));
@@ -217,7 +232,7 @@ export async function publishAttributes(
   objectId: string | null,
 ): Promise<ReadonlyMap<string, PublishAttribute>> {
   if (objectId === null) return new Map();
-  const attributes = fileable(await loadAttributes(tx, objectId));
+  const attributes = await fileableOn(tx, objectId, await loadAttributes(tx, objectId));
   const name = await objectName(tx, objectId);
   const writesObject = objectLevel(access, objectId) === 'write';
   return new Map(
