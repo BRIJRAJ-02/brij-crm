@@ -29,3 +29,7 @@ One day is in the tab order; the arrows, Home and End move along the days; Enter
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Bookings fix pass (5 November 2026)
+
+The strip fades out at its far edge, so days running past the card read as more to scroll rather than the last day (critic A4).

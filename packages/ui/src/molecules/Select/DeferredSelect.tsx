@@ -31,6 +31,7 @@ export type DeferredSelectProps = Pick<
   | 'rank'
   | 'placement'
   | 'onOpenChange'
+  | 'popoverFoot'
 > & {
   readonly items: readonly DeferredSelectItem[];
   /**

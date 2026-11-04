@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, waitFor } from 'storybook/test';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { DeferredSelect, DeferredSelectFrom, type DeferredSelectProps, type SelectModule } from './DeferredSelect.tsx';
 import { Select } from './SelectWithFaces.tsx';
 
@@ -220,6 +222,39 @@ function opensWith(keys: string): Story['play'] {
     await waitFor(() => expect(document.activeElement).toBe(real));
   };
 }
+
+/**
+ * A setting under the list (`popoverFoot`, critic A24): the booking page's 12h or 24h clock under its time zones, as
+ * Calendly keeps it, in the open list's foot.
+ */
+export const WithPopoverFoot: Story = {
+  args: {
+    popoverFoot: (
+      <SegmentedControl
+        label="Clock"
+        value="12"
+        onChange={fn()}
+        segments={[
+          { value: '12', label: '12h' },
+          { value: '24', label: '24h' },
+        ]}
+      />
+    ),
+  },
+  render: (args) => <Held {...args} />,
+  play: async ({ canvasElement, userEvent }) => {
+    await userEvent.click(triggerIn(canvasElement));
+    await listbox();
+    const clock = await waitFor(() => {
+      const found = document.querySelector('[role="radiogroup"][aria-label="Clock"]');
+      if (found === null) throw new Error('no clock in the list’s foot');
+      return found;
+    });
+    await settleAnimations();
+    await expect(clock).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+  },
+};
 
 /** From the keyboard: Tab reaches it, Enter opens it the first time, and Esc puts focus back on it. */
 export const FirstEnter: Story = { render: (args) => <Held {...args} />, play: opensWith('{Enter}') };

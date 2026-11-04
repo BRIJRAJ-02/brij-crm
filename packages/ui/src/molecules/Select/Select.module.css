@@ -242,6 +242,15 @@
     min-block-size: 0;
   }
 
+  /* One setting that belongs with the choice, under the list (`popoverFoot`): the booking page's clock. */
+  .popoverFoot {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    padding: var(--popover-inset);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
   .option {
     display: flex;
     align-items: center;

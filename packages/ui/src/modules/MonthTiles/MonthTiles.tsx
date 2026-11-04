@@ -30,6 +30,12 @@ export interface MonthTilesProps {
   readonly isLoading?: boolean;
 }
 
+/**
+ * A day's number as a plain figure, whatever the language (critic B-13): a day cell in Japanese read "5日", beside
+ * English words on the same page.
+ */
+const dayNumber = (key: string) => String(Number(key.slice(8)));
+
 /** The next open day from `from` in a direction, within the open days given. */
 function step(open: readonly string[], from: string, delta: number): string | undefined {
   const index = open.indexOf(from);
@@ -38,7 +44,7 @@ function step(open: readonly string[], from: string, delta: number): string | un
 
 /**
  * A booking page's month (spec 0025, AC-665): every day a square tile, the
- * open ones filled and the chosen one in the accent; only a Best day carries a dot, and today takes the calendars' one today ring. One day is
+ * open ones filled and the chosen one in the accent; a Best day carries a dot in its corner, and today a dot under its number. One day is
  * in the tab order; arrows move between open days, Up and Down a week, Home
  * and End to the first and last, and a swipe turns the month on touch.
  */
@@ -72,7 +78,9 @@ export function MonthTiles({
     setWasLoading(isLoading);
     if (!isLoading) setSettled(month);
   }
-  const cells = monthCells(month, locale, weekStart);
+  // Only the weeks the month needs (critic B-21): six weeks always drew a row of the next month's days under most.
+  const weeks = monthCells(month, locale, weekStart);
+  const cells = weeks.slice(0, Math.ceil((weeks.findLastIndex((key) => key !== undefined) + 1) / 7) * 7);
   const open = cells.filter((key): key is string => key !== undefined && openDays.has(key));
   // The month's first day and its place, so a cell outside the month can name its neighbour's date.
   const lead = cells.findIndex((key) => key !== undefined);
@@ -166,7 +174,7 @@ export function MonthTiles({
               <span
                 key={`outside-${String(index)}`}
                 className={styles.outside}
-                data-date={dayLabels(addDays(first, index - lead), locale).day}
+                data-date={dayNumber(addDays(first, index - lead))}
                 aria-hidden="true"
               />
             );
@@ -202,7 +210,7 @@ export function MonthTiles({
                 onChange(key);
               }}
             >
-              {labels.day}
+              {dayNumber(key)}
             </button>
           );
         })}

@@ -53,3 +53,9 @@ The thread is a log (`role="log"`, polite), so each reply is read as it arrives,
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Bookings fix pass (5 November 2026)
+
+- The visitor's lines carry no face, and the host's label shows once, over the conversation's first line (critic C16). `visitorName` is gone.
+- Quick replies are the page's own `ChoiceChips` (critics C5, A9); a read back's Yes and its alternatives stay full width buttons.
+- The confirm card takes `more`, a line for the guests and the note folded into it (critic B-10).

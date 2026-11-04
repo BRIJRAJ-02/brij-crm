@@ -9,6 +9,8 @@
     overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
+    /* The days run on past the card's edge: a fade there says so, where a hard cut read as the last day (critic A4). */
+    mask-image: linear-gradient(to right, var(--surface) calc(100% - var(--space-32)), transparent);
   }
 
   .day {

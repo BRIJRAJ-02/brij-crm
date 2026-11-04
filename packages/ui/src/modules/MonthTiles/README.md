@@ -42,3 +42,10 @@ One day is in the tab order. The arrows move between open days, Up and Down a we
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Bookings fix pass (5 November 2026)
+
+- **Today is a small dot under its number** in the day's own colour, not a ring (critics C10, A25): the ring was read as focus or a choice.
+- **Only the weeks the month needs** are drawn (critic B-21).
+- **Day numbers are plain figures** whatever the language (critic B-13).
+- **A tile stops growing at twice a row's height** (`--month-tile-max`), so a wide frame's month never towers over its times (critic B-11).

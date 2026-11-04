@@ -53,6 +53,11 @@ export interface BookingChangesProps {
   /** Takes a guest off. */
   readonly onRemove: (email: string) => Promise<CancelOutcome>;
   readonly onCancel: (reason: string) => Promise<CancelOutcome>;
+  /**
+   * The booking is on a calendar (its event exists): only then does the cancel confirm say it comes off both
+   * calendars (critic B-18). Left out, it says the host is told and the invite withdrawn.
+   */
+  readonly isOnCalendar?: boolean;
 }
 
 /** A rough email shape; the server checks it properly. */
@@ -84,6 +89,7 @@ export function BookingChanges({
   onInvite,
   onRemove,
   onCancel,
+  isOnCalendar = false,
 }: BookingChangesProps) {
   const [mode, setMode] = useState<Mode>(startsWith === 'move' && canMove ? 'move' : 'idle');
   // Arriving from the email's Cancel link opens the confirm straight away.
@@ -162,6 +168,7 @@ export function BookingChanges({
       <CancelDialog
         title={title}
         hostName={hostName}
+        isOnCalendar={isOnCalendar}
         isOpen={isCancelOpen}
         onCancel={onCancel}
         onKeep={() => {
@@ -344,7 +351,8 @@ function RemoveDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy}>
+          {/* No keycap on a public page's dialog (critic A26): a guest isn't reading shortcuts. */}
+          <Button slot="close" kbd={[]} isDisabled={isBusy}>
             {strings.dismiss}
           </Button>
           <Button variant="danger-solid" icon="x" isPending={isBusy} onPress={remove}>
@@ -370,12 +378,14 @@ function RemoveDialog({
 function CancelDialog({
   title,
   hostName,
+  isOnCalendar,
   isOpen,
   onCancel,
   onKeep,
 }: {
   readonly title: string;
   readonly hostName: string;
+  readonly isOnCalendar: boolean;
   readonly isOpen: boolean;
   readonly onCancel: (reason: string) => Promise<CancelOutcome>;
   readonly onKeep: () => void;
@@ -406,7 +416,7 @@ function CancelDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy}>
+          <Button slot="close" kbd={[]} isDisabled={isBusy}>
             {strings.keep}
           </Button>
           <Button variant="danger-solid" icon="circle-x" isPending={isBusy} onPress={cancel}>
@@ -420,7 +430,7 @@ function CancelDialog({
           {error}
         </Callout>
       )}
-      <p>{strings.cancelText(hostName)}</p>
+      <p>{isOnCalendar ? strings.cancelText(hostName) : strings.cancelTextPlain(hostName)}</p>
       <Field
         label={strings.reason}
         hint={strings.reasonHint(hostName)}

@@ -69,13 +69,74 @@ export const ChooseATime: Story = {
     const view = canvas.getByRole('radiogroup', { name: 'View' });
     await expect(clock.parentElement).toBe(view.parentElement);
     await expect(clock.getBoundingClientRect().top).toBe(view.getBoundingClientRect().top);
-    // Both feet, the rail's (wide screens) and the page's (phones): each link tagged as the booking page's.
+    // One foot, after the card in the reading order (critic C7), each link tagged as the booking page's.
     await expect(timefixLinkTags(canvasElement)).toEqual([
       timefixTags('booking_page', 'footer_logo'),
       timefixTags('booking_page', 'claim_link'),
-      timefixTags('booking_page', 'footer_logo'),
-      timefixTags('booking_page', 'claim_link'),
     ]);
+    const card = canvas.getByRole('region', { name: 'Choose a time' });
+    const foot = canvasElement.querySelector('footer');
+    await expect(foot === null ? false : Boolean(card.compareDocumentPosition(foot) & 4)).toBe(true);
+  },
+};
+
+/**
+ * Nothing chosen yet (critic A10): the band says so quietly instead of drawing Book disabled; stacked it has no band.
+ * The rail's facts read the zone in the picker's own format, and the page's rules on a quiet line (critic C4).
+ */
+export const WaitingForATime: Story = {
+  args: {
+    facts: [
+      { id: 'where', icon: 'video', children: '30 min · Video call' },
+      { id: 'zone', icon: 'globe', children: 'London time', aside: 'GMT+1 · 14:30' },
+      { id: 'rules', icon: 'clock', isQuiet: true, children: 'Can’t be booked within 4 hours · Up to 60 days ahead' },
+    ],
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingFrame
+        {...args}
+        heading="Choose a time"
+        footer={null}
+        footerWaiting="Pick a time"
+        aside={<SlotList heading="Thu Oct 8" slots={TIMES} value={undefined} onChange={fn()} />}
+      >
+        <MonthTiles
+          month="2026-10"
+          today="2026-10-08"
+          openDays={OPEN}
+          value="2026-10-08"
+          onChange={fn()}
+          onMonthChange={fn()}
+          canPrevious={false}
+          canNext
+        />
+      </BookingFrame>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('button', { name: /^Book/ })).toBeNull();
+    await expect(canvas.getByText('Pick a time')).toBeInTheDocument();
+    await expect(canvas.getByText('GMT+1 · 14:30')).toBeInTheDocument();
+  },
+};
+
+/** A paused page whose host is known (critic B-09): their face, the sentence, and the way on to their link page. */
+export const Paused: Story = {
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingMessage
+        title="Ada Lovelace isn’t taking bookings here right now"
+        host={{ name: 'Ada Lovelace' }}
+        action={{ href: '/ada-lovelace', label: 'See Ada’s page' }}
+      >
+        Their other pages may still be open.
+      </BookingMessage>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { name: /isn’t taking bookings/ })).toHaveFocus();
+    await expect(canvas.getByRole('link', { name: 'See Ada’s page' })).toHaveAttribute('href', '/ada-lovelace');
   },
 };
 
@@ -307,9 +368,9 @@ export const StepToDetailsAndBack: Story = {
     const atMonth = card();
     await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
     await userEvent.click(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' }));
-    // Focus is in the first field at once, while it slides in, and the card keeps its size.
+    // Focus is in the first field at once, while it slides in, and the card hugs the step (critics C14, A11).
     await expect(canvas.getByRole('textbox', { name: /Your name/ })).toHaveFocus();
-    await expect(card()?.height).toBe(atMonth?.height);
+    await expect(card()?.height).not.toBe(atMonth?.height);
     await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(document.getAnimations().filter((each) => each.playState === 'running')).toEqual([]));
     await expect(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' })).toBeVisible();

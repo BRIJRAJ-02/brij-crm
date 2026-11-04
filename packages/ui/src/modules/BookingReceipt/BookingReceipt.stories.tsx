@@ -65,6 +65,24 @@ export const Welcome: Story = {
   },
 };
 
+/**
+ * The booking page's last step (critic C1): drawn inside the page's own card right after Confirm, a section under the
+ * frame's heading, with no ground, card or foot of its own.
+ */
+export const InTheBookingCard: Story = {
+  args: { placement: 'card' },
+  render: (args) => (
+    <Stage width="narrow">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByRole('heading', { level: 2, name: 'You’re booked' })).toHaveFocus();
+    await expect(canvasElement.querySelector('main')).toBeNull();
+    await expect(timefixLinkTags(canvasElement)).toEqual([]);
+  },
+};
+
 /** Cancelled: the time struck through, and a way to book again. */
 export const Cancelled: Story = {
   args: {

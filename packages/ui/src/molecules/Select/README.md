@@ -72,3 +72,7 @@ Enter, Space or the arrow keys open it; arrows move; typing jumps to a match; En
 
 - `items` (with `optionStyle`) replace `options` with `color`, `dot` and `render`; `value` and `onChange(id | null)` follow React Aria.
 - `isClearable`, archived options, `isReadOnly` with its reason, and `error` are new.
+
+## Popover foot (5 November 2026)
+
+`popoverFoot` puts one setting that belongs with the choice in a band under a searchable list: the public booking page's 12h or 24h clock under its time zones, as Calendly keeps it (critic A24). DeferredSelect passes it on. Tab reaches it after the search.
