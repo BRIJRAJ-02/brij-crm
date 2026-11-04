@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { Modal, ModalTrigger } from '../../molecules/Modal/Modal.tsx';
 import styles from './PublishBar.module.css';
@@ -214,5 +215,19 @@ export function PublishBar({
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * The bar standing in while its editor loads: the same strip and height, its status a skeleton line, so the editor
+ * below lands where the loading state put it.
+ */
+export function PublishBarSkeleton() {
+  return (
+    <div className={styles.root} data-loading="" aria-hidden="true">
+      <div className={styles.row}>
+        <Skeleton width="short" />
+      </div>
+    </div>
   );
 }

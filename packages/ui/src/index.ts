@@ -300,6 +300,7 @@ export type { PageTemplate } from './lib/page-template.ts';
 /** A public page's publish bar (spec 0068, AC-6811, AC-6812): changes not published, Changes, Versions and Publish. */
 export {
   PublishBar,
+  PublishBarSkeleton,
   type PublishBarProblem,
   type PublishBarProps,
   type PublishBarStatus,

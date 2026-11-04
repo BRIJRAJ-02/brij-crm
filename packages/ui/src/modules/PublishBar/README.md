@@ -15,6 +15,8 @@ SaveBar is the floating bar for unsaved edits on one screen: it leaves once they
 - `published`: a check and "Published", and Publish says Published, disabled; the caller puts the bar back to `live` after a moment.
 - `error`: one line saying why (`problem.message`) and the way to the setting to fix (`problem.fix`); Publish keeps its name. Below 480px of its own width (a phone) the reason comes first, above the status and the buttons (a container query).
 
+`PublishBarSkeleton` stands in while the editor loads: the same strip and height with its status as a skeleton line, so the editor under it lands where the loading state put it.
+
 Publish asks nothing (publishing is reversible through Versions). Discard draft asks first: "Discard the draft?", with Keep the draft and Discard draft. Versions reads when its menu opens (`onVersions`); the live one is marked and can't be picked; picking another calls `onRestore`, which brings it back as the draft. Changes is a disclosure (`aria-expanded` on its button), the status is a polite live region and the refusal an alert. The status crossfades when what it says changes (a fade, which reduced motion keeps).
 
 ## Differences from the artifact
