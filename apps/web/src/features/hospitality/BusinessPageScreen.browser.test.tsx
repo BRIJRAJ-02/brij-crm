@@ -191,7 +191,9 @@ describe('Settings › Business › Page', () => {
     await expect.element(page.getByRole('button', { name: 'Move photo 3 later' })).toBeDisabled();
     await expect.element(page.getByRole('button', { name: 'Move photo 2 later' })).toBeEnabled();
     // A thumbnail in each photo's row.
-    expect(document.querySelectorAll(`img[src*="/api/business/page/photos/${PHOTO(2).id}"]`).length).toBeGreaterThan(0);
+    await expect
+      .poll(() => document.querySelectorAll(`img[src*="/api/business/page/photos/${PHOTO(2).id}"]`).length)
+      .toBeGreaterThan(0);
     await userEvent.click(page.getByRole('button', { name: 'Remove photo 2' }));
     await expect.poll(() => calls.at(-1)?.draft?.gallery.map((photo) => photo.id)).toEqual([PHOTO(1).id, PHOTO(3).id]);
     const removed = said.find((content) => content.message === 'Photo removed.');
