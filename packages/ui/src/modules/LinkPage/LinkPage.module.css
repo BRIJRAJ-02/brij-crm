@@ -286,6 +286,10 @@
   .root {
     /* The social marks arrive one after another and lift a touch under the pointer (SocialLinks), as on a booking
        page. */
+    /* A held control eases down and a changed label rises in, as on a booking page (spec 0068, AC-6803; the timing the
+       stageshow demos settled, MotionDemos), from tokens. */
+    --scale-press: var(--scale-enter);
+    --label-swap: var(--duration-modal);
     --social-arrive: var(--duration-modal);
     /* stylelint-disable-next-line unit-disallowed-list -- a lift with no token, the public pages' own */
     --social-lift: 2px;
@@ -1335,9 +1339,17 @@
     padding: var(--space-12);
   }
 
+  /* The picture fills what the cell gives it, never sets the row's height: a wide photo's own shape would make its
+     whole row a poster (spec 0068's bento rows are as tall as their tallest card). */
   .tilePicture {
+    position: relative;
     flex: 1;
-    min-block-size: 0;
+    min-block-size: calc(var(--size-column-narrow) + var(--space-32));
+  }
+
+  .tilePicture > .coverImage {
+    position: absolute;
+    inset: 0;
   }
 
   .tileFoot {
