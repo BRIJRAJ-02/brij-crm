@@ -1606,7 +1606,7 @@
   }
 
   .root[data-template='split'] .cover {
-    flex-basis: 100%;
+    inline-size: 100%;
   }
 
   /* Every template: rows press in and lift a touch under the pointer (AC-6803). */

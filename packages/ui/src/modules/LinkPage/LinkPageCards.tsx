@@ -224,7 +224,6 @@ function ProfileCard({
               size="touch"
               icon="calendar"
               href={bookHref}
-              isFullWidth="center"
               {...(onPress === undefined ? {} : { onPress })}
             >
               {book.label}
@@ -243,7 +242,7 @@ function StatusCard({ block }: { readonly block: Extract<CardBlock, { kind: 'sta
     <Card kind="status">
       <span className={styles.status}>
         <span className={styles.dot} data-state={block.state} aria-hidden="true" />
-        <span className={styles.statusText}>{block.text}</span>
+        <span className={styles.cardName}>{block.text}</span>
       </span>
     </Card>
   );
@@ -321,7 +320,7 @@ function AudioCard({
           {failed && asked ? strings.introFailed : length === undefined ? '' : clockOf(length - elapsed)}
         </span>
       </span>
-      {block.title !== undefined && <span className={styles.quiet}>{block.title}</span>}
+      {block.title !== undefined && <span className={styles.footTitle}>{block.title}</span>}
       {src !== undefined && (
         // A visitor's own control is the button above; the element itself is never shown. A spoken intro of a
         // minute has no captions file to offer; the card's title says what it is.

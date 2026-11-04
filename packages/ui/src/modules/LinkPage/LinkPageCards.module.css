@@ -187,12 +187,22 @@
     gap: var(--space-4);
   }
 
-  /* A status: the dot and its words, one line. */
+  /* A status: the dot and its words in the card's large type, at its foot, as the references' date cards sit. */
   .status {
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    margin-block: auto;
+    margin-block-start: auto;
+  }
+
+  /* A card's own words at its foot, large, when the card holds little else (an audio intro's title). */
+  .footTitle {
+    margin-block-start: auto;
+    color: var(--page-card-text, var(--text));
+    font: var(--text-note-title);
+    font-family: var(--page-face, var(--font-sans));
+    font-synthesis: none;
+    overflow-wrap: anywhere;
   }
 
   .dot {
@@ -221,11 +231,6 @@
     to {
       box-shadow: 0 0 0 var(--space-6) transparent;
     }
-  }
-
-  .statusText {
-    color: var(--page-card-text, var(--text));
-    font: var(--text-body-strong);
   }
 
   /* An audio intro: Play, the waveform, the time left. */
@@ -304,6 +309,7 @@
 
   /* Logos: a row that drifts sideways, its copy right behind it, held under the pointer and for reduced motion. */
   .marquee {
+    margin-block: auto;
     display: flex;
     gap: var(--space-24);
     overflow: hidden;

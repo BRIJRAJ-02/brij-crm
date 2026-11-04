@@ -2187,7 +2187,11 @@ export function LinkPage({
   const contact = contactOf(blocks);
   // A page whose only block is the contact card has no rows: its card is the header's Save contact, so the list
   // draws its empty state rather than an empty group.
-  const groups = blocks === undefined ? [] : groupsOf(blocks);
+  // In Split the sticky panel is who the page is (spec 0068): a profile card beside it would say it twice.
+  const groups =
+    blocks === undefined
+      ? []
+      : groupsOf(drawn?.template === 'split' ? blocks.filter((block) => block.kind !== 'profile') : blocks);
   // Words that rise in once on the live page and are simply there everywhere else (a preview, a draft).
   const entering = (words: string, order: 1 | 2 | 3) =>
     isLive ? (
@@ -2200,6 +2204,8 @@ export function LinkPage({
   const look = lookAttributes(theme, photos);
   const variablesRef = usePageVariables(variables);
   const isSplit = drawn?.template === 'split';
+  // A profile card leads the page in place of the hero (AC-6808), except in Split, whose panel is who the page is.
+  const leadsWithCard = !isSplit && layout === 'page' && (blocks?.some((block) => block.kind === 'profile') ?? false);
   // Split's panel always offers Book when the page has a booking page (AC-6801); elsewhere only the caller's.
   const heroBook = book ?? (isSplit ? pageBook : undefined);
   const bookHref = ownPath(heroBook?.href);
@@ -2272,7 +2278,13 @@ export function LinkPage({
               data-cover={(person !== undefined && hasCover) || undefined}
               aria-busy={person === undefined || undefined}
             >
-              {person === undefined ? (
+              {person !== undefined && leadsWithCard ? (
+                // The profile card says who the page is (spec 0068, AC-6808): the header keeps the page's one h1
+                // for screen readers and the outline, and the card draws the face, name and line once.
+                <h1 className={styles.name}>
+                  <VisuallyHidden>{person.name}</VisuallyHidden>
+                </h1>
+              ) : person === undefined ? (
                 <>
                   <Skeleton shape="circle" size="xl" />
                   <p className={styles.name}>
@@ -2351,7 +2363,7 @@ export function LinkPage({
               Share stands while the page loads: it shares the address the visitor is already on. */}
             <Actions
               contact={contact}
-              share={share}
+              share={leadsWithCard ? undefined : share}
               onPress={onPress}
               {...(walletHref === undefined ? {} : { walletHref })}
             />
