@@ -175,7 +175,7 @@ export const strings = {
   jumpsHint: 'Go further down when answers match. First match wins.',
   addJump: 'Add a jump',
   removeJump: (place: number) => `Remove jump ${String(place)}`,
-  jumpsNowhere: 'Add a step below this one, or an ending in Settings, to jump to.',
+  jumpsNowhere: 'Add a step below this one to jump to.',
   jumpTo: 'Jump to',
   /** One jump among a step's, in the order they are tried. */
   jumpNumber: (place: number) => `Jump ${String(place)}`,
@@ -184,7 +184,7 @@ export const strings = {
     title === undefined || title.trim() === '' ? `Step ${String(place)}` : `Step ${String(place)} · ${title.trim()}`,
   /** An ending as a jump's target: its heading, or its place while it has none. */
   jumpToEnding: (place: number, heading: string) =>
-    heading.trim() === '' ? `Ending ${String(place)}` : `Ending: ${heading.trim()}`,
+    heading.trim() === '' ? `Thank-you message ${String(place)}` : `Thank-you message: ${heading.trim()}`,
   jumpGone: 'This jump no longer points to a step below this one. Choose where it goes.',
   jumpsFull: (most: number) => `A step holds ${String(most)} jumps.`,
   jumpsNoAnswers: 'This step has no answers to jump on yet.',

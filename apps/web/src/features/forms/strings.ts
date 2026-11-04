@@ -563,10 +563,10 @@ export const strings = {
   // Endings, the score and the Flow view (spec 0063 slice 5, AC-6315, AC-6316, AC-6325).
   endingsTitle: 'Endings',
   endingsLine: 'Where a jump or a rule can send a visitor instead of the thank you.',
-  endingsFull: (most: number) => `A form holds the thank you and ${String(most)} endings.`,
+  endingsFull: (most: number) => `A form holds ${String(most)} thank-you messages beside the thank you page.`,
   addEnding: 'Add an ending',
   endingName: (place: number, heading: string | undefined) =>
-    heading === undefined || heading.trim() === '' ? `Ending ${String(place)}` : heading,
+    heading === undefined || heading.trim() === '' ? `Thank-you message ${String(place)}` : heading,
   endingHeading: 'Heading',
   endingHeadingPlaceholder: 'Thanks, we are not a fit',
   endingLine: 'Line under it',
@@ -602,7 +602,7 @@ export const strings = {
   flowThen: 'Then',
   /** The next step, as a place to go. */
   flowGoTo: (name: string) => `Go to ${name}`,
-  flowEndings: 'Endings',
+  flowEndings: 'Thank-you messages',
   flowClassic: 'Steps and logic jumps work with the Steps layout.',
   flowEmptyTitle: 'No questions yet',
   flowEmpty: 'Add a question to see the flow.',
@@ -659,30 +659,41 @@ export const strings = {
   // After they send (T20, 5 November 2026): the end of the Form tab's list, as Typeform's endings and Tally's thank you
   // page sit at the end of a form. Endings, routing and the score live here, never in Settings.
   afterSend: 'After they send',
-  anotherEnding: 'Another ending',
-  sendElsewhere: 'Send to a booking page or link',
-  afterMenu: 'More ways to end',
-  thankYouPage: 'Thank you page',
-  /** What everyone no rule sends elsewhere gets, as the default row's choice. */
-  afterEveryone: 'Everyone else',
-  /** A rule's destination, over its choice of a booking page or a link. */
-  sendTo: 'Send to',
+  /** The one line of what everyone gets (T39): "Everyone sees [Thank you page]", "Everyone else" once a rule exists. */
+  everyoneSees: 'Everyone sees',
+  everyoneElseSees: 'Everyone else sees',
+  everyoneGets: 'What everyone else sees',
   afterKindThanks: 'Thank you page',
-  afterKindBooking: 'Booking page',
-  afterKindLink: 'Link',
-  bookingRow: (title: string | undefined) => (title === undefined ? 'Booking page' : `Booking page · ${title}`),
-  linkRow: (url: string) => (url.trim() === '' || url === 'https://' ? 'Link' : `Link · ${url}`),
-  messageRow: 'Message',
-  /** A rule's condition on its row: "When Budget is Under $1k". */
-  whenLine: (line: string) => `When ${line}`,
-  dependingOnAnswers: 'Depending on answers',
-  addCondition: 'Depending on answers…',
-  /** An ending nothing sends anyone to yet. */
-  endingUnreached: 'Nothing leads here yet',
-  /** An ending only a step's jump reaches. */
-  endingByJump: 'Reached by a jump',
-  removeOutcome: 'Remove',
-  outcomeRemoved: 'Removed.',
+  afterKindBooking: 'A booking page',
+  afterKindLink: 'A link',
+  /** The quiet line that adds a rule. */
+  sendSome: 'Send some people somewhere else',
+  sendSomeNeedsQuestion: 'Add a question with choices first, so a rule has something to read.',
+  rulesFull: (most: number) => `A form holds ${String(most)} rules.`,
+  /** A rule's destination, after its arrow. */
+  thenArrow: '→',
+  destination: 'Where they go',
+  toMessage: 'A different thank-you message',
+  toPage: (title: string) => `Booking page · ${title}`,
+  toLink: 'A link',
+  ruleName: (place: number) => `rule ${String(place)}`,
+  ruleMenu: (place: number) => `Rule ${String(place)} actions`,
+  moveUp: 'Move up',
+  moveDown: 'Move down',
+  deleteRule: 'Delete',
+  ruleDeleted: 'Rule deleted.',
+  addCondition: 'Add a condition',
+  /** A booking page's countdown, in the sentence: "after 5 seconds". */
+  countdownInLine: 'at once',
+  countdownAfterInLine: (seconds: number) => `after ${String(seconds)} seconds`,
+  ifWord: 'If',
+  /** A thank-you message only a step's jump reaches: said, with where its rule is changed. */
+  sentByStep: (step: string) => `${step} sends people here`,
+  nothingSendsHere: 'Nothing sends people here yet',
+  sendPeopleHere: 'Send people here',
+  messageMenu: 'Thank-you message actions',
+  deleteMessage: 'Delete',
+  messageDeleted: 'Thank-you message deleted.',
   insertAnswer: 'Insert an answer',
   insertScore: 'Score',
   linkAddress: 'Address',

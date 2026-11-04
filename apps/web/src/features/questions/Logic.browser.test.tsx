@@ -140,7 +140,7 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
     // Only forward: the step below it and the form's ending, never itself or the step above.
     expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent)).toEqual([
       'Step 3 · Your team',
-      'Ending: Thanks, we are not a fit',
+      'Thank-you message: Thanks, we are not a fit',
     ]);
     await page.screenshot({ path: '.vitest/shots/s5-jumps-light.png' });
     await wear('dark');
@@ -157,7 +157,7 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
     // (a rule that did nothing): with Step 3 next, it goes to the form's ending.
     await expect.poll(() => document.querySelectorAll('[aria-label="Remove jump 2"]').length).toBe(1);
     const targets = [...document.querySelectorAll('button')].filter((each) =>
-      each.textContent.includes('Ending: Thanks, we are not a fit'),
+      each.textContent.includes('Thank-you message: Thanks, we are not a fit'),
     );
     expect(targets.length).toBe(2);
   });
@@ -211,10 +211,10 @@ describe('the Flow view (AC-6325)', () => {
     await expect.element(page.getByText('Step 3 · Your team').first()).toBeVisible();
     // The jump as one line, in words, and the ending it goes to; then where everyone else goes.
     await expect.element(page.getByText('If Budget is Under $1k')).toBeVisible();
-    await expect.element(page.getByText('Jump to Ending: Thanks, we are not a fit')).toBeVisible();
+    await expect.element(page.getByText('Jump to Thank-you message: Thanks, we are not a fit')).toBeVisible();
     await expect.element(page.getByText('Otherwise')).toBeVisible();
     // Every end is listed: the form's own thank you page first, then its endings.
-    await expect.element(page.getByText('Endings')).toBeVisible();
+    await expect.element(page.getByText('Thank-you messages')).toBeVisible();
     await expect.element(page.getByText('Thank you page').first()).toBeVisible();
     await page.screenshot({ path: '.vitest/shots/s5-flow-light.png' });
     await wear('dark');

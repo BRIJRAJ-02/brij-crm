@@ -1,10 +1,9 @@
 // Brief
-// Purpose: what happens after someone sends a form (T20, 5 November 2026), at the end of the Form tab's list as
-// Typeform's endings and Tally's thank you page are: the thank you page everyone else gets, other endings, and sending
-// people to a booking page or a link, each "depending on answers"; then the score, once a question gives points.
-// Main task: say what each person sees next, in one place, with one click per outcome.
-// Leaves out: which step jumps where (each step's own logic, above), and reordering (the first match wins in list
-// order, which is rarely changed; Typeform hides it too).
+// Purpose: what happens after someone sends a form (T39, 5 November 2026), at the end of the Form tab, read as
+// sentences: each rule "If Budget is Under $1k → A different thank-you message", then "Everyone else sees
+// [Thank you page]"; then the score, once a question gives points.
+// Main task: say what each person sees next, in one place, each part changed where it is read.
+// Leaves out: which step jumps where (each step's own logic, above).
 import type { BookingPageView, FormDocument, FormTargetChoices, RoutingRule } from '@crm/data';
 import { FORM_ENDINGS_MAX, ROUTING_RULES_MAX, SCORE_FACT, SCORED_TYPES, type FormEnding } from '@crm/data/forms';
 import { useCaptureList } from '@crm/data/react';
@@ -12,40 +11,47 @@ import {
   Button,
   ButtonLink,
   Callout,
+  Card,
   EmptyState,
   Field,
-  FieldGroup,
   focusLater,
+  InfoTip,
   Menu,
   MenuItem,
+  MenuSeparator,
   MenuTrigger,
-  QuestionList,
+  SectionBar,
   SegmentedControl,
   Select,
+  Sentence,
   SettingsRow,
+  SettingsStack,
   Tooltip,
-  InfoTip,
-  type QuestionListItem,
   type Toasts,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { linksHref, pageEditorHref } from '../booking/links.ts';
-import { ConditionsEditor } from '../routing/ConditionsEditor.tsx';
-import { conditionsLine, questionFacts, readyConditions, storedShowWhen, type Fact } from '../routing/facts.ts';
-import { strings as routingStrings } from '../routing/strings.ts';
+import { ConditionLines, withCondition } from '../routing/ConditionLines.tsx';
+import { questionFacts, storedShowWhen, type Fact } from '../routing/facts.ts';
+import { stepPlaces } from '../questions/steps.ts';
+import { strings as questionStrings } from '../questions/strings.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { afterPageProblem } from './after-page.ts';
-import { firstWords, isRedirectAddress, mintEndingId } from './draft.ts';
+import { isRedirectAddress, mintEndingId } from './draft.ts';
+import { readyRule } from './logic.ts';
 import { strings } from './strings.ts';
 
-/** The default row's id: what everyone no rule sends elsewhere gets. */
+/** The default line's id, for a link to it (the Flow's Edit, `?question=after`). */
 export const AFTER_ROW = 'after';
-const RULE = 'rule:';
-const ENDING = 'ending:';
 
 /** The countdowns a form offers before it sends its visitor on to book (AC-1056): 0 is at once. */
 const COUNTDOWNS = [0, 3, 5, 10, 15, 30] as const;
+
+/** A rule's destination as its Select names it: a thank-you message, a booking page, or a link. */
+const TO_MESSAGE = 'message';
+const TO_LINK = 'link';
+const TO_PAGE = 'page:';
 
 /** Props for After they send. */
 export interface AfterSendSectionProps {
@@ -56,9 +62,9 @@ export interface AfterSendSectionProps {
   readonly toasts: Toasts;
   readonly newId: () => string;
   readonly onDraftChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
-  /** A row to open and bring into view as the tab shows: `after`, or an ending a publish refused. */
+  /** `after` to bring the Everyone line into focus as the tab shows (the Flow's Edit). */
   readonly focusRow?: string;
-  /** The ending a publish refused, and why: kept open with the message. */
+  /** The thank-you message a publish refused, and why: said on its card. */
   readonly problem?: { readonly endingId: string; readonly message: string };
   /** A field still being typed blocks Publish: show its message whether or not it was left yet. */
   readonly showGaps: boolean;
@@ -76,8 +82,9 @@ function factsOf(draft: FormDocument): readonly Fact[] {
 }
 
 /**
- * After they send: one list of what happens, the thank you page first (everyone else), then each rule in the order it
- * is tried, then any ending only a jump reaches. Each opens in place, as a question does.
+ * After they send, as sentences (T39): the rules first, in the order they are tried ("If … → …"), each in a card
+ * with its ⋯, then one quiet "+ Send some people somewhere else", then what everyone else sees. A thank-you message
+ * only a step's jump reaches has its own card, saying which step sends people there.
  */
 export function AfterSendSection(props: AfterSendSectionProps) {
   const { slug, draft, target, isReadOnly, toasts, newId, onDraftChange, problem, showGaps } = props;
@@ -88,143 +95,36 @@ export function AfterSendSection(props: AfterSendSectionProps) {
   const facts = factsOf(draft);
   const endings = draft.endings ?? [];
   const rules = draft.routing.rules;
-  const placeOf = (endingId: string) => endings.findIndex((ending) => ending.id === endingId) + 1;
   const endingRuled = new Set(rules.flatMap((rule) => (rule.then.kind === 'ending' ? [rule.then.endingId] : [])));
-  const jumpedTo = new Set(
-    [
-      ...draft.steps.flatMap((step) => step.jumps ?? []),
-      ...draft.questions.flatMap((question) => question.jumps ?? []),
-    ].flatMap((jump) => ('ending' in jump.to ? [jump.to.ending] : [])),
-  );
   const loose = endings.filter((ending) => !endingRuled.has(ending.id));
-
-  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
-  // A link to a row (Publish's refusal, the Flow's Edit) opens it, once per link.
-  const [focused, setFocused] = useState<string | undefined>(undefined);
-  const want = props.focusRow ?? (problem === undefined ? undefined : endingRowOf(problem.endingId));
-  if (want !== focused) {
-    setFocused(want);
-    if (want !== undefined) setOpen((before) => new Set([...before, want]));
-  }
-  function endingRowOf(endingId: string): string {
-    const rule = rules.find((each) => each.then.kind === 'ending' && each.then.endingId === endingId);
-    return rule === undefined ? `${ENDING}${endingId}` : `${RULE}${rule.id}`;
-  }
-  const [justAdded, setJustAdded] = useState<string | undefined>(undefined);
-  const openRow = (id: string) => {
-    setOpen((before) => new Set([...before, id]));
-    setJustAdded(id);
-  };
-
-  const afterItem = (): QuestionListItem => {
-    const after = draft.after;
-    if (after.kind === 'redirect') {
-      return { id: AFTER_ROW, label: strings.afterKindLink, typeIcon: 'external-link', note: after.url };
-    }
-    if (after.kind === 'booking') {
-      const page = pageList.find((each) => each.id === after.bookingPageId);
-      return {
-        id: AFTER_ROW,
-        label: strings.bookingRow(page?.title),
-        typeIcon: 'calendar-check',
-        note: strings.afterEveryone,
-      };
-    }
-    return {
-      id: AFTER_ROW,
-      label: strings.thankYouPage,
-      typeIcon: 'circle-check',
-      note: firstWords(after.message === '' ? strings.thankYouDefault : after.message),
-    };
-  };
-  const conditionOf = (rule: RoutingRule) => {
-    const line = conditionsLine(rule.when, facts);
-    return line === undefined ? {} : { condition: strings.whenLine(line) };
-  };
-  const ruleItem = (rule: RoutingRule): QuestionListItem => {
-    const then = rule.then;
-    const base = { id: `${RULE}${rule.id}`, ...conditionOf(rule) };
-    switch (then.kind) {
-      case 'ending': {
-        const ending = endings.find((each) => each.id === then.endingId);
-        return {
-          ...base,
-          label: strings.endingName(placeOf(then.endingId), ending?.heading),
-          typeIcon: 'message-square',
-          hasProblem: problem?.endingId === then.endingId,
-        };
-      }
-      case 'book':
-        return {
-          ...base,
-          label: strings.bookingRow(pageList.find((page) => page.id === then.bookingPageId)?.title),
-          typeIcon: 'calendar-check',
-        };
-      case 'redirect':
-        return { ...base, label: strings.linkRow(then.url), typeIcon: 'external-link' };
-      default:
-        return { ...base, label: strings.messageRow, typeIcon: 'message-square' };
-    }
-  };
-  const items: readonly QuestionListItem[] = [
-    afterItem(),
-    ...rules.map(ruleItem),
-    ...loose.map((ending) => ({
-      id: `${ENDING}${ending.id}`,
-      label: strings.endingName(placeOf(ending.id), ending.heading),
-      typeIcon: 'message-square' as const,
-      note: jumpedTo.has(ending.id) ? strings.endingByJump : strings.endingUnreached,
-      hasProblem: problem?.endingId === ending.id,
-    })),
-  ];
-
-  const isEndingsFull = endings.length >= FORM_ENDINGS_MAX;
+  const ready = readyRule(draft.questions, facts);
   const isRulesFull = rules.length >= ROUTING_RULES_MAX;
-  // A ready condition, one click from the button: complete the moment it appears (foolproof, the owner).
-  const ready = () => storedShowWhen(readyConditions(facts));
+  const isEndingsFull = endings.length >= FORM_ENDINGS_MAX;
+  const addRef = useRef<HTMLButtonElement>(null);
+  const firstRefs = useRef(new Map<string, HTMLButtonElement | null>());
 
-  /** + Another ending: an ending, with a ready "depending on answers" rule sending people to it, opened. */
-  const addEnding = () => {
-    if (isEndingsFull) return;
-    const endingId = mintEndingId(endings);
-    const ruleId = newId();
-    const withRule = facts.length > 0 && !isRulesFull;
-    onDraftChange((before) => ({
-      ...before,
-      endings: [...(before.endings ?? []), { id: endingId, heading: '' }],
-      ...(withRule
-        ? {
-            routing: {
-              rules: [...before.routing.rules, { id: ruleId, when: ready(), then: { kind: 'ending', endingId } }],
-            },
-          }
-        : {}),
-    }));
-    openRow(withRule ? `${RULE}${ruleId}` : `${ENDING}${endingId}`);
-  };
+  // A thank-you message switched away from is kept here, so switching back brings its words back.
+  const parked = useRef(new Map<string, FormEnding>());
 
-  /** Send to a booking page or link: a ready rule, to the first live booking page, else to a link. */
-  const addSend = () => {
-    if (isRulesFull || facts.length === 0) return;
+  /** + Send some people somewhere else: a ready rule to a new thank-you message (or a page, or a link), focused. */
+  const addRule = () => {
+    if (isRulesFull || ready === undefined) return;
     const ruleId = newId();
     const page = usable[0];
+    const endingId = mintEndingId(endings);
+    const then: RoutingRule['then'] = !isEndingsFull
+      ? { kind: 'ending', endingId }
+      : page === undefined
+        ? { kind: 'redirect', url: 'https://' }
+        : { kind: 'book', bookingPageId: page.id, message: '' };
     onDraftChange((before) => ({
       ...before,
-      routing: {
-        rules: [
-          ...before.routing.rules,
-          {
-            id: ruleId,
-            when: ready(),
-            then:
-              page === undefined
-                ? { kind: 'redirect', url: 'https://' }
-                : { kind: 'book', bookingPageId: page.id, message: '' },
-          },
-        ],
-      },
+      ...(then.kind === 'ending'
+        ? { endings: [...(before.endings ?? []), { id: endingId, heading: questionStrings.newEndingHeading }] }
+        : {}),
+      routing: { rules: [...before.routing.rules, { id: ruleId, when: storedShowWhen(ready), then }] },
     }));
-    openRow(`${RULE}${ruleId}`);
+    focusLater(() => firstRefs.current.get(ruleId) ?? null);
   };
 
   const changeRule = (ruleId: string, change: (rule: RoutingRule) => RoutingRule) => {
@@ -249,33 +149,69 @@ export function AfterSendSection(props: AfterSendSectionProps) {
     }));
   };
 
-  const listRef = useRef<HTMLButtonElement>(null);
-  /** Remove a row: its rule, and its ending once nothing else leads there; Undo puts both back where they were. */
-  const remove = (rowId: string) => {
-    const ruleId = rowId.startsWith(RULE) ? rowId.slice(RULE.length) : undefined;
-    const rule = rules.find((each) => each.id === ruleId);
-    const endingId =
-      rule?.then.kind === 'ending'
-        ? rule.then.endingId
-        : rowId.startsWith(ENDING)
-          ? rowId.slice(ENDING.length)
-          : undefined;
-    const otherRule = rules.some(
+  /** Whether a thank-you message is still needed by something other than `ruleId`: another rule, or a jump. */
+  const isUsedElsewhere = (document: FormDocument, endingId: string, ruleId?: string) =>
+    document.routing.rules.some(
       (each) => each.id !== ruleId && each.then.kind === 'ending' && each.then.endingId === endingId,
+    ) ||
+    [...document.steps.flatMap((step) => step.jumps ?? []), ...document.questions.flatMap((q) => q.jumps ?? [])].some(
+      (jump) => 'ending' in jump.to && jump.to.ending === endingId,
     );
-    const dropsEnding = endingId !== undefined && !otherRule && !jumpedTo.has(endingId);
-    const ruleAt = rule === undefined ? -1 : rules.indexOf(rule);
+
+  /** A rule's destination changed: a thank-you message it leaves is parked, one it picks comes back or is made. */
+  const changeDestination = (rule: RoutingRule, id: string) => {
+    onDraftChange((before) => {
+      const was = rule.then;
+      let nextEndings = before.endings ?? [];
+      if (was.kind === 'ending' && id !== TO_MESSAGE && !isUsedElsewhere(before, was.endingId, rule.id)) {
+        const leaving = nextEndings.find((each) => each.id === was.endingId);
+        if (leaving !== undefined) parked.current.set(rule.id, leaving);
+        nextEndings = nextEndings.filter((each) => each.id !== was.endingId);
+      }
+      let then: RoutingRule['then'] | undefined;
+      if (id === TO_MESSAGE) {
+        if (was.kind === 'ending') return before;
+        const kept = parked.current.get(rule.id);
+        const ending =
+          kept !== undefined && !nextEndings.some((each) => each.id === kept.id)
+            ? kept
+            : { id: mintEndingId(nextEndings), heading: questionStrings.newEndingHeading };
+        if (nextEndings.length >= FORM_ENDINGS_MAX) return before;
+        nextEndings = [...nextEndings, ending];
+        then = { kind: 'ending', endingId: ending.id };
+      } else if (id === TO_LINK) {
+        then = was.kind === 'redirect' ? was : { kind: 'redirect', url: 'https://' };
+      } else if (id.startsWith(TO_PAGE)) {
+        // The hosts a team page's route narrows to stay as they were while the page stays the same.
+        const bookingPageId = id.slice(TO_PAGE.length);
+        then = was.kind === 'book' ? { ...was, bookingPageId } : { kind: 'book', bookingPageId, message: '' };
+      }
+      if (then === undefined) return before;
+      const next = then;
+      return {
+        ...before,
+        endings: nextEndings,
+        routing: { rules: before.routing.rules.map((each) => (each.id === rule.id ? { ...each, then: next } : each)) },
+      };
+    });
+  };
+
+  /** Delete a rule, and its thank-you message once nothing else leads there; Undo puts both back where they were. */
+  const removeRule = (rule: RoutingRule) => {
+    const endingId = rule.then.kind === 'ending' ? rule.then.endingId : undefined;
+    const dropsEnding = endingId !== undefined && !isUsedElsewhere(draft, endingId, rule.id);
+    const ruleAt = rules.indexOf(rule);
     const ending = endings.find((each) => each.id === endingId);
     const endingAt = ending === undefined ? -1 : endings.indexOf(ending);
     onDraftChange((before) => ({
       ...before,
-      routing: { rules: before.routing.rules.filter((each) => each.id !== ruleId) },
+      routing: { rules: before.routing.rules.filter((each) => each.id !== rule.id) },
       ...(dropsEnding ? { endings: (before.endings ?? []).filter((each) => each.id !== endingId) } : {}),
     }));
-    focusLater(() => listRef.current);
+    focusLater(() => addRef.current);
     toasts.toast({
       tone: 'info',
-      message: strings.outcomeRemoved,
+      message: strings.ruleDeleted,
       action: {
         label: strings.undo,
         onAction: () => {
@@ -285,11 +221,10 @@ export function AfterSendSection(props: AfterSendSectionProps) {
               dropsEnding && ending !== undefined && !kept.some((each) => each.id === ending.id)
                 ? [...kept.slice(0, endingAt), ending, ...kept.slice(endingAt)]
                 : kept;
-            const rulesNow = before.routing.rules;
-            const rulesBack =
-              rule !== undefined && !rulesNow.some((each) => each.id === rule.id)
-                ? [...rulesNow.slice(0, ruleAt), rule, ...rulesNow.slice(ruleAt)]
-                : rulesNow;
+            const now = before.routing.rules;
+            const rulesBack = now.some((each) => each.id === rule.id)
+              ? now
+              : [...now.slice(0, ruleAt), rule, ...now.slice(ruleAt)];
             return { ...before, endings: endingsBack, routing: { rules: rulesBack } };
           });
         },
@@ -297,179 +232,321 @@ export function AfterSendSection(props: AfterSendSectionProps) {
     });
   };
 
-  const sendLabel = strings.sendElsewhere;
-  const canSend = !isRulesFull && facts.length > 0;
+  /** Delete a thank-you message nothing sends anyone to, with Undo. */
+  const removeLoose = (ending: FormEnding) => {
+    const at = endings.indexOf(ending);
+    onDraftChange((before) => ({
+      ...before,
+      endings: (before.endings ?? []).filter((each) => each.id !== ending.id),
+    }));
+    focusLater(() => addRef.current);
+    toasts.toast({
+      tone: 'info',
+      message: strings.messageDeleted,
+      action: {
+        label: strings.undo,
+        onAction: () => {
+          onDraftChange((before) => {
+            const kept = before.endings ?? [];
+            return kept.some((each) => each.id === ending.id)
+              ? before
+              : { ...before, endings: [...kept.slice(0, at), ending, ...kept.slice(at)] };
+          });
+        },
+      },
+    });
+  };
+
+  /** Send people here: a ready rule to a thank-you message nothing sends anyone to yet. */
+  const ruleTo = (endingId: string) => {
+    if (isRulesFull || ready === undefined) return;
+    const ruleId = newId();
+    onDraftChange((before) => ({
+      ...before,
+      routing: {
+        rules: [
+          ...before.routing.rules,
+          { id: ruleId, when: storedShowWhen(ready), then: { kind: 'ending', endingId } },
+        ],
+      },
+    }));
+    focusLater(() => firstRefs.current.get(ruleId) ?? null);
+  };
+
+  const move = (ruleId: string, by: -1 | 1) => {
+    onDraftChange((before) => {
+      const list = [...before.routing.rules];
+      const from = list.findIndex((each) => each.id === ruleId);
+      const to = from + by;
+      const moving = list[from];
+      if (moving === undefined || to < 0 || to >= list.length) return before;
+      list.splice(from, 1);
+      list.splice(to, 0, moving);
+      return { ...before, routing: { rules: list } };
+    });
+  };
+
+  const destinations = (rule: RoutingRule) => {
+    const then = rule.then;
+    const chosen = then.kind === 'book' ? pageList.find((page) => page.id === then.bookingPageId) : undefined;
+    return [
+      ...(then.kind === 'ending' || !isEndingsFull ? [{ id: TO_MESSAGE, label: strings.toMessage }] : []),
+      ...usable.map((page) => ({ id: `${TO_PAGE}${page.id}`, label: strings.toPage(page.title) })),
+      ...(chosen !== undefined && !usable.includes(chosen)
+        ? [
+            {
+              id: `${TO_PAGE}${chosen.id}`,
+              label: strings.toPage(chosen.title),
+              description: strings.pageNotUsable,
+              isArchived: true,
+            },
+          ]
+        : []),
+      { id: TO_LINK, label: strings.toLink },
+    ];
+  };
+  const destinationOf = (rule: RoutingRule): string | null => {
+    switch (rule.then.kind) {
+      case 'ending':
+        return TO_MESSAGE;
+      case 'redirect':
+        return TO_LINK;
+      case 'book':
+        return `${TO_PAGE}${rule.then.bookingPageId}`;
+      default:
+        return null;
+    }
+  };
+
+  const ruleCard = (rule: RoutingRule, place: number) => {
+    const then = rule.then;
+    const ending = then.kind === 'ending' ? endings.find((each) => each.id === then.endingId) : undefined;
+    const name = strings.ruleName(place + 1);
+    const menu = isReadOnly ? undefined : (
+      <MenuTrigger>
+        <Button variant="ghost" icon="ellipsis" label={strings.ruleMenu(place + 1)} />
+        <Menu
+          label={strings.ruleMenu(place + 1)}
+          onAction={(key) => {
+            if (key === 'condition') {
+              changeRule(rule.id, (before) => ({ ...before, when: storedShowWhen(withCondition(before.when, facts)) }));
+            }
+            if (key === 'up') move(rule.id, -1);
+            if (key === 'down') move(rule.id, 1);
+            if (key === 'delete') removeRule(rule);
+          }}
+        >
+          {rule.when.rules.length < 5 && (
+            <MenuItem id="condition" icon="plus">
+              {strings.addCondition}
+            </MenuItem>
+          )}
+          {place > 0 && (
+            <MenuItem id="up" icon="arrow-up">
+              {strings.moveUp}
+            </MenuItem>
+          )}
+          {place < rules.length - 1 && (
+            <MenuItem id="down" icon="arrow-down">
+              {strings.moveDown}
+            </MenuItem>
+          )}
+          <MenuSeparator />
+          <MenuItem id="delete" icon="trash" isDanger>
+            {strings.deleteRule}
+          </MenuItem>
+        </Menu>
+      </MenuTrigger>
+    );
+    return (
+      <Card key={rule.id}>
+        {ending !== undefined && problem?.endingId === ending.id && <Callout tone="danger">{problem.message}</Callout>}
+        <SettingsStack variant="nested">
+          <ConditionLines
+            value={rule.when}
+            facts={facts}
+            name={name}
+            isReadOnly={isReadOnly}
+            firstRef={(node) => {
+              firstRefs.current.set(rule.id, node);
+            }}
+            {...(menu === undefined ? {} : { end: menu })}
+            onChange={(when) => {
+              changeRule(rule.id, (before) => ({ ...before, when: storedShowWhen(when) }));
+            }}
+            then={
+              <>
+                {strings.thenArrow}
+                {then.kind === 'message' ? (
+                  strings.toMessage
+                ) : (
+                  <Select
+                    label={`${strings.destination}, ${name}`}
+                    isLabelHidden
+                    variant="inline"
+                    savesOnPick
+                    items={destinations(rule)}
+                    value={destinationOf(rule)}
+                    isReadOnly={isReadOnly}
+                    onChange={(id) => {
+                      if (id !== null) changeDestination(rule, id);
+                    }}
+                  />
+                )}
+              </>
+            }
+          />
+        </SettingsStack>
+        {ending !== undefined && (
+          <EndingFields
+            ending={ending}
+            facts={facts}
+            draft={draft}
+            pages={usable}
+            isReadOnly={isReadOnly}
+            isJustAdded={false}
+            showGaps={showGaps}
+            onChange={(next) => {
+              changeEnding(ending.id, next);
+            }}
+          />
+        )}
+        {then.kind === 'redirect' && (
+          <RuleLink
+            url={then.url}
+            isReadOnly={isReadOnly}
+            showGaps={showGaps}
+            onChange={(url) => {
+              changeRule(rule.id, (before) => ({ ...before, then: { kind: 'redirect', url } }));
+            }}
+          />
+        )}
+        {then.kind === 'message' && (
+          <Field
+            label={strings.thankYou}
+            isLabelHidden
+            isMultiline
+            value={then.message}
+            maxLength={2_000}
+            isReadOnly={isReadOnly}
+            onChange={(message) => {
+              changeRule(rule.id, (before) => ({ ...before, then: { kind: 'message', message } }));
+            }}
+          />
+        )}
+      </Card>
+    );
+  };
+
+  // The step a jump to this thank-you message sits on, for its card's line.
+  const flow = { questions: draft.questions, steps: draft.steps };
+  const places = stepPlaces(flow);
+  const sentBy = (endingId: string) => {
+    const step = draft.steps.find((each) =>
+      (each.jumps ?? []).some((jump) => 'ending' in jump.to && jump.to.ending === endingId),
+    );
+    if (step !== undefined) return questionStrings.stepName(places.get(step.id)?.number ?? 1, step.title);
+    const question = draft.questions.find((each) =>
+      (each.jumps ?? []).some((jump) => 'ending' in jump.to && jump.to.ending === endingId),
+    );
+    return question === undefined
+      ? undefined
+      : question.label === ''
+        ? questionStrings.untitledQuestion
+        : question.label;
+  };
+
+  const looseCard = (ending: FormEnding) => {
+    const by = sentBy(ending.id);
+    const menu =
+      isReadOnly || by !== undefined ? undefined : (
+        <MenuTrigger>
+          <Button variant="ghost" icon="ellipsis" label={strings.messageMenu} />
+          <Menu
+            label={strings.messageMenu}
+            onAction={(key) => {
+              if (key === 'send') ruleTo(ending.id);
+              if (key === 'delete') removeLoose(ending);
+            }}
+          >
+            {!isRulesFull && ready !== undefined && (
+              <MenuItem id="send" icon="git-branch">
+                {strings.sendPeopleHere}
+              </MenuItem>
+            )}
+            <MenuSeparator />
+            <MenuItem id="delete" icon="trash" isDanger>
+              {strings.deleteMessage}
+            </MenuItem>
+          </Menu>
+        </MenuTrigger>
+      );
+    return (
+      <Card key={ending.id}>
+        {problem?.endingId === ending.id && <Callout tone="danger">{problem.message}</Callout>}
+        <Sentence lead={strings.ifWord} {...(menu === undefined ? {} : { end: menu })}>
+          {`${by === undefined ? strings.nothingSendsHere : strings.sentByStep(by)} ${strings.thenArrow} ${strings.toMessage}`}
+        </Sentence>
+        <EndingFields
+          ending={ending}
+          facts={facts}
+          draft={draft}
+          pages={usable}
+          isReadOnly={isReadOnly}
+          isJustAdded={false}
+          showGaps={showGaps}
+          onChange={(next) => {
+            changeEnding(ending.id, next);
+          }}
+        />
+      </Card>
+    );
+  };
+
   const scored = draft.questions.some(
     (question) => question.points !== undefined && SCORED_TYPES.includes(question.answerType),
   );
   const numbers = target.items.filter((item) => item.type === 'number' && item.canWrite);
+  const cantAdd = isRulesFull
+    ? strings.rulesFull(ROUTING_RULES_MAX)
+    : ready === undefined
+      ? strings.sendSomeNeedsQuestion
+      : undefined;
 
   return (
-    <>
-      <QuestionList
-        label={strings.afterSend}
-        isCountHidden
-        {...(isReadOnly || !canSend
-          ? {}
-          : {
-              wideActions: (
-                <Button variant="ghost" icon="calendar-check" onPress={addSend}>
-                  {sendLabel}
-                </Button>
-              ),
-            })}
-        actions={
-          isReadOnly ? undefined : (
-            <>
-              {isEndingsFull ? (
-                <Tooltip content={strings.endingsFull(FORM_ENDINGS_MAX)}>
-                  <Button icon="plus" isDisabled>
-                    {strings.anotherEnding}
-                  </Button>
-                </Tooltip>
-              ) : (
-                <Button ref={listRef} icon="plus" onPress={addEnding}>
-                  {strings.anotherEnding}
-                </Button>
-              )}
-              {canSend && (
-                <MenuTrigger>
-                  <Button variant="ghost" icon="ellipsis" label={strings.afterMenu} />
-                  <Menu
-                    label={strings.afterMenu}
-                    onAction={(key) => {
-                      if (key === 'send') addSend();
-                    }}
-                  >
-                    <MenuItem id="send" icon="calendar-check">
-                      {sendLabel}
-                    </MenuItem>
-                  </Menu>
-                </MenuTrigger>
-              )}
-            </>
-          )
-        }
-        items={items}
-        openIds={open}
-        onOpenChange={(id, isOpen) => {
-          setOpen((before) => {
-            const next = new Set(before);
-            if (isOpen) next.add(id);
-            else next.delete(id);
-            return next;
-          });
-        }}
-        renderOpen={(id) => {
-          if (id === AFTER_ROW) {
-            return (
-              <AfterDefault
-                slug={slug}
-                draft={draft}
-                pages={pages.status}
-                pageList={pageList}
-                usable={usable}
-                isReadOnly={isReadOnly}
-                showGaps={showGaps}
-                onDraftChange={onDraftChange}
-              />
-            );
-          }
-          const ruleId = id.startsWith(RULE) ? id.slice(RULE.length) : undefined;
-          const rule = rules.find((each) => each.id === ruleId);
-          const endingId =
-            rule?.then.kind === 'ending' ? rule.then.endingId : id.startsWith(ENDING) ? id.slice(ENDING.length) : '';
-          const ending = endings.find((each) => each.id === endingId);
-          const condition =
-            rule === undefined ? null : (
-              <FieldGroup label={strings.dependingOnAnswers}>
-                <ConditionsEditor
-                  value={rule.when}
-                  facts={facts}
-                  factLabel={routingStrings.question}
-                  isReadOnly={isReadOnly}
-                  onChange={(when) => {
-                    changeRule(rule.id, (before) => ({ ...before, when: storedShowWhen(when) }));
-                  }}
-                />
-              </FieldGroup>
-            );
-          if (ending !== undefined) {
-            return (
-              <>
-                {problem?.endingId === ending.id && <Callout tone="danger">{problem.message}</Callout>}
-                <EndingFields
-                  ending={ending}
-                  facts={facts}
-                  draft={draft}
-                  pages={usable}
-                  isReadOnly={isReadOnly}
-                  isJustAdded={justAdded === id}
-                  showGaps={showGaps}
-                  onChange={(next) => {
-                    changeEnding(ending.id, next);
-                  }}
-                />
-                {condition}
-              </>
-            );
-          }
-          if (rule === undefined) return null;
-          return (
-            <>
-              <RouteFields
-                rule={rule}
-                usable={usable}
-                pageList={pageList}
-                isReadOnly={isReadOnly}
-                showGaps={showGaps}
-                onChange={(then) => {
-                  changeRule(rule.id, (before) => ({ ...before, then }));
-                }}
-              />
-              {condition}
-            </>
-          );
-        }}
-        renderFooterStart={(id) => {
-          // An ending nothing leads to yet: one click gives it a ready rule.
-          if (isReadOnly || !id.startsWith(ENDING) || facts.length === 0 || isRulesFull) return null;
-          const endingId = id.slice(ENDING.length);
-          return (
-            <Button
-              variant="ghost"
-              icon="git-branch"
-              onPress={() => {
-                const ruleId = newId();
-                onDraftChange((before) => ({
-                  ...before,
-                  routing: {
-                    rules: [...before.routing.rules, { id: ruleId, when: ready(), then: { kind: 'ending', endingId } }],
-                  },
-                }));
-                openRow(`${RULE}${ruleId}`);
-              }}
-            >
-              {strings.addCondition}
+    <SettingsStack variant="plain">
+      <SectionBar title={strings.afterSend} />
+      {rules.map(ruleCard)}
+      {loose.map(looseCard)}
+      {!isReadOnly && (
+        <span>
+          {cantAdd === undefined ? (
+            <Button ref={addRef} variant="ghost" icon="plus" onPress={addRule}>
+              {strings.sendSome}
             </Button>
-          );
-        }}
-        renderFooter={(id) =>
-          isReadOnly || id === AFTER_ROW ? null : (
-            <Tooltip content={strings.removeOutcome}>
-              <Button
-                variant="ghost-danger"
-                size="lg"
-                icon="trash"
-                label={strings.removeOutcome}
-                onPress={() => {
-                  remove(id);
-                }}
-              />
+          ) : (
+            <Tooltip content={cantAdd}>
+              <Button ref={addRef} variant="ghost" icon="plus" isDisabled>
+                {strings.sendSome}
+              </Button>
             </Tooltip>
-          )
-        }
-      />
+          )}
+        </span>
+      )}
+      <Card>
+        <AfterDefault
+          slug={slug}
+          draft={draft}
+          pages={pages.status}
+          pageList={pageList}
+          usable={usable}
+          hasRules={rules.length > 0 || loose.length > 0}
+          isFocused={props.focusRow === AFTER_ROW}
+          isReadOnly={isReadOnly}
+          showGaps={showGaps}
+          onDraftChange={onDraftChange}
+        />
+      </Card>
       {/* The score (Typeform's): only once a question gives points, as one row. */}
       {scored && (
         <SettingsRow
@@ -499,17 +576,51 @@ export function AfterSendSection(props: AfterSendSectionProps) {
           />
         </SettingsRow>
       )}
-    </>
+    </SettingsStack>
   );
 }
 
-/** Props for the thank you page's own row. */
+/** A rule's link: its address, said when it is not a whole one yet. */
+function RuleLink({
+  url,
+  isReadOnly,
+  showGaps,
+  onChange,
+}: {
+  readonly url: string;
+  readonly isReadOnly: boolean;
+  readonly showGaps: boolean;
+  readonly onChange: (url: string) => void;
+}) {
+  const [isLeft, setLeft] = useState(false);
+  const error = (isLeft || showGaps) && !isRedirectAddress(url) ? strings.routeIncomplete : undefined;
+  return (
+    <Field
+      label={strings.linkAddress}
+      type="url"
+      value={url}
+      isRequired
+      isReadOnly={isReadOnly}
+      {...(error === undefined ? {} : { error })}
+      onBlur={() => {
+        setLeft(true);
+      }}
+      onChange={onChange}
+    />
+  );
+}
+
+/** Props for what everyone else gets. */
 interface AfterDefaultProps {
   readonly slug: string;
   readonly draft: FormDocument;
   readonly pages: 'ready' | 'loading' | 'error' | 'no-access';
   readonly pageList: readonly BookingPageView[];
   readonly usable: readonly BookingPageView[];
+  /** Some rule sends people elsewhere: the line reads "Everyone else". */
+  readonly hasRules: boolean;
+  /** Brought into focus as the tab shows (a link to it). */
+  readonly isFocused: boolean;
   readonly isReadOnly: boolean;
   readonly showGaps: boolean;
   readonly onDraftChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
@@ -519,8 +630,9 @@ interface AfterDefaultProps {
 type AfterKind = FormDocument['after']['kind'];
 
 /**
- * The thank you page, open: its words in place, and a quiet choice of what everyone no rule sends elsewhere gets
- * (the old After sending card, moved here). Switching keeps what each choice held, so going back loses nothing.
+ * "Everyone sees [Thank you page]" (T39): one sentence, its words edited under it; a booking page reads "Everyone
+ * sees [A booking page] [Intro call] after [5 seconds]", a link "Everyone sees [A link] [https://…]". Switching keeps
+ * what each choice held, so going back loses nothing.
  */
 function AfterDefault({
   slug,
@@ -528,12 +640,18 @@ function AfterDefault({
   pages,
   pageList,
   usable,
+  hasRules,
+  isFocused,
   isReadOnly,
   showGaps,
   onDraftChange,
 }: AfterDefaultProps) {
   const seesAllPages = useCan('booking.admin');
   const after = draft.after;
+  const kindRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (isFocused) focusLater(() => kindRef.current);
+  }, [isFocused]);
   const [kept, setKept] = useState({
     message: after.kind === 'redirect' ? '' : after.message,
     url: after.kind === 'redirect' ? after.url : 'https://',
@@ -548,18 +666,6 @@ function AfterDefault({
   // Booking is always a choice: with no live page, it shows how to make one and the form keeps doing what it did.
   const [isBookingPending, setBookingPending] = useState(false);
   const shownKind: AfterKind = isBookingPending ? 'booking' : after.kind;
-  const pickPending = (pageId: string) => {
-    setBookingPending(false);
-    onDraftChange((before) => ({
-      ...before,
-      after: {
-        kind: 'booking',
-        bookingPageId: pageId,
-        countdownSeconds: kept.countdownSeconds,
-        message: before.after.kind === 'redirect' ? kept.message : before.after.message,
-      },
-    }));
-  };
   const choose = (next: AfterKind) => {
     if (next === shownKind) return;
     setBookingPending(false);
@@ -598,22 +704,106 @@ function AfterDefault({
 
   return (
     <>
-      <SegmentedControl
-        label={strings.afterEveryone}
-        isLabelVisible
-        size="compact"
-        isFitted
-        segments={[
-          { value: 'message', label: strings.afterKindThanks },
-          { value: 'booking', label: strings.afterKindBooking },
-          { value: 'redirect', label: strings.afterKindLink },
-        ]}
-        value={shownKind}
-        isReadOnly={isReadOnly}
-        onChange={(value) => {
-          if (value === 'message' || value === 'redirect' || value === 'booking') choose(value);
-        }}
-      />
+      {after.kind === 'booking' && afterProblem?.kind === 'paused' && (
+        <Callout
+          tone="warning"
+          title={strings.pagePausedTitle(afterProblem.page.title)}
+          {...(afterProblem.page.canChange
+            ? {
+                actions: (
+                  <ButtonLink href={pageEditorHref(slug, afterProblem.page.id)} variant="secondary">
+                    {strings.openPage}
+                  </ButtonLink>
+                ),
+              }
+            : {})}
+        >
+          {strings.pagePaused({
+            hostLeft: afterProblem.page.pausedReason === 'host_removed',
+            canResume: afterProblem.page.canChange,
+            canPick: !isReadOnly,
+          })}
+        </Callout>
+      )}
+      {after.kind === 'booking' && afterProblem?.kind === 'gone' && (
+        <Callout tone="warning" title={strings.pageGoneTitle}>
+          {strings.pageGone(!isReadOnly)}
+        </Callout>
+      )}
+      <Sentence lead="">
+        {hasRules ? strings.everyoneElseSees : strings.everyoneSees}
+        <Select
+          triggerRef={kindRef}
+          label={strings.everyoneGets}
+          isLabelHidden
+          variant="inline"
+          savesOnPick
+          items={[
+            { id: 'message', label: strings.afterKindThanks },
+            { id: 'booking', label: strings.afterKindBooking },
+            { id: 'redirect', label: strings.afterKindLink },
+          ]}
+          value={shownKind}
+          isReadOnly={isReadOnly}
+          onChange={(value) => {
+            if (value === 'message' || value === 'redirect' || value === 'booking') choose(value);
+          }}
+        />
+        {after.kind === 'booking' && !isBookingPending && (
+          <>
+            <Select
+              label={strings.bookingPage}
+              isLabelHidden
+              variant="inline"
+              savesOnPick
+              items={[
+                ...usable.map((page) => ({ id: page.id, label: page.title })),
+                ...(bookingPage !== undefined && !usable.includes(bookingPage)
+                  ? [
+                      {
+                        id: bookingPage.id,
+                        label: bookingPage.title,
+                        description: strings.pageNotUsable,
+                        isArchived: true,
+                      },
+                    ]
+                  : []),
+              ]}
+              value={after.bookingPageId}
+              isReadOnly={isReadOnly}
+              onChange={(id) => {
+                if (id === null) return;
+                onDraftChange((before) =>
+                  before.after.kind === 'booking'
+                    ? { ...before, after: { ...before.after, bookingPageId: id } }
+                    : before,
+                );
+              }}
+            />
+            <Select
+              label={strings.countdown}
+              isLabelHidden
+              variant="inline"
+              savesOnPick
+              items={COUNTDOWNS.map((seconds) => ({
+                id: String(seconds),
+                label: seconds === 0 ? strings.countdownInLine : strings.countdownAfterInLine(seconds),
+              }))}
+              value={String(after.countdownSeconds)}
+              isReadOnly={isReadOnly}
+              onChange={(id) => {
+                const seconds = Number(id);
+                if (!Number.isInteger(seconds)) return;
+                onDraftChange((before) =>
+                  before.after.kind === 'booking'
+                    ? { ...before, after: { ...before.after, countdownSeconds: seconds } }
+                    : before,
+                );
+              }}
+            />
+          </>
+        )}
+      </Sentence>
       {isBookingPending && usable.length > 0 && (
         <Select
           label={strings.bookingPage}
@@ -622,7 +812,17 @@ function AfterDefault({
           value={null}
           isReadOnly={isReadOnly}
           onChange={(id) => {
-            if (id !== null) pickPending(id);
+            if (id === null) return;
+            setBookingPending(false);
+            onDraftChange((before) => ({
+              ...before,
+              after: {
+                kind: 'booking',
+                bookingPageId: id,
+                countdownSeconds: kept.countdownSeconds,
+                message: before.after.kind === 'redirect' ? kept.message : before.after.message,
+              },
+            }));
           }}
         />
       )}
@@ -645,78 +845,6 @@ function AfterDefault({
           {after.kind === 'redirect' ? strings.keepsWebPage : strings.keepsMessage}
         </EmptyState>
       )}
-      {after.kind === 'booking' && !isBookingPending && (
-        <>
-          {afterProblem?.kind === 'paused' && (
-            <Callout
-              tone="warning"
-              title={strings.pagePausedTitle(afterProblem.page.title)}
-              {...(afterProblem.page.canChange
-                ? {
-                    actions: (
-                      <ButtonLink href={pageEditorHref(slug, afterProblem.page.id)} variant="secondary">
-                        {strings.openPage}
-                      </ButtonLink>
-                    ),
-                  }
-                : {})}
-            >
-              {strings.pagePaused({
-                hostLeft: afterProblem.page.pausedReason === 'host_removed',
-                canResume: afterProblem.page.canChange,
-                canPick: !isReadOnly,
-              })}
-            </Callout>
-          )}
-          {afterProblem?.kind === 'gone' && (
-            <Callout tone="warning" title={strings.pageGoneTitle}>
-              {strings.pageGone(!isReadOnly)}
-            </Callout>
-          )}
-          <Select
-            label={strings.bookingPage}
-            items={[
-              ...usable.map((page) => ({ id: page.id, label: strings.pageItem(page.title, page.durations[0] ?? 30) })),
-              ...(bookingPage !== undefined && !usable.includes(bookingPage)
-                ? [
-                    {
-                      id: bookingPage.id,
-                      label: bookingPage.title,
-                      description: strings.pageNotUsable,
-                      isArchived: true,
-                    },
-                  ]
-                : []),
-            ]}
-            value={after.bookingPageId}
-            isReadOnly={isReadOnly}
-            onChange={(id) => {
-              if (id === null) return;
-              onDraftChange((before) =>
-                before.after.kind === 'booking' ? { ...before, after: { ...before.after, bookingPageId: id } } : before,
-              );
-            }}
-          />
-          <Select
-            label={strings.countdown}
-            items={COUNTDOWNS.map((seconds) => ({
-              id: String(seconds),
-              label: seconds === 0 ? strings.countdownAtOnce : strings.countdownAfter(seconds),
-            }))}
-            value={String(after.countdownSeconds)}
-            isReadOnly={isReadOnly}
-            onChange={(id) => {
-              const seconds = Number(id);
-              if (!Number.isInteger(seconds)) return;
-              onDraftChange((before) =>
-                before.after.kind === 'booking'
-                  ? { ...before, after: { ...before.after, countdownSeconds: seconds } }
-                  : before,
-              );
-            }}
-          />
-        </>
-      )}
       {isBookingPending ? null : after.kind === 'redirect' ? (
         <Field
           label={strings.linkAddress}
@@ -732,116 +860,20 @@ function AfterDefault({
             onDraftChange((before) => ({ ...before, after: { kind: 'redirect', url } }));
           }}
         />
-      ) : (
+      ) : after.kind === 'message' ? (
         <Field
           label={strings.thankYou}
+          isLabelHidden
           placeholder={strings.thankYouDefault}
           isMultiline
           value={after.message}
           maxLength={2_000}
           isReadOnly={isReadOnly}
           onChange={(message) => {
-            onDraftChange((before) => ({
-              ...before,
-              after: before.after.kind === 'booking' ? { ...before.after, message } : { kind: 'message', message },
-            }));
+            onDraftChange((before) => ({ ...before, after: { kind: 'message', message } }));
           }}
         />
-      )}
-    </>
-  );
-}
-
-/** Props for a rule that sends people to a booking page, a link, or shows a message. */
-interface RouteFieldsProps {
-  readonly rule: RoutingRule;
-  readonly usable: readonly BookingPageView[];
-  readonly pageList: readonly BookingPageView[];
-  readonly isReadOnly: boolean;
-  readonly showGaps: boolean;
-  readonly onChange: (then: RoutingRule['then']) => void;
-}
-
-/** Where a rule sends people: a booking page or a link (a message, kept for rules made before). */
-function RouteFields({ rule, usable, pageList, isReadOnly, showGaps, onChange }: RouteFieldsProps) {
-  const then = rule.then;
-  const [isLeft, setLeft] = useState(false);
-  if (then.kind === 'message') {
-    return (
-      <Field
-        label={strings.thankYou}
-        isMultiline
-        value={then.message}
-        maxLength={2_000}
-        isReadOnly={isReadOnly}
-        onChange={(message) => {
-          onChange({ kind: 'message', message });
-        }}
-      />
-    );
-  }
-  if (then.kind !== 'book' && then.kind !== 'redirect') return null;
-  const chosen = then.kind === 'book' ? pageList.find((page) => page.id === then.bookingPageId) : undefined;
-  const error =
-    then.kind === 'redirect' && (isLeft || showGaps) && !isRedirectAddress(then.url)
-      ? strings.routeIncomplete
-      : undefined;
-  return (
-    <>
-      {usable.length > 0 && (
-        <SegmentedControl
-          label={strings.sendTo}
-          isLabelVisible
-          size="compact"
-          isFitted
-          segments={[
-            { value: 'book', label: strings.afterKindBooking },
-            { value: 'redirect', label: strings.afterKindLink },
-          ]}
-          value={then.kind}
-          isReadOnly={isReadOnly}
-          onChange={(value) => {
-            const page = usable[0];
-            if (value === 'book' && then.kind !== 'book' && page !== undefined) {
-              onChange({ kind: 'book', bookingPageId: page.id, message: '' });
-            }
-            if (value === 'redirect' && then.kind !== 'redirect') onChange({ kind: 'redirect', url: 'https://' });
-          }}
-        />
-      )}
-      {then.kind === 'book' ? (
-        <Select
-          savesOnPick
-          label={strings.bookingPage}
-          items={[
-            ...usable.map((page) => ({ id: page.id, label: strings.pageItem(page.title, page.durations[0] ?? 30) })),
-            ...(chosen !== undefined && !usable.includes(chosen)
-              ? [{ id: chosen.id, label: chosen.title, description: strings.pageNotUsable, isArchived: true }]
-              : []),
-          ]}
-          value={then.bookingPageId}
-          isReadOnly={isReadOnly}
-          onChange={(id) => {
-            // The hosts it narrows to (a team page's) stay as they were.
-            if (id !== null) onChange({ ...then, bookingPageId: id });
-          }}
-        />
-      ) : (
-        <Field
-          label={strings.linkAddress}
-          type="url"
-          value={then.url}
-          isRequired
-          isReadOnly={isReadOnly}
-          {...(error === undefined ? {} : { error })}
-          onBlur={() => {
-            setLeft(true);
-          }}
-          onChange={(url) => {
-            onChange({ kind: 'redirect', url });
-          }}
-        />
-      )}
+      ) : null}
     </>
   );
 }

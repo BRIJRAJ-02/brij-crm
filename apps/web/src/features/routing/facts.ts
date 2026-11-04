@@ -145,8 +145,10 @@ function factsOfQuestion(question: FormQuestion): Fact[] {
             .map((choice) => ({ id: choice, label: choice })),
         },
       ];
+    // A consent is ticked or not, as a yes or no: never a value to type (T39).
     case 'yes_no':
     case 'checkbox':
+    case 'consent':
       return [{ key: question.key, label, kind: 'yes_no', options: yesNo() }];
     case 'number':
       return [{ key: question.key, label, kind: 'number' }];
