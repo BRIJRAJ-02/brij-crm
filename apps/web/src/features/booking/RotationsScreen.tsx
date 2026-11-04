@@ -193,7 +193,8 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
   const actionSlot = useBookingsActionSlot();
   const [isInviting, setInviting] = useState(false);
   // Make a booking page from a group's card (B-04): the one Add a booking page dialog, offering who it books.
-  const [isAddingPage, setAddingPage] = useState(false);
+  // The group whose card asked, so the dialog opens on Round robin with it picked.
+  const [addingFor, setAddingFor] = useState<string | undefined>(undefined);
   const navigate = useNavigate();
   // Members whose upcoming bookings an admin may hand on, one prompt at a time (every member a save removed).
   const [queue, setQueue] = useState<readonly Handing[]>([]);
@@ -363,7 +364,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                             icon="plus"
                             size="sm"
                             onPress={() => {
-                              setAddingPage(true);
+                              setAddingFor(rotation.id);
                             }}
                           >
                             {strings.makePage}
@@ -375,7 +376,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                             label={strings.rowActions(rotation.name)}
                             onAction={(key) => {
                               if (key === 'edit') open(rotation);
-                              if (key === 'page') setAddingPage(true);
+                              if (key === 'page') setAddingFor(rotation.id);
                               if (key === 'delete') {
                                 setDeleteError(undefined);
                                 setDeleting(rotation);
@@ -534,17 +535,18 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
         </SettingsStack>
       </Modal>
       {/* Mounted only while asked for: it mints a page id and reads the groups as it mounts. */}
-      {canManage && isAddingPage && (
+      {canManage && addingFor !== undefined && (
         <NewPageDialog
           data={data}
           slug={slug}
           canBookTeams
+          rotationId={addingFor}
           isOpen
           onClose={() => {
-            setAddingPage(false);
+            setAddingFor(undefined);
           }}
           onCreated={(page) => {
-            setAddingPage(false);
+            setAddingFor(undefined);
             void navigate({ to: pageEditorHref(slug, page.id) });
           }}
         />

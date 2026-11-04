@@ -50,6 +50,11 @@ export interface NewPageDialogProps {
    * which makes the template in one step; `onManaged` then opens its editor.
    */
   readonly onManaged?: (templateId: string) => void;
+  /**
+   * A group's card asked (Round robin's "Make a booking page"): the dialog opens on Round robin with that group
+   * picked. Needs `canBookTeams`.
+   */
+  readonly rotationId?: string;
 }
 
 /**
@@ -67,13 +72,16 @@ export function NewPageDialog({
   kind = 'page',
   onTeamLink,
   onManaged,
+  rotationId: askedRotation,
 }: NewPageDialogProps) {
+  // Round robin first only when a group's card asked for it; otherwise Just me (the owner, 4 November 2026).
+  const firstType: PageType = askedRotation !== undefined && canBookTeams ? 'rotation' : 'me';
   const [title, setTitle] = useState('');
   // A segment's minutes, or `custom` with the typed minutes beside it.
   const [length, setLength] = useState('30');
   const [custom, setCustom] = useState('');
   // Just me, always first and chosen (the owner, 4 November 2026: nothing else is ever pre-selected).
-  const [type, setType] = useState<PageType>('me');
+  const [type, setType] = useState<PageType>(firstType);
   // More types, folded until opened; held open while its type is the one chosen, so the choice never hides.
   const [isMoreOpen, setMoreOpen] = useState(false);
   const isTeamLink = kind === 'team-link' && onTeamLink !== undefined;
@@ -83,7 +91,7 @@ export function NewPageDialog({
   const canManaged = isPage && onManaged !== undefined && !isLinkOnly;
   const isManaged = canManaged && type === 'managed';
   const isTeam = isPage && canBookTeams && type === 'rotation';
-  const [rotationId, setRotationId] = useState<string | null>(null);
+  const [rotationId, setRotationId] = useState<string | null>(askedRotation ?? null);
   const [rotationError, setRotationError] = useState<string | undefined>(undefined);
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationItems =
@@ -134,9 +142,9 @@ export function NewPageDialog({
     setTitle('');
     setLength('30');
     setCustom('');
-    setType('me');
+    setType(firstType);
     setMoreOpen(false);
-    setRotationId(null);
+    setRotationId(askedRotation ?? null);
     setRotationError(undefined);
     setErrors({});
     setFailure(undefined);
@@ -221,7 +229,12 @@ export function NewPageDialog({
           ...(isLinkOnly && !isWorkspace ? { isPrivate: true } : {}),
         },
         ...(isTeam && pickedRotation !== null
-          ? { kind: 'round_robin' as const, hosts: { fixed: [], rotations: [pickedRotation] } }
+          ? // A team's page gets the workspace's address (owner, 5 November 2026); pages made before keep theirs.
+            {
+              kind: 'round_robin' as const,
+              scope: 'workspace' as const,
+              hosts: { fixed: [], rotations: [pickedRotation] },
+            }
           : {}),
         ...(isWorkspace ? { kind: 'round_robin' as const, scope: 'workspace' as const } : {}),
       })
