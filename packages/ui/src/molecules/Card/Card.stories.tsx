@@ -246,3 +246,18 @@ export const FooterWraps: Story = {
     }
   },
 };
+
+/** A header alone: a count with nothing under it keeps the same room below as above (lane 3c). */
+export const HeaderOnly: Story = {
+  args: { title: '2. Work email', description: '4 responses' },
+  render: (args) => (
+    <Stage width="narrow">
+      <Card {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    const frame = canvasElement.querySelector('.ws-card-root')?.getBoundingClientRect();
+    const line = canvas.getByText('4 responses').getBoundingClientRect();
+    await expect((frame?.bottom ?? 0) - line.bottom).toBeGreaterThanOrEqual(12);
+  },
+};
