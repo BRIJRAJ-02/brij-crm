@@ -390,3 +390,201 @@ test.describe('the Menu app from an empty workspace', () => {
     });
   });
 });
+
+/** One procedure as the page's own session calls it, answering its result; a refusal throws its message. */
+async function rpc<T>(page: Page, path: string, input: Record<string, unknown>): Promise<T> {
+  return page.evaluate(
+    async ([procedure, body]) => {
+      const response = await fetch(`/api/rpc/${procedure}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ json: body }),
+      });
+      const answer = (await response.json()) as { json: unknown };
+      if (!response.ok) throw new Error(JSON.stringify(answer.json));
+      return answer.json as T;
+    },
+    [path, input] as const,
+  );
+}
+
+test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
+  test.use({ locale: 'en-GB', timezoneId: 'Europe/London', actionTimeout: 15_000 });
+  if (process.env.FLOW_COLOR_SCHEME === 'dark') test.use({ colorScheme: 'dark' });
+  if (process.env.FLOW_WIDTH !== undefined)
+    test.use({ viewport: { width: Number(process.env.FLOW_WIDTH), height: 844 } });
+  test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to open business apps for the new workspace.');
+
+  test('install both, tables, a code per table, downloads, the print sheet, the guest’s table, a new code', async ({
+    page,
+    context,
+    browser,
+  }) => {
+    test.setTimeout(240_000);
+    const slug = `somewhere-qr-${String(Date.now()).slice(-6)}`;
+    await newWorkspace(page, `${slug}@example.com`, slug);
+    execFileSync('psql', [
+      OWNER_URL ?? '',
+      '-c',
+      `update workspaces set early_access = '{business_apps}', name = 'Somewhere' where slug = '${slug}'`,
+    ]);
+
+    await test.step('install Menu QR: it needs Menu, so both go in one step', async () => {
+      await page.goto(`/w/${slug}/settings/apps`);
+      await page.getByRole('button', { name: 'Install Menu QR' }).click();
+      const asked = page.getByRole('dialog');
+      await expect(asked).toBeVisible();
+      await shot(page, 'qr-01-needs-menu');
+      await asked.getByRole('button', { name: 'Install both' }).click();
+      const card = page.getByRole('dialog');
+      await card.getByLabel('Business name').fill('Somewhere');
+      await card.getByRole('button', { name: 'Install', exact: true }).click();
+      await expect(card).toBeHidden({ timeout: 15_000 });
+    });
+
+    const place = (await draftOf(page, slug)).places[0];
+    const placeId = place?.id ?? '';
+    const menuKey = place?.menuKey ?? '';
+
+    await test.step('QR codes with no tables yet: the way to add them', async () => {
+      await page.goto(`/w/${slug}/qr`);
+      await expect(page.getByRole('heading', { level: 1, name: 'QR codes' })).toBeVisible();
+      await expect(page.getByText('No tables yet')).toBeVisible();
+      // Nothing is published yet, so the page says scans would show nothing.
+      await expect(page.getByText(/Your menu isn’t published yet/)).toBeVisible();
+      await shot(page, 'qr-02-empty');
+      await expect(page.getByRole('link', { name: 'Add tables' })).toHaveAttribute(
+        'href',
+        `/w/${slug}/settings/business/places/${placeId}`,
+      );
+    });
+
+    await test.step('a menu published and four tables added', async () => {
+      const menuId = crypto.randomUUID();
+      const sectionId = crypto.randomUUID();
+      await rpc(page, 'menu/saveMenu', {
+        workspace: slug,
+        id: menuId,
+        name: 'Dinner',
+        placeIds: [placeId],
+        mutationId: crypto.randomUUID(),
+      });
+      await rpc(page, 'menu/saveSection', {
+        workspace: slug,
+        id: sectionId,
+        menuId,
+        name: 'Mains',
+        mutationId: crypto.randomUUID(),
+      });
+      for (const [name, price] of [
+        ['Soup', 650],
+        ['Risotto', 1450],
+        ['Tart', 700],
+      ] as const) {
+        await rpc(page, 'menu/saveItem', {
+          workspace: slug,
+          id: crypto.randomUUID(),
+          sectionId,
+          item: {
+            name,
+            priceMinor: price,
+            diet: [],
+            allergens: [],
+            kcal: null,
+            featured: false,
+            sizes: [],
+            groupIds: [],
+          },
+          mutationId: crypto.randomUUID(),
+        });
+      }
+      await rpc(page, 'menu/publish', { workspace: slug, mutationId: crypto.randomUUID() });
+      await rpc(page, 'hospitality/addResources', {
+        workspace: slug,
+        placeId,
+        kind: 'table',
+        labels: ['T1', 'T2', 'T3', 'T4'],
+        minCapacity: 2,
+        maxCapacity: 4,
+        online: true,
+        mutationId: crypto.randomUUID(),
+      });
+    });
+
+    let firstAddress = '';
+    await test.step('every table has its own code; one opens in a dialog with its link and downloads', async () => {
+      await page.goto(`/w/${slug}/qr`);
+      await expect(page.getByRole('rowheader', { name: 'Table 4' })).toBeVisible();
+      await expect(page.getByText(/Your menu isn’t published yet/)).toBeHidden();
+      await shot(page, 'qr-03-list');
+      await page.getByRole('button', { name: 'Show the QR code for Table 1' }).click();
+      const dialog = page.getByRole('dialog', { name: 'QR code for Table 1' });
+      await expect(dialog.getByRole('img', { name: 'QR code for Table 1' })).toBeVisible();
+      await shot(page, 'qr-04-code');
+      const download = page.waitForEvent('download');
+      await dialog.getByRole('button', { name: 'Download the Table 1 code as PNG' }).click();
+      expect((await download).suggestedFilename()).toMatch(/-t1-qr\.png$/);
+      const svg = page.waitForEvent('download');
+      await dialog.getByRole('button', { name: 'Download the Table 1 code as SVG' }).click();
+      expect((await svg).suggestedFilename()).toMatch(/-t1-qr\.svg$/);
+      firstAddress = (await dialog.getByRole('link', { name: 'Open menu' }).getAttribute('href')) ?? '';
+      expect(firstAddress).toMatch(new RegExp(`/m/${menuKey}\\?t=[A-Za-z0-9_-]{22}$`));
+      await page.keyboard.press('Escape');
+    });
+
+    await test.step('download every code as one zip', async () => {
+      const zip = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Download all' }).click();
+      await page.getByRole('menuitem', { name: 'PNG images (.zip)' }).click();
+      expect((await zip).suggestedFilename()).toMatch(/\.zip$/);
+      await expect(page.getByText('Downloaded 4 codes.')).toBeVisible();
+    });
+
+    await test.step('the print sheet: tent cards, two or four to a sheet', async () => {
+      await page.getByRole('link', { name: 'Print sheet' }).click();
+      await expect(page.getByRole('region', { name: 'Page 1 of 2' })).toBeVisible();
+      await expect(page.getByRole('article', { name: 'Table 1' })).toBeVisible();
+      await shot(page, 'qr-05-print-two');
+      await page.getByRole('radio', { name: '4 per sheet' }).click({ force: true });
+      await expect(page.getByRole('region', { name: 'Page 1 of 1' })).toBeVisible();
+      await shot(page, 'qr-06-print-four');
+      await page.emulateMedia({ media: 'print' });
+      await shot(page, 'qr-07-print-media');
+      await page.emulateMedia({ media: 'screen' });
+      await page.getByRole('link', { name: 'Back to QR codes' }).click();
+      await expect(page.getByRole('heading', { level: 1, name: 'QR codes' })).toBeVisible();
+    });
+
+    await test.step('a guest scans Table 1: the menu says so in its bar, and the scan counts', async () => {
+      // A phone's browser: a headless one reads as a machine, whose scans are never counted.
+      const phone = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+        ...(process.env.FLOW_COLOR_SCHEME === 'dark' ? { colorScheme: 'dark' as const } : {}),
+        viewport: { width: 390, height: 844 },
+      });
+      const guest = await phone.newPage();
+      await guest.goto(firstAddress.replace(/^https?:\/\/[^/]+/, ''));
+      await expect(guest.getByText('Table 1', { exact: true })).toBeVisible();
+      await shot(guest, 'qr-08-guest-table');
+      await phone.close();
+      await page.reload();
+      await expect(page.getByRole('row', { name: /Table 1.*1 scan/ })).toBeVisible();
+    });
+
+    await test.step('a new code asks first; the old print then opens the menu with no table', async () => {
+      await page.getByRole('button', { name: 'Actions for Table 1' }).last().click();
+      await page.getByRole('menuitem', { name: 'New code…' }).click();
+      const confirm = page.getByRole('alertdialog', { name: 'New code for Table 1?' });
+      await expect(confirm).toBeVisible();
+      await shot(page, 'qr-09-new-code');
+      await confirm.getByRole('button', { name: 'Make a new code' }).click();
+      await expect(page.getByText('Table 1 has a new code. Print it to replace the old one.')).toBeVisible();
+      const guest = await context.newPage();
+      await guest.goto(firstAddress.replace(/^https?:\/\/[^/]+/, ''));
+      await expect(guest.getByRole('heading', { name: 'Somewhere' })).toBeVisible();
+      await guest.waitForTimeout(1000);
+      await expect(guest.getByText('Table 1', { exact: true })).toBeHidden();
+      await guest.close();
+    });
+  });
+});

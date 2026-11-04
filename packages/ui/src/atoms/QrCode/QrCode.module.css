@@ -79,4 +79,10 @@
       fill: var(--border-strong);
     }
   }
+
+  /* On paper (Menu QR's print sheet, spec 0065 H2): the light surface in either theme, as a saved PNG is, since a
+     printed code is printed on white. After the dark rules, at their weight, so it wins over them. */
+  .root[data-ground='paper'] .ground {
+    fill: var(--surface);
+  }
 }

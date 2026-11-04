@@ -155,6 +155,7 @@ describe('@crm/ui', () => {
       'PublishBar',
       'PublishBarSkeleton',
       'QrCode',
+      'QrSheet',
       'QuestionList',
       'Radio',
       'RadioGroup',

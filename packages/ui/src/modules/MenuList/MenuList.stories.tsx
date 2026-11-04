@@ -22,7 +22,7 @@ function WithPicks({
       photoHref={samplePhotoHref}
       picks={picks}
       onPicksChange={setPicks}
-      table="4"
+      table="Table 4"
       {...(openItemId === undefined ? {} : { openItemId })}
       {...(isPicksOpen === undefined ? {} : { isPicksOpen })}
     />

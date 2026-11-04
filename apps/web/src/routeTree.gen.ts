@@ -50,6 +50,7 @@ import { Route as WSlugCapturesIndexRouteImport } from './routes/w.$slug.capture
 import { Route as WSlugFormsSplatRouteImport } from './routes/w.$slug.forms.$.tsx'
 import { Route as WSlugListsListRouteImport } from './routes/w.$slug.lists.$list.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
+import { Route as WSlugQrPrintRouteImport } from './routes/w.$slug.qr_.print.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsAppsRouteImport } from './routes/w.$slug.settings.apps.tsx'
 import { Route as WSlugSettingsAutomationsRouteImport } from './routes/w.$slug.settings.automations.tsx'
@@ -319,6 +320,11 @@ const WSlugListsListRoute = WSlugListsListRouteImport.update({
 const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
   id: '/objects/$object',
   path: '/objects/$object',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugQrPrintRoute = WSlugQrPrintRouteImport.update({
+  id: '/qr_/print',
+  path: '/qr/print',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugSettingsIndexRoute = WSlugSettingsIndexRouteImport.update({
@@ -727,6 +733,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/qr/print': typeof WSlugQrPrintRoute
   '/w/$slug/settings/apps': typeof WSlugSettingsAppsRoute
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
@@ -830,6 +837,7 @@ export interface FileRoutesByTo {
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/qr/print': typeof WSlugQrPrintRoute
   '/w/$slug/settings/apps': typeof WSlugSettingsAppsRoute
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
@@ -938,6 +946,7 @@ export interface FileRoutesById {
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/qr_/print': typeof WSlugQrPrintRoute
   '/w/$slug/settings/apps': typeof WSlugSettingsAppsRoute
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
@@ -1047,6 +1056,7 @@ export interface FileRouteTypes {
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/qr/print'
     | '/w/$slug/settings/apps'
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
@@ -1150,6 +1160,7 @@ export interface FileRouteTypes {
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/qr/print'
     | '/w/$slug/settings/apps'
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
@@ -1257,6 +1268,7 @@ export interface FileRouteTypes {
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/qr_/print'
     | '/w/$slug/settings/apps'
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
@@ -1626,6 +1638,13 @@ declare module '@tanstack/react-router' {
       path: '/objects/$object'
       fullPath: '/w/$slug/objects/$object'
       preLoaderRoute: typeof WSlugObjectsObjectRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/qr_/print': {
+      id: '/w/$slug/qr_/print'
+      path: '/qr/print'
+      fullPath: '/w/$slug/qr/print'
+      preLoaderRoute: typeof WSlugQrPrintRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/settings/': {
@@ -2254,6 +2273,7 @@ interface WSlugRouteChildren {
   WSlugFormsSplatRoute: typeof WSlugFormsSplatRoute
   WSlugListsListRoute: typeof WSlugListsListRoute
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
+  WSlugQrPrintRoute: typeof WSlugQrPrintRoute
   WSlugBookingsAvailabilityScheduleIdRoute: typeof WSlugBookingsAvailabilityScheduleIdRoute
   WSlugCapturesFormsFormIdRoute: typeof WSlugCapturesFormsFormIdRoute
   WSlugCapturesLinksPageIdRoute: typeof WSlugCapturesLinksPageIdRoute
@@ -2292,6 +2312,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugFormsSplatRoute: WSlugFormsSplatRoute,
   WSlugListsListRoute: WSlugListsListRoute,
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
+  WSlugQrPrintRoute: WSlugQrPrintRoute,
   WSlugBookingsAvailabilityScheduleIdRoute:
     WSlugBookingsAvailabilityScheduleIdRoute,
   WSlugCapturesFormsFormIdRoute: WSlugCapturesFormsFormIdRoute,

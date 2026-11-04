@@ -4,6 +4,7 @@
 //                                                colours live in the page's stylesheet)
 //   GET /public/menu/:key/logo?v=                the business's logo (the brand kit's)
 //   GET /public/menu/:key/photos/:id/:size?v=    a photo the live snapshot shows, at 1200 or 400 pixels
+//   GET /public/menu/:key/tables/:code           the table a QR's code names (H2), counting the scan; never cached
 // Each enters through the menu door (`crm_menu_by_key`: ids only, and only while the workspace is live, has early
 // access and has Menu installed), so a key that names nothing, a malformed one and a removed app all answer the same
 // 404 `no-store`. Answers are kept at the edge under the place's tag (`menu:<placeId>`) and the workspace's brand tag,
@@ -11,12 +12,27 @@
 // Routes); the browser always asks again (max-age 0), so a guest on the page sees Sold out on the next read. 60 reads a
 // minute per address, as the booking pages' reads; the `/m/<key>` render's reads count per guest and per key
 // (`MENU_LIMITS`).
-import { brandCacheTags, menuCacheTags, menuWorkspaceTags, MENU_KEY_PATTERN, type MenuPhotoSize } from '@crm/contracts';
-import { enterMenuPage, menuLookStylesheet, readMenuPhoto, readPublicMenu, type MenuEntry } from '@crm/core/public';
+import {
+  brandCacheTags,
+  menuCacheTags,
+  menuWorkspaceTags,
+  MENU_KEY_PATTERN,
+  TABLE_CODE_PATTERN,
+  type MenuPhotoSize,
+} from '@crm/contracts';
+import {
+  enterMenuPage,
+  menuLookStylesheet,
+  readMenuPhoto,
+  readPublicMenu,
+  scanTable,
+  type MenuEntry,
+} from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { loadStoredImage } from '../brand-logo.ts';
 import type { EdgeCache } from '../edge-cache.ts';
+import { isMachine, utcDay, visitorId } from '../analytics/visitor.ts';
 import { log } from '../log.ts';
 import type { FileStore } from '../storage/blob.ts';
 import { addressKey, asksFor, nothingHere, stylesheetResponse, uncached } from './brand-css.ts';
@@ -43,6 +59,9 @@ export interface PublicMenuDeps {
    * (`EdgeGuard.rendered`): only a request carrying the edge secret in the render's header is one.
    */
   readonly rendered?: (request: Request) => { readonly guestIp: string | undefined } | undefined;
+  /** The daily visitor key (spec 0047), so a table QR's scan counts once per visitor and day (H2). */
+  readonly visitorKey?: Buffer;
+  readonly now?: () => Date;
 }
 
 interface Variables {
@@ -159,5 +178,37 @@ export function mountPublicMenu(app: Hono<{ Variables: Variables }>, deps: Publi
     }
     tag(entry);
     return pictureResponse(loaded, MENU_IMAGE_CACHE_CONTROL);
+  });
+
+  // The table a printed QR named (spec 0065, H2): only a live table of the key's own place while Menu QR is installed,
+  // else the same 404. A scan counts once per visitor and day as the table's `qr` visit; a machine's never counts.
+  // Never cached: a regenerated code must stop answering at once.
+  app.get('/public/menu/:key/tables/:code', async (c) => {
+    const key = c.req.param('key');
+    const code = c.req.param('code');
+    if (!MENU_KEY_PATTERN.test(key) || !TABLE_CODE_PATTERN.test(code)) return nothingHere();
+    for (const [name, rule] of [
+      [`menu:table:${addressKey(c.get('clientIp'))}`, MENU_LIMITS.tablesPerAddress],
+      [`menu:table-key:${key}`, MENU_LIMITS.tablesPerKey],
+    ] as const) {
+      if (!deps.limiter(name, rule).allowed) {
+        return uncached('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
+      }
+    }
+    const entry = await enterMenuPage({ db: deps.db }, key);
+    if (entry === undefined) return nothingHere();
+    const userAgent = c.req.header('user-agent');
+    const visitor =
+      deps.visitorKey === undefined || isMachine(userAgent)
+        ? undefined
+        : visitorId(deps.visitorKey, {
+            day: utcDay(deps.now?.() ?? new Date()),
+            ip: c.get('clientIp'),
+            userAgent: userAgent ?? '',
+            place: `qr:${key}`,
+          });
+    const table = await scanTable({ db: deps.db }, entry, code, visitor);
+    if (table === undefined) return nothingHere();
+    return Response.json(table, { headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
   });
 }

@@ -29,7 +29,6 @@ export const strings = {
   allergenFooter: (list: readonly string[]) =>
     `This menu’s dishes name: ${list.join(', ')}. Tell your server about any allergy before you order.`,
   yourPicks: 'Your picks',
-  table: (label: string) => `Table ${label}`,
   close: 'Close',
   noMenu: 'This menu is empty for now.',
   diet: {

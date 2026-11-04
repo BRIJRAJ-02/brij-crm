@@ -280,6 +280,11 @@ export const ACCESS_TABLE = {
   archiveResource: { permission: 'hospitality.manage' },
   restoreResource: { permission: 'hospitality.manage' },
   deleteResource: { permission: 'hospitality.manage' },
+  // Menu QR (spec 0065, H2): a place's table codes and replacing one are setup, `hospitality.manage`'s.
+  listQrCodes: { permission: 'hospitality.manage' },
+  regenerateTableCode: { permission: 'hospitality.manage' },
+  // The places a member's own link page can name in a Menu or Reserve block (spec 0065, AC-6528): their own page.
+  listPlaceChoices: { anyMember: true },
   // The Menu app (spec 0065, H1): Run service reads the draft and flips Sold out (AC-6526); everything else is
   // `hospitality.manage`'s. The place ids a purge names are any member's (ids only).
   readMenuDraft: { permission: 'hospitality.service' },

@@ -49,7 +49,7 @@ export interface MenuListProps {
   readonly logoHref?: string;
   /** Where each photo is served; without it no photo draws. */
   readonly photoHref?: MenuPhotoHref;
-  /** The table a QR code opened the menu at ("4"), shown in the bar (H2). */
+  /** The table a QR code opened the menu at, as the guest reads it ("Table 4", "Bar 2"), shown in the bar (H2). */
   readonly table?: string;
   /** The picks kept in the guest's browser (AC-6530); without `onPicksChange` the menu has no picks. */
   readonly picks?: readonly GuestPick[];
@@ -255,7 +255,7 @@ export function MenuList({
               <p className={styles.barName} data-shown={isNameShown ? '' : undefined} aria-hidden={!isNameShown}>
                 {business.name}
               </p>
-              {table === undefined ? null : <span className={styles.table}>{strings.table(table)}</span>}
+              {table === undefined ? null : <span className={styles.table}>{table}</span>}
             </div>
             {shownSections.length < 2 ? null : (
               <div className={styles.barTabs}>

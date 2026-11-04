@@ -144,6 +144,8 @@ export {
   type MenuEntry,
   type PublicMenuRead,
 } from './hospitality/public-menu.ts';
+// Menu QR (spec 0065, H2): the table a QR's code names on the key's own place, counting the scan.
+export { scanTable } from './hospitality/qr.ts';
 
 // Table seating's guest page (spec 0066 B7 lite): the door by a place's public key, and the guest's reads and writes.
 export { enterTablePage, TABLE_KEY_PATTERN, type TableEntry } from './access/table-door.ts';

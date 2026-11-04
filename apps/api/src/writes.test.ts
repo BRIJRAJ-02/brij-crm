@@ -128,6 +128,10 @@ const READS: ReadonlySet<string> = new Set([
   'hospitality.apps',
   'hospitality.business',
   'hospitality.resources',
+  // Menu QR's codes (spec 0065, H2).
+  'hospitality.qrCodes',
+  // The places a link page's Menu or Reserve block can name (spec 0065, AC-6528).
+  'profile.placeChoices',
   // The Menu app's draft (spec 0065, H1).
   'menu.draft',
   // Table seating's reads (spec 0066 B7 lite).
@@ -3239,6 +3243,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'hospitality.archiveResource': 3,
   'hospitality.restoreResource': 4,
   'hospitality.deleteResource': 3,
+  // Menu QR (spec 0065, H2): Menu and Menu QR installed in one step, two tables, then the new code.
+  'hospitality.regenerateTableCode': 3,
   // Table seating (spec 0066 B7 lite): installed first (and the setup saved before a status move).
   'tables.saveSetup': 2,
   'tables.setStatus': 3,
@@ -3680,6 +3686,26 @@ Object.assign(WRITES, {
     const { placeId } = await hospitalityOf(m);
     const [one] = await tablesAt(m, placeId);
     await m.client.hospitality.deleteResource({ workspace: m.slug, placeId, resourceId: one, mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'hospitality.regenerateTableCode': async (m: Member, mutationId: string) => {
+    await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
+    await m.client.hospitality.install({
+      workspace: m.slug,
+      app: 'menu_qr',
+      withNeeded: true,
+      business: { name: 'Somewhere', kind: 'restaurant', place: { country: 'GB', timeZone: 'UTC' }, currency: 'GBP' },
+      mutationId: newId(),
+    });
+    const place = (await m.client.hospitality.business({ workspace: m.slug })).places[0];
+    if (place === undefined) throw new Error('No place.');
+    const [one] = await tablesAt(m, place.id);
+    await m.client.hospitality.regenerateTableCode({
+      workspace: m.slug,
+      placeId: place.id,
+      resourceId: one,
+      mutationId,
+    });
     return [{ kind: 'nav' }];
   },
 });

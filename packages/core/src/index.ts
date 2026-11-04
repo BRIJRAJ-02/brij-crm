@@ -939,6 +939,10 @@ export {
   restoreResource,
   deleteResource,
 } from './hospitality/floor.ts';
+// Menu QR (spec 0065, H2): a place's table codes and their scans, and a new code for one table.
+export { listQrCodes, regenerateTableCode, QR_SCAN_DAYS } from './hospitality/qr.ts';
+// The link page's Menu and Reserve blocks (spec 0065, AC-6528): the places one can name, with each kind's facts.
+export { listPlaceChoices } from './profile/place-blocks.ts';
 // The Menu app (spec 0065, H1): the draft, its edits, Publish and Discard, Sold out and photos.
 export {
   readMenuDraft,
