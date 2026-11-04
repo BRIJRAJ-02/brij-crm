@@ -1,11 +1,12 @@
 // Brief
-// Purpose: Availability's Time off section (spec 0037, AC-1286): the whole days a member is away, which close every page that books them.
-// Main task: see what is planned and Add time off; each row's menu edits or deletes it (Delete asks first, AC-1445).
+// Purpose: Availability's Time off section (spec 0037, AC-1286): the whole days a member is away, which close every page that books them, and the open schedule's days off beside them (critic A15: one card for the days someone is away).
+// Main task: see what is planned and Add time off (or a day off in this schedule); each row's menu edits or deletes it (Delete asks first, AC-1445).
 // Leaves out: a colleague's reason, note and stand in for someone who may only See them ("Away" and the days alone), and the Team week (a follow up).
 import type { DataLayer, TimeOffEntry, TimeOffSaved } from '@crm/data';
 import { useScheduling } from '@crm/data/react';
 import {
   Button,
+  ButtonGroup,
   Card,
   Disclosure,
   EmptyState,
@@ -22,6 +23,7 @@ import { useRef, useState } from 'react';
 import { daysLabel, firstName } from './time-off.ts';
 import { timeOffStrings as strings } from './time-off-strings.ts';
 import { TimeOffDialog, type StandinChoice } from './TimeOffDialog.tsx';
+import { AddDayOff, DaysOffRows, upcomingOf, type DaysOffSlot } from './DaysOff.tsx';
 
 const COLUMNS: readonly TableColumn[] = [
   { id: 'days', label: strings.columns.days, isRowHeader: true },
@@ -45,10 +47,25 @@ export interface TimeOffCardProps {
   readonly onNotice: (notice: { readonly tone: 'success' | 'danger'; readonly message: string }) => void;
   /** Open Bookings (after a save over meetings). */
   readonly onOpenBookings: () => void;
+  /**
+   * The open schedule's days off (Availability): listed under the time off and added beside it, saved with the
+   * schedule's hours. Left out, the card holds time off alone.
+   */
+  readonly daysOff?: DaysOffSlot | undefined;
 }
 
 /** The section: a Card of rows, upcoming first, past ones folded under them, then Add time off. */
-export function TimeOffCard({ data, slug, member, me, nameOf, people, onNotice, onOpenBookings }: TimeOffCardProps) {
+export function TimeOffCard({
+  data,
+  slug,
+  member,
+  me,
+  nameOf,
+  people,
+  onNotice,
+  onOpenBookings,
+  daysOff,
+}: TimeOffCardProps) {
   const store = data.scheduling.loaded()?.timeOff;
   return store === undefined ? (
     <TimeOffCardPending />
@@ -63,6 +80,7 @@ export function TimeOffCard({ data, slug, member, me, nameOf, people, onNotice, 
       people={people}
       onNotice={onNotice}
       onOpenBookings={onOpenBookings}
+      daysOff={daysOff}
     />
   );
 }
@@ -77,6 +95,7 @@ function Loaded({
   people,
   onNotice,
   onOpenBookings,
+  daysOff,
 }: TimeOffCardProps & { readonly store: NonNullable<ReturnType<DataLayer['scheduling']['loaded']>>['timeOff'] }) {
   const { locale, timeZone } = useFormatSettings();
   const held = store.held(slug, member?.id);
@@ -85,6 +104,7 @@ function Loaded({
   const [editing, setEditing] = useState<TimeOffEntry | undefined>(undefined);
   const [deleting, setDeleting] = useState<TimeOffEntry | undefined>(undefined);
   const addRef = useRef<HTMLButtonElement>(null);
+  const addDayRef = useRef<HTMLButtonElement>(null);
   if (state.status === 'loading') return <TimeOffCardPending />;
   if (state.status === 'error') {
     return (
@@ -156,20 +176,38 @@ function Loaded({
   const who = member === undefined ? undefined : { id: member.id, name: member.name };
   return (
     <Card title={strings.title}>
-      {list.upcoming.length === 0 ? (
+      {/* One quiet line only when neither time off nor a day off is ahead. */}
+      {list.upcoming.length === 0 && (daysOff === undefined || upcomingOf(daysOff.availability).length === 0) ? (
         <EmptyState layout="row" icon="plane" title={strings.none} />
       ) : (
-        table(list.upcoming, strings.title)
+        <>
+          {list.upcoming.length > 0 && table(list.upcoming, strings.title)}
+          {daysOff !== undefined && (
+            <DaysOffRows
+              availability={daysOff.availability}
+              onChange={daysOff.onChange}
+              isReadOnly={daysOff.isReadOnly === true}
+              onRemoved={() => addDayRef.current ?? addRef.current}
+            />
+          )}
+        </>
       )}
       {list.past.length > 0 && (
         <Disclosure title={strings.past} count={list.past.length} variant="quiet">
           {table(list.past, strings.past, true)}
         </Disclosure>
       )}
-      {list.canManage && (
-        <Button ref={addRef} icon="plus" onPress={() => setAdding(true)}>
-          {who === undefined ? strings.add : strings.addFor(firstName(who.name))}
-        </Button>
+      {(list.canManage || (daysOff !== undefined && daysOff.isReadOnly !== true)) && (
+        <ButtonGroup label={strings.title} layout="row">
+          {list.canManage && (
+            <Button ref={addRef} icon="plus" onPress={() => setAdding(true)}>
+              {who === undefined ? strings.add : strings.addFor(firstName(who.name))}
+            </Button>
+          )}
+          {daysOff !== undefined && daysOff.isReadOnly !== true && (
+            <AddDayOff ref={addDayRef} availability={daysOff.availability} onChange={daysOff.onChange} />
+          )}
+        </ButtonGroup>
       )}
       <TimeOffDialog
         data={data}
