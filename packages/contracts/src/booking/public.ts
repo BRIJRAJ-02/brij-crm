@@ -416,6 +416,8 @@ export const VisitorName = z
   .min(1, 'Give your name.')
   .max(VISITOR_NAME_MAX, 'Keep your name to 200 characters.')
   .superRefine((name, context) => {
+    // Too long is already said; the web address scan is quadratic in the length, so a huge name never reaches it.
+    if (name.length > VISITOR_NAME_MAX) return;
     const problem = visitorNameProblem(name);
     if (problem !== undefined) context.addIssue({ code: 'custom', message: problem });
   });
