@@ -10,7 +10,6 @@ import {
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Button, ButtonLink } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
-import { Link } from '../atoms/Link/Link.tsx';
 import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { usePageVariables } from '../lib/page-variables.ts';
@@ -19,10 +18,8 @@ import { safeImageSrc } from '../lib/safe-image-src.ts';
 import { templateAttributes } from '../lib/page-template.ts';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import type { EmbedLook } from './HostedForm.tsx';
-import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
-import { labelOf } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
 import type { HostedFormMode, HostedFormState } from './use-hosted-form.ts';
 
@@ -400,36 +397,6 @@ export function QuestionSlot({
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * Above the button after a submit that found problems: how many, then each
- * question's label as a link that focuses it (its message sits under it). Announced politely;
- * it shrinks as answers are fixed and leaves with the last.
- */
-export function ErrorSummary({
-  state,
-  among,
-}: {
-  readonly state: HostedFormState;
-  /** Only these questions (a step's); every question when left out. */
-  readonly among?: readonly PublicQuestion[];
-}) {
-  const listed = among === undefined ? state.summary : state.summary.filter((question) => among.includes(question));
-  const count = listed.length;
-  if (count === 0) return null;
-  // A status, not an alert: focus already went to the first problem, so this is said politely.
-  return (
-    <Callout tone="danger" isPolite title={state.words.needsALook(count)}>
-      <span className={styles.summaryList}>
-        {listed.map((question) => (
-          <Link key={question.key} href={`#question-${question.key}`} onPress={() => state.focus(question.key)}>
-            {labelOf(question, state.words, state.read)}
-          </Link>
-        ))}
-      </span>
-    </Callout>
   );
 }
 

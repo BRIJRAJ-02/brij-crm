@@ -121,8 +121,7 @@ test.describe('forms QA: stress', () => {
     if (seats !== '') await expect(visitor.getByText('Enter a number, such as 1500.').first()).toBeVisible();
     // The start date is required and empty.
     await expect(visitor.getByText('Answer this question.').filter({ visible: true }).first()).toBeVisible();
-    // The summary names how many answers need a look, and focus went to the first.
-    await expect(visitor.getByText(/answers? needs? a look/).first()).toBeVisible();
+    // Each problem is said under its own question (no summary repeats them), and focus went to the first.
     await expect(visitor.getByLabel(/Work email/)).toBeFocused();
     expect(submits()).toBe(0);
     await visitor.context().close();

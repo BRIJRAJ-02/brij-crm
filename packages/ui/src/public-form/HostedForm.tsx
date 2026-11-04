@@ -4,7 +4,6 @@ import { isBlank, type PublicForm } from '@crm/contracts/forms';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import {
-  ErrorSummary,
   FormAlert,
   FormClosed,
   FormFoot,
@@ -208,7 +207,6 @@ export function HostedForm({
             ))}
           <FormTrap form={form} state={state} />
           <div className={styles.actions}>
-            <ErrorSummary state={state} />
             <FormAlert state={state} />
             <Button
               variant="primary"

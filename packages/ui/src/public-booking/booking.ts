@@ -50,6 +50,8 @@ export {
   type BookingTeam,
   type PageBrand,
 } from '../modules/BookingFrame/BookingFrame.tsx';
+/** Book by chat's loading shape (4 Nov 2026): the chat itself loads on its own, this stands in its place first. */
+export { BookingChatGhost } from '../modules/BookingChat/BookingChatGhost.tsx';
 export { BookingReceipt, type BookingReceiptState } from '../modules/BookingReceipt/BookingReceipt.tsx';
 export { BookingChanges, type CancelOutcome, type GuestsOutcome } from '../modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';

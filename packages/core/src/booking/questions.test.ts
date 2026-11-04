@@ -209,7 +209,7 @@ describe('a booking page’s questions (spec 0057)', () => {
     expect(await jobTitleOf(w, second?.personRecordId)).toBe('CTO');
   });
 
-  it('turns Book by chat off for a page with a required question, and keeps it, skipping them, when all are optional', async () => {
+  it('asks a page’s questions by chat too (4 Nov 2026): a required one opens in chat and is checked as the form checks it', async () => {
     const w = await workspace();
     const required = await createBookingPage(
       w.owner,
@@ -222,11 +222,14 @@ describe('a booking page’s questions (spec 0057)', () => {
       NOW,
     );
     const requiredEntry = await enterBookingPage({ db }, required.publicKey);
-    expect((await getPublicBookingPage(requiredEntry)).defaultView).toBe('month');
+    expect((await getPublicBookingPage(requiredEntry)).defaultView).toBe('chat');
     const chat = [{ role: 'visitor' as const, text: 'Monday at 9' }];
+    // Without the required answer, refused on that question, as the details step is.
     expect(await refusalOf(bookPublicSlot(requiredEntry, deps, bookInput(), [], undefined, { chat }))).toEqual([
-      expect.objectContaining({ code: 'BOOKING_CLOSED' }),
+      expect.objectContaining({ code: 'ATTRIBUTE_VALUE_INVALID', field: 'answers.budget' }),
     ]);
+    await bookPublicSlot(requiredEntry, deps, bookInput({ answers: { budget: 'Under 5k' } }), [], undefined, { chat });
+    expect(await listBookings(w.owner, { pageId: required.id, when: 'upcoming' }, NOW)).toHaveLength(1);
 
     const optional = await createBookingPage(
       w.owner,

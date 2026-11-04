@@ -305,6 +305,13 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
       '2026-11-02T13:00:00.000Z',
       '2026-11-02T15:00:00.000Z',
     ]);
+    // Asked with no length (the page's first read, sent beside its facts): the page's first length, 25 minutes.
+    const unasked = await readPublicSlots(entry, deps(), {
+      from: '2026-11-02T00:00:00.000Z',
+      to: '2026-11-03T00:00:00.000Z',
+      tz: 'UTC',
+    });
+    expect(unasked.slots.map((slot) => slot.start)).toEqual(short);
     // A two hour booking at 09:00 takes the morning's first two hours from both lengths.
     const booked = await bookPublicSlot(entry, deps(), bookInput({ duration: 120 }));
     expect(Date.parse(booked.booking.end) - Date.parse(booked.booking.start)).toBe(120 * 60_000);

@@ -59,6 +59,8 @@ export type ChatIntent =
 export interface ChatPage {
   readonly title: string;
   readonly hostName: string;
+  /** A team or round robin page: the chat speaks as "we", the workspace, since no one host is picked before booking. */
+  readonly isTeam?: boolean;
   readonly durations: readonly number[];
   readonly location: PublicLocation;
 }
@@ -303,6 +305,21 @@ export interface ChatAnswer {
   readonly suggestions: readonly string[];
   /** On a read back, the suggestion that books it, so the page can draw it as the answer's confirm button. */
   readonly confirm?: string;
+  /** Which of the visitor's details the chat waits on next, once a time is held: the page's prompt box asks for it. */
+  readonly asks?: ChatAsks;
+}
+
+/** The details a held time still waits on: both, the name, the email, or a number to call. */
+export type ChatAsks = 'details' | 'name' | 'email' | 'phone';
+
+/** What the chat waits on next, from its state alone: once a time is held and before the read back, the details owed. */
+export function asksOf(state: ChatState, needsPhone: boolean): ChatAsks | undefined {
+  if (state.readBack || state.held === undefined || !state.chosen) return undefined;
+  if (state.name === undefined && state.email === undefined) return 'details';
+  if (state.name === undefined) return 'name';
+  if (state.email === undefined) return 'email';
+  if (needsPhone && state.phone === undefined) return 'phone';
+  return undefined;
 }
 
 /** The phrases offered as buttons; each one reads back through `step` as what it says. */
@@ -337,6 +354,16 @@ export function offerWords(iso: string, zone: string, hour12: boolean): string {
 /** A sentence's first letter in capitals. */
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
+/**
+ * The host's own voice (owner, 4 Nov 2026: "that person is doing it", not an assistant): "I" on a personal page, "we"
+ * on a team or round robin page, where no one host is picked before the booking.
+ */
+export function voiceOf(page: Pick<ChatPage, 'isTeam'>) {
+  return page.isTeam === true
+    ? { i: 'we', am: 'we’re', me: 'us', my: 'our', will: 'we’ll' }
+    : { i: 'I', am: 'I’m', me: 'me', my: 'my', will: 'I’ll' };
+}
+
 /** The two suggestions under a reply with times. */
 function moreSuggestions(offers: readonly string[], now: DateTime): readonly string[] {
   if (offers.length === 0) return [];
@@ -349,11 +376,12 @@ function moreSuggestions(offers: readonly string[], now: DateTime): readonly str
  * the booking nothing says one will be made (the guest page decides by the link itself), so its host sends it (QA Q77).
  */
 function whereSentence(page: ChatPage): string {
+  const we = voiceOf(page);
   switch (page.location.type) {
     case 'video':
-      return `It’s a video call. ${page.hostName} will send you the link.`;
+      return `It’s a video call. ${capital(we.will)} send you the link.`;
     case 'phone':
-      return `It’s a phone call. ${page.hostName} will call the number you give.`;
+      return `It’s a phone call. ${capital(we.will)} call the number you give ${we.me}.`;
     case 'address':
       return `In person, at ${page.location.value}.`;
     case 'custom':
@@ -384,11 +412,15 @@ export function answer(
   const { now, hour12, page, duration, needsPhone } = context;
   const offers = state.offered;
   const named = state.window?.phrase;
+  const asks = asksOf(state, needsPhone);
+  const we = voiceOf(page);
   const say = (text: string, shown: readonly string[] = [], suggestions?: readonly string[]): ChatAnswer => ({
     text,
     offers: shown,
     suggestions: state.readBack ? [SAY.confirm, SAY.somethingElse] : (suggestions ?? moreSuggestions(shown, now)),
     ...(state.readBack ? { confirm: SAY.confirm } : {}),
+    // Only while nothing is offered: with times on screen, picking one comes first.
+    ...(asks === undefined || shown.length > 0 ? {} : { asks }),
   });
   const held = state.held === undefined ? undefined : timeLabel(state.held, now, hour12);
   const lengths = page.durations.map(String);
@@ -399,7 +431,7 @@ export function answer(
   if (state.readBack && !isQuestion && state.held !== undefined && held !== undefined) {
     const who = `${state.name ?? ''} (${state.email ?? ''}${state.phone === undefined ? '' : `, ${state.phone}`})`;
     return say(
-      `${fullTimeLabel(state.held, now, hour12)}, ${String(duration)} minutes, for ${who}. Shall I book it?`,
+      `${fullTimeLabel(state.held, now, hour12)}, ${String(duration)} min, for ${who}. Shall ${we.i} book it?`,
       [],
       [SAY.confirm, SAY.somethingElse],
     );
@@ -413,56 +445,53 @@ export function answer(
     if (state.name === undefined && state.email === undefined)
       return say(`${lead} What’s your name and email?`, [], []);
     if (state.name === undefined) return say(`${lead} And your name?`, [], []);
-    if (state.email === undefined) return say(`${lead} Where should I send the confirmation?`, [], []);
-    if (needsPhone && state.phone === undefined) return say(`${lead} And a number to call you on?`, [], []);
+    if (state.email === undefined) return say(`${lead} And your email?`, [], []);
+    if (needsPhone && state.phone === undefined) return say(`${lead} What number should ${we.i} call?`, [], []);
   }
 
   const asideHeld = held === undefined ? '' : ` ${capital(held)} is still yours.`;
   switch (state.intent) {
     case 'offer':
-      return say(`Here’s what’s open ${named ?? 'next'}.`, offers);
+      return say(`Here’s when ${we.am} free ${named ?? 'next'}.`, offers);
     case 'single-offer':
-      return say(`Only one time is open ${named ?? 'then'}: ${held ?? ''}. Tap it to take it.`, offers);
+      return say(`${capital(we.i)} only have ${held ?? ''} free ${named ?? 'then'}. Tap it if it works.`, offers);
     case 'exact':
     case 'select':
     case 'confirm':
       return say(`Great, ${held ?? 'that'} it is. What’s your name and email?`, [], []);
     case 'point-miss':
-      return say(`That time isn’t open. Here are the closest times.`, offers);
+      return say(`${capital(we.i)} can’t do that time. These are the closest.`, offers);
     case 'none-in-window':
-      return say(`Nothing is open ${named ?? 'then'}. Here are the closest times.`, offers);
+      return say(`${capital(we.am)} not free ${named ?? 'then'}. These are the closest.`, offers);
     case 'reject-offer':
-      return say(`No problem. Here’s what’s open after those.`, offers);
+      return say(`No problem. How about these?`, offers);
     case 'availability':
-      return say(`Here’s what’s open next.`, offers);
+      return say(`Here’s when ${we.am} free next.`, offers);
     case 'select-ambiguous':
-      return say(`Which one? Tap a time, or say “the first one”.`, offers);
+      return say(`Which one? Tap a time.`, offers);
     case 'confirm-nothing':
-      return say(`Happy to. When works for you? Type something like “tomorrow afternoon”.`, soonest(offers));
+      return say(`Sure. When works for you?`, soonest(offers));
     case 'exhausted':
-      return say(`${page.hostName} has nothing open for now. Check back soon.`, [], []);
+      return say(`${capital(we.am)} fully booked for now. Check back soon.`, [], []);
     case 'duration':
       return say(`It’s ${String(duration)} minutes.${asideHeld}`, held === undefined ? offers : []);
     case 'location':
       return say(`${whereSentence(page)}${asideHeld}`, held === undefined ? offers : []);
     case 'change-policy':
       return say(
-        `Yes. Every confirmation carries a link to move or cancel it yourself, any time.${asideHeld}`,
+        `Yes. Your confirmation has a link to move or cancel, any time.${asideHeld}`,
         held === undefined ? offers : [],
       );
     case 'length':
-      return say(`${String(duration)} minutes it is. Here’s what’s open.`, offers);
+      return say(`${String(duration)} minutes it is. Here’s when ${we.am} free.`, offers);
     case 'length-refused':
-      return say(`This page offers ${lengthList} minutes.`, offers);
+      return say(`${capital(we.i)} can do ${lengthList} minutes.`, offers);
     case 'thanks':
       return say(`You’re welcome.`, [], []);
     case 'details':
-      return say(`Thanks${state.name === undefined ? '' : `, ${state.name}`}. Here’s what’s open next.`, offers);
+      return say(`Thanks${state.name === undefined ? '' : `, ${state.name}`}. Here’s when ${we.am} free next.`, offers);
     case 'not-understood':
-      return say(
-        `Sorry, I didn’t catch a time in that. Try something like “Thursday morning”, or tap one of these.`,
-        offers,
-      );
+      return say(`Sorry, I didn’t catch a time. Try “Thursday morning”, or tap one.`, offers);
     case 'greet':
     case 'await-details':
     case 'await-confirm':
@@ -471,7 +500,16 @@ export function answer(
   }
 }
 
-/** The chat's opening line (AC-1502). */
+/**
+ * The chat's opening line (AC-1502), in the host's own voice (owner, 4 Nov 2026): their first name on a personal page,
+ * the workspace's name on a team page.
+ */
 export function greeting(page: ChatPage, duration: number): string {
-  return `I can book your ${String(duration)} minute ${page.title} with ${page.hostName}. When works for you? Type something like “tomorrow afternoon”, or pick a time below.`;
+  const who = page.isTeam === true ? `it’s ${page.hostName}` : `I’m ${firstName(page.hostName)}`;
+  return `Hi, ${who}. When suits you for a ${String(duration)} min ${page.title}?`;
+}
+
+/** The first word of a name, as a person signs a text: "Brijraj Rana" is Brijraj. */
+export function firstName(name: string): string {
+  return name.trim().split(/\s+/u)[0] ?? name;
 }

@@ -7,7 +7,6 @@ export const strings = {
   message: 'Message',
   placeholder: 'When works for you?',
   send: 'Send',
-  loading: 'Loading times',
   waiting: 'One moment',
   suggestions: 'Suggestions',
   retry: 'Try again',

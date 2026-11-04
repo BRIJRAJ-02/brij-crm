@@ -223,12 +223,6 @@
     letter-spacing: var(--tracking-body);
   }
 
-  .error {
-    color: var(--danger);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .dot {
       scale: none;

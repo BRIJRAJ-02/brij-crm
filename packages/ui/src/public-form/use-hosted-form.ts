@@ -159,8 +159,6 @@ export interface HostedFormState {
   readonly errors: Messages;
   /** The email typo hints shown, by key: the address the visitor probably meant. */
   readonly hints: Messages;
-  /** The questions a submit found problems with, in order, while any remain: the error summary. */
-  readonly summary: readonly PublicQuestion[];
   /** The questions that show for the answers so far (spec 0043, AC-1614): one whose Show when fails is hidden. */
   readonly shown: ReadonlySet<string>;
   /** The visitor's path (spec 0063, `pathOf`): the steps they see for the answers so far, each with its questions. */
@@ -361,7 +359,6 @@ export function useHostedForm({
   const [hints, setHints] = useState<Messages>({});
   // Questions that have held an answer: a required one emptied again says so when it loses focus.
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
-  const [isSubmitted, setSubmitted] = useState(false);
   const [isSending, setSending] = useState(false);
   const [alert, setAlert] = useState('');
   const [isClosedMidFill, setClosedMidFill] = useState(false);
@@ -622,7 +619,6 @@ export function useHostedForm({
       );
       return true;
     }
-    setSubmitted(true);
     show(result.fields, questions);
     return false;
   };
@@ -652,7 +648,6 @@ export function useHostedForm({
     }
     const result = checkAll(form.questions);
     if (!result.ok) {
-      setSubmitted(true);
       onRefused?.(Object.keys(result.fields));
       show(result.fields, form.questions);
       return;
@@ -714,7 +709,6 @@ export function useHostedForm({
             );
             return;
           }
-          setSubmitted(true);
           onRefused?.(Object.keys(outcome.fields));
           show(outcome.fields, form.questions);
           return;
@@ -743,16 +737,11 @@ export function useHostedForm({
     setErrors({});
     setHints({});
     setTouched(new Set());
-    setSubmitted(false);
     setTrap('');
     setStartedAt(now());
     setView({ kind: 'form' });
     setFocusTarget('heading');
   };
-
-  const summary = isSubmitted
-    ? form.questions.filter((question) => shown.has(question.key) && errors[question.key] !== undefined)
-    : [];
 
   const state: HostedFormState = {
     words,
@@ -761,7 +750,6 @@ export function useHostedForm({
     answers,
     errors,
     hints,
-    summary,
     shown,
     path,
     score,

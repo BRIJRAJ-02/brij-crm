@@ -11,7 +11,6 @@ import {
 import {
   Autocomplete,
   Button as AriaButton,
-  FieldError,
   Header,
   ListBox,
   ListBoxItem,
@@ -21,6 +20,7 @@ import {
   SelectValue,
   Text,
 } from 'react-aria-components';
+import { FieldError } from '../../atoms/FieldError/FieldError.tsx';
 import { FocusScope, useFilter } from 'react-aria';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -603,10 +603,7 @@ export function SelectBase({
           {description}
         </Text>
       )}
-      <FieldError className={styles.error}>
-        <Icon name="circle-alert" size="xs" />
-        {error}
-      </FieldError>
+      {error !== undefined && <FieldError>{error}</FieldError>}
       <Popover
         {...(optionDescription === 'below'
           ? { width: 'list' as const, placement: placement ?? ('bottom end' as const) }

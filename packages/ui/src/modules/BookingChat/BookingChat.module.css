@@ -24,12 +24,15 @@
     min-block-size: 0;
   }
 
+  /* The conversation as a messaging app draws it (owner, 4 November 2026: "look like chat"): the host on the start
+     side on a neutral fill with their face at the foot of each run and their name over its first, the visitor on the
+     end side in the page's accent. Lines in one run sit close; a new speaker starts further down. */
   .thread {
     display: flex;
-    /* Twelve rows tall on its own: room for a reply with its times, on a phone too. */
+    /* Twelve rows tall on its own: room for a reply with its times. */
     flex: 1 1 calc(var(--size-row) * 12);
     flex-direction: column;
-    gap: var(--space-12);
+    gap: var(--space-4);
     min-block-size: 0;
     margin: 0;
     padding: 0 var(--space-4) var(--space-4) 0;
@@ -53,6 +56,10 @@
     animation: line-drop var(--duration-modal) var(--ease-out) backwards;
   }
 
+  .line[data-run-start]:not(:first-child) {
+    margin-block-start: var(--space-12);
+  }
+
   /* A turn that failed: its notice drops in with its own height above the composer. */
   .error {
     interpolate-size: allow-keywords;
@@ -65,12 +72,41 @@
     animation-name: line-sent;
   }
 
+  /* The host's name over the first message of their run, in line with the bubbles. */
+  .who {
+    padding-inline-start: calc(var(--avatar-md) + var(--space-8));
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* A message and the face beside it, the face level with the message's last line. */
+  .said {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-8);
+    inline-size: 100%;
+  }
+
+  .line[data-role='visitor'] > .said {
+    flex-direction: row-reverse;
+  }
+
+  /* The face's place in every line, filled only at a run's foot, so a run's bubbles share one edge. */
+  .face {
+    display: flex;
+    flex: none;
+    inline-size: var(--avatar-md);
+  }
+
+  /* The bubble's corner nearest the face is the small one (iMessage's tail). */
   .bubble {
-    max-inline-size: 85%;
+    max-inline-size: 80%;
     margin: 0;
     padding: var(--space-8) var(--space-12);
-    border-radius: var(--radius-lg);
-    background: var(--surface-subtle);
+    border-radius: var(--radius-xl);
+    border-end-start-radius: var(--radius-xs);
+    background: var(--surface-sunken);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -79,7 +115,33 @@
   }
 
   .line[data-role='visitor'] .bubble {
-    background: var(--accent-soft);
+    border-end-start-radius: var(--radius-xl);
+    border-end-end-radius: var(--radius-xs);
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  /* The host typing: three dots that rise in turn, still under reduced motion. */
+  .typing {
+    display: inline-flex;
+    gap: var(--space-4);
+    padding-block: var(--space-6);
+  }
+
+  .dot {
+    inline-size: var(--space-6);
+    block-size: var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--text-tertiary);
+    animation: typing var(--duration-pulse) var(--ease-in-out) infinite;
+  }
+
+  .dot:nth-child(2) {
+    animation-delay: calc(var(--duration-pulse) / 6);
+  }
+
+  .dot:nth-child(3) {
+    animation-delay: calc(var(--duration-pulse) / 3);
   }
 
   /* A reply writes itself: each word resolves a beat after the one before (Written in BookingChat.tsx), about 25
@@ -90,24 +152,41 @@
   }
 
   /* What the reply offers (its times, its suggestions) arrives once its words have: the answer first, then the
-     choices, as a person would say it and then point. */
+     choices, as a person would say it and then point. They stand in line with the host's bubbles. */
+  .offers,
+  .confirmCard[data-card] {
+    margin-inline-start: calc(var(--avatar-md) + var(--space-8));
+  }
+
+  /* Quick replies sit at the visitor's side, under the host's last message. */
+  .confirmCard:not([data-card]) {
+    align-self: flex-end;
+  }
+
   .offers,
   .suggestions {
+    /* The visitor's possible answers wear the accent, outlined, as the replies they become: the times as round chips,
+       through SlotList's and Button's own colour names. */
+    --border: var(--accent-line);
+    --text: var(--link);
+    --radius-md: var(--radius-full);
+
     interpolate-size: allow-keywords;
     animation: line-drop var(--duration-modal) var(--ease-out) backwards;
     animation-delay: calc(var(--words, 0) * var(--stream-step) + var(--duration-popover));
   }
 
-  /* Each day's times start a group of their own: as far under the reply as the reply sits under the card's heading. */
+  /* Each day's times start a group of their own. */
   .offers {
-    inline-size: 100%;
-    margin-block-start: var(--space-16);
+    inline-size: calc(100% - var(--avatar-md) - var(--space-8));
+    margin-block-start: var(--space-12);
   }
 
   .suggestions {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-4);
+    justify-content: flex-end;
+    gap: var(--space-8);
   }
 
   /* A read back's answer is a confirm card (stageshow's ai-cards): the booking it would make, headed by the date tile
@@ -186,49 +265,29 @@
     gap: var(--space-8);
   }
 
-  /* While the reply is being written: its words in a light passing across them, the way a status line shimmers. */
-  .thinking {
-    background-image: linear-gradient(
-      90deg,
-      var(--text-secondary) 0%,
-      var(--text-secondary) 40%,
-      var(--text) 50%,
-      var(--text-secondary) 60%,
-      var(--text-secondary) 100%
-    );
-    background-size: 300% 100%;
-    background-clip: text;
-    color: transparent;
-    animation: thinking var(--duration-pulse) linear infinite;
-  }
+  /* The composer, a prompt box (the owner, 25 October and 4 November 2026: "a prompt box, not a search box", "this box
+     needs to feel like a prompt"), as AI chats draw theirs: one raised box two rows tall, a step above the card it
+     sits on (in dark a surface lighter, as raised surfaces go; in light the card's white with a shadow), the message
+     at its top growing a line at a time, and the round Send at its bottom end. Its edge holds 3.5:1 in both themes
+     (control-border), and the accent's ring marks it focused.
 
-  .waiting {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-8);
-    padding: var(--space-8) var(--space-12);
-    border-radius: var(--radius-lg);
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
-  }
-
-  /* The composer (the owner, 25 October 2026: "a prompt box, not a search box"): one raised box a toolbar tall,
-     with an edge that holds 3.5:1 in both themes (control-border), the message growing a line at a time as it is
-     typed, and Send inside it at the end. The field draws no box of its own (its cell variant): this box is the
-     field's, so it takes the focus ring. */
+     On a phone the card runs taller than the screen, so the box keeps to the foot of the window while the card is
+     on it, clear of the home indicator and Safari's floating toolbar (env(safe-area-inset-bottom), with book.html's
+     viewport-fit=cover): the box to type in is always in view (4 November 2026). */
   .composer {
-    display: flex;
+    position: sticky;
+    inset-block-end: max(var(--space-12), env(safe-area-inset-bottom));
+    display: grid;
     flex: none;
-    align-items: flex-end;
-    gap: var(--space-4);
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-8);
     box-sizing: border-box;
-    min-block-size: var(--size-toolbar);
-    padding: var(--space-8);
-    padding-inline-start: var(--space-2);
+    min-block-size: calc(var(--size-toolbar) + var(--space-24));
+    padding: var(--space-8) var(--space-8) var(--space-8) var(--space-4);
     border: var(--border-width-hairline) solid var(--control-border);
-    border-radius: var(--radius-lg);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-xs);
+    border-radius: var(--radius-xl);
+    background: light-dark(var(--surface-raised), var(--surface-hover));
+    box-shadow: var(--shadow-md);
     transition:
       border-color var(--duration-hover) var(--ease-hover),
       box-shadow var(--duration-hover) var(--ease-hover);
@@ -237,7 +296,7 @@
   /* The ring is the message's: Send keeps its own. */
   .composer:has(.field:focus-within) {
     border-color: var(--accent-line);
-    box-shadow: var(--shadow-focus);
+    box-shadow: var(--shadow-md), var(--shadow-focus);
   }
 
   /* Forced colours drop the shadow and the accent: the system's highlight marks the focused message. */
@@ -254,8 +313,13 @@
 
   .field {
     display: flex;
-    flex: 1;
+    align-self: start;
     min-inline-size: 0;
+  }
+
+  .send {
+    display: flex;
+    align-self: end;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -270,10 +334,8 @@
       animation: none;
     }
 
-    .thinking {
+    .dot {
       animation: none;
-      background-image: none;
-      color: var(--text-secondary);
     }
 
     .offers,
@@ -319,9 +381,31 @@
     }
   }
 
-  @keyframes thinking {
-    from {
-      background-position-x: 100%;
+  @keyframes typing {
+    50% {
+      opacity: var(--opacity-busy);
+      translate: 0 calc(-1 * var(--space-2));
+    }
+  }
+
+  /* While the chat is on the page, focus never lands under the sticky prompt box (WCAG 2.4.11): the page keeps the
+     box's height, its gap and the safe area clear when it scrolls a time or a chip into view. */
+  :root:has(.composer) {
+    scroll-padding-block-end: calc(var(--size-toolbar) + 2 * var(--space-24) + env(safe-area-inset-bottom));
+  }
+
+  /* On a phone the page is the only scroller (owner review, 4 November 2026): the thread takes its whole height and
+     the chat sets the card's, and the newest line comes into view above the sticky prompt box and the safe area. */
+  @media (width < 1024px) {
+    .thread {
+      flex: none;
+      overflow: visible;
+    }
+
+    .line {
+      scroll-margin-block-end: calc(
+        var(--size-toolbar) + var(--space-24) + var(--space-12) + env(safe-area-inset-bottom)
+      );
     }
   }
 

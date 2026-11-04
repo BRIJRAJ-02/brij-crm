@@ -374,8 +374,8 @@ export async function questionTargets(
 }
 
 /**
- * Whether Book by chat is off for a page (owner, 26 Oct 2026): chat asks no questions, so a page with a required one
- * books only through its form. A page whose questions are all optional keeps chat, which skips them.
+ * Whether a page has a question that must be answered. Book by chat once turned off for such a page (26 Oct 2026);
+ * since 4 Nov 2026 it asks the questions itself, so a chat booking on such a page is checked as the form's is.
  */
 export function chatIsOff(questions: BookingQuestions): boolean {
   return questions.some((question) => question.required);

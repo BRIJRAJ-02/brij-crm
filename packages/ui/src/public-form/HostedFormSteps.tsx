@@ -6,7 +6,6 @@ import { Kbd } from '../atoms/Kbd/Kbd.tsx';
 import { ProgressBar } from '../atoms/ProgressBar/ProgressBar.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import {
-  ErrorSummary,
   FormAlert,
   FormClosed,
   FormFoot,
@@ -476,7 +475,6 @@ export function HostedFormSteps({
           })}
           {isLast && <FormTrap form={form} state={state} />}
           <div className={styles.actions} data-layout={layout}>
-            {!isOpen && <ErrorSummary state={state} among={step.questions} />}
             <FormAlert state={state} />
             <div className={styles.buttons} data-layout={layout}>
               {/* One at a time, the way back is the quiet up arrow at the foot (T42); Steps keep Back here. */}

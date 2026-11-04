@@ -1,0 +1,16 @@
+/* FieldError: the alert mark and the message on one line, in the danger colour at the label size. */
+@layer components {
+  .root {
+    display: flex;
+    gap: var(--space-4);
+    align-items: center;
+    margin: 0;
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .root[data-inset='check'] {
+    padding-inline-start: calc(var(--size-check) + var(--space-8));
+  }
+}

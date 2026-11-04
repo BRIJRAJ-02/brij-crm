@@ -5,6 +5,7 @@ import { BookingProvider } from '@crm/ui/public-booking';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
 import { BookingPage } from './BookingPage.tsx';
 import { openedBefore, rememberOpened, saveView } from './prefs.ts';
 
@@ -214,5 +215,176 @@ describe('a next times chip’s time (spec 0061, AC-6110)', () => {
     await loaded();
     expect(host?.textContent).not.toContain('That time was just taken');
     expect(host?.textContent).not.toContain('Your name');
+  });
+});
+
+describe('the times’ read (4 Nov 2026: the chat view sat on its loading shape for 2 to 3 seconds)', () => {
+  it('asks for the first times beside the page’s facts, not after them', async () => {
+    const asked: string[] = [];
+    // The facts never answer here: the times' read must already be out regardless.
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      asked.push(url);
+      return new Promise<Response>(() => undefined);
+    });
+    show();
+    await loaded();
+    const slots = asked.find((url) => url.includes('/slots'));
+    expect(slots).toBeDefined();
+    // With no length yet: the page's first, which the server picks.
+    expect(slots).not.toContain('duration=');
+  });
+
+  it('draws the times from that read, without asking again', async () => {
+    const start = new Date(Date.now() + 86_400_000);
+    start.setUTCHours(9, 0, 0, 0);
+    const api = fakeApi('month', [start.toISOString()]);
+    show();
+    await loaded();
+    await loaded();
+    expect(
+      api.mock.calls.filter(([input]) => String(input instanceof Request ? input.url : input).includes('/slots')),
+    ).toHaveLength(1);
+    expect(host?.textContent).toContain('9:00');
+  });
+
+  it('holds the chat’s own shape while the times load: a bubble, a day’s times and the prompt box', async () => {
+    // The facts answer at once, the times never do.
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/slots')) return new Promise<Response>(() => undefined);
+      if (url.includes('/viewer')) return Promise.resolve(answer({ isHost: false, canConnect: false }));
+      return Promise.resolve(
+        answer({
+          publicKey: KEY,
+          title: 'meeting',
+          description: '',
+          hostName: 'Ada',
+          durations: [30],
+          location: { type: 'video' },
+          hostTimeZone: 'UTC',
+          windowDays: 30,
+          defaultView: 'chat',
+        }),
+      );
+    });
+    show();
+    await loaded();
+    expect(chosenView()).toBe('chat');
+    // The view on show (the month under it is inert): far more than two bars, the host's name and face, the bubble,
+    // the day's label and six times. It comes with the chat's code, fetched beside the page's facts.
+    await vi.waitFor(() => {
+      const shown = [...(host?.querySelectorAll('[aria-busy="true"]') ?? [])].filter(
+        (each) => each.closest('[inert]') === null,
+      );
+      const shapes = Math.max(0, ...shown.map((each) => each.querySelectorAll('[aria-hidden="true"]').length));
+      expect(shapes).toBeGreaterThanOrEqual(9);
+    });
+  });
+});
+
+describe('Book by chat does what the details step does (chat parity, 4 Nov 2026)', () => {
+  const questions = [
+    {
+      id: 'budget',
+      key: 'budget',
+      label: 'Budget',
+      answerType: 'choice',
+      choices: ['Under 5k', 'Over 5k'],
+      required: true,
+    },
+    { id: 'role', key: 'role', label: 'Your role', answerType: 'short_text', required: false },
+  ];
+
+  it('asks the required question, offers guests, a note and the optional ones, then books with them', async () => {
+    const tomorrow = new Date(Date.now() + 86_400_000);
+    tomorrow.setUTCHours(9, 0, 0, 0);
+    const start = tomorrow.toISOString();
+    const sent: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/viewer')) return Promise.resolve(answer({ isHost: false, canConnect: false }));
+      if (url.includes('/slots')) return Promise.resolve(answer({ slots: [{ start }], calendar: 'ok' }));
+      if (url.includes('/chat')) {
+        const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as Record<string, unknown>;
+        sent.push(body);
+        const said = (body.messages as unknown[]).length;
+        if (said === 1)
+          return Promise.resolve(
+            answer({
+              text: 'Thursday 22 Oct at 9:00 AM, 30 min, for Grace Hopper (grace@example.com). Shall I book it?',
+              offers: [],
+              suggestions: ['Yes, book it', 'Something else'],
+              confirm: 'Yes, book it',
+              readBack: { start, name: 'Grace Hopper', email: 'grace@example.com' },
+              name: 'Grace Hopper',
+              duration: 30,
+            }),
+          );
+        return Promise.resolve(
+          answer({
+            text: 'You’re booked. See you tomorrow at 9:00 AM.',
+            offers: [],
+            suggestions: [],
+            duration: 30,
+            booked: { manageToken: 't'.repeat(32), booking: { start } },
+          }),
+        );
+      }
+      return Promise.resolve(
+        answer({
+          publicKey: KEY,
+          title: 'Intro call',
+          description: '',
+          hostName: 'Ada Lovelace',
+          durations: [30, 60],
+          location: { type: 'video' },
+          hostTimeZone: 'UTC',
+          windowDays: 30,
+          defaultView: 'chat',
+          questions,
+        }),
+      );
+    });
+    show();
+    const box = await vi.waitFor(() => {
+      const found = host?.querySelector('textarea');
+      if (found === null || found === undefined) throw new Error('No box yet.');
+      return found;
+    });
+    // Two lengths: the greeting carries them as chips, picked to the page's first.
+    await vi.waitFor(() => expect(host?.textContent).toContain('60 min'));
+    const press = async (name: string) => {
+      const button = await vi.waitFor(() => {
+        const found = [...(host?.querySelectorAll('button') ?? [])].find((each) => each.textContent === name);
+        if (found === undefined) throw new Error(`No ${name} yet.`);
+        return found;
+      });
+      act(() => button.click());
+    };
+    const type = async (text: string) => {
+      await userEvent.fill(box, text);
+      await userEvent.keyboard('{Enter}');
+    };
+    await type('tomorrow at 9, Grace Hopper, grace@example.com');
+    // The required question, in the host's voice, answered with a chip.
+    await vi.waitFor(() => expect(host?.textContent).toContain('One more thing. Budget?'));
+    await press('Under 5k');
+    // Then one row for the optional things.
+    await vi.waitFor(() => expect(host?.textContent).toContain('Anything else before I book it?'));
+    await press('Add a guest');
+    await vi.waitFor(() => expect(host?.textContent).toContain('Who else is joining?'));
+    await type('ada@example.com');
+    await vi.waitFor(() => expect(host?.textContent).toContain('Added. Anything else before I book it?'));
+    await press('That’s all');
+    await press('Yes, book it');
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    // The page's own lines never reach the server's replay: only what the visitor said to the chat.
+    expect(sent[1]?.messages).toEqual([
+      { role: 'visitor', text: 'tomorrow at 9, Grace Hopper, grace@example.com' },
+      { role: 'visitor', text: 'Yes, book it' },
+    ]);
+    expect(sent[1]?.answers).toEqual({ budget: 'Under 5k' });
+    expect(sent[1]?.guests).toEqual(['ada@example.com']);
   });
 });
