@@ -15,6 +15,7 @@ import {
   makeOwner,
   q,
   tabTo,
+  TRY_AGAIN,
   visitorOn,
   type FormView,
   type Owner,
@@ -55,14 +56,22 @@ test.describe('forms QA: accessibility', () => {
     await asOwner(page, owner);
     const form = await liveForm(page, owner, `Keys ${randomUUID().slice(0, 6)}`);
     await page.goto(`/w/${owner.slug}/captures/forms/${form.id}`);
-    await expect(page.getByLabel('Question', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Add a question' })).toBeVisible({ timeout: 30_000 });
     // Start from the page's top, as someone arriving by keyboard does.
     await page.locator('body').focus();
 
     await tabTo(page, page.getByRole('button', { name: 'Add a question' }), 120);
     await page.keyboard.press('Enter');
     const fresh = page.getByLabel('Question', { exact: true }).last();
-    await tabTo(page, fresh);
+    // BUG (forms QA, 5 November 2026): Add a question leaves focus on the first question's row, not the new one,
+    // and the open question's fields sit inside the Questions grid, where Tab leaves the grid and the arrows move
+    // between rows, so a keyboard alone never reaches them. Intended: focus lands in the new question's words, ready to type.
+    await expect.soft(fresh, 'Add a question puts focus in the new question').toBeFocused({ timeout: 5_000 });
+    // Neither Tab nor the grid's arrows reach an open question's words today, so the walk puts focus there itself
+    // (the soft check above has already failed the test) to go on checking the stops after it.
+    if (!(await fresh.evaluate((input) => input === document.activeElement))) await fresh.focus();
+    await expect(fresh).toBeFocused();
+    await expectVisibleFocus(page);
     await page.keyboard.type('What is your budget?');
     await expect(fresh).toHaveValue('What is your budget?');
 
@@ -123,6 +132,19 @@ test.describe('forms QA: accessibility', () => {
       await visitor.waitForTimeout(HUMAN_PACE_MS);
       // Enter in the last one line field sends (Classic) or sends on the last step.
       await visitor.keyboard.press('Enter');
+      // Every local visitor shares one address: if this minute's five sends are spent, wait it out and press again.
+      if (
+        await visitor
+          .getByText(TRY_AGAIN)
+          .waitFor({ timeout: 4_000 })
+          .then(
+            () => true,
+            () => false,
+          )
+      ) {
+        await visitor.waitForTimeout(61_000);
+        await visitor.keyboard.press('Enter');
+      }
       await expectThanks(visitor);
       // Focus goes to the thank you's heading, so a screen reader hears it.
       await expect(visitor.getByRole('heading', { name: /Thanks, we got it/ }).first()).toBeFocused();
@@ -131,7 +153,7 @@ test.describe('forms QA: accessibility', () => {
   }
 
   for (const width of WIDTHS) {
-    test(`axe finds nothing on the builder, Settings, Submissions, Analytics and Share at ${String(width)}`, async ({
+    test(`axe finds nothing on the builder, Settings, Submissions and Analytics at ${String(width)}`, async ({
       page,
     }) => {
       test.setTimeout(300_000);
@@ -150,8 +172,16 @@ test.describe('forms QA: accessibility', () => {
         await page.waitForLoadState('networkidle');
         await checkScreen(page, `forms-${name}-${String(width)}`);
       }
-      // Share (wip/forms-guest) replaces Install; until it lands the tab is Install.
-      await page.goto(base);
+    });
+
+    test(`axe finds nothing on Share at ${String(width)}`, async ({ page }) => {
+      test.setTimeout(180_000);
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
+      await asOwner(page, owner);
+      const form = await liveForm(page, owner, `Axe share ${String(width)} ${randomUUID().slice(0, 6)}`);
+      await page.goto(`/w/${owner.slug}/captures/forms/${form.id}`);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 30_000 });
+      // Share (wip/forms-guest) replaces Install; until it lands there is no Share to check.
       const share = page.getByRole('tab', { name: 'Share' }).or(page.getByRole('link', { name: 'Share', exact: true }));
       test.fixme((await share.count()) === 0, 'Waits on wip/forms-guest: the Share tab.');
       await share.first().click();
