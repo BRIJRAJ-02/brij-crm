@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the Menu app's editor (spec 0065, H1, AC-6520 to AC-6527), laid out after checklabs' menu editor: a header
-// with the status and one Review and publish, the menus, then each menu's Structure (sections, sub sections and their
+// with the menu picked, its status, Settings and one Publish, then the menu's Structure (sections, sub sections and their
 // dishes in order), Dishes, Options and Settings, with the guest menu's phone beside it.
 // Main task: build a menu and publish it, watching the guest menu take shape in the phone beside it.
 // Leaves out: the guest look's presets (H5), QR codes per table (H2, the Menu QR app), import (H6), analytics (0066).
@@ -22,6 +22,7 @@ import {
   SetupChecklist,
   TabPanel,
   Tabs,
+  ToggleButton,
   TopBar,
   type Toasts,
 } from '@crm/ui';
@@ -222,13 +223,30 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
     });
   const statusText = !isLive ? strings.statusDraft : draft.hidden ? strings.statusHidden : strings.statusLive;
   // At a phone's width the bar keeps the title, Live or Hidden, More and Publish; the count waits in the review.
-  const changesBadge =
-    isLive && draft.changes > 0 && !isNarrow ? (
-      <Badge tone="neutral" text={strings.changesShort(draft.changes)} />
-    ) : null;
+  // The menu being edited, picked in the header (checklabs' editor names its menu there); New menu at the list's foot.
+  const picker =
+    current === undefined ? null : (
+      <Select
+        label={strings.menuPicker}
+        isLabelHidden
+        variant="inline"
+        items={[
+          ...menus.map((menu) => ({ id: menu.id, label: menu.name })),
+          ...(draft.canEdit && draft.menus.length < 30
+            ? [{ id: 'new', label: strings.newMenu, icon: 'plus' as const, isApart: true }]
+            : []),
+        ]}
+        value={current.id}
+        onChange={(id) => {
+          if (id === 'new') newMenu();
+          else if (id !== null) go({ menu: id });
+        }}
+      />
+    );
   const status =
     isLive && draft.canEdit ? (
       <>
+        {picker}
         <MenuTrigger>
           <Button variant="ghost" icon={draft.hidden ? 'eye-off' : 'eye'} iconRight="chevron-down">
             {statusText}
@@ -250,18 +268,28 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
             </MenuItem>
           </Menu>
         </MenuTrigger>
-        {changesBadge}
       </>
     ) : (
       <>
-        <Badge tone={isLive && !draft.hidden ? 'accent' : 'neutral'} text={statusText} />
-        {changesBadge}
+        {picker}
+        {/* At a phone's width a draft's badge gives its room to the menu picker; Publish says the rest. */}
+        {isNarrow && !isLive ? null : <Badge tone={isLive && !draft.hidden ? 'accent' : 'neutral'} text={statusText} />}
       </>
     );
 
   const actions =
     draft.menus.length === 0 && !isLive ? undefined : (
       <>
+        {/* Settings in the header, as checklabs' editor has it; its view keeps `?tab=settings`. */}
+        {current === undefined ? null : (
+          <ToggleButton
+            variant="ghost"
+            icon="settings"
+            {...(isNarrow ? { label: strings.tabSettings } : { children: strings.tabSettings })}
+            isSelected={tab === 'settings'}
+            onChange={(isOn) => go({ tab: isOn ? 'settings' : 'structure' })}
+          />
+        )}
         <MenuTrigger>
           <Button variant="ghost" icon="ellipsis" label={strings.more} />
           <Menu
@@ -278,11 +306,6 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
               else if (key === 'discard') setOpen({ kind: 'discard' });
             }}
           >
-            {isNarrow && draft.canEdit && draft.menus.length > 0 && draft.menus.length < 30 ? (
-              <MenuItem id="new" icon="plus">
-                {strings.newMenu}
-              </MenuItem>
-            ) : null}
             {isLive && place !== undefined ? (
               <>
                 <MenuItem id="open" icon="external-link">
@@ -311,7 +334,13 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
             isDisabled={draft.changes === 0 && isLive}
             onPress={() => setOpen({ kind: 'publish' })}
           >
-            {justPublished ? strings.published : isNarrow ? strings.publish : strings.reviewPublish}
+            {justPublished
+              ? strings.published
+              : isNarrow
+                ? strings.publish
+                : isLive && draft.changes > 0
+                  ? strings.publishCount(draft.changes)
+                  : strings.reviewPublish}
           </Button>
         ) : null}
       </>
@@ -424,92 +453,57 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                 >
                   {strings.emptyMenusLine}
                 </EmptyState>
+              ) : tab === 'settings' ? (
+                <SettingsTab
+                  store={store}
+                  slug={slug}
+                  draft={draft}
+                  menuId={current.id}
+                  {...(placeHours === undefined ? {} : { placeHours })}
+                  onOpen={setOpen}
+                  said={said}
+                />
               ) : (
                 <Tabs
-                  label={strings.menus}
-                  tabs={menus.map((menu) => ({ id: menu.id, label: menu.name }))}
-                  selectedKey={current.id}
-                  onSelectionChange={(id) => go({ menu: id })}
-                  end={
-                    <>
-                      {draft.canEdit && !isNarrow && draft.menus.length < 30 ? (
-                        <Button icon="plus" onPress={newMenu}>
-                          {strings.newMenu}
-                        </Button>
-                      ) : null}
-                    </>
+                  label={strings.menuSettings}
+                  tabs={[
+                    {
+                      id: 'structure',
+                      label: strings.tabStructure,
+                      count: draft.sections.filter((each) => each.menuId === current.id).length,
+                    },
+                    {
+                      id: 'dishes',
+                      // Every dish of the workspace, not this menu's (checklabs' Items).
+                      label: strings.tabAllDishes,
+                      count: draft.items.length,
+                      ...(unpriced.length === 0 ? {} : { alert: strings.needsPrice(unpriced.length) }),
+                    },
+                    { id: 'options', label: strings.tabAllOptions, count: draft.groups.length },
+                  ]}
+                  selectedKey={tab}
+                  onSelectionChange={(id) =>
+                    go({ tab: (MENU_TABS as readonly string[]).includes(id) ? (id as MenuTab) : 'structure' })
                   }
                 >
-                  {menus.map((menu) => (
-                    <TabPanel key={menu.id} id={menu.id}>
-                      <Tabs
-                        label={strings.menuSettings}
-                        tabs={[
-                          {
-                            id: 'structure',
-                            label: strings.tabStructure,
-                            icon: 'list',
-                            count: draft.sections.filter((each) => each.menuId === menu.id).length,
-                          },
-                          {
-                            id: 'dishes',
-                            // Every dish of the workspace, not this menu's (UX review should-fix 12).
-                            label: strings.tabAllDishes,
-                            icon: 'utensils',
-                            count: draft.items.length,
-                            ...(unpriced.length === 0 ? {} : { alert: strings.needsPrice(unpriced.length) }),
-                          },
-                          {
-                            id: 'options',
-                            label: strings.tabAllOptions,
-                            icon: 'sliders-horizontal',
-                            count: draft.groups.length,
-                          },
-                          { id: 'settings', label: strings.tabSettings, icon: 'settings' },
-                        ]}
-                        selectedKey={tab}
-                        onSelectionChange={(id) =>
-                          go({ tab: (MENU_TABS as readonly string[]).includes(id) ? (id as MenuTab) : 'structure' })
-                        }
-                      >
-                        <TabPanel id="structure">
-                          <StructureTab
-                            store={store}
-                            slug={slug}
-                            draft={draft}
-                            menuId={menu.id}
-                            onOpen={setOpen}
-                            said={said}
-                            toasts={toasts}
-                          />
-                        </TabPanel>
-                        <TabPanel id="dishes">
-                          <DishesTab
-                            store={store}
-                            slug={slug}
-                            draft={draft}
-                            onOpen={setOpen}
-                            said={said}
-                            toasts={toasts}
-                          />
-                        </TabPanel>
-                        <TabPanel id="options">
-                          <OptionsTab draft={draft} onOpen={setOpen} />
-                        </TabPanel>
-                        <TabPanel id="settings">
-                          <SettingsTab
-                            store={store}
-                            slug={slug}
-                            draft={draft}
-                            menuId={menu.id}
-                            {...(placeHours === undefined ? {} : { placeHours })}
-                            onOpen={setOpen}
-                            said={said}
-                          />
-                        </TabPanel>
-                      </Tabs>
-                    </TabPanel>
-                  ))}
+                  <TabPanel id="structure" variant="fields">
+                    <StructureTab
+                      key={current.id}
+                      store={store}
+                      slug={slug}
+                      draft={draft}
+                      menuId={current.id}
+                      onOpen={setOpen}
+                      said={said}
+                      toasts={toasts}
+                    />
+                  </TabPanel>
+                  <TabPanel id="dishes">
+                    <DishesTab store={store} slug={slug} draft={draft} onOpen={setOpen} said={said} toasts={toasts} />
+                  </TabPanel>
+                  <TabPanel id="options">
+                    <OptionsTab draft={draft} onOpen={setOpen} />
+                  </TabPanel>
                 </Tabs>
               )}
             </PreviewLayout>

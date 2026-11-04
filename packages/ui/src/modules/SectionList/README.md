@@ -51,3 +51,5 @@ Tab reaches each section's grip, then its menu, then what it holds (a LinkList t
 ## Differences from the artifact
 
 Not in the artifact yet.
+
+- `description` puts a line under a section's title, the Card's own (a menu section's "5 items", after checklabs' category card, 5 November 2026).

@@ -218,7 +218,8 @@ describe('the Menus editor', () => {
     await expect.element(page.getByRole('button', { name: /Review/ }).first()).toBeInTheDocument();
     // The dish Publish would refuse says so on its row, and on the Dishes tab, before Publish is pressed.
     await expect.element(page.getByText('No price').first()).toBeVisible();
-    await expect.element(page.getByRole('switch', { name: 'Oysters available' }).first()).toBeInTheDocument();
+    // Sold out is in a dish's ⋯ on Structure (checklabs' rows have no switch); the Items tab keeps the switch.
+    await expect.element(page.getByRole('button', { name: 'More for Oysters' }).first()).toBeInTheDocument();
     await userEvent.click(page.getByRole('button', { name: 'Review and publish' }));
     const review = page.getByRole('dialog', { name: 'Review and publish' });
     await expect.element(review.getByText(/Give Oysters a price or a price note/)).toBeVisible();

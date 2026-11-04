@@ -10,6 +10,7 @@ import {
   Button,
   EmptyState,
   Field,
+  Icon,
   LinkList,
   LinkListRowOrder,
   Menu,
@@ -23,10 +24,9 @@ import {
   type LinkRow,
   type Toasts,
 } from '@crm/ui';
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { Open } from './MenusScreen.tsx';
 import { draftPhotoHref } from './photo.ts';
-import { useIsNarrow } from './narrow.ts';
 import { strings } from './strings.ts';
 
 type Said = (refused: { readonly message: string } | undefined) => void;
@@ -108,22 +108,31 @@ export function StructureTab({
     [draft.sections, menuId],
   );
   const top = sections.filter((each) => each.parentId === undefined);
+  // A section's head, after checklabs' category card: its grip, its name, how many items it holds, the List or Grid
+  // switch, then its ⋯ (Edit, Add sub section, Move, Delete). No numbers.
+  const count = (section: MenuSection) =>
+    section.itemIds.length +
+    sections.filter((each) => each.parentId === section.id).reduce((sum, sub) => sum + sub.itemIds.length, 0);
   const card = (section: MenuSection, index: number, siblings: readonly MenuSection[]) => ({
     id: section.id,
-    title: strings.numbered(index + 1, section.name),
+    title: section.name,
+    description: strings.itemCount(count(section)),
     actions: draft.canEdit ? (
-      <SectionMenu
-        section={section}
-        index={index}
-        count={siblings.length}
-        onAction={(key) => {
-          if (key === 'edit') onOpen({ kind: 'section', menuId, sectionId: section.id });
-          else if (key === 'sub') onOpen({ kind: 'section', menuId, parentId: section.id });
-          else if (key === 'up') void store.move(slug, 'section', section.id, index - 1).then(said);
-          else if (key === 'down') void store.move(slug, 'section', section.id, index + 1).then(said);
-          else if (key === 'delete') onOpen({ kind: 'deleteSection', sectionId: section.id, name: section.name });
-        }}
-      />
+      <>
+        <LayoutSwitch store={store} slug={slug} section={section} said={said} />
+        <SectionMenu
+          section={section}
+          index={index}
+          count={siblings.length}
+          onAction={(key) => {
+            if (key === 'edit') onOpen({ kind: 'section', menuId, sectionId: section.id });
+            else if (key === 'sub') onOpen({ kind: 'section', menuId, parentId: section.id });
+            else if (key === 'up') void store.move(slug, 'section', section.id, index - 1).then(said);
+            else if (key === 'down') void store.move(slug, 'section', section.id, index + 1).then(said);
+            else if (key === 'delete') onOpen({ kind: 'deleteSection', sectionId: section.id, name: section.name });
+          }}
+        />
+      </>
     ) : undefined,
     content: (
       <SectionBody
@@ -161,11 +170,40 @@ export function StructureTab({
         }
       />
       {draft.canEdit && top.length > 0 ? (
-        <Button icon="plus" onPress={() => onOpen({ kind: 'section', menuId })}>
+        <Button variant="dashed" icon="plus" isFullWidth onPress={() => onOpen({ kind: 'section', menuId })}>
           {strings.newSection}
         </Button>
       ) : null}
     </>
+  );
+}
+
+/** A section's List or Grid, as icons in its head (checklabs' place for it). */
+function LayoutSwitch({
+  store,
+  slug,
+  section,
+  said,
+}: {
+  readonly store: MenuStore;
+  readonly slug: string;
+  readonly section: MenuSection;
+  readonly said: Said;
+}) {
+  return (
+    <SegmentedControl
+      label={strings.layoutLabel(section.name)}
+      segments={[
+        { value: 'list', label: strings.layoutList, icon: 'list', isIconOnly: true },
+        { value: 'grid', label: strings.layoutGrid, icon: 'layout-grid', isIconOnly: true },
+      ]}
+      value={section.layout}
+      onChange={(layout: string) =>
+        void store
+          .saveSection(slug, { ...sectionInput(section), layout: layout === 'grid' ? 'grid' : 'list' })
+          .then(said)
+      }
+    />
   );
 }
 
@@ -232,8 +270,6 @@ function SectionBody({
   readonly toasts: Toasts;
 }) {
   const items = new Map(draft.items.map((item) => [item.id, item]));
-  // At a phone's width a sold out row says so by its off switch and quiet title, so its name keeps the room.
-  const isNarrow = useIsNarrow();
   const locale = draft.places[0]?.locale ?? 'en-GB';
   const menuNames = (itemId: string) =>
     draft.sections
@@ -264,25 +300,13 @@ function SectionBody({
       ...item.diet.slice(0, 2).map((mark) => strings.diets[mark]),
       ...(menuNames(item.id).length === 0 ? [] : [strings.alsoOn(menuNames(item.id).join(', '))]),
     ],
-    leading: (
-      <Avatar
-        name={item.name}
-        id={item.id}
-        size="sm"
-        isDecorative
-        {...(item.photo === undefined ? {} : { src: draftPhotoHref(slug, item.photo.id, 'small', item.photo.version) })}
-      />
-    ),
+    // The dish's photo, or a quiet photo mark where it has none (checklabs' empty photo slot): never a letter tile.
+    leading: <DishThumb slug={slug} item={item} />,
     ...(item.soldOut
-      ? { ...(isNarrow ? {} : { badge: strings.soldOutBadge }), isOff: true }
+      ? { badge: strings.soldOutBadge, isOff: true }
       : isUnpriced(item)
         ? { badge: strings.noPriceBadge }
         : {}),
-    toggle: {
-      label: strings.available(item.name),
-      isSelected: !item.soldOut,
-      onChange: (isAvailable) => flipSoldOut(store, slug, item, !isAvailable, toasts, said),
-    },
     ...(draft.canEdit
       ? {
           actions: (
@@ -292,6 +316,7 @@ function SectionBody({
                 label={strings.moreFor(item.name)}
                 onAction={(key) => {
                   if (key === 'edit') onOpen({ kind: 'item', item });
+                  else if (key === 'sold') flipSoldOut(store, slug, item, !item.soldOut, toasts, said);
                   else if (key === 'up') void store.move(slug, 'placement', item.id, index - 1, section.id).then(said);
                   else if (key === 'down')
                     void store.move(slug, 'placement', item.id, index + 1, section.id).then(said);
@@ -301,6 +326,9 @@ function SectionBody({
               >
                 <MenuItem id="edit" icon="pencil">
                   {strings.editDish}
+                </MenuItem>
+                <MenuItem id="sold" icon={item.soldOut ? 'circle-check' : 'circle-slash'}>
+                  {item.soldOut ? strings.markAvailable : strings.markSoldOut}
                 </MenuItem>
                 {index > 0 ? (
                   <MenuItem id="up" icon="arrow-up">
@@ -326,24 +354,6 @@ function SectionBody({
   }));
   return (
     <>
-      {draft.canEdit ? (
-        <>
-          <SegmentedControl
-            label={strings.sectionLayout}
-            segments={[
-              { value: 'list', label: strings.layoutList },
-              { value: 'grid', label: strings.layoutGrid },
-            ]}
-            value={section.layout}
-            onChange={(layout: string) =>
-              void store
-                .saveSection(slug, { ...sectionInput(section), layout: layout === 'grid' ? 'grid' : 'list' })
-                .then(said)
-            }
-          />
-          <AddDishes store={store} slug={slug} draft={draft} section={section} onOpen={onOpen} said={said} />
-        </>
-      ) : null}
       <LinkList
         label={strings.dishesIn(section.name)}
         rows={rows}
@@ -363,26 +373,34 @@ function SectionBody({
           : {})}
         emptyState={<EmptyState title={strings.emptySection} layout="row" />}
       />
+      {draft.canEdit ? (
+        <AddDishes store={store} slug={slug} draft={draft} section={section} onOpen={onOpen} said={said} />
+      ) : null}
       {subsections.length === 0 ? null : (
         <SectionList
           label={strings.subsectionsLabel(section.name)}
           sections={subsections.map((sub, index) => ({
             id: sub.id,
             title: sub.name,
+            description: strings.itemCount(sub.itemIds.length),
             ...(draft.canEdit
               ? {
                   actions: (
-                    <SectionMenu
-                      section={sub}
-                      index={index}
-                      count={subsections.length}
-                      onAction={(key) => {
-                        if (key === 'edit') onOpen({ kind: 'section', menuId: sub.menuId, sectionId: sub.id });
-                        else if (key === 'up') void store.move(slug, 'section', sub.id, index - 1).then(said);
-                        else if (key === 'down') void store.move(slug, 'section', sub.id, index + 1).then(said);
-                        else if (key === 'delete') onOpen({ kind: 'deleteSection', sectionId: sub.id, name: sub.name });
-                      }}
-                    />
+                    <>
+                      <LayoutSwitch store={store} slug={slug} section={sub} said={said} />
+                      <SectionMenu
+                        section={sub}
+                        index={index}
+                        count={subsections.length}
+                        onAction={(key) => {
+                          if (key === 'edit') onOpen({ kind: 'section', menuId: sub.menuId, sectionId: sub.id });
+                          else if (key === 'up') void store.move(slug, 'section', sub.id, index - 1).then(said);
+                          else if (key === 'down') void store.move(slug, 'section', sub.id, index + 1).then(said);
+                          else if (key === 'delete')
+                            onOpen({ kind: 'deleteSection', sectionId: sub.id, name: sub.name });
+                        }}
+                      />
+                    </>
                   ),
                 }
               : {}),
@@ -404,15 +422,6 @@ function SectionBody({
             : {})}
         />
       )}
-      {draft.canEdit && section.parentId === undefined ? (
-        <Button
-          variant="ghost"
-          icon="plus"
-          onPress={() => onOpen({ kind: 'section', menuId: section.menuId, parentId: section.id })}
-        >
-          {strings.addSubsection}
-        </Button>
-      ) : null}
     </>
   );
 }
@@ -438,6 +447,12 @@ function AddDishes({
 }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(-1);
+  // "+ Add item" under the block (checklabs'), turning into the search or create field in place.
+  const [isAdding, setAdding] = useState(false);
+  // The field takes focus as it replaces the button that opened it.
+  useEffect(() => {
+    if (isAdding) anchor.current?.focus();
+  }, [isAdding]);
   const anchor = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const listId = useId();
   const typed = query.trim();
@@ -475,10 +490,26 @@ function AddDishes({
       setActive(-1);
     }
   };
+  const keyDownClosing = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && !isOpen) {
+      setAdding(false);
+      return;
+    }
+    keyDown(event);
+  };
+  if (!isAdding)
+    return (
+      <Button variant="ghost" icon="plus" onPress={() => setAdding(true)}>
+        {strings.addDishButton}
+      </Button>
+    );
   return (
     <>
       <Field
         ref={anchor}
+        onBlur={() => {
+          if (query.trim() === '') setAdding(false);
+        }}
         label={strings.addDish}
         icon="search"
         placeholder={strings.addDishPlaceholder}
@@ -488,7 +519,7 @@ function AddDishes({
           setQuery(next);
           setActive(next.trim() === '' ? -1 : 0);
         }}
-        onKeyDown={keyDown}
+        onKeyDown={keyDownClosing}
         onSubmit={() => pick(active === -1 ? 0 : active)}
         combobox={{
           listId,
@@ -522,5 +553,21 @@ function AddDishes({
         />
       ) : null}
     </>
+  );
+}
+
+/** A dish row's leading tile: its photo, or a quiet photo mark in its place. */
+export function DishThumb({ slug, item }: { readonly slug: string; readonly item: Dish }) {
+  return (
+    <Avatar
+      name={item.name}
+      id={item.id}
+      size="sm"
+      shape="square"
+      hue="gray"
+      isDecorative
+      mark={<Icon name="image" size="xs" />}
+      {...(item.photo === undefined ? {} : { src: draftPhotoHref(slug, item.photo.id, 'small', item.photo.version) })}
+    />
   );
 }
