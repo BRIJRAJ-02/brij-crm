@@ -79,3 +79,33 @@ describe('the signed in invite card asks Your name (QA N14)', () => {
     resetTheme();
   });
 });
+
+describe('an invitation that opens nothing (expired, revoked, used) has a way on that fits who is here', () => {
+  const renderExpired = async (user: SignedInUser | undefined, hasWorkspace: boolean) => {
+    const data = {} as unknown as DataLayer;
+    shown = await renderInApp(
+      () => (
+        <InviteScreen data={data} token={TOKEN} invitation={undefined} user={user} hasWorkspace={hasWorkspace} />
+      ),
+      { data, pattern: '/invite/$token', at: `/invite/${TOKEN}` },
+    );
+  };
+
+  it('asks for a new invitation, and offers their workspaces to someone who has one', async () => {
+    await renderExpired(userOf('Ada', 'ada@acme.dev'), true);
+    await expect.element(page.getByRole('heading', { level: 1, name: 'This invitation is no longer valid' })).toBeVisible();
+    await expect.element(page.getByText('Ask whoever invited you to send a new one.')).toBeVisible();
+    await expect.element(page.getByRole('link', { name: 'Go to your workspaces' })).toHaveAttribute('href', '/');
+  });
+
+  it('offers making a workspace to someone signed in with none, never "your workspaces"', async () => {
+    await renderExpired(userOf('Ada', 'ada@acme.dev'), false);
+    await expect.element(page.getByRole('link', { name: 'Create a workspace' })).toHaveAttribute('href', '/welcome');
+    expect(page.getByRole('link', { name: 'Go to your workspaces' }).query()).toBeNull();
+  });
+
+  it('offers Sign in to someone signed out', async () => {
+    await renderExpired(undefined, false);
+    await expect.element(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
+  });
+});

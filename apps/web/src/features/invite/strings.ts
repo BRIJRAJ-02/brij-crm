@@ -21,6 +21,10 @@ export const strings = {
   invalidTitle: 'This invitation is no longer valid',
   invalidText: 'Ask whoever invited you to send a new one.',
   goHome: 'Go to your workspaces',
+  /** An invitation that opens nothing, for someone signed in with no workspace: making their own. */
+  createWorkspace: 'Create a workspace',
+  /** An invitation that opens nothing, for someone signed out: sign in finds their workspaces. */
+  signIn: 'Sign in',
   /** The sign out confirm's line here: where signing in again leads. */
   signOutText: 'You’ll sign in again, then come back to this invitation.',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
