@@ -61,6 +61,11 @@ export const PublicBookingPage = z.object({
   /** How many days ahead a slot may start. */
   windowDays: z.number().int(),
   /**
+   * How soon a time may start, in minutes, when the page keeps any notice (bookings fix, 5 Nov 2026): the rail says
+   * it plainly. The slots read's own number (a private page none, a request page at least an hour). Left out: none.
+   */
+  minNoticeMinutes: z.number().int().positive().optional(),
+  /**
    * The view the page opens in (owner, 25 Oct 2026), travelling with the page's other facts so the first paint is
    * already the right one. A visitor's own remembered choice on this browser wins over it.
    */

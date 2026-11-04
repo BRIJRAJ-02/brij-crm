@@ -226,6 +226,22 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
     expect(await refusalOf(enterBookingPage({ db }, 'not a key'))).toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('says the notice its times keep, as the slots read keeps it, and nothing when there is none', async () => {
+    const w = await workspace();
+    const { page, entry } = await livePage(w);
+    await updateBookingPage(w.owner, { pageId: page.id, settings: { minNoticeMinutes: 240 } });
+    const facts = await getPublicBookingPage(entry);
+    expect(facts).toMatchObject({ minNoticeMinutes: 240, windowDays: 60 });
+    // A page that confirms each booking first keeps at least an hour, as its times do (spec 0062, AC-6203).
+    await updateBookingPage(w.owner, {
+      pageId: page.id,
+      settings: { minNoticeMinutes: 0, requiresConfirmation: true },
+    });
+    expect((await getPublicBookingPage(entry)).minNoticeMinutes).toBe(60);
+    await updateBookingPage(w.owner, { pageId: page.id, settings: { requiresConfirmation: false } });
+    expect(await getPublicBookingPage(entry)).not.toHaveProperty('minNoticeMinutes');
+  });
+
   it('opens in the view its host chose, and in Month until one is chosen (owner, 25 Oct 2026)', async () => {
     const w = await workspace();
     const { page, entry } = await livePage(w);

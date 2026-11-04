@@ -1224,11 +1224,8 @@ function Booking({
     },
   );
   // The page's rules, said plainly under the facts while the times show (bookings critics, 4 Nov 2026): how soon
-  // and how far ahead it books. The notice is read only when the page's answer carries it.
-  const noticeMinutes =
-    'minNoticeMinutes' in page && typeof page.minNoticeMinutes === 'number' && page.minNoticeMinutes > 0
-      ? page.minNoticeMinutes
-      : undefined;
+  // and how far ahead it books. The notice comes with the page's facts only when it keeps one.
+  const noticeMinutes = page.minNoticeMinutes;
   if (!isPastTimes)
     facts.push({
       id: 'rules',
