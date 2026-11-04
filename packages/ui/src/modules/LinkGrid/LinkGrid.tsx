@@ -47,6 +47,8 @@ export interface LinkGridProps {
    * group by `groupId`. A group the search empties is left out. Without it, one grid with no headings.
    */
   readonly groups?: readonly LinkGridGroup[];
+  /** The cards carry a picture (LinkCard's `picture`): the loading cards draw its stage too, so nothing jumps. */
+  readonly hasPictures?: boolean;
 }
 
 /** How many skeleton cards stand in while the grid loads. */
@@ -77,6 +79,7 @@ export function LinkGrid({
   errorTitle,
   emptyState,
   groups,
+  hasPictures = false,
 }: LinkGridProps) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   if (status === 'no-access') {
@@ -98,7 +101,10 @@ export function LinkGrid({
   if (status === 'loading') {
     return (
       <div className={styles.grid} aria-busy="true">
-        {showSkeleton && Array.from({ length: SKELETON_CARDS }, (_, index) => <LinkCardSkeleton key={index} />)}
+        {showSkeleton &&
+          Array.from({ length: SKELETON_CARDS }, (_, index) => (
+            <LinkCardSkeleton key={index} hasPicture={hasPictures} />
+          ))}
         <VisuallyHidden>{strings.loading(label)}</VisuallyHidden>
       </div>
     );

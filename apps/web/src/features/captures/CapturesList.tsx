@@ -41,6 +41,8 @@ export interface CapturesListProps {
   readonly dialogs?: ReactNode;
   /** Beside the search at the bar's end, while there are cards: Forms' sort. */
   readonly toolbarActions?: ReactNode;
+  /** The cards carry pictures: the loading cards draw their stage too. */
+  readonly hasPictures?: boolean;
 }
 
 /**
@@ -59,6 +61,7 @@ export function CapturesList({
   onRetry,
   dialogs,
   toolbarActions,
+  hasPictures = false,
 }: CapturesListProps) {
   const slot = useCapturesToolbarSlot();
   const [query, setQuery] = useState('');
@@ -99,6 +102,7 @@ export function CapturesList({
             status={status}
             errorTitle={errorTitle}
             onRetry={onRetry}
+            hasPictures={hasPictures}
           />
         </>
       )}

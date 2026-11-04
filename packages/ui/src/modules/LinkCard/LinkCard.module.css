@@ -10,7 +10,14 @@
    switch (in a 32px box, so a near miss does nothing rather than opening the card), the address (so it can
    be selected) and the foot sit above it; a miss in the foot does nothing. Hover (a fine pointer only) raises the border to border-strong; focus on the title rings the
    whole card. An off card's title reads in text-secondary; a pending one in text-tertiary. Nothing moves on
-   press. */
+   press.
+   A pictured card (5 November 2026, the owner: "make these cards look much prettier"): a stage across its top,
+   surface-sunken (faintly tinted with the link's colour when it has one) over a hairline, holds a sheet the width
+   of half a panel (a form's thumbnail is laid out at a panel's width and shown at half size), its top corners
+   rounded, shadow-md, its foot cut by the stage. On hover (a fine pointer) the sheet lifts space-4 in
+   duration-move with ease-out, so the card answers the pointer; reduced motion keeps it still. The facts line can
+   start with the link's status as a StatusDot, a middle dot after it; the footer's start can hold one control of
+   the card's own (`lead`) in the address's place; Copy link can be a quiet ghost icon. */
 @layer components {
   .root {
     position: relative;
@@ -201,6 +208,74 @@
     gap: var(--space-8);
   }
 
+  .stage {
+    position: relative;
+    display: flex;
+    flex: none;
+    justify-content: center;
+    box-sizing: border-box;
+    block-size: calc(var(--size-column-narrow) + var(--space-24));
+    padding-block-start: var(--space-16);
+    overflow: hidden;
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-sunken);
+  }
+
+  /* A link with a colour tints its stage with it, faintly: the dot's colour, carried up to the picture. */
+  .root[data-hue] .stage {
+    background: color-mix(in oklab, var(--edge) 14%, var(--surface-sunken));
+  }
+
+  .sheet {
+    flex: none;
+    inline-size: calc(var(--size-panel) / 2);
+    max-inline-size: calc(100% - 2 * var(--space-24));
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-block-end: 0;
+    border-start-start-radius: var(--radius-md);
+    border-start-end-radius: var(--radius-md);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    transition: translate var(--duration-move) var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root:has(.title[data-hovered]) .sheet {
+      translate: 0 calc(-1 * var(--space-4));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root:has(.title[data-hovered]) .sheet {
+      translate: none;
+    }
+  }
+
+  /* The status, then the facts after a middle dot. */
+  .facts:has(.factsText) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--space-6);
+  }
+
+  .facts > .factsText:not(:first-child)::before {
+    margin-inline-end: var(--space-6);
+    content: '·';
+  }
+
+  /* The footer's own control, in the address's place, pushing Copy link and the actions to the end. A ghost
+     button's icon lines up with the title above it: the lead reaches back over the button's own space-8 inset. */
+  .lead {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    margin-inline: calc(-1 * var(--space-8)) auto;
+  }
+
   .skeletonTitle {
     display: flex;
     align-items: center;
@@ -222,6 +297,10 @@
 
     .dot {
       background: CanvasText;
+    }
+
+    .sheet {
+      border-color: CanvasText;
     }
 
     /* Shadows go in forced colours, so focus draws a real outline. */

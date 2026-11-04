@@ -24,6 +24,7 @@ import {
   publishProblem,
   recordFactProblem,
   FormDocument,
+  formPictureOf,
   type FormQuestion,
   type FormStatus,
   type FormSummary,
@@ -237,6 +238,7 @@ export async function listForms(
         liveVersionId: forms.liveVersionId,
         liveObjectId: liveObjectOf(),
         publicKey: forms.publicKey,
+        draftVersionId: forms.draftVersionId,
         liveNumber: sql<
           number | null
         >`(select v.number from ${formVersions} v where v.workspace_id = ${forms.workspaceId} and v.id = ${forms.liveVersionId})`,
@@ -256,8 +258,14 @@ export async function listForms(
       tx,
       shown.map((row) => row.id),
     );
+    // Each card draws its own draft (5 November 2026): one read of the shown forms' drafts, the list's third statement.
+    const drafts = await loadVersions(
+      tx,
+      shown.flatMap((row) => (row.draftVersionId === null ? [] : [row.draftVersionId])),
+    );
     const items = shown.map((row): FormSummary => {
       const count = counts.get(row.id);
+      const draft = row.draftVersionId === null ? undefined : drafts.get(row.draftVersionId);
       return {
         id: row.id,
         name: row.name,
@@ -271,6 +279,7 @@ export async function listForms(
         ...(count?.last === undefined || count.last === null ? {} : { lastSubmissionAt: count.last }),
         submissionCount: count?.total ?? 0,
         questionCount: row.questionCount,
+        ...(draft === undefined ? {} : { picture: formPictureOf(draft.document) }),
         updatedAt: row.updatedAt,
       };
     });

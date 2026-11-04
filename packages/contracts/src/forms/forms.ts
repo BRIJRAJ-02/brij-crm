@@ -12,7 +12,8 @@ import { WorkspaceScoped } from '../workspaces.ts';
 import { SubmissionContext } from './context.ts';
 import { CLOSED_MESSAGE_MAX } from './confirmation.ts';
 import { FormConfirmation, FormDocument } from './document.ts';
-import { PublicForm } from './public.ts';
+import { PublicForm, PublicQuestion } from './public.ts';
+import { FORM_LAYOUTS } from './path.ts';
 import { FormAnalytics, FormAnalyticsInput } from './visits.ts';
 import { FormTemplateSummary, OfferedFormTemplateId } from './templates.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
@@ -54,6 +55,22 @@ export const FormOrigin = z
     }
   });
 
+/**
+ * A form's picture on its list card (5 November 2026): the draft's headline, line, button, look and first visible
+ * questions, so the card draws its own form at a thumbnail's size. `formPictureOf` (`@crm/contracts/forms`) makes it.
+ */
+export const FormPicture = z.object({
+  headline: z.string(),
+  subheading: z.string().optional(),
+  buttonText: z.string(),
+  layout: z.enum(FORM_LAYOUTS).optional(),
+  colour: z.enum(['light', 'dark']),
+  corners: z.enum(['rounded', 'square']),
+  questions: z.array(PublicQuestion).max(3),
+});
+/** A form's picture on its list card. */
+export type FormPicture = z.infer<typeof FormPicture>;
+
 /** A form card in the list (spec 0023, The forms list). */
 export const FormSummary = z.object({
   id: Uuid,
@@ -75,6 +92,8 @@ export const FormSummary = z.object({
   submissionCount: z.number().int().min(0),
   /** The draft's questions, hidden ones left out: the list card's meta line ("5 questions"). */
   questionCount: z.number().int().min(0).optional(),
+  /** The draft as its card draws it; absent from an answer that never read the draft (an older server). */
+  picture: FormPicture.optional(),
   updatedAt: Timestamp,
 });
 /** A form card in the list. */

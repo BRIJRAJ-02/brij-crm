@@ -63,6 +63,14 @@ export const strings = {
   notAccepting: 'Paused',
   /** The list card's state badge for a form never published (lane 3c: a badge, never a greyed title). */
   draftBadge: 'Draft',
+  /** The list card's state for a published form taking submissions (5 November 2026: a dot and a word). */
+  liveStatus: 'Live',
+  /** The list card's mark beside the count when a submission came since the reader last looked. */
+  newBadge: 'New',
+  /** The count link's name, its visible words first: "12 submissions to Contact us". */
+  submissionsOf: (count: string, name: string) => `${count} to ${name}`,
+  /** A card's picture of a form whose row carries none: the hosted form's default button. */
+  sendButton: 'Send',
   /** The card's meta line (lane 3c, Klaviyo's list): "5 questions · edited 2h ago · 4 submissions". */
   editedAgo: (when: string) => `edited ${when}`,
   /** The list's sort (lane 3c), the record lists' sort chip: by when it changed, or by name. */

@@ -1,12 +1,14 @@
 // Brief
-// Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links, each with one meta line (its
-// questions, when it was edited, its submissions; Klaviyo's list) and its state as a badge (spec 0023; lane 3c).
+// Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links, each a picture of its own form
+// over its name, its state as a dot and a word, when it was edited, and its submissions (spec 0023; 5 November 2026).
 // Main task: open a form, make a new one at once, copy its link, or open its submissions; sort by Updated or Name.
 // Leaves out: anything inside one form (its builder), archived forms (a later pass), and a one-click off switch:
 // pausing ends something, so it sits in ⋯ and asks first.
 import { isDataError, type FormSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
+import type { PublicForm } from '@crm/contracts/forms';
 import {
+  Badge,
   Button,
   ButtonLink,
   focusLater,
@@ -15,6 +17,7 @@ import {
   MenuSeparator,
   MenuTrigger,
   formatRelative,
+  HostedFormPreview,
   Popover,
   SortChip,
   SpotIllustration,
@@ -49,29 +52,38 @@ export interface FormsScreenProps {
 }
 
 /**
- * A form's meta line (lane 3c, Klaviyo's list): its questions, when it was edited, and its submissions ("5 questions
- * · edited 2h ago · 4 submissions"); a draft says no submissions, since it has taken none. Spam is left out, as
- * Submissions' All leaves it out (forms fix a8): the card and the list it opens agree.
+ * The card's picture (5 November 2026, the owner: "make these cards look much prettier"; Flodesk's and Fillout's form
+ * grids): the draft's headline and first questions, drawn by the hosted page's own component at a thumbnail's size,
+ * in the form's own Light or Dark, so each card shows its own form. A row from an older answer, with no picture,
+ * draws its name alone on an empty form.
  */
-function factsOf(form: FormSummary, edited: string): readonly string[] {
-  const real = Math.max(form.submissionCount - form.spamCount, 0);
-  return [
-    ...(form.questionCount === undefined ? [] : [strings.questionCount(form.questionCount)]),
-    strings.editedAgo(edited),
-    ...(form.liveVersionNumber === undefined
-      ? []
-      : [real === 0 ? strings.noSubmissionsYet : strings.submissionCount(real)]),
-  ];
+function pictureOf(form: FormSummary): PublicForm {
+  const picture = form.picture;
+  return {
+    key: `card-${form.id}`,
+    status: 'live',
+    versionNumber: 1,
+    headline: picture?.headline ?? form.name,
+    ...(picture?.subheading === undefined ? {} : { subheading: picture.subheading }),
+    buttonText: picture?.buttonText ?? strings.sendButton,
+    language: 'en',
+    look: { colour: picture?.colour ?? 'light', corners: picture?.corners ?? 'rounded' },
+    ...(picture?.layout === undefined ? {} : { layout: picture.layout }),
+    questions: [...(picture?.questions ?? [])],
+    offersMeeting: false,
+  };
 }
 
-/**
- * Its badge: Draft until its first publish (a neutral badge, never a greyed title; lane 3c); Paused once paused;
- * New submissions when one came since the reader last opened its Submissions.
- */
-function badgeOf(form: FormSummary, isNew: boolean): { readonly badge?: string } {
-  if (form.liveVersionNumber === undefined) return { badge: strings.draftBadge };
-  if (form.status === 'paused') return { badge: strings.notAccepting };
-  return isNew ? { badge: strings.newAnswers } : {};
+/** Its state as a dot and a word: Draft until its first publish, Paused once paused, otherwise Live. */
+function statusOf(form: FormSummary): { readonly label: string; readonly hue: 'gray' | 'orange' | 'green' } {
+  if (form.liveVersionNumber === undefined) return { label: strings.draftBadge, hue: 'gray' };
+  if (form.status === 'paused') return { label: strings.notAccepting, hue: 'orange' };
+  return { label: strings.liveStatus, hue: 'green' };
+}
+
+/** Its submissions, spam left out as Submissions' All leaves it out (forms fix a8): the card and the list agree. */
+function realSubmissions(form: FormSummary): number {
+  return Math.max(form.submissionCount - form.spamCount, 0);
 }
 
 /** How the list is sorted: by when each form changed, newest first, or by name, A to Z. */
@@ -176,41 +188,51 @@ export function FormsScreen({ slug }: FormsScreenProps) {
     const isPending = list.status === 'ready' && list.pendingIds.has(form.id);
     const isPublished = form.liveVersionNumber !== undefined;
     const isLive = isPublished && form.status === 'live';
+    const real = realSubmissions(form);
+    const countText = real === 0 ? strings.noSubmissionsYet : strings.submissionCount(real);
     return {
       id: form.id,
       title: form.name,
       href: formHref(slug, form.id),
-      // No colour mark: a form has no colour of its own, and one picked from its id identified nothing (T3). No
-      // address either (lane 3c): the meta line fills the card, and a slug cut to "/f/booking-i…" said nothing; Copy
-      // link copies it whole.
-      facts: factsOf(form, formatRelative(form.updatedAt, now, locale, timeZone, dateFormat)),
-      ...(isPending ? { badge: strings.copying } : badgeOf(form, hasNewAnswers(slug, form, now))),
-      // Only a paused form reads quieter: a draft says Draft in its badge and keeps its title's full weight.
+      // The form itself, small, across the card's top: what it asks says more than "4 questions" did.
+      picture: <HostedFormPreview form={pictureOf(form)} size="thumbnail" />,
+      // Its state as a dot and a word, then one fact: when it changed. Its submissions are the foot's own link.
+      ...(isPending ? { badge: strings.copying } : { status: statusOf(form) }),
+      facts: [strings.editedAgo(formatRelative(form.updatedAt, now, locale, timeZone, dateFormat))],
+      // Only a paused form reads quieter.
       isOff: form.status === 'paused',
       isPending,
-      // Not published, there is nothing to copy or open: the badge says why.
-      ...(isPublished ? { copyValue: data.forms.hostedUrl(form.publicKey) } : {}),
+      // Not published, there is nothing to copy or open: its Draft says why. Copy link is a quiet icon.
+      ...(isPublished ? { copyValue: data.forms.hostedUrl(form.publicKey), isCopyQuiet: true } : {}),
+      lead: isPending ? undefined : isPublished ? (
+        // Its submissions, one press from the list (forms fix a9), as their count: "12 submissions", with New when
+        // one came since the reader last looked.
+        <>
+          <ButtonLink
+            variant="ghost"
+            size="lg"
+            icon="inbox"
+            label={strings.submissionsOf(countText, form.name)}
+            href={formHref(slug, form.id, 'submissions')}
+          >
+            {countText}
+          </ButtonLink>
+          {hasNewAnswers(slug, form, now) && <Badge text={strings.newBadge} tone="accent" isWhole />}
+        </>
+      ) : canManage ? (
+        // A draft has no link to copy or open: Edit is the next step (the owner, 31 October 2026: "no idea what to do").
+        <ButtonLink
+          variant="ghost"
+          size="lg"
+          icon="pencil"
+          label={strings.editFormOf(form.name)}
+          href={formHref(slug, form.id)}
+        >
+          {strings.editDraft}
+        </ButtonLink>
+      ) : undefined,
       actions: (
         <>
-          {/* A draft has no link to copy or open, so its foot said nothing to do: Edit is the next step, beside More
-              (the owner, 31 October 2026: "no idea what to do"). */}
-          {canManage && !isPublished && !isPending && (
-            <ButtonLink size="lg" icon="pencil" label={strings.editFormOf(form.name)} href={formHref(slug, form.id)}>
-              {strings.editDraft}
-            </ButtonLink>
-          )}
-          {/* Its submissions, one press from the list (forms fix a9), named in words (lane 3c): an inbox icon alone
-              read as mail. */}
-          {isPublished && !isPending && (
-            <ButtonLink
-              size="lg"
-              icon="inbox"
-              label={strings.openSubmissionsOf(form.name)}
-              href={formHref(slug, form.id, 'submissions')}
-            >
-              {strings.openSubmissions}
-            </ButtonLink>
-          )}
           {/* Open sits in ⋯ for those who have it, so a phone's card holds Copy link, Submissions and ⋯ on one line
               (lane 3c); a reader with no menu keeps it here. */}
           {isLive && !canManage && (
@@ -294,6 +316,7 @@ export function FormsScreen({ slug }: FormsScreenProps) {
             ),
           })}
       empty={EMPTY}
+      hasPictures
       errorTitle={strings.failedTitle}
       onRetry={() => {
         data.forms.view(slug).reload();
@@ -349,6 +372,7 @@ export function FormsPending() {
       status="loading"
       cards={[]}
       empty={EMPTY}
+      hasPictures
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}
     />
