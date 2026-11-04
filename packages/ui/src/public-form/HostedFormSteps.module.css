@@ -51,34 +51,21 @@
     animation: step-in var(--duration-modal) var(--ease-out);
   }
 
+  /* Back comes down from above; under reduced motion it is a crossfade alone, with no travel. */
   .form[data-enter='back'] {
-    animation-name: step-back;
+    --step-from: calc(-1 * var(--space-16));
   }
 
   @keyframes step-in {
     from {
       opacity: 0;
-      translate: 0 var(--space-16);
-    }
-  }
-
-  @keyframes step-back {
-    from {
-      opacity: 0;
-      translate: 0 calc(-1 * var(--space-16));
-    }
-  }
-
-  @keyframes step-fade {
-    from {
-      opacity: 0;
+      translate: 0 var(--step-from, var(--space-16));
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .form[data-enter],
-    .form[data-enter='back'] {
-      animation-name: step-fade;
+    .form[data-enter] {
+      --step-from: 0;
     }
   }
 

@@ -42,7 +42,7 @@ export function FinishLater({ state, language, stepId }: FinishLaterProps) {
           that opens the ways back only when pressed. A failed save says so, with Try again, never a promise. */}
       <div className={styles.row}>
         {/* Polite, not assertive: a save is news a visitor can read when they look, never an interruption. */}
-        <span className={styles.line} aria-live="polite" data-failed={isFailed || undefined}>
+        <span className={styles.line} aria-live="polite">
           {save.kind === 'saving' ? (
             words.saving
           ) : isFailed ? (
@@ -50,10 +50,9 @@ export function FinishLater({ state, language, stepId }: FinishLaterProps) {
           ) : kept === undefined ? (
             ''
           ) : (
-            <span className={styles.saved}>
-              <Icon name="check" size="xs" />
-              {words.savedOn('')}
-            </span>
+            <>
+              <Icon name="check" size="xs" /> {words.savedOn('')}
+            </>
           )}
         </span>
         {isFailed ? (

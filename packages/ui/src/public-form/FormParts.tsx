@@ -7,7 +7,7 @@ import {
   type PublicForm,
   type PublicQuestion,
 } from '@crm/contracts/forms';
-import { useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Button, ButtonLink } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
 import { Link } from '../atoms/Link/Link.tsx';
@@ -308,12 +308,36 @@ export function QuestionSlot({
   readonly children: ReactNode;
 }) {
   const hint = state.hints[question.key];
+  const error = state.errors[question.key];
+  const slot = useRef<HTMLDivElement>(null);
+  // A required question left empty nudges once beside its line (T23, Typeform): a short shake through the Web
+  // Animations API, so the hosted page's tight stylesheet carries none of it; nothing under reduced motion.
+  useEffect(() => {
+    const element = slot.current;
+    if (error === undefined || element === null || typeof element.animate !== 'function') return;
+    if (globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const tokens = getComputedStyle(element);
+    const step = tokens.getPropertyValue('--space-4').trim() || '0px';
+    element.animate(
+      [
+        { transform: 'none' },
+        { transform: `translateX(calc(-1.5 * ${step}))` },
+        { transform: `translateX(${step})` },
+        { transform: 'none' },
+      ],
+      {
+        duration: Number.parseFloat(tokens.getPropertyValue('--duration-modal')) || 0,
+        easing: tokens.getPropertyValue('--ease-out').trim() || 'ease-out',
+      },
+    );
+  }, [error]);
   return (
     <div
+      ref={slot}
       data-question={question.key}
       id={`question-${question.key}`}
       className={styles.question}
-      data-invalid={state.errors[question.key] === undefined ? undefined : true}
+      data-invalid={error === undefined ? undefined : true}
       onBlur={(event) => state.blur(question, event)}
     >
       {children}
