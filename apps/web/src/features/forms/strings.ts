@@ -585,6 +585,8 @@ export const strings = {
   /** The open submission's neighbours in the list (forms critique a). */
   previousSubmission: 'Previous submission',
   nextSubmission: 'Next submission',
+  previousSubmissionTip: 'Previous (K)',
+  nextSubmissionTip: 'Next (J)',
   /** A form that keeps answers only: the way to the CRM from a submission (forms fix a10). */
   turnOnCrm: 'Save answers to the CRM',
   /** All leaves spam out; this chip opens it (forms fix a8). */

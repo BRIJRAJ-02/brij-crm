@@ -35,6 +35,7 @@ import {
   Separator,
   Select,
   Table,
+  Tooltip,
   TruncatedText,
   type TableColumn,
 } from '@crm/ui';
@@ -742,28 +743,30 @@ export function SubmissionsTab({
             <>
               <StatusDot hue={stateHue(open, isFiling)}>{stateLabel(open, isFiling)}</StatusDot>
               {/* The one before and after in the list, without closing (forms fix a, Gmail's and Attio's K and J). */}
-              <Button
-                variant="ghost"
-                size="sm"
-                icon="chevron-up"
-                label={strings.previousSubmission}
-                kbd="K"
-                isDisabled={before === undefined}
-                onPress={() => {
-                  if (before !== undefined) go(before.id);
-                }}
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                icon="chevron-down"
-                label={strings.nextSubmission}
-                kbd="J"
-                isDisabled={after === undefined}
-                onPress={() => {
-                  if (after !== undefined) go(after.id);
-                }}
-              />
+              <Tooltip content={strings.previousSubmissionTip}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="chevron-up"
+                  label={strings.previousSubmission}
+                  isDisabled={before === undefined}
+                  onPress={() => {
+                    if (before !== undefined) go(before.id);
+                  }}
+                />
+              </Tooltip>
+              <Tooltip content={strings.nextSubmissionTip}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="chevron-down"
+                  label={strings.nextSubmission}
+                  isDisabled={after === undefined}
+                  onPress={() => {
+                    if (after !== undefined) go(after.id);
+                  }}
+                />
+              </Tooltip>
             </>
           }
           isStacked
