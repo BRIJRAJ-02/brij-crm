@@ -1,6 +1,6 @@
 import { Button } from '../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
-import type { PublicForm } from '@crm/contracts/forms';
+import { isBlank, type PublicForm } from '@crm/contracts/forms';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import {
@@ -20,7 +20,7 @@ import { BookingView, useLoadedBooking } from './BookingView.tsx';
 import type { HostedRemoveUpload, HostedUpload } from './files.ts';
 import { useEffect } from 'react';
 import { FinishLater } from './FinishLater.tsx';
-import { Question } from './Question.tsx';
+import { answerOf, Question } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
 import {
   type HostedFill,
@@ -31,6 +31,7 @@ import {
   type HostedSubmission,
   type HostedSubmitOutcome,
   type PrefillValue,
+  type PreviewEnding,
 } from './use-hosted-form.ts';
 
 export { FormLoading, FormMessage } from './FormParts.tsx';
@@ -70,6 +71,8 @@ export interface HostedFormProps {
   readonly resumedStepId?: string | undefined;
   /** The clock, for the fill time (tests pass their own). */
   readonly now?: () => number;
+  /** The builder's preview: the thank you or an ending drawn in the form's place while it is open. */
+  readonly previewEnding?: PreviewEnding | undefined;
   /** The Timefix wordmark under the form; the web app serves these two by default. */
   readonly logo?: ProductLogo;
   /**
@@ -77,6 +80,18 @@ export interface HostedFormProps {
    * Left out, the form wears the brand its own read names (its logo; the page's stylesheet brings the accent).
    */
   readonly brand?: PageBrand;
+  /**
+   * How a site's inline embed asked to draw it (T44's Share tab): `isTransparent` leaves the ground clear so the
+   * site's own background shows, `isTitleHidden` keeps the headline for screen readers only (FormHeader's
+   * `isVisuallyHidden`; the site has its own).
+   */
+  readonly embedLook?: EmbedLook;
+}
+
+/** How a site's inline embed asked the form to draw. */
+export interface EmbedLook {
+  readonly isTransparent?: boolean;
+  readonly isTitleHidden?: boolean;
 }
 
 /**
@@ -101,8 +116,10 @@ export function HostedForm({
   onSave,
   onEmailResume,
   now = Date.now,
+  previewEnding,
   logo = TIMEFIX_LOGO,
   brand,
+  embedLook,
 }: HostedFormProps) {
   const { state, refs } = useHostedForm({
     form,
@@ -118,14 +135,19 @@ export function HostedForm({
     onSave,
     onEmailResume,
     now,
+    previewEnding,
   });
   const { words, preview } = state;
   const loadedBooking = useLoadedBooking();
-  // Classic puts every shown question on screen at once, so they are all reached the moment the form is.
-  // An answer that hides a later one leaves it uncounted, which is what the drop off bar should show.
-  const onScreen = form.questions
-    .filter((question) => state.shown.has(question.key) && question.answerType !== 'hidden')
-    .map((question) => question.id);
+  // Classic puts every shown question on screen at once, so seeing one says nothing: a question is reached once
+  // it, or one after it, holds an answer (critique c, 4), and the furthest answered is where a visitor stopped.
+  const shownQuestions = form.questions.filter(
+    (question) => state.shown.has(question.key) && question.answerType !== 'hidden',
+  );
+  const furthest = shownQuestions.findLastIndex(
+    (question) => !isBlank(answerOf(question, state.answers[question.key])),
+  );
+  const onScreen = shownQuestions.slice(0, furthest + 1).map((question) => question.id);
   useEffect(() => {
     if (state.view.kind === 'form' && !state.isClosed) state.reached(onScreen);
   });
@@ -149,7 +171,12 @@ export function HostedForm({
   else {
     body = (
       <>
-        <FormHeader form={form} mode={mode} heading={refs.heading} />
+        <FormHeader
+          form={form}
+          mode={mode}
+          heading={refs.heading}
+          isVisuallyHidden={embedLook?.isTitleHidden === true}
+        />
         <VisuallyHidden>
           <span aria-live="polite">{state.shownNote}</span>
         </VisuallyHidden>
@@ -183,7 +210,14 @@ export function HostedForm({
           <div className={styles.actions}>
             <ErrorSummary state={state} />
             <FormAlert state={state} />
-            <Button variant="primary" size="lg" type={preview ? 'button' : 'submit'} isFullWidth="center">
+            <Button
+              variant="primary"
+              size="lg"
+              type={preview ? 'button' : 'submit'}
+              isFullWidth="center"
+              // Closed while they filled it in: nothing more to send, only their answers to keep.
+              isDisabled={state.isClosedMidFill}
+            >
               {state.isSending ? words.sending : form.buttonText}
             </Button>
             <FinishLater state={state} language={form.language} />
@@ -197,6 +231,7 @@ export function HostedForm({
       form={form}
       mode={mode}
       {...(brand === undefined ? {} : { brand })}
+      {...(embedLook === undefined ? {} : { embedLook })}
       container={refs.container}
       {...(preview ? { previewNote: words.previewNote } : {})}
       foot={<FormFoot form={form} mode={mode} logo={logo} state={state} />}

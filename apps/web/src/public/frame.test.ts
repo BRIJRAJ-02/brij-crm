@@ -15,7 +15,28 @@ describe('the embed a frame is', () => {
         isFramed: true,
         ancestorOrigins: ['https://acme.com'],
       }),
-    ).toEqual({ mode: 'popup', frameId: '2', hostOrigin: 'https://acme.com' });
+    ).toEqual({
+      mode: 'popup',
+      frameId: '2',
+      hostOrigin: 'https://acme.com',
+      isTransparent: false,
+      isTitleHidden: false,
+    });
+  });
+
+  it('reads an inline embed’s clear ground and hidden headline, and never a dialog’s (the Share tab)', () => {
+    const inline = embedOf({
+      search: search({ embed: '1', mode: 'inline', fid: '3', ground: 'none', head: 'none' }),
+      isFramed: true,
+      ancestorOrigins: ['https://acme.com'],
+    });
+    expect(inline).toMatchObject({ isTransparent: true, isTitleHidden: true });
+    const popup = embedOf({
+      search: search({ embed: '1', mode: 'popup', fid: '3', ground: 'none', head: 'none' }),
+      isFramed: true,
+      ancestorOrigins: ['https://acme.com'],
+    });
+    expect(popup).toMatchObject({ isTransparent: false, isTitleHidden: false });
   });
 
   it('uses the named host where the browser has no ancestor list, and nothing that is no web origin', () => {
@@ -38,7 +59,7 @@ describe('the embed a frame is', () => {
     let height = 400.2;
     let changed: () => void = () => undefined;
     reportHeight(
-      { mode: 'inline', frameId: '3', hostOrigin: 'https://acme.com' },
+      { mode: 'inline', frameId: '3', hostOrigin: 'https://acme.com', isTransparent: false, isTitleHidden: false },
       post,
       () => height,
       (callback) => {
@@ -56,9 +77,15 @@ describe('the embed a frame is', () => {
   });
 
   it('keeps the embed on a booking page of ours', () => {
-    expect(framedUrl('/b/abc?p=fb1.x', { mode: 'inline', frameId: '4', hostOrigin: 'https://acme.com' })).toBe(
-      '/b/abc?p=fb1.x&embed=1&mode=inline&fid=4&host=https%3A%2F%2Facme.com',
-    );
+    expect(
+      framedUrl('/b/abc?p=fb1.x', {
+        mode: 'inline',
+        frameId: '4',
+        hostOrigin: 'https://acme.com',
+        isTransparent: false,
+        isTitleHidden: false,
+      }),
+    ).toBe('/b/abc?p=fb1.x&embed=1&mode=inline&fid=4&host=https%3A%2F%2Facme.com');
   });
 });
 

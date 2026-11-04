@@ -91,7 +91,7 @@ test.describe('the form template gallery', () => {
     // One click puts it live (5 November 2026): no name, link or field table asked first, then its link.
     const formUrl = page.url().replace(/\?.*$/, '');
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const ready = page.getByRole('dialog', { name: 'Your form is live' });
+    const ready = page.getByRole('dialog', { name: / is live$/ });
     await expect(ready).toBeVisible({ timeout: 30_000 });
     await expect(ready.getByRole('textbox')).toHaveCount(0);
     // The link is made from the name when it is free, else the form keeps its own key.

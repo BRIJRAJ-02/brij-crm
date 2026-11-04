@@ -217,6 +217,9 @@ export async function formAnalytics(scope: EngineScope, input: FormAnalyticsInpu
  *
  * A visit whose furthest question is no longer in the live form (it was
  * deleted since) counts towards nothing: it can't be placed in the order.
+ *
+ * Only visits that started (or finished) count: a look is not a fill. The page says a question was reached only
+ * once the visitor has answered something (critique c, 4), and this keeps any older look-only rows out too.
  */
 async function dropOff(
   tx: WorkspaceTx,
@@ -226,6 +229,7 @@ async function dropOff(
   const found = await tx.execute<{ furthest: string | null; completed: boolean; visits: number }>(sql`
     select furthest_detail as furthest, finished_at is not null as completed, count(*)::int as visits
     from page_visits where ${inRange} and (furthest_detail is not null or finished_at is not null)
+      and (step_rank > 0 or finished_at is not null)
     group by furthest_detail, finished_at is not null
   `);
   const positionOf = new Map(questionIds.map((id, at) => [id, at]));

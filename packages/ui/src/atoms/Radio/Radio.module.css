@@ -25,7 +25,7 @@
     gap: var(--space-8);
   }
 
-  .choices[data-variant='cards'] .field {
+  .choices:not([data-variant='plain']) .field {
     position: relative;
     box-sizing: border-box;
     gap: var(--space-2);
@@ -39,13 +39,26 @@
       border-color var(--duration-hover) var(--ease-hover);
   }
 
-  .choices[data-variant='cards'] .field:has(.radio[data-selected]) {
+  /* Letters (a public form's choice, Typeform's way): the cards' box one to a row, each choice's letter in a key
+     where the circle was, counted by CSS so no letter is markup; the chosen key fills with the accent. */
+  .choices[data-variant='letters'] {
+    counter-reset: choice;
+  }
+
+  /* The label itself fills the box (its padding, not the box's), so the whole box picks the choice and a press
+     anywhere lands on the label or its words, with nothing laid over them. */
+  .choices[data-variant='letters'] .field {
+    padding: 0;
+    counter-increment: choice;
+  }
+
+  .choices:not([data-variant='plain']) .field:has(.radio[data-selected]) {
     border-color: var(--accent-line);
     background: var(--accent-soft);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .choices[data-variant='cards'] .field:has(.radio[data-hovered]:not([data-selected], [data-disabled])) {
+    .choices:not([data-variant='plain']) .field:has(.radio[data-hovered]:not([data-selected], [data-disabled])) {
       background: var(--surface-hover);
     }
   }
@@ -65,6 +78,11 @@
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     -webkit-tap-highlight-color: transparent;
+  }
+
+  .choices[data-variant='letters'] .radio {
+    align-items: center;
+    padding: var(--space-8) var(--space-12);
   }
 
   /* The whole card picks it, which is what a bordered box this size promises: the description and the padding
@@ -98,6 +116,25 @@
       border-color var(--duration-hover) var(--ease-hover);
   }
 
+  .choices[data-variant='letters'] .circle {
+    inline-size: var(--space-24);
+    block-size: var(--space-24);
+    margin: 0;
+    border-color: var(--accent-line);
+    border-radius: var(--radius-xs);
+    color: var(--letter-ink, var(--link));
+    font: var(--text-label-strong);
+  }
+
+  .choices[data-variant='letters'] .circle::before {
+    content: counter(choice, upper-alpha);
+  }
+
+  /* A choice that names its own key (a yes or no's Y and N) shows that one. */
+  .choices[data-variant='letters'] .circle[data-letter]::before {
+    content: attr(data-letter);
+  }
+
   .dot {
     inline-size: var(--space-6);
     block-size: var(--space-6);
@@ -110,6 +147,10 @@
       scale var(--duration-press) var(--ease-out);
   }
 
+  .choices[data-variant='letters'] .dot {
+    display: none;
+  }
+
   /* The edge is accent-line, as a checked box's is, so it reads on any surface. */
   .radio[data-selected] .circle {
     border-color: var(--accent-line);
@@ -119,6 +160,10 @@
   .radio[data-selected] .dot {
     opacity: 1;
     scale: 1;
+  }
+
+  .radio[data-selected] {
+    --letter-ink: var(--on-accent);
   }
 
   @media (hover: hover) and (pointer: fine) {

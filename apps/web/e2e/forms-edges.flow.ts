@@ -244,7 +244,7 @@ test.describe('the form journey’s edges', () => {
 
     // The first publish is one click, with nothing asked.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: / is live$/ })).toBeVisible({ timeout: 30_000 });
     await page.keyboard.press('Escape');
     await page.getByRole('tab', { name: 'Settings' }).click();
     const key = await page.getByRole('textbox', { name: /^Link/ }).inputValue();

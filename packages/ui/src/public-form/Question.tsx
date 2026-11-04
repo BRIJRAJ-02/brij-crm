@@ -4,7 +4,6 @@ import { Rating } from '../atoms/Rating/Rating.tsx';
 import { ChoiceChips } from '../molecules/ChoiceChips/ChoiceChips.tsx';
 import { AddressQuestion, type AddressDraft } from './AddressQuestion.tsx';
 import { Radio, RadioGroup } from '../atoms/Radio/Radio.tsx';
-import { Switch } from '../atoms/Switch/Switch.tsx';
 import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
 import { Field } from '../molecules/Field/Field.tsx';
 import { PhoneField, type PhoneFieldValue } from '../molecules/PhoneField/PhoneField.tsx';
@@ -45,15 +44,11 @@ export function labelOf(question: PublicQuestion, words: FormStrings, read?: (te
 }
 
 /**
- * "(optional)" after an optional question's label; a tick box, a consent or a yes or no is never marked, since blank
+ * "(optional)" after an optional question's label; a tick box or a consent is never marked, since blank
  * is an answer.
  */
 export function asideOf(question: PublicQuestion, words: FormStrings): string | undefined {
-  const marked =
-    question.required ||
-    question.answerType === 'checkbox' ||
-    question.answerType === 'yes_no' ||
-    question.answerType === 'consent';
+  const marked = question.required || question.answerType === 'checkbox' || question.answerType === 'consent';
   return marked ? undefined : words.optional;
 }
 
@@ -69,7 +64,9 @@ export function answerOf(question: PublicQuestion, value: unknown): unknown {
     if (phone === undefined || phone.national.trim() === '') return undefined;
     return { number: toE164(phone.country, phone.national), country: phone.country };
   }
-  if (question.answerType === 'checkbox' || question.answerType === 'yes_no' || question.answerType === 'consent') {
+  // A yes or no is what was picked, or nothing: unpicked is not No.
+  if (question.answerType === 'yes_no') return typeof value === 'boolean' ? value : undefined;
+  if (question.answerType === 'checkbox' || question.answerType === 'consent') {
     return value === true;
   }
   // A date and time is the moment the visitor's own clock reads it as, with their zone (spec 0063).
@@ -125,6 +122,8 @@ export interface QuestionProps {
   readonly hint?: string | undefined;
   /** Reads the recalls in the label (spec 0063, AC-6317): `HostedFormState.read`. */
   readonly read?: ((text: string) => string) | undefined;
+  /** One at a time (T42, Typeform's way): a typed answer is the Field's `underline`, a line in the accent. */
+  readonly isUnderlined?: boolean;
 }
 
 /** One question, drawn with the library's control for its answer type. */
@@ -140,6 +139,7 @@ export function Question({
   isLabelHidden = false,
   hint,
   read,
+  isUnderlined = false,
 }: QuestionProps) {
   const label = labelOf(question, words, read);
   const aside = asideOf(question, words);
@@ -149,12 +149,14 @@ export function Question({
     : { label, ...(aside === undefined ? {} : { labelAside: aside }) };
   const placeholder = question.placeholder;
   const errorProps = error === undefined ? {} : { error };
+  const underline = isUnderlined ? { variant: 'underline' as const } : {};
   const text = typeof value === 'string' ? value : '';
   switch (question.answerType) {
     case 'long_text':
       return (
         <Field
           {...labelProps}
+          {...underline}
           name={question.key}
           isMultiline
           value={text}
@@ -196,8 +198,10 @@ export function Question({
     }
     case 'choice':
       return (
+        // Lettered, full width options (T42, Typeform's way), in every layout: a letter key picks one.
         <RadioGroup
           {...labelProps}
+          variant="letters"
           name={question.key}
           value={text === '' ? null : text}
           onChange={onChange}
@@ -217,15 +221,25 @@ export function Question({
         <Checkbox label={label} name={question.key} isSelected={value === true} onChange={onChange} {...errorProps} />
       );
     case 'yes_no':
+      // Two answers to pick, Yes and No, as a choice is drawn (critique c, 9: a switch read as a setting, not a
+      // question), with Y and N as their keys. Nothing picked sends nothing: unpicked is not No.
       return (
-        // The error is the switch's description, so a screen reader hears it with the switch.
-        <Switch
-          label={label}
+        <RadioGroup
+          {...labelProps}
+          variant="letters"
+          orientation="horizontal"
           name={question.key}
-          isSelected={value === true}
-          onChange={onChange}
-          {...(error === undefined ? {} : { description: error })}
-        />
+          value={value === true ? 'yes' : value === false ? 'no' : null}
+          onChange={(picked) => onChange(picked === 'yes')}
+          {...errorProps}
+        >
+          <Radio value="yes" letter={words.yes.charAt(0).toUpperCase()}>
+            {words.yes}
+          </Radio>
+          <Radio value="no" letter={words.no.charAt(0).toUpperCase()}>
+            {words.no}
+          </Radio>
+        </RadioGroup>
       );
     case 'phone': {
       const phone = (value as PhoneFieldValue | undefined) ?? { country: countryGuess ?? 'US', national: '' };
@@ -267,7 +281,14 @@ export function Question({
           label={isLabelHidden && aside !== undefined ? `${label} ${aside}` : label}
           value={typeof value === 'number' ? value : null}
           onChange={(next) => onChange(next ?? undefined)}
-          field={{ aside, error, isLabelHidden }}
+          // Its number of stars and its end words (5 November 2026), as a Scale has them.
+          {...(question.options?.count === undefined ? {} : { count: question.options.count })}
+          field={{
+            aside,
+            error,
+            isLabelHidden,
+            ends: { start: question.options?.lowLabel, end: question.options?.highLabel },
+          }}
         />
       );
     case 'scale': {
@@ -401,6 +422,7 @@ export function Question({
       return (
         <Field
           {...labelProps}
+          {...underline}
           name={question.key}
           value={text}
           onChange={onChange}

@@ -4,6 +4,8 @@ export const strings = {
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
   share: 'Share',
+  /** The pill's quiet way to see the page itself. */
+  open: 'Open',
   qrLabel: 'QR code for the link',
   preview: 'Preview',
   /** The success mark's name for screen readers. */

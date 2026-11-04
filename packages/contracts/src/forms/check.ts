@@ -6,7 +6,7 @@
 // else is dropped. Each answer comes back in its canonical shape: text for
 // most types, `true` or `false` for the yes or no types, and a phone as its
 // number in E.164 with the country it was dialled from.
-import { choiceKeysOf, LONG_ANSWER_MAX, SHORT_ANSWER_MAX } from './answer-keys.ts';
+import { choiceKeysOf, LONG_ANSWER_MAX, RATING_COUNT, SHORT_ANSWER_MAX } from './answer-keys.ts';
 import type { AnswerType } from './answer-types.ts';
 import { countryOfE164, DIAL_CODES } from './dial-codes.ts';
 import { walkPath, type FormLayout, type PathStep } from './path.ts';
@@ -288,7 +288,7 @@ function checkOne(
     case 'rating':
     case 'scale': {
       const from = answerType === 'rating' ? 1 : (options.from ?? 0);
-      const to = answerType === 'rating' ? 5 : (options.to ?? 10);
+      const to = answerType === 'rating' ? (options.count ?? RATING_COUNT.default) : (options.to ?? 10);
       const value = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
       return Number.isInteger(value) && value >= from && value <= to ? { value } : { error: words.pickOption };
     }
@@ -414,6 +414,12 @@ export function checkAnswers(
     // a visitor can't see it to answer it.
     const raw = question.answerType === 'hidden' && isBlank(given) ? question.options?.default : given;
     if (question.answerType === 'hidden' && isBlank(raw)) return undefined;
+    // A yes or no left unpicked is no answer (5 November 2026): drawn as two choices, untouched means the visitor said
+    // neither, never No. A required one asks for a pick, as a choice does.
+    if (question.answerType === 'yes_no' && (raw === undefined || raw === null || raw === '')) {
+      if (question.required) fields[question.key] = words.required;
+      return undefined;
+    }
     if (question.answerType === 'checkbox' || question.answerType === 'yes_no' || question.answerType === 'consent') {
       const ticked = raw === true || raw === 'yes' || raw === 'true';
       // A required consent blocks the submit until it is ticked, as a required checkbox does (AC-1053).

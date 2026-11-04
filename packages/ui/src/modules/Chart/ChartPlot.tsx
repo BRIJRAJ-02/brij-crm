@@ -83,7 +83,13 @@ export function ChartPlot({ kind, label, points, width, formatTick, compareLabel
   const isPaired = kind === 'bar' && compareLabel !== undefined;
   const values = points.map((point) => Math.max(0, point.value));
   const compares = points.map((point) => Math.max(0, point.compare ?? 0));
-  const { ticks, top } = niceTicks(Math.max(0, ...values, ...(isPaired ? compares : [])));
+  // Counts draw whole ticks only: a chart of whole numbers never shows a 0.5 between them.
+  const plotted = [...values, ...(isPaired ? compares : [])];
+  const { ticks, top } = niceTicks(
+    Math.max(0, ...plotted),
+    4,
+    plotted.every((value) => Number.isInteger(value)),
+  );
   const tickLabels = ticks.map((tick) => formatTick(tick));
   const left = Math.max(32, Math.max(...tickLabels.map((text) => text.length)) * 6.2 + 12);
   const plotWidth = Math.max(0, width - left - RIGHT);

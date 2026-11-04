@@ -22,16 +22,21 @@ export interface RadioProps {
    */
   readonly preview?: ReactNode;
   readonly isDisabled?: boolean;
+  /**
+   * `letters`: the key that picks this choice and shows in its key, in place of its place letter (A, B, C): a yes or
+   * no's Y and N, Typeform's way. One character.
+   */
+  readonly letter?: string;
 }
 
 /** One choice in a RadioGroup. */
-export function Radio({ value, children, description, icon, preview, isDisabled = false }: RadioProps) {
+export function Radio({ value, children, description, icon, preview, isDisabled = false, letter }: RadioProps) {
   // What sits under the label, read as its description: a card's value, else the line of words.
   const under = preview ?? description;
   return (
     <RadioField className={styles.field} value={value} isDisabled={isDisabled}>
       <RadioButton className={styles.radio}>
-        <span className={styles.circle} aria-hidden="true">
+        <span className={styles.circle} aria-hidden="true" {...(letter === undefined ? {} : { 'data-letter': letter })}>
           <span className={styles.dot} />
         </span>
         <span className={styles.label} data-described={under === undefined ? undefined : ''}>
@@ -71,9 +76,11 @@ export interface RadioGroupProps {
   /**
    * `cards` draws each choice as a bordered card in a grid two wide, the chosen one on the accent's soft fill:
    * a handful of choices that each start a different job, where the choice itself is the first step of a form
-   * (the link page's Add item). `plain` (the default) is the usual stack.
+   * (the link page's Add item). `letters` draws each choice full width with its letter (A, B, C) in a key before it,
+   * the chosen one filling with the accent, and a letter key picks its choice while focus is in the group (a public
+   * form, Typeform's way). `plain` (the default) is the usual stack.
    */
-  readonly variant?: 'plain' | 'cards';
+  readonly variant?: 'plain' | 'cards' | 'letters';
   readonly isDisabled?: boolean;
   readonly isReadOnly?: boolean;
   /** Why the choice is invalid, as a sentence that says how to fix it. */
@@ -81,6 +88,31 @@ export interface RadioGroupProps {
   /** The `id` of the error line, so a control nearby can name it in `aria-describedby` (a submit it turns off). */
   readonly errorId?: string;
   readonly name?: string;
+}
+
+/** A letter key's place among the choices (A is 0), or -1 for any other key. */
+function letterAt(event: KeyboardEvent): number {
+  if (event.key.length !== 1 || event.altKey || event.ctrlKey || event.metaKey) return -1;
+  const code = event.key.toUpperCase().charCodeAt(0) - 65;
+  return code >= 0 && code < 26 ? code : -1;
+}
+
+/**
+ * `letters`: a letter key picks its choice, as a press on it would, and focus follows it: the choice that names the
+ * key as its own `letter`, else the one at that place.
+ */
+function pickByLetter(event: KeyboardEvent<HTMLElement>) {
+  const at = letterAt(event);
+  if (at === -1) return;
+  const named = event.currentTarget
+    .querySelector(`[data-letter="${event.key.toUpperCase()}"]`)
+    ?.parentElement?.querySelector('input');
+  const hasNamed = event.currentTarget.querySelector('[data-letter]') !== null;
+  const input = hasNamed ? (named ?? undefined) : event.currentTarget.querySelectorAll('input')[at];
+  if (input === undefined || input.disabled) return;
+  event.preventDefault();
+  input.focus();
+  input.click();
 }
 
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
@@ -125,7 +157,12 @@ export function RadioGroup({
         // The group moves and picks a choice on any arrow key inside it; on the tip (or in its help) they do nothing.
         <FieldLabel label={label} aside={labelAside} info={info} tone="strong" onInfoKeyDown={keepArrows} />
       )}
-      <span className={styles.choices} data-orientation={orientation} data-variant={variant}>
+      <span
+        className={styles.choices}
+        data-orientation={orientation}
+        data-variant={variant}
+        {...(variant === 'letters' && !isReadOnly && !isDisabled ? { onKeyDown: pickByLetter } : {})}
+      >
         {children}
       </span>
       {/* React Aria takes a given id over its own, and the group's aria-describedby follows it. */}

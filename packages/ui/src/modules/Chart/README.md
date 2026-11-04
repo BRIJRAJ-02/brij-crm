@@ -32,6 +32,8 @@ import { Chart } from '@crm/ui/charts';
 - Long category names cut with an ellipsis, and the x labels thin to the room there is: each label is measured in its own font (a canvas, read from a hidden label; an estimate before then), and the axis draws every n-th one, the least n that leaves 8px of air between any two (4 November 2026, "numbers are overlapping" over a 90 day range). The tooltip and the table hold every name.
 - Two series (Insights, spec 0067): give a bar chart `compareLabel` and each point `compare` and `compareText`. Each pair draws side by side with a 2px surface gap, the second in the next data colour (`dot-orange`, checked with the dataviz validator against blue: CVD ΔE 33), on the same axis, with a legend naming both at the head's start and a column each in the table. A variant, not a new chart: a second y axis is never drawn, so a rate goes in a chart of its own.
 
+- An axis of counts (every value a whole number: visits, people) ticks in whole numbers only, never 0.5 or 2.5 between two visitors (`niceTicks`' `isWhole`, critique c of the forms, 5 November 2026).
+
 ## States
 
 Loading (the chart's frame, held at its height), empty (every value zero: "No data yet", not flat bars), error with Try again, no access, refreshing (`isRefreshing`: the figures stay, a step dimmer, the frame does not move), the table view, and hover (the slot under the pointer is washed and a tooltip shows value then label).

@@ -22,7 +22,7 @@ test.describe('a form’s first publish', () => {
     await newForm(page);
 
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const ready = page.getByRole('heading', { name: 'Your form is live' });
+    const ready = page.getByRole('heading', { name: / is live$/ });
     await expect(ready).toBeVisible({ timeout: 30_000 });
     // No field was asked for, and focus is on Done, inside the dialog, so the dialog is said with its name.
     await expect(page.getByRole('dialog').getByRole('textbox')).toHaveCount(0);
