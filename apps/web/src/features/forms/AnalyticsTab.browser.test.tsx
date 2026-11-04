@@ -163,7 +163,7 @@ describe('the Analytics tab (T45)', () => {
     expect(figures.getByText('0%').query()).toBeNull();
   });
 
-  it('numbers every question as the form does, an email counted but never listed', async () => {
+  it('leaves typed answers and contacts to Submissions: no Answers section when nothing adds up', async () => {
     await draw({
       range: 30,
       totals: { views: 3, starts: 3, completions: 3, submissions: 3 },
@@ -176,12 +176,13 @@ describe('the Analytics tab (T45)', () => {
         { questionId: 'email', responses: 3 },
       ],
     });
-    await expect.element(page.getByRole('heading', { name: '2. Work email' })).toBeVisible();
-    await expect.element(page.getByText('3 responses').nth(1)).toBeVisible();
-    expect(page.getByRole('table', { name: /Work email/ }).query()).toBeNull();
+    // The figures are drawn, so the read has landed and the section would be there by now.
+    await expect.element(page.getByRole('group', { name: 'This period' })).toBeVisible();
+    expect(page.getByRole('heading', { name: 'Answers' }).query()).toBeNull();
+    expect(page.getByText('Ada').query()).toBeNull();
   });
 
-  it('draws a card per question: bars with share and count for a choice, the latest words for text', async () => {
+  it('draws a card per choice question, numbered as the form does: bars with share and count, none for text', async () => {
     await draw({
       range: 30,
       totals: { views: 6, starts: 4, completions: 3, submissions: 3 },
@@ -203,8 +204,8 @@ describe('the Analytics tab (T45)', () => {
       ],
     });
     await expect.element(page.getByRole('heading', { name: 'Answers' })).toBeVisible();
-    await expect.element(page.getByRole('heading', { name: '1. Your name' })).toBeVisible();
-    await expect.element(page.getByText('Edsger')).toBeVisible();
+    expect(page.getByRole('heading', { name: '1. Your name' }).query()).toBeNull();
+    expect(page.getByText('Edsger').query()).toBeNull();
     const budget = page
       .getByRole('grid', { name: 'Answers to What budget do you have in mind?' })
       .or(page.getByRole('table', { name: 'Answers to What budget do you have in mind?' }));

@@ -81,7 +81,9 @@ export function AnalyticsAnswers({ questions, answers, latestOf }: AnalyticsAnsw
   // Numbered by the question's place in the form, so "4." is the form's fourth question even when 3 has no card.
   const cards = questions.flatMap((question, at) => {
     const answer = byId.get(question.id);
-    return answer === undefined ? [] : [{ question, answer, number: at + 1 }];
+    // Only what adds up to a picture (choices, ratings, yes or no): a typed answer, a name or an email is read one
+    // by one in Submissions, so listing them here again said nothing new (the owner, 5 November 2026).
+    return answer?.choices === undefined ? [] : [{ question, answer, number: at + 1 }];
   });
   if (cards.length === 0) return null;
   return (
@@ -144,23 +146,7 @@ export function AnalyticsAnswers({ questions, answers, latestOf }: AnalyticsAnsw
             </Card>
           );
         }
-        // An email or a phone: how many answered, and none of them (a contact says nothing at a glance).
-        if (answer.latest === undefined) {
-          return <Card key={question.id} title={title} description={responses} actions={type} />;
-        }
-        const latest = answer.latest.map((text, at) => ({ id: String(at), text }));
-        return (
-          <Card key={question.id} title={title} description={responses} actions={type}>
-            <Table
-              label={strings.analyticsLatestOf(label)}
-              isHeaderHidden
-              columns={[{ id: 'text', label: strings.analyticsLatest, isRowHeader: true, size: 'fill' }]}
-              rows={latest}
-              getRowId={(row) => `latest:${row.id}`}
-              renderCell={(row) => row.text}
-            />
-          </Card>
-        );
+        return null;
       })}
     </>
   );

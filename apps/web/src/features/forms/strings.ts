@@ -35,6 +35,7 @@ export const strings = {
   /** Said in the title bar, and announced politely, while a template is being turned into a draft. */
   galleryMakingOne: (name: string) => `Making your ${name}…`,
   /** What the blank template is called in that line, when the tiles never loaded and only Blank is reachable. */
+  galleryTemplates: 'Templates',
   galleryBlankName: 'blank form',
   galleryFailedTitle: 'The templates didn’t load',
   /** Read by screen readers while the tiles are on their way; the tile and lines only show after the loading delay. */
@@ -907,8 +908,6 @@ export const strings = {
   analyticsAnswersLatest: (shown: string) => `From the latest ${shown} submissions.`,
   analyticsNoAnswers: 'Nobody answered this yet',
   analyticsAnswersOf: (question: string) => `Answers to ${question}`,
-  analyticsLatestOf: (question: string) => `Latest answers to ${question}`,
-  analyticsLatest: 'Latest answers',
   analyticsAnswer: 'Answer',
   analyticsShare: 'Share',
   analyticsBar: 'Share of responses',
