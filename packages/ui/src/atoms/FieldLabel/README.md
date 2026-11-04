@@ -30,3 +30,7 @@ The label takes no focus; the InfoTip's button does.
 ## Differences from the artifact
 
 Not in the artifact (it is part of each control there).
+
+## Colour on a public surface
+
+The label reads `--label-colour` before the secondary grey. Only the hosted form sets it (to the text colour, in its card), where grey labels at the public 16px read weaker than the placeholders under them (the design critique, 5 November 2026). The app never sets it. Why a custom property and not a variant: every control draws its own FieldLabel, so a form wide colour reaches them all through one name rather than a prop on each.
