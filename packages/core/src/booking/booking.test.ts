@@ -218,6 +218,8 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
       location: { type: 'video' },
       hostTimeZone: 'UTC',
       windowDays: 60,
+      // A new page's 4 hours' notice (lane O), which the public page says (lane P).
+      minNoticeMinutes: 240,
       defaultView: 'month',
     });
     expect(JSON.stringify(facts)).not.toContain('@');
