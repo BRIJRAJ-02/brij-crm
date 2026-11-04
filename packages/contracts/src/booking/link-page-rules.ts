@@ -20,6 +20,17 @@ export const PROFILE_BLOCK_KINDS = [
   'gallery',
   'times',
   'banner',
+  // Spec 0068, AC-6808: the bento cards. A profile card, an "Available for work" line, a short audio intro, an
+  // experience timeline, a row of client logos, work cards, how I work, a location and the next events.
+  'profile',
+  'status',
+  'audio',
+  'timeline',
+  'logos',
+  'work',
+  'steps',
+  'location',
+  'events',
 ] as const;
 /** One of the kinds this build draws. */
 export type ProfileBlockKind = (typeof PROFILE_BLOCK_KINDS)[number];
@@ -45,6 +56,15 @@ export const PROFILE_LIMITS = {
   gallery: 3,
   times: 3,
   banner: 1,
+  profile: 1,
+  status: 1,
+  audio: 1,
+  timeline: 2,
+  logos: 2,
+  work: 3,
+  steps: 2,
+  location: 3,
+  events: 2,
   featured: 3,
 } as const;
 
@@ -82,6 +102,24 @@ export function profileLimitSentence(kind: ProfileBlockKind | 'items' | 'feature
       return 'A link page shows one banner at a time.';
     case 'featured':
       return most(PROFILE_LIMITS.featured, 'featured links');
+    case 'profile':
+      return 'A link page holds one profile card.';
+    case 'status':
+      return 'A link page shows one status at a time.';
+    case 'audio':
+      return 'A link page holds one audio intro.';
+    case 'timeline':
+      return most(PROFILE_LIMITS.timeline, 'timelines');
+    case 'logos':
+      return most(PROFILE_LIMITS.logos, 'rows of logos');
+    case 'work':
+      return most(PROFILE_LIMITS.work, 'sets of work');
+    case 'steps':
+      return most(PROFILE_LIMITS.steps, 'sets of steps');
+    case 'location':
+      return most(PROFILE_LIMITS.location, 'locations');
+    case 'events':
+      return most(PROFILE_LIMITS.events, 'lists of events');
     case 'page':
       return most(PROFILE_LIMITS.page, 'booking pages');
   }
@@ -142,23 +180,111 @@ export const PROFILE_LINK_STYLES = ['row', 'featured'] as const;
 /** How a link draws. */
 export type ProfileLinkStyle = (typeof PROFILE_LINK_STYLES)[number];
 
-/** A tile's size on a grid page (AC-6103): 1 by 1, 2 by 1, or 2 by 2. Absent is `small`. */
+/**
+ * A card's span on a grid page (spec 0061 AC-6103, made a bento by spec 0068 AC-6808): `small` takes one column,
+ * `wide` two. `large` is spec 0061's 2 by 2, kept so a block stored with it still reads, and drawn as `wide`: the
+ * bento's rows are as tall as their cards, so a card never spans two of them. Absent is `small`.
+ */
 export const PROFILE_TILE_SIZES = ['small', 'wide', 'large'] as const;
-/** A tile's size on a grid page. */
+/** A card's span on a grid page. */
 export type ProfileTileSize = (typeof PROFILE_TILE_SIZES)[number];
 
-/** The kinds that may take a tile size; every other kind always spans the full row (AC-6103). */
-export const PROFILE_SIZED_KINDS = [
-  'link',
-  'page',
-  'media',
-  'image',
-  'gallery',
-] as const satisfies readonly ProfileBlockKind[];
+/** The spans the editor offers (AC-6808): one column or two. */
+export const PROFILE_SPANS = ['small', 'wide'] as const;
 
-/** Whether a kind always spans the full row of a grid page (AC-6103). */
+/**
+ * The kinds that may take a span (AC-6808): every kind but a heading, which names the cards after it across the
+ * whole row, and a banner, which sits above the page. The database's check holds the same list.
+ */
+export const PROFILE_SIZED_KINDS = PROFILE_BLOCK_KINDS.filter(
+  (kind): kind is Exclude<ProfileBlockKind, 'heading' | 'banner'> => kind !== 'heading' && kind !== 'banner',
+);
+
+/** Whether a kind always spans the full row of a grid page: a heading and a banner. */
 export function spansFullRow(kind: ProfileBlockKind): boolean {
   return !PROFILE_SIZED_KINDS.some((sized) => sized === kind);
+}
+
+/** The longest a bento card's own title may be (AC-6808): "Experience", "Clients", "How I work". */
+export const PROFILE_CARD_TITLE_MAX = 40;
+/** The longest a profile card's one line may be. */
+export const PROFILE_CARD_LINE_MAX = 80;
+/** The longest a status may be ("Available for work"). */
+export const PROFILE_STATUS_MAX = 40;
+/** What a status says when its owner types nothing. */
+export const PROFILE_STATUS_DEFAULT = 'Available for work';
+/** Whether a status is the green "open" dot or the quiet "away" one. */
+export const PROFILE_STATUS_STATES = ['open', 'away'] as const;
+/** A status's state. */
+export type ProfileStatusState = (typeof PROFILE_STATUS_STATES)[number];
+
+/**
+ * A short audio intro (AC-6808): the sound types a link page stores, decided by their first bytes on the server,
+ * never by the name or the declared type. MP3, AAC in MP4 (`.m4a`, what a phone records), Ogg and WebM (what a
+ * browser records). Stored privately like a picture and served only while a published block names it.
+ */
+export const PROFILE_AUDIO_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm'] as const;
+/** A sound type a link page stores. */
+export type ProfileAudioType = (typeof PROFILE_AUDIO_TYPES)[number];
+/** The largest sound stored: about ninety seconds of a phone's voice memo. The database's check alike. */
+export const PROFILE_AUDIO_MAX_BYTES = 1_572_864;
+/** The sentence a sound too big is refused with. */
+export const PROFILE_AUDIO_SIZE_REFUSAL =
+  'That recording is too long. Keep it under 1.5 MB, about a minute and a half.';
+/** The sentence a file that isn't a sound we take is refused with. */
+export const PROFILE_AUDIO_TYPE_REFUSAL = 'That file isn’t a recording we can use. Choose an MP3, M4A, OGG or WebM.';
+/** The longest an audio intro's title may be. */
+export const PROFILE_AUDIO_TITLE_MAX = 60;
+/**
+ * An audio intro's waveform (AC-6808): 48 bars, each one of 32 heights written as one character `0` to `v`, made in
+ * the owner's browser from the recording and stored beside it, so a visitor's page draws it with nothing decoded.
+ */
+export const PROFILE_WAVE = /^[0-9a-v]{48}$/;
+/** How many bars a waveform has. */
+export const PROFILE_WAVE_BARS = 48;
+
+/** Where a link page's sound is served from: our own origin, under its handle. The id never changes. */
+export function profileAudioPath(handle: string, audioId: string): string {
+  return `/api/public/profiles/${encodeURIComponent(handle)}/audio/${audioId}`;
+}
+
+/** How many rows an experience timeline holds, and what each part of one may run to. */
+export const PROFILE_TIMELINE_ITEMS = 12;
+/** The longest a timeline row's when may be ("2021 – 2023"). */
+export const PROFILE_WHEN_MAX = 20;
+/** The longest a row's title, a work card's title, a step's title or an event's title may be. */
+export const PROFILE_ITEM_TITLE_MAX = 60;
+/** The longest a row's place, or an event's, may be. */
+export const PROFILE_PLACE_MAX = 60;
+/** How many logos one row of clients holds. */
+export const PROFILE_LOGOS_MIN = 2;
+/** The most logos one row holds. */
+export const PROFILE_LOGOS_MAX = 12;
+/** The longest a logo's name (its alt text) may be. */
+export const PROFILE_LOGO_ALT_MAX = 80;
+/** How many work cards one block holds. */
+export const PROFILE_WORK_ITEMS = 6;
+/** The longest a work card's two lines may be. */
+export const PROFILE_WORK_BODY_MAX = 160;
+/** How many steps "How I work" holds. */
+export const PROFILE_STEPS_MIN = 2;
+/** The most steps. */
+export const PROFILE_STEPS_MAX = 6;
+/** The longest a step's words may be. */
+export const PROFILE_STEP_BODY_MAX = 240;
+/** The longest a location's address may be. */
+export const PROFILE_ADDRESS_MAX = 200;
+/** The longest a location's name may be. */
+export const PROFILE_LOCATION_TITLE_MAX = 60;
+/** How many events one list holds. */
+export const PROFILE_EVENTS_ITEMS = 8;
+
+/**
+ * Directions to an address (AC-6808, "static map later, address and Directions now"): the map search every phone
+ * opens in its own maps app, the address its only query. Built here from the stored words, never typed.
+ */
+export function directionsHref(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
 /** The notices a link may carry (AC-6113): self declared, as on Linktree, with no identity check. */

@@ -31,6 +31,7 @@ import {
 import type { Database } from '@crm/db';
 import type { Context, Env, Hono } from 'hono';
 import { loadStoredImage } from '../brand-logo.ts';
+import { audioResponse, loadStoredAudio } from '../link-page-pictures.ts';
 import type { EdgeCache } from '../edge-cache.ts';
 import type { FileStore } from '../storage/blob.ts';
 import type { LimitRule } from './limits.ts';
@@ -167,6 +168,34 @@ export function mountLinkPageRoutes<E extends Env>(app: Hono<E>, deps: LinkPageR
       });
     } catch {
       return missing('There’s no picture here.');
+    }
+  });
+
+  // An audio intro's recording (spec 0068, AC-6808): exactly a picture's rule, through the same door (only while a
+  // published block of a page the visitor may see names it), served only as one of the four sound types.
+  app.get('/public/profiles/:handle/audio/:audioId', async (c) => {
+    const handle = c.req.param('handle');
+    const audioId = c.req.param('audioId');
+    if (!HANDLE_PATTERN.test(handle) || !isUuid(audioId)) return missing('There’s no recording here.');
+    if (new URL(c.req.url).search !== '') return missing('There’s no recording here.');
+    const refused = deps.limited([
+      [`link-page:image:${deps.addressOf(c)}`, LINK_PAGE_LIMITS.imagesPerAddress],
+      [`link-page:image-handle:${handle}`, LINK_PAGE_LIMITS.imagesPerHandle],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      const viewer = await deps.signedInAs(c);
+      const found = await enterLinkImage({ db: deps.db }, handle, audioId, viewer === undefined ? {} : { viewer });
+      const stored = await loadStoredAudio(deps.files, found.path, found.type);
+      if (stored === undefined) return missing('There’s no recording here.');
+      if (found.owner.isShown) tagged(found.owner.handle, handle);
+      return audioResponse(
+        stored,
+        found.owner.isShown ? LINK_IMAGE_CACHE_CONTROL : PRIVATE_IMAGE_CACHE_CONTROL,
+        c.req.header('range'),
+      );
+    } catch {
+      return missing('There’s no recording here.');
     }
   });
 

@@ -1540,15 +1540,19 @@ async function withinWorkspace(
 function imageIdsOf(data: unknown): readonly string[] {
   if (typeof data !== 'object' || data === null) return [];
   const record = data as Readonly<Record<string, unknown>>;
-  const one = [record.thumb, record.image, record.poster].filter((id): id is string => typeof id === 'string');
-  const gallery = Array.isArray(record.images)
-    ? (record.images as readonly unknown[]).flatMap((each) =>
-        typeof each === 'object' && each !== null && 'image' in each && typeof each.image === 'string'
-          ? [each.image]
-          : [],
-      )
-    : [];
-  return [...one, ...gallery];
+  const one = [record.thumb, record.image, record.poster, record.audio].filter(
+    (id): id is string => typeof id === 'string',
+  );
+  // A gallery's or a row of logos' pictures, and a work card's (spec 0068): `crm_profile_item_images` alike.
+  const inRows = (rows: unknown) =>
+    Array.isArray(rows)
+      ? (rows as readonly unknown[]).flatMap((each) =>
+          typeof each === 'object' && each !== null && 'image' in each && typeof each.image === 'string'
+            ? [each.image]
+            : [],
+        )
+      : [];
+  return [...one, ...inRows(record.images), ...inRows(record.items)];
 }
 
 /** A visitor as spec 0047 mints it: the day's HMAC, 32 lowercase hex digits. */

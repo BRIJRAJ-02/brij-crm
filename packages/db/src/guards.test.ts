@@ -650,6 +650,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_discard_link_draft',
         'crm_profile_identity_public',
         'crm_profile_look_public',
+        // Bento cards (spec 0068, migration 0180): the one line rule the block check reads, run only inside it.
+        'crm_profile_text_ok',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',

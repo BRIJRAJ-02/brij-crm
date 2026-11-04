@@ -34,6 +34,7 @@ import {
   type ProfileCounts,
   type ProfileDay,
   type ProfileFactValue,
+  type ProfileAudioType,
   type ProfileImageKind,
   type ProfileImageType,
   type ProfileInsightDays,
@@ -568,6 +569,30 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number], media?: Resol
     const kept = compact({ ...fields, ...shared });
     // A gallery's `row` is its default, left out as a size's `small` is.
     if (kind === 'gallery' && kept.display === 'row') delete kept.display;
+    // `small` is every span's default, left out (the grid's one column).
+    if (kept.size === 'small') delete kept.size;
+    return { kind, data: kept, workspaceId: null, pageId: null, formId: null };
+  }
+  if (
+    block.kind === 'profile' ||
+    block.kind === 'status' ||
+    block.kind === 'audio' ||
+    block.kind === 'location' ||
+    block.kind === 'timeline' ||
+    block.kind === 'logos' ||
+    block.kind === 'work' ||
+    block.kind === 'steps' ||
+    block.kind === 'events'
+  ) {
+    // Spec 0068's cards (AC-6808): the fields the schema kept, an empty one never stored, and in a card made of
+    // rows each row the same way. A status's `open` is its default, left out as a size's `small` is.
+    const { kind, showFrom: _from, hideAfter: _after, size: _size, ...fields } = block;
+    const rows =
+      'items' in fields
+        ? { items: (fields.items as readonly Readonly<Record<string, unknown>>[]).map((row) => compact(row)) }
+        : {};
+    const kept = compact({ ...fields, ...rows, ...shared });
+    if (kind === 'status' && kept.state === 'open') delete kept.state;
     return { kind, data: kept, workspaceId: null, pageId: null, formId: null };
   }
   if (block.kind === 'form') {
@@ -1084,9 +1109,10 @@ export async function addProfileImage(
   scope: EngineScope,
   image: {
     readonly id: string;
-    readonly kind: ProfileImageKind;
+    /** `audio` is an audio intro's recording (spec 0068), whose sides are 1 by 1. */
+    readonly kind: ProfileImageKind | 'audio';
     readonly path: string;
-    readonly type: ProfileImageType;
+    readonly type: ProfileImageType | ProfileAudioType;
     readonly bytes: number;
     readonly width: number;
     readonly height: number;
