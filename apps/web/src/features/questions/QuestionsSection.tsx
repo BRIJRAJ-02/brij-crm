@@ -525,7 +525,20 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   const firstQuestion = questions[0];
   const hasLeadHeader = flow === undefined || firstQuestion === undefined || itemsOf(flow)[0]?.kind === 'step';
   const leadRow: readonly QuestionListItem[] =
-    isStepped && !hasLeadHeader ? [{ id: `${STEP_ROW}${LEAD}`, kind: 'step', label: strings.stepName(1) }] : [];
+    isStepped && !hasLeadHeader
+      ? [
+          {
+            id: `${STEP_ROW}${LEAD}`,
+            kind: 'step',
+            label: strings.stepName(1),
+            note: strings.questionCount(
+              itemsOf(flow).findIndex((item) => item.kind === 'step') < 0
+                ? questions.length
+                : itemsOf(flow).findIndex((item) => item.kind === 'step'),
+            ),
+          },
+        ]
+      : [];
   const items: readonly QuestionListItem[] = !isStepped
     ? questionItems
     : [
@@ -540,6 +553,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               id: `${STEP_ROW}${step.id}`,
               kind: 'step',
               label: strings.stepName(place.number, step.title),
+              // Clearly a step (T39): its number, its name and how many questions it holds.
+              note: strings.questionCount(place.count),
               // Named by every question, so one that comes after the step reads by its label, not as removed.
               ...shownWhenOf(step.showWhen, questionFacts(questions)),
               hasProblem: stepProblem?.stepId === step.id,
@@ -589,6 +604,99 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     breaks.onChange((before) => splitAt(before, questionId, id));
     setRenaming({ stepId: id, text: '' });
     props.onOpened?.(`${STEP_ROW}${id}`);
+  };
+
+  /**
+   * The quiet + in the gap above a row (T39): "Add a question here" (the types), and with Steps "Start a new step
+   * here" too, between two questions of one step. Above a step's first question the new one opens that step; above
+   * a step header it ends the step before. Nothing above the list's first row.
+   */
+  const gapFor = (rowId: string): ReactNode => {
+    const at = items.findIndex((item) => item.id === rowId);
+    if (at <= 0 || isFull) return null;
+    const previous = items[at - 1];
+    const rowStep = stepOfRow(rowId);
+    // The question the new one goes before: this row's, or the first of the step this header opens.
+    const beforeId =
+      rowStep === undefined ? rowId : (items.slice(at + 1).find((item) => item.kind !== 'step')?.id ?? undefined);
+    const takesStart = rowStep === undefined && previous?.kind === 'step';
+    const place = { ...(beforeId === undefined ? {} : { beforeId }), takesStart };
+    const canSplit = isStepped && rowStep === undefined && previous?.kind !== 'step' && !startsAStep(flow, rowId);
+    const button = (
+      <Button variant="ghost" size="sm" icon="plus" label={canSplit ? strings.addHereOrStep : strings.addHere} />
+    );
+    if (!canSplit) {
+      return (
+        <TypeMenu
+          label={strings.addHere}
+          allowed={allowed}
+          onPick={(type) => {
+            addAt(type, place);
+          }}
+        >
+          {button}
+        </TypeMenu>
+      );
+    }
+    return (
+      <MenuTrigger>
+        {button}
+        <Menu
+          label={strings.addHereOrStep}
+          onAction={(key) => {
+            if (key === 'split') split(rowId);
+          }}
+        >
+          <SubmenuTrigger>
+            <MenuItem icon="plus">{strings.addHere}</MenuItem>
+            <Menu
+              label={strings.addHere}
+              onAction={(key) => {
+                const type = ANSWER_TYPES.find((each) => each === String(key));
+                if (type !== undefined) addAt(type, place);
+              }}
+            >
+              {TYPE_GROUPS.map((group) => {
+                const types = group.types.filter((type) => allowed.has(type));
+                return types.length === 0 ? null : (
+                  <MenuSection key={group.id} label={strings.typeGroups[group.id]}>
+                    {types.map((type) => (
+                      <MenuItem key={type} id={type} icon={TYPE_ICONS[type]}>
+                        {strings.answerTypes[type]}
+                      </MenuItem>
+                    ))}
+                  </MenuSection>
+                );
+              })}
+            </Menu>
+          </SubmenuTrigger>
+          <MenuItem id="split" icon="scissors">
+            {strings.startStepHere}
+          </MenuItem>
+        </Menu>
+      </MenuTrigger>
+    );
+  };
+
+  /**
+   * Add a step (T39: "a clear Add a step" up front): a new step at the end holding one new question, its name typed
+   * first, so no step is ever empty.
+   */
+  const addStepAtEnd = () => {
+    if (breaks === undefined || isFull) return;
+    const stepId = newId();
+    const questionId = newId();
+    breaks.onChange((before) => ({
+      questions: keptAtFirst(
+        insertQuestion(before.questions, questionId, 'short_text', before.questions.length),
+        questionId,
+      ),
+      steps: [...before.steps, { id: stepId, startsAt: questionId }],
+    }));
+    setFresh((before) => new Set([...before, questionId]));
+    setOpen(new Set([questionId]));
+    setRenaming({ stepId, text: '' });
+    props.onOpened?.(`${STEP_ROW}${stepId}`);
   };
 
   /** Merge with the step above: the break goes, its questions join the step before it, with Undo. */
@@ -733,6 +841,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       actions={
         <>
           {props.actionsStart}
+          {!isReadOnly && isStepped && !isFull && (
+            <Button icon="list-plus" onPress={addStepAtEnd}>
+              {strings.addStep}
+            </Button>
+          )}
           {!isReadOnly &&
             (isFull ? (
               // Off at the most a form holds, and says so on hover and focus.
@@ -759,6 +872,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         </>
       }
       items={items}
+      // A quiet + between the cards, always there (T39: adding in between was "a find"); not on a read only list.
+      {...(isReadOnly ? {} : { gaps: 'shown' as const, renderGap: gapFor })}
       openIds={shownOpen}
       onOpenChange={(id, isOpen) => {
         // The question or divider a publish refused stays open until it is fixed.
@@ -805,20 +920,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             ...(isReadOnly
               ? {}
               : {
-                  renderGap: (id: string) => {
-                    if (stepOfRow(id) !== undefined || startsAStep(flow, id)) return null;
-                    return (
-                      <Button
-                        size="sm"
-                        icon="scissors"
-                        onPress={() => {
-                          split(id);
-                        }}
-                      >
-                        {strings.splitHere}
-                      </Button>
-                    );
-                  },
+                  renderGap: (id: string) => gapFor(id),
                 }),
           }
         : {})}
@@ -937,7 +1039,6 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           SCORED_TYPES.includes(question.answerType);
         // How they heard about you (spec 0067, AC-6703): a form's one choice or short text question.
         const canBeSource = props.keptWith === 'submission' && SOURCE_ANSWER_TYPES.has(question.answerType);
-        const canSplit = isStepped && !startsAStep(flow, id);
         const filing = filingChoices(question);
         return (
           <MenuTrigger>
@@ -960,7 +1061,6 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                   onChange((before) => changeQuestion(before, id, { points: startingPoints(question) }, liveIds));
                 }
                 if (key === 'source') onChange((before) => markSource(before, id, question.source !== true));
-                if (key === 'split') split(id);
                 if (key === 'duplicate') {
                   const copy = newId();
                   onChange((before) => keptAtFirst(duplicateQuestion(before, id, copy), copy));
@@ -1013,11 +1113,6 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               {canScore && (
                 <MenuItem id="points" icon="target">
                   {strings.givePoints}
-                </MenuItem>
-              )}
-              {canSplit && (
-                <MenuItem id="split" icon="scissors">
-                  {strings.startStepHere}
                 </MenuItem>
               )}
               <MenuItem id="duplicate" icon="copy">

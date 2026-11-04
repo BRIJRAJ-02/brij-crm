@@ -108,8 +108,15 @@ export const strings = {
   // A form's steps as pages (spec 0063; T20, 5 November 2026: Tally's page breaks)
   /** Between two questions of one step, on hover or focus: one click starts a new step there. */
   splitHere: 'Split here',
-  /** The same, from an open question's footer (touch has no hover). */
+  /** The gap's +, between two questions of one step: a new step starts at the question below. */
   startStepHere: 'Start a new step here',
+  /** The gap's + (T39): always there, quiet. */
+  addHere: 'Add a question here',
+  addHereOrStep: 'Add a question or a step here',
+  /** The Questions header with Steps (T39): a new step at the end, with a question in it. */
+  addStep: 'Add a step',
+  /** A step header's count. */
+  questionCount: (count: number) => (count === 1 ? '1 question' : `${String(count)} questions`),
   /** The first page's title when Steps splits a form after its contact details. */
   yourDetails: 'Your details',
   /** The second page's title when the first is the contact details. */

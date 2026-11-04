@@ -258,9 +258,13 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* Never wider than its row: a row of several small fields (a question's points per choice) wraps onto a second
+     line rather than running past the card's edge (5 November 2026). */
   .rowControl {
     display: flex;
     flex: none;
+    flex-wrap: wrap;
+    max-inline-size: 100%;
     gap: var(--space-8);
     align-items: center;
     justify-content: flex-end;
