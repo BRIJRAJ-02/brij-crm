@@ -3,7 +3,8 @@
 // the view switcher's menu (it was a "···" button of its own until the view bar was simplified, 21 October 2026).
 // Main task: pick an action; one you could take after a change is there, disabled, saying why; one that can never
 // apply here is left out.
-// Leaves out: the view's columns (View settings) and its filters and sorts (the Toolbar).
+// Leaves out: the view's columns (View settings), its filters and sorts (the Toolbar), and what belongs to the object
+// rather than the view (Find duplicates and Open trash, in the object's ⋯ beside New <record>: ObjectMenu below).
 import {
   isDataError,
   viewRule,
@@ -19,12 +20,15 @@ import {
   Callout,
   Field,
   Form,
+  Menu,
+  MenuItem,
+  MenuTrigger,
   Modal,
   sharedStrings,
   type FormRefusal,
   type ViewAction as ViewMenuAction,
 } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useRouteContext } from '@tanstack/react-router';
 import { duplicatesHref } from '../duplicates/paths.ts';
 import { strings as duplicateStrings } from '../duplicates/strings.ts';
 import { trashHref } from '../workspace/objects.ts';
@@ -51,8 +55,7 @@ export interface ViewMenuProps {
   /** The view was deleted here: the screen goes to the default view, offering Undo with the view as it was. */
   readonly onDeleted: (deleted: View) => void;
   /**
-   * The list whose view this is (spec 0048, AC-4808): its views are held by the list's id, and a list has no
-   * trash of its own, so Open trash is left out.
+   * The list whose view this is (spec 0048, AC-4808): its views are held by the list's id.
    */
   readonly listId?: string | undefined;
 }
@@ -106,7 +109,6 @@ export function useViewMenu({
   // A view's parent as the views store holds it: its list, or its object.
   const parentId = listId ?? object.id;
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  const navigate = useNavigate();
   const [isRenaming, setRenaming] = useState(false);
   const [isBusy, setBusy] = useState(false);
   // Make private ends everyone else's use of the view, so it asks first, as Delete does.
@@ -303,33 +305,6 @@ export function useViewMenu({
                   run(data.views.setDefault(slug, parentId, view.id));
                 },
               })),
-        ]
-      : []),
-    // Deleted records wait in the trash (spec 0022); a delete's toast has room for Undo only, so the way there is here.
-    ...(listId === undefined
-      ? [
-          {
-            id: 'open-trash',
-            label: strings.openTrash,
-            icon: 'trash' as const,
-            startsGroup: true,
-            run: () => {
-              void navigate({ href: `${trashHref(slug)}?object=${encodeURIComponent(object.id)}` });
-            },
-          },
-        ]
-      : []),
-    // Likely duplicates of this object (spec 0049, AC-4907): a page of pairs to merge or dismiss.
-    ...(listId === undefined
-      ? [
-          {
-            id: 'find-duplicates',
-            label: duplicateStrings.findDuplicates,
-            icon: 'copy' as const,
-            run: () => {
-              void navigate({ href: duplicatesHref(slug, object.apiSlug) });
-            },
-          },
         ]
       : []),
     ...entry(reasonFor('delete'), {
@@ -544,5 +519,32 @@ function RenameForm({
         onChange={setValue}
       />
     </Form>
+  );
+}
+
+/** Props for the object's ⋯ menu. */
+export interface ObjectMenuProps {
+  readonly slug: string;
+  readonly object: ObjectSummary;
+}
+
+/**
+ * The object's ⋯ in its top bar (the foolproof pass, 5 November 2026): what acts on the whole object, apart from the
+ * view's own actions. Find duplicates (spec 0049, AC-4907) and Open trash (spec 0022), on its table and board alike.
+ * A list has neither, so it shows none.
+ */
+export function ObjectMenu({ slug, object }: ObjectMenuProps) {
+  return (
+    <MenuTrigger>
+      <Button variant="ghost" icon="ellipsis" label={strings.objectActions(object.pluralName)} />
+      <Menu label={strings.objectActions(object.pluralName)}>
+        <MenuItem id="find-duplicates" icon="copy" href={duplicatesHref(slug, object.apiSlug)}>
+          {duplicateStrings.findDuplicates}
+        </MenuItem>
+        <MenuItem id="open-trash" icon="trash" href={`${trashHref(slug)}?object=${encodeURIComponent(object.id)}`}>
+          {strings.openTrash}
+        </MenuItem>
+      </Menu>
+    </MenuTrigger>
   );
 }

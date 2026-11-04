@@ -21,7 +21,7 @@ A view of kind `board` (spec 0021): one column per option of a status or single 
 
 ## States
 
-Loading (the Board's skeleton columns after the loading delay, and three skeleton cards in a column whose call is still out), failed with Try again (from the call that failed, the columns already in kept), nothing to group by (with Add attribute for `schema.manage`), an archived grouping field, more than 50 options, no columns (a field with no options yet), an empty column ("No cards"), hidden empty columns, a filtered count past 10,000 ("10,000+"), read only with each card's lock, a refused drop, and live paused in the view bar.
+Loading (the Board's skeleton columns after the loading delay, and three skeleton cards in a column whose call is still out), failed with Try again (from the call that failed, the columns already in kept), nothing to group by (Add Stage for `schema.manage`, which makes a status field named Stage with Lead, In progress, Won and Lost in one click and the board groups by it; Show as table for everyone), an archived grouping field, more than 50 options (with Show as table), no columns (a field with no options yet), an empty column ("No cards"), hidden empty columns, a filtered count past 10,000 ("10,000+"), read only with each card's lock, a refused drop, and live paused in the view bar.
 
 ## Not yet
 
