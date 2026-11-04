@@ -1,10 +1,12 @@
 // Brief
 // Purpose: tell a member at once, on every page, that their calendar stopped syncing (spec 0024, AC-619, AC-620).
-// Main task: Reconnect, which goes through Google's consent and back to Settings › Calendar.
-// Leaves out: anyone else's calendars, the reason in detail (Settings › Calendar shows the last error), dismissing it.
+// Main task: Reconnect, through the stopped calendar's own provider (Google or Microsoft) and back to Calendars; where
+// that can't work here, Open calendars, where it can be removed. Always one action, never none.
+// Leaves out: anyone else's calendars, the reason in detail (Calendars shows the last error), dismissing it.
 import { needsReconnect, type DataLayer } from '@crm/data';
 import { useCalendar } from '@crm/data/react';
-import { Button, Callout } from '@crm/ui';
+import { Button, ButtonLink, Callout } from '@crm/ui';
+import { calendarsHref } from '../booking/links.ts';
 import { useEffect } from 'react';
 import { strings } from './calendar-banner-strings.ts';
 
@@ -42,25 +44,31 @@ export function CalendarBanner({ data, slug }: CalendarBannerProps) {
   const stopped = state.connections.find(needsReconnect);
   if (stopped === undefined) return null;
   const provider = stopped.provider === 'google' ? strings.google : strings.outlook;
+  // Reconnect only where it can work: sync on here, and this calendar's provider offered (Outlook can be off).
+  const canReconnect = state.enabled && state.providers.includes(stopped.provider);
   return (
     <Callout
       tone="warning"
       placement="banner"
       isAnnounced
       actions={
-        state.enabled ? (
+        canReconnect ? (
           <Button
             variant="ghost"
             onPress={() => {
-              window.location.assign(data.calendar.connectUrl(slug));
+              window.location.assign(data.calendar.connectUrl(slug, 'settings', stopped.provider));
             }}
           >
             {strings.reconnect}
           </Button>
-        ) : undefined
+        ) : (
+          <ButtonLink variant="ghost" href={calendarsHref(slug)}>
+            {strings.openCalendars}
+          </ButtonLink>
+        )
       }
     >
-      {stopped.status === 'failed' ? strings.failed(provider) : strings.disconnected(provider)}
+      {strings.stopped(provider)}
     </Callout>
   );
 }
