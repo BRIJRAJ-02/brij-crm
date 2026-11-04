@@ -34,6 +34,16 @@ export const strings = {
   kindLabel: { personal: 'One on one', collective: 'Collective', round_robin: 'Round robin' },
   /** A workspace link's kind on its card, in place of Round robin. */
   workspaceLink: 'Workspace link',
+  /** The Links header's Team links menu (the bookings area, 4 November 2026): links that aren't page types. */
+  teamLinks: 'Team links',
+  workspaceLinkLine: 'Books whoever in the workspace is free.',
+  copyWorkspaceLink: 'Copy workspace link',
+  editWorkspaceLink: 'Edit workspace link',
+  workspaceLinkCopied: 'Workspace link copied.',
+  copyFailed: 'Couldn’t copy the link. Try again.',
+  teamLink: 'Team link',
+  teamLinkLine: 'A form asks what they want, then books the right team page.',
+  addTeamLink: 'New team link',
   /** A workspace link a member may copy and open, not change. */
   viewOnly: 'View only',
   /** Captures › Links' groups, when the workspace has a link of its own. */
@@ -76,13 +86,21 @@ export const strings = {
   cancel: 'Cancel',
   somethingWrong: 'Something went wrong. Try again.',
   // New booking page.
-  addPage: 'Add a booking page',
+  addPage: 'New booking page',
+  addWorkspaceLink: 'New workspace link',
+  /** The page's type (the bookings area, 4 November 2026): a mark, a name and one plain line each. */
+  typeLabel: 'Type',
+  typeMe: 'Just me',
+  typeMeLine: 'Guests book time with you.',
+  typeRoundRobin: 'Round robin',
+  typeRoundRobinLine: 'Whoever on the team is free.',
+  moreTypes: 'More types',
+  typeManagedLine: 'You set it up once; each person gets their own copy.',
+  noGroupsYet: 'No round robin groups yet.',
   title: 'Title',
   titlePlaceholder: 'Quick chat',
   titleRequired: 'Give the page a title.',
   whereRequired: 'Say where the meeting happens.',
-  /** Above a paused page's editor: what visitors see, and how to turn it back on. */
-  pausedNote: 'Paused. Visitors see it closed.',
   duration: 'Duration',
   durationRequired: 'Pick at least one length.',
   durationCustom: 'Custom',
@@ -92,6 +110,21 @@ export const strings = {
   addLength: 'Add a length',
   /** The editor's tabs (22 Oct 2026): one per group, the chosen one in `?tab=`. */
   tabsLabel: 'Booking page settings',
+  /** Hours and Limits as one tab, and the ways to hand the page out as another (the bookings area, 4 November 2026). */
+  /** The editor's rows (critic A8, 4 Nov 2026): each row's help, in its tip. */
+  linkSection: 'Link',
+  addressHelp: 'Guests book at this address. Changing it goes live when saved.',
+  bAddressHelp: 'Only people you send this link to can book it.',
+  handleRow: 'Short address',
+  setHandleShort: 'Set your handle',
+  shareLinkSection: 'Share the link',
+  publishToShare: 'Publish the page to get its link.',
+  durationsHelp: 'Guests pick one. Up to four.',
+  addToCrmHelp: 'Each guest is found or added in the CRM.',
+  opensInHelp: 'The view guests see first. They can switch.',
+  anyTime: 'Any time',
+  availabilityTab: 'Availability',
+  shareTab: 'Share',
   hostsTab: 'Hosts',
   /** Said to screen readers after a tab's name when a field on it holds an error. */
   needsFix: 'needs a fix',
@@ -100,11 +133,6 @@ export const strings = {
   minutesUnit: 'min',
   createPage: 'Create page',
   creating: 'Creating',
-  /** The Ready panel after Create page (spec 0058, AC-5): the one heading, one line, and the way on to the editor. */
-  readyTitle: 'Your booking page is ready',
-  readyMessage: 'Anyone with the link can book.',
-  readyEdit: 'Edit page',
-  readyPreview: 'Preview of the booking page',
   // The editor.
   live: 'Live',
   page: 'Page',
@@ -382,9 +410,7 @@ export const strings = {
   /** The editor's header on someone else's page (spec 0037, AC-1273). */
   editingFor: (name: string) => `${firstOf(name)}’s page`,
   destinationLoading: 'Loading calendars',
-  noCalendarTitle: 'No calendar connected',
   connectCalendar: 'Connect calendar',
-  notNow: 'Not now',
   statusLive: 'Live',
   statusOff: 'Paused',
   noCalendar: 'Other meetings don’t block times until you connect one.',

@@ -8,9 +8,6 @@ import type { ManagedPart } from '@crm/data';
 export const managedStrings = {
   /** New › Who books. */
   bookManaged: 'A page each',
-  managedInfo:
-    'One page you set up, with a page of it for each person you pick. You choose which parts they can change.',
-  addManaged: 'Add a managed page',
 
   /** Captures › Links. */
   group: 'Managed pages',

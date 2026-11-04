@@ -85,16 +85,20 @@ test.describe('availability schedules', () => {
     await page.getByRole('button', { name: 'New booking page' }).first().click();
     await page.getByLabel('Title').fill('Intro call');
     await page.getByRole('button', { name: 'Create page' }).click();
-    // The Ready panel shows the link (spec 0058, AC-5); Edit page goes on to the editor.
-    await page.getByRole('button', { name: 'Edit page' }).click();
+    // Create page goes straight on to the editor; Publish puts the draft live (the bookings area).
     await expect(page).toHaveURL(/captures\/links\/[0-9a-f-]{36}/, { timeout: 60_000 });
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: /is live$/ })
+      .getByRole('button', { name: 'Done' })
+      .click();
     const pageUrl = page.url();
     // The preview beside the editor loads the page by its /b/ link.
     const key = /\/b\/([A-Za-z0-9_-]{16})/.exec(
       (await page.getByTitle('Preview of Intro call').getAttribute('src')) ?? '',
     )?.[1];
-    // The schedule is on the Hours tab.
-    await page.getByRole('tab', { name: 'Hours', exact: true }).click();
+    // The schedule is on the Availability tab (Hours and Limits, 4 November 2026).
+    await page.getByRole('tab', { name: 'Availability', exact: true }).click();
     await expect(page.getByRole('button', { name: /Working hours.*Default/ }).first()).toBeVisible();
     expect(key).toBeDefined();
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
@@ -131,10 +135,10 @@ test.describe('availability schedules', () => {
     await page.getByRole('button', { name: 'Save draft', exact: true }).click();
     await expect(page.getByText('Saved', { exact: true })).toBeVisible();
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
-    const publishBar = page.getByRole('region', { name: 'Publish' });
-    await expect(publishBar.getByRole('status')).toHaveText('1 change not published');
-    await publishBar.getByRole('button', { name: 'Publish', exact: true }).click();
-    await expect(publishBar.getByRole('status')).toHaveText(/Published|Live: guests see this page/);
+    // The header says so (the bookings area, 4 November 2026): Live · edited, and Publish beside Preview.
+    await expect(page.getByText('Live · edited').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByText('Published Intro call.')).toBeVisible();
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(18, 20));
 
     // A second browser on the same schedule's editor sees a save from the first (AC-977).
@@ -150,14 +154,15 @@ test.describe('availability schedules', () => {
     });
     await expect(reader.getByRole('button', { name: /Monday until/ }).first()).toContainText('8:00 PM');
     // The page's Hours tab edits the schedule's week in place, saved by the page's own Save (the owner, 22 October
-    // 2026), and says which other pages the change reaches; View page opens the live page in a new tab.
-    await page.goto(`${pageUrl}?tab=hours`);
+    // 2026), and says which other pages the change reaches; the Share tab opens the live page in a new tab.
     // Its live address: `/b/<key>` until its host holds a handle, and `/<handle>/<slug>` once they do, which every
     // membership now does (26 October 2026, a link page made with the membership).
-    await expect(page.getByRole('link', { name: 'View page' })).toHaveAttribute(
+    await page.goto(`${pageUrl}?tab=share`);
+    await expect(page.getByRole('link', { name: 'Open', exact: true })).toHaveAttribute(
       'href',
       new RegExp(`(/b/${key ?? ''}|/[a-z0-9-]+/[a-z0-9-]+)$`),
     );
+    await page.goto(`${pageUrl}?tab=hours`);
     await setAllDays(page, '6:00 PM', '9:00 PM');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Saved', { exact: true })).toBeVisible();

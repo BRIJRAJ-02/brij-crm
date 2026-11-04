@@ -172,22 +172,8 @@ export const strings = {
   rescheduleSame: 'Same host when they are free',
   rescheduleRotation: 'Through the group again',
   // New booking page.
-  whoBooks: 'Who it books',
-  bookMe: 'Me',
-  bookRotation: 'Round robin group',
-  bookEveryone: 'Workspace link',
-  /** The one help for Who it books, in its InfoTip. */
-  whoBooksInfo:
-    'Me: guests book you. Round robin group: one host from a group, in turn. Workspace link: whoever is free, on nobody’s profile.',
-  /** Who it books' tip when the Team link is offered too. */
-  whoBooksInfoTeamLink:
-    'Me: guests book you. Round robin group: one host from a group, in turn. Workspace link: whoever is free, on nobody’s profile. Team link: a form asks what they want, then books the right team page.',
   // The Team link (spec 0037, AC-1353): a form in front of the team pages.
-  teamLink: 'Team link',
   teamLinkName: 'Book a call',
-  teamLinkLine: 'A form asks what they want, then books the right team page.',
-  teamLinkNone: 'Make a team page or the workspace link first.',
-  addTeamLink: 'Add a team link',
   createTeamLink: 'Create team link',
   // Copy handoff (31 Oct 2026): the switches are the explanation.
   rosterNote: (on: number, all: number) => `${String(on)} of ${String(all)} on.`,

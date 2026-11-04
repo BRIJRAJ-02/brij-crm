@@ -91,13 +91,16 @@ test.describe('round robin', () => {
     // The page, on the only group without picking it.
     await page.goto(`/w/${slug}/captures/links`);
     await page.getByRole('button', { name: /^New booking page/ }).click();
-    const create = page.getByRole('dialog', { name: 'Add a booking page' });
+    const create = page.getByRole('dialog', { name: 'New booking page' });
     await create.getByLabel('Title').fill('Sales intro');
-    await create.getByText('Round robin group', { exact: true }).click();
+    await create.getByText('Round robin', { exact: true }).click();
     await create.getByRole('button', { name: 'Create page' }).click();
-    await page.getByRole('button', { name: 'Edit page' }).click();
     await expect(page).toHaveURL(/\/captures\/links\/[0-9a-f-]{36}/, { timeout: 30_000 });
-    const address = await page.getByRole('link', { name: 'View page' }).getAttribute('href');
+    // A new page is a draft (the bookings area, 4 November 2026): Publish puts it live and ends on its link.
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    const live = page.getByRole('dialog', { name: /is live$/ });
+    const address = await live.getByRole('link', { name: 'Open' }).getAttribute('href');
+    await live.getByRole('button', { name: 'Done' }).click();
     expect(address).not.toBeNull();
 
     // Three visitors, three hosts: the fewest meetings goes first, so nobody gets two.

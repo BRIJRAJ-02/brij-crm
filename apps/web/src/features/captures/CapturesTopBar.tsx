@@ -1,5 +1,6 @@
 // Brief
-// Purpose: the Captures TopBar, drawn once by the layout: the scheduling tile, the title, the chosen tab's count and New, as People's TopBar has.
+// Purpose: the Captures TopBar, drawn once by the layout: the scheduling tile, the title, the chosen tab's count and New, as People's TopBar has;
+// on Links, Team links before New.
 // Main task: say how many links or forms there are and make a new one, from one place that never moves between tabs.
 // Leaves out: the tab strip and the lists (the layout's tabs and each tab's screen).
 import type { CaptureListView } from '@crm/data';
@@ -7,6 +8,7 @@ import { useCaptureList } from '@crm/data/react';
 import { Badge, TopBar } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { SCHEDULING_HUE } from '../scheduling.ts';
+import { TeamLinksMenu } from '../booking/TeamLinksMenu.tsx';
 import { CapturesNewButton } from './create.tsx';
 import { strings } from './strings.ts';
 import type { CaptureTab } from './tabs.ts';
@@ -33,6 +35,8 @@ export function CapturesTopBar({ slug, tab }: CapturesTopBarProps) {
         )
       }
     >
+      {/* The workspace and team links, which are links rather than page types (the bookings area, 4 November 2026). */}
+      {tab === 'links' && <TeamLinksMenu slug={slug} />}
       <CapturesNewButton />
     </TopBar>
   );
