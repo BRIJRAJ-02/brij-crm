@@ -27,12 +27,30 @@ export function holdsFile(answer: Pick<SubmissionAnswer, 'value'>): boolean {
 }
 
 /**
- * An answer's value as a panel shows it: a phone through the field set, spaced for reading; everything else as
- * its words, which wrap whole. An email or a website stays plain text, never a link, since a visitor typed it.
+ * An answer's value as a panel shows it, through the field set where it has a display: a phone spaced for reading,
+ * an email as its LinkChip (a mailto: link, with Copy beside it; lane 3c), a file as its file. Everything else is
+ * its words, which wrap whole. A website stays plain text, never a link, since a visitor typed where it goes.
  */
 function answerValue(answer: SubmissionAnswer): ReactNode {
   const text = answerText(answer);
   if (text === '') return strings.noAnswer;
+  if (answer.answerType === 'email' && typeof answer.value === 'string') {
+    return (
+      <AttributeDisplay
+        attribute={{
+          id: answer.questionId,
+          name: answer.label,
+          type: 'email',
+          allowMultiple: false,
+          isRequired: false,
+          isUnique: false,
+          isReadOnly: true,
+        }}
+        value={text}
+        surface="panel"
+      />
+    );
+  }
   if (answer.answerType === 'file' || answer.answerType === 'signature') {
     // The stored file through the field set: its icon and name, a download link the api checks on every open.
     const file = FileValue.safeParse(answer.value);
@@ -90,8 +108,11 @@ export function PhoneAnswer({
   );
 }
 
-/** The answers worth copying (an email, a phone, a website), with what copying gives: a phone's full number. */
-const COPYABLE: ReadonlySet<string> = new Set(['email', 'phone', 'website']);
+/**
+ * The answers worth copying (a phone, a website), with what copying gives: a phone's full number. An email's chip
+ * carries its own Copy, from the field set.
+ */
+const COPYABLE: ReadonlySet<string> = new Set(['phone', 'website']);
 
 /** What copying an answer copies, and its button's name. */
 function answerCopy(answer: SubmissionAnswer): { readonly value: string; readonly label: string } | undefined {
@@ -105,10 +126,12 @@ export interface AnswerListProps {
   readonly answers: readonly SubmissionAnswer[];
   /** The words after an answer's label when it is the exception ("Not saved"), by answer; none for the rest. */
   readonly markOf?: (answer: SubmissionAnswer) => string | undefined;
+  /** The caller's own display for an answer (a company answer as the company's RecordChip); undefined keeps the rest. */
+  readonly displayOf?: (answer: SubmissionAnswer) => ReactNode;
 }
 
 /** The answers in their question order, stacked, each label then its answer. */
-export function AnswerList({ answers, markOf }: AnswerListProps) {
+export function AnswerList({ answers, markOf, displayOf }: AnswerListProps) {
   return (
     <DescriptionList
       layout="stacked"
@@ -118,7 +141,7 @@ export function AnswerList({ answers, markOf }: AnswerListProps) {
         return {
           id: answer.questionId,
           term: mark === undefined ? answer.label : `${answer.label} · ${mark}`,
-          description: answerValue(answer),
+          description: displayOf?.(answer) ?? answerValue(answer),
           ...(answerText(answer) === '' ? { isPlaceholder: true } : {}),
           ...(copy === undefined ? {} : { copy }),
         };

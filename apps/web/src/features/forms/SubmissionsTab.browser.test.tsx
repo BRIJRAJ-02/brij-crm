@@ -192,9 +192,11 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     await expect.poll(() => app.router.state.location.href).toContain(`submission=${id(2)}`);
   });
 
-  it('deletes in one click, asking nothing, and Undo puts it back and opens it again (forms fixes 2)', async () => {
+  it('deletes from ⋯ asking nothing, and Undo puts it back and opens it again (forms fixes 2, lane 3c)', async () => {
     const app = await show(OPEN);
-    await userEvent.click(page.getByRole('button', { name: 'Delete', exact: true }));
+    // Delete sits in the footer's ⋯ (lane 3c): the footer's end holds the one primary.
+    await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'More actions' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Delete' }));
     expect(page.getByRole('button', { name: 'Delete submission' }).query()).toBeNull();
     expect(calls).toEqual([`delete ${id(1)}`]);
     await expect.element(page.getByText('Submission deleted.')).toBeVisible();

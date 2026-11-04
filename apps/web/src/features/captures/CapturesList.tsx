@@ -39,6 +39,8 @@ export interface CapturesListProps {
   readonly onRetry: () => void;
   /** The tab's dialogs (New, Delete), drawn in every state. */
   readonly dialogs?: ReactNode;
+  /** Beside the search at the bar's end, while there are cards: Forms' sort. */
+  readonly toolbarActions?: ReactNode;
 }
 
 /**
@@ -56,6 +58,7 @@ export function CapturesList({
   errorTitle,
   onRetry,
   dialogs,
+  toolbarActions,
 }: CapturesListProps) {
   const slot = useCapturesToolbarSlot();
   const [query, setQuery] = useState('');
@@ -83,6 +86,7 @@ export function CapturesList({
                 onQueryChange={setQuery}
                 size="sm"
                 isSearchDisabled={isBusy}
+                {...(toolbarActions === undefined ? {} : { actions: toolbarActions })}
               />,
               slot,
             )}

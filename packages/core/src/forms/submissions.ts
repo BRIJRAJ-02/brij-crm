@@ -14,6 +14,7 @@ import {
   SUBMISSION_SUMMARY_QUESTIONS,
   SUBMISSIONS_PAGE,
   type FormDocument,
+  type FormQuestion,
   type SubmissionAnswer,
   type SubmissionCrm,
   type SubmissionPage,
@@ -147,7 +148,11 @@ const verdictOf = (spam: unknown): SubmissionSummary['verdict'] => {
  * checked on its own object, read from the record itself: a form's target can change between versions, and
  * Add to CRM files with the live one, so the records of one form's submissions may sit on several objects.
  */
-export async function visibleRows(tx: WorkspaceTx, scope: EngineScope, rows: readonly Row[]): Promise<readonly Row[]> {
+export async function visibleRows<T extends Pick<Row, 'mainRecordId'>>(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  rows: readonly T[],
+): Promise<readonly T[]> {
   const manages = can(scope.access, 'forms.manage');
   const withRecord = [...new Set(rows.flatMap((row) => (row.mainRecordId === null ? [] : [row.mainRecordId])))];
   const found =
@@ -182,21 +187,36 @@ export async function displays(
  * is absent). A filed question's attribute is on its version's target; a version that keeps submissions
  * only files none.
  */
-export function answersOf(scope: EngineScope, document: FormDocument, stored: unknown): SubmissionAnswer[] {
+/**
+ * Whether a question's answer is hidden from the reader (AC-573): it is saved on a field they may not see, or on the
+ * deal (forms fixes 2) when they can't read Deals or that field. Submissions leaves such an answer out, and so does
+ * Analytics.
+ */
+export function answerHidden(scope: EngineScope, document: FormDocument, question: FormQuestion): boolean {
+  const attributeId = question.filedOn?.attributeId;
+  if (attributeId === undefined) return false;
+  const on =
+    question.filedOn?.objectRole === 'deal' ? document.targets.deal?.objectId : document.targets.main?.objectId;
+  return on === undefined || fieldLevel(scope.access, { id: attributeId, objectId: on }) === 'hidden';
+}
+
+export function answersOf(
+  scope: EngineScope,
+  document: FormDocument,
+  stored: unknown,
+  options: { readonly withSkipped?: boolean } = {},
+): SubmissionAnswer[] {
   const answers = record(stored);
-  const objectId = document.targets.main?.objectId;
   return document.questions.flatMap((question): SubmissionAnswer[] => {
-    if (!Object.hasOwn(answers, question.key)) return [];
+    // A question the visitor skipped is left out, unless the reader asked for every question (one submission's
+    // panel says "No answer" for it); a hidden one is a link's tag, never a question someone skipped.
+    if (!Object.hasOwn(answers, question.key) && (options.withSkipped !== true || question.answerType === 'hidden')) {
+      return [];
+    }
     const attributeId = question.filedOn?.attributeId;
     // An answer saved on the deal (forms fixes 2) is read as the deal's field, so a reader without Deals, or with
     // that field hidden, never sees it.
-    const on = question.filedOn?.objectRole === 'deal' ? document.targets.deal?.objectId : objectId;
-    if (
-      attributeId !== undefined &&
-      (on === undefined || fieldLevel(scope.access, { id: attributeId, objectId: on }) === 'hidden')
-    ) {
-      return [];
-    }
+    if (answerHidden(scope, document, question)) return [];
     return [
       {
         questionId: question.id,
@@ -204,7 +224,7 @@ export function answersOf(scope: EngineScope, document: FormDocument, stored: un
         label: question.label,
         answerType: question.answerType,
         ...(attributeId === undefined ? {} : { attributeId }),
-        value: answers[question.key],
+        value: Object.hasOwn(answers, question.key) ? answers[question.key] : null,
       },
     ];
   });
@@ -432,7 +452,7 @@ export async function viewIn(
   const [visible] = await visibleRows(tx, scope, [row]);
   if (visible === undefined) throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
-  const answers = version === undefined ? [] : answersOf(scope, version.document, row.answers);
+  const answers = version === undefined ? [] : answersOf(scope, version.document, row.answers, { withSkipped: true });
   const touched = await tx
     .select({
       recordId: formSubmissionRecords.recordId,

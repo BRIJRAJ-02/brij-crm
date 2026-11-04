@@ -778,12 +778,81 @@ describe('analytics (AC-6320, AC-6321)', () => {
     const w = await workspace();
     const form = await stepsForm(w);
     const read = await formAnalytics(w.scope, { formId: form.id, range: 30 });
-    expect(read.totals).toEqual({ views: 0, starts: 0, completions: 0 });
+    expect(read.totals).toEqual({ views: 0, starts: 0, completions: 0, submissions: 0 });
     expect(read.byDay).toEqual([]);
     expect(read.bySource).toEqual([]);
     // Every question still has a row, all zero, so the tab draws the form's shape rather than nothing.
     expect(read.byQuestion).toHaveLength(4);
     expect(read.byQuestion.every((row) => row.reached === 0 && row.leftHere === 0)).toBe(true);
+    expect(read.countingSince).toBeUndefined();
+  });
+
+  /** The steps form with a choice question after the note, so the Answers section has bars to count. */
+  const withPlan = (document: FormDocument): FormDocument => ({
+    ...document,
+    questions: [
+      ...document.questions,
+      question({ id: 'plan', key: 'plan', label: 'Which plan?', answerType: 'choice', choices: ['Basic', 'Pro'] }),
+    ],
+  });
+
+  it('counts stored submissions with no visit counted, and reads each question’s answers (lane 3c)', async () => {
+    const w = await workspace();
+    const form = await stepsForm(w, withPlan);
+    for (const [at, plan] of ['Pro', 'Basic', 'Pro'].entries()) {
+      await submit(
+        form.publicKey,
+        body({ name: `Visitor ${String(at)}`, email: `v${String(at)}@example.com`, why: `Reason ${String(at)}`, plan }),
+      );
+    }
+    const read = await formAnalytics(w.scope, { formId: form.id, range: 30 });
+    // Three submissions the Submissions tab lists, though no visit was ever counted: never "0 finished".
+    expect(read.totals).toMatchObject({ views: 0, completions: 0, submissions: 3 });
+    const plan = read.answers.find((answer) => answer.questionId === 'plan');
+    expect(plan).toMatchObject({ responses: 3 });
+    expect(plan?.choices).toEqual([
+      { value: 'Pro', count: 2 },
+      { value: 'Basic', count: 1 },
+    ]);
+    const why = read.answers.find((answer) => answer.questionId === 'why');
+    expect(why?.responses).toBe(3);
+    expect(why?.latest).toEqual(['Reason 2', 'Reason 1', 'Reason 0']);
+    // An email is a contact: its card counts the answers, so the form's numbering holds, and never lists one.
+    const emailQuestion = read.answers.find((answer) => answer.questionId === 'email');
+    expect(emailQuestion).toEqual({ questionId: 'email', responses: 3 });
+    expect(JSON.stringify(read)).not.toContain('@example.com');
+  });
+
+  it('leaves out a question saved on a field hidden from the reader, and submissions they can’t see', async () => {
+    const w = await workspace();
+    const form = await stepsForm(w, withPlan);
+    await submit(form.publicKey, body({ name: 'Grace Hopper', email: 'grace@example.com', why: 'Hi', plan: 'Pro' }));
+    const nameField = form.live?.questions.find((each) => each.key === 'name')?.filedOn?.attributeId;
+    expect(nameField).toBeDefined();
+    // An admin whose rules hide the field the name is saved on (AC-573): no card for it, and the name never shows.
+    const nameHidden = rescope(w.scope, {
+      role: 'admin',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'admin' },
+            target: { type: 'attribute', objectId: w.people, attributeId: nameField ?? '' },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const hidden = await formAnalytics(nameHidden, { formId: form.id, range: 30 });
+    expect(hidden.answers.some((answer) => answer.questionId === 'name')).toBe(false);
+    expect(JSON.stringify(hidden)).not.toContain('Grace Hopper');
+    expect(hidden.answers.find((answer) => answer.questionId === 'plan')?.responses).toBe(1);
+    // A member who may not manage forms sees none of a submission with no record yet, as Submissions hides it.
+    const member = rescope(w.scope, { role: 'member' });
+    const theirs = await formAnalytics(member, { formId: form.id, range: 30 });
+    expect(theirs.totals.submissions).toBe(0);
+    expect(theirs.answers.every((answer) => answer.responses === 0)).toBe(true);
+    expect(JSON.stringify(theirs)).not.toContain('Hi');
   });
 });
 

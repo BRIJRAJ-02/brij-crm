@@ -159,6 +159,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
     ...((count?.review ?? 0) === 0 ? {} : { reviewCount: count?.review }),
     ...(count?.last === undefined || count.last === null ? {} : { lastSubmissionAt: count.last }),
     submissionCount: count?.total ?? 0,
+    questionCount: draft.document.questions.filter((question) => question.answerType !== 'hidden').length,
     updatedAt: form.updatedAt,
     createdAt: form.createdAt,
     draftNumber: draft.number,
@@ -240,6 +241,11 @@ export async function listForms(
           number | null
         >`(select v.number from ${formVersions} v where v.workspace_id = ${forms.workspaceId} and v.id = ${forms.liveVersionId})`,
         updatedAt: sql<string>`${millis('forms.updated_at')}`,
+        // The draft's questions, a hidden one left out (a link's tag, not something asked): the card's meta line.
+        questionCount: sql<number>`(select count(*)::int from ${formVersions} v,
+          jsonb_array_elements(coalesce(v.document -> 'questions', '[]'::jsonb)) q
+          where v.workspace_id = ${forms.workspaceId} and v.id = ${forms.draftVersionId}
+            and q ->> 'answerType' is distinct from 'hidden')`,
       })
       .from(forms)
       .where(input.archived ? eq(forms.status, 'archived') : ne(forms.status, 'archived'))
@@ -264,6 +270,7 @@ export async function listForms(
         ...((count?.review ?? 0) === 0 ? {} : { reviewCount: count?.review }),
         ...(count?.last === undefined || count.last === null ? {} : { lastSubmissionAt: count.last }),
         submissionCount: count?.total ?? 0,
+        questionCount: row.questionCount,
         updatedAt: row.updatedAt,
       };
     });

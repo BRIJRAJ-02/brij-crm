@@ -41,7 +41,8 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { generalSettingsHref } from '../settings/nav.ts';
+import { useCan } from '../workspace/WorkspacePage.tsx';
+import { KeepSubmissionsRow } from './KeepSubmissions.tsx';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
@@ -292,7 +293,8 @@ export function SettingsTab({
   onSettingsChange,
   keepMonths,
 }: SettingsTabProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const canChangeWorkspace = useCan('workspace.manage');
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
 
@@ -455,7 +457,9 @@ export function SettingsTab({
   };
 
   return (
-    <SettingsStack width="readable">
+    // The full width Settings › General uses (lane 3c): the labels at the start, the controls at the end, no dead
+    // column beside a 780px one.
+    <SettingsStack>
       <SettingsSection title={strings.groupForm}>
         {isPublished && (
           <>
@@ -492,7 +496,8 @@ export function SettingsTab({
                 onSubmit={settings.leaveAddress}
                 {...(linkError === undefined ? {} : { error: linkError })}
               />
-              <CopyButton value={link} label={strings.copyLink} isIconOnly />
+              {/* At the field's own height: one control height on the row (lane 3c). */}
+              <CopyButton value={link} label={strings.copyLink} isIconOnly size="lg" />
             </SettingsRow>
           </>
         )}
@@ -783,12 +788,21 @@ export function SettingsTab({
       </SettingsSection>
       <SettingsSection title={strings.groupAnswers}>
         {/* How long answers are kept is the workspace's (Settings › General); the form says it, and where to change it. */}
+        {/* The workspace's own setting, under its own name, as a field height Select (lane 3c): it was a 26px
+            button off to Settings › General among field height controls. */}
         {keepMonths !== undefined && (
-          <SettingsRow title={strings.keptRow} meta={tip(strings.keptRow, strings.keptHelp)}>
-            <ButtonLink variant="secondary" href={generalSettingsHref(slug)}>
-              {keepMonths === null ? strings.keptForever : strings.keptMonths(keepMonths)}
-            </ButtonLink>
-          </SettingsRow>
+          <KeepSubmissionsRow
+            data={data}
+            slug={slug}
+            months={keepMonths}
+            canChange={canChangeWorkspace && !isReadOnly}
+            onSaved={(message, undo) => {
+              toasts.toast({ tone: 'success', message, action: { label: strings.undo, onAction: undo } });
+            }}
+            onFailed={(message) => {
+              toasts.toast({ tone: 'danger', message });
+            }}
+          />
         )}
         {isPublished && (
           // Review opens where something waits: Needs review first, else Spam; with neither, it says so instead of
@@ -798,14 +812,15 @@ export function SettingsTab({
             meta={tip(strings.spamRow, strings.spamSummary)}
             {...(form.reviewCount === undefined && form.spamCount === 0 ? { description: strings.spamNone } : {})}
           >
-            {(form.reviewCount !== undefined || form.spamCount > 0) && (
-              <ButtonLink
-                href={`${formHref(slug, form.id, 'submissions')}&state=${form.reviewCount === undefined ? 'spam' : 'needs_review'}`}
-                variant="secondary"
-              >
-                {strings.spamReview}
-              </ButtonLink>
-            )}
+            {/* Review opens where something waits; with nothing caught, View spam still opens the filter, so where
+                spam goes is never a guess (lane 3c). At the field's height, as every control here. */}
+            <ButtonLink
+              href={`${formHref(slug, form.id, 'submissions')}&state=${form.reviewCount === undefined ? 'spam' : 'needs_review'}`}
+              variant="secondary"
+              size="lg"
+            >
+              {form.reviewCount !== undefined || form.spamCount > 0 ? strings.spamReview : strings.spamView}
+            </ButtonLink>
           </SettingsRow>
         )}
       </SettingsSection>

@@ -72,6 +72,8 @@ export const FormSummary = z.object({
   lastSubmissionAt: Timestamp.optional(),
   /** Every stored submission, counted up to `FORM_COUNT_CAP`. */
   submissionCount: z.number().int().min(0),
+  /** The draft's questions, hidden ones left out: the list card's meta line ("5 questions"). */
+  questionCount: z.number().int().min(0).optional(),
   updatedAt: Timestamp,
 });
 /** A form card in the list. */

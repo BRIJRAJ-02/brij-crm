@@ -1,7 +1,9 @@
 // Brief
-// Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links, with their submissions and whether they take more (spec 0023).
-// Main task: open a form, make a new one at once, copy its link, or pause and resume it from its switch.
-// Leaves out: anything inside one form (its builder), and archived forms (a later pass).
+// Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links, each with one meta line (its
+// questions, when it was edited, its submissions; Klaviyo's list) and its state as a badge (spec 0023; lane 3c).
+// Main task: open a form, make a new one at once, copy its link, or open its submissions; sort by Updated or Name.
+// Leaves out: anything inside one form (its builder), archived forms (a later pass), and a one-click off switch:
+// pausing ends something, so it sits in ⋯ and asks first.
 import { isDataError, type FormSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
@@ -13,6 +15,8 @@ import {
   MenuSeparator,
   MenuTrigger,
   formatRelative,
+  Popover,
+  SortChip,
   SpotIllustration,
   Tooltip,
   useFormatSettings,
@@ -20,13 +24,13 @@ import {
   type LinkGridCard,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { useCapturesCreate } from '../captures/create.tsx';
 import { pageHeading } from '../navigation/focus.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
-import { DeleteFormDialog } from './FormConfirms.tsx';
+import { DeleteFormDialog, PauseFormDialog } from './FormConfirms.tsx';
 import { formHref } from './paths.ts';
 import { hasNewAnswers } from './seen.ts';
 import { strings } from './strings.ts';
@@ -45,28 +49,83 @@ export interface FormsScreenProps {
 }
 
 /**
- * A form's facts: what to do first while it is a draft; then its submissions, with spam when there is some
- * ("12 submissions · 2 spam"), or "No submissions yet".
+ * A form's meta line (lane 3c, Klaviyo's list): its questions, when it was edited, and its submissions ("5 questions
+ * · edited 2h ago · 4 submissions"); a draft says no submissions, since it has taken none. Spam is left out, as
+ * Submissions' All leaves it out (forms fix a8): the card and the list it opens agree.
  */
-function factsOf(form: FormSummary, last: string | undefined): readonly string[] {
-  // A draft's badge (Not published) and its Edit say it all: no line repeating them.
-  if (form.liveVersionNumber === undefined) return [];
-  if (form.submissionCount === 0) return [strings.noSubmissionsYet];
-  // How many, and when the last came (forms fix a9, Tally's and Typeform's lists); spam is counted in Submissions.
-  // Spam left out, as Submissions' All leaves it out (forms fix a8): the card and the list it opens agree.
+function factsOf(form: FormSummary, edited: string): readonly string[] {
   const real = Math.max(form.submissionCount - form.spamCount, 0);
-  if (real === 0) return [strings.noSubmissionsYet];
-  return [strings.submissionCount(real), ...(last === undefined ? [] : [strings.lastAnswer(last)])];
+  return [
+    ...(form.questionCount === undefined ? [] : [strings.questionCount(form.questionCount)]),
+    strings.editedAgo(edited),
+    ...(form.liveVersionNumber === undefined
+      ? []
+      : [real === 0 ? strings.noSubmissionsYet : strings.submissionCount(real)]),
+  ];
 }
 
 /**
- * Its badge: Not published until its first publish; Paused once paused (forms fix b2: a muted card with an
- * unlabelled switch didn't say it); New when an answer came since the reader last opened its Submissions.
+ * Its badge: Draft until its first publish (a neutral badge, never a greyed title; lane 3c); Paused once paused;
+ * New submissions when one came since the reader last opened its Submissions.
  */
 function badgeOf(form: FormSummary, isNew: boolean): { readonly badge?: string } {
-  if (form.liveVersionNumber === undefined) return { badge: strings.notPublishedYet };
+  if (form.liveVersionNumber === undefined) return { badge: strings.draftBadge };
   if (form.status === 'paused') return { badge: strings.notAccepting };
   return isNew ? { badge: strings.newAnswers } : {};
+}
+
+/** How the list is sorted: by when each form changed, newest first, or by name, A to Z. */
+type FormSort = 'updated' | 'name';
+
+/** The forms in the order picked; the server's order (newest first) breaks a tie. */
+function sortForms(forms: readonly FormSummary[], sort: FormSort, locale: string): readonly FormSummary[] {
+  const collator = new Intl.Collator(locale, { sensitivity: 'base', numeric: true });
+  return [...forms].sort((a, b) =>
+    sort === 'name' ? collator.compare(a.name, b.name) : b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
+
+/**
+ * The list's sort, as the record lists say theirs (SortChip, spec 0020): "Updated · descending", pressing it opens
+ * the two choices.
+ */
+function FormsSort({ value, onChange }: { readonly value: FormSort; readonly onChange: (sort: FormSort) => void }) {
+  const anchor = useRef<HTMLSpanElement>(null);
+  const [isOpen, setOpen] = useState(false);
+  return (
+    <>
+      <SortChip
+        ref={anchor}
+        attribute={value === 'name' ? strings.sortName : strings.sortUpdated}
+        direction={value === 'name' ? 'ascending' : 'descending'}
+        onPress={() => {
+          setOpen(true);
+        }}
+      />
+      <Popover triggerRef={anchor} isOpen={isOpen} onOpenChange={setOpen} placement="bottom end" width="menu">
+        <Menu
+          label={strings.sortLabel}
+          isInline
+          // A menu in a popover of its own, which no MenuTrigger focuses: the picked sort's row takes focus as it opens.
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus
+          autoFocus="first"
+          selectionMode="single"
+          selectedKeys={new Set([value])}
+          onAction={(key) => {
+            if (key === 'updated' || key === 'name') onChange(key);
+            setOpen(false);
+          }}
+        >
+          <MenuItem id="updated" icon="arrow-down-wide-narrow">
+            {strings.sortUpdated}
+          </MenuItem>
+          <MenuItem id="name" icon="arrow-up-narrow-wide">
+            {strings.sortName}
+          </MenuItem>
+        </Menu>
+      </Popover>
+    </>
+  );
 }
 
 /** Captures › Forms: New form, then one card per form, newest change first, read from the data layer's held list. */
@@ -78,6 +137,8 @@ export function FormsScreen({ slug }: FormsScreenProps) {
   const now = useNow();
   const create = useCapturesCreate();
   const [deleting, setDeleting] = useState<FormSummary | undefined>(undefined);
+  const [pausing, setPausing] = useState<FormSummary | undefined>(undefined);
+  const [sort, setSort] = useState<FormSort>('updated');
 
   // A refusal says what was put back, then why.
   const failed = (what: string) => (error: unknown) => {
@@ -108,7 +169,9 @@ export function FormsScreen({ slug }: FormsScreenProps) {
     );
   };
 
-  const forms = list.status === 'ready' ? list.items : [];
+  const items = list.status === 'ready' ? list.items : undefined;
+  // Sorted when the list, the pick or the language changes, not on every tick of the clock the cards read.
+  const forms = useMemo(() => (items === undefined ? [] : sortForms(items, sort, locale)), [items, sort, locale]);
   const cards: readonly LinkGridCard[] = forms.map((form) => {
     const isPending = list.status === 'ready' && list.pendingIds.has(form.id);
     const isPublished = form.liveVersionNumber !== undefined;
@@ -117,33 +180,14 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       id: form.id,
       title: form.name,
       href: formHref(slug, form.id),
-      // No colour mark: a form has no colour of its own, and one picked from its id identified nothing (T3).
-      facts: factsOf(
-        form,
-        form.lastSubmissionAt === undefined
-          ? undefined
-          : formatRelative(form.lastSubmissionAt, now, locale, timeZone, dateFormat),
-      ),
-      // A draft has no link yet: its generated address only becomes real on the first publish.
-      ...(isPending ? { address: strings.addressPending } : isPublished ? { address: `/f/${form.publicKey}` } : {}),
+      // No colour mark: a form has no colour of its own, and one picked from its id identified nothing (T3). No
+      // address either (lane 3c): the meta line fills the card, and a slug cut to "/f/booking-i…" said nothing; Copy
+      // link copies it whole.
+      facts: factsOf(form, formatRelative(form.updatedAt, now, locale, timeZone, dateFormat)),
       ...(isPending ? { badge: strings.copying } : badgeOf(form, hasNewAnswers(slug, form, now))),
-      isOff: !isLive,
+      // Only a paused form reads quieter: a draft says Draft in its badge and keeps its title's full weight.
+      isOff: form.status === 'paused',
       isPending,
-      // Accepting is a published form's: a draft shows no switch, its badge and facts say what to do.
-      ...(isPublished || isPending
-        ? {
-            toggle: {
-              label: strings.acceptingOf(form.name),
-              isSelected: isLive,
-              onChange: (isOn: boolean) => {
-                setLive(form, isOn ? 'live' : 'paused');
-              },
-              isDisabled: !canManage,
-              disabledReason: strings.manageOnly,
-              hint: isLive ? strings.accepting : strings.notAccepting,
-            },
-          }
-        : {}),
       // Not published, there is nothing to copy or open: the badge says why.
       ...(isPublished ? { copyValue: data.forms.hostedUrl(form.publicKey) } : {}),
       actions: (
@@ -155,19 +199,21 @@ export function FormsScreen({ slug }: FormsScreenProps) {
               {strings.editDraft}
             </ButtonLink>
           )}
-          {/* Its answers, one press from the list (forms fix a9): the count names them, this opens them. */}
+          {/* Its submissions, one press from the list (forms fix a9), named in words (lane 3c): an inbox icon alone
+              read as mail. */}
           {isPublished && !isPending && (
-            <Tooltip content={strings.openSubmissions}>
-              <ButtonLink
-                variant="ghost"
-                size="lg"
-                icon="inbox"
-                label={strings.openSubmissionsOf(form.name)}
-                href={formHref(slug, form.id, 'submissions')}
-              />
-            </Tooltip>
+            <ButtonLink
+              size="lg"
+              icon="inbox"
+              label={strings.openSubmissionsOf(form.name)}
+              href={formHref(slug, form.id, 'submissions')}
+            >
+              {strings.openSubmissions}
+            </ButtonLink>
           )}
-          {isLive && (
+          {/* Open sits in ⋯ for those who have it, so a phone's card holds Copy link, Submissions and ⋯ on one line
+              (lane 3c); a reader with no menu keeps it here. */}
+          {isLive && !canManage && (
             <Tooltip content={strings.openInNewTab} isDisabled={isPending}>
               <Button
                 variant="ghost"
@@ -195,8 +241,27 @@ export function FormsScreen({ slug }: FormsScreenProps) {
                 onAction={(key) => {
                   if (key === 'duplicate') duplicate(form);
                   if (key === 'delete') setDeleting(form);
+                  if (key === 'pause') setPausing(form);
+                  if (key === 'resume') setLive(form, 'live');
+                  if (key === 'open') globalThis.open(data.forms.hostedUrl(form.publicKey), '_blank', 'noopener');
                 }}
               >
+                {isLive ? (
+                  <MenuItem id="open" icon="external-link">
+                    {strings.openInNewTab}
+                  </MenuItem>
+                ) : null}
+                {/* Pausing ends something, so it asks first; resuming ends nothing and goes at once (lane 3c). */}
+                {isLive ? (
+                  <MenuItem id="pause" icon="pause">
+                    {strings.pauseForm}
+                  </MenuItem>
+                ) : null}
+                {isPublished && form.status === 'paused' ? (
+                  <MenuItem id="resume" icon="play">
+                    {strings.resumeForm}
+                  </MenuItem>
+                ) : null}
                 <MenuItem id="duplicate" icon="copy">
                   {strings.duplicate}
                 </MenuItem>
@@ -233,8 +298,29 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       onRetry={() => {
         data.forms.view(slug).reload();
       }}
+      toolbarActions={<FormsSort value={sort} onChange={setSort} />}
       dialogs={
         <>
+          <PauseFormDialog
+            data={data}
+            slug={slug}
+            form={pausing}
+            onClose={() => setPausing(undefined)}
+            onDone={(form) => {
+              setPausing(undefined);
+              toasts.toast({
+                tone: 'success',
+                message: capturesStrings.pausedToast(form.name),
+                action: {
+                  label: capturesStrings.undo,
+                  onAction: () => {
+                    const found = list.status === 'ready' ? list.items.find((each) => each.id === form.id) : undefined;
+                    if (found !== undefined) setLive(found, 'live');
+                  },
+                },
+              });
+            }}
+          />
           <DeleteFormDialog
             data={data}
             slug={slug}

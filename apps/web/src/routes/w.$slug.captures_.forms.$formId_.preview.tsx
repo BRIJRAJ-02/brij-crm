@@ -1,12 +1,25 @@
 import { isDataError } from '@crm/data';
 import { previewOf } from '@crm/data/forms';
-import { Callout, EmptyState, HostedFormPreview } from '@crm/ui';
+import {
+  Button,
+  ButtonLink,
+  Callout,
+  EmptyState,
+  HostedFormPreview,
+  PreviewPage,
+  SectionBar,
+  SegmentedControl,
+} from '@crm/ui';
 import { createFileRoute } from '@tanstack/react-router';
+import { useState } from 'react';
 import { BrandedFormPreview } from '../features/forms/FormBrand.tsx';
+import { formHref } from '../features/forms/paths.ts';
 import { strings } from '../features/forms/strings.ts';
 
-// A draft opened in a new tab to try (spec 0023, The editor: layout): the hosted page's own renderer, marked
-// "Preview, not live", checking answers and sending nothing. Outside the app frame, as a visitor would see it.
+// A draft opened in a new tab to try (spec 0023, The editor: layout): the hosted page's own renderer, checking answers
+// and sending nothing. Outside the app frame, as a visitor would see it, under one bar (lane 3c): Back to editor, the
+// form's name, and Desktop or Phone; then "Preview · nothing is sent", and the page in the height left, so its foot
+// ("Powered by") is never cut off.
 export const Route = createFileRoute('/w/$slug/captures_/forms/$formId_/preview')({
   loader: async ({ context, params }) => {
     try {
@@ -31,25 +44,73 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId_/preview'
   component: PreviewRoute,
 });
 
+/** The two ways to look at it: the window's width, or a phone's. */
+type Device = 'desktop' | 'phone';
+
 function PreviewRoute() {
   const { form, brand } = Route.useLoaderData();
-  const { slug } = Route.useParams();
+  const { slug, formId } = Route.useParams();
+  const [device, setDevice] = useState<Device>('desktop');
+  // Whether the editor opened this tab (its Preview), read once: then Back closes the tab.
+  const [opener] = useState(() => globalThis.opener !== null && globalThis.opener !== undefined);
   if (form === undefined) return <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>;
+  const shown = previewOf(form.draft, { key: form.publicKey });
   return (
     <main>
-      <Callout placement="banner" tone="info">
-        {strings.previewNotLive}
-      </Callout>
-      {form.draft.look.theme === 'brand' && brand !== undefined ? (
-        <BrandedFormPreview
-          brand={brand}
-          slug={slug}
-          form={previewOf(form.draft, { key: form.publicKey })}
-          mode="page"
-        />
-      ) : (
-        <HostedFormPreview form={previewOf(form.draft, { key: form.publicKey })} mode="page" />
-      )}
+      <PreviewPage
+        device={device}
+        bar={
+          <SectionBar
+            variant="bar"
+            isTitleQuiet
+            start={
+              // Opened from the editor's Preview, this tab closes back to it: a link here would open a second
+              // editor on the same draft. Reached any other way, it is a link to the editor.
+              opener ? (
+                <Button
+                  variant="ghost"
+                  icon="arrow-left"
+                  onPress={() => {
+                    globalThis.close();
+                  }}
+                >
+                  {strings.backToEditor}
+                </Button>
+              ) : (
+                <ButtonLink variant="ghost" icon="arrow-left" href={formHref(slug, formId)}>
+                  {strings.backToEditor}
+                </ButtonLink>
+              )
+            }
+            title={form.name}
+            end={
+              <SegmentedControl
+                label={strings.previewDevice}
+                size="compact"
+                value={device}
+                onChange={(next) => {
+                  if (next === 'desktop' || next === 'phone') setDevice(next);
+                }}
+                segments={[
+                  { value: 'desktop', label: strings.previewDesktop, icon: 'monitor' },
+                  { value: 'phone', label: strings.previewPhone, icon: 'smartphone' },
+                ]}
+              />
+            }
+          />
+        }
+        banner={
+          <Callout placement="banner" tone="info">
+            {strings.previewNotLive}
+          </Callout>
+        }
+      >
+        {form.draft.look.theme === 'brand' && brand !== undefined ? (
+          <BrandedFormPreview brand={brand} slug={slug} form={shown} mode="page" />
+        ) : (
+          <HostedFormPreview form={shown} mode="page" />
+        )}
+      </PreviewPage>
     </main>
   );
 }

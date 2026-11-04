@@ -614,6 +614,7 @@ export type {
   OnboardingRole,
   OnboardingTeamSize,
   FormAnalytics,
+  FormAnalyticsAnswer,
   FormAnalyticsRange,
   FormAttributeChoice,
   FormDocument,
@@ -1434,6 +1435,7 @@ function toFormSummary(form: FormView): FormSummary {
     spamCount: form.spamCount,
     ...(form.lastSubmissionAt === undefined ? {} : { lastSubmissionAt: form.lastSubmissionAt }),
     submissionCount: form.submissionCount,
+    ...(form.questionCount === undefined ? {} : { questionCount: form.questionCount }),
     updatedAt: form.updatedAt,
   };
 }
@@ -7890,6 +7892,7 @@ export function createDataLayer({
                 submissionsThisMonth: 0,
                 spamCount: 0,
                 submissionCount: 0,
+                ...(source.questionCount === undefined ? {} : { questionCount: source.questionCount }),
                 updatedAt: new Date().toISOString(),
               };
         return formLists.write(workspace, {

@@ -11,7 +11,8 @@ import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkPage } from '../LinkPage/LinkPage.tsx';
 import { HostedFormPreview } from '../HostedFormPreview/HostedFormPreview.tsx';
-import { EditorStatus, PhonePreview, PreviewFrame, PreviewLayout } from './PreviewLayout.tsx';
+import { SectionBar } from '../../molecules/SectionBar/SectionBar.tsx';
+import { EditorStatus, PhonePreview, PreviewFrame, PreviewLayout, PreviewPage } from './PreviewLayout.tsx';
 
 const FORM: PublicForm = {
   key: 'contact-us',
@@ -498,4 +499,49 @@ export const PageSize: Story = {
     const frame = await waitFor(() => canvas.getByTitle('Preview of Intro call'));
     await expect(frame).toHaveAttribute('tabindex', '-1');
   },
+};
+
+/**
+ * A form's Preview in a tab of its own (lane 3c): the bar, the banner, then the page in exactly the height left, so
+ * the form's foot ends at the window's foot; `device="phone"` draws it in the editors' phone.
+ */
+function PreviewPageExample({ device }: { readonly device: 'desktop' | 'phone' }) {
+  return (
+    <Stage height="page" width="fill">
+      <PreviewPage
+        device={device}
+        bar={
+          <SectionBar
+            variant="bar"
+            isTitleQuiet
+            start={
+              <Button variant="ghost" icon="arrow-left">
+                Back to editor
+              </Button>
+            }
+            title="Contact us"
+          />
+        }
+        banner={
+          <Callout placement="banner" tone="info">
+            Preview · nothing is sent
+          </Callout>
+        }
+      >
+        <HostedFormPreview form={FORM} mode="page" logo={LOGO} />
+      </PreviewPage>
+    </Stage>
+  );
+}
+
+export const PreviewPageDesktop: Story = {
+  render: () => <PreviewPageExample device="desktop" />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Contact us' })).toBeInTheDocument();
+    await expect(canvas.getByText('Preview · nothing is sent')).toBeInTheDocument();
+  },
+};
+
+export const PreviewPagePhone: Story = {
+  render: () => <PreviewPageExample device="phone" />,
 };
