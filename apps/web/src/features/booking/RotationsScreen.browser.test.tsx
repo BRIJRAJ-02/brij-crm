@@ -132,7 +132,7 @@ function layerWith(
       distribution: () => new Promise(() => undefined),
     },
     routing: { skills: { view: () => heldSkills(skills) } },
-    // Make a booking page (B-04) opens Add a booking page, which mints its page's id as it opens.
+    // Make a booking page (B-04) opens New booking page, which mints its page's id as it opens.
     bookingPages: { newId: () => '0199a6f2-0000-7000-8000-0000000000p1' },
     managedPages: { newId: () => '0199a6f2-0000-7000-8000-0000000000p2' },
     // Sharing (spec 0037, AC-1331): the group's editors, held, and set at once.
@@ -233,7 +233,10 @@ describe('New group, always in the bar', () => {
     await renderRoundRobin([{ ...SALES, pages: 0 }]);
     await expect.element(page.getByText('Fair · last 30 days · not on a booking page yet')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: strings.makePage }));
-    await expect.element(page.getByRole('dialog', { name: 'Add a booking page' })).toBeVisible();
+    // The bookings area's New booking page, on Round robin with this group (the bookings combine).
+    const dialog = page.getByRole('dialog', { name: 'New booking page' });
+    await expect.element(dialog).toBeVisible();
+    await expect.element(dialog.getByRole('radio', { name: /Round robin/ })).toBeChecked();
   });
 
   // AC-1382: the column arrives with the workspace's first skill, and only then. Asserted because the harness used
