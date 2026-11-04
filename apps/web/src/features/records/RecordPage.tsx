@@ -667,6 +667,7 @@ function RecordScreen({
         taskHref={taskHref}
         submissionHref={submissionHref}
         onAddPerson={addPerson}
+        {...(canAddTasks ? { onLogActivity: () => openLog('new') } : {})}
       />
     );
   } else if (tab === 'comments') {
