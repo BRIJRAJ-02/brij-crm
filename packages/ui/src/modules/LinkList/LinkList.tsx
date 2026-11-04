@@ -2,6 +2,7 @@ import { useState, type ComponentType, type ReactNode } from 'react';
 import { GridList, GridListItem } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
@@ -85,6 +86,12 @@ export interface LinkRow {
    * nothing under it moves when the figure lands. Ignored once `chips` has anything in it.
    */
   readonly areChipsPending?: boolean;
+  /**
+   * One quiet number at the row's end, before its badge and actions (a link page block's clicks): `text` is drawn
+   * ("12"), `label` is what a screen reader hears in its place ("12 clicks"). For a figure every row has, where a
+   * Badge under each title made the list twice as tall and as loud as its titles (owner, 5 November 2026).
+   */
+  readonly figure?: { readonly text: string; readonly label: string };
 }
 
 /** Props for LinkList. */
@@ -470,6 +477,13 @@ function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isComp
         </div>
       )}
       <div className={styles.end}>
+        {row.figure !== undefined && (
+          <span className={styles.figure}>
+            <Icon name="mouse-pointer-2" size="xs" tone="muted" />
+            <span aria-hidden>{row.figure.text}</span>
+            <VisuallyHidden>{row.figure.label}</VisuallyHidden>
+          </span>
+        )}
         {row.badge !== undefined && <Badge text={row.badge} />}
         {row.toggle !== undefined && <RowSwitch toggle={row.toggle} isPending={row.isPending === true} />}
         {row.actions !== undefined && row.actions !== null && (

@@ -53,6 +53,70 @@
     border-radius: var(--radius-xs);
   }
 
+  /* variant="row": one line, a small picture, the label, and its buttons at the end. Still a drop target, so a
+     dragged file rings it in the accent as the zone does. */
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-block-size: var(--size-row);
+    padding-block: var(--space-4);
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--radius-md);
+    color: var(--text);
+    outline: none;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .row[data-drop-target] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .row[data-focus-visible] {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* What is there, small and wide (a cover or a share picture is wide), or the picture mark on a quiet tile. */
+  .thumb {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: calc(var(--size-row) * 2);
+    block-size: var(--size-row);
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--surface-subtle);
+  }
+
+  .thumbImage {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .rowLabel {
+    flex: 1;
+    min-inline-size: 0;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .rowActions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .row[data-disabled] .rowLabel {
+    color: var(--text-tertiary);
+  }
+
   .label {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);

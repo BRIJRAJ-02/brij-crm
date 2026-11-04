@@ -78,6 +78,35 @@ export const LabelCollapsible: Story = {
   },
 };
 
+/**
+ * A pill whose words are the address itself (a link page's bar, 5 November 2026): collapsed or not, its `name`
+ * says what pressing it does, starting with the words it shows.
+ */
+export const AddressPill: Story = {
+  // New after the last baselines were shot on CI; its screenshot joins with the next baseline run.
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'timefix.com/ada',
+    name: 'timefix.com/ada, copy link',
+    isRound: true,
+    isLabelCollapsible: true,
+    value: 'https://timefix.com/ada',
+  },
+  render: (args) => (
+    <Stage direction="column">
+      <CopyButton {...args} />
+      <Stage width="phone">
+        <CopyButton {...args} />
+      </Stage>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const [wide, narrow] = canvas.getAllByRole('button', { name: 'timefix.com/ada, copy link' });
+    await expect(wide).toHaveTextContent('timefix.com/ada');
+    await expect(narrow).toBeInTheDocument();
+  },
+};
+
 /** Refused: an error toast says to copy it by hand, and the label stays Copy link. */
 export const Failed: Story = {
   render: (args) => (
