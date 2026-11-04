@@ -114,6 +114,8 @@ export const strings = {
   willMakeUnique: (field: string, objectName: string) =>
     `${field} becomes unique on ${objectName}: one record per email.`,
   changedBy: (name: string) => `${name} changed this form.`,
+  changedByMe: 'You changed this form in another tab.',
+  loadMine: 'Load that version',
   someoneChanged: 'Someone else changed this form.',
   loadTheirs: 'Load their version',
   saveFailed: 'Your last change didn’t save. Check your connection; it saves again as you go on.',

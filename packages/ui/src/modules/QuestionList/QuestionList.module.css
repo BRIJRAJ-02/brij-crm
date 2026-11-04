@@ -55,6 +55,17 @@
     .wide {
       display: none;
     }
+
+    /* On a phone the header's actions go under the heading rather than running off the row (Logic, Add a step,
+       Add a question). */
+    .header {
+      flex-wrap: wrap;
+    }
+
+    .actions {
+      flex-wrap: wrap;
+      margin-inline-start: 0;
+    }
   }
 
   /* An open card's last row, under a hairline: a closing choice (Required)

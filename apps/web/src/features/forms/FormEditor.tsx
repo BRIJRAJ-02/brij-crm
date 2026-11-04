@@ -42,7 +42,7 @@ import {
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteFormDialog, DiscardChangesDialog, RetargetFormDialog, type RetargetAsk } from './FormConfirms.tsx';
 import { retargetStep } from './retarget.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
@@ -630,6 +630,8 @@ export function FormEditor(props: FormEditorProps) {
   };
 
   const changedBy = members.find((member) => member.id === form.draftSavedByMemberId)?.name;
+  // Saved by this person from another tab (critique c): never blamed on them as if someone else.
+  const isMine = useMyAccess()?.memberId === form.draftSavedByMemberId;
 
   const topBar = (
     <TopBar
@@ -755,8 +757,16 @@ export function FormEditor(props: FormEditorProps) {
         }}
       />
       {conflict && (
-        <Callout tone="warning" isAnnounced actions={<Button onPress={loadTheirs}>{strings.loadTheirs}</Button>}>
-          {changedBy === undefined ? strings.someoneChanged : strings.changedBy(changedBy)}
+        <Callout
+          tone="warning"
+          isAnnounced
+          actions={<Button onPress={loadTheirs}>{isMine ? strings.loadMine : strings.loadTheirs}</Button>}
+        >
+          {isMine
+            ? strings.changedByMe
+            : changedBy === undefined
+              ? strings.someoneChanged
+              : strings.changedBy(changedBy)}
         </Callout>
       )}
       {shown !== undefined && (

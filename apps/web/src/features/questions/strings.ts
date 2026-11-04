@@ -104,6 +104,10 @@ export const strings = {
   anyPicks: 'Any',
   offerOther: 'Offer Other, with a box to type in',
   hiddenDefault: 'Value when the link has none',
+  /** A hidden question's name (critique c): only you see it. */
+  hiddenPlaceholder: 'Name it, for example Source',
+  hiddenKey: 'Add to the link',
+  copyKey: 'Copy',
   hiddenDefaultHint: (key: string) => `Visitors never see it. Add ?${key}=… to the link to set it.`,
   // A form's steps as pages (spec 0063; T20, 5 November 2026: Tally's page breaks)
   /** Between two questions of one step, on hover or focus: one click starts a new step there. */

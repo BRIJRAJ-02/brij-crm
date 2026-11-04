@@ -1111,8 +1111,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         const name = question.label === '' ? strings.untitledQuestion : question.label;
         const locked = isLocked(question);
         // Show only if…: one click to a ready condition, while it has none and something before it to read.
+        // A hidden question is never shown, so it has no Show only if (critique c).
         const canShowIf =
-          !locked && question.showWhen === undefined && questionFacts(questions.slice(0, at)).length > 0;
+          !locked &&
+          question.answerType !== 'hidden' &&
+          question.showWhen === undefined &&
+          questionFacts(questions.slice(0, at)).length > 0;
         // Give points (Typeform's score, T20): on a form only, on a question that can score.
         const canScore =
           props.keptWith === 'submission' &&
@@ -1326,7 +1330,13 @@ function QuestionHead({
         isLabelHidden
         size="lg"
         isWrapping
-        placeholder={isConsent ? strings.consentPlaceholder : strings.questionPlaceholder}
+        placeholder={
+          isConsent
+            ? strings.consentPlaceholder
+            : question.answerType === 'hidden'
+              ? strings.hiddenPlaceholder
+              : strings.questionPlaceholder
+        }
         value={question.label}
         maxLength={200}
         isReadOnly={isReadOnly}
@@ -1708,16 +1718,20 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
       );
     case 'hidden':
       return (
-        <Field
-          label={strings.hiddenDefault}
-          hint={strings.hiddenDefaultHint(question.key)}
-          value={options.default ?? ''}
-          maxLength={200}
-          isReadOnly={isReadOnly}
-          onChange={(text) => {
-            onChange({ options: { default: text } });
-          }}
-        />
+        <>
+          {/* Its key, to copy into a link (critique c): ?source=newsletter fills it. */}
+          <Field label={strings.hiddenKey} variant="copy" copyLabel={strings.copyKey} value={`?${question.key}=`} />
+          <Field
+            label={strings.hiddenDefault}
+            hint={strings.hiddenDefaultHint(question.key)}
+            value={options.default ?? ''}
+            maxLength={200}
+            isReadOnly={isReadOnly}
+            onChange={(text) => {
+              onChange({ options: { default: text } });
+            }}
+          />
+        </>
       );
     default:
       return null;
