@@ -88,12 +88,9 @@ export const AsPage: Story = {
     await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
-    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
-    // Send another starts again, with focus on the form's headline.
-    await userEvent.click(canvas.getByRole('button', { name: 'Send another' }));
-    await waitFor(() =>
-      expect(canvas.getByRole('heading', { name: 'Fill this in and we will come back to you' })).toHaveFocus(),
-    );
+    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thanks, we got it.' })).toHaveFocus());
+    // Nothing to send again (T23).
+    await expect(canvas.queryByRole('button', { name: 'Send another' })).toBeNull();
   },
 };
 

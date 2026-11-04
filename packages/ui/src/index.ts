@@ -513,7 +513,11 @@ export {
   FormLayoutThumbnail,
   type FormLayoutThumbnailProps,
 } from './modules/HostedFormPreview/FormLayoutThumbnail.tsx';
-export { HostedFormPreview, type HostedFormPreviewProps } from './modules/HostedFormPreview/HostedFormPreview.tsx';
+export {
+  HostedFormPreview,
+  type HostedFormPreviewProps,
+  type PreviewTextChange,
+} from './modules/HostedFormPreview/HostedFormPreview.tsx';
 export {
   OptionsEditor,
   type OptionOutcome,

@@ -1,8 +1,55 @@
 /* HostedFormPreview: the form's own ground under it. The phone's screen stretches its one child to the frame's foot
    (PreviewLayout), so this ground, in the form's own look (`data-theme`), runs to the bottom of the phone instead
-   of stopping where a short form does over the app's surface (a light form in dark mode). */
+   of stopping where a short form does over the app's surface (a light form in dark mode). The headline and the
+   button take a press target laid over them when the builder edits words in place (`onTextChange`). */
 @layer components {
   .ground {
+    position: relative;
     background: var(--surface);
+  }
+
+  /* The layer the press targets sit in: over the inert preview, taking no room of its own. */
+  .edits {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /* One editable part: exactly over it, a dashed accent edge on hover, focus or while its popover is open, so the
+     words read as something to click, as Tally's do. */
+  .spot {
+    /* Where the part sits, set by the component from its measured box (zero until measured). */
+    --spot-top: 0;
+    --spot-left: 0;
+    --spot-width: 0;
+    --spot-height: 0;
+
+    position: absolute;
+    inset-block-start: calc(var(--spot-top) - var(--space-4));
+    inset-inline-start: calc(var(--spot-left) - var(--space-4));
+    inline-size: calc(var(--spot-width) + 2 * var(--space-4));
+    block-size: calc(var(--spot-height) + 2 * var(--space-4));
+    padding: 0;
+    border: var(--border-width-hairline) dashed transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    outline: none;
+    pointer-events: auto;
+    transition: border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .spot[data-open] {
+    border-color: var(--accent-line);
+  }
+
+  .spot[data-focus-visible] {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .spot:hover {
+      border-color: var(--accent-line);
+    }
   }
 }
