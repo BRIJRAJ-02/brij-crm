@@ -380,3 +380,17 @@ export function firstWords(line: string): string {
     .filter((word) => word !== '');
   return words.length <= FIRST_WORDS ? words.join(' ') : `${words.slice(0, FIRST_WORDS).join(' ')}…`;
 }
+
+/**
+ * Whether the builder warns that a form asks for a file where visitors can't upload one (forms fixes 2): a file or a
+ * signature question, and the api saying uploads are off here.
+ */
+export function uploadsOffFor(
+  target: Pick<FormTargetChoices, 'uploadsOff'>,
+  document: Pick<FormDocument, 'questions'>,
+) {
+  return (
+    target.uploadsOff === true &&
+    document.questions.some((question) => question.answerType === 'file' || question.answerType === 'signature')
+  );
+}

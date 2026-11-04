@@ -291,6 +291,11 @@ export const FormTargetChoices = z.object({
    * with Also create a deal on, a question may go on the deal itself (its Value, its Source). Absent otherwise.
    */
   deal: z.object({ objectId: Uuid, objectName: z.string(), items: z.array(FormAttributeChoice) }).optional(),
+  /**
+   * True where visitors can't upload files here (no file store set up, forms fixes 2): a form asking for a file
+   * says so before it goes live. Absent where uploads work.
+   */
+  uploadsOff: z.literal(true).optional(),
 });
 /** The target object and its attributes. */
 export type FormTargetChoices = z.infer<typeof FormTargetChoices>;

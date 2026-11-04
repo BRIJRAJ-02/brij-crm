@@ -32,9 +32,11 @@ import type { ApplyFormSettingsInput } from '@crm/contracts';
 export const formsRouter = member.forms.router({
   list: member.forms.list.handler(({ context, input }) => listForms(context.scope, { archived: input.archived })),
   get: member.forms.get.handler(({ context, input }) => getForm(context.scope, { formId: input.formId })),
-  attributes: member.forms.attributes.handler(({ context, input }) =>
-    formAttributes(context.scope, { formId: input.formId }),
-  ),
+  attributes: member.forms.attributes.handler(async ({ context, input }) => {
+    const choices = await formAttributes(context.scope, { formId: input.formId });
+    // Said where it is known: the store is the api's, not the core's (forms fixes 2).
+    return context.takesFormFiles ? choices : { ...choices, uploadsOff: true as const };
+  }),
   // A form's analytics (spec 0063, AC-6321): read only, and only for a form this member may see.
   analytics: member.forms.analytics.handler(({ context, input }) =>
     formAnalytics(context.scope, { formId: input.formId, range: input.range }),

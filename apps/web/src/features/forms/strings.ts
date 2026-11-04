@@ -359,6 +359,10 @@ export const strings = {
   settingsFailed: 'That didn’t save.',
 
   // Install tab
+  /** A form asking for a file where uploads are off (forms fixes 2). */
+  uploadsOffTitle: 'Files can’t be uploaded here yet',
+  uploadsOffText: 'Visitors can send the form, but not the file. Ask an admin to turn on file storage.',
+  publishedUploadsOff: 'Published. Files can’t be uploaded here yet, so visitors can’t attach one.',
   readOnlyTitle: 'You can view this form',
   /** In the bar, for a member who may only view a live form's answers (forms fix a10). */
   viewOnly: 'View only',

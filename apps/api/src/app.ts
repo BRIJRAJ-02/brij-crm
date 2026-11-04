@@ -523,6 +523,7 @@ export function createApp({
         webhooks,
         linkPageFetch,
         files: pictureFiles,
+        takesFormFiles: services.files !== undefined || env.BLOB_READ_WRITE_TOKEN !== undefined,
         appUrl: env.APP_URL,
         publicOrigins,
         bookingOrigin,

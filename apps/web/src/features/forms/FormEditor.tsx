@@ -63,6 +63,7 @@ import {
   withFlow,
   mintEndingId,
   withQuestions,
+  uploadsOffFor,
 } from './draft.ts';
 import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from './FormBrand.tsx';
 import { FlowView } from './FlowView.tsx';
@@ -552,7 +553,11 @@ export function FormEditor(props: FormEditorProps) {
           setJustLive(view);
           return;
         }
-        toasts.toast({ tone: 'success', message: strings.published });
+        toasts.toast(
+          view.live !== undefined && uploadsOffFor(target, view.live)
+            ? { tone: 'info', message: strings.publishedUploadsOff }
+            : { tone: 'success', message: strings.published },
+        );
         // Where answers are saved changed, and the form saves now: offer to save the earlier submissions the same way.
         if (filingChanged && view.live?.targets.main !== undefined && view.submissionCount > 0) {
           setSyncOffer(wasKeptOnly ? 'connected' : 'published');
@@ -827,6 +832,12 @@ export function FormEditor(props: FormEditorProps) {
       {/* On every tab but Settings, which says it beside the choice: visitors quietly get the message (late trap #53). */}
       {current !== 'settings' && form.live?.after.kind === 'booking' && (
         <AfterPageNotice slug={slug} formId={form.id} live={form.live} />
+      )}
+      {/* A form asking for a file where visitors can't upload one (forms fixes 2): said before it goes live. */}
+      {current === 'form' && canManage && uploadsOffFor(target, draft) && (
+        <Callout tone="warning" title={strings.uploadsOffTitle}>
+          {strings.uploadsOffText}
+        </Callout>
       )}
       {!canManage && !viewOnly && (
         <Callout tone="info" title={strings.readOnlyTitle}>
