@@ -126,13 +126,17 @@ test.describe('the form journey’s edges', () => {
     await expect(visitor.getByText(/Thanks, we got it/).first()).toBeVisible({ timeout: 15_000 });
     await visitor.context().close();
 
+    // All leaves spam out (forms fix a8): the "1 spam" beside the filter opens it.
     await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=submissions`);
-    const row = page.getByRole('row').filter({ hasText: `bot-${form.id.slice(-6)}@example.com` });
+    const email = `bot-${form.id.slice(-6)}@example.com`;
+    await page.getByRole('button', { name: '1 spam' }).click({ timeout: 30_000 });
+    const row = page.getByRole('row').filter({ hasText: email });
     await expect(row).toContainText('Spam', { timeout: 30_000 });
     await row.getByRole('checkbox').check({ force: true });
     await page.getByRole('button', { name: 'Not spam' }).first().click();
-    await expect(page.getByText(/marked as not spam|Released\./).first()).toBeVisible();
-    await expect(row).not.toContainText('Spam', { timeout: 30_000 });
+    await expect(page.getByText(/marked as not spam/i).first()).toBeVisible();
+    await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=submissions`);
+    await expect(page.getByRole('row').filter({ hasText: email })).not.toContainText('Spam', { timeout: 30_000 });
   });
 
   test('a paused form tells its visitor it is closed, and takes sends again once resumed', async ({
