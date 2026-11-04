@@ -20,7 +20,7 @@ import { bookingTargetProblem, createBookingPage, updateBookingPage } from '../b
 import { getActivity } from '../engine/activity.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
-import { createRecord, getRecords } from '../engine/records.ts';
+import { createRecord, getRecords, setValues } from '../engine/records.ts';
 import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
@@ -61,6 +61,7 @@ import {
   retrySubmission,
   useNewAnswer,
   undoUseNewAnswer,
+  CHANGED_SINCE,
 } from './submissions.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -955,6 +956,19 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(view.refused).toEqual([expect.objectContaining({ questionId: 'heard' })]);
     const [person] = await getRecords(w.scope, { ids: [view.mainRecord?.recordId ?? ''] });
     expect(Object.values(person?.values ?? {})).not.toContainEqual(expect.objectContaining({ amount: '12000' }));
+    // A reader who can't see Deals never sees an answer saved on the deal (security review, forms fixes 2).
+    const noDeals = rescope(w.scope, {
+      role: 'member',
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.deals }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    const theirs = await getSubmission(noDeals, { submissionId: submission.id });
+    expect(theirs.answers.map((answer) => answer.key)).not.toContain('budget');
+    expect(theirs.answers.map((answer) => answer.key)).toContain('email');
   });
 
   it('refuses an answer saved on the deal while Also create a deal is off (forms fixes 2)', () => {
@@ -1290,6 +1304,16 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
       { code: 'FORM_STATE' },
     ]);
     // Undo (forms fixes 2): the value before comes back, the answer reads as kept again, and only once.
+    // Changed on the record since: Undo refuses rather than wipe the newer value.
+    const title = w.attribute('people.job_title');
+    await setValues(w.scope, {
+      recordId: existing.recordId,
+      values: { [title]: { value: 'Rear admiral' } },
+    });
+    expect(
+      await refusalOf(undoUseNewAnswer(w.scope, { submissionId: submission.id, questionId: 'title' })),
+    ).toMatchObject([{ code: 'FORM_STATE', message: CHANGED_SINCE }]);
+    await setValues(w.scope, { recordId: existing.recordId, values: { [title]: { value: 'Engineer' } } });
     const undone = await undoUseNewAnswer(w.scope, { submissionId: submission.id, questionId: 'title' });
     expect(undone.kept).toEqual([{ questionId: 'name' }, { questionId: 'title' }]);
     const [back] = await getRecords(w.scope, { ids: [existing.recordId] });

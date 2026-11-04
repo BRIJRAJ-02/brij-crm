@@ -184,10 +184,12 @@ export function answersOf(scope: EngineScope, document: FormDocument, stored: un
   return document.questions.flatMap((question): SubmissionAnswer[] => {
     if (!Object.hasOwn(answers, question.key)) return [];
     const attributeId = question.filedOn?.attributeId;
+    // An answer saved on the deal (forms fixes 2) is read as the deal's field, so a reader without Deals, or with
+    // that field hidden, never sees it.
+    const on = question.filedOn?.objectRole === 'deal' ? document.targets.deal?.objectId : objectId;
     if (
       attributeId !== undefined &&
-      objectId !== undefined &&
-      fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden'
+      (on === undefined || fieldLevel(scope.access, { id: attributeId, objectId: on }) === 'hidden')
     ) {
       return [];
     }
@@ -767,7 +769,12 @@ export async function useNewAnswer(
       });
       const [refusal] = filed.refused;
       if (refusal !== undefined) throw refuse('FORM_STATE', refusal.message);
-      const used = { questionId: input.questionId, attributeId: filedOn?.id ?? null, before: held };
+      // And the value it wrote, so Undo puts the old one back only while the record still holds this one.
+      const wrote =
+        filedOn === undefined
+          ? null
+          : (heldValues(indexHeld(await currentItems(tx, [recordId], [filedOn.id])), recordId)(filedOn) ?? null);
+      const used = { questionId: input.questionId, attributeId: filedOn?.id ?? null, before: held, after: wrote };
       await tx
         .update(formSubmissions)
         .set({
@@ -818,6 +825,13 @@ export async function undoUseNewAnswer(
       if (recordId === undefined || used === undefined || used.attributeId === null) {
         throw refuse('FORM_STATE', NOTHING_TO_UNDO);
       }
+      // Someone changed the field since: Undo would wipe their edit, so it says so instead.
+      const attribute = (await loadAttributesById(tx, [used.attributeId])).get(used.attributeId);
+      const now =
+        attribute === undefined
+          ? null
+          : (heldValues(indexHeld(await currentItems(tx, [recordId], [attribute.id])), recordId)(attribute) ?? null);
+      if (JSON.stringify(now) !== JSON.stringify(used.after ?? null)) throw refuse('FORM_STATE', CHANGED_SINCE);
       const written = await context.perRecord((inner) =>
         updateRecord(inner, { recordId, values: { [used.attributeId ?? '']: { value: used.before } } }),
       );
@@ -840,7 +854,15 @@ export async function undoUseNewAnswer(
 }
 
 /** One Use new, as the submission keeps it for Undo. */
-const UsedNew = z.object({ questionId: z.string(), attributeId: z.string().nullable(), before: z.unknown() });
+const UsedNew = z.object({
+  questionId: z.string(),
+  attributeId: z.string().nullable(),
+  before: z.unknown(),
+  after: z.unknown(),
+});
+
+/** What Undo on Use new says when the field has changed since. */
+export const CHANGED_SINCE = 'That field has changed since, so Undo would lose the newer value. Edit it on the record.';
 
 /** How long a deleted submission can be put back before the daily cleanup removes it for good. */
 export const DELETED_SUBMISSIONS_KEPT_DAYS = 30;

@@ -17,7 +17,8 @@
 // every submission, whether or not the visitor goes on to book (spec 0023
 // AC-1050): the rotation's lock first, then the match key's, the pick before
 // the write and its ledger row after it, all in this one transaction.
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
+import { recordVisibleSql } from '../access/visibility.ts';
 import * as z from 'zod';
 import { fitsAttribute, scoreOf, type EngineRefusal, type FiledOn, type FormDocument } from '@crm/contracts';
 import { isUnfillableRequired } from '@crm/contracts/values';
@@ -131,6 +132,8 @@ async function companyNamed(
   workspaceId: string,
   nameAttributeId: string,
   name: string,
+  /** The reader's record rule on Companies, as SQL over `r`; none under an open policy. */
+  visible: SQL | undefined,
 ): Promise<string | undefined> {
   const found = await tx.execute<{ record_id: string }>(sql`
     select v.record_id::text as record_id
@@ -139,6 +142,7 @@ async function companyNamed(
     where v.workspace_id = ${workspaceId}::uuid and v.attribute_id = ${nameAttributeId}::uuid
       and v.active_until is null and not v.is_cleared and v.text_value is not null
       and lower(left(v.text_value, 256)) collate "und-x-icu" = lower(left(${name}, 256)) collate "und-x-icu"
+      ${visible === undefined ? sql`` : sql`and ${visible}`}
     limit 2
   `);
   // Two companies of that name: which one is meant can't be told, so neither is linked.
@@ -158,9 +162,16 @@ async function linkByName(
   planned: readonly Planned[],
   /** The record the answers go on, when it exists already. */
   recordId: string | undefined,
-): Promise<{ readonly planned: readonly Planned[]; readonly refused: { questionId: string; message: string }[] }> {
-  if (named.length === 0) return { planned: [], refused: [] };
+): Promise<{
+  readonly planned: readonly Planned[];
+  readonly refused: { questionId: string; message: string }[];
+  /** Names no company has yet: made, and linked, only once the record's own write has gone in (`makeNamed`). */
+  readonly later: readonly Named[];
+}> {
+  if (named.length === 0) return { planned: [], refused: [], later: [] };
   const { tx, scope } = context;
+  // A member's own filing finds only the companies they may see: a hidden one of that name is never told to them.
+  const visible = recordVisibleSql(scope.access, 'r');
   const target = await companyFilingTarget(tx, input.objectId, input.attributes);
   const companyAttributes = target === undefined ? undefined : await loadAttributes(tx, target.companies);
   const nameAttribute = companyAttributes === undefined ? undefined : bySlug(companyAttributes, 'name');
@@ -171,39 +182,67 @@ async function linkByName(
   );
   const linked: Planned[] = [];
   const refused: { questionId: string; message: string }[] = [];
+  const later: Named[] = [];
   for (const each of named) {
     if (target === undefined || nameAttribute?.type !== 'text' || each.attribute.id !== target.companyAttributeId) {
       refused.push({ questionId: each.questionId, message: LINK_NOT_COMPANY });
       continue;
     }
     if (recordId !== undefined && !each.always && (await hasCompany(tx, recordId, each.attribute))) continue;
-    let companyId = await companyNamed(tx, scope.workspaceId, nameAttribute.id, each.name);
+    let companyId = await companyNamed(tx, scope.workspaceId, nameAttribute.id, each.name, visible);
     if (companyId === undefined && hasDomain) continue;
     if (companyId === undefined) {
       // Two submissions naming one new company take turns, so the second finds the first's.
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`company-name:${scope.workspaceId}:${each.name.toLowerCase()}`}, 0))`,
       );
-      companyId = await companyNamed(tx, scope.workspaceId, nameAttribute.id, each.name);
+      companyId = await companyNamed(tx, scope.workspaceId, nameAttribute.id, each.name, visible);
     }
+    // None yet: made after the record's write, so a record that fails leaves no company behind.
     if (companyId === undefined) {
-      const made = await input
-        .writer(new Set())
-        .perRecord((inner) =>
-          insertRecord(inner, { objectId: target.companies, values: { [nameAttribute.id]: each.name.slice(0, 256) } }),
-        );
-      if (!made.ok) {
-        refused.push({ questionId: each.questionId, message: made.refusals[0]?.message ?? LINK_NOT_COMPANY });
-        continue;
-      }
-      companyId = made.value.recordId;
+      later.push(each);
+      continue;
     }
     const reference = { objectId: target.companies, recordId: companyId };
     const parsed = parseAttributeInput(each.attribute, each.attribute.isMulti ? [reference] : reference);
     if (!parsed.ok || parsed.value === null) continue;
     linked.push({ attribute: each.attribute, questionId: each.questionId, value: parsed.value, always: each.always });
   }
-  return { planned: linked, refused };
+  return { planned: linked, refused, later };
+}
+
+/**
+ * Makes the companies `linkByName` found none of, once the record's own write has gone in, and links each to the
+ * record, through the writer's own access in its own savepoint: a refusal makes nothing and says why.
+ */
+async function makeNamed(
+  context: WriteContext,
+  input: Pick<FileInput, 'objectId' | 'attributes' | 'writer'>,
+  later: readonly Named[],
+  recordId: string,
+): Promise<{ questionId: string; message: string }[]> {
+  if (later.length === 0) return [];
+  const target = await companyFilingTarget(context.tx, input.objectId, input.attributes);
+  const companyAttributes = target === undefined ? undefined : await loadAttributes(context.tx, target.companies);
+  const nameAttribute = companyAttributes === undefined ? undefined : bySlug(companyAttributes, 'name');
+  const refused: { questionId: string; message: string }[] = [];
+  for (const each of later) {
+    if (target === undefined || nameAttribute === undefined) continue;
+    const writer = input.writer(new Set([each.attribute.id]));
+    const made = await writer.perRecord(async (inner) => {
+      const company = await insertRecord(inner, {
+        objectId: target.companies,
+        values: { [nameAttribute.id]: each.name.slice(0, 256) },
+      });
+      const reference = { objectId: target.companies, recordId: company.recordId };
+      await updateRecord(inner, {
+        recordId,
+        values: { [each.attribute.id]: { value: each.attribute.isMulti ? [reference] : reference } },
+      });
+    });
+    if (!made.ok) refused.push({ questionId: each.questionId, message: made.refusals[0]?.message ?? LINK_NOT_COMPANY });
+  }
+  return refused;
 }
 
 /** One answer bound for an attribute: the attribute, the value, and whether it overwrites. */
@@ -687,7 +726,7 @@ export async function fileOntoRecord(
   // A typed company (forms fixes 2), as a form's submission links one.
   const linked =
     held === undefined
-      ? { planned: [], refused: [] }
+      ? { planned: [], refused: [], later: [] }
       : await linkByName(
           context,
           { objectId: held.object_id, attributes: input.attributes, writer: () => context },
@@ -696,7 +735,19 @@ export async function fileOntoRecord(
           input.recordId,
         );
   const planned = [...first.planned, ...linked.planned];
-  const refused = [...first.refused, ...linked.refused];
+  const refused = [
+    ...first.refused,
+    ...linked.refused,
+    // A company nobody has yet, made and linked now: the record already exists.
+    ...(held === undefined
+      ? []
+      : await makeNamed(
+          context,
+          { objectId: held.object_id, attributes: input.attributes, writer: () => context },
+          linked.later,
+          input.recordId,
+        )),
+  ];
   const ids = planned.map((each) => each.questionId);
   if (planned.length === 0) return { planned: ids, refused };
   const { changes } = await changesFor(context.tx, input.recordId, planned, undefined, undefined);
@@ -944,9 +995,12 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
     await recordLeadOwner(tx, writer.scope, pick, { recordId, formId: form.id, submissionId: input.submissionId });
   }
 
+  // A company typed by a name nobody has, made now the record is in (forms fixes 2).
+  const madeRefused = await makeNamed(context, input, linked.later, recordId);
   const questionOf = new Map(planned.map((each) => [each.attribute.id, each.questionId]));
   const allRefused = [
     ...refused,
+    ...madeRefused,
     ...skipped.flatMap((refusal) => {
       const questionId = refusal.attributeId === undefined ? undefined : questionOf.get(refusal.attributeId);
       return questionId === undefined ? [] : [{ questionId, message: refusal.message }];
