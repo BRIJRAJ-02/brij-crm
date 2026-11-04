@@ -231,7 +231,7 @@ function renderBusiness(handle: string, slug?: string, initial?: Parameters<type
  * missed, or a local run with no shell, finds a business this way. True once the business page took over.
  */
 async function tryBusiness(handle: string, slug?: string): Promise<boolean> {
-  const { createBusinessClient } = await import('@crm/data/business-page');
+  const { createBusinessClient } = await import('./BusinessPublicPage.tsx');
   try {
     const page = await createBusinessClient({ origin: globalThis.location.origin }).page(handle, slug);
     renderBusiness(handle, slug, page);

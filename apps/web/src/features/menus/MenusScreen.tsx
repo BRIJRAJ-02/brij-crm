@@ -49,12 +49,10 @@ import { PublishDialog } from './PublishDialog.tsx';
 import { SectionDrawer } from './SectionDrawer.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
 import { StructureTab } from './StructureTab.tsx';
+import { MENU_TABS, menusSearch, type MenuTab, type MenusView } from './search.ts';
 import { strings } from './strings.ts';
 
-/** The tabs of one menu, after checklabs' Structure and Items, its modifier groups and its Settings page. */
-export const MENU_TABS = ['structure', 'dishes', 'options', 'settings'] as const;
-/** One tab of a menu. */
-export type MenuTab = (typeof MENU_TABS)[number];
+export { MENU_TABS, menusSearch, type MenuTab, type MenusView } from './search.ts';
 
 /** What the screen opens over itself: a dish, a section or an option group in a drawer, or a confirm. */
 export type Open =
@@ -68,26 +66,6 @@ export type Open =
   | { readonly kind: 'deleteSection'; readonly sectionId: string; readonly name: string }
   | { readonly kind: 'deleteItem'; readonly item: Dish }
   | undefined;
-
-/** Where the screen stands, kept in the address (`?menu=&tab=&at=&preview=`), so a reload or a link opens it there. */
-export interface MenusView {
-  readonly menu?: string;
-  readonly tab?: MenuTab;
-  /** `sat-11:00`: the preview read on Saturday at 11:00 at the place (`preview-at.ts`). */
-  readonly at?: string;
-  readonly preview?: 'off';
-}
-
-/** The address's search as the screen reads it: anything unknown is dropped. */
-export function menusSearch(search: Record<string, unknown>): MenusView {
-  const tab = search.tab;
-  return {
-    ...(typeof search.menu === 'string' && /^[0-9a-f-]{36}$/i.test(search.menu) ? { menu: search.menu } : {}),
-    ...(typeof tab === 'string' && (MENU_TABS as readonly string[]).includes(tab) ? { tab: tab as MenuTab } : {}),
-    ...(parsePreviewAt(search.at) === undefined ? {} : { at: search.at as string }),
-    ...(search.preview === 'off' ? { preview: 'off' as const } : {}),
-  };
-}
 
 export interface MenusScreenProps {
   readonly store: MenuStore;

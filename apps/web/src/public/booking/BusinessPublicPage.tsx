@@ -8,6 +8,10 @@
 // It draws the shell's copy at once when there is a recent one (boot.ts), and reads the page again behind it, so an
 // edge cached shell is never what stays. An old handle's or slug's address shows the current one in place.
 import { createBusinessClient, directionsLinks, isDataError, type PublicBusinessPage } from '@crm/data/business-page';
+
+// The page's read, for main.tsx's late check that a handle names a business: one lazy chunk carries the page and
+// its client (a separate dynamic import of the package split every app route into its own first load file).
+export { createBusinessClient };
 import { BookingFoot, BookingMessage, BusinessPage } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { wearStylesheet } from '../stylesheet.ts';
