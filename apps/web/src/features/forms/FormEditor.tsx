@@ -64,14 +64,22 @@ import {
   withQuestions,
 } from './draft.ts';
 import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from './FormBrand.tsx';
-import { FlowView } from './FlowView.tsx';
+import { LogicMap } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { ReadyDialog } from './PublishDialog.tsx';
 import { AFTER_ROW, AfterSendSection } from './AfterSendSection.tsx';
-import { dropQuestionLogic, followChoices, logicProblems, logicUses, problemsAt, problemWords } from './logic.ts';
+import {
+  dropQuestionLogic,
+  followChoices,
+  logicCount,
+  logicProblems,
+  logicUses,
+  problemsAt,
+  problemWords,
+} from './logic.ts';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
 import { splitIntoSteps } from '../questions/steps.ts';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
@@ -847,34 +855,45 @@ export function FormEditor(props: FormEditorProps) {
                 );
               }}
             />
-            <FlowView
-              draft={draft}
-              isOpen={isFlowOpen}
-              questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
-              stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
-              endingsHref={`${formHref(slug, form.id)}?question=${AFTER_ROW}`}
-              onOpenChange={setFlowOpen}
-            />
+            {isFlowOpen && (
+              <LogicMap
+                slug={slug}
+                draft={draft}
+                problems={logicIssues}
+                onSuggest={(suggestion) => {
+                  const ids = { rule: data.forms.newId(), ending: mintEndingId(draft.endings ?? []) };
+                  setDraft((before) => suggestion.apply(before, ids));
+                  toasts.toast({ tone: 'success', message: strings.suggestionAdded });
+                }}
+                questionHref={(questionId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(questionId)}`}
+                stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
+                endingsHref={`${formHref(slug, form.id)}?question=${AFTER_ROW}`}
+                onOpenChange={setFlowOpen}
+              />
+            )}
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               {...(questionStats === undefined ? {} : { stats: questionStats })}
               onOpened={setPreviewRow}
-              // The Flow sits beside Add a question once a step jumps (T20): before that, the list is the flow.
-              {...(draft.layout === 'steps' && draft.steps.some((step) => (step.jumps?.length ?? 0) > 0)
-                ? {
+              // The Logic map's door (T41): how many rules the form has, and how many need a look.
+              {...(draft.questions.length === 0
+                ? {}
+                : {
                     actionsStart: (
                       <Button
                         variant="ghost"
-                        icon="git-branch"
+                        icon={logicIssues.length > 0 ? 'triangle-alert' : 'git-branch'}
+                        {...(logicIssues.length > 0
+                          ? { label: strings.logicButtonWarn(logicCount(draft), logicIssues.length) }
+                          : {})}
                         onPress={() => {
                           setFlowOpen(true);
                         }}
                       >
-                        {strings.flowOpen}
+                        {strings.logicButton(logicCount(draft))}
                       </Button>
                     ),
-                  }
-                : {})}
+                  })}
               steps={{
                 steps: draft.steps,
                 layout: draft.layout,

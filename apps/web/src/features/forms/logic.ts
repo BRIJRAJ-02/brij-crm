@@ -2,8 +2,16 @@
 // smart"): the question a new rule reads first, and keeping every rule in step when a choice is renamed or removed.
 // No React and no I/O: the builder's screens call these, and `logic.test.ts` checks them.
 import type { FormDocument, FormQuestion } from '@crm/data';
-import { SCORE_FACT, stepsOfBreaks, type ShowWhen } from '@crm/data/forms';
-import { questionFacts, type Fact } from '../routing/facts.ts';
+import {
+  FORM_ENDINGS_MAX,
+  matchesShowWhen,
+  pathOf,
+  ROUTING_RULES_MAX,
+  SCORE_FACT,
+  stepsOfBreaks,
+  type ShowWhen,
+} from '@crm/data/forms';
+import { questionFacts, storedShowWhen, type Fact } from '../routing/facts.ts';
 import { isContactQuestion } from '../questions/steps.ts';
 
 /** The answer types a rule branches on best: picked from a list, so its value is one of the real choices. */
@@ -557,4 +565,168 @@ export function problemWords(problem: LogicProblem): string {
     case 'hiddenRequired':
       return 'Required, but some people never see it, so they won’t have to answer it.';
   }
+}
+
+/** Where a tested path ends: a thank-you message a jump or a rule sent them to, a booking page, a link, or the default. */
+export type TestEnd =
+  | { readonly kind: 'ending'; readonly endingId: string; readonly by: 'jump' | 'rule' }
+  | { readonly kind: 'book'; readonly bookingPageId: string }
+  | { readonly kind: 'redirect'; readonly url: string }
+  | { readonly kind: 'default' };
+
+/** A tested path (T41, Test it): the steps a visitor sees, the ones skipped, and where they end. */
+export interface TestPath {
+  /** Each step by its place (1 up) and its break id when it has one: those shown, then those skipped. */
+  readonly shown: readonly { readonly place: number; readonly id?: string | undefined }[];
+  readonly skipped: readonly { readonly place: number; readonly id?: string | undefined }[];
+  /** The questions asked, by key. */
+  readonly asked: ReadonlySet<string>;
+  /** The rule that decided, when one did. */
+  readonly ruleId?: string;
+  readonly end: TestEnd;
+}
+
+/**
+ * The path a visitor takes for these answers (T41, Test it): the same walk the hosted page and the server run
+ * (`pathOf`), then After they send's rules in order, the first match deciding, else what everyone else sees.
+ * Answers are as the page holds them: a choice's words, true or false, a number.
+ */
+export function testPath(document: FormDocument, answers: Readonly<Record<string, unknown>>): TestPath {
+  const resolved = stepsOfBreaks(document.questions, document.steps).filter((step) => step.keys.length > 0);
+  const jumpsOf = new Map(document.steps.map((step) => [step.id, step.jumps]));
+  const path = pathOf(
+    {
+      layout: document.layout,
+      questions: document.questions.map((question) => ({
+        key: question.key,
+        showWhen: question.showWhen,
+        jumps: question.jumps,
+      })),
+      steps: resolved.map((step) => ({ ...step, jumps: step.id === undefined ? undefined : jumpsOf.get(step.id) })),
+    },
+    answers,
+  );
+  const places = resolved.map((step, index) => ({ place: index + 1, id: step.id }));
+  const seen = new Set(path.steps.map((step) => step.keys[0]));
+  const isStepped = document.layout === 'steps';
+  const shown = isStepped ? places.filter((_, index) => seen.has(resolved[index]?.keys[0])) : [];
+  const skipped = isStepped ? places.filter((_, index) => !seen.has(resolved[index]?.keys[0])) : [];
+  if (path.ending !== undefined) {
+    return { shown, skipped, asked: path.keys, end: { kind: 'ending', endingId: path.ending, by: 'jump' } };
+  }
+  const facts = Object.fromEntries(
+    [...path.keys].flatMap((key) => (Object.hasOwn(answers, key) ? [[key, answers[key]]] : [])),
+  );
+  const rule = document.routing.rules.find((each) => matchesShowWhen(each.when, facts));
+  if (rule !== undefined) {
+    const then = rule.then;
+    const end: TestEnd =
+      then.kind === 'ending'
+        ? { kind: 'ending', endingId: then.endingId, by: 'rule' }
+        : then.kind === 'book'
+          ? { kind: 'book', bookingPageId: then.bookingPageId }
+          : then.kind === 'redirect'
+            ? { kind: 'redirect', url: then.url }
+            : { kind: 'default' };
+    return { shown, skipped, asked: path.keys, ruleId: rule.id, end };
+  }
+  const after = document.after;
+  const end: TestEnd =
+    after.kind === 'booking'
+      ? { kind: 'book', bookingPageId: after.bookingPageId }
+      : after.kind === 'redirect'
+        ? { kind: 'redirect', url: after.url }
+        : { kind: 'default' };
+  return { shown, skipped, asked: path.keys, end };
+}
+
+/** One click suggestion (T41): what it says, and the change it makes, given fresh ids. */
+export interface LogicSuggestion {
+  readonly id: string;
+  readonly words: string;
+  readonly apply: (document: FormDocument, ids: { readonly rule: string; readonly ending: string }) => FormDocument;
+}
+
+/**
+ * A few rules worth one click (T41: "one-click suggestions"), read from the questions themselves, never more than
+ * three, and never one the form already has: a different thank-you message for the first choice of the question a
+ * rule would read; sending a top choice on to a booking page, when there is one; and low ratings to a message of
+ * their own.
+ */
+export function logicSuggestions(
+  document: FormDocument,
+  pages: readonly { readonly id: string; readonly title: string }[],
+  words: {
+    readonly message: (question: string, choice: string) => string;
+    readonly book: (question: string, choice: string, page: string) => string;
+    readonly low: (question: string, below: string) => string;
+    readonly heading: string;
+  },
+): readonly LogicSuggestion[] {
+  const rules = document.routing.rules;
+  if (rules.length >= ROUTING_RULES_MAX) return [];
+  const facts = questionFacts(document.questions);
+  const used = new Set(rules.flatMap((rule) => rule.when.rules.map((condition) => condition.key)));
+  const question = ruleQuestion(document.questions);
+  const fact = question === undefined ? undefined : facts.find((each) => each.key === question.key);
+  const out: LogicSuggestion[] = [];
+  const canEnd = (document.endings ?? []).length < FORM_ENDINGS_MAX;
+  const ruleTo =
+    (when: ShowWhen, then: FormDocument['routing']['rules'][number]['then']): LogicSuggestion['apply'] =>
+    (before, ids) => ({
+      ...before,
+      ...(then.kind === 'ending'
+        ? { endings: [...(before.endings ?? []), { id: ids.ending, heading: words.heading }] }
+        : {}),
+      routing: {
+        rules: [
+          ...before.routing.rules,
+          {
+            id: ids.rule,
+            when: storedShowWhen(when),
+            then: then.kind === 'ending' ? { kind: 'ending', endingId: ids.ending } : then,
+          },
+        ],
+      },
+    });
+  if (question !== undefined && fact !== undefined && !used.has(fact.key)) {
+    const options = fact.options ?? [];
+    const label = question.label.trim() === '' ? question.key : question.label.trim();
+    const first = options[0];
+    const last = options.at(-1);
+    if (first !== undefined && canEnd) {
+      out.push({
+        id: `message:${fact.key}`,
+        words: words.message(label, first.label),
+        apply: ruleTo(
+          { join: 'all', rules: [{ key: fact.key, op: 'is', value: first.id }] },
+          { kind: 'ending', endingId: '' },
+        ),
+      });
+    }
+    const page = pages[0];
+    if (last !== undefined && last !== first && page !== undefined) {
+      out.push({
+        id: `book:${fact.key}`,
+        words: words.book(label, last.label, page.title),
+        apply: ruleTo(
+          { join: 'all', rules: [{ key: fact.key, op: 'is', value: last.id }] },
+          { kind: 'book', bookingPageId: page.id, message: '' },
+        ),
+      });
+    }
+    const range = fact.range;
+    if (options.length === 0 && range !== undefined && range.to > range.from && canEnd) {
+      const below = String(range.from + Math.ceil((range.to - range.from) * 0.65));
+      out.push({
+        id: `low:${fact.key}`,
+        words: words.low(label, below),
+        apply: ruleTo(
+          { join: 'all', rules: [{ key: fact.key, op: 'less_than', value: below }] },
+          { kind: 'ending', endingId: '' },
+        ),
+      });
+    }
+  }
+  return out.slice(0, 3);
 }

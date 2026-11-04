@@ -7,8 +7,10 @@ import {
   followChoices,
   logicCount,
   logicProblems,
+  logicSuggestions,
   logicUses,
   readyRule,
+  testPath,
   ruleQuestion,
 } from './logic.ts';
 
@@ -229,5 +231,65 @@ describe('finding what is wrong with the logic (T41)', () => {
     });
     expect(logicProblems(sound)).toEqual([]);
     expect(logicCount(sound)).toBe(2);
+  });
+});
+
+describe('Test it: the path for chosen answers (T41)', () => {
+  const team = q('team', 'short_text', 'Team');
+  const stepped = doc([BUDGET, team, NOTES], {
+    layout: 'steps',
+    steps: [
+      { id: 's1', startsAt: 'budget', jumps: [{ when: is('budget', 'Under $1k'), to: { step: 's3' } }] },
+      { id: 's2', startsAt: 'team' },
+      { id: 's3', startsAt: 'notes' },
+    ],
+    routing: { rules: [{ id: 'r1', when: is('budget', '$10k+'), then: to('https://big.example') }] },
+  });
+
+  it('skips the step a jump passes, and ends on what everyone else sees', () => {
+    const path = testPath(stepped, { budget: 'Under $1k' });
+    expect(path.shown.map((step) => step.place)).toEqual([1, 3]);
+    expect(path.skipped.map((step) => step.id)).toEqual(['s2']);
+    expect(path.end).toEqual({ kind: 'default' });
+  });
+
+  it('ends where the first matching rule sends them', () => {
+    const path = testPath(stepped, { budget: '$10k+' });
+    expect(path.shown.map((step) => step.place)).toEqual([1, 2, 3]);
+    expect(path.ruleId).toBe('r1');
+    expect(path.end).toEqual({ kind: 'redirect', url: 'https://big.example' });
+  });
+});
+
+describe('one click suggestions (T41)', () => {
+  const words = {
+    message: (question: string, choice: string) => `${question} is ${choice}: a different thank-you message`,
+    book: (question: string, choice: string, page: string) => `${question} is ${choice}: book ${page}`,
+    low: (question: string, below: string) => `${question} under ${below}`,
+    heading: 'Thanks',
+  };
+
+  it('offers a thank-you message and a booking page on the choice question, and each makes a sound rule', () => {
+    const form = doc([NAME, BUDGET]);
+    const offered = logicSuggestions(form, [{ id: 'p1', title: 'Intro call' }], words);
+    expect(offered.map((each) => each.words)).toEqual([
+      'Budget is Under $1k: a different thank-you message',
+      'Budget is $10k+: book Intro call',
+    ]);
+    const made = offered[1]?.apply(form, { rule: 'r1', ending: 'e1' });
+    expect(made?.routing.rules[0]).toEqual({
+      id: 'r1',
+      when: { join: 'all', rules: [{ key: 'budget', op: 'is', value: '$10k+' }] },
+      then: { kind: 'book', bookingPageId: 'p1', message: '' },
+    });
+    expect(logicProblems(made ?? form)).toEqual([]);
+  });
+
+  it('offers nothing on a question a rule already reads, and low ratings their own message', () => {
+    const ruled = doc([BUDGET], {
+      routing: { rules: [{ id: 'r', when: is('budget', '$5k'), then: to('https://a.example') }] },
+    });
+    expect(logicSuggestions(ruled, [], words)).toEqual([]);
+    expect(logicSuggestions(doc([RATING]), [], words).map((each) => each.words)).toEqual(['How was it? under 4']);
   });
 });

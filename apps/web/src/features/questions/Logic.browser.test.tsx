@@ -188,14 +188,23 @@ describe('a step’s Logic (AC-6313, AC-6325; T15)', () => {
   });
 });
 
-describe('the Flow view (AC-6325)', () => {
-  it('draws the steps, their jumps and the endings, read only, in both themes', async () => {
+describe('the Logic map (AC-6325, T41)', () => {
+  it('lists every step with its rules as sentences, what to check, a suggestion, and Test it, in both themes', async () => {
     const toasts = createToasts();
+    let suggested = '';
     shown = await renderInApp(
       () => (
         <FlowView
           draft={DOCUMENT}
           isOpen
+          problems={[{ kind: 'shadowed', place: { kind: 'jump', stepId: 's2', index: 0 }, winner: 1 }]}
+          suggestions={[
+            { id: 'one', words: 'Show a different thank-you message when Budget is $10k', apply: (each) => each },
+          ]}
+          pages={[]}
+          onSuggest={(suggestion) => {
+            suggested = suggestion.id;
+          }}
           questionHref={(id) => `/w/acme/captures/forms/form-1?question=${id}`}
           stepHref={(id) => `/w/acme/captures/forms/form-1?question=step:${id}`}
           endingsHref="/w/acme/captures/forms/form-1/settings"
@@ -204,18 +213,19 @@ describe('the Flow view (AC-6325)', () => {
       ),
       { data: {}, pattern: '/w/$slug/captures/forms/$formId', at: '/w/acme/captures/forms/form-1', toasts },
     );
-    await expect.element(page.getByRole('heading', { name: 'Flow' })).toBeVisible();
-    await expect.element(page.getByText('Step 1').first()).toBeVisible();
+    await expect.element(page.getByRole('heading', { name: 'Logic', exact: true })).toBeVisible();
+    await expect.element(page.getByText('1 thing to check')).toBeVisible();
     await expect.element(page.getByText('Step 2 · Your budget').first()).toBeVisible();
-    // The fall through says where it goes, by name, never an empty value.
-    await expect.element(page.getByText('Step 3 · Your team').first()).toBeVisible();
-    // The jump as one line, in words, and the ending it goes to; then where everyone else goes.
-    await expect.element(page.getByText('If Budget is Under $1k')).toBeVisible();
-    await expect.element(page.getByText('Jump to Thank-you message: Thanks, we are not a fit')).toBeVisible();
-    await expect.element(page.getByText('Otherwise')).toBeVisible();
-    // Every end is listed: the form's own thank you page first, then its endings.
-    await expect.element(page.getByText('Thank-you messages')).toBeVisible();
-    await expect.element(page.getByText('Thank you page').first()).toBeVisible();
+    // The rule as one sentence, then where everyone else goes, by name.
+    await expect.element(page.getByText('If Budget is Under $1k').first()).toBeVisible();
+    await expect.element(page.getByText('→ Thank-you message: Thanks, we are not a fit').first()).toBeVisible();
+    await expect.element(page.getByText('→ Step 3 · Your team').first()).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Add this rule' }));
+    expect(suggested).toBe('one');
+    // Test it: pick an answer and read the path.
+    await userEvent.click(page.getByRole('button', { name: /Budget$/ }).last());
+    await userEvent.click(page.getByRole('option', { name: 'Under $1k' }));
+    await expect.element(page.getByText('Thanks, we are not a fit').last()).toBeVisible();
     await page.screenshot({ path: '.vitest/shots/s5-flow-light.png' });
     await wear('dark');
     await page.screenshot({ path: '.vitest/shots/s5-flow-dark.png' });

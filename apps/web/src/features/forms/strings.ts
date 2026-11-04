@@ -591,31 +591,37 @@ export const strings = {
   scoreFiledOn: 'Save the score to',
   scoreFiledNowhere: 'Keep it off the CRM',
   scoreNoNumbers: 'This object has no number field to save a score to.',
-  flowOpen: 'Flow',
-  flowTitle: 'Flow',
-  flowStep: (place: number, title: string | undefined) =>
-    title === undefined || title.trim() === '' ? `Step ${String(place)}` : `Step ${String(place)} · ${title}`,
-  /** A jump as a line: "If Budget is Under $1k". */
-  flowJump: (condition: string) => `If ${condition}`,
-  /** Where it goes, after its If: "Jump to Step 3", "Jump to Ending: Not a fit". */
-  flowJumpTo: (where: string) => `Jump to ${where}`,
-  /** A step that only shows for some answers. */
-  flowShownIf: 'Shown only if',
-  /** Where a step goes after its jumps: everyone the jumps above didn't send elsewhere. */
-  flowNext: 'Otherwise',
-  /** Where a step with no jumps goes. */
+  // The Logic map (T41): every rule in the form's order, what to check, suggestions and Test it.
+  logicTitle: 'Logic',
+  toCheck: (count: number) => (count === 1 ? '1 thing to check' : `${String(count)} things to check`),
+  flowGoTo: 'Go to it',
+  flowIf: (condition: string) => `If ${condition}`,
+  flowOtherwise: 'Otherwise',
   flowThen: 'Then',
-  /** The next step, as a place to go. */
-  flowGoTo: (name: string) => `Go to ${name}`,
-  flowEndings: 'Thank-you messages',
-  flowClassic: 'Steps and logic jumps work with the Steps layout.',
+  flowEveryone: 'Everyone',
+  flowThisStep: 'This step',
+  flowQuestions: 'Questions',
+  flowNoRules: 'No rules here: everyone goes on.',
   flowEmptyTitle: 'No questions yet',
-  flowEmpty: 'Add a question to see the flow.',
-  /** The form's own end, after the last step. */
-  flowThanks: 'Thank you page',
+  flowEmpty: 'Add a question to give it logic.',
   flowEdit: 'Edit',
-  flowAddStep: 'Add a step',
   flowClose: 'Close',
+  suggestionsTitle: 'Suggestions',
+  suggestionTerm: 'One click',
+  suggestionAdd: 'Add this rule',
+  suggestMessage: (question: string, choice: string) =>
+    `Show a different thank-you message when ${question} is ${choice}`,
+  suggestBook: (question: string, choice: string, page: string) =>
+    `Send people whose ${question} is ${choice} on to book ${page}`,
+  suggestLow: (question: string, below: string) =>
+    `Show a different thank-you message when ${question} is less than ${below}`,
+  suggestionAdded: 'Rule added to After they send.',
+  testTitle: 'Test it',
+  testLine: 'Pick answers to see the path a visitor takes. Nothing is sent.',
+  testNoAnswer: 'No answer',
+  testSees: 'Sees',
+  testSkips: 'Skips',
+  testEnds: 'Ends on',
   // Analytics (spec 0063, AC-6321, AC-6322). Short on purpose (spec 0058, AC-3).
   analytics: 'Analytics',
   analyticsPeriod: 'Period',
