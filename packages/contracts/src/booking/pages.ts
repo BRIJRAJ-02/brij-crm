@@ -83,8 +83,11 @@ export const BookingPageView = BookingPageSettings.extend({
   availability: BookingAvailability,
   /** That schedule's name ("Working hours" while its owner has saved none), read only here. */
   scheduleName: z.string(),
-  /** Why a paused page is paused when the system paused it: its last host was removed (spec 0031, AC-814). */
-  pausedReason: z.literal('host_removed').optional(),
+  /**
+   * Why a paused page is paused, when the person didn't pause it: its last host was removed (spec 0031, AC-814), or
+   * it was made as a draft and has never been published (`draft`, the bookings area, 4 November 2026).
+   */
+  pausedReason: z.enum(['host_removed', 'draft']).optional(),
   /** A round robin page's hosts (spec 0037, AC-1319): its fixed hosts and the rotations it books one host from. */
   hosts: TeamHosts.optional(),
   /**
@@ -170,6 +173,11 @@ export const CreateBookingPageInput = WorkspaceScoped.extend({
    */
   scope: BookingPageScope.optional(),
   hosts: TeamHosts.optional(),
+  /**
+   * Makes the page as a draft (the bookings area, 4 November 2026): paused with `pausedReason: 'draft'`, so guests
+   * can't book it until its first Publish, which is setting its status to `live` (every go live check runs then).
+   */
+  isDraft: z.boolean().optional(),
   mutationId: Uuid,
 });
 /** A new page. */

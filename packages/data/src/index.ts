@@ -4360,6 +4360,8 @@ export function createDataLayer({
           /** `workspace`: the workspace's own link (`booking.admin`), booking everyone on the roster unless `hosts` says. */
           scope?: 'workspace';
           hosts?: TeamHosts;
+          /** Made as a draft: paused until its first Publish (the editor's Publish sets it live). */
+          isDraft?: boolean;
         },
       ): Promise<BookingPageView> =>
         bookingPageLists.write(workspace, {

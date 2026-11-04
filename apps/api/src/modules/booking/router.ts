@@ -115,6 +115,7 @@ export const bookingPagesRouter = member.bookingPages.router({
           ...(input.kind === undefined ? {} : { kind: input.kind }),
           ...(input.scope === undefined ? {} : { scope: input.scope }),
           ...(input.hosts === undefined ? {} : { hosts: input.hosts }),
+          ...(input.isDraft === undefined ? {} : { isDraft: input.isDraft }),
         }),
       );
     } catch (error) {

@@ -817,7 +817,10 @@ export function slugRefusal(error: unknown) {
  */
 export async function createBookingPage(
   scope: EngineScope,
-  input: Pick<CreateBookingPageInput, 'id' | 'title' | 'timeZone' | 'settings' | 'kind' | 'hosts' | 'scope'>,
+  input: Pick<
+    CreateBookingPageInput,
+    'id' | 'title' | 'timeZone' | 'settings' | 'kind' | 'hosts' | 'scope' | 'isDraft'
+  >,
   now: Date = new Date(),
 ): Promise<BookingPageView> {
   requirePermission(scope, 'booking.manage');
@@ -863,7 +866,8 @@ export async function createBookingPage(
       windowDays: given.windowDays ?? 60,
       dailyLimit: given.dailyLimit ?? null,
       slotStep: given.slotStep ?? null,
-      status: given.status ?? 'live',
+      // A draft waits, paused, for its first Publish (the bookings area, 4 November 2026).
+      status: input.isDraft === true ? 'paused' : (given.status ?? 'live'),
       scheduleId: given.scheduleId ?? null,
       rescheduleHost: given.rescheduleHost ?? 'same',
       isPrivate: given.isPrivate ?? false,
@@ -921,6 +925,7 @@ export async function createBookingPage(
           dailyLimit: settings.dailyLimit,
           slotStep: settings.slotStep,
           status: settings.status,
+          ...(input.isDraft === true ? { pausedReason: 'draft' } : {}),
           scheduleId: settings.scheduleId,
           // Mirrored for one release, while `hours_mode` stays readable (spec 0035, AC-975).
           hoursMode: settings.scheduleId === null ? 'mine' : 'own',

@@ -255,7 +255,11 @@ export const bookingPages = pgTable(
     check('booking_pages_scope', sql`${t.scope} in ('member', 'workspace')`),
     check('booking_pages_scope_kind', sql`${t.scope} = 'member' or ${t.kind} = 'round_robin'`),
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),
-    check('booking_pages_paused_reason', sql`${t.pausedReason} is null or ${t.pausedReason} = 'host_removed'`),
+    // `draft`: made from New booking page and never published yet (the bookings area, 4 November 2026).
+    check(
+      'booking_pages_paused_reason',
+      sql`${t.pausedReason} is null or ${t.pausedReason} in ('host_removed', 'draft')`,
+    ),
     check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),
     check('booking_pages_reschedule_host', sql`${t.rescheduleHost} in ('same', 'rotation')`),
     check('booking_pages_default_view', sql`${t.defaultView} in ('month', 'list', 'chat')`),
