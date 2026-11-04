@@ -100,6 +100,15 @@
     letter-spacing: var(--tracking-note-title);
   }
 
+  /* One at a time's description under the heading: quiet, in the body size, before the answer. */
+  .describe {
+    margin: calc(-1 * var(--space-4)) 0 var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: pre-line;
+  }
+
   /* The number in the accent with a small arrow after it (T42, Typeform's way). The accent is the link colour
      here, the shade of it that reads as text on the ground. */
   .number {

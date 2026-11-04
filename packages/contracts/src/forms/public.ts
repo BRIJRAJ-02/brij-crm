@@ -67,6 +67,8 @@ export const PublicQuestion = z.object({
   /** Shown only when earlier answers match (spec 0043, AC-1614): `visibleQuestions` decides, here and on the server. */
   showWhen: PublicShowWhen.optional(),
   placeholder: z.string().optional(),
+  /** A quiet line under the question; absent when it has none. */
+  description: z.string().optional(),
   required: z.boolean(),
   /** Its jumps (AC-6313), with One at a time, where each question is a screen of its own. */
   jumps: z.array(PublicJump).optional(),

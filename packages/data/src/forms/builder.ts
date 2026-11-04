@@ -37,6 +37,7 @@ export {
   SCORED_TYPES,
   scoreOf,
   STEP_JUMPS_MAX,
+  RATING_COUNT,
   stepsOfBreaks,
   type FormLayout,
   FORM_SLUG,
@@ -124,6 +125,9 @@ export function previewOf(
       ...(question.placeholder === undefined || question.placeholder === ''
         ? {}
         : { placeholder: question.placeholder }),
+      ...(question.description === undefined || question.description === ''
+        ? {}
+        : { description: question.description }),
       required: question.required,
       ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
       ...(question.options === undefined ? {} : { options: question.options }),

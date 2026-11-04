@@ -10,7 +10,7 @@ import { useCaptureList } from '@crm/data/react';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { conditionsLine, questionFacts } from '../routing/facts.ts';
-import { idOfTarget, jumpChoices } from '../questions/jumps.ts';
+import { idOfTarget, jumpChoices, nextQuestionName, questionJumpChoices } from '../questions/jumps.ts';
 import { strings as questionStrings } from '../questions/strings.ts';
 import { strings as routingStrings } from '../routing/strings.ts';
 import { firstWords } from './draft.ts';
@@ -106,6 +106,9 @@ export function FlowView({
     let where: string = strings.afterSend;
     let href = endingsHref;
     if (at.kind === 'question') {
+      where = nameOf(draft.questions.find((question) => question.id === at.questionId));
+      href = questionHref(at.questionId);
+    } else if (at.kind === 'questionJump') {
       where = nameOf(draft.questions.find((question) => question.id === at.questionId));
       href = questionHref(at.questionId);
     } else if (at.kind === 'step' || at.kind === 'jump') {
@@ -239,6 +242,45 @@ export function FlowView({
             );
           })
         )}
+        {/* One at a time (spec 0063, AC-6313): each question with rules gets its card, "After Budget", in order. */}
+        {draft.layout === 'conversational' &&
+          draft.questions.flatMap((question) => {
+            const jumps = question.jumps ?? [];
+            if (jumps.length === 0) return [];
+            const choices = questionJumpChoices(draft.questions, endings, question.id);
+            const lines = jumps.flatMap((jump, index) => {
+              const line = conditionsLine(jump.when, facts);
+              if (line === undefined) return [];
+              const where =
+                choices.find((choice) => choice.id === idOfTarget(jump.to))?.label ??
+                ('ending' in jump.to ? messageName(jump.to.ending) : jump.to.step);
+              return [
+                { id: `j-${String(index)}`, term: strings.flowIf(line), description: `${strings.thenArrow} ${where}` },
+              ];
+            });
+            return [
+              <Card
+                key={`after-${question.id}`}
+                title={strings.flowAfterQuestion(nameOf(question))}
+                actions={
+                  <Link href={questionHref(question.id)} onPress={close}>
+                    {strings.flowEdit}
+                  </Link>
+                }
+              >
+                <DescriptionList
+                  items={[
+                    ...lines,
+                    {
+                      id: 'next',
+                      term: lines.length > 0 ? strings.flowOtherwise : strings.flowThen,
+                      description: `${strings.thenArrow} ${nextQuestionName(draft.questions, question.id) ?? strings.afterSend}`,
+                    },
+                  ]}
+                />
+              </Card>,
+            ];
+          })}
         <Card
           title={strings.afterSend}
           actions={
@@ -403,6 +445,17 @@ function TestIt({
                       },
                     ]),
               ]
+            : []),
+          // One at a time: the questions a rule sent them past.
+          ...(draft.layout === 'conversational'
+            ? (() => {
+                const skipped = draft.questions.filter(
+                  (question) => question.answerType !== 'hidden' && !path.asked.has(question.key),
+                );
+                return skipped.length === 0
+                  ? []
+                  : [{ id: 'skipped', term: strings.testSkips, description: skipped.map(nameOf).join(', ') }];
+              })()
             : []),
           { id: 'end', term: strings.testEnds, description: endWords(path.end) },
         ]}

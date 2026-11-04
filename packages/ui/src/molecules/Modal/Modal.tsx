@@ -77,6 +77,13 @@ export interface ModalProps {
    * takes it.
    */
   readonly isWide?: boolean;
+  /**
+   * A side pane at the window's end, beside the body: a preview of what the body picks (the form template gallery's
+   * big preview, 5 November 2026). It sits on the page's ground, `size-panel` wide, as tall as the body, and scrolls
+   * on its own; where the dialog is too narrow for both (below `bp-page-compact`) it is left out, so it must hold
+   * nothing the body needs. Only `window` takes it.
+   */
+  readonly aside?: ReactNode;
   /** A window's header icon (a peek draws none). */
   readonly icon?: IconName;
   /** A window's header detail after the title: the record or list it works on. A peek shows it first, as a crumb. */
@@ -136,6 +143,7 @@ export function Modal({
   footerStart,
   variant = 'dialog',
   isWide = false,
+  aside,
   icon,
   context,
   headerActions,
@@ -172,6 +180,28 @@ export function Modal({
       observer.disconnect();
     };
   }, []);
+  // The body, alone or beside a window's side pane.
+  const body = (
+    <InPopover value={false}>
+      <div className={styles.body} ref={watchBody} {...(isConfirm ? {} : { id: bodyId })}>
+        {isConfirm && (
+          <Heading slot="title" className={styles.question}>
+            {title}
+          </Heading>
+        )}
+        {/* Opened from a settings page, its content keeps to the dialog, never the page's edges. */}
+        {isConfirm ? (
+          hasBody && (
+            <div className={styles.consequence} id={bodyId}>
+              <PageEdge value={false}>{children}</PageEdge>
+            </div>
+          )
+        ) : (
+          <PageEdge value={false}>{children}</PageEdge>
+        )}
+      </div>
+    </InPopover>
+  );
   const footerKeys: FooterKeys = {
     close: strings.closeKey,
     submit: holdsLongText ? strings.submitLongKey : strings.submitKey,
@@ -196,6 +226,7 @@ export function Modal({
         className={styles.root}
         data-variant={variant}
         data-wide={isWide && variant === 'window' ? '' : undefined}
+        data-aside={variant === 'window' && aside !== undefined ? '' : undefined}
         data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
       >
         <Dialog
@@ -244,25 +275,17 @@ export function Modal({
             </div>
           )}
           {/* A dialog opened from inside a popover is a page of its own: its fields keep their halo. */}
-          <InPopover value={false}>
-            <div className={styles.body} ref={watchBody} {...(isConfirm ? {} : { id: bodyId })}>
-              {isConfirm && (
-                <Heading slot="title" className={styles.question}>
-                  {title}
-                </Heading>
-              )}
-              {/* Opened from a settings page, its content keeps to the dialog, never the page's edges. */}
-              {isConfirm ? (
-                hasBody && (
-                  <div className={styles.consequence} id={bodyId}>
-                    <PageEdge value={false}>{children}</PageEdge>
-                  </div>
-                )
-              ) : (
-                <PageEdge value={false}>{children}</PageEdge>
-              )}
+          {/* A window's side pane sits beside the body (the template gallery's preview); without one, the body alone. */}
+          {variant === 'window' && aside !== undefined ? (
+            <div className={styles.panes}>
+              {body}
+              <div className={styles.aside}>
+                <PageEdge value={false}>{aside}</PageEdge>
+              </div>
             </div>
-          </InPopover>
+          ) : (
+            body
+          )}
           {actions !== undefined && (
             <div className={styles.foot}>
               {footerStart !== undefined ? (

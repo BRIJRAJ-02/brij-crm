@@ -81,6 +81,10 @@ export const strings = {
   // Spec 0067: its answers show beside Insights' sources.
   sourceQuestion: 'Use as “How did you hear about us” in Insights',
   duplicateQuestion: 'Duplicate',
+  /** A quiet line under a question (5 November 2026): its ⋯ item, and the line's own name and prompt. */
+  addDescription: 'Add a description',
+  description: 'Description',
+  descriptionPlaceholder: 'A short explanation',
   deleteQuestion: 'Delete',
   questionDeleted: (label: string) => `Deleted “${label}”.`,
   questionDeletedFiled: (label: string, filed: string) => `Deleted “${label}”. Its answers went to ${filed}.`,
@@ -98,6 +102,10 @@ export const strings = {
   lowLabelPlaceholder: 'Not likely',
   highLabel: 'High end',
   highLabelPlaceholder: 'Very likely',
+  /** A rating's number of stars. */
+  ratingCount: 'Stars',
+  ratingLowPlaceholder: 'Poor',
+  ratingHighPlaceholder: 'Excellent',
   picks: 'Picks',
   leastPicks: 'Least picks',
   mostPicks: 'Most picks',
@@ -234,6 +242,11 @@ export const strings = {
   jumpToEnding: (place: number, heading: string) =>
     heading.trim() === '' ? `Thank-you message ${String(place)}` : `Thank-you message: ${heading.trim()}`,
   jumpGone: 'This jump no longer points to a step below this one. Choose where it goes.',
+  /** One at a time: a question as a jump's target, after "→": its own words, as its card shows them (no number). */
+  jumpToQuestion: (label: string) => label,
+  jumpGoneQuestion: 'This jump no longer points to a question below this one. Choose where it goes.',
+  /** One at a time: the heading over a question's rules, and its rules row under it. */
+  afterQuestion: 'After this question',
   jumpsFull: (most: number) => `A step holds ${String(most)} jumps.`,
   jumpsNoAnswers: 'This step has no answers to jump on yet.',
   points: 'Points',

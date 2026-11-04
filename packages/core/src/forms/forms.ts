@@ -756,7 +756,8 @@ export async function createFormFromTemplate(
       }
       // The tile's name is what the person chose between; `formName` is what the form itself is called.
       const name = input.name?.trim() ?? template.formName ?? template.name;
-      const objectId = await defaultObject(tx, scope.access);
+      // An anonymous template (Feedback, NPS) keeps its submissions only: no object, nothing filed (AC-6323).
+      const objectId = template.keepsSubmissionsOnly === true ? undefined : await defaultObject(tx, scope.access);
       const bookingPageId = template.endsWithBooking === true ? await intakeBookingPage(tx, scope) : undefined;
       if (objectId === undefined) {
         const kept = await insertForm(tx, scope, {

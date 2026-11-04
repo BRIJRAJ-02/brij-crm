@@ -324,6 +324,7 @@ export function publicQuestionOf(question: FormQuestion, withPoints = false): Pu
     answerType: question.answerType,
     ...(question.choices === undefined ? {} : choicesOf(question)),
     ...(question.placeholder === undefined || question.placeholder === '' ? {} : { placeholder: question.placeholder }),
+    ...(question.description === undefined || question.description === '' ? {} : { description: question.description }),
     required: question.required,
     ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
     ...(question.options === undefined ? {} : { options: question.options }),

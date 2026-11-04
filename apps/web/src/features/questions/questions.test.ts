@@ -156,3 +156,17 @@ describe('points follow their choice (spec 0063, AC-6316)', () => {
     expect(typed?.points).toBeUndefined();
   });
 });
+
+describe('a question’s description (5 November 2026)', () => {
+  it('is added empty, keeps its words, and goes with null', () => {
+    const list: FormQuestion[] = [
+      { id: 'a', key: 'budget', label: 'Budget', answerType: 'short_text', required: false, update: 'fill' },
+    ];
+    const added = changeQuestion(list, 'a', { description: '' });
+    expect(added[0]?.description).toBe('');
+    const written = changeQuestion(added, 'a', { description: 'A rough number is fine.' });
+    expect(written[0]?.description).toBe('A rough number is fine.');
+    expect(changeQuestion(written, 'a', { required: true })[0]?.description).toBe('A rough number is fine.');
+    expect(changeQuestion(written, 'a', { description: null })[0]).not.toHaveProperty('description');
+  });
+});

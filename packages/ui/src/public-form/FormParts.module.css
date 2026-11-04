@@ -207,6 +207,15 @@
     min-inline-size: 0;
   }
 
+  /* A question's description (5 November 2026): a quiet line in the secondary colour, as a field's hint. */
+  .description {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    white-space: pre-line;
+  }
+
   /* The loading shape's questions column. It keeps its own copy of the Classic
      form's column (HostedForm's `.form`) rather than reaching into it, because
      one component owns its styles (`pnpm house-rules`). The places the

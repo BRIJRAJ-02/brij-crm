@@ -77,6 +77,11 @@ export interface AfterSendSectionProps {
   readonly showGaps: boolean;
   /** A step's row on the Form tab, for Edit the rule on a thank-you message only a step sends people to. */
   readonly stepHref?: (stepId: string) => string;
+  /**
+   * A thank-you message's words took focus (T47, 5 November 2026): the preview shows that message in the form's
+   * place while it is edited, `default` for what everyone else sees, else the ending's id.
+   */
+  readonly onEditEnding?: (which: 'default' | { readonly endingId: string } | undefined) => void;
 }
 
 /** The facts a rule here may read: every question, and the score once a question gives points. */
@@ -439,6 +444,8 @@ export function AfterSendSection(props: AfterSendSectionProps) {
             onChange={(next) => {
               changeEnding(ending.id, next);
             }}
+            onFocus={() => props.onEditEnding?.({ endingId: ending.id })}
+            onBlur={() => props.onEditEnding?.(undefined)}
           />
         )}
         {then.kind === 'redirect' && (
@@ -525,7 +532,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
       <Card key={ending.id}>
         {problem?.endingId === ending.id && <Callout tone="danger">{problem.message}</Callout>}
         {/* Said plainly, not as a second copy of the step's rule (UX review), with the way to that rule. */}
-        <Sentence lead="" {...(menu === undefined ? {} : { end: menu })}>
+        <Sentence {...(menu === undefined ? {} : { end: menu })}>
           {by === undefined ? strings.nothingSendsHere : strings.sentByStep(by.name)}
           {by?.stepId !== undefined && props.stepHref !== undefined && (
             <ButtonLink variant="ghost" size="sm" href={props.stepHref(by.stepId)}>
@@ -544,6 +551,8 @@ export function AfterSendSection(props: AfterSendSectionProps) {
           onChange={(next) => {
             changeEnding(ending.id, next);
           }}
+          onFocus={() => props.onEditEnding?.({ endingId: ending.id })}
+          onBlur={() => props.onEditEnding?.(undefined)}
         />
       </Card>
     );
@@ -591,6 +600,7 @@ export function AfterSendSection(props: AfterSendSectionProps) {
           isReadOnly={isReadOnly}
           showGaps={showGaps}
           onDraftChange={onDraftChange}
+          onEditThanks={(isEditing) => props.onEditEnding?.(isEditing ? 'default' : undefined)}
         />
       </Card>
       {/* The score (Typeform's): only once a question gives points, as one row. */}
@@ -670,6 +680,8 @@ interface AfterDefaultProps {
   readonly isReadOnly: boolean;
   readonly showGaps: boolean;
   readonly onDraftChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
+  /** The thank you's words took focus (true) or left them (false): the preview shows it meanwhile. */
+  readonly onEditThanks?: ((isEditing: boolean) => void) | undefined;
 }
 
 /** What everyone else gets (AC-570, AC-1055): the thank you page, a booking page, or a link. */
@@ -691,6 +703,7 @@ function AfterDefault({
   isReadOnly,
   showGaps,
   onDraftChange,
+  onEditThanks,
 }: AfterDefaultProps) {
   const seesAllPages = useCan('booking.admin');
   const after = draft.after;
@@ -776,7 +789,7 @@ function AfterDefault({
           {strings.pageGone(!isReadOnly)}
         </Callout>
       )}
-      <Sentence lead="">
+      <Sentence>
         {hasRules ? strings.everyoneElseSees : strings.everyoneSees}
         <Select
           triggerRef={kindRef}
@@ -915,6 +928,16 @@ function AfterDefault({
           value={after.message}
           maxLength={2_000}
           isReadOnly={isReadOnly}
+          {...(onEditThanks === undefined
+            ? {}
+            : {
+                onFocus: () => {
+                  onEditThanks(true);
+                },
+                onBlur: () => {
+                  onEditThanks(false);
+                },
+              })}
           onChange={(message) => {
             onDraftChange((before) => ({ ...before, after: { kind: 'message', message } }));
           }}
@@ -934,10 +957,24 @@ interface EndingFieldsProps {
   readonly isJustAdded: boolean;
   readonly showGaps: boolean;
   readonly onChange: (change: Partial<FormEnding>) => void;
+  /** Its words took focus: the preview shows it. */
+  readonly onFocus?: (() => void) | undefined;
+  /** Its words lost focus: the preview shows the form again. */
+  readonly onBlur?: (() => void) | undefined;
 }
 
 /** An ending (AC-6315): its heading and line, each with Insert an answer, then an optional button. */
-function EndingFields({ ending, draft, pages, isReadOnly, isJustAdded, showGaps, onChange }: EndingFieldsProps) {
+function EndingFields({
+  ending,
+  draft,
+  pages,
+  isReadOnly,
+  isJustAdded,
+  showGaps,
+  onChange,
+  onFocus,
+  onBlur,
+}: EndingFieldsProps) {
   const headingRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const lineRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   // A new ending's heading takes focus as it opens, so its words are typed at once.
@@ -961,6 +998,8 @@ function EndingFields({ ending, draft, pages, isReadOnly, isJustAdded, showGaps,
         value={ending.heading}
         maxLength={120}
         isReadOnly={isReadOnly}
+        {...(onFocus === undefined ? {} : { onFocus })}
+        {...(onBlur === undefined ? {} : { onBlur })}
         {...(isReadOnly
           ? {}
           : {
@@ -986,6 +1025,8 @@ function EndingFields({ ending, draft, pages, isReadOnly, isJustAdded, showGaps,
         maxLength={2_000}
         isMultiline
         isReadOnly={isReadOnly}
+        {...(onFocus === undefined ? {} : { onFocus })}
+        {...(onBlur === undefined ? {} : { onBlur })}
         {...(isReadOnly
           ? {}
           : {

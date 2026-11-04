@@ -35,8 +35,8 @@ import {
   SettingsStack,
   focusLater,
   HostedFormPreview,
+  type HostedFormPreviewProps,
   PreviewLayout,
-  Select,
   type PreviewTextChange,
   TabPanel,
   Tabs,
@@ -65,7 +65,7 @@ import {
   mintEndingId,
   withQuestions,
 } from './draft.ts';
-import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from './FormBrand.tsx';
+import { BrandedFormPreview, DesignButton } from './FormBrand.tsx';
 import { LogicMap } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
@@ -167,7 +167,7 @@ export function FormEditor(props: FormEditorProps) {
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
   // After a publish that changed where answers go: offer to file the submissions before it the same way.
-  const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | 'menu' | undefined>(undefined);
+  const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | undefined>(undefined);
   const [isRetargeting, setRetargeting] = useState(false);
   // A blocked Publish shows every incomplete Settings field's message at once, wherever it was pressed from.
   const [showGaps, setShowGaps] = useState(false);
@@ -303,6 +303,22 @@ export function FormEditor(props: FormEditorProps) {
   const preview = useMemo(() => previewOf(draft, { key: form.publicKey }), [draft, form.publicKey]);
   // The question or divider last opened: Steps and One at a time preview the step it is in (spec 0063).
   const [previewRow, setPreviewRow] = useState<string | undefined>(undefined);
+  // The thank-you message being edited in After they send (T47): the preview shows it in the form's place until a
+  // question or a step is opened again.
+  const [editedEnding, setEditedEnding] = useState<'default' | { readonly endingId: string } | undefined>(undefined);
+  const openRow = (row: string | undefined) => {
+    setPreviewRow(row);
+    setEditedEnding(undefined);
+  };
+  const previewEnding: HostedFormPreviewProps['ending'] =
+    editedEnding === undefined
+      ? undefined
+      : editedEnding === 'default'
+        ? {}
+        : (() => {
+            const ending = draft.endings?.find((each) => each.id === editedEnding.endingId);
+            return ending === undefined ? undefined : { heading: ending.heading, line: ending.line };
+          })();
   // The edited question's or divider's step, shown even when its Show when hides it from a visitor who has answered
   // nothing yet: its conditions (the step's, and its questions') are lifted in the preview only.
   const shownPreview = useMemo(() => {
@@ -743,18 +759,6 @@ export function FormEditor(props: FormEditorProps) {
                         },
                       ]
                     : []),
-                  // Earlier submissions saved again the way the form saves now: once it saves to the CRM and has some.
-                  ...(form.live?.targets.main !== undefined && form.submissionCount > 0
-                    ? [
-                        {
-                          id: 'sync',
-                          label: strings.syncOld,
-                          icon: 'refresh-cw' as const,
-                          description: strings.syncOldText,
-                          onAction: () => setSyncOffer('menu'),
-                        },
-                      ]
-                    : []),
                 ],
               },
             }
@@ -950,9 +954,11 @@ export function FormEditor(props: FormEditorProps) {
               />
             )}
             <QuestionsSection
+              // A new form never saved since it was made with nothing in it (Blank) opens on its first question.
+              startsWithQuestion={!isPublished && form.revision === 1}
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               {...(questionStats === undefined ? {} : { stats: questionStats })}
-              onOpened={setPreviewRow}
+              onOpened={openRow}
               // The Logic map's door (T41): how many rules the form has, and how many need a look.
               {...(draft.questions.length === 0
                 ? {}
@@ -1094,6 +1100,7 @@ export function FormEditor(props: FormEditorProps) {
               newId={() => data.forms.newId()}
               onDraftChange={setDraft}
               showGaps={showGaps}
+              onEditEnding={setEditedEnding}
               stepHref={(stepId) => `${formHref(slug, form.id)}?question=${encodeURIComponent(`step:${stepId}`)}`}
               {...(props.question === AFTER_ROW ? { focusRow: AFTER_ROW } : {})}
               {...(shown?.endingId === undefined
@@ -1122,69 +1129,27 @@ export function FormEditor(props: FormEditorProps) {
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
                   {...(canManage ? { onTextChange: changeText } : {})}
+                  {...(previewEnding === undefined ? {} : { ending: previewEnding })}
                 />
               ) : (
                 <HostedFormPreview
                   form={shownPreview.form}
                   {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
                   {...(canManage ? { onTextChange: changeText } : {})}
+                  {...(previewEnding === undefined ? {} : { ending: previewEnding })}
                 />
               ),
+            // Design (5 November 2026): one button holding the look, over the preview it changes.
             previewControls: (
-              <>
-                <Select
-                  label={strings.colour}
-                  isLabelHidden
-                  size="sm"
-                  isReadOnly={!canManage}
-                  items={[
-                    { id: 'light', label: strings.light, icon: 'sun' },
-                    { id: 'dark', label: strings.dark, icon: 'moon' },
-                  ]}
-                  value={draft.look.colour}
-                  onChange={(colour) => {
-                    if (colour === 'light' || colour === 'dark') {
-                      setDraft((before) => ({ ...before, look: { ...before.look, colour } }));
-                    }
-                  }}
-                />
-                <Select
-                  label={strings.corners}
-                  isLabelHidden
-                  size="sm"
-                  isReadOnly={!canManage}
-                  items={[
-                    { id: 'rounded', label: strings.rounded },
-                    { id: 'square', label: strings.square },
-                  ]}
-                  value={draft.look.corners}
-                  onChange={(corners) => {
-                    if (corners === 'rounded' || corners === 'square') {
-                      setDraft((before) => ({ ...before, look: { ...before.look, corners } }));
-                    }
-                  }}
-                />
-                {/* Colours (spec 0063, AC-6327): the workspace's brand kit, or the product's own. */}
-                {props.brand === undefined ? (
-                  <BrandThemeSelect
-                    value={draft.look.theme ?? 'plain'}
-                    isReadOnly={!canManage}
-                    onChange={(theme) => {
-                      setDraft((before) => ({ ...before, look: { ...before.look, theme } }));
-                    }}
-                  />
-                ) : (
-                  <BrandThemeSelectWithKit
-                    brand={props.brand}
-                    slug={slug}
-                    value={draft.look.theme ?? 'plain'}
-                    isReadOnly={!canManage}
-                    onChange={(theme) => {
-                      setDraft((before) => ({ ...before, look: { ...before.look, theme } }));
-                    }}
-                  />
-                )}
-              </>
+              <DesignButton
+                look={draft.look}
+                isReadOnly={!canManage}
+                {...(props.brand === undefined ? {} : { brand: props.brand })}
+                slug={slug}
+                onChange={(look) => {
+                  setDraft((before) => ({ ...before, look }));
+                }}
+              />
             ),
           }
         : {})}

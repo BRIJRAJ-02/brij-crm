@@ -161,6 +161,52 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* A window's body beside its side pane (`aside`): the body takes the room left, the pane a panel's width. */
+  .panes {
+    display: flex;
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .panes > .body {
+    min-inline-size: 0;
+  }
+
+  /* The side pane: on the page's ground under a hairline edge, as tall as the body beside it (its own size is
+     contained, so it never makes the dialog taller), scrolling on its own. */
+  .aside {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    inline-size: var(--size-panel);
+    padding: var(--overlay-inset);
+    overflow: auto;
+    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface);
+    contain: size;
+  }
+
+  /* A window with a side pane takes the window's height (less space-32 above and below), so the preview in the
+     pane is drawn at a readable size however short the body's list is. */
+  @media (width >= 1024px) {
+    .root[data-aside] {
+      block-size: calc(100dvh - 2 * var(--space-32));
+    }
+
+    .root[data-aside] > .dialog {
+      block-size: 100%;
+    }
+  }
+
+  /* Too narrow for both (a window under bp-page-compact): the body alone. The pane only previews what the body
+     picks. A media query, as the window's own width decides the dialog's, and container conditions take only the
+     small breakpoints. */
+  @media (width < 1024px) {
+    .aside {
+      display: none;
+    }
+  }
+
   .foot {
     display: flex;
     flex: none;

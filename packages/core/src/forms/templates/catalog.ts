@@ -11,10 +11,12 @@
 // never had a field. An answer whose slug matches nothing is kept with the
 // submission instead (`kept`), and no field is made for it until publish.
 //
-// Every template asks for a name and an email filed on People, because a form
-// whose answers reach the CRM needs both: the email is how a submission finds
-// the record it belongs to, and a name is required on People, so a template
-// without them could never be published (`publishProblem`).
+// Every template whose answers reach the CRM asks for a name and an email filed
+// on People: the email is how a submission finds the record it belongs to, and
+// a name is required on People, so without them it could never be published
+// (`publishProblem`). Two are anonymous and keep their submissions only
+// (`keepsSubmissionsOnly`: Feedback and NPS ask nobody who they are), and
+// Blank starts empty, its first question the member's own.
 import type {
   AnswerType,
   FormLayout,
@@ -25,7 +27,7 @@ import type {
 } from '@crm/contracts';
 
 /** The templates' version, moved whenever a template's questions change, so a report can say which one made a form. */
-export const FORM_TEMPLATES_VERSION = 3;
+export const FORM_TEMPLATES_VERSION = 4;
 
 /** One question a template asks, before it knows a workspace's attribute ids. */
 export interface FormTemplateQuestion {
@@ -79,6 +81,12 @@ export interface FormTemplate {
    * resolved when the draft is made; with none the maker can use, the form thanks the visitor instead.
    */
   readonly endsWithBooking?: true;
+  /**
+   * Keeps its submissions only (spec 0063, AC-6323; the owner, 5 November 2026): an anonymous form, Feedback or NPS,
+   * asks no name or email and adds nobody to the CRM, so the draft names no object and files nothing. Somebody who
+   * wants the answers on a person turns Save answers to back on in Settings.
+   */
+  readonly keepsSubmissionsOnly?: true;
 }
 
 /** Name and email, which every template starts with: the two answers a submission needs to become a person. */
@@ -165,15 +173,16 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   blank: {
     id: 'blank',
     name: 'Blank form',
-    // The same name `createForm` gives an unnamed form: the blank tile makes exactly what New form used to.
+    // The same name `createForm` gives an unnamed form.
     formName: 'Untitled form',
-    purpose: 'Name, email and phone.',
-    preview: ['field', 'field', 'field'],
+    // Truly empty (the owner, 5 November 2026): the builder opens on its first question, ready to type.
+    purpose: 'Start from an empty page.',
+    preview: [],
     layout: 'classic',
     headline: 'Fill this in and we will come back to you',
     thanks: 'Thanks. We will come back to you soon.',
     buttonText: 'Send',
-    questions: [...WHO, PHONE],
+    questions: [],
   },
 
   contact_us: {
@@ -247,14 +256,14 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   feedback: {
     id: 'feedback',
     name: 'Feedback',
-    purpose: 'A rating, and why.',
-    preview: ['field', 'rating', 'long'],
+    purpose: 'A rating, and why. Anonymous.',
+    preview: ['rating', 'long'],
     layout: 'classic',
     headline: 'How did we do?',
     thanks: 'Thank you. Every answer is read.',
     buttonText: 'Send feedback',
+    keepsSubmissionsOnly: true,
     questions: [
-      ...PERSON,
       {
         id: 'rating',
         key: 'rating',
@@ -269,14 +278,14 @@ export const FORM_TEMPLATES: Readonly<Record<FormTemplateId, FormTemplate>> = {
   nps: {
     id: 'nps',
     name: 'Recommendation score (NPS)',
-    purpose: '0 to 10, and why.',
-    preview: ['field', 'scale', 'long'],
+    purpose: '0 to 10, and why. Anonymous.',
+    preview: ['scale', 'long'],
     layout: 'classic',
     headline: 'How likely are you to recommend us?',
     thanks: 'Thank you. That helps more than you know.',
     buttonText: 'Send',
+    keepsSubmissionsOnly: true,
     questions: [
-      ...PERSON,
       {
         id: 'nps',
         key: 'nps',

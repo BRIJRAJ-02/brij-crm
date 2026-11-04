@@ -20,11 +20,12 @@ New (parity #53, Automations). A rule that does something for you reads best as 
 
 - Give every control its own label with `isLabelHidden`, so a screen reader names it; the words between them read in order.
 - `lead` is "When", "Then" or "Only if". Under 480px of its container the lead sits over the line.
+- Leave `lead` out for a line with no lead word, such as where everyone else goes ("Otherwise → Step 3", "Everyone else sees [Thank you page]"): the lead column goes and the words start at the line's edge, so on a phone they line up with the card's other lines instead of sitting behind an empty column (critique 9, 5 November 2026). Why a variant: an empty lead kept the column, which is right for a rule's second condition under its "If" (pass `""` there) and wrong for a line that stands alone. Story: `NoLead`.
 - `end` holds a remove button outside the sentence; leave it out for a line that stays.
 
 ## States
 
-Default, with an end control, narrow (the lead above). The controls carry their own states.
+Default, with an end control, with no lead, narrow (the lead above). The controls carry their own states.
 
 ## Keyboard
 

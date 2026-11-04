@@ -1,11 +1,13 @@
-// The form template gallery in Chromium (spec 0063, AC-6323): the tiles New
-// form opens, each with a preview and a one line purpose, Blank first; one
-// press makes a draft and hands it back; the tiles turn off while it is being
-// made, so a second press can't make a second form; and a read that failed
-// says so with a way to try again.
+// The form template gallery in Chromium (spec 0063, AC-6323): the templates New
+// form opens, each with its one line purpose, Blank first and picked as it
+// opens with focus on it; picking one shows the form it makes beside the list;
+// Use makes a draft and hands it back; the tiles turn off while it is being
+// made, so a second Use can't make a second form; and a read that failed says
+// so with a way to try again.
 import type { DataLayer, FormTemplateSummary, FormView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
+import '@crm/ui/styles.css';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { TemplateGallery } from './TemplateGallery.tsx';
 
@@ -13,26 +15,43 @@ const TEMPLATES: readonly FormTemplateSummary[] = [
   {
     id: 'blank',
     name: 'Blank form',
-    purpose: 'Name, email and phone.',
-    preview: { layout: 'classic', rows: ['field', 'field', 'field'] },
+    purpose: 'Start from an empty page.',
+    preview: { layout: 'classic', rows: [] },
+    sample: { headline: 'Fill this in', buttonText: 'Send', questions: [] },
   },
   {
     id: 'feedback',
     name: 'Feedback',
-    purpose: 'A rating, and why.',
-    preview: { layout: 'classic', rows: ['field', 'rating', 'long'] },
+    purpose: 'A rating, and why. Anonymous.',
+    preview: { layout: 'classic', rows: ['rating', 'long'] },
+    sample: {
+      headline: 'How did we do?',
+      buttonText: 'Send feedback',
+      questions: [{ id: 'rating', key: 'rating', label: 'How was it?', answerType: 'rating', required: true }],
+    },
+    keepsSubmissionsOnly: true,
   },
   {
     id: 'booking_intake',
     name: 'Booking intake',
     purpose: 'A few questions, then your calendar.',
     preview: { layout: 'classic', rows: ['field', 'field', 'long'] },
+    sample: {
+      headline: 'Before we meet',
+      buttonText: 'Next',
+      questions: [{ id: 'name', key: 'name', label: 'Your name', answerType: 'short_text', required: true }],
+    },
   },
   {
     id: 'customer_onboarding',
     name: 'Customer onboarding',
     purpose: 'Everything you need from a new customer, asked a step at a time.',
     preview: { layout: 'steps', rows: ['field', 'field', 'date'] },
+    sample: {
+      headline: 'Welcome aboard',
+      buttonText: 'Finish',
+      questions: [{ id: 'start', key: 'start', label: 'When do you start?', answerType: 'date', required: true }],
+    },
   },
 ];
 
@@ -89,33 +108,47 @@ async function open(
 }
 
 describe('the gallery (AC-6323)', () => {
-  it('shows each template as a tile with its name and its one line purpose, Blank first', async () => {
+  it('lists each template with its name and its one line purpose, Blank first, picked and focused', async () => {
     await open();
-    await expect.element(page.getByRole('button', { name: 'Blank form' })).toBeVisible();
+    const blank = page.getByRole('radio', { name: 'Blank form' });
+    await expect.element(blank).toBeVisible();
+    // Blank is picked as it opens, and focus is on it, so the arrows browse at once.
+    await expect.element(blank).toBeChecked();
+    await expect.poll(() => document.activeElement === blank.element()).toBe(true);
     // The purpose is on the tile, read as the tile's description and visible as text: not hidden in a tooltip.
     await expect
-      .element(page.getByRole('button', { name: 'Feedback' }))
-      .toHaveAccessibleDescription('A rating, and why.');
-    await expect.element(page.getByText('Name, email and phone.')).toBeVisible();
-    // The tiles are in the template order, Blank first (AC-6323), inside the one group the gallery draws.
-    const group = document.querySelector('[role="group"]');
-    const names = [...(group?.querySelectorAll('[data-tile]') ?? [])].map(
-      (tile) => tile.querySelector('[data-tile] > span')?.textContent,
-    );
-    expect(names.length).toBe(TEMPLATES.length);
+      .element(page.getByRole('radio', { name: 'Feedback' }))
+      .toHaveAccessibleDescription('A rating, and why. Anonymous.');
+    await expect.element(page.getByText('Start from an empty page.')).toBeVisible();
+    const group = document.querySelector('[role="radiogroup"]');
+    expect(group?.querySelectorAll('[data-tile]').length).toBe(TEMPLATES.length);
     // No thumbnails (T4): each tile is a small mark beside its name and line, a list to scan.
     expect(group?.querySelectorAll('[data-tile][data-tall]').length).toBe(0);
     expect(group?.querySelectorAll('[data-tile][data-described]').length).toBe(TEMPLATES.length);
+    await expect.element(page.getByRole('button', { name: 'Use Blank form' })).toBeVisible();
   });
 
-  it('makes a draft from the tile that was pressed and hands it back', async () => {
+  it('shows the picked template beside the list, as a visitor sees it, and the arrows move it', async () => {
+    await open();
+    await expect.element(page.getByText('Fill this in')).toBeVisible();
+    await userEvent.keyboard('{ArrowDown}');
+    // The preview follows the pick: the Feedback form's own headline and question.
+    await expect.element(page.getByText('How did we do?')).toBeVisible();
+    await expect.element(page.getByText('How was it?')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Use Feedback' })).toBeVisible();
+  });
+
+  it('makes a draft from the picked template on Use and hands it back', async () => {
     const run = await open();
-    await userEvent.click(page.getByRole('button', { name: 'Feedback' }).element());
+    await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
+    // Picking alone makes nothing.
+    expect(run.asked).toEqual([]);
+    await userEvent.click(page.getByRole('button', { name: 'Use Feedback' }).element());
     await expect.poll(() => run.made.map((form) => form.id)).toEqual([MADE.id]);
     expect(run.asked).toEqual([{ templateId: 'feedback' }]);
   });
 
-  it('turns the tiles off while it is making one, so a second press makes no second form', async () => {
+  it('turns the other tiles off while it is making one, so a second Use makes no second form', async () => {
     let settle: ((form: FormView) => void) | undefined;
     const run = await open({
       create: () =>
@@ -123,13 +156,12 @@ describe('the gallery (AC-6323)', () => {
           settle = resolve;
         }),
     });
-    await userEvent.click(page.getByRole('button', { name: 'Feedback' }).element());
-    // The status names the template, so the person knows which tile they pressed, and it is announced politely.
+    await userEvent.click(page.getByRole('radio', { name: 'Feedback' }).element());
+    await userEvent.click(page.getByRole('button', { name: 'Use Feedback' }).element());
+    // The status names the template, so the person knows which one is being made, and it is announced politely.
     await expect.element(page.getByText('Making your Feedback…')).toBeVisible();
-    // The pressed tile stays on and the other nine turn off: the one still lit is the one being made, and a
-    // keyboard keeps its place on it (UX review, slice 8).
-    await expect.element(page.getByRole('button', { name: 'Feedback' })).toBeEnabled();
-    await expect.element(page.getByRole('button', { name: 'Blank form' })).toBeDisabled();
+    await expect.element(page.getByRole('radio', { name: 'Feedback' })).toBeEnabled();
+    await expect.element(page.getByRole('radio', { name: 'Blank form' })).toBeDisabled();
     settle?.(MADE);
     await expect.poll(() => run.made.length).toBe(1);
     expect(run.asked).toEqual([{ templateId: 'feedback' }]);
@@ -145,7 +177,7 @@ describe('the gallery (AC-6323)', () => {
     });
     await expect.element(page.getByText('The templates didn’t load')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Try again' }).element());
-    await expect.element(page.getByRole('button', { name: 'Feedback' })).toBeVisible();
+    await expect.element(page.getByRole('radio', { name: 'Feedback' })).toBeVisible();
     expect(attempts).toBe(2);
   });
 
@@ -168,17 +200,37 @@ describe('the gallery (AC-6323)', () => {
   it('lets Cancel out of a create that never settles', async () => {
     // A request that hangs must not be a modal only a page reload escapes.
     const run = await open({ create: () => new Promise<FormView>(() => undefined) });
-    await userEvent.click(page.getByRole('button', { name: 'Feedback' }).element());
-    await expect.element(page.getByText('Making your Feedback…')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Use Blank form' }).element());
+    await expect.element(page.getByText('Making your Blank form…')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Cancel' }).element());
     expect(run.closedCount()).toBe(1);
   });
 
   it('closes on Cancel without making anything', async () => {
     const run = await open();
-    await expect.element(page.getByRole('button', { name: 'Feedback' })).toBeVisible();
+    await expect.element(page.getByRole('radio', { name: 'Feedback' })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Cancel' }).element());
     expect(run.closedCount()).toBe(1);
     expect(run.asked).toEqual([]);
+  });
+
+  it('draws the list beside the picked template’s preview, and the list alone on a phone, in both themes', async () => {
+    for (const width of [1280, 390] as const) {
+      for (const theme of ['light', 'dark'] as const) {
+        await page.viewport(width, width === 390 ? 844 : 900);
+        document.documentElement.dataset.theme = theme;
+        await open();
+        await userEvent.keyboard('{ArrowDown}');
+        await expect.element(page.getByRole('button', { name: 'Use Feedback' })).toBeVisible();
+        // The preview is beside the list only where the window holds both.
+        if (width === 1280) await expect.element(page.getByText('How did we do?')).toBeVisible();
+        await new Promise((resolve) => globalThis.setTimeout(resolve, 500));
+        await page.screenshot({ path: `.vitest/shots/gallery-${String(width)}-${theme}.png` });
+        shown?.unmount();
+        shown = undefined;
+      }
+    }
+    delete document.documentElement.dataset.theme;
+    await page.viewport(1280, 900);
   });
 });

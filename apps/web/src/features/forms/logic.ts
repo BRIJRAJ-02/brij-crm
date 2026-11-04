@@ -270,6 +270,8 @@ export type LogicPlace =
   | { readonly kind: 'question'; readonly questionId: string }
   | { readonly kind: 'step'; readonly stepId: string }
   | { readonly kind: 'jump'; readonly stepId: string; readonly index: number }
+  /** One of a question's rules with One at a time ("After this question"), by its place. */
+  | { readonly kind: 'questionJump'; readonly questionId: string; readonly index: number }
   | { readonly kind: 'rule'; readonly ruleId: string };
 
 /**
@@ -279,7 +281,7 @@ export type LogicPlace =
  * - `never`: a rule can never match (a value that is not one of the question's choices, or one question asked to be
  *   two things at once);
  * - `shadowed`: an earlier rule in the same list always catches these people first (the first match wins);
- * - `unreachable`: no visitor can reach this step;
+ * - `unreachable`: no visitor can reach this step (or, with One at a time, this question);
  * - `backward`: a jump goes back up the form, which would loop, so it is ignored;
  * - `hiddenRequired`: a required question some people never see (they won't have to answer it).
  */
@@ -510,6 +512,8 @@ export function logicProblems(document: FormDocument): readonly LogicProblem[] {
     });
   }
 
+  if (document.layout === 'conversational') problems.push(...questionJumpProblems(questions, facts, isFact));
+
   problems.push(
     ...listProblems(
       document.routing.rules.map((rule) => rule.when),
@@ -520,6 +524,65 @@ export function logicProblems(document: FormDocument): readonly LogicProblem[] {
     ),
   );
   return problems;
+}
+
+/**
+ * One at a time's logic problems (spec 0063, AC-6313; each question is a screen and carries its own rules): a
+ * question nobody reaches because the rules above send everyone past it, a rule going back up the form, and each
+ * question's rules judged as a list (never matching, caught first by an earlier one, reading a question that is gone).
+ * Hidden questions are never a screen, so they are neither reached nor skipped.
+ */
+function questionJumpProblems(
+  questions: readonly FormQuestion[],
+  facts: ReadonlyMap<string, Fact>,
+  isFact: (key: string) => boolean,
+): LogicProblem[] {
+  const asked = questions.filter((question) => question.answerType !== 'hidden');
+  const indexOf = new Map(asked.map((question, index) => [question.key, index] as const));
+  const reached = new Set<number>([0]);
+  for (let at = 0; at < asked.length; at += 1) {
+    if (!reached.has(at)) continue;
+    const question = asked[at];
+    // A question whose Show only if never matches passes everyone on to the next.
+    if (question?.showWhen !== undefined && whenNever(question.showWhen, facts)) {
+      reached.add(at + 1);
+      continue;
+    }
+    let fallsThrough = true;
+    for (const jump of question?.jumps ?? []) {
+      if (whenNever(jump.when, facts)) continue;
+      const target = 'step' in jump.to ? indexOf.get(jump.to.step) : undefined;
+      if (target !== undefined && target > at) reached.add(target);
+      if (whenAlways(jump.when, facts, questions)) {
+        fallsThrough = false;
+        break;
+      }
+    }
+    if (fallsThrough) reached.add(at + 1);
+  }
+  return asked.flatMap((question, at): LogicProblem[] => {
+    const out: LogicProblem[] = [];
+    if (!reached.has(at)) out.push({ kind: 'unreachable', place: { kind: 'question', questionId: question.id } });
+    const jumps = question.jumps ?? [];
+    const backward = new Set<number>();
+    jumps.forEach((jump, index) => {
+      const target = 'step' in jump.to ? indexOf.get(jump.to.step) : undefined;
+      if (target !== undefined && target <= at) {
+        backward.add(index);
+        out.push({ kind: 'backward', place: { kind: 'questionJump', questionId: question.id, index } });
+      }
+    });
+    out.push(
+      ...listProblems(
+        jumps.map((jump) => jump.when),
+        (index) => ({ kind: 'questionJump', questionId: question.id, index }),
+        facts,
+        questions,
+        isFact,
+      ).filter((problem) => !(problem.place.kind === 'questionJump' && backward.has(problem.place.index))),
+    );
+    return out;
+  });
 }
 
 /** The problems at one place: a question's, a step's, one jump's, or one rule's. */
@@ -533,6 +596,8 @@ export function problemsAt(problems: readonly LogicProblem[], place: LogicPlace)
         return at.kind === 'step' && at.stepId === place.stepId;
       case 'jump':
         return at.kind === 'jump' && at.stepId === place.stepId && at.index === place.index;
+      case 'questionJump':
+        return at.kind === 'questionJump' && at.questionId === place.questionId && at.index === place.index;
       case 'rule':
         return at.kind === 'rule' && at.ruleId === place.ruleId;
     }
@@ -559,9 +624,13 @@ export function problemWords(problem: LogicProblem): string {
     case 'shadowed':
       return `Rule ${String(problem.winner ?? 1)} catches these people first, so this one never runs. The first match wins.`;
     case 'unreachable':
-      return 'Nobody reaches this step: the rules above send everyone past it.';
+      return problem.place.kind === 'question'
+        ? 'Nobody reaches this question: the rules above send everyone past it.'
+        : 'Nobody reaches this step: the rules above send everyone past it.';
     case 'backward':
-      return 'This goes back up the form, which would loop, so it is ignored. Pick a step below.';
+      return problem.place.kind === 'questionJump'
+        ? 'This goes back up the form, which would loop, so it is ignored. Pick a question below.'
+        : 'This goes back up the form, which would loop, so it is ignored. Pick a step below.';
     case 'hiddenRequired':
       return 'Required, but some people never see it, so they won’t have to answer it.';
   }

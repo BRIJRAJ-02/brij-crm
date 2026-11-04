@@ -101,6 +101,7 @@ export interface PublishProblem {
     | 'SHOW_WHEN_INVALID'
     | 'ROUTING_INVALID'
     | 'STEP_EMPTY'
+    | 'QUESTIONS_MISSING'
     | 'JUMP_INVALID'
     | 'ENDING_INVALID'
     | 'RECALL_INVALID'
@@ -637,6 +638,14 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
   if (input.name.trim() === '') return { code: 'NAME_MISSING', message: 'Give the form a name.' };
   if (!FORM_SLUG.test(input.slug)) {
     return { code: 'ADDRESS_INVALID', message: 'The address needs 2 to 40 lowercase letters, numbers or hyphens.' };
+  }
+  // A form with nothing to ask has nothing to send (a Blank template starts empty, spec 0063, AC-6323): said plainly
+  // before anything about filing, which would otherwise ask for an email question first.
+  if (input.document.questions.length === 0) {
+    return {
+      code: 'QUESTIONS_MISSING',
+      message: 'Add a question first. A form with no questions has nothing to send.',
+    };
   }
   // The look before the questions: a brand the page could not be read in is about the whole form, not one answer.
   if (input.document.look?.theme === 'brand' && input.brand !== undefined) {

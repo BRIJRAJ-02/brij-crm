@@ -107,6 +107,13 @@
     inline-size: calc(3 * var(--size-chip) + var(--size-control));
   }
 
+  /* A choice's number (`scores`): two digits and its unit, at the row's end before remove. */
+  .score {
+    display: grid;
+    flex: none;
+    inline-size: calc(2 * var(--size-chip) + var(--size-control));
+  }
+
   .meta {
     color: var(--text-secondary);
     font: var(--text-body);

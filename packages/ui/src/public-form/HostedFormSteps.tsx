@@ -14,6 +14,7 @@ import {
   FormHeader,
   FormThanks,
   FormTrap,
+  descriptionIdOf,
   QuestionSlot,
   TIMEFIX_LOGO,
 } from './FormParts.tsx';
@@ -447,7 +448,13 @@ export function HostedFormSteps({
           {step.questions.map((question) => {
             const aside = asideOf(question, words);
             return (
-              <QuestionSlot key={`${String(state.round)}-${question.key}`} question={question} state={state}>
+              <QuestionSlot
+                key={`${String(state.round)}-${question.key}`}
+                question={question}
+                state={state}
+                // One at a time draws the description under its large heading, below; the others under the control.
+                isDescriptionShown={!isOpen}
+              >
                 {isOpen && (
                   <p className={styles.ask} data-mode={mode} aria-hidden="true">
                     <span className={styles.number}>
@@ -464,6 +471,12 @@ export function HostedFormSteps({
                         </>
                       )}
                     </span>
+                  </p>
+                )}
+                {/* The question's description, quiet, under the heading it explains (5 November 2026). */}
+                {isOpen && question.description !== undefined && question.description !== '' && (
+                  <p id={descriptionIdOf(question)} className={styles.describe} data-mode={mode}>
+                    {state.read(question.description)}
                   </p>
                 )}
                 <Question

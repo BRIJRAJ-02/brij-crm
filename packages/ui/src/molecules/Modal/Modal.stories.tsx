@@ -149,6 +149,43 @@ export const WindowWide: Story = {
   },
 };
 
+/** `aside`: a side pane beside a window's body, previewing what the body picks (the form template gallery). */
+export const WindowAside: Story = {
+  render: () => (
+    <Stage>
+      <ModalTrigger defaultOpen>
+        <Button icon="clipboard-list">New form</Button>
+        <Modal
+          variant="window"
+          isWide
+          title="Start a form"
+          icon="clipboard-list"
+          aside={<p>The picked template, as a visitor sees it.</p>}
+          actions={
+            <>
+              <Button slot="close">Cancel</Button>
+              <Button variant="primary">Use Feedback</Button>
+            </>
+          }
+        >
+          <Checkbox label="Blank form" isReadOnly />
+          <Checkbox label="Feedback" defaultSelected isReadOnly />
+        </Modal>
+      </ModalTrigger>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await within(document.body).findByRole('dialog', { name: 'Start a form' });
+    const pane = within(dialog).getByText('The picked template, as a visitor sees it.');
+    // Beside the body on a wide window, never under it.
+    if (globalThis.innerWidth >= 1024) {
+      await expect(pane.getBoundingClientRect().left).toBeGreaterThan(
+        within(dialog).getByText('Feedback').getBoundingClientRect().right,
+      );
+    }
+  },
+};
+
 export const Window: Story = {
   render: () => (
     <Stage>

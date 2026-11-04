@@ -75,6 +75,8 @@ A live form wears its workspace's kit (spec 0060, AC-4). `formBrand(form)` turns
 
 A form that wears its kit wears its workspace's template too (spec 0068): `formBrand` carries `brand.template` and `FormGround` sets `data-template` (and Night's or Studio's `data-theme`, which wins over the form's own Colour) with the ground and the headline's face. A plain form names no kit and so no template.
 
+- **A question's description** (5 November 2026): `description` on a question is a quiet line in the secondary colour: under its control in Classic and Steps (`QuestionSlot`), and under the large heading with One at a time (`isDescriptionShown={false}` on the slot there), with recalls read in it.
+
 ## A file that didn't upload, and a closed form's words (forms fixes b8, b2, 5 November 2026)
 
 - A file question names what it takes under its drop area ("PDF, images or Office files, up to 4 MB"). An upload the page's client answers `unavailable` (the form has no file store, 503) says the form can't take files now and that the answers can still go, never "try again". A failed file marks its question (`HostedFileHandlers.setFailed`, optional): the first press of Send then says the file didn't upload and that pressing again sends the rest without it, so a file is never left behind in silence. Test: `FileFailure.browser.test.tsx`.

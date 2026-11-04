@@ -298,3 +298,22 @@ export const StepsOneStep: Story = {
     await expect(canvas.getByRole('button', { name: 'Send enquiry' })).toBeInTheDocument();
   },
 };
+
+/** One at a time with a description: the quiet line under the large question, describing its answer. */
+export const ConversationalDescription: Story = {
+  args: {
+    form: {
+      ...ONE_BY_ONE,
+      questions: ONE_BY_ONE.questions.map((question, index) =>
+        index === 0 ? { ...question, description: 'As you would like us to address you.' } : question,
+      ),
+    },
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Start' }));
+    await expect(canvas.getByText('As you would like us to address you.')).toBeInTheDocument();
+    await expect(canvas.getByRole('group', { name: 'Your name' })).toHaveAccessibleDescription(
+      'As you would like us to address you.',
+    );
+  },
+};
