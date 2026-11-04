@@ -171,7 +171,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_address', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_profile_pages', owner: 'crm_booking_lookup' },
-      // The business branch of the handle lookup (spec 0066, B4, migration 0175).
+      // The business branch of the handle lookup (spec 0066, B4, migration 0179).
       { name: 'crm_business_handle_owner', owner: 'crm_handle' },
       { name: 'crm_calendar_account_shared', owner: 'crm_calendar_lookup' },
       // The calendar health sweep's read across workspaces, ids and counts only (spec 0037, migration 0134).
@@ -195,7 +195,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
       // The member told of someone else's change to their scheduling (spec 0037, migration 0122).
       { name: 'crm_enqueue_scheduling_notice', owner: 'crm_queue' },
-      // A reservation's guest email (spec 0066 B7 lite, migration 0173).
+      // A reservation's guest email (spec 0066 B7 lite, migration 0177).
       { name: 'crm_enqueue_visit_mail', owner: 'crm_queue' },
       // One webhook delivery's next try (spec 0064, slice 3).
       { name: 'crm_enqueue_webhook_delivery', owner: 'crm_queue' },
@@ -215,7 +215,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_link_page_state', owner: 'crm_handle' },
       // A published business listed for search engines, or not (spec 0066, AC-6644).
       { name: 'crm_list_business', owner: 'crm_handle' },
-      // The workspace and place a guest menu's key names (spec 0065, H1, migration 0169).
+      // The workspace and place a guest menu's key names (spec 0065, H1, migration 0175).
       { name: 'crm_menu_by_key', owner: 'crm_menu_lookup' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_operator_daily', owner: 'crm_operator' },
@@ -273,7 +273,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
       // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
-      // The operator console's one write (spec 0065, AC-6502, migration 0168).
+      // The operator console's one write (spec 0065, AC-6502, migration 0174).
       { name: 'crm_set_early_access', owner: 'crm_operator' },
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
@@ -285,7 +285,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
       // A deleted account's handles freed after their 90 days (late trap #73, migration 0126).
       { name: 'crm_sweep_released_handles', owner: 'crm_handle' },
-      // The workspace and place a reservation page's key names (spec 0066 B7 lite, migration 0173).
+      // The workspace and place a reservation page's key names (spec 0066 B7 lite, migration 0177).
       { name: 'crm_table_place_by_key', owner: 'crm_table_lookup' },
       { name: 'crm_take_guest_handoff', owner: 'crm_guest_handoff' },
       // The link pages that carry a form, for a webhook's link_page.signup (spec 0064, slice 3).
@@ -686,7 +686,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_discard_link_draft',
         'crm_profile_identity_public',
         'crm_profile_look_public',
-        // The business page (spec 0066, B4, migration 0175): the business branch of the handle lookup, its claim, its
+        // The business page (spec 0066, B4, migration 0179): the business branch of the handle lookup, its claim, its
         // listing for search engines and the sitemap's read of the listings.
         'crm_business_handle_owner',
         'crm_claim_business_handle',
@@ -2585,7 +2585,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
   const AUTH_TABLES = [
     'account',
     'activity_day',
-    // The business pages listed for search engines (spec 0066, AC-6644, migration 0175).
+    // The business pages listed for search engines (spec 0066, AC-6644, migration 0179).
     'business_listings',
     // A guest calendar connect's single use hand off (4 Nov 2026, migration 0168).
     'guest_connect_handoffs',
@@ -2633,7 +2633,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     // And a link page's block, which may name a booking page by its workspace and id (migration 0098): never read
     // for access, since whether a visitor sees the page is still the booking lookup's call.
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
-      // A business listed for search engines names its workspace (spec 0066, migration 0175).
+      // A business listed for search engines names its workspace (spec 0066, migration 0179).
       'business_listings',
       // A link page's bookings, pictures and views by fact (spec 0061, migration 0147).
       'profile_booking_days',
@@ -2784,9 +2784,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by (table_name || ' ' || privilege_type) collate "C"
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
-      // The business pages listed for search engines (spec 0066, migration 0175), through crm_handle's functions only.
+      // The business pages listed for search engines (spec 0066, migration 0179), through crm_handle's functions only.
       'business_listings DELETE',
-      // And the purge's, taking a purged workspace's business out of the sitemap (migration 0175).
+      // And the purge's, taking a purged workspace's business out of the sitemap (migration 0179).
       'business_listings DELETE',
       'business_listings INSERT',
       'business_listings SELECT',
@@ -2861,13 +2861,13 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(columns.rows.map((row) => row.grant)).toEqual([
-      // A purged workspace's business listing (migration 0175): which is its.
+      // A purged workspace's business listing (migration 0179): which is its.
       'auth.business_listings.workspace_id SELECT',
       // A purged workspace's link pages and handles (migration 0127): which are its, and its handles let go.
       'auth.profile_items.workspace_id SELECT',
       'auth.profile_view_days.workspace_id SELECT',
       'auth.profile_views.workspace_id SELECT',
-      // Its business handles let go into the hold (migration 0175): a member's kind, stamped released.
+      // Its business handles let go into the hold (migration 0179): a member's kind, stamped released.
       'auth.public_handles.owner_kind SELECT',
       'auth.public_handles.owner_kind UPDATE',
       'auth.public_handles.released_at UPDATE',

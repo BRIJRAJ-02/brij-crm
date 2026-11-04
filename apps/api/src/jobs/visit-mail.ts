@@ -1,5 +1,5 @@
 // A reservation's guest email task (spec 0066 B7 lite): `crm_visit_mail`, which `crm_enqueue_visit_mail` queues
-// (migration 0173) with ids and a kind only. It reads the visit again as the system, gets the words from core
+// (migration 0177) with ids and a kind only. It reads the visit again as the system, gets the words from core
 // (`prepareVisitMail`), draws them with the booking emails' layout and sends them with the calendar file. Without a
 // mail transport it logs that it skipped and completes. A failed send throws a plain error for Graphile to try again
 // (5 tries), under the same idempotency key, so a send that reached the service but timed out here goes once.

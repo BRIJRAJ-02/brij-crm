@@ -306,7 +306,7 @@ describe("migration 0018's closing check", () => {
     'revoke all on auth.profile_items, auth.profile_views, auth.profile_view_days, auth.public_profiles from crm_purge',
     'revoke all (workspace_id) on auth.profile_items, auth.profile_views, auth.profile_view_days, auth.public_profiles from crm_purge',
     'revoke all (workspace_id, user_id) on auth.public_handles from crm_purge',
-    // And migration 0175's business handles and listings of a purged workspace, with its own closing check.
+    // And migration 0179's business handles and listings of a purged workspace, with its own closing check.
     'revoke all (owner_kind, released_at) on auth.public_handles from crm_purge',
     'revoke all on auth.business_listings from crm_purge',
     'revoke all on auth.business_listings from crm_handle',

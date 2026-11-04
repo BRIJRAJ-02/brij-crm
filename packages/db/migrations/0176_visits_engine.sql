@@ -1,5 +1,5 @@
 -- The visit engine, slice B0 of spec 0066 (AC-6601 to AC-6606, and the rules settled by the cross check of 4 Nov 2026).
--- Numbered 0172 after H0's 0168, with 0169 to 0171 claimed by other lanes.
+-- Numbered 0176 after H0's 0174 and H1's 0175.
 --
 -- What changes:
 -- * Fourteen tenant tables: the services catalogue (`service_categories`, `services`, `service_variants` with a buffer

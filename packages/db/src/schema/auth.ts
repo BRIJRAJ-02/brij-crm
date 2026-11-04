@@ -322,7 +322,7 @@ export const publicHandles = auth.table(
     /** When it was let go (its person's account deleted, or room made at the cap): set with a null `userId` only. */
     releasedAt: timestamptz('released_at'),
     /**
-     * `member` (a person's link page) or `business` (a workspace's business page, spec 0066 B4, migration 0175): a
+     * `member` (a person's link page) or `business` (a workspace's business page, spec 0066 B4, migration 0179): a
      * business handle names no person, is never released, and belongs to its workspace.
      */
     ownerKind: text('owner_kind').notNull().default('member'),

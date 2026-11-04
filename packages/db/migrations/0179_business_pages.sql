@@ -1,6 +1,6 @@
 -- The business page (spec 0066 B4 lite, owner priority R1 in spec 0068): a workspace's public page at
--- `timefix.com/<company-handle>` and each place at `/<company-handle>/<place-slug>`. Numbered 0175, with 0166 to 0174
--- claimed by other lanes.
+-- `timefix.com/<company-handle>` and each place at `/<company-handle>/<place-slug>`. Numbered 0179, after the
+-- visit engine's 0176 to 0178.
 --
 -- What changes:
 -- * `auth.public_handles` holds businesses too (0066, Rules settled: Handles): `owner_kind` is `member` or `business`.
@@ -404,7 +404,7 @@ begin atomic
   where h.workspace_id = crm_purge_workspace_begin.workspace_id and h.user_id is not null
     and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
       and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
-  -- Its business page leaves the sitemap, and its business handles are held, naming nobody, until the sweep (0175).
+  -- Its business page leaves the sitemap, and its business handles are held, naming nobody, until the sweep (0179).
   delete from auth.business_listings l
   where l.workspace_id = crm_purge_workspace_begin.workspace_id
     and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id

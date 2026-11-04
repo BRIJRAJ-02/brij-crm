@@ -1,6 +1,6 @@
 -- The Hospitality suite, slice H0 (spec 0065, AC-6501 to AC-6511): installable apps behind Timefix's early access,
--- the business profile, its places with opening hours, and each place's areas and tables. Numbered 0168 after main's
--- 0165, with 0166 and 0167 claimed by other lanes.
+-- the business profile, its places with opening hours, and each place's areas and tables. Numbered 0174 on the
+-- landing car, after car/pages' 0173 (written as 0168 on its lane).
 --
 -- What changes:
 -- * `workspaces.early_access`, a closed list of flags (`business_apps` today: the business apps, Hospitality first), written only by the operator console's
@@ -325,7 +325,7 @@ begin
       and not (att.attrelid = 'public.workspaces'::regclass and att.attname = 'early_access'
         and a.privilege_type = 'UPDATE')
   ) then
-    raise exception '0168_hospitality_apps: crm_operator must own exactly its seven functions and update only early_access';
+    raise exception '0174_hospitality_apps: crm_operator must own exactly its seven functions and update only early_access';
   end if;
 end
 $$;
