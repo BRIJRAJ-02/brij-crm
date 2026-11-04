@@ -366,6 +366,31 @@ import type { MenuDraft as MenuDraftAnswer } from '@crm/contracts';
 import type { TablesStore } from './tables/store.ts';
 export type { TablesStore, WalkIn } from './tables/store.ts';
 import type { BusinessPageStore } from './business-page/store.ts';
+import type { ServicesStore } from './services/store.ts';
+export type { NewBlock, NewTimeOff, ServicesStore, TeamCopy } from './services/store.ts';
+// Services, staff and shifts (spec 0066 B1): the shapes Settings › Services, Staff and Shifts show.
+export type {
+  AppointmentsSetup,
+  CatalogueCategory,
+  CatalogueService,
+  CatalogueView,
+  PriceTypeName,
+  ServiceFields,
+  ServiceNeed,
+  ServicePlace,
+  ServiceResource,
+  ServiceStaffRule,
+  ServiceTimesView,
+  ServiceVariantView,
+  SetupStepId,
+  StaffBlockView,
+  StaffFields,
+  StaffPlaceView,
+  StaffTeamView,
+  StaffTimeOffView,
+  StaffView,
+  VariantFields,
+} from '@crm/contracts';
 export type { BusinessPageStore, PhotoUpload } from './business-page/store.ts';
 // The business page's editor (spec 0066, B4 lite): the shapes Settings › Business › Page shows.
 export type {
@@ -1787,6 +1812,9 @@ export function createDataLayer({
     void tables?.then((made) => {
       made.clear();
     });
+    void services?.then((made) => {
+      made.clear();
+    });
     socialLinks?.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
@@ -2411,6 +2439,10 @@ export function createDataLayer({
     void tables?.then((made) => {
       made.placesChanged(workspace, event.placeIds);
     });
+    // The catalogue and the team (spec 0066 B1): every held copy of the workspace reads again.
+    void services?.then((made) => {
+      made.placesChanged(workspace);
+    });
   });
   router.on('time_off', (workspace) => {
     if (timeOffDue.has(workspace)) return;
@@ -2947,6 +2979,8 @@ export function createDataLayer({
   let tables: Promise<TablesStore> | undefined;
   // Settings › Business › Page (spec 0066, B4 lite): the business page's editor, loaded with the first screen that asks.
   let businessPage: Promise<BusinessPageStore> | undefined;
+  // Settings › Services, Staff and Shifts (spec 0066 B1), loaded with the first screen that asks.
+  let services: Promise<ServicesStore> | undefined;
   /** An image to or from one of our own upload routes, for the workspace `x-crm-workspace` names (spec 0060). */
   const sendImage = async (
     path: string,
@@ -6213,6 +6247,41 @@ export function createDataLayer({
                 throw toDataError({ code: 'INTERNAL', message: 'The photo’s answer couldn’t be read.' });
               }
               return { id, width, height };
+            },
+          }),
+        )),
+    },
+    /**
+     * Services, staff and shifts (spec 0066 B1): the catalogue, the team and their shifts, a profile's photo, and the
+     * desk's offered times. The store loads on first use; a `visits` event reads every held copy of the workspace again.
+     */
+    services: {
+      load: (): Promise<ServicesStore> =>
+        (services ??= import('./services/store.ts').then(({ openServices }) =>
+          openServices({
+            api: api.services,
+            call,
+            mintId,
+            origin,
+            upload: async (workspace, staffId, body) => {
+              const response = await fetch(
+                new URL(`/api/services/staff/${encodeURIComponent(staffId)}/photo`, origin).href,
+                {
+                  method: 'POST',
+                  headers: { 'x-crm-workspace': workspace, 'content-type': body.type },
+                  body,
+                  credentials: 'include',
+                },
+              ).catch((error: unknown) => {
+                throw toDataError(error);
+              });
+              const answer: unknown = await response.json().catch(() => undefined);
+              const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+              if (!response.ok) throw toDataError({ ...fields, status: response.status });
+              if (typeof fields.photo !== 'string') {
+                throw toDataError({ code: 'INTERNAL', message: 'The photo’s answer couldn’t be read.' });
+              }
+              return { photo: fields.photo };
             },
           }),
         )),

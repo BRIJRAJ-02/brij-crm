@@ -70,6 +70,7 @@ import { mountPublicTables } from './public/tables.ts';
 import { mountBrandCss } from './public/brand-css.ts';
 import { mountPublicBusiness } from './public/business.ts';
 import { mountBusinessPagePhotos } from './business-page-photos.ts';
+import { mountStaffPhotos } from './staff-photos.ts';
 import { mountLook } from './public/look.ts';
 import { mountPublicMenu } from './public/menu.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
@@ -826,6 +827,8 @@ export function createApp({
   mountLinkPagePictures(app, imageRoutes);
   // The business page's gallery pictures (spec 0066, B4 lite), the same way.
   mountBusinessPagePhotos(app, imageRoutes);
+  // Staff photos (spec 0066 B1), the same way.
+  mountStaffPhotos(app, imageRoutes);
   // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
   mountLogos(app, { auth, logos: logoFetch, limiter: createMemoryLimiter() });
 

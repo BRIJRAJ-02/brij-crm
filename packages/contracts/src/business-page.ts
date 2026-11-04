@@ -84,7 +84,7 @@ export type PlaceSlug = z.infer<typeof PlaceSlug>;
 /** What Publish would refuse, in one line, and where to fix it. */
 export const BusinessPublishProblem = z.object({
   message: z.string(),
-  fix: z.enum(['handle', 'profile', 'place', 'hours', 'address']),
+  fix: z.enum(['handle', 'profile', 'place', 'hours', 'address', 'services', 'staff', 'shifts']),
   placeId: Uuid.optional(),
 });
 /** What Publish would refuse. */

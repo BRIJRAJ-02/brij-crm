@@ -148,3 +148,72 @@ export function normalLookupCode(typed: string): string | undefined {
   const code = typed.replace(/[\s-]/g, '').toUpperCase();
   return LOOKUP_PATTERN.test(code) ? code : undefined;
 }
+
+/**
+ * The catalogue's and the team's bounds (B1: AC-6610, AC-6611), in one place, so the screens and the server refuse
+ * at the same line.
+ */
+export const CATALOGUE_LIMITS = {
+  categories: 50,
+  services: 500,
+  /** Staff profiles a workspace keeps (60 at each place, up to 20 places, archived ones aside). */
+  staff: 300,
+  categoryNameMax: 60,
+  serviceNameMax: 80,
+  descriptionMax: 600,
+  variantNameMax: 60,
+  cancelNoteMax: 200,
+  staffNameMax: 80,
+  staffTitleMax: 60,
+  staffBioMax: 600,
+  blockReasonMax: 60,
+  /** The largest price, in minor units (a hundred million in major units). */
+  priceMax: 10_000_000_000,
+  /** People one Copy shifts to reaches. */
+  copyTo: 60,
+  /** Services one bulk change takes. */
+  bulk: 100,
+  /** Time off longest span, in days, and a block's. */
+  timeOffDays: 367,
+  blockDays: 31,
+} as const;
+
+/** The first service a new catalogue offers by kind of business (Foolproof: a first try works without reading). */
+export interface StarterService {
+  readonly name: string;
+  readonly category: string;
+  readonly minutes: number;
+}
+
+/** The starter by kind of business ("Haircut, 30 min" for a salon); a restaurant's tables are Table seating's. */
+export const STARTER_SERVICES: Readonly<Record<string, StarterService>> = {
+  salon: { name: 'Haircut', category: 'Hair', minutes: 30 },
+  barber: { name: 'Haircut', category: 'Hair', minutes: 30 },
+  spa: { name: 'Massage', category: 'Massage', minutes: 60 },
+  clinic: { name: 'Consultation', category: 'Consultations', minutes: 30 },
+  fitness: { name: 'Personal training', category: 'Training', minutes: 60 },
+};
+
+/** The starter for a kind of business, or a plain one. */
+export function starterService(kind: string | undefined): StarterService {
+  return (
+    (kind === undefined ? undefined : STARTER_SERVICES[kind]) ?? {
+      name: 'Appointment',
+      category: 'Services',
+      minutes: 30,
+    }
+  );
+}
+
+/** A URL slug from a name ("Men's cut & style" → "men-s-cut-style"), at most 80 characters, never empty. */
+export function serviceSlug(name: string): string {
+  const slug = name
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 72)
+    .replace(/-+$/, '');
+  return slug === '' ? 'service' : slug;
+}

@@ -28,6 +28,7 @@ import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, postgresError, refuse, refuseOn } from '../engine/refusals.ts';
+import { appointmentsReadiness } from '../visits/readiness.ts';
 import { auditSetup, hospitalityMember, installedHospitalityApps, requireAnyApp } from './gate.ts';
 import { PLACE_NOT_FOUND } from './places.ts';
 
@@ -144,6 +145,8 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
       ...(place.city === null ? {} : { city: place.city }),
       hours: place.hours as PlaceHours,
     })),
+    // With Appointments, Book needs something bookable behind it (spec 0066 B1; spec 0068, Foolproof).
+    ...(apps.has('appointments') ? { appointments: await appointmentsReadiness(tx) } : {}),
   });
   const hasHandle = row?.handle !== null && row?.handle !== undefined;
   const suggested = hasHandle || profile === undefined ? undefined : await freeHandleFor(tx, profile.name);

@@ -57,6 +57,7 @@ import { profileContract } from './profile.ts';
 import { brandContract } from './workspace-brand.ts';
 import { hospitalityContract } from './hospitality.ts';
 import { menuContract } from './menu.ts';
+import { servicesContract } from './services.ts';
 import { tablesContract } from './tables.ts';
 import { businessPageContract } from './business-page.ts';
 import { schedulingContract } from './scheduling.ts';
@@ -138,6 +139,7 @@ export * from './brand-colour.ts';
 export * from './hospitality.ts';
 export * from './menu.ts';
 export * from './visits-model.ts';
+export * from './services.ts';
 export * from './tables.ts';
 export * from './business-page.ts';
 export * from './hospitality-hours.ts';
@@ -170,6 +172,8 @@ export const contract = {
   menu: menuContract,
   // Table seating (spec 0066 B7 lite): the setup, the Service list and status moves.
   tables: tablesContract,
+  // Services, staff and shifts (spec 0066 B1).
+  services: servicesContract,
   // The business page's editor (spec 0066, B4 lite): its address, draft, places' slugs and Publish.
   businessPage: businessPageContract,
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.
