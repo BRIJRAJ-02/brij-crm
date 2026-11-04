@@ -204,9 +204,7 @@ export const Window: Story = {
           actions={
             <>
               <Button slot="close">Cancel</Button>
-              <Button variant="primary" kbd="⌘↵">
-                Export 248 deals
-              </Button>
+              <Button variant="primary">Export 248 deals</Button>
             </>
           }
         >
@@ -300,9 +298,7 @@ export const FooterStart: Story = {
         actions={
           <>
             <Button slot="close">Cancel</Button>
-            <Button variant="primary" kbd="⌘↵">
-              Create person
-            </Button>
+            <Button variant="primary">Create person</Button>
           </>
         }
       >
@@ -697,5 +693,85 @@ export const FooterKeys: Story = {
     await expect(cancel).toHaveAttribute('aria-keyshortcuts', 'Escape');
     const add = within(dialog as HTMLElement).getByRole('button', { name: 'Add note' });
     await waitFor(() => expect(add.getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+Enter$/u));
+  },
+};
+
+/**
+ * A primary that acts on press, not a Form's submit (Edit social links' Save): the footer gives it ⌘↵ and presses it
+ * on ⌘↵ from any control in the dialog, the value just typed included. While it is off, the key does nothing.
+ */
+export const PressKey: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render() {
+    const [name, setName] = useState('');
+    const [saved, setSaved] = useState<string | undefined>(undefined);
+    return (
+      <Stage>
+        <Modal
+          title="Edit social links"
+          isOpen
+          actions={
+            <>
+              <Button slot="close">Cancel</Button>
+              <Button variant="primary" isDisabled={name === 'off'} onPress={() => setSaved(name)}>
+                Save
+              </Button>
+            </>
+          }
+        >
+          <Field label="Handle" value={name} onChange={setName} />
+          <Switch label="Show on the page" />
+          {saved !== undefined && <p>Saved {saved}</p>}
+        </Modal>
+      </Stage>
+    );
+  },
+  play: async ({ userEvent }) => {
+    const dialog = (await openDialog()) as HTMLElement;
+    const save = within(dialog).getByRole('button', { name: 'Save' });
+    const shortcut = save.getAttribute('aria-keyshortcuts') ?? '';
+    await expect(shortcut).toMatch(/^(Meta|Control)\+Enter$/u);
+    const mod = shortcut.startsWith('Meta') ? 'Meta' : 'Control';
+    // Off: the key presses nothing.
+    await userEvent.click(within(dialog).getByRole('textbox', { name: 'Handle' }));
+    await userEvent.keyboard(`off{${mod}>}{Enter}{/${mod}}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await expect(within(dialog).queryByText(/^Saved/u)).toBeNull();
+    // From a text field, with what was just typed.
+    await userEvent.clear(within(dialog).getByRole('textbox', { name: 'Handle' }));
+    await userEvent.keyboard(`ada{${mod}>}{Enter}{/${mod}}`);
+    await waitFor(() => expect(within(dialog).getByText('Saved ada')).toBeVisible());
+    // From a control that is not a text field.
+    await userEvent.click(within(dialog).getByRole('switch', { name: 'Show on the page' }));
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Handle' }), 'x');
+    within(dialog).getByRole('switch', { name: 'Show on the page' }).focus();
+    await userEvent.keyboard(`{${mod}>}{Enter}{/${mod}}`);
+    await waitFor(() => expect(within(dialog).getByText('Saved adax')).toBeVisible());
+  },
+};
+
+/** An alert's commit destroys: no key presses it, so its primary-looking button shows none. */
+export const AlertNoPressKey: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Modal
+        title="Remove this webhook?"
+        tone="danger"
+        isOpen
+        actions={
+          <>
+            <Button slot="close">Cancel</Button>
+            <Button variant="primary">Remove</Button>
+          </>
+        }
+      >
+        Deliveries stop at once.
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = (await openDialog()) as HTMLElement;
+    await expect(within(dialog).getByRole('button', { name: 'Remove' })).not.toHaveAttribute('aria-keyshortcuts');
   },
 };
